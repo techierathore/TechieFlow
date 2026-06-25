@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+# scaffold-greenfield.sh — Bootstrap a NEW (greenfield) project with this TechieFlow v4 setup.
+#
+# For an EXISTING project (brownfield) use scaffold-brownfield.sh instead —
+# it skips creating src/ and tests/ folders that would clash with your code.
+#
+# Usage:
+#   /mnt/c/3AIGenCode/TechieFlow/scaffold-greenfield.sh /path/to/new/project
+#   /mnt/c/3AIGenCode/TechieFlow/scaffold-greenfield.sh    (defaults to $PWD)
+#
+# Copies the TechieFlow v4 setup (your customizations, not the npm-latest v6) plus a
+# pre-built .claude/settings.json that auto-allows everything except git/sudo.
+# Creates empty src/, tests/playwright/, tests/unit/ ready for use.
+#
+# Library-deployed agent files are explicitly excluded — they land via
+# `dotnet build` once the project adds the NuGet packages:
+#   .claude/trblazeui.md, .opencode/command/trblazeui.md, .trblazeui/
+#   .claude/techierag.md, .opencode/command/techierag.md, .techierag/
+#
+# Idempotent: re-running won't overwrite existing files — with one exception:
+# the harness agent mirrors (.claude/commands/TechieFlow/agents/ and
+# .opencode/command/TechieFlow/agents/) are force-synced from .tfcore/agents/
+# on every run, and NuGet persona shims are refreshed from .claude/<lib>.md.
+
+set -euo pipefail
+
+TEMPLATE="/mnt/c/3AIGenCode/TechieFlow"
+TARGET="${1:-$PWD}"
+TARGET="$(realpath -m "$TARGET")"
+
+if [[ "$TARGET" == "$TEMPLATE" || "$TARGET" == "$TEMPLATE"/* ]]; then
+  echo "Refusing to scaffold into the template itself. Pass a different path." >&2
+  exit 1
+fi
+
+if ! command -v rsync >/dev/null 2>&1; then
+  echo "rsync not found. Install it -- Linux/WSL: sudo apt-get install rsync  |  macOS: brew install rsync (usually preinstalled)  |  native Windows: run this script from WSL or Git Bash" >&2
+  exit 1
+fi
+
+mkdir -p "$TARGET"
+cd "$TARGET"
+
+# Sanity check: warn if already scaffolded — they probably want update, not scaffold
+if [[ -d .tfcore ]]; then
+  echo "ℹ This project already has .tfcore/ — it appears to be already scaffolded."
+  echo "  scaffold-greenfield.sh uses --ignore-existing, so existing framework files"
+  echo "  (tasks, templates, workflows, agents) will NOT be updated."
+  echo ""
+  echo "  If you want to refresh framework files from the reference repo while preserving"
+  echo "  your docs/, src/, tests/, PROJECT-STATUS.md, CLAUDE.md — use this instead:"
+  echo "    $TEMPLATE/update-framework.sh \"$TARGET\""
+  echo ""
+  echo "  Continuing with scaffold (will only fill in any missing files)..."
+  echo ""
+fi
+
+echo "→ Scaffolding TechieFlow v4 (customized) into: $TARGET"
+
+# Library-deployed agent filenames — keep these out of the command roots
+# (.claude/commands/, .opencode/command/) so NuGet-deployed personas are
+# never overwritten by the framework copy. The .tfcore/ copy and the
+# step-3b force-sync deliberately do NOT use these: the template's TechieFlow
+# subtrees no longer carry library personas, and NuGet never deploys there.
+LIB_EXCLUDES=(--exclude='trblazeui.md' --exclude='techierag.md')
+
+# 1. TechieFlow core agents/tasks/templates
+rsync -a --ignore-existing \
+  "$TEMPLATE/.tfcore/" .tfcore/
+
+# 2. Claude Code slash commands (TechieFlow agents only — library agents excluded)
+mkdir -p .claude/commands
+rsync -a --ignore-existing "${LIB_EXCLUDES[@]}" \
+  "$TEMPLATE/.claude/commands/" .claude/commands/
+
+# 3. OpenCode commands (TechieFlow agents only)
+mkdir -p .opencode/command/TechieFlow
+rsync -a --ignore-existing "${LIB_EXCLUDES[@]}" \
+  "$TEMPLATE/.opencode/command/TechieFlow/" .opencode/command/TechieFlow/
+
+# 3b. FORCE-sync agent files from .tfcore/agents/ to both harness paths.
+# .tfcore/agents/ is canonical (TechieFlow personas + commands). The harness
+# folders MUST mirror it or slash commands like *day1-greenfield won't appear.
+# This step overwrites the harness copies — do NOT edit them directly; edit
+# .tfcore/agents/ and re-run the scaffold.
+echo "  syncing agent files from .tfcore/agents/ → harness paths"
+rsync -a \
+  .tfcore/agents/ .claude/commands/TechieFlow/agents/
+rsync -a \
+  .tfcore/agents/ .opencode/command/TechieFlow/agents/
+
+# 4. Reference files at project root — only if missing
+[[ -f WORKFLOW.html ]]   || cp "$TEMPLATE/WORKFLOW.html"   .
+[[ -f opencode.jsonc ]]  || cp "$TEMPLATE/opencode.jsonc"  .
+
+# 5. .claude/settings.json — yolo-except-git. ONLY write if missing,
+#    so per-project tweaks survive scaffold re-runs.
+if [[ ! -f .claude/settings.json ]]; then
+  cat > .claude/settings.json <<'JSON'
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash",
+      "Edit",
+      "Write",
+      "MultiEdit",
+      "NotebookEdit",
+      "Read",
+      "Glob",
+      "Grep",
+      "TodoWrite",
+      "WebFetch",
+      "WebSearch",
+      "Task"
+    ],
+    "ask": [
+      "Bash(rm *)",
+      "Bash(rmdir *)",
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(sudo *)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf ~/*)"
+    ]
+  }
+}
+JSON
+  echo "  created .claude/settings.json"
+else
+  echo "  .claude/settings.json already exists — preserved"
+fi
+
+# 6. Project skeleton folders (mkdir -p is idempotent)
+mkdir -p tests/playwright tests/unit src
+
+# 7. Scaffold note — path-neutral; does not leak template location into the project
+if [[ ! -f .tf-scaffold-note.txt ]]; then
+  cat > .tf-scaffold-note.txt <<'NOTE'
+Scaffolded by the TechieFlow v4 customized greenfield scaffold script.
+
+This is a NEW (greenfield) project — empty src/ and tests/ folders are ready.
+
+Folders/files created (only missing files filled — re-runs are safe):
+  .tfcore/                  ← TechieFlow v4 customized (agents, tasks, templates)
+  .claude/commands/            ← Claude Code slash commands (TechieFlow agents)
+  .claude/settings.json        ← yolo-except-git permissions
+  .opencode/command/TechieFlow/      ← OpenCode slash commands
+  WORKFLOW.html                ← the human workflow guide (open in a browser; §17 = macOS / Windows / Linux)
+  opencode.jsonc               ← OpenCode config
+  tests/playwright/  tests/unit/  src/
+
+All TechieFlow templates the analyst will need live LOCALLY in this project under:
+  .tfcore/templates/v4custom/
+
+So the project is portable — copy this whole tree to another machine and the
+analyst can author every doc without reaching back to the original template.
+
+Next: create the .NET solution, add your library NuGet packages, build once:
+  dotnet new sln -n MyApp
+  dotnet new blazor -n MyApp.Web -o src/MyApp.Web && dotnet sln add src/MyApp.Web
+  dotnet add src/MyApp.Web package TrBlazeUI    # if UI involved
+  dotnet add src/MyApp.Web package TechieRag    # if AI/RAG involved
+  dotnet build       ← deploys .claude/<lib>.md, .opencode/command/<lib>.md,
+                                .<lib>/<Lib>-AI-Reference.md
+
+Then start Claude Code in this folder and run:
+  /analyst *day1-greenfield <AppName>
+(Replace <AppName> with PascalCase name, e.g. AppManager, AstroLyfe.)
+
+That single command will produce all six day-1 deliverables in one pass.
+
+You can delete this note once you've read it.
+NOTE
+fi
+
+# 8. NuGet persona shims — Claude Code only scans .claude/commands/ for slash
+# commands, but NuGet auto-deploy drops library personas at .claude/<lib>.md.
+# Mirror them into .claude/commands/ so /trblazeui and /techierag resolve.
+# The NuGet-deployed file is authoritative — always overwrite the shim.
+for lib in trblazeui techierag; do
+  if [[ -f "$TARGET/.claude/$lib.md" ]]; then
+    cp "$TARGET/.claude/$lib.md" "$TARGET/.claude/commands/$lib.md"
+    echo "  shimmed .claude/$lib.md → .claude/commands/$lib.md"
+  fi
+done
+
+echo ""
+echo "✔ Done."
+echo ""
+echo "Next: cd \"$TARGET\""
+echo "      dotnet new sln + blazor + add TrBlazeUI/TechieRag NuGets + dotnet build"
+echo "      open WORKFLOW.html, start Claude Code, follow §7 greenfield day-1 prompt"

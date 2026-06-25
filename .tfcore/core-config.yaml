@@ -1,0 +1,27 @@
+markdownExploder: true
+# NOTE (custom solo-dev flow): the qa/prd/devStory keys below are stock TechieFlow v4 values kept
+# only for the unused stock agents (qa, sm, po, dev story flow). The custom workflow uses
+# docs/{AppName}-BRD.md / docs/{AppName}-Architecture.md (set in customTechnicalDocuments by
+# the day-1 tasks) and bans dated docs/qa result files — per-REQ status lives in each
+# checklist's Requirements Status table.
+qa:
+  qaLocation: docs/qa
+prd:
+  prdFile: docs/prd.md
+  prdVersion: v4
+  prdSharded: false
+  prdShardedLocation: docs/prd
+  epicFilePattern: epic-{n}*.md
+architecture:
+  architectureFile: docs/architecture.md
+  architectureVersion: v4
+  architectureSharded: false
+  architectureShardedLocation: docs/architecture
+customTechnicalDocuments: null
+# devLoadAlwaysFiles: the day-1 tasks rewrite this list with the project's concrete paths
+# (docs/{AppName}-Coding-Standards.md + docs/{AppName}-Architecture.md). Empty until then —
+# the stock paths (docs/architecture/coding-standards.md etc.) never exist in this flow.
+devLoadAlwaysFiles: []
+devDebugLog: .ai/debug-log.md
+devStoryLocation: docs/stories
+slashPrefix: TechieFlow

@@ -1,0 +1,230 @@
+# verify-phase
+
+Autonomously verify implemented requirements against their numbered REQ IDs. The AGENT performs every step itself in its own shell. The user runs nothing.
+
+## Purpose
+
+Replace manual verification. Given a scope, prove whether each numbered requirement is actually implemented and behaving, by running real headless browser tests and unit tests against the running application. Verdicts are written into the owning checklist's Requirements Status table (the single source of truth) plus a console miss list.
+
+## Inputs
+
+- `{AppName}` — required for the checklist paths; resolve from the command argument, `core-config.yaml` → `customTechnicalDocuments`, or the `docs/{AppName}-*-Checklist.md` filenames. Ask only if it cannot be resolved.
+- `{scope}` — see Modes.
+- **The DevGuide** (`docs/{AppName}-DevGuide.md`, or the split set under `docs/devguides/`) — the screen-by-screen, **per-control** test map. The verifier uses it to know which controls each screen must render (the render gate, §4a). If it is missing, the verifier still runs but notes that no control map exists and recommends `*devguide {AppName}`; if it exists, the verifier **refreshes its observed render-status tags** for every screen it exercises (§6b) — this is the DevGuide ⇄ Checklist ⇄ Verifier loop.
+
+## Modes
+
+- **Full mode** (default, `*verify {scope}`): run the entire pipeline below. Scope values:
+  - `ui` — all `REQ-UI-*` rows from `docs/{AppName}-UI-Checklist.md`.
+  - `functional` — all `REQ-FN-*` / `REQ-NFR-*` / `REQ-RAG-*` rows from `docs/{AppName}-Functional-Checklist.md`.
+  - `all` — both checklists.
+  - An explicit ID list (`REQ-UI-007,REQ-UI-013`) — just those rows.
+  - `phase-N` — LEGACY fallback for pre-split projects: grade the BRD's Phase-N numbered IDs (see §0 legacy path).
+- **Setup-only mode** (`*setup`): execute only Section 1, then HALT.
+
+## Local-only deployment policy (CRITICAL — read before every run)
+
+The verifier MUST run the application **LOCALLY**. Never propose, suggest, or initiate any of the following to "make Playwright work":
+
+- Cloudflare / Cloudflare Pages / Cloudflare Tunnels
+- Vercel / Netlify / Render / Fly.io
+- Azure App Service / AWS / GCP / any cloud deploy
+- Pushing to a remote branch so a preview environment builds
+- Asking the user to "deploy somewhere I can reach"
+
+The user runs Claude Code on their own machine. Local boot is always possible. If you find yourself drafting "let me deploy this to X first" — STOP, that is a banned escape hatch. The user has explicitly called this out as an "idiotic option" — do not repeat it.
+
+If the WSL-side `dotnet run` is unreachable by Playwright (port collision, WSL networking quirks, missing browser deps), the correct escalation order is:
+
+1. **Try a different rung of the build invocation ladder.** Rung #4 `cmd.exe /c "dotnet run --project ..."` launches Windows-side dotnet on a Windows-side port; that port IS reachable from WSL Playwright via the WSL host IP (`$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}')` or `host.docker.internal` analog). Try this BEFORE asking the user anything.
+2. **Try a different port** if rung #2 is on a busy port (5099 → 5599).
+3. **Ask the user to run it locally themselves.** Output the EXACT two-line shell recipe and a `go` prompt:
+
+   ```
+   I can't reach the app from Playwright in this environment. Please run these two
+   commands in separate terminals on the Windows side (or in your usual dev setup):
+
+     Terminal 1 (API):  dotnet run --project src/{AppName}.Api --urls http://localhost:5100
+     Terminal 2 (Web):  dotnet run --project src/{AppName}.Web --urls http://localhost:5099
+
+   When both show "Now listening on", reply `go` and I'll run the verifier against
+   those URLs.
+   ```
+
+   Wait for `go`. Then point Playwright at `http://localhost:5099` (and `http://localhost:5100` for API checks). Do NOT skip verification. Do NOT propose cloud anything.
+
+This applies to EVERY phase task that boots an app (build-functional self-smoke, build-ui self-smoke, build-rag self-smoke, and this verifier). They all share this policy.
+
+## SEQUENTIAL Execution (do not proceed until current section is complete)
+
+### 0. Load inputs and build the working list
+
+- Load `.tfcore/core-config.yaml`; resolve `{AppName}` per Inputs above.
+- Determine the scope from the command argument (`ui` / `functional` / `all` / explicit REQ IDs / legacy `phase-N`). **When this task is chained from a build phase (build-ui / build-functional / build-rag), the caller has already stated the scope — use it and ask nothing.** Only if invoked standalone with NO scope: ask the user once "Verify which scope — ui, functional, all, or specific REQ IDs?" — this is the ONLY question you may ask.
+- **Checklist path (normal):** open the owning checklist(s) — `docs/{AppName}-UI-Checklist.md` for `ui`, `docs/{AppName}-Functional-Checklist.md` for `functional`, both for `all`. From the **Requirements Status** table, build the working list `[{id, text, status, type-guess}]` (type-guess ∈ {ui, behavioral, backend-logic, nonfunctional}; pull each REQ's acceptance criteria from its Details anchor section).
+- **`Done (pre-existing)` is NOT a free pass — it is an unverified migrated claim.** Do NOT skip those rows. They were carried over from a dev-plan and have **never been runtime-verified** — this is exactly how blank-rendering screens slipped through (a `Done (pre-existing)` home page with an empty table and a blank list). Every in-scope row, **including `Done (pre-existing)`**, gets the **§4a DevGuide render sweep** at minimum (load its screens, confirm every control actually renders its data). Only `N/A` rows are skipped. Rows already `Verified` get a fast re-confirm (render sweep + re-run their test); `Done (pre-existing)` that passes the render sweep gets a `runtime render-confirmed {date}` remark and may stay Done; anything that renders blank/empty/errors → `Needs re-verify`/`FAIL` (§6).
+- **Load the DevGuide map.** Read the DevGuide (`docs/{AppName}-DevGuide.md`, or the split set under `docs/devguides/`) and, for each in-scope screen, extract the list of controls + their expected data source from the *Controls*/*Data lineage* tables. This is the checklist of what must render in §4a. If no DevGuide exists, note it and fall back to acceptance-criteria-only grading, and recommend `*devguide {AppName}` in the report.
+- **Legacy BRD path (only for `phase-N` scope on pre-split projects):** locate the BRD (`customTechnicalDocuments`, then `docs/{AppName}-BRD*.md`, then `docs/brd*.md`/`docs/BRD*.md`) and extract that phase's numbered IDs (`BRD-12`, `REQ-12`, `FR-12`, `[BRD-12]`). If no numbered IDs exist, STOP auto-grading and tell the user: "This phase has no numbered, checkable requirements, so coverage cannot be graded by ID. Number them as BRD-N (or run `*split-brd`) and re-run." Then offer a loose best-effort prose verification.
+- If the working list is empty (all rows `N/A`), report "Nothing to verify — all rows N/A" and skip to §8. (Note: `Verified` and `Done (pre-existing)` rows are NOT empty-list — they still get the §4a render sweep.)
+
+### 1. Ensure the verification environment (self-healing)
+
+Run these checks yourself and act on them. Echo a one-line summary of what you did.
+
+- If no `package.json` in repo root: `npm init -y`.
+- Check Playwright: run `npx playwright --version`. If it errors or is absent: `npm install -D @playwright/test`.
+- Check browsers: attempt `npx playwright install chromium`. If it reports missing system libraries (common on a fresh WSL/Ubuntu): run `npx playwright install --with-deps chromium`. If that needs sudo and sudo is unavailable, run `sudo npx playwright install --with-deps chromium`; if sudo also fails, report the single apt command the user must run once and HALT (this is the only situation where a manual step is unavoidable, and it happens at most once per machine).
+- Ensure a minimal `playwright.config.ts` exists at repo root. If absent, create one with: testDir `./tests/verify`, `use: { screenshot: 'only-on-failure', trace: 'retain-on-failure', headless: true }`, and `reporter: 'line'`.
+- In SETUP-ONLY mode: print "Verification environment ready." and HALT here.
+
+### 2. Locate and characterize the Blazor app
+
+- Find the startup `*.csproj` (the one referencing `Microsoft.NET.Sdk.Web` or a Blazor SDK; if multiple, prefer one named like `*.Web`, `*.Server`, `*.App`, else ask once).
+- Read `Properties/launchSettings.json` for `applicationUrl`. Capture both the https and http URLs. **Prefer the http URL** for testing to avoid dev-cert friction in WSL. If only https is exposed, run `dotnet dev-certs https --trust` (best-effort) and fall back to http if the cert blocks navigation.
+- Note whether it is Blazor Server (SignalR — needs explicit waits) or WASM (slower first paint).
+
+### 3. Boot the app headless in the background
+
+- **Pick the right rung first** — read the startup `.csproj`. If it has `<UseMaui>`, MAUI SDK, or `-android`/`-ios`/`-maccatalyst` target frameworks → use rung #4 (`cmd.exe /c "dotnet run --project ..."`); MAUI workloads aren't on WSL. Otherwise rung #2 (`~/.dotnet/dotnet run --project ...`).
+- Start it yourself, detached, capturing logs:
+  `nohup ~/.dotnet/dotnet run --project <csproj> --urls http://localhost:5099 > .verify/app.log 2>&1 &`
+  (Pin a known free port like 5099 so the test URL is deterministic. Create `.verify/` if needed.)
+- Poll `http://localhost:5099` (curl, up to ~60s) until it returns HTTP 200, or until `app.log` shows "Now listening on".
+- If the log shows `NETSDK1178` / workload missing / `Microsoft.iOS.Sdk missing` → you picked the wrong rung. Kill the process, switch to rung #4, retry.
+
+### 3a. Boot-failure fallback — ASK USER, never propose cloud
+
+If the boot doesn't succeed in 60s, OR Playwright cannot connect to it (e.g. WSL networking blocks the WSL→localhost lookup):
+
+1. Capture the last 30 lines of `.verify/app.log` and read them. If the error is fixable (port already in use → pick another port; missing dev cert → http only) — retry once.
+2. Try rung #4 of the build invocation ladder: `cmd.exe /c "cd C:\\path\\to\\project && dotnet run --project src\\{AppName}.Web --urls http://localhost:5099"`. Detached, log to `.verify/app.log`. This launches Windows-side dotnet which Playwright in WSL can reach via `http://localhost:5099` (WSL2 forwards localhost to the Windows host).
+3. If both fail, fall through to the **ask-user flow** (per the "Local-only deployment policy" at the top of this file). Output the two-terminal shell recipe. **Wait for `go`** and proceed.
+
+**NEVER**: propose cloud deploy, propose skipping verification, propose "let me push to staging", propose "let me deploy to Cloudflare Pages so Playwright can reach it." Banned escape hatches.
+
+### 4. Generate / refresh tests from the scoped requirement IDs (PARALLEL FAN-OUT)
+
+**Test users (per `.tfcore/tasks/_smoke-test-policy.md`):** any test that needs a logged-in user MUST use a documented/existing account — first from `docs/{AppName}-UsageGuide.md`'s Test-users table, else looked up from the database via the connection string in `appsettings*.json`. **NEVER auto-create random verify/smoke users** (that pollutes the DB). If no usable account exists, STOP and ask the user to provide or confirm credentials before creating any — then record the created account in the UsageGuide table. Pass the chosen credentials into each subagent prompt so all tests share the same accounts.
+
+**Single-agent test generation is a banned anti-pattern for the verifier too** — splits cleanly along test-type lines.
+
+Group the working list by `type-guess`:
+
+- **Cluster UI** — all `ui` / `behavioral` IDs (Playwright tests).
+- **Cluster API** — all `backend-logic` IDs with HTTP surface (Playwright `page.request` or dotnet test integration tests).
+- **Cluster Unit** — all `backend-logic` / `nonfunctional` IDs without HTTP surface (dotnet unit tests).
+
+For each non-empty cluster, spawn a parallel `Agent` (subagent_type=general-purpose) in ONE assistant turn. Each subagent prompt MUST include:
+- The cluster's REQ IDs + requirement text.
+- The running app URL (`http://localhost:5099` or whatever §3/§3a resolved to).
+- Path to where the test files should land: `tests/verify/{scope}-{cluster}.spec.ts` (Playwright; scope slug = `ui` / `functional` / `req-list` / `phase-N`) or appropriate `*Tests.csproj` for dotnet tests.
+- Black-box rule: do NOT touch application source.
+- Return contract: `{ testsAdded[], testsRefreshed[], unobservable[] }`.
+
+After all subagents return, you (the verifier) own running the tests in §5. Do NOT have subagents run tests — concurrent test runs against one running app would race.
+
+Per-requirement guidance for subagents:
+
+- **ui / behavioral** → one `test()` per requirement, title PREFIXED with the ID, e.g. `test('BRD-12 user can filter the grid by status', ...)`. Use Playwright auto-waiting plus explicit `await page.waitForSelector(...)` for Blazor Server render/SignalR. Assert the observable outcome the requirement describes.
+- **backend-logic / nonfunctional** → if a `*Tests.csproj` exists, ensure a matching unit/integration test is present (do not rewrite existing passing tests; only flag absence). If no test project exists, mark the requirement `NOT-OBSERVABLE` rather than guessing.
+- Reference the running URL as `baseURL`.
+- Keep tests black-box and idempotent.
+
+### 4a. DevGuide render sweep — the STRICT RENDER GATE (run for every in-scope screen)
+
+Acceptance tests check "does the feature behave"; this sweep checks the thing that actually slips through — **"does every control on the screen actually render its data, or is it blank?"** A page that returns HTTP 200 with an empty table, a count badge over zero visible rows, or a chart with no data is a DEFECT, not a pass. This is what the verifier missed before.
+
+For **every in-scope screen** in the DevGuide map (including those backing `Done (pre-existing)` and `Verified` REQs), generate/refresh a Playwright check (fan out by role-cluster like §4) that:
+- Logs in as the role that reaches the screen (use the DevGuide's stated role + the `_smoke-test-policy.md` test user), navigates to the screen's route.
+- For **each control the DevGuide lists** for that screen, asserts it actually rendered its data:
+  - grids/tables/lists → **row count > 0 AND cells are non-empty** (catch the "count says 16 but rows blank" case: assert visible data cells, not just the count badge);
+  - charts → the chart/SVG/series node exists and is non-empty;
+  - detail/value panels → the value element is present and not blank/placeholder;
+  - a control hidden behind a null guard (`@if (X != null)`) that never appears → **render-empty**, not "absent by design", unless the DevGuide says it's conditional.
+- Record per control: **RENDERS** / **RENDER-EMPTY** (blank, zero-rows, count-vs-rows mismatch, null-guarded-away) / **RENDER-ERROR** (console/Blazor error) / **UNREACHABLE** (route/auth failed).
+
+A screen with any RENDER-EMPTY / RENDER-ERROR control **fails the render gate** for every REQ that owns a control on it (§6). Capture a screenshot for each failing control. These observations are also what feed the DevGuide refresh in §6b — the DevGuide's render-status tags become *observed runtime facts*, not static inferences.
+
+### 5. Run the tests
+
+- Playwright: `npx playwright test --reporter=line`.
+- Unit/integration (if a test project exists): `dotnet test --nologo`.
+- Collect: per-test pass/fail, and for FAILURES only, the screenshot path under `test-results/` and the relevant assertion message. Do not open artifacts for passing tests.
+
+### 6. Build the coverage matrix AND write it into the Status table
+
+Map every requirement ID to exactly one verdict:
+
+- `PASS` — a real test for this ID passed against the running app / a unit test passed, **AND** every control the DevGuide attributes to this REQ's screens passed the §4a render gate.
+- `RENDER-FAIL` — the acceptance behavior may work, but at least one of the REQ's controls is **RENDER-EMPTY / RENDER-ERROR** (blank table, count-vs-rows mismatch, empty chart, blank value, Blazor error). Include the control + screenshot. This is a real defect even if an old status said `Done`.
+- `FAIL` — a test for this ID ran and failed (include the one-line reason + screenshot path).
+- `NOT-IMPLEMENTED` — feature/element the requirement needs was absent (test could not even find it).
+- `NOT-OBSERVABLE` — backend/nonfunctional requirement with no test project to assert it; needs a human or a test to be written.
+
+**STRICT RENDER GATE (non-negotiable):** a REQ may be `Verified` **only if** its acceptance test passes AND all its DevGuide-listed controls RENDER. Never mark `Verified` when any owned control is RENDER-EMPTY/RENDER-ERROR — that is the exact failure mode this gate exists to stop. A `Done (pre-existing)` REQ whose screens pass the render gate stays `Done (pre-existing)` with a `runtime render-confirmed {date}` remark; one that fails it drops to `Needs re-verify`.
+
+Then **write each verdict into the Requirements Status table** of the doc that DEFINES the ID — `docs/{AppName}-UI-Checklist.md` for `REQ-UI-*`, `docs/{AppName}-Functional-Checklist.md` for `REQ-FN/RAG/NFR-*`. This is the single source of truth; there are no dated coverage files. Update only the Status / % / Remarks cells (never the requirement text or app source). Map verdict → table Status:
+
+| Verdict | Status | % | Remark |
+|---------|--------|---|--------|
+| PASS | `Verified` | 100% | date + test path + `render gate: all controls render` |
+| RENDER-FAIL | `Needs re-verify` | lower to reflect reality | date + `⚠ render gate: {control} renders empty/error on {screen}` + screenshot path |
+| FAIL | `FAIL` | keep | date + one-line reason + screenshot path |
+| FAIL caused by a library gap | `Blocked` | keep | date + link the `TR-NNN` entry in `docs/{AppName}-TrBlazeUI-Feedback.md` or the `TR-RAG-NNN` entry in `docs/{AppName}-TechieRag-Feedback.md` (add the entry if the implementing agent didn't — one feedback file per library) |
+| NOT-IMPLEMENTED | `In Progress` | 25% | date + "element/feature absent" |
+| NOT-OBSERVABLE | `N/A` | — | date + "no test surface; needs human/test" |
+
+A FAIL counts as "caused by a library gap" when the failing behavior traces to TrBlazeUI/TechieRag rather than app code (matches an entry in the owning library's feedback file, or your diagnosis pins it on the library). `Blocked` rows pass through phase-completion checks — they are not the app's fault.
+
+If a graded ID has no row in the Status table yet, add one.
+
+### 6b. Refresh the DevGuide render-status (close the loop)
+
+For every screen you exercised, update its entry in the DevGuide (`docs/{AppName}-DevGuide.md`, or the matching role file under `docs/devguides/`) so its control render-status reflects **what you just observed at runtime** — not the old static inference:
+- Tag each control **renders ✓ (runtime-confirmed {date})** / **renders-empty (DEFECT — {what}, {date})** / **render-error** / **unreachable**, matching the §4a sweep.
+- Update/refresh the screen's *Known issues* with any new RENDER-EMPTY/ERROR finding (with file refs if known), and clear ones that now render.
+- Stamp the DevGuide file header (or the screen block) `Runtime-verified {date} as {roles exercised}`. If a screen could not be reached/booted, mark it `NOT RUNTIME-VERIFIED` rather than leaving a stale "renders" claim.
+- This is markdown only — do NOT render the checklists to HTML; DO re-render the touched DevGuide `.html` via `.tfcore/tasks/generate-html.md` (it is a human doc).
+
+If no DevGuide exists, skip this and add to the report: "No DevGuide to refresh — run `*devguide {AppName}` to create the control map, then re-verify."
+
+### 7. Tear down
+
+- Kill the app process you started (by the pinned port / stored PID). Confirm the port is free.
+
+### 8. Report and HALT
+
+Print a compact report (you have already updated the checklist Status table in §6; do NOT modify requirement text or app source):
+
+```
+# Verification — {scope}
+Source checklist(s): <path(s)>   |   Requirements graded: N
+
+| ID      | Requirement (short)        | Status          | Evidence                          |
+|---------|----------------------------|-----------------|-----------------------------------|
+| BRD-10  | ...                        | PASS            | tests/verify/phase-2.spec.ts      |
+| BRD-12  | ...                        | FAIL            | screenshot: test-results/.../...png — "expected grid rows > 0" |
+| BRD-13  | ...                        | NOT-IMPLEMENTED | element [data-testid=status] absent |
+| BRD-14  | ...                        | NOT-OBSERVABLE  | no test project; logic-only       |
+
+## MISS LIST (act on these)
+- BRD-12 FAIL — <one line>
+- BRD-13 NOT-IMPLEMENTED — <one line>
+
+## Summary: PASS x / FAIL y / BLOCKED b / NOT-IMPLEMENTED z / NOT-OBSERVABLE w
+```
+
+- The per-REQ detail now lives in the checklist Status table (§6) — do NOT also save a dated `docs/verify/*.md` report. The console report above plus the updated Status table ARE the deliverable.
+- **FINAL GATE — update PROJECT-STATUS.md (MANDATORY, non-skippable).** Before you HALT, update `PROJECT-STATUS.md` per `.tfcore/tasks/_status-update-gate.md`: `last_updated`, `last_verified_build`/`last_verified_date`, sync Open requirements to the Status table (anything not `Verified` stays open), set the Next command (re-run the phase if there are FAILs; advance if all `Verified`), and add a verification-log row pointing at the checklist's `#requirements-status`. A verification run that does not update PROJECT-STATUS is incomplete.
+- Do not fix source. If the user wants fixes, that is a separate instruction to the dev/orchestrator agent referencing the miss list.
+- HALT.
+
+## Key principles
+
+- The user typed one command. You did everything else.
+- Grade only against numbered IDs; never inflate coverage.
+- **A feature is not "done" until its UI actually renders its data.** Behaves-correctly AND renders-its-data are both required for `Verified` (the strict render gate, §4a/§6). HTTP 200 with a blank table is a FAIL.
+- **`Done (pre-existing)` is an unverified claim, not a pass** — it gets the render sweep like everything else. The first runtime pass either confirms it or flags it.
+- **Close the loop:** the DevGuide is your control map (§0/§4a) and you write your runtime observations back into it (§6b). DevGuide ⇄ Checklist ⇄ Verifier stay in sync; a build phase marking a REQ done → this verifier → updated checklist + DevGuide → repeat.
+- Results go in the checklist Status table + PROJECT-STATUS (+ the DevGuide render tags) — never a separate dated file.
+- Lean context: read failures, ignore successes, tear down what you booted.

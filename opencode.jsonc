@@ -1,0 +1,142 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    ".tfcore/core-config.yaml"
+  ],
+  // Solo-dev TechieFlow v4: only the agents the compressed workflow actually uses.
+  // Stock story-flow agents (dev/pm/po/qa/sm/ux-expert) were trimmed 2026-06-12
+  // and are no longer included.
+  "agent": {
+    "flow-master": {
+      "prompt": "{file:./.tfcore/agents/flow-master.md}",
+      "mode": "primary",
+      "tools": {
+        "write": true,
+        "edit": true,
+        "bash": true
+      },
+      "description": "Madhav — the single super-agent. Orchestrates the full pipeline (*run-workflow, *phase) with parallel subagents, runs backend/business-logic builds (*build-functional-phase), and handles doc/status utilities (*render-workflow-docs, *generate-html, *handoff-phase, *refresh-status, *devguide) plus any one-off task."
+    },
+    "flow-architect": {
+      "prompt": "{file:./.tfcore/agents/architect.md}",
+      "mode": "all",
+      "tools": {
+        "write": true,
+        "edit": true,
+        "bash": true
+      },
+      "description": "Optional deep architecture dive; /analyst covers day-1 architecture by default"
+    },
+    "flow-analyst": {
+      "prompt": "{file:./.tfcore/agents/analyst.md}",
+      "mode": "all",
+      "tools": {
+        "write": true,
+        "edit": true,
+        "bash": true
+      },
+      "description": "Day-1 docs (*day1-brownfield / *day1-greenfield), requirements split (*split-brd), brainstorming, research"
+    },
+    "flow-verifier": {
+      "prompt": "{file:./.tfcore/agents/verifier.md}",
+      "mode": "all",
+      "tools": {
+        "write": true,
+        "edit": true,
+        "bash": true
+      },
+      "description": "Vidur — autonomous verification (*verify ui|functional|all); writes verdicts into the checklist Requirements Status tables"
+    }
+  },
+  "command": {
+    "techieflow:tasks:day1-brownfield": {
+      "template": "{file:./.tfcore/tasks/day1-brownfield.md}",
+      "description": "Day-1 master task for an EXISTING project: Architecture + BRD + Coding-Standards + .editorconfig + PROJECT-STATUS + CLAUDE.md (+ checklist migration if a dev plan exists), all HTML-rendered."
+    },
+    "techieflow:tasks:day1-greenfield": {
+      "template": "{file:./.tfcore/tasks/day1-greenfield.md}",
+      "description": "Day-1 master task for a NEW project: target Architecture + BRD + Coding-Standards + .editorconfig + PROJECT-STATUS + CLAUDE.md, all HTML-rendered."
+    },
+    "techieflow:tasks:split-brd": {
+      "template": "{file:./.tfcore/tasks/split-brd.md}",
+      "description": "Split the BRD into UI-Checklist (REQ-UI-*) and Functional-Checklist (REQ-FN/RAG/NFR-*) with Requirements Status tables."
+    },
+    "techieflow:tasks:build-ui-phase": {
+      "template": "{file:./.tfcore/tasks/build-ui-phase.md}",
+      "description": "Implement every open REQ-UI-* with TrBlazeUI per Coding Standards; self-smoke; chain the verifier. Normally driven by /trblazeui."
+    },
+    "techieflow:tasks:build-functional-phase": {
+      "template": "{file:./.tfcore/tasks/build-functional-phase.md}",
+      "description": "Implement every open REQ-FN-*/REQ-NFR-* per Coding Standards; self-smoke; chain the verifier. Normally driven by /flow-master."
+    },
+    "techieflow:tasks:build-rag-phase": {
+      "template": "{file:./.tfcore/tasks/build-rag-phase.md}",
+      "description": "Implement every open REQ-RAG-* with TechieRag per Coding Standards; self-smoke. Normally driven by /techierag."
+    },
+    "techieflow:tasks:verify-phase": {
+      "template": "{file:./.tfcore/tasks/verify-phase.md}",
+      "description": "Autonomous verification of a scope (ui | functional | all | REQ list | legacy phase-N); verdicts land in the checklist Requirements Status tables."
+    },
+    "techieflow:tasks:handoff-phase": {
+      "template": "{file:./.tfcore/tasks/handoff-phase.md}",
+      "description": "Final wrap-up: UsageGuide doc (test users + test plan + setup), PROJECT-STATUS → Handoff, HTML re-renders, Library-Feedback consolidation."
+    },
+    "techieflow:tasks:refresh-status": {
+      "template": "{file:./.tfcore/tasks/refresh-status.md}",
+      "description": "RECOVERY: rebuild PROJECT-STATUS.md from ground truth (git + working tree + checklist tables + fresh build) after a session died mid-phase and the status gate never ran. Distrusts stale status; never edits source."
+    },
+    "techieflow:tasks:render-workflow-docs": {
+      "template": "{file:./.tfcore/tasks/render-workflow-docs.md}",
+      "description": "Re-render the canonical trio: BRD.html + Architecture.html + PROJECT-STATUS.html (with NEXT COMMAND call-to-action)."
+    },
+    "techieflow:tasks:generate-html": {
+      "template": "{file:./.tfcore/tasks/generate-html.md}",
+      "description": "Render any markdown file(s) or a non-recursive directory to self-contained HTML using the shared shell."
+    },
+    "techieflow:tasks:author-brd": {
+      "template": "{file:./.tfcore/tasks/author-brd.md}",
+      "description": "Interactively extend docs/{AppName}-BRD.md with confirmed BRD-N requirements (per-item elicitation)."
+    },
+    "techieflow:tasks:amend-docs": {
+      "template": "{file:./.tfcore/tasks/amend-docs.md}",
+      "description": "Fold an evolving concept / changed requirements into the EXISTING day-1 docs IN PLACE: surgically amends BRD + Architecture (append-only IDs), ripples to PROJECT-STATUS / BRD §4 / checklists, re-renders HTML. Incremental alternative to re-running day1-*."
+    },
+    "techieflow:tasks:devguide": {
+      "template": "{file:./.tfcore/tasks/devguide.md}",
+      "description": "Generate/refresh the screen-by-screen Developer Guide: traces every screen/control from Razor page → service → data-access → stored proc/query, per user role, documenting the code AS BUILT. Single doc for small apps, split per role for large ones; --update refreshes only changed screens."
+    },
+    "techieflow:tasks:document-project": {
+      "template": "{file:./.tfcore/tasks/document-project.md}",
+      "description": "Generate comprehensive documentation for existing projects optimized for AI development agents."
+    },
+    "techieflow:tasks:create-doc": {
+      "template": "{file:./.tfcore/tasks/create-doc.md}"
+    },
+    "techieflow:tasks:create-deep-research-prompt": {
+      "template": "{file:./.tfcore/tasks/create-deep-research-prompt.md}",
+      "description": "Generate well-structured research prompts."
+    },
+    "techieflow:tasks:facilitate-brainstorming-session": {
+      "template": "{file:./.tfcore/tasks/facilitate-brainstorming-session.md}"
+    },
+    "techieflow:tasks:advanced-elicitation": {
+      "template": "{file:./.tfcore/tasks/advanced-elicitation.md}",
+      "description": "Reflective/brainstorming actions for deeper exploration and iterative refinement of drafted content."
+    },
+    "techieflow:tasks:execute-checklist": {
+      "template": "{file:./.tfcore/tasks/execute-checklist.md}"
+    },
+    "techieflow:tasks:index-docs": {
+      "template": "{file:./.tfcore/tasks/index-docs.md}",
+      "description": "Maintain docs/index.md by scanning all documentation files and indexing them with descriptions."
+    },
+    "techieflow:tasks:kb-mode-interaction": {
+      "template": "{file:./.tfcore/tasks/kb-mode-interaction.md}",
+      "description": "User-friendly interface to the TechieFlow knowledge base."
+    },
+    "techieflow:tasks:shard-doc": {
+      "template": "{file:./.tfcore/tasks/shard-doc.md}",
+      "description": "Split a large document into smaller documents by level-2 sections, preserving content integrity."
+    }
+  }
+}
