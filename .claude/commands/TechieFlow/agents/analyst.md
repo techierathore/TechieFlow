@@ -57,12 +57,13 @@ persona:
 # All commands require * prefix when used (e.g., *help)
 commands:
   - help: Show numbered list of the following commands to allow selection
-  - day1-brownfield {AppName}: Day-1 master task for an EXISTING project. Produces Architecture, BRD, Coding-Standards, .editorconfig, PROJECT-STATUS, CLAUDE.md in one session; if an existing dev/phase plan is found, also migrates it into UI-Checklist + Functional-Checklist (inline split, statuses preserved). Runs task day1-brownfield.md.
-  - day1-greenfield {AppName}: Day-1 master task for a NEW project. Produces brief + BRD + target Architecture + Coding-Standards + .editorconfig + PROJECT-STATUS + CLAUDE.md. Runs task day1-greenfield.md.
-  - split-brd {AppName}: Split docs/{AppName}-BRD.md into docs/{AppName}-UI-Checklist.md (REQ-UI-*) and docs/{AppName}-Functional-Checklist.md (REQ-FN/RAG/NFR-*); seeds phase tags + Done(pre-existing) statuses from any existing dev/phase plan. Runs task split-brd.md.
+  - day1-brownfield {AppName}: Day-1 master task for an EXISTING project. Produces Architecture, BRD, Coding-Standards, .editorconfig, PROJECT-STATUS, CLAUDE.md + the screen-by-screen DevGuide (with per-screen screenshots) in one session; if an existing dev/phase plan is found, also migrates it into the one Checklist (inline split, statuses preserved). Runs task day1-brownfield.md.
+  - day1-greenfield {AppName}: Day-1 master task for a NEW project. Produces brief + BRD + target Architecture + UI mockups + Coding-Standards + .editorconfig + PROJECT-STATUS + CLAUDE.md + UsageGuide. Runs task day1-greenfield.md.
+  - mockups {AppName} [--update]: Produce the greenfield UI design — docs/{AppName}-UIDesign.md (per-screen component map) + rendered docs/mockups/*.html styled to look like TrBlazeUI (reads the TrBlazeUI catalog first; replicable by construction). The visual contract the build matches + the verifier diffs against. Runs task mockups.md.
+  - split-brd {AppName}: Split docs/{AppName}-BRD.md into the one docs/{AppName}-Checklist.md (REQ-UI/FN/RAG/NFR-* in a single Requirements Status table); seeds phase tags + Done(pre-existing) statuses from any existing dev/phase plan. Runs task split-brd.md.
   - brainstorm {topic}: Facilitate structured brainstorming session (run task facilitate-brainstorming-session.md with template brainstorming-output-tmpl.yaml)
   - create-brd {AppName} {topic}: Interactively extend the BRD with numbered BRD-N requirements (per-item confirmation). Runs task author-brd.md. Writes to docs/{AppName}-BRD.md. For CREATING a project's BRD, prefer *day1-brownfield / *day1-greenfield (bulk draft).
-  - amend-docs {AppName} {change}: Fold an evolving concept / changed requirements into the EXISTING day-1 docs IN PLACE — surgically amends BRD + Architecture (append-only BRD IDs, unchanged sections preserved), ripples to PROJECT-STATUS / BRD §4 / the checklists, re-renders HTML. The incremental alternative to re-running *day1-* (which archives + regenerates). Runs task amend-docs.md.
+  - amend-docs {AppName} {change}: Fold an evolving concept / changed requirements into the EXISTING day-1 docs IN PLACE — surgically amends BRD + Architecture (append-only BRD IDs, unchanged sections preserved), ripples to PROJECT-STATUS / BRD §4 / the checklist (and points UI changes at *mockups --update), re-renders HTML. The incremental alternative to re-running *day1-* (which archives + regenerates). Runs task amend-docs.md.
   - create-competitor-analysis: use task create-doc with competitor-analysis-tmpl.yaml
   - create-project-brief: use task create-doc with project-brief-tmpl.yaml
   - doc-out: Output full document in progress to current destination file
@@ -84,6 +85,7 @@ dependencies:
     - day1-brownfield.md
     - day1-greenfield.md
     - facilitate-brainstorming-session.md
+    - mockups.md
     - split-brd.md
   templates:
     - brainstorming-output-tmpl.yaml

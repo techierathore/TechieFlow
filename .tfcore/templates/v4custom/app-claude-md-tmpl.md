@@ -62,4 +62,4 @@ If `/trblazeui` or `/techierag` is missing: run `dotnet build` (NuGet deploy tar
 
 If `/flow-master *render-workflow-docs <App>` returns "Unknown command", use `/TechieFlow:agents:flow-master *render-workflow-docs <App>` instead.
 
-After the agent is loaded, every TechieFlow-native agent (analyst, flow-master, flow-master, verifier) accepts `*command args` style invocations. trblazeui and techierag are free-form personas — give them prompts like `Follow .tfcore/tasks/build-ui-phase.md for the app <App>.`
+After the agent is loaded, every TechieFlow-native agent (analyst, architect, flow-master, verifier) accepts `*command args` style invocations. trblazeui and techierag are free-form personas — normally `flow-master *build-phase <App>` calls them as sub-agents, but you can also drive them directly with prompts like `Implement REQ-UI-* from docs/<App>-Checklist.md to match the mockups in docs/mockups/.`

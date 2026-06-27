@@ -8,16 +8,16 @@ Replace manual verification. Given a scope, prove whether each numbered requirem
 
 ## Inputs
 
-- `{AppName}` — required for the checklist paths; resolve from the command argument, `core-config.yaml` → `customTechnicalDocuments`, or the `docs/{AppName}-*-Checklist.md` filenames. Ask only if it cannot be resolved.
+- `{AppName}` — required for the checklist path; resolve from the command argument, `core-config.yaml` → `customTechnicalDocuments`, or the `docs/{AppName}-Checklist.md` filename. Ask only if it cannot be resolved.
 - `{scope}` — see Modes.
 - **The DevGuide** (`docs/{AppName}-DevGuide.md`, or the split set under `docs/devguides/`) — the screen-by-screen, **per-control** test map. The verifier uses it to know which controls each screen must render (the render gate, §4a). If it is missing, the verifier still runs but notes that no control map exists and recommends `*devguide {AppName}`; if it exists, the verifier **refreshes its observed render-status tags** for every screen it exercises (§6b) — this is the DevGuide ⇄ Checklist ⇄ Verifier loop.
 
 ## Modes
 
-- **Full mode** (default, `*verify {scope}`): run the entire pipeline below. Scope values:
-  - `ui` — all `REQ-UI-*` rows from `docs/{AppName}-UI-Checklist.md`.
-  - `functional` — all `REQ-FN-*` / `REQ-NFR-*` / `REQ-RAG-*` rows from `docs/{AppName}-Functional-Checklist.md`.
-  - `all` — both checklists.
+- **Full mode** (default, `*verify {scope}`): run the entire pipeline below. There is **one checklist** (`docs/{AppName}-Checklist.md`); scopes filter its Requirements Status table by REQ prefix, they do NOT pick a separate file. Scope values:
+  - `ui` — all `REQ-UI-*` rows.
+  - `functional` — all `REQ-FN-*` / `REQ-NFR-*` / `REQ-RAG-*` rows.
+  - `all` — every row.
   - An explicit ID list (`REQ-UI-007,REQ-UI-013`) — just those rows.
   - `phase-N` — LEGACY fallback for pre-split projects: grade the BRD's Phase-N numbered IDs (see §0 legacy path).
 - **Setup-only mode** (`*setup`): execute only Section 1, then HALT.
@@ -53,15 +53,15 @@ If the WSL-side `dotnet run` is unreachable by Playwright (port collision, WSL n
 
    Wait for `go`. Then point Playwright at `http://localhost:5099` (and `http://localhost:5100` for API checks). Do NOT skip verification. Do NOT propose cloud anything.
 
-This applies to EVERY phase task that boots an app (build-functional self-smoke, build-ui self-smoke, build-rag self-smoke, and this verifier). They all share this policy.
+This applies to EVERY phase task that boots an app (the `build-phase` self-smoke, the `fix-issues` repro, the `devguide` OBSERVE pass, and this verifier). They all share this policy.
 
 ## SEQUENTIAL Execution (do not proceed until current section is complete)
 
 ### 0. Load inputs and build the working list
 
 - Load `.tfcore/core-config.yaml`; resolve `{AppName}` per Inputs above.
-- Determine the scope from the command argument (`ui` / `functional` / `all` / explicit REQ IDs / legacy `phase-N`). **When this task is chained from a build phase (build-ui / build-functional / build-rag), the caller has already stated the scope — use it and ask nothing.** Only if invoked standalone with NO scope: ask the user once "Verify which scope — ui, functional, all, or specific REQ IDs?" — this is the ONLY question you may ask.
-- **Checklist path (normal):** open the owning checklist(s) — `docs/{AppName}-UI-Checklist.md` for `ui`, `docs/{AppName}-Functional-Checklist.md` for `functional`, both for `all`. From the **Requirements Status** table, build the working list `[{id, text, status, type-guess}]` (type-guess ∈ {ui, behavioral, backend-logic, nonfunctional}; pull each REQ's acceptance criteria from its Details anchor section).
+- Determine the scope from the command argument (`ui` / `functional` / `all` / explicit REQ IDs / legacy `phase-N`). **When this task is chained from `build-phase` or `fix-issues`, the caller has already stated the scope — use it and ask nothing.** Only if invoked standalone with NO scope: ask the user once "Verify which scope — ui, functional, all, or specific REQ IDs?" — this is the ONLY question you may ask.
+- **Checklist path (normal):** open the one checklist `docs/{AppName}-Checklist.md`. From the **Requirements Status** table, filter rows by the scope's REQ prefix (`REQ-UI-*` for `ui`; `REQ-FN/NFR/RAG-*` for `functional`; all rows for `all`) and build the working list `[{id, text, status, type-guess}]` (type-guess ∈ {ui, behavioral, backend-logic, nonfunctional}; pull each REQ's acceptance criteria from its Details anchor section).
 - **`Done (pre-existing)` is NOT a free pass — it is an unverified migrated claim.** Do NOT skip those rows. They were carried over from a dev-plan and have **never been runtime-verified** — this is exactly how blank-rendering screens slipped through (a `Done (pre-existing)` home page with an empty table and a blank list). Every in-scope row, **including `Done (pre-existing)`**, gets the **§4a DevGuide render sweep** at minimum (load its screens, confirm every control actually renders its data). Only `N/A` rows are skipped. Rows already `Verified` get a fast re-confirm (render sweep + re-run their test); `Done (pre-existing)` that passes the render sweep gets a `runtime render-confirmed {date}` remark and may stay Done; anything that renders blank/empty/errors → `Needs re-verify`/`FAIL` (§6).
 - **Load the DevGuide map.** Read the DevGuide (`docs/{AppName}-DevGuide.md`, or the split set under `docs/devguides/`) and, for each in-scope screen, extract the list of controls + their expected data source from the *Controls*/*Data lineage* tables. This is the checklist of what must render in §4a. If no DevGuide exists, note it and fall back to acceptance-criteria-only grading, and recommend `*devguide {AppName}` in the report.
 - **Legacy BRD path (only for `phase-N` scope on pre-split projects):** locate the BRD (`customTechnicalDocuments`, then `docs/{AppName}-BRD*.md`, then `docs/brd*.md`/`docs/BRD*.md`) and extract that phase's numbered IDs (`BRD-12`, `REQ-12`, `FR-12`, `[BRD-12]`). If no numbered IDs exist, STOP auto-grading and tell the user: "This phase has no numbered, checkable requirements, so coverage cannot be graded by ID. Number them as BRD-N (or run `*split-brd`) and re-run." Then offer a loose best-effort prose verification.
@@ -145,6 +145,19 @@ For **every in-scope screen** in the DevGuide map (including those backing `Done
 
 A screen with any RENDER-EMPTY / RENDER-ERROR control **fails the render gate** for every REQ that owns a control on it (§6). Capture a screenshot for each failing control. These observations are also what feed the DevGuide refresh in §6b — the DevGuide's render-status tags become *observed runtime facts*, not static inferences.
 
+### 4b. VISUAL-TRUTH gate — does the screen actually LOOK right (run for every in-scope screen)
+
+The §4a render gate proves the data is *present in the DOM*; it does NOT prove the screen is *usable*. The exact failure the owner hit: every control renders its data, the verifier passes — but the controls **overlap, sit off-screen, are clipped to zero height, or the layout is broken**, so the running app is unusable. "Has data" ≠ "looks right." This gate closes that hole.
+
+For **every in-scope screen** (same screens as §4a, same role login), at **at least two viewport widths** — desktop (1280×800) and mobile (390×844) — assert via Playwright:
+- **No overlap:** no two sibling/interactive controls have intersecting bounding boxes (`boundingBox()` rectangles must not overlap beyond a small tolerance). Overlapping controls = `VISUAL-FAIL`.
+- **In-viewport & sized:** every control the DevGuide lists has a bounding box with width > 0 and height > 0, and lies within the page bounds (not pushed off-canvas, not clipped to 0). A control with a zero-size or off-screen box = `VISUAL-FAIL`.
+- **Not occluded / not collapsed:** key containers are not zero-height and content is not spilling out of its container.
+- **Screenshot + vision:** capture a full-page screenshot at each width and **inspect it** — broken grid, stacked/overlapping text, unstyled fallback (raw HTML with no TrBlazeUI styling), or content overflowing its region is a `VISUAL-FAIL` even if the box-geometry checks passed.
+- **Mockup diff (greenfield, when a mockup exists):** compare the screen against its mockup (`docs/mockups/{screen}.html` named in the REQ's checklist row). The same regions/controls should be present in roughly the same layout. A large structural deviation = `MOCKUP-DRIFT` (a `VISUAL-FAIL` sub-type); a match = `MOCKUP-MATCH`. Brownfield has no mockup — rely on the geometry + vision checks (and, where present, the reviewed DevGuide screenshots from `docs/screenshots/{AppName}/`).
+
+Record per screen: **VISUAL-OK** / **VISUAL-FAIL** (with the failing controls + which width + a screenshot path) / **MOCKUP-DRIFT**. A screen with any `VISUAL-FAIL` fails the visual gate for every REQ that owns a control on it (§6). These observations also feed the DevGuide refresh (§6b).
+
 ### 5. Run the tests
 
 - Playwright: `npx playwright test --reporter=line`.
@@ -155,20 +168,22 @@ A screen with any RENDER-EMPTY / RENDER-ERROR control **fails the render gate** 
 
 Map every requirement ID to exactly one verdict:
 
-- `PASS` — a real test for this ID passed against the running app / a unit test passed, **AND** every control the DevGuide attributes to this REQ's screens passed the §4a render gate.
+- `PASS` — a real test for this ID passed against the running app / a unit test passed, **AND** every control the DevGuide attributes to this REQ's screens passed the §4a render gate **AND** the §4b visual-truth gate.
 - `RENDER-FAIL` — the acceptance behavior may work, but at least one of the REQ's controls is **RENDER-EMPTY / RENDER-ERROR** (blank table, count-vs-rows mismatch, empty chart, blank value, Blazor error). Include the control + screenshot. This is a real defect even if an old status said `Done`.
+- `VISUAL-FAIL` — the data renders, but the screen does not LOOK right: controls overlap, sit off-viewport, are clipped to zero size, the layout is broken/unstyled, or it drifts structurally from its mockup (§4b). Include the failing control(s), the width, and a screenshot. A real defect even if §4a passed and an old status said `Done`.
 - `FAIL` — a test for this ID ran and failed (include the one-line reason + screenshot path).
 - `NOT-IMPLEMENTED` — feature/element the requirement needs was absent (test could not even find it).
 - `NOT-OBSERVABLE` — backend/nonfunctional requirement with no test project to assert it; needs a human or a test to be written.
 
-**STRICT RENDER GATE (non-negotiable):** a REQ may be `Verified` **only if** its acceptance test passes AND all its DevGuide-listed controls RENDER. Never mark `Verified` when any owned control is RENDER-EMPTY/RENDER-ERROR — that is the exact failure mode this gate exists to stop. A `Done (pre-existing)` REQ whose screens pass the render gate stays `Done (pre-existing)` with a `runtime render-confirmed {date}` remark; one that fails it drops to `Needs re-verify`.
+**STRICT GATE (non-negotiable):** a REQ may be `Verified` **only if** its acceptance test passes AND all its DevGuide-listed controls RENDER their data (§4a) AND every screen it owns passes VISUAL-TRUTH (§4b). Never mark `Verified` when any owned control is RENDER-EMPTY/RENDER-ERROR or any owned screen is VISUAL-FAIL — those are the exact failure modes these gates exist to stop (data-present-but-blank, and data-present-but-visually-broken). A `Done (pre-existing)` REQ whose screens pass both gates stays `Done (pre-existing)` with a `runtime render+visual-confirmed {date}` remark; one that fails either drops to `Needs re-verify`.
 
-Then **write each verdict into the Requirements Status table** of the doc that DEFINES the ID — `docs/{AppName}-UI-Checklist.md` for `REQ-UI-*`, `docs/{AppName}-Functional-Checklist.md` for `REQ-FN/RAG/NFR-*`. This is the single source of truth; there are no dated coverage files. Update only the Status / % / Remarks cells (never the requirement text or app source). Map verdict → table Status:
+Then **write each verdict into the Requirements Status table** of the one checklist `docs/{AppName}-Checklist.md` (find the row by its REQ ID). This is the single source of truth; there are no dated coverage files. Update only the Status / % / Remarks cells (never the requirement text or app source). Map verdict → table Status:
 
 | Verdict | Status | % | Remark |
 |---------|--------|---|--------|
-| PASS | `Verified` | 100% | date + test path + `render gate: all controls render` |
+| PASS | `Verified` | 100% | date + test path + `render+visual gate: all controls render and look right` |
 | RENDER-FAIL | `Needs re-verify` | lower to reflect reality | date + `⚠ render gate: {control} renders empty/error on {screen}` + screenshot path |
+| VISUAL-FAIL | `Needs re-verify` | lower to reflect reality | date + `⚠ visual: {control(s)} overlap/clip/off-viewport on {screen} @ {width}` (or `⚠ visual: drifts from mockup`) + screenshot path |
 | FAIL | `FAIL` | keep | date + one-line reason + screenshot path |
 | FAIL caused by a library gap | `Blocked` | keep | date + link the `TR-NNN` entry in `docs/{AppName}-TrBlazeUI-Feedback.md` or the `TR-RAG-NNN` entry in `docs/{AppName}-TechieRag-Feedback.md` (add the entry if the implementing agent didn't — one feedback file per library) |
 | NOT-IMPLEMENTED | `In Progress` | 25% | date + "element/feature absent" |
@@ -181,8 +196,8 @@ If a graded ID has no row in the Status table yet, add one.
 ### 6b. Refresh the DevGuide render-status (close the loop)
 
 For every screen you exercised, update its entry in the DevGuide (`docs/{AppName}-DevGuide.md`, or the matching role file under `docs/devguides/`) so its control render-status reflects **what you just observed at runtime** — not the old static inference:
-- Tag each control **renders ✓ (runtime-confirmed {date})** / **renders-empty (DEFECT — {what}, {date})** / **render-error** / **unreachable**, matching the §4a sweep.
-- Update/refresh the screen's *Known issues* with any new RENDER-EMPTY/ERROR finding (with file refs if known), and clear ones that now render.
+- Tag each control **renders ✓ (runtime-confirmed {date})** / **renders-empty (DEFECT — {what}, {date})** / **render-error** / **unreachable**, matching the §4a sweep, and add the §4b visual result for the screen **looks-right ✓ (runtime-confirmed {date})** / **visual-broken (DEFECT — {what} @ {width}, {date})**.
+- Update/refresh the screen's *Known issues* with any new RENDER-EMPTY/ERROR **or VISUAL-FAIL** finding (with file refs if known), and clear ones that now render and look right.
 - Stamp the DevGuide file header (or the screen block) `Runtime-verified {date} as {roles exercised}`. If a screen could not be reached/booted, mark it `NOT RUNTIME-VERIFIED` rather than leaving a stale "renders" claim.
 - This is markdown only — do NOT render the checklists to HTML; DO re-render the touched DevGuide `.html` via `.tfcore/tasks/generate-html.md` (it is a human doc).
 
@@ -215,7 +230,7 @@ Source checklist(s): <path(s)>   |   Requirements graded: N
 ```
 
 - The per-REQ detail now lives in the checklist Status table (§6) — do NOT also save a dated `docs/verify/*.md` report. The console report above plus the updated Status table ARE the deliverable.
-- **FINAL GATE — update PROJECT-STATUS.md (MANDATORY, non-skippable).** Before you HALT, update `PROJECT-STATUS.md` per `.tfcore/tasks/_status-update-gate.md`: `last_updated`, `last_verified_build`/`last_verified_date`, sync Open requirements to the Status table (anything not `Verified` stays open), set the Next command (re-run the phase if there are FAILs; advance if all `Verified`), and add a verification-log row pointing at the checklist's `#requirements-status`. A verification run that does not update PROJECT-STATUS is incomplete.
+- **FINAL GATE — update PROJECT-STATUS (MANDATORY, non-skippable).** Before you HALT, update PROJECT-STATUS — **both `PROJECT-STATUS.md` AND re-rendered `PROJECT-STATUS.html`** — per `.tfcore/tasks/_status-update-gate.md`: `last_updated`, `last_verified_build`/`last_verified_date`, sync Open requirements to the Status table (anything not `Verified` stays open), set the Next command (**command-against-checklist only — re-run the phase naming the FAILed REQ IDs if there are FAILs; advance if all `Verified` — no prose to-do narrative**), and add a verification-log row pointing at the checklist's `#requirements-status`. A verification run that updates the markdown but not the HTML, or that does not update PROJECT-STATUS at all, is incomplete.
 - Do not fix source. If the user wants fixes, that is a separate instruction to the dev/orchestrator agent referencing the miss list.
 - HALT.
 
@@ -223,7 +238,7 @@ Source checklist(s): <path(s)>   |   Requirements graded: N
 
 - The user typed one command. You did everything else.
 - Grade only against numbered IDs; never inflate coverage.
-- **A feature is not "done" until its UI actually renders its data.** Behaves-correctly AND renders-its-data are both required for `Verified` (the strict render gate, §4a/§6). HTTP 200 with a blank table is a FAIL.
+- **A feature is not "done" until its UI renders its data AND looks right.** Behaves-correctly AND renders-its-data (§4a) AND looks-right (§4b) are ALL required for `Verified`. HTTP 200 with a blank table is a FAIL; data-present-but-overlapping/clipped/off-screen is also a FAIL. This is the gap that let "verified" screens be visibly broken.
 - **`Done (pre-existing)` is an unverified claim, not a pass** — it gets the render sweep like everything else. The first runtime pass either confirms it or flags it.
 - **Close the loop:** the DevGuide is your control map (§0/§4a) and you write your runtime observations back into it (§6b). DevGuide ⇄ Checklist ⇄ Verifier stay in sync; a build phase marking a REQ done → this verifier → updated checklist + DevGuide → repeat.
 - Results go in the checklist Status table + PROJECT-STATUS (+ the DevGuide render tags) — never a separate dated file.

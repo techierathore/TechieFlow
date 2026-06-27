@@ -19,7 +19,7 @@ Update the existing day-1 docs **in place** when a project's concept or requirem
 ### 1. Load the targets
 
 - Read `.tfcore/core-config.yaml`; resolve `{AppName}`, the BRD (`docs/{AppName}-BRD.md`), and the Architecture (`docs/{AppName}-Architecture.md`). Note the highest existing `BRD-N`.
-- Check whether the checklists exist (`docs/{AppName}-UI-Checklist.md`, `docs/{AppName}-Functional-Checklist.md`) — they do iff `*split-brd` has run. This decides §6 (ripple).
+- Check whether the checklist exists (`docs/{AppName}-Checklist.md`) — it does iff `*split-brd` has run. This decides §6 (ripple).
 - If a BRD doesn't exist at all, this isn't an amend — tell the user to run `*day1-*` first, and HALT.
 
 ### 2. Parse the change into a change-set
@@ -67,19 +67,19 @@ If `{Scope}` includes architecture and there are ARCH items, edit `docs/{AppName
 - Update the stack line if the change altered it.
 - Status note: keep the existing status (`Target` / `Current`) and append `amended {YYYY-MM-DD}: {summary}`.
 
-### 6. Ripple to the checklists (only if they already exist)
+### 6. Ripple to the checklist (only if it already exists)
 
-If `*split-brd` has run (checklists present), the BRD change must reach the per-REQ tables — but **never clobber existing statuses by re-splitting blindly:**
+If `*split-brd` has run (checklist present), the BRD change must reach the per-REQ table — but **never clobber existing statuses by re-splitting blindly:**
 
-- **New BRD-N (ADD):** append new `REQ-*` row(s) to the correct checklist (`REQ-UI-*` → UI-Checklist, `REQ-FN/NFR/RAG-*` → Functional-Checklist), Status `Not started`, with the new ID's acceptance criteria in its Details anchor. Pick the REQ type the way `split-brd` does.
+- **New BRD-N (ADD):** append new `REQ-*` row(s) to the one checklist `docs/{AppName}-Checklist.md` (the prefix carries the type — `REQ-UI/FN/NFR/RAG-*`), Status `Not started`, with the new ID's acceptance criteria in its Details anchor. Pick the REQ type the way `split-brd` does. **If the ADD is a UI change and mockups exist** (`docs/{AppName}-UIDesign.md`), the new `REQ-UI-*` should cite its mockup screen — if that screen doesn't exist yet, flag it in the §7 report to run `*mockups {AppName} --update` so the new screen gets a mockup before build.
 - **MODIFY:** find the REQ rows derived from that BRD-N and set their Status to `Needs re-verify` (or add a Remark) so the verifier re-grades them — do not silently flip to Verified.
 - **REMOVE:** mark the derived REQ rows `N/A (removed {date})`; keep the rows for traceability.
 - If the mapping from BRD-N → REQ-* is non-obvious for a MODIFY/REMOVE, list those rows in the §7 report and ask the user rather than guessing.
-- **If checklists do NOT exist yet** (pre-split greenfield still in discovery): nothing to ripple — note that the next `*split-brd {AppName}` will pick up all the amendments.
+- **If the checklist does NOT exist yet** (pre-split greenfield still in discovery): nothing to ripple — note that the next `*split-brd {AppName}` will pick up all the amendments.
 
 ### 7. Re-render + status gate (MANDATORY)
 
-- Re-render the touched HUMAN docs to HTML via `.tfcore/tasks/generate-html.md` (shared shell): `docs/{AppName}-BRD.html` always; `docs/{AppName}-Architecture.html` if §5 ran. **Do NOT render the checklists to HTML** even though §6 may have changed their rows — they are AI-agent working documents kept in markdown only. (If the amendment changed code-level flows, refresh the DevGuide separately via `*devguide {AppName}`.)
+- Re-render the touched HUMAN docs to HTML via `.tfcore/tasks/generate-html.md` (shared shell): `docs/{AppName}-BRD.html` always; `docs/{AppName}-Architecture.html` if §5 ran. **Do NOT render the checklist to HTML** even though §6 may have changed its rows — it is an AI-agent working document kept in markdown only. (If the amendment changed code-level flows, refresh the DevGuide separately via `*devguide {AppName}`; if it changed greenfield UI/screens, refresh the mockups via `*mockups {AppName} --update`.)
 - **Run `.tfcore/tasks/_status-update-gate.md`:** update `PROJECT-STATUS.md` (`last_updated`, a "Where I am" line noting the amendment, the BRD §4 Development-status rollup per gate item 9) and re-render `PROJECT-STATUS.html`. Add a one-line note to PROJECT-STATUS: `Docs amended {date}: {summary}`.
 
 ### 8. HALT — amendment report
@@ -90,10 +90,10 @@ Print:
 # Docs amended — {AppName}
 BRD:   +{a} added (BRD-{x}..BRD-{y}) · {m} modified · {r} removed   (highest now BRD-{N})
 Arch:  {modules/flows/ADRs touched, or "no change"}
-Checklists: {rows appended / flagged for re-verify / removed, or "not split yet — run *split-brd"}
+Checklist: {rows appended / flagged for re-verify / removed, or "not split yet — run *split-brd"}
 Re-rendered: {list of .html}
 
-Next: {if new reqs and not split → "*split-brd {AppName}"} / {if reqs need building → the relevant build phase} / {else "review the rendered docs"}
+Next: {if new reqs and not split → "*split-brd {AppName}"} / {if new UI screens need mockups → "*mockups {AppName} --update"} / {if reqs need building → "*build-phase {AppName}"} / {else "review the rendered docs"}
 ```
 
 ## Hard rules
@@ -109,7 +109,7 @@ Next: {if new reqs and not split → "*split-brd {AppName}"} / {if reqs need bui
 - [ ] Change-set parsed (ADD/MODIFY/REMOVE/ARCH) and confirmed once with the user
 - [ ] BRD amended in place — new BRD-N appended, modified IDs edited in place, removed IDs struck through; §4/§9/§10 + footer updated; no renumbering; no OldDocs archive
 - [ ] Architecture amended in place (if in scope) — modules/flows/ADRs updated, unchanged sections preserved
-- [ ] Checklists rippled (new REQ rows appended / modified flagged for re-verify / removed marked) — or noted "not split yet"
-- [ ] BRD.html (+ Architecture.html as touched) re-rendered; every diagram passes the §5.5 self-check (checklists are NOT rendered to HTML — markdown only)
+- [ ] Checklist rippled (new REQ rows appended / modified flagged for re-verify / removed marked) — or noted "not split yet"
+- [ ] BRD.html (+ Architecture.html as touched) re-rendered; every diagram passes the §5.5 self-check (the checklist is NOT rendered to HTML — markdown only)
 - [ ] PROJECT-STATUS.md updated via the status gate (incl. BRD §4 rollup) + PROJECT-STATUS.html re-rendered
 - [ ] Amendment report printed with the next command

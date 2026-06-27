@@ -4,7 +4,7 @@ Final-phase wrap-up: usage doc + status refresh + library-feedback consolidation
 
 ## Purpose
 
-After the Functional Checklist's Requirements Status table is green (or `Blocked` library-gap items accepted), produce the artifacts the user needs to ship and the artifacts future-you needs to resume.
+After the checklist's Requirements Status table is green (or `Blocked` library-gap items accepted), produce the artifacts the user needs to ship and the artifacts future-you needs to resume.
 
 ## Inputs
 
@@ -40,7 +40,7 @@ Detection sources for each section:
   - If frontend and backend are the same project (Blazor Server-only): collapse steps 5+6 into one.
 - **Test**: `dotnet test`. Add `npx playwright test` ONLY if the repo has Playwright tests checked in.
 - **Smoke checklist**: one checkbox per top-level BRD capability (5–10 max). Each line is a user action, not a technical step ("Log in as admin and load the dashboard" — NOT "verify JWT validation").
-- **Known limitations**: pull every `Blocked` REQ row from the checklist Status tables + every entry from the per-library feedback files (`docs/{AppName}-TrBlazeUI-Feedback.md`, `docs/{AppName}-TechieRag-Feedback.md`). One line each. Cross-reference to issue IDs (TR-NNN, TR-RAG-NNN).
+- **Known limitations**: pull every `Blocked` REQ row from the checklist Status table + every entry from the per-library feedback files (`docs/{AppName}-TrBlazeUI-Feedback.md`, `docs/{AppName}-TechieRag-Feedback.md`). One line each. Cross-reference to issue IDs (TR-NNN, TR-RAG-NNN).
 
 **If you find yourself writing more than one line per numbered step, you're doing it wrong** — the user has explicitly called out that the deployment steps got polluted with "unnecessary details" in past runs. Strip aggressively.
 
@@ -52,10 +52,10 @@ Detection sources for each section:
 - `last_verified_date`: today
 - "Where I am": one paragraph — "All REQ-* verified; awaiting UAT per usage doc."
 - "Next command to run": `Manual UAT per docs/{AppName}-UsageGuide.md smoke checklist.`
-- "Open requirements": list any REQ-* not `Verified` in the checklist Status tables (`Blocked`-by-library or deferred). Empty if all clear.
+- "Open requirements": list any REQ-* not `Verified` in the checklist Status table (`Blocked`-by-library or deferred). Empty if all clear.
 - "Library feedback summary": refresh counts from the consolidated library-feedback doc (§4 below)
 - "Standards compliance": copy from the latest verifier run (recorded in the checklist Status table Remarks / prior PROJECT-STATUS entry)
-- Append a "Verification log" row for the handoff (Result = ship-readiness verdict; Status table column → the Functional Checklist's `#requirements-status`)
+- Append a "Verification log" row for the handoff (Result = ship-readiness verdict; Status table column → `docs/{AppName}-Checklist.md#requirements-status`)
 - **BRD §4 Development status** — per the gate's item 9, roll the now-final checklist statuses up into the BRD §4 table (at handoff, most features should land on `Done`). If the BRD has no §4 section (legacy), say so and point the user at `*refresh-status {AppName}` to add it. The re-render in §3 picks up the change.
 
 ### 3. Re-render the HTMLs
@@ -65,7 +65,7 @@ Invoke `render-workflow-docs {AppName}` as a subtask. Specifically:
 - `docs/{AppName}-Architecture.html` — if implementation revealed "as-built" deltas from "Target", update Architecture.md first, then re-render. Set status to "Current (post-implementation)" or "Current + planned target" as appropriate.
 - `PROJECT-STATUS.html` — always re-render (just updated in §2)
 
-Then re-render the **Usage Guide** (updated in §1) and the **DevGuide** (refreshed in §3a) via `.tfcore/tasks/generate-html.md`: `docs/{AppName}-UsageGuide.md` (+ the DevGuide — `docs/{AppName}-DevGuide.md` if single, or every file under `docs/devguides/` if split) → sibling `.html`. **Do NOT render the checklists to HTML** — they are AI-agent working documents kept in markdown only; their Status tables stay accurate in markdown.
+Then re-render the **Usage Guide** (updated in §1) and the **DevGuide** (refreshed in §3a) via `.tfcore/tasks/generate-html.md`: `docs/{AppName}-UsageGuide.md` (+ the DevGuide — `docs/{AppName}-DevGuide.md` if single, or every file under `docs/devguides/` if split) → sibling `.html`. **Do NOT render the checklist to HTML** — it is an AI-agent working document kept in markdown only; its Status table stays accurate in markdown.
 
 ### 3a. Refresh the Developer Guide
 
@@ -97,12 +97,13 @@ Then explicitly tell the user:
 1. Open `docs/{AppName}-UsageGuide.md` and run the smoke checklist.
 2. Hand each per-library feedback file to its team (or file as GitHub issues against that library's repo): `docs/{AppName}-TrBlazeUI-Feedback.md` → TrBlazeUI team, `docs/{AppName}-TechieRag-Feedback.md` → TechieRag team. The library teams use this same framework, so the file drops straight into their flow.
 3. After UAT passes, manually update `PROJECT-STATUS.md`: `current_phase: Released`.
+4. For end-user / external documentation, run `*productguide {AppName}` (flow-master) — it builds a screenshot-illustrated, task-oriented user manual (MD + HTML) from the DevGuide's screen map + captured screenshots. On-demand; re-run with `--update` as the UI evolves.
 
 ## Output Checklist
 
 - [ ] `docs/{AppName}-UsageGuide.md` finalized — Test-users table reconciled with the DB (created accounts ✅) + screen-by-screen plan current + prereqs/build/run/test/smoke; its `.html` re-rendered
 - [ ] Developer Guide generated/refreshed (`*devguide {AppName}`) — screen-by-screen code map (page→control→service→data-access→proc) + its `.html`
 - [ ] `PROJECT-STATUS.md` updated with handoff phase + UAT next-step
-- [ ] `docs/{AppName}-BRD.html`, `docs/{AppName}-Architecture.html`, `PROJECT-STATUS.html`, the UsageGuide + DevGuide HTML re-rendered (checklists are NOT rendered to HTML — markdown only)
+- [ ] `docs/{AppName}-BRD.html`, `docs/{AppName}-Architecture.html`, `PROJECT-STATUS.html`, the UsageGuide + DevGuide HTML re-rendered (the checklist is NOT rendered to HTML — markdown only)
 - [ ] Per-library feedback files consolidated, one per library (if applicable; legacy combined file split + archived)
 - [ ] Ship-readiness verdict delivered with explicit next steps

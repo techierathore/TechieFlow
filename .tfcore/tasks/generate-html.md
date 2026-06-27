@@ -2,7 +2,7 @@
 
 Convert one or more **human-readable** markdown files to self-contained HTML using the shared shell. Use this when you need to render documents that `*render-workflow-docs` does not cover (the UsageGuide, the DevGuide, library-feedback docs, ad-hoc design notes, legacy/archived docs). Note: suffixed doc variants like `-v2` are banned by the collision policy (day1-brownfield §1.6) — superseded docs live unmodified in `docs/OldDocs/`.
 
-**NEVER render the checklists to HTML.** The `*-UI-Checklist.md` / `*-Functional-Checklist.md` (and their Requirements Status tables) are **AI-agent working documents** — agents read them in markdown. An HTML mirror just burns tokens and drifts from the source. If asked to render a `*-Checklist.md`, decline and explain it's an agent doc; if a stale `*-Checklist.html` exists from before this rule, the user may delete it.
+**NEVER render the checklist to HTML.** The `*-Checklist.md` (and its Requirements Status table) is an **AI-agent working document** — agents read it in markdown. An HTML mirror just burns tokens and drifts from the source. If asked to render a `*-Checklist.md`, decline and explain it's an agent doc; if a stale `*-Checklist.html` exists from before this rule, the user may delete it.
 
 ## Why this exists
 

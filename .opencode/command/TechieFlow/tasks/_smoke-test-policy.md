@@ -4,17 +4,25 @@
 
 **Every code change is SMOKE-TESTED by the agent that made it, in this same session, BEFORE it is handed to the verifier or reported as "done".** A green `dotnet build` is NOT a smoke test — it proves the code compiles, not that the feature runs. No build phase chains to the verifier, and no agent says "implemented / done", with un-smoke-tested code. The owner should never have to discover at UAT that a feature was never actually run once.
 
-A smoke test = boot the app (or the relevant host), exercise the changed feature once against the running app, and confirm it reaches the user without an unhandled exception. The per-phase tasks define the exact shape (build-functional §6a, build-ui §4a, build-rag §5a, verify-phase). This file defines the things every one of them must honor: **you run it yourself**, **you confirm the data actually renders**, and **you use real test users**.
+A smoke test = boot the app (or the relevant host), exercise the changed feature once against the running app, and confirm it reaches the user without an unhandled exception. The per-phase tasks define the exact shape (`build-phase §6`, `fix-issues`, `devguide §5a`, `verify-phase`). This file defines the things every one of them must honor: **you run it yourself**, **you confirm the data actually renders**, **you confirm the screen actually looks right**, and **you use real test users**.
 
-## "It runs" means the CONTROLS RENDER THEIR DATA — not just HTTP 200
+## "It runs" means the CONTROLS RENDER THEIR DATA *and* the screen LOOKS RIGHT — not just HTTP 200
 
-A page that loads without an exception but shows a **blank table, a count badge over zero visible rows, an empty chart, or a blank value** is a FAILED smoke, not a pass. The most damaging bugs here have been exactly this shape — a screen that "loads" but renders nothing real (a home page whose details table is empty and whose list shows "16" over blank rows), shipped because the smoke only checked that the page opened. So when you smoke or verify a screen:
+A screen passes the smoke only if it clears **two** gates. Both have shipped real, damaging bugs:
 
+**RENDER-TRUTH — the data is actually there.** A page that loads without an exception but shows a **blank table, a count badge over zero visible rows, an empty chart, or a blank value** is a FAILED smoke, not a pass (a home page whose details table is empty and whose list shows "16" over blank rows, shipped because the smoke only checked that the page opened). So:
 - For **every data-bound control on the screen you touched** (grid/table/list, chart, detail/value panel), confirm it actually shows data: **rows present AND cells non-empty** (not just a count), chart/series non-empty, value not blank/placeholder. A control hidden by a `@if (x != null)` guard that never appears is render-empty, not "fine".
-- Where a DevGuide exists (`docs/{AppName}-DevGuide.md`, or the split set under `docs/devguides/`), it lists the controls each screen must render — use it as the per-control checklist (the verifier formalizes this as the **render gate**, `verify-phase.md §4a/§6`).
 - A render-empty/blank control is a defect: log it to the owning `REQ-*` Remarks and do not report the screen "done"/`Verified`.
 
-This is the difference between "the method exists / the page compiled" and "the feature works". Only the latter counts.
+**VISUAL-TRUTH — the screen actually looks right.** Data being present is necessary but NOT sufficient. A screen where every control has its data but the controls **overlap each other, sit off-screen, are clipped to zero height, the layout is broken, or the UI renders unstyled** is a FAILED smoke — this is the exact "the verifier passed but the running UI is completely broken / controls overlapping" problem the framework exists to catch. So, for the screen you touched, at **desktop and a mobile width**:
+- No two controls overlap (intersecting bounding boxes); every control is in-viewport with non-zero width and height; nothing is clipped or pushed off-canvas.
+- Capture a screenshot and **look at it** — overlapping/stacked text, a broken grid, content overflowing its container, or raw unstyled HTML is a visual FAIL even if the geometry checks pass.
+- ❌ "The data is present, so the screen is fine" is a **BANNED excuse** — a visually broken screen is a failed smoke regardless of data.
+- A visual failure is a defect: log it to the owning `REQ-*` Remarks (prefix `⚠ visual:`) and route the fix to the UI builder (`/trblazeui`); do not report the screen "done"/`Verified`.
+
+Where a DevGuide exists (`docs/{AppName}-DevGuide.md`, or the split set under `docs/devguides/`), it lists the controls each screen must render — use it as the per-control checklist. The verifier formalizes both gates: the **render gate** (`verify-phase.md §4a/§6`) and the **visual-truth gate** (`verify-phase.md §4b/§6`). A REQ is `Verified` only when it passes acceptance AND render-truth AND visual-truth.
+
+This is the difference between "the method exists / the page compiled" and "the feature works". Only the latter — data present AND looking right — counts.
 
 ## "I can't run it here" is a BANNED excuse — the environment is already set up
 
@@ -31,8 +39,15 @@ Therefore the following are **NOT acceptable reasons to skip the smoke and push 
 - ❌ "Playwright needs a GUI / there's no browser here."
 - ❌ "I'll let the verifier (or the user) smoke it."
 - ❌ "The build passed, so it's fine."
+- ❌ "It's a multi-service app — the API / DB / LLM endpoint it depends on is down, so I can't run it." (You bring those services up yourself — see below.)
 
 **Escalating to the user is the LAST resort, not the first.** If WSL-side `dotnet run` can't be reached, switch to rung #4 (Windows-side) per the build ladder. If Playwright still can't connect after that, follow `verify-phase.md §3a` (try rung #4, try another port, THEN — only then — ask the user to run the two-line recipe and wait for `go`). Never propose a cloud deploy (banned per verify-phase's Local-only policy). You ask the user to boot the app **only after** the ladder genuinely fails — and you still run the smoke yourself once they reply `go`.
+
+**A multi-service app does not change this — bring the dependent services up yourself.** When the feature needs an API + a web front-end + a database + an LLM endpoint, a dependent service being down is something you **start**, not a blocker you hand to the owner. Read each dependent project's `appsettings*.json` / launch settings for its configured port and URL, then start EACH service yourself **in dependency order** (DB/LLM endpoint first, then API, then web) via the build ladder before concluding you "can't run it". "The stack is down / it's multi-service" is the same banned excuse as "it can't run on Linux" — already-solved by booting the pieces.
+
+## Git is manual — NEVER run git to inspect code or chase a defect
+
+This framework keeps **all** git activity manual: agents never run `git` or `gh` — not to commit, and **not to read**. Do NOT reach for `git diff` / `git log` / `git status` / `git blame` to see "what changed" or to investigate a bug while smoking, verifying, observing, or mapping code. The owner has deliberately gated git behind a manual approval and will deny the prompt — which only stalls you mid-task. Investigate by **reading the working-tree files** at their paths: the files on disk ARE the as-built code, and a finding's evidence is the `file:line` you read, never a diff. (`refresh-status` was de-git-ed for exactly this reason — see `WorkFlow-Context.md`; status/recovery is reconstructed from the checklist tables + files-on-disk + a fresh `dotnet build`, never from commit history.)
 
 ## Test users — use the documented/existing ones; NEVER auto-create random smoke users
 

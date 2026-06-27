@@ -21,7 +21,7 @@ This is a **read-and-reconcile** task. It NEVER edits application source code an
 
 Collect evidence the interrupted agent could not have faked or selectively updated. Do NOT read PROJECT-STATUS first and reason from it — gather independently, compare last.
 
-1. **Checklist Requirements Status tables** (the primary source) — read the top tables in `docs/{AppName}-UI-Checklist.md` and `docs/{AppName}-Functional-Checklist.md`. These are the per-REQ source of truth (Status / % / Remarks). Terminal statuses: `Verified`, `Done (pre-existing)`, `N/A`. Note `Blocked` rows (library gaps) and especially any row left at `In Progress`/`Implemented` (smoke done, verifier never ran — the classic interruption fingerprint).
+1. **Checklist Requirements Status table** (the primary source) — read the top table in the one checklist `docs/{AppName}-Checklist.md` (all REQ prefixes in a single table). This is the per-REQ source of truth (Status / % / Remarks). Terminal statuses: `Verified`, `Done (pre-existing)`, `N/A`. Note `Blocked` rows (library gaps) and especially any row left at `In Progress`/`Implemented` (smoke done, verifier never ran — the classic interruption fingerprint).
 2. **What is actually in the working tree** — look at the source the checklists imply should exist, and *when it was last touched*:
    - For the REQs the tables claim are done/in-progress, confirm the corresponding components/services/pages actually exist on disk (a row marked `Implemented` whose files are absent is suspect; a row left open whose files DO exist is work that happened but was never recorded).
    - Compare file modification times against PROJECT-STATUS `last_updated` (read in step 4): **source files newer than `last_updated`** are work that landed *after* the last gate write — the status undercounts it. This is the no-git replacement for "what was committed since the last status write".
@@ -38,13 +38,13 @@ Decide what really happened by comparing the evidence. Common signatures:
 - **In-flight / partial:** a REQ's expected files only partially exist, or the fresh build errors inside them → a phase was mid-implementation. Those REQs are **In Progress**, NOT done — even if a subagent reported them done before dying.
 - **Smoke-without-verify:** checklist rows at `Implemented`/`In Progress` with no `Verified` → self-smoke ran, verifier was cut off. Those REQs need verification, not rebuilding.
 - **Build regressed:** PROJECT-STATUS says `last_verified_build: PASS` but step 1.3 fails → a later edit broke the build; capture the real `CS####` errors as a Known blocker.
-- **Phase boundary lost:** every UI row is terminal but PROJECT-STATUS still says `current_phase: UI build` → phase actually advanced; correct it.
+- **Phase boundary lost:** every row is terminal but PROJECT-STATUS still says `current_phase: Build` → phase actually advanced to `Handoff`; correct it.
 
 State the detected signature in one or two plain sentences. If evidence conflicts (e.g. a table marks a REQ `Implemented` but the build fails on that file), trust the **build + files on disk over the table cell**, and flag the REQ as `PARTIAL`/`FAIL` with a note.
 
 ### 3. Reconstruct the true per-REQ picture
 
-For each REQ across both checklists, settle on a status from evidence, in this precedence:
+For each REQ in the checklist, settle on a status from evidence, in this precedence:
 
 1. **Verifier verdict already in the table** (`Verified`/`FAIL`/`PARTIAL`) → keep, unless step 1.3's build contradicts it.
 2. **`Done (pre-existing)` / `N/A`** → terminal, keep, never touch.
@@ -63,9 +63,9 @@ Overwrite `PROJECT-STATUS.md` to reflect the reconstructed reality, honoring eve
 3. `last_verified_build` + `last_verified_date` from step 1.3's real build.
 4. **Open requirements** = every non-terminal REQ from the reconciled tables.
 5. **Next command to run** = the exact command that resumes from the true state (Claude Code + OpenCode forms). Examples:
-   - in-flight UI work → `/trblazeui Follow .tfcore/tasks/build-ui-phase.md for the app {AppName}.` (FIX/FRESH mode will re-detect from the now-correct table).
+   - in-flight build work → `/TechieFlow:agents:flow-master *build-phase {AppName}` (FIX/FRESH mode will re-detect the open REQs from the now-correct table; it calls trblazeui/techierag itself).
    - smoke-without-verify → `/TechieFlow:agents:verifier *verify ui` (or `functional`/`all`).
-   - UI done, functional open → `/TechieFlow:agents:flow-master *build-functional-phase {AppName}`.
+   - all built, verify open → `/TechieFlow:agents:verifier *verify all`.
 6. A **Verification log** row only if a verifier actually ran this session (don't fabricate one); otherwise leave the log untouched.
 7. Library-feedback + standards-compliance lines refreshed only if evidence changed them.
 8. Add a one-block **`## Recovery note ({today})`** section at the end recording: the interruption signature (step 2), which files were found newer-than-status / present-for-open-REQs, which checklist cells were corrected and why, and any REQ now flagged for re-verify. This is the audit trail so the next session — human or AI — knows this status was reconstructed, not gate-written.

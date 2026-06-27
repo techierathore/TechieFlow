@@ -25,7 +25,7 @@
 
 ## For the team (agent habits)
 
-- **Open the task file first, then load only what it names.** Tasks list their exact inputs. If a task says "read the Functional-Checklist Requirements Status table," read that — not the BRD, Architecture, and every source file too.
+- **Open the task file first, then load only what it names.** Tasks list their exact inputs. If a task says "read the Checklist Requirements Status table," read that — not the BRD, Architecture, and every source file too.
 - **Search before reading.** To find where something lives, use grep or an `Explore` subagent (it reads excerpts, returns the conclusion) rather than reading whole files. Read fully only the 1–3 files that matter.
 - **Prefer the checklist over the BRD during builds.** After `*split-brd`, the per-REQ checklist tables are the compact work view. The rich BRD is the human document — don't reload it every build turn.
 - **Scope your reads.** Use `Read` with `offset`/`limit` for big files; use `@path` mentions for specific files instead of broad directory loads.

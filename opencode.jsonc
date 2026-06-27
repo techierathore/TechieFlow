@@ -15,7 +15,7 @@
         "edit": true,
         "bash": true
       },
-      "description": "Madhav — the single super-agent. Orchestrates the full pipeline (*run-workflow, *phase) with parallel subagents, runs backend/business-logic builds (*build-functional-phase), and handles doc/status utilities (*render-workflow-docs, *generate-html, *handoff-phase, *refresh-status, *devguide) plus any one-off task."
+      "description": "Madhav — the single super-agent. Orchestrates the full pipeline (*run-workflow, *phase) with parallel subagents, runs the unified build (*build-phase — calls /trblazeui + /techierag as sub-agents), fixes bugs from screenshots (*fix-issues), and handles doc/status utilities (*render-workflow-docs, *generate-html, *handoff-phase, *refresh-status, *devguide) plus any one-off task."
     },
     "flow-architect": {
       "prompt": "{file:./.tfcore/agents/architect.md}",
@@ -35,7 +35,7 @@
         "edit": true,
         "bash": true
       },
-      "description": "Day-1 docs (*day1-brownfield / *day1-greenfield), requirements split (*split-brd), brainstorming, research"
+      "description": "Day-1 docs (*day1-brownfield / *day1-greenfield), UI mockups (*mockups), requirements split (*split-brd), doc amendments (*amend-docs), brainstorming, research"
     },
     "flow-verifier": {
       "prompt": "{file:./.tfcore/agents/verifier.md}",
@@ -51,31 +51,31 @@
   "command": {
     "techieflow:tasks:day1-brownfield": {
       "template": "{file:./.tfcore/tasks/day1-brownfield.md}",
-      "description": "Day-1 master task for an EXISTING project: Architecture + BRD + Coding-Standards + .editorconfig + PROJECT-STATUS + CLAUDE.md (+ checklist migration if a dev plan exists), all HTML-rendered."
+      "description": "Day-1 master task for an EXISTING project: Architecture + BRD + Coding-Standards + .editorconfig + PROJECT-STATUS + CLAUDE.md + the screen-by-screen DevGuide (with per-screen screenshots) (+ one-Checklist migration if a dev plan exists), all HTML-rendered."
     },
     "techieflow:tasks:day1-greenfield": {
       "template": "{file:./.tfcore/tasks/day1-greenfield.md}",
-      "description": "Day-1 master task for a NEW project: target Architecture + BRD + Coding-Standards + .editorconfig + PROJECT-STATUS + CLAUDE.md, all HTML-rendered."
+      "description": "Day-1 master task for a NEW project: target Architecture + BRD + UI mockups + Coding-Standards + .editorconfig + PROJECT-STATUS + CLAUDE.md + UsageGuide, all HTML-rendered."
+    },
+    "techieflow:tasks:mockups": {
+      "template": "{file:./.tfcore/tasks/mockups.md}",
+      "description": "Greenfield UI design: docs/{App}-UIDesign.md (per-screen region→TrBlazeUI-control map) + rendered docs/mockups/*.html styled to look like TrBlazeUI. The build's visual contract + the verifier's visual baseline. Driven by /analyst."
     },
     "techieflow:tasks:split-brd": {
       "template": "{file:./.tfcore/tasks/split-brd.md}",
-      "description": "Split the BRD into UI-Checklist (REQ-UI-*) and Functional-Checklist (REQ-FN/RAG/NFR-*) with Requirements Status tables."
+      "description": "Split the BRD into the one docs/{App}-Checklist.md (REQ-UI/FN/RAG/NFR-* in a single Requirements Status table)."
     },
-    "techieflow:tasks:build-ui-phase": {
-      "template": "{file:./.tfcore/tasks/build-ui-phase.md}",
-      "description": "Implement every open REQ-UI-* with TrBlazeUI per Coding Standards; self-smoke; chain the verifier. Normally driven by /trblazeui."
+    "techieflow:tasks:build-phase": {
+      "template": "{file:./.tfcore/tasks/build-phase.md}",
+      "description": "The single unified build: implement every open REQ (UI/FN/RAG/NFR) from the one Checklist by clustering and calling /trblazeui (from mockups) + /techierag as sub-agents; self-smoke (data + visual); chain the verifier. Driven by /flow-master."
     },
-    "techieflow:tasks:build-functional-phase": {
-      "template": "{file:./.tfcore/tasks/build-functional-phase.md}",
-      "description": "Implement every open REQ-FN-*/REQ-NFR-* per Coding Standards; self-smoke; chain the verifier. Normally driven by /flow-master."
-    },
-    "techieflow:tasks:build-rag-phase": {
-      "template": "{file:./.tfcore/tasks/build-rag-phase.md}",
-      "description": "Implement every open REQ-RAG-* with TechieRag per Coding Standards; self-smoke. Normally driven by /techierag."
+    "techieflow:tasks:fix-issues": {
+      "template": "{file:./.tfcore/tasks/fix-issues.md}",
+      "description": "Bug-fix front door: given a folder of screenshots (+ optional description), reproduce with Playwright, triage (layout/data/logic/RAG), fan fixes to the right builder, re-smoke (data+visual) + re-verify, update docs. Driven by /flow-master."
     },
     "techieflow:tasks:verify-phase": {
       "template": "{file:./.tfcore/tasks/verify-phase.md}",
-      "description": "Autonomous verification of a scope (ui | functional | all | REQ list | legacy phase-N); verdicts land in the checklist Requirements Status tables."
+      "description": "Autonomous verification of a scope (ui | functional | all | REQ list | legacy phase-N) — filters the one Checklist by REQ prefix; applies the data-render + visual-truth gates; verdicts land in the Checklist Requirements Status table."
     },
     "techieflow:tasks:handoff-phase": {
       "template": "{file:./.tfcore/tasks/handoff-phase.md}",
@@ -100,6 +100,10 @@
     "techieflow:tasks:amend-docs": {
       "template": "{file:./.tfcore/tasks/amend-docs.md}",
       "description": "Fold an evolving concept / changed requirements into the EXISTING day-1 docs IN PLACE: surgically amends BRD + Architecture (append-only IDs), ripples to PROJECT-STATUS / BRD §4 / checklists, re-renders HTML. Incremental alternative to re-running day1-*."
+    },
+    "techieflow:tasks:productguide": {
+      "template": "{file:./.tfcore/tasks/productguide.md}",
+      "description": "End-user Product Guide: screenshot-illustrated, task-oriented how-to manual for external users (what each screen is for + how to do things) — the user-facing sibling of the DevGuide, reusing its captured screenshots. Always MD + HTML. On-demand. Driven by /flow-master."
     },
     "techieflow:tasks:devguide": {
       "template": "{file:./.tfcore/tasks/devguide.md}",

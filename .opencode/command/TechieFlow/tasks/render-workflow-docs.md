@@ -6,7 +6,7 @@ Render BRD.html, Architecture.html, and PROJECT-STATUS.html from their markdown 
 
 After day-1 (or any phase that changes BRD/Architecture/PROJECT-STATUS), regenerate the human-readable HTML mirrors. Self-contained single-file HTML with Mermaid rendering, copy buttons on every code block, mermaid toolbar (zoom/fit/1:1/fullscreen/popout), inline TOC, and sidebar TOC for long docs.
 
-**If the user has ad-hoc HUMAN-readable docs to render (library-feedback files, design notes, archived docs, anything else), use `*generate-html @path/to/file.md` instead — this task only handles the three canonical files.** Note: the **checklists are AI-agent working documents and are NEVER rendered to HTML** — do not render `*-UI-Checklist` / `*-Functional-Checklist` here or via `generate-html`.
+**If the user has ad-hoc HUMAN-readable docs to render (library-feedback files, design notes, archived docs, anything else), use `*generate-html @path/to/file.md` instead — this task only handles the three canonical files.** Note: the **checklist is an AI-agent working document and is NEVER rendered to HTML** — do not render `*-Checklist.md` here or via `generate-html`.
 
 ## Inputs
 

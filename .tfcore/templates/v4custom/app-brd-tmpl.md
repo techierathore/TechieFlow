@@ -2,7 +2,7 @@
 
 > Stable IDs: every requirement has a BRD-{N} ID. IDs are append-only across revisions.
 
-> **Depth mandate — read before drafting.** This is a HUMAN document, read as rendered HTML by the product owner. It is NOT the coding checklist (that's the UI-Checklist / split-brd output). One-line entries belong ONLY in §10's requirements ledger. Every other section is full prose, tables, and Mermaid diagrams. §9 Feature catalog is the heart of the document — one detailed subsection per feature, with screens, workflows, and a diagram wherever the flow is non-trivial. When harvesting existing source docs, this document must be an information-preserving SUPERSET of their requirements content: carry their tables, matrices, screen inventories, and menus forward (updated, not summarized away). If a reader of the old doc would miss something in this one, the draft is wrong.
+> **Depth mandate — read before drafting.** This is a HUMAN document, read as rendered HTML by the product owner. It is NOT the coding checklist (that's `docs/{AppName}-Checklist.md` / split-brd output). One-line entries belong ONLY in §10's requirements ledger. Every other section is full prose, tables, and Mermaid diagrams. §9 Feature catalog is the heart of the document — one detailed subsection per feature, with screens, workflows, and a diagram wherever the flow is non-trivial. When harvesting existing source docs, this document must be an information-preserving SUPERSET of their requirements content: carry their tables, matrices, screen inventories, and menus forward (updated, not summarized away). If a reader of the old doc would miss something in this one, the draft is wrong.
 
 > **Mermaid mandate.** Every diagram MUST follow the authoring rules in `.tfcore/templates/v4custom/html-render-shell.md §5.5` — **quote every node/edge/subgraph label** (`A["Order Service (v2)"]`, not `A[Order Service (v2)]`) and never use `end` as a node id. Unquoted special characters (`(`, `)`, `/`, `&`, `:`, …) in flowchart labels are the #1 cause of "Syntax error" diagrams in the rendered HTML.
 
@@ -41,8 +41,8 @@
 
 <!-- SNAPSHOT (point-in-time) of what is BUILT vs PENDING, at the feature level — the first thing a
      reader of an existing app wants to know. This is a HUMAN summary, NOT a competing source of truth:
-     the LIVE per-requirement status lives in PROJECT-STATUS.md + the UI/Functional checklist
-     "Requirements Status" tables. Do NOT duplicate per-REQ status here — one row per feature only.
+     the LIVE per-requirement status lives in PROJECT-STATUS.md + the one checklist's
+     "Requirements Status" table. Do NOT duplicate per-REQ status here — one row per feature only.
        • Brownfield: fill from the migrated dev-plan and/or the code scan (what actually compiles/runs).
          Mirror the phase tags used in the checklists.
        • Greenfield: this is the build ROADMAP — every row is "Planned" with its target phase.
@@ -51,7 +51,7 @@
      *refresh-status re-derive this table from the checklists and re-render the HTML, so it
      tracks reality without manual edits — see _status-update-gate.md item 9. -->
 
-**Snapshot as of {YYYY-MM-DD}.** Live, per-requirement status: see `PROJECT-STATUS.md` and the **Requirements Status** tables in the UI-Checklist / Functional Checklist.
+**Snapshot as of {YYYY-MM-DD}.** Live, per-requirement status: see `PROJECT-STATUS.md` and the **Requirements Status** table in `docs/{AppName}-Checklist.md`.
 
 | Feature (F-code) | Phase | Status | % | Notes |
 |------------------|-------|--------|---|-------|

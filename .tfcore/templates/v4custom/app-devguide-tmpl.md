@@ -1,8 +1,8 @@
 # {AppName} — Developer Guide (Screen-by-Screen Code Map)
 
 > {Verification-status banner — REQUIRED, set by the OBSERVE pass (devguide §5a). One of:}
-> ✅ **Runtime-verified {YYYY-MM-DD}** — exercised as: {roles}. Control render-status below is **observed**, not inferred.
-> ⚠ **STATIC-ONLY ({YYYY-MM-DD})** — built from code reading; **NOT yet runtime-verified**. Render-status is unconfirmed until `*verify` runs against the running app.
+> ✅ **Runtime-verified {YYYY-MM-DD}** — exercised as: {roles}. Control render-status **and per-screen visual-status** below are **observed** (data renders + screen looks right), not inferred. Per-screen screenshots in `docs/screenshots/{AppName}/`.
+> ⚠ **STATIC-ONLY ({YYYY-MM-DD})** — built from code reading; **NOT yet runtime-verified**. Render/visual status is unconfirmed and no screenshots were captured until `*verify` runs against the running app.
 
 > **Purpose — this is the document a HUMAN developer uses to trace any screen, control, or number on the page all the way down to the database, so they can find and fix a bug, or verify that AI-generated code is actually correct.** The BRD explains *what* the app does; the Architecture explains *how the system is shaped*; the database design explains *the data*. **None of those tell a developer "the dashboard's Ruling-Planet chart comes from `DashboardService.GetRulingPlanets()` → `KundliRepository.QueryRulingPlanets()` → `usp_RulingPlanets`."** This guide does exactly that, per user role, per screen, down to the stored procedure or query.
 >
@@ -74,6 +74,14 @@ One subsection per screen, grouped by role, in navigation order. **In a split gu
 - **Razor file:** `src/{AppName}.Web/Pages/Dashboard.razor` (+ code-behind `Dashboard.razor.cs` if present)
 - **Reached via:** {Menu group → menu item}; **Log in as:** {test user from UsageGuide}
 - **What this screen does:** {one or two lines}
+- **Visual status:** {✅ looks-right (runtime-confirmed {date}) | ⚠ visual-broken (DEFECT — {what} @ {width}, {date}) | static-only (unconfirmed)}
+
+**Screenshot** — the real rendered screen (captured by the OBSERVE pass, devguide §5a). Review this for layout/overlap issues.
+
+![{Screen} — {Role}](../screenshots/{AppName}/{role}-{screen-slug}.png)
+
+<!-- Path is relative to where this guide lives: `screenshots/...` from docs/, `../screenshots/...` from docs/devguides/. STATIC-ONLY guides omit the image (no shot captured). -->
+
 
 **Screen flowchart** — show every meaningful control on the screen and where its data comes from. (Follow the Mermaid authoring rules in `.tfcore/templates/v4custom/html-render-shell.md §5.5` — quote every label, never use `end` as a node id.)
 

@@ -10,12 +10,31 @@ last_verified_date: {YYYY-MM-DD}
 # {AppName} — Status
 
 ## Where I am
-<one paragraph>
+<one short paragraph — the current STATE only: which phase, what is built/verified, what is open.
+ This is a status snapshot, NOT a technical to-do list. Do not narrate the implementation work
+ still to be done (how to wire a service, fix a binding, etc.) — that lives in the checklist REQ rows.>
 
 ## Next command to run
+<!--
+  Express the next step ONLY as a command pointed at a checklist/scope. NOT a prose description of
+  the technical work. The "what to do" already lives in the checklist's REQ rows — here we just say
+  WHICH COMMAND to run against WHICH checklist/REQs. At most one line naming the target checklist or
+  REQ IDs may accompany the command block.
+
+  GOOD:
+    ```
+    /TechieFlow:agents:verifier *verify ui      (OpenCode: /flow-verifier *verify ui)
+    ```
+    Resumes FAILed REQ-UI-007, REQ-UI-012 in docs/{AppName}-Checklist.md.
+
+  BAD (do not do this — technical narrative belongs in the checklist, not here):
+    Next, wire the AstroData service into the dashboard, fix the empty ruling-planet
+    table binding, add validation to the onboarding form, then re-run verification...
+-->
 ```
-/<agent> <exact prompt>
+/<agent> <exact prompt>      (OpenCode: <exact prompt>)
 ```
+<one optional line naming the target checklist or REQ IDs>
 
 ## Open requirements
 - [ ] REQ-UI-013 — <desc>
@@ -37,11 +56,11 @@ last_verified_date: {YYYY-MM-DD}
 
 
 ## Verification log
-<!-- Status detail lives in each checklist's "Requirements Status" table (the single
+<!-- Status detail lives in the checklist's "Requirements Status" table (the single
      source of truth). This log is just a dated index of verification passes. -->
 | Date | Phase | Result | Status table |
 |------|-------|--------|--------------|
-| {YYYY-MM-DD} | UI verify | 14/14 Verified | docs/{AppName}-UI-Checklist.md#requirements-status |
+| {YYYY-MM-DD} | UI verify | 14/14 Verified | docs/{AppName}-Checklist.md#requirements-status |
 
 ## Library feedback summary
 - TrBlazeUI: 0 major, 0 minor — docs/{AppName}-TrBlazeUI-Feedback.md

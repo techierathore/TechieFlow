@@ -1,6 +1,6 @@
 # day1-brownfield
 
-Day-1 master task for a BROWNFIELD project. Produces all six day-1 deliverables in a single session: reverse-doc the codebase, plus BRD, Architecture, Coding Standards, .editorconfig, PROJECT-STATUS.md, and CLAUDE.md — each named with the app's prefix. If the project already has a development/phase plan, the task ALSO migrates it into the split requirement docs (UI-Checklist + Functional Checklist) in the same run (§3.5) — no separate `*split-brd` step.
+Day-1 master task for a BROWNFIELD project. Produces all six day-1 deliverables in a single session: reverse-doc the codebase, plus BRD, Architecture, Coding Standards, .editorconfig, PROJECT-STATUS.md, and CLAUDE.md — each named with the app's prefix. Because a brownfield repo already has built code, the task ALSO generates the screen-by-screen **Developer Guide** (§7.6) — the as-built page → control → service → data-access → proc map — which greenfield day-1 cannot (no code yet). If the project already has a development/phase plan, the task ALSO migrates it into the one checklist (`docs/{AppName}-Checklist.md`) in the same run (§3.5) — no separate `*split-brd` step.
 
 ## Purpose
 
@@ -115,7 +115,7 @@ This is the friction-removal step. **Do NOT run `author-brd`. Do NOT prompt the 
 - **INFORMATION-PRESERVATION RULE (hard requirement when SourceDocs exist):** the new BRD must be a SUPERSET of the requirements content in the harvested source docs — never a summary of it. Concretely:
   - Every table, matrix, screen inventory, route list, license/feature matrix, navigation-menu tree, persona-detail block, and per-feature workflow in a source BRD/spec **carries forward** into the new doc (updated where stale, attributed where copied) — it does NOT get compressed into a one-liner.
   - **Length sanity check before writing:** if the source docs' requirements content totals X lines and your draft (excluding boilerplate) is under ~60% of X, you compressed — go back and restore the detail. A 1,000-line source BRD should never produce a 250-line replacement.
-  - One-line statements are allowed ONLY in the §10 BRD ledger. Everything else is full prose, tables, and diagrams — this is a HUMAN document read as rendered HTML; the coding agents get their compact view later from `*split-brd` / the UI-Checklist.
+  - One-line statements are allowed ONLY in the §10 BRD ledger. Everything else is full prose, tables, and diagrams — this is a HUMAN document read as rendered HTML; the coding agents get their compact view later from `*split-brd` / the Checklist.
 - **§4 Development status (brownfield: the reader's first question — "what's built, what's pending?"):** fill the §4 table with ONE row per §9 feature-catalog F-code. Derive each row's Status / % / Phase / Notes from the **strongest evidence available**, in priority order: (1) a migrated dev/phase plan (§3.5) — carry its phase + completion verbatim; (2) the code scan from §2 — a feature whose screens/handlers actually compile and exist is `Done`, partially-present is `Partial`, absent is `Planned`; (3) source-doc status notes. Set the "Snapshot as of" date to today. This is a feature-level SUMMARY only — do NOT restate per-REQ status (that's PROJECT-STATUS + the checklists). Keep it consistent with §3.5's migrated statuses and with PROJECT-STATUS.
 - **§9 Feature catalog (the heart of the doc):** one `### F-{CODE}: {Name}` subsection per feature/capability area found in the source docs and the codebase. Per feature: personas + phase, 1-2 paragraphs of what/why, a screens & routes table, a numbered workflow (inputs → outputs), and the owning BRD-N IDs. If a source doc already has a feature catalog, preserve its feature codes and per-feature detail. Depth scales with the app (8–25 features is normal) — there is NO cap. Every F-code MUST also appear as a row in the §4 Development status table.
 - For §10 Functional requirements ledger: walk the feature catalog and emit `BRD-1`, `BRD-2`, … as one-line `<actor> can <action>` or `system shall <behavior>` statements, each tagged with its catalog feature `(F-CODE)`. Number monotonically. **One BRD per discrete capability — the count scales with the app (20–60 is normal for a real product); NEVER merge capabilities to keep the count low.** If a BRD came directly from a source doc, suffix the line with `<!-- from: <source-file> -->`.
@@ -141,17 +141,17 @@ This is the friction-removal step. **Do NOT run `author-brd`. Do NOT prompt the 
 
 **If a dev plan EXISTS, do NOT leave the split as a separate step** — the plan already validates the requirements, so migrate it now:
 
-- Execute the logic of `.tfcore/tasks/split-brd.md` inline (read that file and follow §2–§5): classify every `BRD-N` from §3 into `REQ-UI-*` / `REQ-FN-*` / `REQ-RAG-*` / `REQ-NFR-*` and write `docs/{AppName}-UI-Checklist.md` + `docs/{AppName}-Functional-Checklist.md`.
-- **Seed from the dev plan (the migration part) — preserve EVERY column the plan tracked.** The plan's own status table is the gold standard; the new **Requirements Status** table (top of UI-Checklist / Functional Checklist) must be a SUPERSET of it, never a lossy summary:
+- Execute the logic of `.tfcore/tasks/split-brd.md` inline (read that file and follow §2–§4): classify every `BRD-N` from §3 into `REQ-UI-*` / `REQ-FN-*` / `REQ-RAG-*` / `REQ-NFR-*` and write the one checklist `docs/{AppName}-Checklist.md` (all prefixes in a single Requirements Status table).
+- **Seed from the dev plan (the migration part) — preserve EVERY column the plan tracked.** The plan's own status table is the gold standard; the new **Requirements Status** table (top of the checklist) must be a SUPERSET of it, never a lossy summary:
   - Carry the plan's phase structure into both docs — tag each REQ with its phase (e.g. `**REQ-FN-007** — … (BRD-21, Phase 1)`), and order sections by phase.
   - Fill ALL columns of the Status table for each migrated REQ: **Status**, **%**, **Remarks**, **Details** link. If the old plan had a `% Done` column, carry the number verbatim; if it had a Status/Remarks column with dates and detail (e.g. "Completed 2026-04-30 (DTOs split…)"), carry that whole remark into **Remarks** — do NOT truncate it.
   - COMPLETE / done / shipped → Status `Done (pre-existing)`, `%` = the plan's figure (usually `100%`), Remarks = the plan's completion note + `per {plan-file} §{section}`. Build agents must NOT rebuild these.
   - Partial items (e.g. "50% Scaffolded") → Status `In Progress` or `PARTIAL`, carry the plan's `%` and remark verbatim.
   - Not-yet-started items → Status `Not Started`, `0%`.
   - Add a header note to both docs: `> Migrated from {plan-file} on {YYYY-MM-DD}. Phase structure, completion %, and status remarks carried over verbatim — verify before building.`
-- **Keep the BRD §4 Development status table consistent with this migration:** the feature-level rows in BRD §4 must agree with the per-REQ statuses you just wrote (a feature whose REQs are all `Done (pre-existing)` → `Done` in §4; mixed → `Partial`; none started → `Planned`). The checklists are the live per-REQ truth; BRD §4 is the human feature-level snapshot of the same reality.
+- **Keep the BRD §4 Development status table consistent with this migration:** the feature-level rows in BRD §4 must agree with the per-REQ statuses you just wrote (a feature whose REQs are all `Done (pre-existing)` → `Done` in §4; mixed → `Partial`; none started → `Planned`). The checklist is the live per-REQ truth; BRD §4 is the human feature-level snapshot of the same reality.
 - Do NOT modify the dev-plan file's content. After migration it is superseded — move it to `docs/OldDocs/` per §1.6 and say so in the §8 summary.
-- If `*split-brd` artifacts (UI-Checklist / Functional Checklist) already exist (re-run scenario), apply §1.6: archive the old ones to `docs/OldDocs/`, write fresh at canonical names. No questions.
+- If the `*split-brd` artifact (`docs/{AppName}-Checklist.md`) already exists (re-run scenario), apply §1.6: archive the old one to `docs/OldDocs/`, write fresh at the canonical name. No questions.
 
 ### 4. Create the Coding Standards → `docs/{AppName}-Coding-Standards.md`
 
@@ -307,7 +307,7 @@ Load `.tfcore/templates/v4custom/app-project-status-tmpl.md` and substitute:
 - `last_verified_date:` → today
 - `current_phase:` → `Discovery`; if §3.5 ran (dev plan migrated), use `Discovery — requirements split done; next build phase: {first incomplete phase from the dev plan}` instead.
 - **Where I am:** one paragraph from §2's findings — what exists, what state it's in. If §3.5 ran, include which dev-plan phases are already complete.
-- **Next command to run:** HTML is rendered by this task itself (§7.5), so point at the real next step: `/TechieFlow:agents:analyst *split-brd {AppName}` — or, if §3.5 ran (split already done), the first incomplete build-phase command (e.g. `/trblazeui Follow .tfcore/tasks/build-ui-phase.md for the app {AppName}.`).
+- **Next command to run:** HTML is rendered by this task itself (§7.5), so point at the real next step: `/TechieFlow:agents:analyst *split-brd {AppName}` — or, if §3.5 ran (split already done), `/TechieFlow:agents:flow-master *build-phase {AppName}` (the unified build; it calls trblazeui/techierag itself).
 - **Open requirements:** empty list — populated later by `*split-brd`. If §3.5 ran, list the REQ-* counts per type with phase tags (already populated; `*split-brd` is NOT needed).
 - **Known blockers:** from §2 (build failure, standards drift, etc.) — otherwise "None".
 - **Verification log:** empty table with headers only.
@@ -338,9 +338,21 @@ Render the deliverables to HTML NOW, in this same run, by following `.tfcore/tas
 - `docs/{AppName}-UsageGuide.md` → `docs/{AppName}-UsageGuide.html`
 - `PROJECT-STATUS.md` → `PROJECT-STATUS.html` (use `layout no-toc`; include the "NEXT COMMAND TO RUN" call-to-action box per render-workflow-docs §5)
 
-**Do NOT render the checklists to HTML.** If §3.5 produced `docs/{AppName}-UI-Checklist.md` / `docs/{AppName}-Functional-Checklist.md`, leave them as markdown — they are AI-agent working documents, never rendered (HTML mirrors of agent docs only burn tokens and drift).
+**Do NOT render the checklist to HTML.** If §3.5 produced `docs/{AppName}-Checklist.md`, leave it as markdown — it is an AI-agent working document, never rendered (HTML mirrors of agent docs only burn tokens and drift).
 
 Use the Write tool — NOT bash heredocs. The user should NEVER have to run a render command after day-1; rendering is idempotent, so post-review edits are handled by a quick re-render (`/generate-html @docs/{file}.md`).
+
+### 7.6. Generate the Developer Guide (brownfield has as-built code → map it NOW)
+
+A brownfield project already has built code, so the screen-by-screen **Developer Guide** — the doc a human uses to chase bugs and catch AI-hallucinated code from page → control → service → data-access → stored proc / query — can and SHOULD be produced at day-1, not deferred to handoff. (Greenfield day-1 has no code, so it has no equivalent step; brownfield does — this is the brownfield-only step that closes the "verifier passed but it's still buggy" gap on day one.)
+
+- Run `.tfcore/tasks/devguide.md` for `{AppName}` (the `*devguide {AppName}` task) and follow it end-to-end: discover roles/menus/screens (it reads the §7.4 UsageGuide test-users table + code authorization), **fan out per role** to bound tokens, map each screen's controls + full data lineage, verify every path is a real symbol (`{unresolved — TODO}` rather than an invented proc name), apply **LANDING-TRUTH** + **RENDER-TRUTH**, and render the markdown + sibling `.html` (single `docs/{AppName}-DevGuide.md`, or an index + per-role files under `docs/devguides/` for a large app — the task auto-decides per its §3).
+- **Self-guard:** if the repo turns out to be doc-only (no built UI/code — unusual for brownfield, but possible when day-1 is run before any code lands), the devguide task HALTs itself. Record "DevGuide skipped — no built code yet (run `*devguide {AppName}` after the first build phase)" in the §8 summary and move on; do NOT treat it as an error.
+- **OBSERVE pass (devguide §5a):** the devguide attempts to boot the app and runtime-observe each control. At day-1 the app's stack is often not up yet, so the guide will commonly be stamped **`⚠ STATIC-ONLY — NOT runtime-verified`** — that is EXPECTED and acceptable here; do NOT block day-1 trying to bring a stack up. The user runs `*verify {scope}` / `*devguide {AppName} --update` later (once the stack is up) to runtime-confirm render-status.
+- **Screenshot capture + owner visual-review (devguide §5a/§5b):** the OBSERVE pass captures a screenshot of every screen to `docs/screenshots/{AppName}/` and embeds it in the DevGuide. At day-1 this is usually non-interactive (chained, no live Q&A), so the devguide skips the live "what needs to change?" gate but still captures the shots — **tell the user in §8 to review `docs/screenshots/{AppName}/` and run `*fix-issues {AppName} {folder}` (or `*devguide {AppName} --update`) for any screen that's wrong.** This is how the broken-UI problem surfaces on day-1. (If the stack can't boot, the guide is STATIC-ONLY and no screenshots are captured — noted below.)
+- **Defect logging (devguide §6a) depends on the checklist existing — handle both branches:**
+  - **If §3.5 ran** (a dev plan was migrated → `docs/{AppName}-Checklist.md` exists): the devguide logs every confirmed defect into the owning `REQ-*`'s Remarks (and flags `Needs re-verify` where the feature is actually broken) per its §6a — markdown only, never checklist HTML.
+  - **If §3.5 did NOT run** (no checklist until `*split-brd`): the devguide cannot map screen → `REQ-*` yet, so its findings stay in the DevGuide's own "Known issues" prose. **Tell the user in §8** to run `*devguide {AppName} --update` immediately AFTER `*split-brd` so those findings get pushed into the freshly-created checklist (otherwise the day-1 defects are lost when the verifier later trusts a clean checklist).
 
 ### 8. HALT — produce a summary and stop
 
@@ -352,20 +364,28 @@ Output a numbered summary listing what was created:
 5. `PROJECT-STATUS.md` — current_phase = Discovery
 6. `CLAUDE.md` — created with the project's field-prefix decision pinned
 7. `docs/{AppName}-UsageGuide.md` — test-users registry (N accounts: M existing ✅ / K planned ⬜) + screen-by-screen test plan
-8. *(only if §3.5 ran)* `docs/{AppName}-UI-Checklist.md` + `docs/{AppName}-Functional-Checklist.md` — migrated from `{plan-file}` (X REQs done pre-existing, Y open); the old dev plan is archived to docs/OldDocs/; `*split-brd` is NOT needed for this project
-9. HTML renders (§7.5) — list every `.html` written
+8. *(only if §3.5 ran)* `docs/{AppName}-Checklist.md` — migrated from `{plan-file}` (X REQs done pre-existing, Y open); the old dev plan is archived to docs/OldDocs/; `*split-brd` is NOT needed for this project
+9. *(§7.6)* DevGuide — `docs/{AppName}-DevGuide.md` (single) or `docs/devguides/` (split): R roles, M screens mapped, {STATIC-ONLY | runtime-verified}, {k} unresolved paths, {d} defects logged ({to the checklist if §3.5 ran, else "in DevGuide prose — run `*devguide --update` after `*split-brd`"}); screenshots in `docs/screenshots/{AppName}/` (if runtime-verified). *(Or "skipped — no built code yet" if the self-guard tripped.)*
+10. HTML renders (§7.5 + §7.6) — list every `.html` written
 
 If `SourceDocs[]` was non-empty, also include a "Sources harvested" line listing each file that contributed content (and any that were declared but couldn't be Read).
 
 Then say exactly:
 
 ```
-Day-1 artifacts complete — MD docs AND their HTML renders (§7.5) are all written. Nothing
-left to run.
+Day-1 artifacts complete — MD docs, their HTML renders (§7.5), AND the screen-by-screen
+DevGuide (§7.6, the as-built code map) are all written. Nothing left to run.
 
 Review the human-readable docs (open the .html files, or edit the .md sources directly).
 The BRD especially is a first-pass draft inferred from the codebase; please verify
-BRD-1..BRD-{N} reflect actual intent.
+BRD-1..BRD-{N} reflect actual intent. The DevGuide traces each screen page → control →
+service → data-access → proc; it is {STATIC-ONLY — run *verify once the stack is up to
+runtime-confirm | runtime-verified}.
+
+{If runtime-verified:} Review the per-screen SCREENSHOTS in docs/screenshots/{AppName}/ — this
+is how each screen actually renders. For any screen that's visually broken or wrong, run
+*fix-issues {AppName} {folder} (drop the screenshots + a note in a folder) — it triages and
+fixes UI + functional bugs and re-verifies.
 
 If you edit any .md afterwards, re-render just that file:
   /generate-html @docs/{AppName}-BRD.md      (works in Claude Code and OpenCode;
@@ -373,8 +393,11 @@ If you edit any .md afterwards, re-render just that file:
                                               top-level .md, non-recursive)
 
 Next workflow step (after your review): *split-brd {AppName} via /TechieFlow:agents:analyst —
-unless this run already migrated a dev plan (§3.5), in which case the next step is the
-first build phase shown in PROJECT-STATUS.md.
+unless this run already migrated a dev plan (§3.5), in which case the next step is
+*build-phase {AppName} shown in PROJECT-STATUS.md.
+{If §3.5 did NOT run AND the DevGuide flagged defects: immediately after *split-brd, run
+*devguide {AppName} --update so the DevGuide's day-1 findings get logged into the new
+checklist before the verifier trusts it.}
 ```
 
 If any pre-existing docs were archived (§1.6), append the list: "Archived to docs/OldDocs/: {files}".
@@ -393,8 +416,10 @@ Do NOT auto-advance past day-1 (no split/build without the user). Rendering HTML
 - [ ] `PROJECT-STATUS.md` exists with current_phase=Discovery and a "Next command to run" pointer
 - [ ] `CLAUDE.md` exists at repo root
 - [ ] `docs/{AppName}-UsageGuide.md` exists — Test-users table populated (existing accounts from the DB marked ✅, planned ones ⬜; NO users were created in day-1) + screen-by-screen test plan
-- [ ] If a dev/phase plan existed (§3.5): `docs/{AppName}-UI-Checklist.md` + `docs/{AppName}-Functional-Checklist.md` written with phase tags and pre-existing completions marked `Done` — NOT left for a separate `*split-brd` run
+- [ ] If a dev/phase plan existed (§3.5): the one `docs/{AppName}-Checklist.md` written with phase tags and pre-existing completions marked `Done` — NOT left for a separate `*split-brd` run
 - [ ] Collision policy §1.6 followed: all deliverables at canonical names, pre-existing versions + superseded source docs moved to `docs/OldDocs/`, NO merge-vs-new question asked, NO `-v2` variants written
 - [ ] §7.5 auto-render done: every day-1 .md deliverable has a fresh sibling .html (shared shell: copy buttons, mermaid toolbar, working TOC) — the user was NOT told to run a render command
+- [ ] §7.6 DevGuide generated (brownfield has as-built code): `docs/{AppName}-DevGuide.md` (single) or `docs/devguides/` (split) + sibling `.html`, with the verification-status banner (STATIC-ONLY is acceptable at day-1) — OR self-guard-skipped because the repo is genuinely doc-only (noted in §8). If §3.5 produced the checklist, devguide defects were logged into it (§6a); if not, the §8 message tells the user to run `*devguide --update` after `*split-brd`
+- [ ] §7.6 if runtime-verified: per-screen screenshots captured to `docs/screenshots/{AppName}/` and the §8 message points the owner at them + `*fix-issues` for any broken screen
 - [ ] Output summary delivered (incl. archived-files list), next command suggested
 - [ ] Did NOT prompt the user mid-task for per-section confirmation

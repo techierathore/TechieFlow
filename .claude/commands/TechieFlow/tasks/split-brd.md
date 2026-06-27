@@ -1,16 +1,15 @@
 # split-brd
 
-Split the BRD into the two AI-targeted requirement docs: UI Checklist and Functional Checklist.
+Split the BRD into the single AI-targeted requirement doc: the app Checklist (`docs/{AppName}-Checklist.md`).
 
 ## Purpose
 
-The BRD captures business intent with `BRD-N` IDs. Implementation needs finer-grained, type-tagged requirements that route to the right agent:
-- `REQ-UI-*` → trblazeui agent (Claude Code `/trblazeui`, OpenCode `/trblazeui`)
-- `REQ-FN-*` → flow-master agent (Claude Code `/TechieFlow:agents:flow-master`, OpenCode `/flow-master`)
-- `REQ-RAG-*` → techierag agent (Claude Code `/techierag`, OpenCode `/techierag`)
-- `REQ-NFR-*` → flow-master agent (cross-cutting checks)
+The BRD captures business intent with `BRD-N` IDs. Implementation needs finer-grained, type-tagged requirements. There is **one checklist per app**; the requirement *type* is carried by the REQ prefix, which routes work to the right builder:
+- `REQ-UI-*` → built by `/trblazeui` (from the approved mockups), invoked as a sub-agent by the unified `build-phase`
+- `REQ-RAG-*` → built by `/techierag`, invoked as a sub-agent by `build-phase`
+- `REQ-FN-*` / `REQ-NFR-*` → built directly by `build-phase` (flow-master)
 
-This task converts each `BRD-N` into one or more `REQ-*` items, sorted into the two AI-only docs.
+This task converts each `BRD-N` into one or more `REQ-*` items inside the one checklist.
 
 ## Inputs
 
@@ -22,6 +21,7 @@ This task converts each `BRD-N` into one or more `REQ-*` items, sorted into the 
 
 - `docs/{AppName}-BRD.md` — must exist. Parse `BRD-N` IDs and their text.
 - `docs/{AppName}-Architecture.md` — read for module boundaries and stack.
+- `docs/{AppName}-UIDesign.md` + `docs/mockups/*.html` — if they exist (greenfield, post-`*mockups`), read them so each `REQ-UI-*` cites the mockup screen it realizes.
 
 ### 2. Classify each BRD-N
 
@@ -37,44 +37,19 @@ A single `BRD-N` may map to multiple REQs (e.g. a "settings page that saves to D
 
 Check `docs/` for an existing development/phase plan (`*Development-Plan*.md`, `*Dev-Plan*.md`, `*Implementation-Plan*.md`, `*Roadmap*.md`, or any doc structured as Phase 0/1/2… with build order/statuses). If one exists:
 
-- Carry its phase structure into §3/§4 — tag each REQ with its phase (e.g. `(BRD-21, Phase 1)`) and order sections by phase.
-- **Preserve every column the plan tracked** — the new Requirements Status table must be a SUPERSET of the plan's, never a lossy summary. For each migrated REQ fill Status, **%**, **Remarks**, Details: carry the plan's `% Done` verbatim and its full dated status remark (e.g. "Completed 2026-04-30 (DTOs split…)") into Remarks — do not truncate.
+- Carry its phase structure into §3 — tag each REQ with its phase (e.g. `(BRD-21, Phase 1)`) and order rows by phase.
+- **Preserve every column the plan tracked** — the Requirements Status table must be a SUPERSET of the plan's, never a lossy summary. For each migrated REQ fill Status, **%**, **Remarks**, Details: carry the plan's `% Done` verbatim and its full dated status remark (e.g. "Completed 2026-04-30 (DTOs split…)") into Remarks — do not truncate.
 - COMPLETE/done/shipped → Status `Done (pre-existing)`, `%` = plan's figure (usually `100%`), Remarks = plan's note + `per {plan-file} §{section}`. Build agents must NOT rebuild these. Partial → `In Progress`/`PARTIAL` with the plan's `%`+remark. Not started → `Not Started`, `0%`.
-- Add a header note to both output docs: `> Migrated from {plan-file} on {YYYY-MM-DD}. Phase structure, completion %, and status remarks carried over verbatim — verify before building.`
+- Add a header note to the checklist: `> Migrated from {plan-file} on {YYYY-MM-DD}. Phase structure, completion %, and status remarks carried over verbatim — verify before building.`
 - Do not modify the plan file's content. After migration it is superseded — move it unchanged to `docs/OldDocs/` (create the folder if missing; date-suffix on name collision) and note this in the §6 summary.
 
 If no plan exists, skip — classify purely from the BRD.
 
-### 3. Write `docs/{AppName}-UI-Checklist.md`
+### 3. Write `docs/{AppName}-Checklist.md`
 
-Schema per `.tfcore/templates/v4custom/app-ui-checklist-tmpl.md` — the **Requirements Status** table sits at the TOP (single source of truth), the per-REQ detail follows with `<a id="d-REQ-ID">` anchors the Details column links to:
+Schema per `.tfcore/templates/v4custom/app-checklist-tmpl.md` — the **Requirements Status** table sits at the TOP (single source of truth for the WHOLE app), with all REQ classes in one table, and the per-REQ detail follows in prefix-grouped sections with `<a id="d-REQ-ID">` anchors the Details column links to:
 ```markdown
-# {AppName} — UI Mockup Checklist
-
-## Scope
-{one paragraph derived from the BRD's UI-related BRD-N items}
-
-## Requirements Status
-| ID | Requirement | Status | % | Remarks | Details |
-|----|-------------|--------|---|---------|---------|
-| REQ-UI-001 | {short name} | Not Started | 0% | — | [view](#d-req-ui-001) |
-{Status values + % guide + Remarks note — copy the legend from the template}
-
-## Page details
-
-### Page: {page name} (`{route}`)
-<a id="d-req-ui-001"></a>
-- **REQ-UI-001** — {description; traces to BRD-X}
-  - *Acceptance:* {specific testable criterion}
-```
-
-Cross-link: every REQ-UI-N's description ends with `(BRD-X)` so traceability is two-way.
-
-### 4. Write `docs/{AppName}-Functional-Checklist.md`
-
-Schema per `.tfcore/templates/v4custom/app-functional-checklist-tmpl.md` — **Requirements Status** table at the TOP (single source of truth), detail sections below with `<a id="d-REQ-ID">` anchors:
-```markdown
-# {AppName} — Functional Checklist
+# {AppName} — Checklist
 
 ## Goal
 {one paragraph; ties back to BRD §1}
@@ -82,52 +57,54 @@ Schema per `.tfcore/templates/v4custom/app-functional-checklist-tmpl.md` — **R
 ## Requirements Status
 | ID | Requirement | Status | % | Remarks | Details |
 |----|-------------|--------|---|---------|---------|
+| REQ-UI-001  | {short name} | Not Started | 0% | — | [view](#d-req-ui-001) |
 | REQ-FN-001  | {short name} | Not Started | 0% | — | [view](#d-req-fn-001) |
 | REQ-RAG-001 | {short name} | Not Started | 0% | — | [view](#d-req-rag-001) |
 | REQ-NFR-001 | {short name} | Not Started | 0% | — | [view](#d-req-nfr-001) |
 {Status values + % guide + Remarks note — copy the legend from the template}
 
+## UI / Pages
+### Page: {page name} (`{route}`)
+<a id="d-req-ui-001"></a>
+- **REQ-UI-001** — {description; traces to BRD-X}. *Mockup:* docs/mockups/{screen}.html (if mockups exist).
+  - *Acceptance:* {specific testable criterion}; controls do not overlap at desktop + mobile widths (visual gate).
+
 ## Functional requirements
 <a id="d-req-fn-001"></a>
 - **REQ-FN-001** — {trigger / acceptance} (BRD-X)
 
-## RAG / AI / LLM requirements (route to /techierag)
+## RAG / AI requirements (→ /techierag)
 <a id="d-req-rag-001"></a>
 - **REQ-RAG-001** — {trigger / acceptance via TechieRag} (BRD-X)
 
-## Non-functional requirements
+## Non-functional
 <a id="d-req-nfr-001"></a>
 - **REQ-NFR-001** — {perf/security/accessibility} (BRD-X)
 ```
 
-Same `(BRD-X)` back-link for every REQ.
+Cross-link: every REQ-N's description ends with `(BRD-X)` so traceability is two-way.
 
-### 5. Trace check
+### 4. Trace check
 
-- Every `BRD-N` should appear at least once in the union of UI-Checklist and Functional Checklist.
+- Every `BRD-N` should appear at least once in the checklist's Requirements Status table.
 - If any `BRD-N` is unmapped, list it in the output summary and ask: "BRD-X has no REQ. Is it deferred, or should I map it now?"
 
-### 6. Output summary
+### 5. Output summary
 
 Report counts:
-- `K` `REQ-UI-*` items in UI Checklist
-- `M` `REQ-FN-*`, `N` `REQ-RAG-*`, `P` `REQ-NFR-*` in Functional Checklist
-- Any unmapped `BRD-N`s flagged in §5
+- `K` `REQ-UI-*`, `M` `REQ-FN-*`, `N` `REQ-RAG-*`, `P` `REQ-NFR-*` items in the checklist
+- Any unmapped `BRD-N`s flagged in §4
 
 Update `PROJECT-STATUS.md` per `.tfcore/tasks/_status-update-gate.md` (this task counts as a phase — the gate applies):
-- Pick the next phase by the FIRST category with OPEN (non-terminal) REQs, in order UI → RAG → FN/NFR (dev-plan seeding in §2.5 may have pre-marked whole categories `Done (pre-existing)`):
-  - Open `REQ-UI-*` → current_phase `UI build`, Next command `/trblazeui Follow .tfcore/tasks/build-ui-phase.md for the app {AppName}.` (trblazeui is NuGet-deployed and has no `*command` syntax — freeform follow-task prompt.)
-  - Else open `REQ-RAG-*` → Next command `/techierag Follow .tfcore/tasks/build-rag-phase.md for the app {AppName}.`
-  - Else open `REQ-FN-*`/`REQ-NFR-*` → current_phase `Functional build`, Next command `/TechieFlow:agents:flow-master *build-functional-phase {AppName}`.
+- Next phase is always the unified build while any REQ is open: current_phase `Build`, Next command `/TechieFlow:agents:flow-master *build-phase {AppName}` (OpenCode: `/flow-master *build-phase {AppName}`). `build-phase` clusters all open REQs and calls `/trblazeui` (REQ-UI-*, from the mockups) and `/techierag` (REQ-RAG-*) as sub-agents itself — you do NOT point the user at a separate UI or RAG command.
 - `last_updated`: today. Leave `last_verified_build`/`last_verified_date` as-is (no build this phase).
-- Sync "Open requirements" to the two new Status tables (everything non-terminal).
+- Sync "Open requirements" to the new Status table (everything non-terminal).
 - Append a row to "Verification log" — N/A (no verify yet)
 - List unmapped open requirements if any
-- Re-render `PROJECT-STATUS.html` (gate minimum #8). Do NOT render the checklists to HTML — they are AI-agent working documents (markdown only).
+- Re-render `PROJECT-STATUS.html` (gate minimum #8). Do NOT render the checklist to HTML — it is an AI-agent working document (markdown only).
 
 ## Output Checklist
 
-- [ ] `docs/{AppName}-UI-Checklist.md` exists with REQ-UI-* IDs each back-linking to BRD-N
-- [ ] `docs/{AppName}-Functional-Checklist.md` exists with REQ-FN/RAG/NFR-* IDs each back-linking to BRD-N
+- [ ] `docs/{AppName}-Checklist.md` exists with REQ-UI/FN/RAG/NFR-* IDs each back-linking to BRD-N, in one Requirements Status table
 - [ ] Every `BRD-N` is mapped or explicitly deferred
-- [ ] `PROJECT-STATUS.md` updated with new phase + next command
+- [ ] `PROJECT-STATUS.md` updated with `Build` phase + `*build-phase` next command (+ re-rendered HTML)

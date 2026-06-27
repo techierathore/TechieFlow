@@ -29,11 +29,11 @@ grep -q 'HOME/bin' ~/.bashrc || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashr
 
 #### Compress, don't expand
 
-No story-by-story TechieFlow. One BRD + one Architecture + one Coding-Standards doc (all human-readable) feed three implementation agents reading two AI-only docs (UI checklist, Functional Checklist).
+No story-by-story TechieFlow. One BRD + one Architecture + one Coding-Standards doc (all human-readable) feed the unified `build-phase` — which reads ONE AI-only doc (the app Checklist) and calls the library agents (`/trblazeui`, `/techierag`) as sub-agents.
 
 #### Verify, don't trust
 
-Every implementation phase ends with `verifier`. Headless Playwright + `dotnet test`. Verdicts written into each checklist's Requirements Status table.
+The `build-phase` self-smokes (data + visual) and then chains `verifier`. Headless Playwright + `dotnet test`, with a data-render gate AND a visual-truth gate. Verdicts written into the checklist's Requirements Status table.
 
 #### Standards enforced from day 1
 
@@ -132,10 +132,12 @@ Every per-project document filename starts with the application name. Examples f
 | `<APP>-BRD.md` / `.html` | `AppManager-BRD.md` | `AstroLyfe-BRD.md` |
 | `<APP>-Architecture.md` / `.html` | `AppManager-Architecture.md` | `AstroLyfe-Architecture.md` |
 | `<APP>-Coding-Standards.md` | `AppManager-Coding-Standards.md` | `AstroLyfe-Coding-Standards.md` |
-| `<APP>-UI-Checklist.md` | `AppManager-UI-Checklist.md` | `AstroLyfe-UI-Checklist.md` |
-| `<APP>-Functional-Checklist.md` | `AppManager-Functional-Checklist.md` | `AstroLyfe-Functional-Checklist.md` |
+| `<APP>-Checklist.md` (ONE per app — all REQ-UI/FN/RAG/NFR-*) | `AppManager-Checklist.md` | `AstroLyfe-Checklist.md` |
+| `<APP>-UIDesign.md` (greenfield mockups spec) | `AppManager-UIDesign.md` | `AstroLyfe-UIDesign.md` |
 | `<APP>-<Library>-Feedback.md` (one per library) | `AppManager-TrBlazeUI-Feedback.md` | `AstroLyfe-TechieRag-Feedback.md` |
 | `<APP>-UsageGuide.md` | `AppManager-UsageGuide.md` | `AstroLyfe-UsageGuide.md` |
+| `<APP>-DevGuide.md` (developer code-map) | `AppManager-DevGuide.md` | `AstroLyfe-DevGuide.md` |
+| `<APP>-ProductGuide.md` (end-user how-to manual) | `AppManager-ProductGuide.md` | `AstroLyfe-ProductGuide.md` |
 
 Throughout this document, `<APP>` is a placeholder. When you paste a prompt to an agent, substitute it with your actual application name (no spaces; use PascalCase to match the user's two existing samples).
 
@@ -175,15 +177,21 @@ your-app/                              ← e.g. AppManager/
 │   ├── <APP>-Architecture.md       ← /analyst — humans + AI (both flows!)
 │   ├── <APP>-Architecture.html     ← /flow-master renders Architecture.md → humans
 │   ├── <APP>-Coding-Standards.md   ← /analyst (day 1) — ALL agents follow this
-│   ├── <APP>-UI-Checklist.md       ← /analyst — REQ-UI-* → /trblazeui — AI
-│   ├── <APP>-Functional-Checklist.md                ← /analyst — REQ-FN-* + REQ-RAG-* — AI
+│   ├── <APP>-Checklist.md          ← /analyst (*split-brd) — ONE checklist, all REQ-UI/FN/RAG/NFR-* — AI
+│   ├── <APP>-UIDesign.md           ← /analyst (*mockups, greenfield) — per-screen spec + component map — humans
+│   ├── <APP>-UIDesign.html         ← rendered for humans
+│   ├── mockups/                    ← /analyst (*mockups, greenfield) — rendered *.html screens (TrBlazeUI-styled)
+│   ├── screenshots/<APP>/          ← /flow-master (*devguide OBSERVE — any built app) — per-screen *.png (DevGuide + Product Guide source)
 │   ├── <APP>-TrBlazeUI-Feedback.md ← agents log TrBlazeUI issues — one file PER library
 │   ├── <APP>-TechieRag-Feedback.md ← agents log TechieRag issues — each goes to its team
 │   ├── <APP>-UsageGuide.md  ← /flow-master — humans
 │   ├── <APP>-UsageGuide.html       ← /flow-master — rendered for humans
 │   ├── <APP>-DevGuide.md           ← /flow-master (*devguide) — humans (small app: single doc)
 │   ├── <APP>-DevGuide.html         ← /flow-master — rendered for humans
-│   └── devguides/                  ← large app: split per-role DevGuide lives here (index + <APP>-DevGuide-<Role>.md/.html)
+│   ├── devguides/                  ← large app: split per-role DevGuide lives here (index + <APP>-DevGuide-<Role>.md/.html)
+│   ├── <APP>-ProductGuide.md       ← /flow-master (*productguide) — END USERS / external (small app: single doc)
+│   ├── <APP>-ProductGuide.html     ← /flow-master — rendered for end users
+│   └── productguides/              ← large app: split per-role Product Guide lives here (index + <APP>-ProductGuide-<Role>.md/.html)
 │
 ├── tests/{playwright,unit}/  …
 └── src/  …
@@ -198,15 +206,16 @@ your-app/                              ← e.g. AppManager/
 | `docs/<APP>-Architecture.md` | H AI | MD + Mermaid | `/analyst` (both flows) | Brownfield: current architecture + planned deltas. Greenfield: target architecture. |
 | `docs/<APP>-Architecture.html` | H | Self-contained HTML | `/flow-master` | Browseable architecture diagrams. |
 | `docs/<APP>-Coding-Standards.md` | H AI | Markdown | `/analyst` (day 1) | Every implementation agent follows this. Pinned by CLAUDE.md. |
-| `docs/<APP>-UI-Checklist.md` | AI | Markdown w/ `REQ-UI-*` | `/analyst` | Input for `/trblazeui`. Agent-only working doc — never rendered to HTML. |
-| `docs/<APP>-Functional-Checklist.md` | AI | Markdown w/ `REQ-FN-*`, `REQ-RAG-*`, `REQ-NFR-*` | `/analyst` | Input for `/flow-master` + `/techierag`. Agent-only working doc — never rendered to HTML. |
+| `docs/<APP>-Checklist.md` | AI | Markdown w/ `REQ-UI-*`, `REQ-FN-*`, `REQ-RAG-*`, `REQ-NFR-*` | `/analyst` (`*split-brd`) | The ONE checklist — every REQ class in a single Requirements Status table. Input for `*build-phase` (which routes REQ-UI-* to `/trblazeui` and REQ-RAG-* to `/techierag` as sub-agents). Scopes (`*verify ui\|functional\|all`) filter this one table by REQ prefix. Agent-only working doc — never rendered to HTML. |
+| `docs/<APP>-UIDesign.md` + `.html` · `docs/mockups/*.html` | H | MD + HTML | `/analyst` (`*mockups`, greenfield) | Per-screen UI Design Spec with a `region → TrBlazeUI control` component map + rendered TrBlazeUI-styled mockups. Approved with the BRD + Architecture before build; what `/trblazeui` builds from; the verifier's visual baseline. |
 | `PROJECT-STATUS.md` + `.html` | H AI | MD + HTML | `/analyst` then `/flow-master` | Single source of "where am I". |
 | `CLAUDE.md` | AI | Markdown | `/analyst` (day 1) | Auto-loaded by Claude Code; points to coding standards, BRD, Architecture. |
 | `.editorconfig` | AI (toolchain) | EditorConfig | `/analyst` (day 1) | Machine-checkable subset of coding standards (file-scoped namespace, async suffix, no-underscore field naming rule). |
-| Requirements Status table (inside each checklist) | AI H | MD table | build agents + `/verifier` | Per-REQ status/%/remarks — single source of truth; REQ ID → PASS/FAIL/Blocked evidence. |
+| Requirements Status table (inside the one checklist) | AI H | MD table | build agents + `/verifier` | Per-REQ status/%/remarks — single source of truth; REQ ID → PASS/FAIL/Blocked evidence. |
 | `docs/<APP>-TrBlazeUI-Feedback.md` `docs/<APP>-TechieRag-Feedback.md` | H | Markdown | All implementing agents | Issues to ship back to each library's team — **one file per library** (separate codebases, separate teams; each file is handed to its owning team, who use this same framework to fix them). |
 | `docs/<APP>-UsageGuide.md` + `.html` | H | MD + HTML | `/flow-master` | Final handoff: install, run, test, smoke checklist. |
-| `docs/<APP>-DevGuide.md` + `.html` (large apps: split per role into `docs/devguides/<APP>-DevGuide-{Role}.md` + index) | H | MD + HTML | `/flow-master` (`*devguide`) | Developer reference: every screen → control → service method → stored procedure, grouped by user role. Used to trace bugs and verify AI-generated code. Auto-generated at handoff; re-runnable anytime. See §13.12. |
+| `docs/<APP>-DevGuide.md` + `.html` (large apps: split per role into `docs/devguides/<APP>-DevGuide-{Role}.md` + index) | H (developers) | MD + HTML | `/flow-master` (`*devguide`) | Developer reference: every screen → control → service method → stored procedure, grouped by user role. Used to trace bugs and verify AI-generated code. Auto-generated at handoff; re-runnable anytime. See §13.12. |
+| `docs/<APP>-ProductGuide.md` + `.html` (large apps: split per role into `docs/productguides/<APP>-ProductGuide-{Role}.md` + index) | H (end users / external) | MD + HTML | `/flow-master` (`*productguide`) | End-user how-to manual: what each screen is for and how to do each task, illustrated with the screenshots captured for the DevGuide. The user-facing sibling of the DevGuide (same screens, different audience). On-demand; `--update` refreshes changed screens; always emits MD + HTML. See §13.13. |
 | `.tfcore/TOKEN-GUIDE.md` | H | Markdown | framework (ships with scaffold) | Token-efficiency guide — where AI tokens go and how to keep usage low. See §15. |
 
 ## 7. Workflows
@@ -216,59 +225,43 @@ your-app/                              ← e.g. AppManager/
 
 #### Reverse-doc + create all six day-1 deliverables
 
-Produces, in ONE bulk pass (no per-section/per-requirement confirmation): `<APP>-Architecture.md`, `<APP>-BRD.md` (feature catalog + BRD ledger), `<APP>-Coding-Standards.md`, `.editorconfig`, `PROJECT-STATUS.md`, `CLAUDE.md` — **plus the HTML render of every doc** (no separate render step). Updates `core-config.yaml` with the app-specific doc paths.
+Produces, in ONE bulk pass (no per-section/per-requirement confirmation): `<APP>-Architecture.md`, `<APP>-BRD.md` (feature catalog + BRD ledger), `<APP>-Coding-Standards.md`, `.editorconfig`, `PROJECT-STATUS.md`, `CLAUDE.md`, the `<APP>-UsageGuide.md`, and — because brownfield already has built code — the screen-by-screen `<APP>-DevGuide.md` (§7.6) — **plus the HTML render of every doc** (no separate render step). Updates `core-config.yaml` with the app-specific doc paths.
 
 `/analyst` `*day1-brownfield TrTools`
 
-Substitute `TrTools` with your app name. Asks at most twice: app name (if omitted) and which existing docs to harvest (`all` = default / a selection / extra paths / drafting instructions). It never asks merge-vs-new: deliverables are always written fresh at canonical names and pre-existing/superseded docs are archived to `docs/OldDocs/`. If a dev/phase plan exists, it's migrated into UI-Checklist + Functional-Checklist in the same run (completed phases pre-marked Done — skip step 3 below). Task: `.tfcore/tasks/day1-brownfield.md`.
+Substitute `TrTools` with your app name. Asks at most twice: app name (if omitted) and which existing docs to harvest (`all` = default / a selection / extra paths / drafting instructions). It never asks merge-vs-new: deliverables are always written fresh at canonical names and pre-existing/superseded docs are archived to `docs/OldDocs/`. If a dev/phase plan exists, it's migrated into the one `<APP>-Checklist.md` in the same run (completed phases pre-marked Done — skip step 3 below). **Brownfield-only:** because the repo already has built code, it also generates the screen-by-screen **DevGuide** (§7.6 — the as-built page → control → service → data-access → proc map). The DevGuide's OBSERVE pass boots the app, **captures a screenshot of every screen** to `docs/screenshots/<APP>/`, embeds them, and presents an **owner visual-review gate** ("here is how each screen renders — what needs to change?") — the brownfield counterpart to greenfield mockups. (Commonly `STATIC-ONLY` at day-1 until the stack is up; found defects land in the one checklist.) Greenfield day-1 has no code, so instead it produces UI **mockups** (§7.10). Task: `.tfcore/tasks/day1-brownfield.md`.
 
 #### Review the rendered HTMLs — manual checkpoint (≈15 min)
 
 No command — day-1 already rendered everything. Open `<APP>-BRD.html` (business intent right?), `<APP>-Architecture.html` (matches what you want?), `PROJECT-STATUS.html` (next command correct?), skim Coding Standards. Cheapest catch-mistakes point. Edit the `.md` sources directly for anything wrong, then re-render just those files: `/generate-html @docs/<APP>-BRD.md` (see §13.6).
 
-#### Split BRD into UI Checklist + Functional Checklist
+#### Split BRD into the one Checklist
 
 `/analyst` `*split-brd TrTools`
 
-Every BRD-N maps to one or more REQ-UI-*/REQ-FN-*/REQ-RAG-*/REQ-NFR-* with back-link to the source BRD. Task: `.tfcore/tasks/split-brd.md`.
+Every BRD-N maps to one or more REQ-UI-*/REQ-FN-*/REQ-RAG-*/REQ-NFR-* (all in the single `docs/<APP>-Checklist.md`, one Requirements Status table) with back-link to the source BRD. Each `REQ-UI-*` cites the mockup screen it realizes (greenfield). Task: `.tfcore/tasks/split-brd.md`.
 
-**Manual checkpoint:** read both produced docs, adjust if needed.
+**Manual checkpoint:** read the checklist, adjust if needed.
 
-#### Build the UI
+#### Build phase — ONE unified build (chains self-smoke + verifier)
 
-`/trblazeui` `Follow .tfcore/tasks/build-ui-phase.md for the app TrTools.`
+`/flow-master` `*build-phase TrTools`
 
-`/trblazeui` is the NuGet-deployed free-form persona (not a TechieFlow agent with `*`-commands). Point it at the task file directly. The task implements every REQ-UI-* per Coding Standards, logs library gaps, then auto-chains `/verifier`. Task: `.tfcore/tasks/build-ui-phase.md`.
+There is no longer a separate UI / RAG / functional build. `*build-phase` reads the one checklist, clusters ALL open REQs, and fans them out — **calling `/trblazeui` (REQ-UI-*, building from the approved mockups) and `/techierag` (REQ-RAG-*) as sub-agents**, and building REQ-FN-* / REQ-NFR-* itself. It then **self-smokes (data + visual)** and auto-chains `/verifier`. You never invoke `/trblazeui` or `/techierag` directly — flow-master orchestrates them. Task: `.tfcore/tasks/build-phase.md`.
 
-#### UI verify loop (until green)
+#### Verify loop (until green)
 
-If Vidur reports misses: `/trblazeui Fix REQ-UI-007, REQ-UI-013 per the Requirements Status table in docs/<APP>-UI-Checklist.md. Follow docs/<APP>-Coding-Standards.md. When done, re-run the verifier.` Then re-verify with `/TechieFlow:agents:verifier *verify ui` (FIX-mode re-run of the phase). Loop until green. `Blocked` (library-gap) items pass through.
+`*build-phase` self-chains `/verifier`, which writes verdicts into the one checklist's Requirements Status table and applies BOTH gates — the **data-render gate** (§4a: every control renders its data) AND the **visual-truth gate** (§4b: no overlap, every control in-viewport and non-zero-size at desktop + mobile, screenshot inspected, diffed against the mockup when one exists). A REQ is `Verified` only if acceptance passes AND data renders AND the screen looks right.
 
-#### Implement functionality — route by REQ ID prefix; standards apply
+If Vidur reports misses, just re-run `/flow-master *build-phase TrTools` — it detects FIX mode and fans out repair subagents (layout/visual fixes route back to `/trblazeui`). Or re-verify a scope directly with `/TechieFlow:agents:verifier *verify ui|functional|all` (it filters the one table by REQ prefix). Loop until green. `Blocked` (library-gap) items pass through.
 
-If `REQ-RAG-*` items exist, run techierag first:
-
-`/techierag` `Follow .tfcore/tasks/build-rag-phase.md for the app TrTools.`
-
-(`/techierag` is the free-form NuGet-deployed persona, not a TechieFlow agent with `*`-commands. So we point it at the task file directly. The task drives the implementation per Coding Standards. Task: `.tfcore/tasks/build-rag-phase.md`.)
-
-Then run flow-master (Madhav) for everything else (REQ-FN-* + REQ-NFR-*):
-
-`/flow-master` `*build-functional-phase TrTools`
-
-Implements REQ-FN-* and REQ-NFR-* per Coding Standards, skips REQ-UI-* and REQ-RAG-*, then auto-chains `/verifier`, which writes verdicts into the Functional Checklist's Requirements Status table. Task: `.tfcore/tasks/build-functional-phase.md`.
-
-#### Functional verify loop (until green)
-
-Same loop rules as step 5 — fix, then re-verify with `/TechieFlow:agents:verifier *verify functional`. Vidur runs `dotnet test` + Playwright e2e across all REQ-FN-*, REQ-RAG-*, REQ-NFR-*.
-
-In this pass Vidur also runs the **standards-compliance grep checks** from `<APP>-Coding-Standards.md` §"Enforcement" — flags any underscore-prefixed field, mis-prefixed parameter/local, or test method with underscores.
+In the verify pass Vidur also runs the **standards-compliance grep checks** from `<APP>-Coding-Standards.md` §"Enforcement" — flags any underscore-prefixed field, mis-prefixed parameter/local, or test method with underscores.
 
 #### Handoff: usage doc + dev guide + status + library-feedback consolidation + HTML refresh
 
 `/flow-master` `*handoff-phase TrTools`
 
-Produces UsageGuide doc (test users + test plan + setup), runs `*devguide` (§3a — generates the screen-by-screen Developer Guide documenting the code as-built), sets PROJECT-STATUS phase to Handoff, re-renders human-facing HTMLs (BRD, Architecture, UsageGuide, DevGuide, PROJECT-STATUS — **not** the checklists), consolidates each per-library feedback file with summary counts. Task: `.tfcore/tasks/handoff-phase.md`.
+Produces UsageGuide doc (test users + test plan + setup), runs `*devguide` (§3a — generates the screen-by-screen Developer Guide documenting the code as-built, capturing a screenshot of every screen), sets PROJECT-STATUS phase to Handoff, re-renders human-facing HTMLs (BRD, Architecture, UIDesign, UsageGuide, DevGuide, PROJECT-STATUS — **not** the checklist), consolidates each per-library feedback file with summary counts. It also points owners at `*productguide <APP>` (§13.13) — the optional end-user how-to manual, built from the same screens + screenshots the DevGuide just captured. Task: `.tfcore/tasks/handoff-phase.md`.
 
 **Manual checkpoint:** 15-min UAT against the smoke checklist. Then hand each `<APP>-<Library>-Feedback.md` to its team / file as GitHub issues (§9.2).
 
@@ -276,17 +269,17 @@ Produces UsageGuide doc (test users + test plan + setup), runs `*devguide` (§3a
 
 `/analyst` `*day1-greenfield MyNewApp`
 
-Asks once for the concept (ANY length — sentence, bullets, half-baked notes) and once for optional harvest paths / drafting instructions, then produces the six day-1 artifacts in bulk — including a TARGET architecture with stack defaults (Blazor Server + TrBlazeUI + TechieRag-if-AI + SQLite-for-dev) — **plus the HTML render of every doc** (no separate render step). Substitute `MyNewApp` with your actual app name. Task: `.tfcore/tasks/day1-greenfield.md`.
+Asks once for the concept (ANY length — sentence, bullets, half-baked notes) and once for optional harvest paths / drafting instructions, then produces the day-1 artifacts in bulk — including a TARGET architecture with stack defaults (Blazor Server + TrBlazeUI + TechieRag-if-AI + SQLite-for-dev) and the UI **mockups** (`docs/<APP>-UIDesign.md` + `docs/mockups/*.html`, §7.10) — **plus the HTML render of every doc** (no separate render step). Substitute `MyNewApp` with your actual app name. Task: `.tfcore/tasks/day1-greenfield.md`.
 
-#### Review the rendered HTMLs — manual checkpoint
+#### Review the rendered HTMLs AND the mockups — manual checkpoint (approve before build)
 
-No command — identical to brownfield step 2: day-1 already rendered everything; read the HTMLs, edit the `.md` sources, re-render edited files with `/generate-html @docs/file.md`.
+No command — day-1 already rendered everything. Read the BRD/Architecture HTMLs AND open `docs/mockups/*.html` + `docs/<APP>-UIDesign.md`: this is the visual design the UI will be built to match, so flag any screen that's wrong NOW. Edit the `.md` sources, re-render with `/generate-html @docs/file.md`, or run `*mockups <APP> --update`. The BRD + Architecture + mockups are **approved together** before any build.
 
 This is your last cheap chance to redirect before code gets written.
 
-#### Split BRD → Build UI → Verify → Implement → Verify → Handoff
+#### Split BRD → Build phase → Verify → Handoff
 
-Identical to brownfield steps 3–8. Same prompts, same templates, same ID schema, same standards-compliance discipline.
+Identical to brownfield steps 3–6. Same prompts, same one checklist, same unified `*build-phase` (which builds REQ-UI-* from your approved mockups via `/trblazeui`), same data + visual gates, same standards-compliance discipline.
 
 ### 7.9 Evolving the day-1 docs (the concept/requirements changed)
 
@@ -294,7 +287,7 @@ A project keeps moving — the greenfield concept is still under discussion, or 
 
 | Situation | Command | What it does |
 |-----------|---------|--------------|
-| **Concept/requirements evolved** (add/reword/drop features, new integration, stack tweak) but most docs still right | `*amend-docs <APP> "<what changed>"` (analyst or flow-master) | Surgically amends BRD + Architecture **in place**: appends new `BRD-N` (append-only — modified IDs edited in place, removed struck through, never renumbered), updates the feature catalog + §4 Development-status, ripples new/changed REQs into the checklists (appends rows, flags modified for re-verify — never blindly re-splits), re-renders HTML, runs the status gate. Confirms the change-set once, then bulk-applies. **Preserves unchanged sections — no `OldDocs` archive.** |
+| **Concept/requirements evolved** (add/reword/drop features, new integration, stack tweak) but most docs still right | `*amend-docs <APP> "<what changed>"` (analyst or flow-master) | Surgically amends BRD + Architecture **in place**: appends new `BRD-N` (append-only — modified IDs edited in place, removed struck through, never renumbered), updates the feature catalog + §4 Development-status, ripples new/changed REQs into the checklist (appends rows, flags modified for re-verify — never blindly re-splits), re-renders HTML, runs the status gate. Confirms the change-set once, then bulk-applies. **Preserves unchanged sections — no `OldDocs` archive.** |
 | **Pure additions**, confirm each requirement | `*create-brd <APP> <topic>` → `author-brd` (analyst) | Interactive per-item elicitation; appends confirmed `BRD-N`. (`*amend-docs` defers to this for the additive part on request.) |
 | **"What's built" refresh** (not requirements) | automatic, or `*refresh-status <APP>` | The status gate re-derives PROJECT-STATUS + BRD §4 at the end of every phase; `*refresh-status` rebuilds on demand (§8a). |
 | **Full pivot** (most of the BRD/Architecture now wrong) | re-run `*day1-greenfield` / `*day1-brownfield` | §1.6 collision policy archives the old docs to `docs/OldDocs/` and writes fresh. Wholesale redo only — never for an incremental change. |
@@ -302,11 +295,27 @@ A project keeps moving — the greenfield concept is still under discussion, or 
 
 Rule of thumb: **amend, don't regenerate.** `*amend-docs` is the default for an evolving project; re-running day-1 is the escape hatch for a true restart. After amending an already-split project with new requirements, run `*split-brd` (or the build phase the report points at) to carry them into the build.
 
+### 7.10 Greenfield UI mockups (`*mockups`)
+
+A greenfield app has no code, so its UI is built freehand from prose — which is exactly why a new app's UI comes out broken (overlapping controls, wrong layout, nothing to verify against). The analyst produces **mockups at day-1** to give the build an approved visual contract and the verifier a baseline to diff against:
+
+`/analyst` `*mockups MyNewApp`
+
+Reads the TrBlazeUI component catalog FIRST (so it designs only with controls that exist), then produces `docs/<APP>-UIDesign.md` — a per-screen spec with a `region → TrBlazeUI control` component map — plus rendered `docs/mockups/*.html` styled to look like TrBlazeUI, one per key screen from the BRD §9 feature catalog. Auto-run inside `*day1-greenfield`; re-runnable with `*mockups <APP> --update` to refresh only changed screens after an `*amend-docs` that added UI. The mockups are approved alongside the BRD + Architecture, are what `/trblazeui` builds from, and are the image the visual-truth gate diffs the live screen against. **Mockups are greenfield only** — a greenfield app has no code to screenshot yet, so its mockups are the pre-build visual contract; brownfield already has built code and instead reviews real screenshots in the DevGuide's OBSERVE pass (§7.6). Note this is about *mockups*, not screenshots: once a greenfield app is built, its DevGuide OBSERVE pass captures real per-screen screenshots exactly like brownfield (§13.12). Task: `.tfcore/tasks/mockups.md`.
+
+### 7.11 Fixing issues you found by running the app (`*fix-issues`)
+
+When the verifier passed but the running UI is still broken — overlapping controls, blank screens, wrong data — there is ONE front door:
+
+`/flow-master` `*fix-issues MyApp ./bugshots`
+
+Drop a folder of **screenshots** (plus an optional `bugs.md` describing what's wrong on each) and flow-master: reads every screenshot (vision), reproduces each issue live with Playwright, triages it (layout / data / logic / RAG), and **fans the fix out to the right builder** — `/trblazeui` for layout, its own subagents for data/logic, `/techierag` for RAG. **You never invoke a builder agent yourself — flow-master calls them as sub-agents.** It then re-smokes (data + visual) and re-verifies the affected REQs, and updates the DevGuide + the one checklist + PROJECT-STATUS. This is the answer to "the verifier passed but the UI is broken — who do I call?". Task: `.tfcore/tasks/fix-issues.md`.
+
 ## 8. Resuming a cold project
 
 Two flavours of resume. Pick by asking one question: **do you trust `PROJECT-STATUS.md`?**
 
-If the last session died in the middle of a build or verify — lost internet, model access revoked/changed mid-run, terminal killed, agent crashed — then the mandatory status gate never ran. `PROJECT-STATUS.md` is now *stale or wrong*: it may point at an old "Next command", undercount committed work, or claim a passing build that's since broken. Do NOT trust it. Run the recovery command, which rebuilds PROJECT-STATUS from *ground-truth evidence* (git history + working tree + checklist Requirements Status tables + a fresh `dotnet build`) and tells you the exact command to resume with:
+If the last session died in the middle of a build or verify — lost internet, model access revoked/changed mid-run, terminal killed, agent crashed — then the mandatory status gate never ran. `PROJECT-STATUS.md` is now *stale or wrong*: it may point at an old "Next command", undercount committed work, or claim a passing build that's since broken. Do NOT trust it. Run the recovery command, which rebuilds PROJECT-STATUS from *ground-truth evidence* (working tree + checklist Requirements Status table + a fresh `dotnet build`) and tells you the exact command to resume with:
 
 `/TechieFlow:agents:flow-master` `*refresh-status <APP>`  —  OpenCode: `/flow-master *refresh-status <APP>`  ·  add `verify` to also re-run the verifier on any REQ whose true state is ambiguous.
 
@@ -328,20 +337,22 @@ dotnet build
 
 #### Re-verify
 
-`/verifier` → *"Re-verify the checklists' Requirements Status tables and run standards-compliance greps from docs/<APP>-Coding-Standards.md. Note regressions."*
+`/verifier` → *"Re-verify the checklist's Requirements Status table and run standards-compliance greps from docs/<APP>-Coding-Standards.md. Note regressions."*
 
 #### Execute the "Next command" from `PROJECT-STATUS.md`
 
 ## 9. Custom library agents — routing rules
 
-| Trigger | Goes to | Reads (besides <APP>-Coding-Standards.md) |
+`/trblazeui` and `/techierag` are **library agents** — flow-master calls them as **sub-agents** during `*build-phase` and `*fix-issues` (and the analyst calls `/trblazeui` for its component catalog during `*mockups`). You drive the build/fix through flow-master; it routes each REQ cluster to the right builder by its prefix.
+
+| Trigger | Routed (by `*build-phase` / `*fix-issues`) to | Reads (besides <APP>-Coding-Standards.md) |
 | --- | --- | --- |
-| UI work (pages, components, forms, dashboards) | `/trblazeui` | `.trblazeui/TrBlazeUI-AI-Reference.md` + UI-Checklist |
-| AI/RAG/LLM (embedding, vector store, chat, tools) | `/techierag` | `.techierag/TechieRag-AI-Reference.md` + Functional Checklist |
-| Backend / business logic / data layer / APIs | `/flow-master` | Functional Checklist + Architecture |
-| Reverse-doc, BRD/Architecture/Standards, requirements splitting | `/analyst` | codebase / brief |
-| Verification of any phase | `/verifier` | checklists + Functional Checklist + running app + standards grep checks |
-| HTML renders / status / handoff / consolidation | `/flow-master` | everything |
+| `REQ-UI-*` — UI work (pages, components, forms, dashboards) | `/trblazeui` (sub-agent) — builds from the mockups | `.trblazeui/TrBlazeUI-AI-Reference.md` + the Checklist + `docs/mockups/*.html` |
+| `REQ-RAG-*` — AI/RAG/LLM (embedding, vector store, chat, tools) | `/techierag` (sub-agent) | `.techierag/TechieRag-AI-Reference.md` + the Checklist |
+| `REQ-FN-*` / `REQ-NFR-*` — backend / business logic / data / APIs / non-functional | `/flow-master` own subagents | the Checklist + Architecture |
+| Reverse-doc, BRD/Architecture/Standards, requirements splitting, mockups | `/analyst` | codebase / brief |
+| Verification of any scope (data + visual gates) | `/verifier` | the Checklist + DevGuide + running app + standards grep checks |
+| Unified build / fix-issues / HTML renders / status / handoff / consolidation | `/flow-master` | everything |
 
 ### 9.1 Adding a new custom library agent
 
@@ -349,13 +360,13 @@ dotnet build
 2. Agent file's frontmatter: `description`, `mode: primary`, `tools`. Body: load reference doc on activation + REQUIRED READING clause for `docs/<APP>-Coding-Standards.md`.
 3. Add routing row to the table above.
 4. The new library gets its OWN feedback file — `<APP>-<LibName>-Feedback.md` with its own issue-ID prefix, from the shared template (§13.9). Never share a feedback file between libraries.
-5. Update step-6 implementation prompt to route the new ID prefix.
+5. Update `build-phase`'s cluster-routing (and `fix-issues`'s triage) to route the new ID prefix to the new sub-agent.
 
 ### 9.2 Library issue tracking flow
 
 1. Implementing agents log on encounter — into the OWNING library's file (`<APP>-TrBlazeUI-Feedback.md` for TR-NNN, `<APP>-TechieRag-Feedback.md` for TR-RAG-NNN). Clause baked into §7 prompts.
 2. Verifier escalates library bugs → `Blocked` status in the checklist's Requirements Status table + entry in that library's feedback file.
-3. `/flow-master` consolidates each file separately in step 8: dedupe, severity sort, summary header (splits + archives any legacy combined `<APP>-Library-Feedback.md`).
+3. `/flow-master` consolidates each file separately at handoff: dedupe, severity sort, summary header (splits + archives any legacy combined `<APP>-Library-Feedback.md`).
 4. You hand each file to its team — they use this same framework, so the file drops straight into their flow — or file as GitHub issues: `gh issue create --repo your-org/TrBlazeUI --title "…" --body-file …`
 
 ## 10. Coding standards — how enforcement actually works
@@ -372,7 +383,7 @@ Claude Code auto-loads `CLAUDE.md` at project root into every session. It says "
 
 #### 3. `.editorconfig` + verifier greps
 
-Machine-checkable rules go in `.editorconfig` (Roslyn enforces in the IDE / build). Non-checkable rules (a/v prefixes, test-name underscores) become grep patterns the verifier runs in step 7.
+Machine-checkable rules go in `.editorconfig` (Roslyn enforces in the IDE / build). Non-checkable rules (a/v prefixes, test-name underscores) become grep patterns the verifier runs in the verify pass.
 
 The grep patterns belong inside `docs/<APP>-Coding-Standards.md` under an "Enforcement" section. Sample grep block (already in §11.3 template):
 
@@ -811,7 +822,7 @@ dotnet_diagnostic.CS8603.severity = warning
 project: <APP>
 stack: .NET 9 / Blazor [Server|WASM|Auto] / TrBlazeUI / TechieRag / [MAUI]
 last_updated: 2026-05-23
-current_phase: Discovery | UI build | UI verify | Functional build | Functional verify | Handoff | Released
+current_phase: Discovery | Build | Verify | Handoff | Released
 last_verified_build: PASS | FAIL | not-run
 last_verified_date: 2026-05-23
 ---
@@ -819,12 +830,14 @@ last_verified_date: 2026-05-23
 # <APP> — Status
 
 ## Where I am
-<one paragraph>
+<one short paragraph — current STATE only (phase, what's built/verified, what's open); NOT a technical to-do list>
 
 ## Next command to run
+<!-- command-against-checklist ONLY; no prose narrative of the technical work (that lives in the checklist REQ rows) -->
 ```
 /<agent> <exact prompt>
 ```
+<one optional line naming the target checklist or REQ IDs>
 
 ## Open requirements
 - [ ] REQ-UI-013 — <desc>
@@ -836,7 +849,7 @@ last_verified_date: 2026-05-23
 ## Verification log
 | Date | Phase | Result | Status table |
 |------|-------|--------|--------------|
-| 2026-05-23 | UI verify | 14/14 Verified | docs/<APP>-UI-Checklist.md#requirements-status |
+| 2026-05-23 | Verify | 14/14 Verified | docs/<APP>-Checklist.md#requirements-status |
 
 ## Library feedback summary
 - TrBlazeUI: 1 major, 0 minor — docs/<APP>-TrBlazeUI-Feedback.md
@@ -853,7 +866,7 @@ last_verified_date: 2026-05-23
 
 ### 13.6 HTML rendering — `/generate-html` & friends
 
-**You normally don't run anything:** the day-1 tasks auto-render every deliverable (BRD, Architecture, PROJECT-STATUS, and UI-Checklist/Functional-Checklist when a dev plan was migrated) to a sibling `.html` as their final step (§7.5 in the task files). The commands below are for *re-renders after you edit an MD* and for ad-hoc files.
+**You normally don't run anything:** the day-1 tasks auto-render every human deliverable (BRD, Architecture, UIDesign/mockups, UsageGuide, PROJECT-STATUS) to a sibling `.html` as their final step (§7.5 in the task files). The commands below are for *re-renders after you edit an MD* and for ad-hoc files. (The one `<APP>-Checklist.md` is markdown-only — never rendered.)
 
 **`/generate-html` — render any markdown, no agent needed** (same short form in Claude Code and OpenCode):
 
@@ -862,7 +875,7 @@ last_verified_date: 2026-05-23
 /generate-html @docs/AstroLyfe-BRD.md
 
 # Multiple specific files
-/generate-html @docs/AstroLyfe-BRD.md @docs/AstroLyfe-Architecture.md @docs/AstroLyfe-Functional-Checklist.md
+/generate-html @docs/AstroLyfe-BRD.md @docs/AstroLyfe-Architecture.md @docs/AstroLyfe-UIDesign.md
 
 # All .md files in a folder — TOP-LEVEL ONLY, non-recursive (docs/OldDocs/ untouched)
 /generate-html @docs/
@@ -877,7 +890,9 @@ last_verified_date: 2026-05-23
 
 **`*render-workflow-docs <APP>`** (on `/TechieFlow:agents:flow-master`) — re-renders just the canonical trio: BRD + Architecture + PROJECT-STATUS with the big "NEXT COMMAND TO RUN" call-to-action box. If multiple BRD/Architecture variants exist (legacy pre-OldDocs projects), it asks which one to render.
 
-**Which docs get HTML?** Only human-readable deliverables: BRD, Architecture, UsageGuide, DevGuide, PROJECT-STATUS. The `*-UI-Checklist.md` and `*-Functional-Checklist.md` are AI-agent working documents and are **never rendered to HTML** — rendering them burns tokens and lets the HTML drift from the markdown source. This rule is enforced in day-1-greenfield, day-1-brownfield, split-brd, handoff-phase, refresh-status, amend-docs, the status-update-gate, generate-html, and render-workflow-docs.
+**Which docs get HTML?** Only human-readable deliverables: BRD, Architecture, UIDesign (mockups spec), UsageGuide, DevGuide, ProductGuide, PROJECT-STATUS. The one `<APP>-Checklist.md` is an AI-agent working document and is **never rendered to HTML** — rendering it burns tokens and lets the HTML drift from the markdown source. This rule is enforced in day-1-greenfield, day-1-brownfield, mockups, split-brd, build-phase, verify-phase, handoff-phase, refresh-status, amend-docs, the status-update-gate, generate-html, and render-workflow-docs.
+
+**`PROJECT-STATUS.html` is re-rendered on every status update.** Updating PROJECT-STATUS always means *both* the `.md` and the `.html` — the status-update-gate (run at the end of every build/verify/handoff phase) re-renders `PROJECT-STATUS.html` in the same turn it edits the markdown, because the owner reads the HTML page. A status update that touches only the markdown is treated as **incomplete**. (Likewise, the "Next command to run" section is a command-against-checklist pointer, not a paragraph describing the technical work to do next — that *what* lives in the checklist REQ rows.)
 
 **What every rendered page contains** (single source of truth: `.tfcore/templates/v4custom/html-render-shell.md` — agents must use it, never hand-roll):
 
@@ -887,41 +902,12 @@ last_verified_date: 2026-05-23
 - **Mermaid toolbar** per diagram: − / + zoom (also Ctrl+wheel), Fit, 1:1, ⛶ full-screen, ↗ open in new tab with print, PNG/SVG export, full pan-and-zoom, keyboard shortcuts.
 - **Table of contents**: inline TOC when the doc has ≥2 H2s; sticky sidebar TOC when >6 H2s. Heading ids and TOC links use one slug rule (shell §1) so anchors always work.
 
-### 13.7 `docs/<APP>-UI-Checklist.md` schema
+### 13.7 `docs/<APP>-Checklist.md` schema — the ONE checklist
+
+One file holds EVERY REQ class (UI / FN / RAG / NFR) in a SINGLE Requirements Status table. `*build-phase`, the self-smoke, and the verifier all write into this one table; `*verify ui|functional|all` filter it by REQ prefix (they do not pick a separate file). Markdown-only — never rendered to HTML.
 
 ```markdown
-# <APP> — UI Mockup Checklist
-
-## Scope
-<one paragraph>
-
-## Requirements Status
-
-<!-- SINGLE SOURCE OF TRUTH: build, self-smoke, and the verifier ALL write
-     their outcomes into THIS table — never into a separate dated docs/qa file. -->
-
-| ID | Requirement | Status | % | Remarks | Details |
-|----|-------------|--------|---|---------|---------|
-| REQ-UI-001 | Dashboard top nav | Not Started | 0% | — | [view](#d-req-ui-001) |
-
-**Status values:** `Not Started` · `In Progress` · `Implemented` · `Verified` ·
-`Done (pre-existing)` · `PARTIAL` · `FAIL` · `Blocked` (library gap) · `N/A`
-
-**% guide:** 0 not started · 25 scaffolded · 50 in progress · 75 implemented-unverified · 100 verified.
-
-## Page details
-
-### Page: Dashboard (`/dashboard`)
-
-<a id="d-req-ui-001"></a>
-- **REQ-UI-001** — TrBlazeUI top nav (logo, user menu, theme toggle).
-  - *Acceptance:* page renders; nav fixed-top; theme toggle persists in localStorage.
-```
-
-### 13.8 `docs/<APP>-Functional-Checklist.md` schema
-
-```markdown
-# <APP> — Functional Checklist
+# <APP> — Checklist
 
 ## Goal
 <one paragraph; ties back to BRD §1>
@@ -929,10 +915,11 @@ last_verified_date: 2026-05-23
 ## Requirements Status
 
 <!-- SINGLE SOURCE OF TRUTH: build, self-smoke, and the verifier ALL write
-     their outcomes into THIS table — never into a separate dated docs/qa file. -->
+     their outcomes into THIS one table — never into a separate dated docs/qa file. -->
 
 | ID | Requirement | Status | % | Remarks | Details |
 |----|-------------|--------|---|---------|---------|
+| REQ-UI-001  | Dashboard top nav | Not Started | 0% | — | [view](#d-req-ui-001) |
 | REQ-FN-001  | <short name> | Not Started | 0% | — | [view](#d-req-fn-001) |
 | REQ-RAG-001 | <short name> | Not Started | 0% | — | [view](#d-req-rag-001) |
 | REQ-NFR-001 | <short name> | Not Started | 0% | — | [view](#d-req-nfr-001) |
@@ -942,20 +929,54 @@ last_verified_date: 2026-05-23
 
 **% guide:** 0 not started · 25 scaffolded · 50 in progress · 75 implemented-unverified · 100 verified.
 
+## UI / Pages
+
+### Page: Dashboard (`/dashboard`)
+
+<a id="d-req-ui-001"></a>
+- **REQ-UI-001** — TrBlazeUI top nav (logo, user menu, theme toggle). *Mockup:* docs/mockups/dashboard.html.
+  - *Acceptance:* page renders; nav fixed-top; theme toggle persists; controls do not overlap at desktop + mobile (visual gate).
+
 ## Functional requirements
 
 <a id="d-req-fn-001"></a>
-- **REQ-FN-001** — <trigger / acceptance>.
+- **REQ-FN-001** — <trigger / acceptance> (BRD-X).
 
 ## RAG / AI requirements (→ /techierag)
 
 <a id="d-req-rag-001"></a>
-- **REQ-RAG-001** — <trigger / acceptance via TechieRag>.
+- **REQ-RAG-001** — <trigger / acceptance via TechieRag> (BRD-X).
 
 ## Non-functional
 
 <a id="d-req-nfr-001"></a>
-- **REQ-NFR-001** — <perf / security / accessibility>.
+- **REQ-NFR-001** — <perf / security / accessibility> (BRD-X).
+```
+
+### 13.8 `docs/<APP>-UIDesign.md` + `docs/mockups/*.html` — greenfield UI mockups
+
+Produced by `*mockups <APP>` (auto-run at greenfield day-1; §7.10). The analyst reads the TrBlazeUI component catalog first and designs ONLY with controls that exist, so `/trblazeui` can reproduce the screens 1:1. `UIDesign.md` is a human doc (rendered to HTML); the `docs/mockups/*.html` screens are HTML by construction. These are approved with the BRD + Architecture, are what `*build-phase` builds REQ-UI-* from, and are the baseline the verifier's visual-truth gate (§4b) diffs the live screen against. **Mockups are greenfield only** (a new app has no code to screenshot yet); once built, every app — greenfield or brownfield — gets real per-screen screenshots from the DevGuide's OBSERVE pass (`docs/screenshots/<APP>/`, §13.12).
+
+```markdown
+# <APP> — UI Design / Mockups
+
+## Design system
+- Layout shell: <TrBlazeUI shell> · Theme: <name> · Controls used: <inventory>
+
+## Screens
+
+### Screen: Dashboard (`/dashboard`)
+- **Mockup:** docs/mockups/dashboard.html
+- **Component map** (region → TrBlazeUI control):
+
+  | Region | TrBlazeUI control | Shows | Empty / loading / error |
+  |--------|-------------------|-------|--------------------------|
+  | Top nav | `<TrNavBar>` | logo, user menu, theme toggle | — |
+  | KPI row | `<StatCard>` ×3 | totals | skeleton → "no data" |
+  | Orders grid | `<TrDataGrid>` | recent orders | spinner → "no orders" |
+
+- **Layout:** nav fixed-top; KPI row above a full-width grid.
+- **Interaction / state notes:** <…>
 ```
 
 ### 13.9 `docs/<APP>-<Library>-Feedback.md` schema — ONE FILE PER LIBRARY
@@ -1049,7 +1070,7 @@ ALWAYS read and follow:
 Always reference REQ IDs in commit messages: `[REQ-UI-007] add settings form validation`.
 
 ## Verification
-After every implementation phase, /verifier is invoked to write verdicts into the checklist Requirements Status tables.
+After every implementation phase, /verifier is invoked to write verdicts into the one checklist's Requirements Status table.
 Library issues go in the owning library's feedback file — docs/<APP>-TrBlazeUI-Feedback.md
 or docs/<APP>-TechieRag-Feedback.md (one file per library) — not silently worked around.
 
@@ -1063,14 +1084,14 @@ Generated by `*devguide {AppName}` on `/flow-master`. Task: `.tfcore/tasks/devgu
 
 The DevGuide documents the code *as built* — not the plan — so a human developer can trace any screen, control, or value from the UI down to the database. Grouped by user role; covers the full stack: Razor page → control → service method → data-access method → stored procedure / query. Use it to find bugs, verify AI-generated code, and understand what was actually implemented.
 
-**When:** auto-run at handoff (handoff-phase §3a); re-runnable anytime with `*devguide {AppName}`; use `--update` to refresh only screens whose source files changed since the last run.
+**When:** auto-run at **brownfield day-1** (day1-brownfield §7.6 — the repo already has code to map) and at handoff (handoff-phase §3a); re-runnable anytime with `*devguide {AppName}`; use `--update` to refresh only screens whose source files changed since the last run.
 
 #### Three-pass generation model
 
 DevGuide generation is a closed, runtime-grounded verification loop — not a static code-read:
 
 1. **MAP** — Static read: trace every page → control → service → data-access method → stored procedure / query. The post-login landing screen is READ from the redirect code in the auth flow, never inferred.
-2. **OBSERVE** — Boot the app via the build-invocation ladder, log in as each role's canonical test user from the UsageGuide, navigate every screen, and record for EVERY control whether it actually renders its data or is blank / empty / error. This pass reuses the verifier as the runtime engine.
+2. **OBSERVE** — Boot the app via the build-invocation ladder, log in as each role's canonical test user from the UsageGuide, navigate every screen, capture a per-screen screenshot to `docs/screenshots/<APP>/`, and record for EVERY control whether it actually renders its data or is blank / empty / error. This pass reuses the verifier as the runtime engine. **Screenshot capture happens for BOTH brownfield and greenfield-built apps** — any time there is built code to boot. (Brownfield's DevGuide runs at day-1 because the repo already has code; a greenfield DevGuide is generated post-build at handoff and gets screenshots exactly the same way — screenshots are NOT brownfield-only.) The captured images serve three purposes: a runtime **visual baseline**, the **owner visual-review** gate, and the **source images the Product Guide (§13.13) reuses**.
 3. **RECONCILE** — Diff documented vs observed. Log any deviation to the checklist. Write each control's render-status as an OBSERVED fact. The Controls table gains an **Observed** column: `✅ renders` / `⚠ blank` / `❌ error`.
 
 > **If the app cannot be booted** (build fails, environment not available), the DevGuide is stamped `⚠ STATIC-ONLY — not runtime-verified` at the top. Render-status fields are omitted rather than faked. The OBSERVE and RECONCILE passes are deferred until the app can be booted.
@@ -1110,21 +1131,51 @@ flowchart TD
 | Total orders | `Model.TotalOrders` | `DashboardService.GetSummaryAsync` | `DashboardRepository.FetchTotalsAsync` | `SP: GetDashboardTotals` |
 ```
 
+### 13.13 `docs/<APP>-ProductGuide.md` — end-user Product Guide
+
+Generated by `*productguide {AppName} [scope] [--update]` on `/flow-master`. Task: `.tfcore/tasks/productguide.md`. Output: `docs/{AppName}-ProductGuide.md` + sibling `.html` for a small app; large apps fan out per role into a `docs/productguides/` subfolder — an index `docs/productguides/{AppName}-ProductGuide.md` + one `docs/productguides/{AppName}-ProductGuide-{Role}.md` per role (each with a sibling `.html`). It **always emits both MD and HTML** (it's a human-facing doc). On-demand; `--update` refreshes only the screens that changed.
+
+**DevGuide vs ProductGuide — same screens, opposite audience.** The DevGuide (§13.12) is the *developer-facing code map*: page → control → service → data-access → stored procedure, used to trace bugs and verify AI-generated code. The ProductGuide is the *end-user how-to manual* for EXTERNAL users: what each screen is for and how to accomplish each task, written in plain language and **illustrated with screenshots**. Both are built from the SAME screen inventory and the SAME images — the per-screen screenshots the DevGuide's OBSERVE pass captured under `docs/screenshots/<APP>/` (the Product Guide re-shoots any missing screen via the verifier render sweep). The DevGuide tells a developer *how it works*; the ProductGuide tells a user *how to use it*.
+
+**When:** on-demand, owned by `/flow-master` (the doc hub that already owns the DevGuide, HTML generation, and handoff). The handoff step points owners at it once the DevGuide screenshots exist. Re-run with `--update` after a UI change to refresh only the affected screens.
+
+```markdown
+# <APP> — Product Guide
+
+## What this app does
+<one short paragraph for an end user — the value, not the architecture>
+
+## Role: Member
+
+### Screen: Dashboard
+![Dashboard](screenshots/<APP>/dashboard.png)
+
+**What this screen is for:** <plain-language purpose>
+
+**How to …**
+1. <step> 2. <step> 3. <step>
+
+**Tips / gotchas:** <…>
+```
+
 ## 14. Agent cheat sheet
 
-- Starting or re-documenting a project → `/analyst` (day-1 tasks, split-brd).
-- Writing code → route by REQ prefix: UI → `/trblazeui`, AI/RAG → `/techierag`, everything else → `/flow-master`.
-- Proving it works → `/verifier` (`*verify ui|functional|all`).
+- Starting or re-documenting a project → `/analyst` (day-1 tasks, mockups, split-brd).
+- Writing code → `/flow-master *build-phase` (the ONE unified build — it calls `/trblazeui` and `/techierag` as sub-agents; you don't invoke them directly).
+- Proving it works → `/verifier` (`*verify ui|functional|all` — filters the one checklist; data + visual gates).
+- The verifier passed but the running UI is broken → `/flow-master *fix-issues` (drop screenshots; it triages + routes the fix).
+- Developer code-map (screen → control → service → proc) → `/flow-master *devguide`.
+- End-user how-to manual (what each screen is for + how to do things) → `/flow-master *productguide`.
 - Docs/HTML/status/handoff chores → `/flow-master`.
 - Architecture deep-dive beyond what day-1 produced → `/architect` (optional).
 
 | Command | Role | Best for | Writes |
 | --- | --- | --- | --- |
-| `/analyst` | Chanakya, business analyst | Reverse-doc; BRD; Architecture; Coding Standards; requirement docs; status init; .editorconfig; CLAUDE.md | `<APP>-BRD.md`, `<APP>-Architecture.md`, `<APP>-Coding-Standards.md`, `<APP>-UI-Checklist.md`, `<APP>-Functional-Checklist.md`, `PROJECT-STATUS.md`, `CLAUDE.md`, `.editorconfig` |
-| `/trblazeui` | Blazor + TrBlazeUI | UI per checklist; reads coding standards | `src/` (Razor), `<APP>-TrBlazeUI-Feedback.md` |
-| `/techierag` | TechieRag RAG/LLM | REQ-RAG-* items; reads coding standards | `src/` (RAG services), `<APP>-TechieRag-Feedback.md` |
-| `/flow-master` | Madhav, master & orchestrator | The single super-agent. Orchestrates the full pipeline (`*run-workflow`, `*phase`) with parallel subagents; builds REQ-FN-* + REQ-NFR-* backend; HTML renders, status refresh, consolidation, handoff doc; generates the screen-by-screen Developer Guide (`*devguide`) | `src/`, `tests/unit/`, `<APP>-BRD.html`, `<APP>-Architecture.html`, `PROJECT-STATUS.md/html`, `<APP>-UsageGuide.md`, `<APP>-DevGuide.md/html`, `<APP>-<Library>-Feedback.md` (per-library consolidation) |
-| `/verifier` | Vidur, autonomous test runner | Verifying phase + running standards grep checks + render gate (§4a): asserts every control listed in the DevGuide actually renders its data. `Done (pre-existing)` is treated as an unverified migrated claim and gets the full render sweep — it stays Done only if its controls runtime-render, else drops to `Needs re-verify`. After each run Vidur writes verdicts to the checklist AND refreshes the DevGuide's observed render-status tags. | checklist Requirements Status tables (verdicts), DevGuide observed render-status tags, `tests/playwright/*`, `<APP>-<Library>-Feedback.md` (on library bugs — the owning library's file) |
+| `/analyst` | Chanakya, business analyst | Reverse-doc; BRD; Architecture; Coding Standards; **mockups** (`*mockups`, greenfield); the one Checklist (`*split-brd`); status init; .editorconfig; CLAUDE.md | `<APP>-BRD.md`, `<APP>-Architecture.md`, `<APP>-Coding-Standards.md`, `<APP>-UIDesign.md` + `docs/mockups/*.html`, `<APP>-Checklist.md`, `PROJECT-STATUS.md`, `CLAUDE.md`, `.editorconfig` |
+| `/trblazeui` | Blazor + TrBlazeUI **(library agent — called as a sub-agent by `*build-phase` / `*fix-issues`)** | REQ-UI-* per the mockups; reads coding standards | `src/` (Razor), `<APP>-TrBlazeUI-Feedback.md` |
+| `/techierag` | TechieRag RAG/LLM **(library agent — called as a sub-agent by `*build-phase` / `*fix-issues`)** | REQ-RAG-* items; reads coding standards | `src/` (RAG services), `<APP>-TechieRag-Feedback.md` |
+| `/flow-master` | Madhav, master & orchestrator | The single super-agent. Runs the **unified `*build-phase`** (clusters all open REQs, calls `/trblazeui` + `/techierag` as sub-agents, builds REQ-FN-*/REQ-NFR-* itself, self-smokes data+visual, chains the verifier); the **`*fix-issues`** bug-fix front door (triages screenshots → routes the fix); HTML renders, status refresh, consolidation, handoff doc; the screen-by-screen Developer Guide (`*devguide`) and the end-user Product Guide (`*productguide`) | `src/`, `tests/unit/`, `<APP>-BRD.html`, `<APP>-Architecture.html`, `PROJECT-STATUS.md/html`, `<APP>-UsageGuide.md`, `<APP>-DevGuide.md/html`, `<APP>-ProductGuide.md/html`, `<APP>-Checklist.md` (verdicts), `<APP>-<Library>-Feedback.md` (per-library consolidation) |
+| `/verifier` | Vidur, autonomous test runner | Verifying any scope + standards grep checks + the **render gate (§4a)** (every control listed in the DevGuide renders its data) AND the **visual-truth gate (§4b)** (no overlap, every control in-viewport and non-zero-size at desktop + mobile, screenshot inspected, diffed against the mockup when one exists). A REQ is `Verified` only if acceptance passes AND data renders AND the screen looks right. `Done (pre-existing)` gets the full sweep — stays Done only if it runtime-renders + looks right, else `Needs re-verify`. After each run Vidur writes verdicts to the one checklist AND refreshes the DevGuide's observed render/visual tags. | `<APP>-Checklist.md` Requirements Status table (verdicts), DevGuide observed render/visual tags, `tests/playwright/*`, `<APP>-<Library>-Feedback.md` (on library bugs — the owning library's file) |
 | `/architect` | Solutions architect | Optional deep arch dive; `/analyst` does basic architecture by default | `<APP>-Architecture.md` (delegated by analyst, optional) |
 
 ## 15. Quick command reference
@@ -1135,18 +1186,19 @@ flowchart TD
 | Scaffold (greenfield) | `./scaffold-greenfield.sh /path/to/new-app` (or run from the template repo) |
 | Update framework in existing project (§3) | `/mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/app` (add `--dry-run` to preview; restart Claude Code after) |
 | Render any MD → HTML (ad-hoc) | `/generate-html @docs/File.md` (multiple `@paths` ok; `@dir/` = top-level *.md, non-recursive; day-1 auto-renders its own docs — this is for re-renders after edits) |
-| Day-1 brownfield (6 deliverables) | `/TechieFlow:agents:analyst *day1-brownfield {AppName}` |
+| Day-1 brownfield (6 deliverables + UsageGuide + DevGuide) | `/TechieFlow:agents:analyst *day1-brownfield {AppName}` |
 | Day-1 greenfield (6 deliverables) | `/TechieFlow:agents:analyst *day1-greenfield {AppName}` |
 | Re-render BRD/Architecture/Status trio (day-1 renders these automatically) | `/TechieFlow:agents:flow-master *render-workflow-docs {AppName}` |
-| Split BRD → requirement docs | `/TechieFlow:agents:analyst *split-brd {AppName}` |
-| **Amend docs as the project evolves** (§7.9) | `/TechieFlow:agents:analyst *amend-docs {AppName} "<what changed>"` (or `/flow-master`) — surgically updates BRD + Architecture in place (append-only IDs), ripples to PROJECT-STATUS / BRD §4 / checklists, re-renders. Incremental alternative to re-running day-1. |
-| Build UI (chains verifier) | `/trblazeui Follow .tfcore/tasks/build-ui-phase.md for the app {AppName}.` |
-| Build AI/RAG | `/techierag Follow .tfcore/tasks/build-rag-phase.md for the app {AppName}.` |
-| Build backend (chains verifier) | `/TechieFlow:agents:flow-master *build-functional-phase {AppName}` |
-| Verify + standards greps + render gate | `/TechieFlow:agents:verifier *verify <scope>` — scope is `ui` \| `functional` \| `all` \| explicit REQ IDs. Runs standards-compliance greps, acceptance tests, and the **render gate** (verify-phase §4a): every control listed in the DevGuide must render its data (no blank table / count-over-zero-rows / empty chart). `Done (pre-existing)` is no longer auto-skipped — it receives the render sweep and drops to `Needs re-verify` if any control is blank. Verdicts land in the checklist Requirements Status tables; Vidur also refreshes the DevGuide's observed render-status tags after each run. |
+| Greenfield UI mockups (§7.10) | `/TechieFlow:agents:analyst *mockups {AppName}` — per-screen UIDesign spec + TrBlazeUI-styled `docs/mockups/*.html`; auto-run at greenfield day-1; `--update` refreshes changed screens. The visual contract the build matches and the verifier diffs against. |
+| Split BRD → the one Checklist | `/TechieFlow:agents:analyst *split-brd {AppName}` — writes `docs/{AppName}-Checklist.md` (all REQ-UI/FN/RAG/NFR-* in one Requirements Status table). |
+| **Amend docs as the project evolves** (§7.9) | `/TechieFlow:agents:analyst *amend-docs {AppName} "<what changed>"` (or `/flow-master`) — surgically updates BRD + Architecture in place (append-only IDs), ripples to PROJECT-STATUS / BRD §4 / the checklist, re-renders. Incremental alternative to re-running day-1. |
+| **Build — ONE unified phase** (chains self-smoke + verifier) | `/TechieFlow:agents:flow-master *build-phase {AppName}` (OpenCode: `/flow-master *build-phase {AppName}`) — clusters all open REQs, calls `/trblazeui` (REQ-UI-*, from the mockups) and `/techierag` (REQ-RAG-*) as sub-agents, builds REQ-FN-*/REQ-NFR-* itself, self-smokes (data + visual), then chains the verifier. Re-run for FIX mode on flagged REQs. (The old separate UI / RAG / functional build commands are dissolved into this one.) |
+| **Fix issues found by running the app** (§7.11) | `/TechieFlow:agents:flow-master *fix-issues {AppName} {folder}` — drop a folder of screenshots (+ optional `bugs.md`); flow-master reproduces each with Playwright, triages (layout/data/logic/RAG), fans the fix to the right builder (trblazeui / its subagents / techierag), re-smokes + re-verifies, updates DevGuide + checklist + PROJECT-STATUS. The answer to "verifier passed but the UI is broken." |
+| Verify + standards greps + data & visual gates | `/TechieFlow:agents:verifier *verify <scope>` — scope is `ui` \| `functional` \| `all` \| explicit REQ IDs; **filters the one checklist by REQ prefix** (no separate file). Runs standards-compliance greps, acceptance tests, the **render gate** (verify-phase §4a: every control renders its data) AND the **visual-truth gate** (§4b: no overlap, every control in-viewport and non-zero-size at desktop + mobile, screenshot inspected, mockup-diffed where one exists). A REQ is `Verified` only if acceptance passes AND data renders AND the screen looks right. `Done (pre-existing)` gets the full sweep. Verdicts land in the checklist; Vidur also refreshes the DevGuide's observed render/visual tags. |
 | End-of-session | `/TechieFlow:agents:flow-master Update PROJECT-STATUS.md (phase, next, log); regenerate PROJECT-STATUS.html.` |
 | Final handoff (incl. DevGuide) | `/TechieFlow:agents:flow-master *handoff-phase {AppName}` |
 | Generate / refresh Developer Guide | `/TechieFlow:agents:flow-master *devguide {AppName}` — generates `docs/{AppName}-DevGuide.md` + `.html` (split per role for large apps) via the 3-pass MAP → OBSERVE → RECONCILE model (§13.12). Add `--update` to refresh only changed screens. Stamped `⚠ STATIC-ONLY` if the app cannot be booted. Auto-run at handoff; re-runnable anytime. The DevGuide is the verifier's per-control test map — see §13.12. |
+| Generate / refresh end-user Product Guide (§13.13) | `/TechieFlow:agents:flow-master *productguide {AppName} [scope] [--update]` — the screenshot-illustrated, task-oriented how-to manual for EXTERNAL users (what each screen is for + how to do things). Reuses the DevGuide's screen inventory + the screenshots under `docs/screenshots/<APP>/` (re-shoots any missing via the verifier render sweep); fans out per role, splitting large apps into `docs/productguides/`. **Always emits MD + HTML.** On-demand; `--update` refreshes only changed screens. The user-facing sibling of the DevGuide. |
 | Token efficiency guide | `.tfcore/TOKEN-GUIDE.md` — ships with every project. Explains where AI tokens go and the levers to keep usage low (don't load whole docs/repos; checklists markdown-only; fan out to subagents; incremental updates via `*amend-docs` / `*devguide --update`; recover with `*refresh-status` instead of re-running). |
 | **Recover broken session** (status stale/wrong) | `/TechieFlow:agents:flow-master *refresh-status {AppName}` — rebuilds PROJECT-STATUS from ground truth (checklist tables + working-tree files & mtimes + fresh build; no git — git is manual) when a phase died before its status gate ran. Add `verify` to re-verify ambiguous REQs. Never edits source. See §8a. |
 | MAUI from WSL | `winrun "dotnet build && dotnet test"` |
@@ -1158,11 +1210,11 @@ The trblazeui and techierag personas are NuGet-deployed to `.claude/<name>.md` a
 
 **Q: What if the agent ignores the coding standards mid-implementation?**
 
-The verifier's standards-compliance grep checks (§10, item 3) catch the most common violations and produce coverage misses. When you see a miss like `STANDARDS: underscore-field in src/Foo.cs:42` flagged in the Functional Checklist's Requirements Status table, tell the implementing agent: *"Fix the standards violations flagged in the Requirements Status table of docs/<APP>-Functional-Checklist.md per docs/<APP>-Coding-Standards.md."* Loop until clean.
+The verifier's standards-compliance grep checks (§10, item 3) catch the most common violations and produce coverage misses. When you see a miss like `STANDARDS: underscore-field in src/Foo.cs:42` flagged in the checklist's Requirements Status table, tell the implementing agent: *"Fix the standards violations flagged in the Requirements Status table of docs/<APP>-Checklist.md per docs/<APP>-Coding-Standards.md."* Loop until clean.
 
 **Q: What if existing brownfield code doesn't use the `obj` field prefix?**
 
-First: the prefix only applies if THIS project chose `obj` — the field prefix is a per-project day-1 decision recorded in `docs/<APP>-Coding-Standards.md` (e.g. AstroLyfe uses bare PascalCase, no prefix). If it did, the analyst flags it as standards drift in step 1's output summary. You then either: (a) let the standards-compliance grep checks in step 7 catch them and fold the fixes into the regular implementation loop (the implementing agent renames as it touches the file), or (b) explicitly ask flow-master for a one-shot rename pass: *"Rename every non-obj-prefixed instance field in src/ to use the obj prefix per docs/<APP>-Coding-Standards.md, in one commit per file."* Option (a) is lower-risk; option (b) is faster if you want a clean baseline.
+First: the prefix only applies if THIS project chose `obj` — the field prefix is a per-project day-1 decision recorded in `docs/<APP>-Coding-Standards.md` (e.g. AstroLyfe uses bare PascalCase, no prefix). If it did, the analyst flags it as standards drift in the day-1 output summary. You then either: (a) let the standards-compliance grep checks in the verify pass catch them and fold the fixes into the regular build loop (the implementing agent renames as it touches the file), or (b) explicitly ask flow-master for a one-shot rename pass: *"Rename every non-obj-prefixed instance field in src/ to use the obj prefix per docs/<APP>-Coding-Standards.md, in one commit per file."* Option (a) is lower-risk; option (b) is faster if you want a clean baseline.
 
 **Q: I want to change the coding standards mid-project. Will the agents pick it up?**
 
@@ -1170,7 +1222,7 @@ Yes — they read `docs/<APP>-Coding-Standards.md` on every invocation. Update t
 
 **Q: Should the architecture document be updated as the code changes?**
 
-Yes. Step 8 (handoff) includes "if the architecture changed during implementation, update Architecture.md first to reflect 'as-built', then regenerate the HTML." For mid-flight structural changes, the implementing agent should note it; `/flow-master` reconciles at handoff.
+Yes. Handoff includes "if the architecture changed during implementation, update Architecture.md first to reflect 'as-built', then regenerate the HTML." For mid-flight structural changes, the implementing agent should note it; `/flow-master` reconciles at handoff. For a deliberate scope/structure change, run `*amend-docs <APP> "<what changed>"` (§7.9).
 
 **Q: `scaffold-brownfield.sh` / `scaffold-greenfield.sh` re-run wiped my work?**
 
@@ -1208,11 +1260,18 @@ Only with a second person. For solo + Claude Max, the compressed flow is strictl
 
 Read `.tfcore/TOKEN-GUIDE.md` (ships with every project). Key levers: don't load whole docs or repo trees into context; checklists stay markdown-only (never rendered to HTML — HTML adds weight with no AI benefit); fan work out to subagents instead of loading everything in one session; use `*amend-docs` and `*devguide --update` for incremental refreshes instead of re-running phases from scratch; use `*refresh-status` to recover a broken session instead of re-running the whole phase.
 
-**Q: A screen passed verification but was rendering blank — how did that happen, and how is it prevented now?**
+**Q: A screen passed verification but was rendering blank OR was visually broken — how is it prevented now?**
 
-Before the render gate, verification only checked acceptance-test pass/fail (HTTP 200, no exception, element present). A screen could pass its acceptance test while its data table showed zero rows or its chart rendered empty — because no assertion confirmed the controls actually received data. `Done (pre-existing)` items were skipped entirely, so migrated brownfield screens were never re-examined.
+Before the gates, verification only checked acceptance-test pass/fail (HTTP 200, no exception, element present). A screen could pass while its data table showed zero rows, or while every control rendered its data but the controls **overlapped / sat off-screen / were clipped** so the running app was unusable. Two gates close both holes:
 
-The render gate (verify-phase §4a) closes this gap: the verifier now asserts every control listed in the DevGuide renders its data on every verify run. No blank table, no count-over-zero-rows that shows empty, no empty chart — or the REQ drops to `FAIL`. `Done (pre-existing)` is treated as an unverified migrated claim and receives the same sweep, dropping to `Needs re-verify` if any control is blank. The DevGuide's observed render-status tags are refreshed after each run, keeping DevGuide ⇄ Checklist ⇄ Verifier runtime-true.
+- **Render gate (verify-phase §4a):** the verifier asserts every control listed in the DevGuide actually renders its data — no blank table, no count-over-zero-rows, no empty chart.
+- **Visual-truth gate (§4b):** it then asserts the screen LOOKS right — no control overlap, every control in-viewport and non-zero-size, checked at desktop + mobile widths, the screenshot inspected, and diffed against the mockup when one exists.
+
+A REQ is `Verified` only if acceptance passes AND data renders AND the screen looks right; otherwise it drops to `Needs re-verify` / `FAIL`. `Done (pre-existing)` is treated as an unverified migrated claim and gets the same sweep. The DevGuide's observed render/visual tags are refreshed each run, keeping DevGuide ⇄ Checklist ⇄ Verifier runtime-true.
+
+**Q: The verifier passed but the running UI is broken — who do I call?**
+
+`/TechieFlow:agents:flow-master *fix-issues {AppName} {folder}` (§7.11). Drop a folder of screenshots of the broken screens (optionally a `bugs.md` naming what's wrong on each). Flow-master reads them (vision), reproduces each issue live with Playwright, triages it (layout / data / logic / RAG), and **fans the fix out to the right builder** — `/trblazeui` for layout, its own subagents for data/logic, `/techierag` for RAG. You never invoke a builder agent yourself. It then re-smokes (data + visual), re-verifies the affected REQs, and updates the DevGuide + checklist + PROJECT-STATUS.
 
 **Q: How does a developer understand or verify the AI-generated code?**
 
@@ -1250,4 +1309,4 @@ The framework never *requires* MAUI — many apps are Blazor-only and build with
 
 ---
 
-Last revised 2026-06-25. Edit freely. When the workflow changes, update `~/.claude/projects/-mnt-c-3AIGenCode-TechieFlow/memory/MEMORY.md` and `WorkFlow-Context.md` (the AI-agent context doc) too.
+Last revised 2026-06-26. Edit freely. When the workflow changes, update `~/.claude/projects/-mnt-c-3AIGenCode-TechieFlow/memory/MEMORY.md` and `WorkFlow-Context.md` (the AI-agent context doc) too.
