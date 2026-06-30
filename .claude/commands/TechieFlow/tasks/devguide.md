@@ -4,6 +4,11 @@ Generate (or incrementally refresh) the **screen-by-screen Developer Guide** —
 
 Output: `docs/{AppName}-DevGuide.md` (single doc for small apps, kept directly in `docs/`) **or**, for a multi-part split (large apps), a dedicated **`docs/devguides/`** subfolder holding the index `docs/devguides/{AppName}-DevGuide.md` + one `docs/devguides/{AppName}-DevGuide-{Role}.md` per role — each rendered to a sibling `.html`. The subfolder keeps a multi-file guide from cluttering `docs/`. Template: `.tfcore/templates/v4custom/app-devguide-tmpl.md`.
 
+**Three modes — the unit you map depends on what the project IS** (a **library is a first-class TechieFlow project**: it gets the SAME full doc set as an app — PROJECT-STATUS, Checklist, Coding-Standards, this DevGuide — "it's just a library" is NOT a reason to skip status or a DevGuide):
+- **Application mode (default)** — an app with its own routable screens: map **screen-by-screen** (role → screen → control → service → data-access → proc), as the rest of this task describes.
+- **UI-component library mode** — ships **UI components** (e.g. TrBlazeUI), exercised by a bundled demo app. Map **component-by-component** (the component's `[Parameter]` API is the contract) — see **§0**.
+- **Service/SDK library mode** — ships **services/APIs** (e.g. TechieRag: `AddTechieRag(...)` + `ITechieRag`, zero shipped UI), exercised by a bundled sample app. Map **service/API-by-service** (the DI surface + public methods are the contract) — see **§0**. **Do NOT document a service library by its sample app's screens** — that documents the demo, not the package a consumer codes against.
+
 ## When to use
 
 - **After a build phase** that added/changed screens, to give developers a current map (auto-run at handoff — `handoff-phase §3a`).
@@ -21,9 +26,40 @@ This task documents code; it **never edits source**. If there is no built code y
 
 ## SEQUENTIAL Execution
 
+### 0. Detect the mode — application, UI-component library, or service/SDK library
+
+Before anything else, decide which mode applies. It changes the **unit** you map, not the rigor. First, is this repo a packable **library** (its product is a NuGet package, not an app)? Signs: `<IsPackable>true</IsPackable>` / a `PackageId` / `Directory.Build.props` packaging, the product lives in `src/…`, and it is exercised by a **bundled showcase under `demos/` or `samples/`** rather than being a deployable app itself. If NOT a library → **application mode** (the default — proceed to §1, screen-by-screen).
+
+If it IS a library, pick the sub-type by **what the package actually ships** (look in `src/`, not in the sample):
+
+- **UI-component library** — ships **UI components**: a `src/*.Components` (or `*.Primitives`/`*.Icons`) project, `.razor` components in the package. The consumer's contract is **component parameters**. → unit = **component**. (TrBlazeUI is canonical.)
+- **Service/SDK library** — ships **services/APIs**, **few or zero UI components** (the only `.razor` live in the sample). The consumer's contract is a **DI entrypoint** (`AddXxx(...)` `IServiceCollection` extension) + **facade interface(s)** + public service classes/methods + options/config types. → unit = **public service / API**. (TechieRag is canonical — it ships `AddTechieRag(...)` + `ITechieRag`, 0 package `.razor`.)
+
+> ⚠ **Do NOT document a library by its sample app's screens.** A NuGet consumer never uses your `samples/` UI — they code against the package's public surface (components or services). A screen-by-screen guide of the sample documents the *demo*, not the *product*; it leaves the actual contract (parameters / `AddXxx` options / public methods) undocumented. The sample/demo is the **exerciser** (the thing you boot for screenshots + usage examples), not the unit of the guide.
+
+**In either library sub-type, the work-list is the PUBLIC SURFACE a consumer codes against, not (role, screen) pairs**, and the app you boot for the OBSERVE pass (§5a) is the **demo/sample showcase project**. Everything else still applies unchanged — fan-out (§4), render-truth (§4 hooks), no-hallucinated-paths, defect→checklist (§6a), HTML render (§6), single-vs-split (§3, but split by **category/module**, not by role). Then:
+
+1. **Inventory the public surface.**
+   - *UI-component library:* every public `.razor` (+ `.razor.cs`) component the package ships (incl. `*.Primitives`/`*.Icons` as their own categories). Echo `N components across K categories` (Inputs / Layout / Overlays / Data display / Feedback / Icons).
+   - *Service/SDK library:* every public service/API the package exposes — the `AddXxx(...)` DI extension(s) + their options, the facade interface(s) (e.g. `ITechieRag`), and each public service class + its public methods. Echo `N services across K modules` (e.g. Ingestion / Embedding / Query-RAG / LLM / Resilience+Token / Admin).
+2. **For each item, document its CODE FLOW** (the library analogue of a screen's lineage), per the template's per-item block:
+   - **Purpose** — one line.
+   - **Public API surface (the consumer's contract — READ at `file:line`, never inferred):**
+     - *Component:* every `[Parameter]`/`[CascadingParameter]` (name, type, default, required?), every `EventCallback`, public methods, `@typeparam`, `[Parameter(CaptureUnmatchedValues=true)]`.
+     - *Service/API:* the `AddXxx(...)` registration + every option/config property, the facade/interface methods (full signatures: params, return type, async), and how the consumer resolves it from DI.
+   - **Internal flow** — how it behaves as built (cite `file:line`):
+     - *Component:* state fields, lifecycle (`OnParametersSet`/`OnAfterRender`), key private methods, JS interop (`IJSRuntime` + the `.js`), cascading values, event propagation.
+     - *Service/API:* the call pipeline (e.g. ingest → chunk → embed → upsert; query → embed → vector-search → prompt → LLM), external dependencies it calls (LLM endpoint, vector store, DB), resilience/retry/token-tracking, key private methods.
+   - **Demo / usage** — the `demos/`/`samples/` page or sample code that exercises it (path) + a **screenshot from the booted demo app** (§5a) **where it has UI**, plus the minimal usage snippet a developer copies (`<Component … />` for UI; `services.AddTechieRag(...)` / an `ITechieRag` call for a service).
+   - **Known issues** — undeclared-required-param traps, broken parameters, unhandled errors, a11y gaps, etc., logged to the checklist (§6a) like any other defect.
+3. **Cross-check public surface against demo/sample COVERAGE — the sample is part of the deliverable, not just a backdrop.** For each public item from step 1, find where the `demos/`/`samples/` app exercises it. A library's sample app exists to **demonstrate every public capability**; the DevGuide can only show/screenshot/verify an item that the sample actually exercises. So as you map:
+   - **Covered** → document it with its demo page + screenshot + snippet (step 2).
+   - **NOT covered** (a public component/service/overload the sample never touches — e.g. a "bring-your-own `IEmbeddingProvider`" extension point with no example, a facade method like `DeleteDocumentAsync`/`ClearAsync` no screen calls) → still document the API + internal flow from code, but mark **`⚠ no demo coverage`**, and **log it to the checklist (§6a) as a sample gap** ("REQ/sample: add a demo for `X`"). This is the answer to "does the sample also need updating?": **the DevGuide regen is the diagnostic** — if it finds uncovered public API, yes, the sample needs a small addition (a showcase page or sample snippet) so that item is demonstrable + verifiable; if coverage is complete, only the DevGuide changes. Report the covered/uncovered tally in §8 so the owner can decide which gaps to fill.
+4. Then skip to §3 (structure — split by category/module), §4 (fan out: one subagent per category/module), §5a (boot the demo/sample app; screenshot each item's showcase page where it has UI; items marked `⚠ no demo coverage` get no screenshot — that's the gap), §6 (render + checklist write-back) — applying them with "component/service" wherever they say "screen".
+
 ### 1. Confirm there is code to map
 
-Verify the app has built source (e.g. `src/{AppName}.Web` Razor files exist). If the repo is doc-only (no UI/code yet), HALT: "No built UI found — the DevGuide maps as-built code. Run the build phases first, then re-run `*devguide {AppName}`."
+Verify the app has built source (e.g. `src/{AppName}.Web` Razor files exist). If the repo is doc-only (no UI/code yet), HALT: "No built UI found — the DevGuide maps as-built code. Run the build phases first, then re-run `*devguide {AppName}`." **(Library mode (§0): the "built source" is the package under `src/…` (UI components and/or services) + its `demos/`/`samples/` showcase app — confirm those exist; a library is never skipped just because it has no app screens of its own.)**
 
 ### 2. Discover roles, menus, and screens (the work-list)
 
@@ -76,7 +112,7 @@ For `--update`: locate the existing guide first (single `docs/{AppName}-DevGuide
 
 A guide built only from reading code is a hypothesis, not the truth — static reading cannot see that a table renders blank, a list shows a count over zero visible rows, or a calc returns empty at runtime. So after drafting the map, **run the app and observe**, then reconcile.
 
-**OBSERVE (reuse the verifier — do not build a second app-runner).** Invoke the verifier's runtime render sweep (`.tfcore/tasks/verify-phase.md §4a` + the §4b visual-truth gate) over the screens in this DevGuide: it boots the app via the build-invocation-ladder, logs in as each role's `docs/{AppName}-UsageGuide.md` test user, navigates each screen, and records for **every control** in the draft map whether it **RENDERS** its data or is **RENDER-EMPTY / RENDER-ERROR / UNREACHABLE**, plus whether the screen is **VISUAL-OK / VISUAL-FAIL** (overlap/clip/off-viewport) (per `_smoke-test-policy.md` — running it is mandatory, "can't run on Linux" is banned).
+**OBSERVE (reuse the verifier — do not build a second app-runner).** Invoke the verifier's runtime render sweep (`.tfcore/tasks/verify-phase.md §4a` + the §4b visual-truth gate) over the screens in this DevGuide: it boots the app via the build-invocation-ladder, logs in as each role's `docs/{AppName}-UsageGuide.md` test user, navigates each screen, and records for **every control** in the draft map whether it **RENDERS** its data or is **RENDER-EMPTY / RENDER-ERROR / UNREACHABLE**, plus whether the screen is **VISUAL-OK / VISUAL-FAIL** (overlap/clip/off-viewport) (per `_smoke-test-policy.md` — running it is mandatory, "can't run on Linux" is banned). For a MAUI **Android / iOS / Mac Catalyst** app, the verifier drives the screens over its **Appium** endpoint (`verify-phase.md §3b`) instead of Playwright — same observations, same screenshots; an unregistered/unreachable head is observed as `⚠ STATIC-ONLY` for that head, not faked.
 
 **CAPTURE a screenshot of every screen — for EVERY DevGuide, greenfield and brownfield alike.** Whenever the OBSERVE pass boots the app (which is any time there is built code to map — a greenfield app's DevGuide is generated post-build/at handoff and gets screenshots exactly like a brownfield one; only a not-yet-built greenfield repo has none, because there is nothing to screenshot), save a full-page screenshot of each observed screen to `docs/screenshots/{AppName}/{role}-{screen-slug}.png` (desktop 1280×800; add a `-mobile` shot at 390×844 for screens with responsive layout). **Embed/link each shot into that screen's DevGuide block** (an `![{screen}](../screenshots/{AppName}/{role}-{screen-slug}.png)` image under the Controls table — use the path relative to wherever the guide lives: `screenshots/...` from `docs/`, `../screenshots/...` from `docs/devguides/`). These real-screen images serve THREE purposes: the runtime visual baseline (brownfield's equivalent of greenfield's mockups), the owner visual-review (§5b), and the **source images the end-user Product Guide reuses** (`*productguide` — the DevGuide is the as-built map for developers AND the screenshot source for external-user documentation).
 

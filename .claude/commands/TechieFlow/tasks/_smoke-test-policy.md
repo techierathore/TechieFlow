@@ -30,12 +30,14 @@ The owner did the one-time setup (`WORKFLOW.html §0`) precisely so the agent ca
 
 - **Headless Playwright + system Chromium** are installed in WSL. Browser smoke tests run **headless** — no GUI, no display server needed. (`verify-phase.md §1` also self-heals them if a fresh machine is missing them.)
 - **The MAUI / Windows-side dotnet bridge** exists (`build-invocation-ladder.md §B`, rungs #3–#4). Windows-targeted code and MAUI code **build AND run** on the right rung (`cmd.exe /c "dotnet run ..."` / `winrun`). WSL2 forwards `localhost`, so WSL-side Playwright reaches a Windows-side port.
+- **The MAUI mobile/desktop runtime bridge** exists for any app that registers it (`core-config.yaml → runtimeVerification.appium`; one-time host setup `WORKFLOW.html §0b`; driver detail `build-invocation-ladder.md §D`). MAUI **Android** runs on an emulator on the Windows host; MAUI **iOS / Mac Catalyst** run on the LAN Mac — both driven over an **Appium** WebDriver endpoint that returns the same screenshot + element tree the gates consume. Appium is the native analogue of Playwright. The MAUI Windows head keeps its FlaUI/Appium-Windows path.
 
 Therefore the following are **NOT acceptable reasons to skip the smoke and push the work onward un-tested.** Each maps to an already-solved capability — saying one of these means you skipped the setup, exactly like logging a wrong-rung build error as a "blocker":
 
 - ❌ "I can't run the app on Linux / WSL."
 - ❌ "This app targets Windows, so I can't run it from here."
 - ❌ "It's a MAUI app — MAUI can't run on this system."
+- ❌ "It's an Android / iOS / Mac Catalyst app — I can't run a mobile/desktop head from WSL." (If the app registered an Appium endpoint, drive it; if it didn't, log that it's unregistered and stamp the head `⚠ STATIC-ONLY` — never silently skip.)
 - ❌ "Playwright needs a GUI / there's no browser here."
 - ❌ "I'll let the verifier (or the user) smoke it."
 - ❌ "The build passed, so it's fine."
@@ -44,6 +46,8 @@ Therefore the following are **NOT acceptable reasons to skip the smoke and push 
 **Escalating to the user is the LAST resort, not the first.** If WSL-side `dotnet run` can't be reached, switch to rung #4 (Windows-side) per the build ladder. If Playwright still can't connect after that, follow `verify-phase.md §3a` (try rung #4, try another port, THEN — only then — ask the user to run the two-line recipe and wait for `go`). Never propose a cloud deploy (banned per verify-phase's Local-only policy). You ask the user to boot the app **only after** the ladder genuinely fails — and you still run the smoke yourself once they reply `go`.
 
 **A multi-service app does not change this — bring the dependent services up yourself.** When the feature needs an API + a web front-end + a database + an LLM endpoint, a dependent service being down is something you **start**, not a blocker you hand to the owner. Read each dependent project's `appsettings*.json` / launch settings for its configured port and URL, then start EACH service yourself **in dependency order** (DB/LLM endpoint first, then API, then web) via the build ladder before concluding you "can't run it". "The stack is down / it's multi-service" is the same banned excuse as "it can't run on Linux" — already-solved by booting the pieces.
+
+**A MAUI mobile head does not change this either — boot the emulator + Appium yourself.** For a MAUI **Android** screen, starting the emulator and the Appium server on the Windows host is YOUR job (run the `runtimeVerification.appium.android.launch` command, e.g. via `winrun`; poll `…/status` until ready — emulators are slow to cold-start, so poll, don't give up). For **iOS / Mac Catalyst**, the LAN Mac's Appium must be reachable (`curl …/status`); that one is a genuine session dependency — if the Mac is down, stamp the head `⚠ STATIC-ONLY` and say so, never a faked pass. Asking the owner is still the LAST resort, after the boot-it-yourself escalation.
 
 ## Git is manual — NEVER run git to inspect code or chase a defect
 

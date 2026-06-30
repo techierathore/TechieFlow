@@ -31,6 +31,11 @@
 - **Chasing a wrong number / missing data?** Find the control in that screen's *Data lineage* table → it names the service method → the data-access method → the stored proc / query. Open those files in order.
 - **Verifying AI-generated code?** Compare what this guide claims against the actual files. If a row says `usp_GetDashboardKpis` but the service actually calls inline SQL, the guide (or the code) is wrong — that mismatch is exactly the kind of hallucination this guide is meant to catch.
 - **For a large app (many roles / screens)** this guide is split into one file per role, kept together in the `docs/devguides/` subfolder (so they don't clutter `docs/`) — see the [index](#roles-and-menu-map). Open only the role file you need.
+- **Library variant (a library is documented by its PUBLIC SURFACE, not its sample app's screens — `devguide.md §0`).** Replace "Roles and menu map" with a **catalog by category/module**, and each item block documents **Purpose · Public API surface** (the consumer's contract, read at file:line) **· Internal flow** (file:line) **· Demo & usage** (the `demos/`/`samples/` page or sample code + screenshot where it has UI + a copy-paste snippet) **· Known issues**. The unit depends on what the package ships:
+  - **UI-component library** (e.g. TrBlazeUI) → **component-by-component**; API surface = every `[Parameter]`/`EventCallback`/`@typeparam`; categories = Inputs / Layout / Overlays / Data display / Feedback / Icons; snippet = `<Component … />`.
+  - **Service/SDK library** (e.g. TechieRag) → **service/API-by-service**; API surface = the `AddXxx(...)` DI registration + options + facade/interface method signatures; modules = e.g. Ingestion / Embedding / Query-RAG / LLM / Resilience+Token / Admin; snippet = `services.AddXxx(...)` + an `IFacade` call.
+
+  The "find your screen / chase a wrong number" guidance above reads as "find your component/service / chase a broken parameter or method". Any public item the sample app does **not** exercise is marked **`⚠ no demo coverage`** (a sample gap logged to the checklist) — the sample app is part of the library's deliverable, not just a backdrop.
 
 ## Architecture cheat-sheet
 

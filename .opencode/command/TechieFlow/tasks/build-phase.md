@@ -108,7 +108,10 @@ If the verifier reports any `FAIL` / `Needs re-verify` items: return to the user
 
 - **Build status (always update):** `last_verified_build: PASS` and `last_verified_date: {today YYYY-MM-DD}`. If the build failed and you somehow advanced anyway, set `FAIL` and add to "Known blockers".
 - **Open requirements:** sync the checkbox list to the checklist Status table — anything not `Verified` stays open.
-- If all REQ-* are `Verified` (`Blocked`-by-library counts as pass-through): phase = `Handoff`, next command = `/TechieFlow:agents:flow-master *handoff-phase {AppName}` (OpenCode: `/flow-master *handoff-phase {AppName}`). Otherwise keep phase `Build`, next command `/TechieFlow:agents:flow-master *build-phase {AppName}` naming the open REQ IDs.
+- **Next command — the Build → Verify → Handoff ladder, gated on the weakest open REQ** (per `_status-update-gate.md` item 5; do NOT freelance to `*verify all` just because you built something this pass):
+  - **Any REQ still unbuilt** (`Planned`/`In Progress`/`PARTIAL`/`NOT-IMPLEMENTED`, or open + not implemented) → keep phase `Build`, next command = `/TechieFlow:agents:flow-master *build-phase {AppName}` naming the open REQ IDs. Building isn't finished, so **build is next — not verify**, even if other REQs you just wired now want verification. This includes REQs that are built but **`NOT-OBSERVABLE` for lack of a test/harness** — writing that test is build work (`*build-phase` adds unit tests), so build still leads until the verifier has something to assert.
+  - **All REQs built AND observable (≥ `Implemented`, with a test/route the verifier can exercise) but some not `Verified`** → phase `Verify`, next command = `/TechieFlow:agents:verifier *verify all {AppName}` (or narrowest scope).
+  - **All REQs `Verified`** (`Blocked`-by-library counts as pass-through) → phase `Handoff`, next command = `/TechieFlow:agents:flow-master *handoff-phase {AppName}` (OpenCode: `/flow-master *handoff-phase {AppName}`).
 - Log a verification-log row (Status table column → `docs/{AppName}-Checklist.md#requirements-status`).
 - Update "Library feedback summary" counts and "Standards compliance".
 

@@ -261,6 +261,13 @@ public Task ConnRejectsNull()
 - Sanitize user data
 - Log security events
 
+### MAUI UI testability — stable AutomationId (MAUI apps only)
+
+- Every interactive or data-bound control the verifier must reach (buttons, entries, pickers, list/collection views, key labels/values) carries a stable, unique `AutomationId` — the native analogue of a stable DOM id for Playwright. Without it, Appium selectors drift and the runtime gates (`verify-phase §4a/§4b`) can't reliably find controls on the Android/iOS/Mac Catalyst heads.
+- Name by intent, not layout: `AutomationId="LoginSubmitButton"`, `AutomationId="ClientsGrid"`, `AutomationId="TotalBalanceValue"` — never positional (`Button2`).
+- Set it on the control whose data the gate asserts (the grid/list itself, the value label), so "rows present AND non-empty" / "value not blank" maps to one addressable element.
+- (Blazor screens use the equivalent `data-testid`/stable element ids for Playwright — same principle.)
+
 ## Migration & Enforcement
 
 ### `.editorconfig` (repo root)

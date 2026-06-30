@@ -9,6 +9,24 @@ last_verified_date: {YYYY-MM-DD}
 
 # {AppName} — Status
 
+<!--
+  ============================================================================
+  THIS FILE IS A CRISP, FIXED-SHAPE SNAPSHOT — OVERWRITE IT, NEVER APPEND TO IT.
+  It has exactly the sections below and NO others. It should stay well under
+  ~60 lines — a human reads it in ten seconds.
+
+  When you update status you REPLACE the content of these sections in place.
+  Do NOT add a new dated section per run. The following are BANNED (they are
+  what turns this file into an unreadable 280-line append-log):
+    - A per-run prose H2 like "## *verify all — formal coverage matrix (DATE)",
+      "## *fix-issues — …", "## *build-phase — …". A run records its outcome as
+      ONE row in "## Verification log" + updated Remarks IN THE CHECKLIST. Period.
+    - A paragraph crammed into `current_phase:` or "## Where I am". `current_phase`
+      is ONE short line. The blow-by-blow lives in the checklist Remarks + .verify/.
+  See .tfcore/tasks/_status-update-gate.md §"CRISP, FIXED-SHAPE snapshot".
+  ============================================================================
+-->
+
 ## Where I am
 <one short paragraph — the current STATE only: which phase, what is built/verified, what is open.
  This is a status snapshot, NOT a technical to-do list. Do not narrate the implementation work

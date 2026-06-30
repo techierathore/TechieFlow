@@ -6,13 +6,45 @@
 
 A phase is not complete when the build passes or the tests are green. It is complete when PROJECT-STATUS reflects the new reality. **"Update PROJECT-STATUS" always means the markdown AND the HTML — never the `.md` alone.** The owner reads the `.html` to check status; a status update that touches only the markdown leaves the page the human actually looks at stale, which defeats the entire purpose of the gate. If you wrote `PROJECT-STATUS.md` but did not re-render `PROJECT-STATUS.html`, you are NOT finished. If you are about to end your turn and you have not written both, you are not finished.
 
+## PROJECT-STATUS is a CRISP, FIXED-SHAPE snapshot — you OVERWRITE it, you NEVER append to it
+
+PROJECT-STATUS is a **one-page state snapshot a human reads in ten seconds** — it answers "where is this project and what do I run next?" in plain English. It is **not** a running journal of everything the agents did. It has exactly the sections defined in `.tfcore/templates/v4custom/app-project-status-tmpl.md` and **no others**:
+
+- frontmatter only (`project`, `stack`, `last_updated`, `current_phase`, `last_verified_build`, `last_verified_date`)
+- `## Where I am` — ONE short paragraph
+- `## Next command to run` — a command block + at most one line naming the target REQ IDs
+- `## Open requirements` — a bullet list synced to the checklist
+- `## Known blockers`
+- `## Verification log` — a dated **table** (one row per pass), nothing more
+- `## Library feedback summary` · `## Standards compliance` · `## Deferred / future`
+
+**Updating PROJECT-STATUS means OVERWRITING the content of these existing sections in place. You do NOT add new sections.** The whole file stays roughly template-length (well under ~60 lines). The detailed blow-by-blow history lives in two places that already exist for it — the **checklist Remarks cells** (per-REQ) and the dated **`.verify/` artifacts** — never here.
+
+These are BANNED — they are exactly the disease that turned real status files into 280-line unreadable messes:
+
+- ❌ **Adding a per-run prose section** — `## *verify all — formal coverage matrix (2026-06-29)`, `## *fix-issues — …`, `## *build-phase — …`, or any dated narrative of what this run did. Every run that appends such a section makes the file permanently longer; after a week it is an append-log nobody can read. A verify/fix/build run records its outcome as **ONE new row in the `## Verification log` table** plus updated **Remarks in the checklist** — full stop. No new H2 in PROJECT-STATUS.
+- ❌ **Stuffing `current_phase:` (or any frontmatter field) with a paragraph.** `current_phase` is ONE short line: a phase name plus at most a half-line qualifier — e.g. `Verify — 19 open, tail is env/external-blocked`. The detail ("re-booted the stack cold, ran the 55-screen sweep, REQ-UI-010 deep-verified on /ShowKundali/368, 9 tabs …") does NOT belong in frontmatter, in `## Where I am`, or anywhere in this file.
+- ❌ **Preserving old run history.** PROJECT-STATUS shows the CURRENT state only. If a section has already grown past its template shape (multiple dated sections, a giant `current_phase`), **TRIM it back to the template shape as part of your update** — do not carry the old prose forward "to be safe".
+
+Smell test: if your edit grows the file by more than the single Verification-log row (and small in-place text changes), you are appending narrative that belongs in the checklist. Stop and move it there.
+
+## Never run git to update status
+
+Status is reconstructed from the **checklist Requirements Status tables + the working-tree files on disk + a fresh `dotnet build`** — **never** from git. Do NOT run `git grep` / `git diff` / `git log` / `git status` / `git blame` to discover "what changed" for the status write. Everything you need is **local**: read the checklist tables and the source files at their paths (the files on disk ARE the as-built code). The owner gates `git` behind a manual approval and will deny the prompt — running it only stalls you mid-gate. (Same rule as `_smoke-test-policy.md` §"Git is manual" and `refresh-status.md`.)
+
 ## What "update PROJECT-STATUS" means (minimum)
 
 1. `last_updated: {today YYYY-MM-DD}`.
-2. `current_phase` set to where the project now is.
+2. `current_phase` set to where the project now is — **ONE short line** (phase name + at most a half-line qualifier), never a paragraph of run detail.
 3. `last_verified_build` + `last_verified_date` reflect the most recent build.
 4. **Open requirements** list synced to the checklist's **Requirements Status** table — every REQ not yet `Verified` stays listed.
 5. **Next command to run** updated to the exact next step, expressed **only as a command pointed at a checklist/scope** — e.g. `/TechieFlow:agents:verifier *verify ui` (filters `docs/{AppName}-Checklist.md` to `REQ-UI-*`) or `/TechieFlow:agents:flow-master *build-phase {AppName}` (with both Claude Code and OpenCode forms where they differ). **Do NOT write a prose description of the technical work to do next** — no "next, wire up the X service and fix the Y binding and then add validation to Z". The *what* already lives in the checklist's REQ rows; PROJECT-STATUS only says **which command to run against which checklist/REQs**. If you need to point at specific items, name the REQ IDs (e.g. "resume FAILed `REQ-UI-007`, `REQ-UI-012`"), not a paragraph explaining how to fix them. Keep the whole "Next command to run" section to the command block plus, at most, one line naming the target REQ IDs.
+
+   **Which command — derive it from the checklist's build state; do NOT freelance.** The pipeline is a strict ladder **Build → Verify → Handoff**, gated on the *weakest* in-scope REQ. Look at the checklist Requirements Status table and pick by the least-advanced open REQ:
+   - **Any REQ not yet built** — `Planned` / `In Progress` / `PARTIAL` / `NOT-IMPLEMENTED`, or any open row whose feature isn't implemented yet → the lead command is **`*build-phase {AppName}`** (keep building). **You do NOT lead with `*verify all` while real functionality is still unbuilt** — verifying a half-built app wastes a pass and misrepresents the project as further along than it is. (You may add ONE trailing line noting verification follows, but the headline command is build.) **This tier also covers a built REQ that cannot be verified yet because the test/harness it needs does not exist** (`NOT-OBSERVABLE`, "unit/integration test to be written", no test project) — writing that test is *build* work (`*build-phase` adds unit tests), so build still leads until the REQ is actually observable. Don't send the verifier at a REQ it has no way to assert — it will only bounce back `NOT-OBSERVABLE`.
+   - **Every REQ built AND observable (all at least `Implemented`, with a test/route the verifier can actually exercise) but some not yet `Verified`** → now verification is the gating work → lead with **`*verify all {AppName}`** (or the narrowest `*verify ui|functional` scope that covers the unverified rows).
+   - **Every REQ `Verified`** (library-`Blocked` counts as pass-through) → **`*handoff-phase {AppName}`**.
+   This is the single rule for choosing the next command — `*build-phase` and `*verify*` are not interchangeable "either works" options; the build state decides which one. When in doubt between build and verify, **build** (an un-built feature is never closed by a verify run).
 6. A new **Verification log** row whose "Status table" column links to the checklist that holds the per-REQ detail (`docs/{AppName}-Checklist.md#requirements-status`) — NOT a dated `docs/qa/*.md` file (those no longer exist).
 7. Library-feedback counts + standards-compliance lines refreshed if the phase touched them.
 8. **HTML refresh (MANDATORY — every time, same turn you edit the `.md`):** re-render `PROJECT-STATUS.html` from the markdown you just wrote (use `.tfcore/tasks/generate-html.md` with the shared shell — never hand-rolled HTML). This is not optional cleanup and not a "later" step — the owner reads the `.html`, so a markdown-only update is an **incomplete** update that fails this gate. If you edited `PROJECT-STATUS.md` you re-render `PROJECT-STATUS.html` in the same turn, full stop. **Do NOT render the checklists to HTML** — they are AI-agent working documents kept in markdown only (the per-REQ Requirements Status table is the agent's source of truth, not a human HTML page).

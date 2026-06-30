@@ -21,6 +21,9 @@
   pre code{background:none;border:none;padding:0}
   .copy{position:absolute;top:8px;right:8px;background:#1c2230;color:#9aa3b2;border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:11px;font-family:var(--sans);cursor:pointer}
   .copy:hover{color:var(--accent);border-color:var(--accent)}
+  pre.mermaid{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 14px;text-align:center;color:var(--ink);overflow:auto;line-height:1.3}
+  .dcap{font-size:14px;color:var(--accent);font-weight:700;margin:18px 0 4px}
+  .dnote{font-size:12.5px;color:var(--muted);margin:0 0 6px}
   .layout{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
   nav.side{position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--line);background:var(--panel);padding:18px 14px}
   nav.side h1{font-size:14px;margin:0 0 4px;letter-spacing:.5px;color:var(--ink)}
@@ -96,9 +99,14 @@
 <nav class="side">
   <h1>TechieFlow: Solo-Dev Delivery Framework</h1>
   <div class="sub">Custom workflow for Claude Max + WSL</div>
+  <div class="group">Quick reference</div>
+  <ol>
+    <li><a href="#ataglance">Process at a glance (flowcharts)</a></li>
+  </ol>
   <div class="group">One-time</div>
   <ol>
     <li><a href="#wsl-bootstrap">WSL bootstrap (once, ever)</a></li>
+    <li><a href="#device-bootstrap">Device-host bootstrap (MAUI Android/iOS/Mac)</a></li>
   </ol>
   <div class="group">Start here</div>
   <ol>
@@ -123,7 +131,6 @@
   </ol>
   <div class="group">Reference</div>
   <ol>
-    <li><a href="#templates">Doc templates</a></li>
     <li><a href="#agents">Agent cheat sheet</a></li>
     <li><a href="#quickref">Command reference</a></li>
     <li><a href="#faq">FAQ &amp; gotchas</a></li>
@@ -141,6 +148,71 @@
   <span class="pill">Harness</span> Claude Code (WSL) + OpenCode &nbsp;·&nbsp;
   <span class="pill">Stack</span> .NET / Blazor / MAUI / TrBlazeUI / TechieRag
 </div>
+
+<!-- ============================================================ -->
+<!-- PROCESS AT A GLANCE — quick-reference flowcharts             -->
+<!-- ============================================================ -->
+<h2 id="ataglance">Process at a glance — flowcharts <span class="pill">quick reference</span><span class="anchor-link"><a href="#ataglance">#</a></span></h2>
+<p class="lede" style="font-size:15px">The whole process on one screen. Each box is the exact command to run (agent + <code>*task</code>); the deep sections (<a href="#flows">§7</a>, <a href="#resume">§8</a>) explain each step. Loops mean "repeat until the gate passes".</p>
+
+<div class="dcap">A · Greenfield — new app from scratch</div>
+<pre class="mermaid">
+flowchart TD
+  A["scaffold-greenfield.sh ."] --> B["/analyst *day1-greenfield"]
+  B --> M["/analyst *mockups (auto-run at day-1)"]
+  M --> C{"Approve BRD + Architecture + mockups"}
+  C -->|"approved"| D["/analyst *split-brd  (creates the one Checklist)"]
+  D --> E["/flow-master *build-phase  (calls trblazeui + techierag)"]
+  E --> F["/verifier *verify all  (data + visual gates)"]
+  F --> G{"All REQ Verified?"}
+  G -->|"bugs found"| X["/flow-master *fix-issues {App} {screenshots-folder}"]
+  X --> F
+  G -->|"yes"| H["/flow-master *handoff-phase"]
+</pre>
+
+<div class="dcap">B · Brownfield — existing app</div>
+<pre class="mermaid">
+flowchart TD
+  A["scaffold-brownfield.sh ."] --> B["/analyst *day1-brownfield  (reverse-doc + DevGuide)"]
+  B --> C{"Was a dev plan migrated into the Checklist?"}
+  C -->|"no"| D["/analyst *split-brd  (creates the Checklist)"]
+  C -->|"yes"| E["/flow-master *build-phase"]
+  D --> E
+  E --> F["/verifier *verify all"]
+  F --> G{"All REQ Verified?"}
+  G -->|"bugs found"| X["/flow-master *fix-issues {App} {screenshots-folder}"]
+  X --> F
+  G -->|"yes"| H["/flow-master *handoff-phase"]
+</pre>
+
+<div class="dcap">C · Which command next? — the Build to Verify to Handoff ladder</div>
+<p class="dnote">Pick the next command from the <em>weakest</em> open REQ in the Checklist. When in doubt, build.</p>
+<pre class="mermaid">
+flowchart TD
+  S{"Weakest open REQ in the Checklist?"}
+  S -->|"any REQ unbuilt (Planned / In Progress / PARTIAL), or built but not testable yet"| B["/flow-master *build-phase {App}"]
+  S -->|"all built and testable, some not yet Verified"| V["/verifier *verify all {App}"]
+  S -->|"all REQ Verified"| H["/flow-master *handoff-phase {App}"]
+</pre>
+
+<div class="dcap">D · Recovering a cold / interrupted project</div>
+<pre class="mermaid">
+flowchart LR
+  A["Session died mid-phase — PROJECT-STATUS is stale"] --> B["/flow-master *refresh-status {App}"]
+  B --> C["Rebuilds status from Checklist + files on disk + a fresh build"]
+  C --> D["Prints the exact next command to resume"]
+</pre>
+
+<div class="dcap">E · Library project (TrBlazeUI / TechieRag) — docs and DevGuide</div>
+<p class="dnote">A NuGet library is a first-class project: same doc set as an app, DevGuide driven by its demo/sample app.</p>
+<pre class="mermaid">
+flowchart TD
+  A["Library repo (TrBlazeUI / TechieRag)"] --> B["/analyst *day1-brownfield  (docs + PROJECT-STATUS)"]
+  B --> C["/analyst *split-brd  (the Checklist)"]
+  C --> D["/flow-master *devguide --update"]
+  D --> E["UI-component library: component-by-component"]
+  D --> G["Service / SDK library: service-by-service"]
+</pre>
 
 <!-- ============================================================ -->
 <h2 id="wsl-bootstrap">0. WSL bootstrap — <span class="pill once">DO ONCE, EVER</span><span class="anchor-link"><a href="#wsl-bootstrap">#</a></span></h2>
@@ -161,6 +233,89 @@ chmod +x ~/bin/winrun
 grep -q 'HOME/bin' ~/.bashrc || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc</code></pre>
 
 <div class="panel ok"><strong>Verify:</strong> open a new WSL terminal and run <code>which winrun</code> → <code>/home/&lt;you&gt;/bin/winrun</code>.</div>
+
+<!-- ============================================================ -->
+<h2 id="device-bootstrap">0b. Device-host bootstrap (MAUI Android / iOS / Mac Catalyst) — <span class="pill once">DO ONCE PER HOST</span><span class="anchor-link"><a href="#device-bootstrap">#</a></span></h2>
+
+<h3>What this is, in plain words</h3>
+
+<p>The AI does its own testing of every app it builds. For a <strong>website</strong> app it can already "see" the screens — it opens the site in an invisible browser, looks at each page, and checks that everything shows up and looks right. But when an app runs on a <strong>phone, tablet, or as a Mac desktop program</strong>, the AI has no window into it: it can confirm the app <em>compiles</em>, but it can't <em>see</em> what the running app looks like. That is the gap this setup closes — without it, the AI might report "all good" while the real phone screen has buttons on top of each other, text cut off, or empty lists.</p>
+
+<div class="panel"><strong>The analogy:</strong> think of the AI as a quality inspector. For websites it already has a screen to watch. This one-time setup gives it a <strong>video feed and a remote control for a phone (and a Mac)</strong> so it can tap around the real app, take screenshots, and catch a broken-looking screen — the same way it already does for websites. You set up the camera and remote <em>once</em>; after that the AI uses them by itself every time it tests.</div>
+
+<div class="panel warn"><strong>Do you even need this?</strong> Only if the app runs on <strong>phones/tablets (Android or iPhone/iPad)</strong> or as a <strong>Mac desktop program</strong>. If your app is a normal <strong>website</strong> (Blazor), you can skip this whole section — website testing already works out of the box. You can also set up just the parts you need: only Android, or only Apple, or both.</div>
+
+<h3>A few words you'll see</h3>
+<table>
+  <tr><th>Word</th><th>What it means here</th></tr>
+  <tr><td><strong>Appium</strong></td><td>The free tool that acts as the "remote control" — it lets the AI tap buttons and read the screen of a phone or Mac app.</td></tr>
+  <tr><td><strong>Emulator</strong> / <strong>Simulator</strong></td><td>A pretend phone that runs <em>on your computer</em> in a window, so you don't need a physical phone plugged in. "Emulator" = Android; "Simulator" = iPhone/iPad.</td></tr>
+  <tr><td><strong>AVD</strong></td><td>"Android Virtual Device" — one specific pretend Android phone you've created (e.g. a Pixel running Android 14).</td></tr>
+  <tr><td><strong>SDK</strong></td><td>The official toolkit from Google (Android) or Apple (iPhone) for building and running their apps.</td></tr>
+  <tr><td><strong>WSL</strong></td><td>The Linux environment inside your Windows PC where the AI (Claude Code) actually runs.</td></tr>
+  <tr><td><strong>Endpoint / URL</strong></td><td>An address like <code>http://localhost:4723</code> that the AI uses to reach the remote control. <code>localhost</code> means "this same computer".</td></tr>
+  <tr><td><strong>Terminal</strong> / <strong>PowerShell</strong></td><td>A text window where you type commands. On Windows it's "PowerShell" or "Terminal"; on Mac it's the "Terminal" app; inside WSL it's your Ubuntu window.</td></tr>
+</table>
+
+<h3>What you'll need first</h3>
+<ul>
+  <li><strong>For Android testing:</strong> a Windows PC, plus <strong>Android Studio</strong> (the free Google app — the easiest way to get the Android toolkit, a pretend phone, and the emulator all at once) and <strong>Node.js</strong> (free, from <code>nodejs.org</code> — it provides the <code>npm</code> command used to install Appium).</li>
+  <li><strong>For iPhone / iPad / Mac-desktop testing:</strong> a <strong>Mac computer on the same Wi-Fi/network</strong> as your PC, with <strong>Xcode</strong> (free from the Mac App Store) and <strong>Node.js</strong>. This is the same Mac used to build Apple apps.</li>
+  <li>Permission to install software (you may be asked for your password), and an internet connection for the downloads.</li>
+</ul>
+
+<div class="panel"><strong>How the pieces fit:</strong> the pretend phone and its remote control run <em>where that platform lives</em> — Android on your <strong>Windows PC</strong>, iPhone/iPad and Mac-desktop on the <strong>Mac</strong>. The AI just needs the <em>address</em> to reach each one; it never needs the phone tools installed in its own Linux environment. Builds are unaffected — this only adds the AI's ability to <em>watch</em> the running app.</div>
+
+<h3>Step 1 — let the AI reach the Android remote control (Windows only, once)</h3>
+<p>By default the AI's Linux environment and the rest of Windows don't share the same network address. Turning on "mirrored networking" makes them share <code>localhost</code>, so the AI can reach the Android remote control with a simple address. Create or edit the file <code>.wslconfig</code> in your user folder (its full path is <code>%UserProfile%\.wslconfig</code> — paste that into the File Explorer address bar) and put these two lines in it:</p>
+<pre><code class="lang-ini">[wsl2]
+networkingMode=mirrored</code></pre>
+<p>Save it, then open <strong>PowerShell</strong> (click Start, type "PowerShell", press Enter) and run <code>wsl --shutdown</code>. Close and reopen your WSL window. <span class="small">(Skip this step if you're only setting up Apple testing.)</span></p>
+
+<h3>Step 2 — set up the Android pretend-phone + remote control (on the Windows PC)</h3>
+<p><strong>Easiest way (clicking):</strong> install <strong>Android Studio</strong>, open its <em>Device Manager</em>, and click "Create device" to make a pretend phone (e.g. a Pixel with Android 14). Android Studio installs the Android toolkit for you. Then install the remote control by opening <strong>PowerShell</strong> and running the two <code>appium</code> lines below.</p>
+<p><strong>Command way (does the same thing):</strong> in <strong>PowerShell</strong>:</p>
+<pre><code class="lang-powershell"># create a pretend Android phone (an "AVD")
+sdkmanager "system-images;android-34;google_apis;x86_64"
+avdmanager create avd -n Pixel_API_34 -k "system-images;android-34;google_apis;x86_64"
+
+# install the remote control (Appium) and its Android adapter
+npm install -g appium
+appium driver install uiautomator2</code></pre>
+<p>Finally, save a tiny helper file named <code>start-android-verify.ps1</code> (the AI runs this itself to switch the phone + remote control on when it tests). It contains:</p>
+<pre><code class="lang-powershell">Start-Process emulator -ArgumentList "-avd Pixel_API_34 -no-snapshot -no-boot-anim"
+Start-Process appium   -ArgumentList "--address 0.0.0.0 --port 4723"</code></pre>
+<p class="small">If you used a different phone name in Android Studio, use that name instead of <code>Pixel_API_34</code> here and in the settings file in Step 4.</p>
+
+<h3>Step 3 — set up Apple (iPhone/iPad + Mac desktop) testing (on the Mac)</h3>
+<p>On the <strong>Mac</strong> (which must be on the same network as your PC), open the <strong>Terminal</strong> app and install the remote control plus the Apple adapters:</p>
+<pre><code class="lang-bash">npm install -g appium
+appium driver install xcuitest      # for the iPhone/iPad simulator
+appium driver install mac2          # for the Mac desktop app
+appium --address 0.0.0.0 --port 4723   # start the remote control (leave this running while testing)</code></pre>
+<p>Give the Mac a <strong>fixed network address</strong> so the AI always finds it (in your Wi-Fi router, reserve an IP for the Mac — search "DHCP reservation" for your router model). Note that address down; you'll put it in Step 4. <span class="small">(Skip this step if you're only setting up Android.)</span></p>
+
+<h3>Step 4 — tell the app where the remote controls are</h3>
+<p>Each app keeps its settings in a file called <code>core-config.yaml</code>. Add a <code>runtimeVerification.appium</code> section listing only the platforms <em>this</em> app runs on. The AI reads this automatically; if a platform isn't listed (or can't be reached), the AI simply marks that platform's screens "not visually checked" rather than pretending they passed.</p>
+<pre><code class="lang-yaml">runtimeVerification:
+  appium:
+    android:     { url: http://localhost:4723, avd: Pixel_API_34, launch: 'winrun "powershell -File start-android-verify.ps1"' }
+    ios:         { url: http://192.168.1.50:4723, simulator: "iPhone 15" }
+    maccatalyst: { url: http://192.168.1.50:4723 }</code></pre>
+<p class="small">Replace <code>192.168.1.50</code> with your Mac's actual address from Step 3. Keep <code>localhost</code> for Android (that's "this PC"). Remove any platform the app doesn't have.</p>
+
+<div class="panel ok"><strong>Check it works:</strong> in your WSL window, type <code>curl http://localhost:4723/status</code> (Android) and <code>curl http://&lt;your-mac-address&gt;:4723/status</code> (Apple). If you see something containing <code>"ready":true</code>, the remote control is reachable — you're done. From now on the AI turns the pretend phone on, takes screenshots, and checks each screen by itself; you don't run anything.</div>
+
+<div class="panel warn"><strong>If something doesn't work:</strong>
+<ul class="small">
+  <li><strong>"command not found" for <code>sdkmanager</code>/<code>avdmanager</code>/<code>emulator</code>:</strong> these come with Android Studio but may not be on your command path — easiest fix is to create the pretend phone by clicking inside Android Studio's Device Manager instead.</li>
+  <li><strong>"command not found" for <code>npm</code> or <code>appium</code>:</strong> install <strong>Node.js</strong> first (from <code>nodejs.org</code>), then re-run the <code>npm install -g appium</code> line.</li>
+  <li><strong>The <code>curl</code> check fails for Android:</strong> make sure Step 1 (mirrored networking) was done and you reopened WSL, and that the emulator + Appium are actually running (run <code>start-android-verify.ps1</code> once to start them).</li>
+  <li><strong>The <code>curl</code> check fails for Apple:</strong> confirm the Mac is on and on the same Wi-Fi, that <code>appium</code> is still running in its Terminal window, and that you used the Mac's correct address.</li>
+  <li><strong>The AI says a screen is "STATIC-ONLY":</strong> that just means it couldn't reach that platform's remote control this time (e.g. the Mac was off) — it's being honest, not failing. Bring the device host up and ask it to verify again.</li>
+</ul></div>
+
+<p class="small"><strong>One more thing for whoever writes the app's screens:</strong> each important button, list, and value should be given a stable name (an <code>AutomationId</code>) so the AI can find it reliably — this is part of the coding standards (see §10). The AI handles this when it builds; you don't need to.</p>
 
 <!-- ============================================================ -->
 <h2 id="overview">1. Overview &amp; principles<span class="anchor-link"><a href="#overview">#</a></span></h2>
@@ -213,7 +368,7 @@ grep -q 'HOME/bin' ~/.bashrc || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashr
 </div>
 <div class="pain">
   <div class="p"><h4>7. Generated code uses inconsistent style across projects</h4></div>
-  <div class="s"><h4>→ <code>&lt;APP&gt;-Coding-Standards.md</code> per project, referenced in every impl prompt; <code>CLAUDE.md</code> pin (§13)</h4></div>
+  <div class="s"><h4>→ <code>&lt;APP&gt;-Coding-Standards.md</code> per project, referenced in every impl prompt; <code>CLAUDE.md</code> pin</h4></div>
 </div>
 <div class="pain">
   <div class="p"><h4>8. Agents excuse themselves from smoke-testing ("can't run on Linux / it targets Windows / it's MAUI / Playwright needs a GUI")</h4></div>
@@ -222,6 +377,10 @@ grep -q 'HOME/bin' ~/.bashrc || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashr
 <div class="pain">
   <div class="p"><h4>9. Smoke/verify runs pollute the DB with random throwaway test users</h4></div>
   <div class="s"><h4>→ <code>_smoke-test-policy.md</code>: use the canonical test accounts in <code>&lt;APP&gt;-UsageGuide.md</code> (or look them up in the DB via the connection string); never auto-create — ask the owner to confirm, then record the account in the UsageGuide.</h4></div>
+</div>
+<div class="pain">
+  <div class="p"><h4>10. The data + visual gates only reached Blazor + the MAUI Windows head — Android/iOS/Mac-desktop screens were build-only (never run/observed)</h4></div>
+  <div class="s"><h4>→ <strong>Appium runtime bridge (§0b)</strong>: the verifier drives MAUI <strong>Android</strong> (emulator on the Windows host), <strong>iOS</strong> (Simulator on a LAN Mac), and <strong>Mac Catalyst</strong> (same Mac) over an HTTP WebDriver endpoint that returns the same screenshot + element tree, so the §4a/§4b gates run unchanged. Endpoints live in <code>core-config.yaml → runtimeVerification.appium</code>; an unreachable host degrades that head to <code>⚠ STATIC-ONLY</code>, never a faked pass.</h4></div>
 </div>
 
 <!-- ============================================================ -->
@@ -469,21 +628,21 @@ cd /path/to/your-app
     <td><span class="audience h">H</span></td>
     <td>MD + HTML</td>
     <td><code>/flow-master</code> (<code>*devguide</code>)</td>
-    <td>Developer reference: every screen → control → service method → stored procedure, grouped by user role. Used to trace bugs and verify AI-generated code. Auto-generated at handoff; re-runnable anytime. See <a href="#t-devguide">§13.12</a>.</td>
+    <td>Developer reference: every screen → control → service method → stored procedure, grouped by user role. Used to trace bugs and verify AI-generated code. Auto-generated at handoff; re-runnable anytime. See <a href="#docs">§6</a>.</td>
   </tr>
   <tr>
     <td><code>docs/&lt;APP&gt;-ProductGuide.md</code> + <code>.html</code><br><small>(large apps: split per role into <code>docs/productguides/&lt;APP&gt;-ProductGuide-{Role}.md</code> + index)</small></td>
     <td><span class="audience h">H</span> (end users / external)</td>
     <td>MD + HTML</td>
     <td><code>/flow-master</code> (<code>*productguide</code>)</td>
-    <td>End-user how-to manual: what each screen is for and how to do each task, illustrated with the screenshots captured for the DevGuide. The user-facing sibling of the DevGuide (same screens, different audience). On-demand; <code>--update</code> refreshes changed screens; always emits MD + HTML. See <a href="#t-productguide">§13.13</a>.</td>
+    <td>End-user how-to manual: what each screen is for and how to do each task, illustrated with the screenshots captured for the DevGuide. The user-facing sibling of the DevGuide (same screens, different audience). On-demand; <code>--update</code> refreshes changed screens; always emits MD + HTML. See <a href="#docs">§6</a>.</td>
   </tr>
   <tr>
     <td><code>.tfcore/TOKEN-GUIDE.md</code></td>
     <td><span class="audience h">H</span></td>
     <td>Markdown</td>
     <td>framework (ships with scaffold)</td>
-    <td>Token-efficiency guide — where AI tokens go and how to keep usage low. See <a href="#quickref">§15</a>.</td>
+    <td>Token-efficiency guide — where AI tokens go and how to keep usage low. See <a href="#quickref">§14</a>.</td>
   </tr>
 </table>
 
@@ -540,7 +699,7 @@ cd /path/to/your-app
     <div class="num">2</div>
     <div class="body">
       <h4>Review the rendered HTMLs — manual checkpoint (≈15 min)</h4>
-      <p class="small">No command — day-1 already rendered everything. Open <code>&lt;APP&gt;-BRD.html</code> (business intent right?), <code>&lt;APP&gt;-Architecture.html</code> (matches what you want?), <code>PROJECT-STATUS.html</code> (next command correct?), skim Coding Standards. Cheapest catch-mistakes point. Edit the <code>.md</code> sources directly for anything wrong, then re-render just those files: <code>/generate-html @docs/&lt;APP&gt;-BRD.md</code> (see <a href="#t-html-render">§13.6</a>).</p>
+      <p class="small">No command — day-1 already rendered everything. Open <code>&lt;APP&gt;-BRD.html</code> (business intent right?), <code>&lt;APP&gt;-Architecture.html</code> (matches what you want?), <code>PROJECT-STATUS.html</code> (next command correct?), skim Coding Standards. Cheapest catch-mistakes point. Edit the <code>.md</code> sources directly for anything wrong, then re-render just those files: <code>/generate-html @docs/&lt;APP&gt;-BRD.md</code> (see <a href="#docs">§6</a>).</p>
     </div>
   </div>
 
@@ -585,7 +744,7 @@ cd /path/to/your-app
     <div class="body">
       <h4>Handoff: usage doc + dev guide + status + library-feedback consolidation + HTML refresh</h4>
       <p class="cmds"><span class="badge cmd">/flow-master</span> <span class="badge task">*handoff-phase TrTools</span></p>
-      <p class="small">Produces UsageGuide doc (test users + test plan + setup), runs <code>*devguide</code> (§3a — generates the screen-by-screen Developer Guide documenting the code as-built, capturing a screenshot of every screen), sets PROJECT-STATUS phase to Handoff, re-renders human-facing HTMLs (BRD, Architecture, UIDesign, UsageGuide, DevGuide, PROJECT-STATUS — <strong>not</strong> the checklist), consolidates each per-library feedback file with summary counts. It also points owners at <code>*productguide &lt;APP&gt;</code> (<a href="#t-productguide">§13.13</a>) — the optional end-user how-to manual, built from the same screens + screenshots the DevGuide just captured. Task: <code>.tfcore/tasks/handoff-phase.md</code>.</p>
+      <p class="small">Produces UsageGuide doc (test users + test plan + setup), runs <code>*devguide</code> (§3a — generates the screen-by-screen Developer Guide documenting the code as-built, capturing a screenshot of every screen), sets PROJECT-STATUS phase to Handoff, re-renders human-facing HTMLs (BRD, Architecture, UIDesign, UsageGuide, DevGuide, PROJECT-STATUS — <strong>not</strong> the checklist), consolidates each per-library feedback file with summary counts. It also points owners at <code>*productguide &lt;APP&gt;</code> (<a href="#docs">§6</a>) — the optional end-user how-to manual, built from the same screens + screenshots the DevGuide just captured. Task: <code>.tfcore/tasks/handoff-phase.md</code>.</p>
       <p class="small"><strong>Manual checkpoint:</strong> 15-min UAT against the smoke checklist. Then hand each <code>&lt;APP&gt;-&lt;Library&gt;-Feedback.md</code> to its team / file as GitHub issues (§9.2). <strong>Found a bug after shipping?</strong> Drop screenshots into a folder and run <code>*fix-issues</code> (§7.11).</p>
     </div>
   </div>
@@ -680,7 +839,7 @@ cd /path/to/your-app
 
 <p class="cmds"><span class="badge cmd">/analyst</span> <span class="badge task">*mockups MyNewApp</span></p>
 
-<p>Reads the TrBlazeUI component catalog FIRST (so it designs only with controls that exist), then produces <code>docs/&lt;APP&gt;-UIDesign.md</code> — a per-screen spec with a <code>region → TrBlazeUI control</code> component map — plus rendered <code>docs/mockups/*.html</code> styled to look like TrBlazeUI, one per key screen from the BRD §9 feature catalog. Auto-run inside <code>*day1-greenfield</code>; re-runnable with <code>*mockups &lt;APP&gt; --update</code> to refresh only changed screens after an <code>*amend-docs</code> that added UI. The mockups are approved alongside the BRD + Architecture, are what <code>/trblazeui</code> builds from, and are the image the visual-truth gate (<a href="#quickref">§4b</a>) diffs the live screen against. <strong>Mockups are greenfield only</strong> — a greenfield app has no code to screenshot yet, so its mockups are the pre-build visual contract; brownfield already has built code and instead reviews real screenshots in the DevGuide's OBSERVE pass (§7.6). Note this is about <em>mockups</em>, not screenshots: once a greenfield app is built, its DevGuide OBSERVE pass captures real per-screen screenshots exactly like brownfield (<a href="#t-devguide">§13.12</a>). Task: <code>.tfcore/tasks/mockups.md</code>.</p>
+<p>Reads the TrBlazeUI component catalog FIRST (so it designs only with controls that exist), then produces <code>docs/&lt;APP&gt;-UIDesign.md</code> — a per-screen spec with a <code>region → TrBlazeUI control</code> component map — plus rendered <code>docs/mockups/*.html</code> styled to look like TrBlazeUI, one per key screen from the BRD §9 feature catalog. Auto-run inside <code>*day1-greenfield</code>; re-runnable with <code>*mockups &lt;APP&gt; --update</code> to refresh only changed screens after an <code>*amend-docs</code> that added UI. The mockups are approved alongside the BRD + Architecture, are what <code>/trblazeui</code> builds from, and are the image the visual-truth gate (<a href="#quickref">§4b</a>) diffs the live screen against. <strong>Mockups are greenfield only</strong> — a greenfield app has no code to screenshot yet, so its mockups are the pre-build visual contract; brownfield already has built code and instead reviews real screenshots in the DevGuide's OBSERVE pass (§7.6). Note this is about <em>mockups</em>, not screenshots: once a greenfield app is built, its DevGuide OBSERVE pass captures real per-screen screenshots exactly like brownfield (<a href="#docs">§6</a>). Task: <code>.tfcore/tasks/mockups.md</code>.</p>
 
 <h3 id="fix-issues">7.11 Fixing issues you found by running the app (<code>*fix-issues</code>)</h3>
 
@@ -763,7 +922,7 @@ dotnet build</code></pre>
   <li>Library's NuGet adds an MSBuild target that copies on consumer build: <code>.&lt;libname&gt;/&lt;LibName&gt;-AI-Reference.md</code>, <code>.claude/&lt;libname&gt;.md</code>, <code>.opencode/command/&lt;libname&gt;.md</code>.</li>
   <li>Agent file's frontmatter: <code>description</code>, <code>mode: primary</code>, <code>tools</code>. Body: load reference doc on activation + REQUIRED READING clause for <code>docs/&lt;APP&gt;-Coding-Standards.md</code>.</li>
   <li>Add routing row to the table above.</li>
-  <li>The new library gets its OWN feedback file — <code>&lt;APP&gt;-&lt;LibName&gt;-Feedback.md</code> with its own issue-ID prefix, from the shared template (§13.9). Never share a feedback file between libraries.</li>
+  <li>The new library gets its OWN feedback file — <code>&lt;APP&gt;-&lt;LibName&gt;-Feedback.md</code> with its own issue-ID prefix, from the shared template. Never share a feedback file between libraries.</li>
   <li>Update <code>build-phase</code>'s cluster-routing (and <code>fix-issues</code>'s triage) to route the new ID prefix to the new sub-agent.</li>
 </ol>
 
@@ -816,7 +975,20 @@ winrun "dotnet build -c Release"
 winrun "dotnet test"
 winrun "dotnet build -t:Run -f net9.0-windows10.0.19041.0"</code></pre>
 
-<p>For verifier on a MAUI app: <em>"This is a MAUI Windows app. Build/run/test via `winrun`. UI automation: FlaUI or Appium-Windows-driver Windows-side, NOT Playwright. Output evidence the same as Blazor projects."</em></p>
+<p>For verifier on a MAUI <strong>Windows</strong> app: <em>"This is a MAUI Windows app. Build/run/test via `winrun`. UI automation: FlaUI or Appium-Windows-driver Windows-side, NOT Playwright. Output evidence the same as Blazor projects."</em></p>
+
+<h3>Mobile &amp; Mac-desktop heads — runtime-observe over Appium</h3>
+<p>The §4a data-render and §4b visual-truth gates reach the MAUI <strong>Android / iOS / Mac Catalyst</strong> heads through an <strong>Appium</strong> WebDriver endpoint — the native analogue of Playwright (same screenshot + element-tree evidence, so the gates run unchanged). One-time host setup is <a href="#device-bootstrap">§0b</a>; the per-head driver map lives in <code>build-invocation-ladder.md §D</code>. <strong>Builds don't change</strong> — Android still builds via <code>cmd.exe</code> (ladder rung #4), iOS/Catalyst on the paired Mac; this is purely how the verifier reaches the <em>running</em> UI after a green build.</p>
+<table>
+  <thead><tr><th>Head</th><th>Where it runs</th><th>Appium driver</th><th>WSL reaches it via</th></tr></thead>
+  <tbody>
+    <tr><td>MAUI Android</td><td>emulator on the Windows host (Android SDK)</td><td><code>uiautomator2</code></td><td><code>http://localhost:4723</code> (mirrored networking); verifier boots emulator + Appium itself</td></tr>
+    <tr><td>MAUI iOS</td><td>Simulator on a LAN Mac</td><td><code>xcuitest</code></td><td><code>http://&lt;mac-ip&gt;:4723</code>; Mac must be up or head is <code>⚠ STATIC-ONLY</code></td></tr>
+    <tr><td>MAUI Mac Catalyst</td><td>the same LAN Mac (desktop .app)</td><td><code>mac2</code></td><td><code>http://&lt;mac-ip&gt;:4723</code></td></tr>
+    <tr><td>MAUI Windows</td><td>Windows side</td><td>FlaUI / Appium-Windows (unchanged)</td><td><code>winrun</code> / <code>cmd.exe</code></td></tr>
+  </tbody>
+</table>
+<p>Selectors target each control's <code>AutomationId</code> (a coding standard, §10). A head with no registered endpoint in <code>core-config.yaml → runtimeVerification.appium</code>, or an unreachable host, is stamped <code>⚠ STATIC-ONLY</code> for that head — never a faked <code>Verified</code>.</p>
 
 <!-- ============================================================ -->
 <h2 id="permissions">12. Permissions (yolo-except-git)<span class="anchor-link"><a href="#permissions">#</a></span></h2>
@@ -854,699 +1026,7 @@ winrun "dotnet build -t:Run -f net9.0-windows10.0.19041.0"</code></pre>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="templates">13. Document templates<span class="anchor-link"><a href="#templates">#</a></span></h2>
-
-<h3 id="t-brd">13.1 <code>docs/&lt;APP&gt;-BRD.md</code> schema</h3>
-<pre><code class="lang-markdown"># &lt;APP&gt; — Business Requirements
-
-## 1. Executive summary
-&lt;2-3 paragraphs: what we're building/changing and why it matters.&gt;
-
-## 2. Business objectives
-- &lt;measurable objective 1&gt;
-- &lt;measurable objective 2&gt;
-
-## 3. Scope
-**In scope:** …
-**Out of scope (explicit):** …
-
-## 4. Stakeholders / users
-| Role | Needs |
-|------|-------|
-| End user | … |
-| Admin    | … |
-
-## 5. Context diagram
-```mermaid
-flowchart LR
-  User([End User]) --&gt; App[(&lt;APP&gt;)]
-  App --&gt; DB[(Database)]
-  App --&gt; LLM[/LLM Provider/]
-```
-
-## 6. User journey — primary use case
-```mermaid
-sequenceDiagram
-  actor U as User
-  participant W as Web UI
-  participant A as App API
-  U-&gt;&gt;W: action
-  W-&gt;&gt;A: request
-  A--&gt;&gt;W: response
-  W--&gt;&gt;U: result
-```
-
-## 7. Component sketch
-```mermaid
-flowchart TB
-  UI[Blazor UI - TrBlazeUI] --&gt; API[ASP.NET API]
-  API --&gt; SQL[(SQL)]
-  API --&gt; Rag[RAG - TechieRag]
-  Rag --&gt; Vec[(Vector store)]
-```
-
-## 8. Functional requirements (high-level)
-- F1. …
-- F2. …
-
-## 9. Non-functional requirements
-- N1. Performance: …
-- N2. Security: …
-- N3. Accessibility: …
-
-## 10. Constraints &amp; assumptions
-- …
-
-## 11. Success metrics
-- …
-
-## 12. Risks
-| Risk | Likelihood | Impact | Mitigation |
-
-## 13. Glossary
-- TrBlazeUI, TechieRag, REQ-UI-*, REQ-FN-*, REQ-RAG-*
-</code></pre>
-
-<h3 id="t-arch">13.2 <code>docs/&lt;APP&gt;-Architecture.md</code> schema</h3>
-<pre><code class="lang-markdown"># &lt;APP&gt; — Architecture
-
-**Last updated:** YYYY-MM-DD
-**Status:** Current (brownfield) | Target (greenfield) | Current + planned target (brownfield with structural change)
-
-## 1. Tech stack
-| Layer | Choice | Version | Notes |
-|-------|--------|---------|-------|
-| Runtime | .NET 9 | … | … |
-| UI | Blazor [Server/WASM/Auto] + TrBlazeUI | … | … |
-| AI/RAG | TechieRag | … | If applicable |
-| DB | SQL Server / SQLite / Postgres | … | … |
-| Vector store | SqliteVec / PgVector / Qdrant | … | If RAG |
-| Auth | … | … | … |
-
-## 2. Component map
-```mermaid
-flowchart TB
-  subgraph UI[Blazor UI]
-    Dash[Dashboard]
-    Settings[Settings]
-  end
-  subgraph BE[Backend]
-    API[API]
-    Auth[Auth]
-    Rag[RAG service]
-  end
-  subgraph Data[Data]
-    SQL[(SQL)]
-    Vec[(Vector)]
-  end
-  UI --&gt; API
-  API --&gt; Auth
-  API --&gt; Rag
-  Rag --&gt; Vec
-  API --&gt; SQL
-```
-
-## 3. Data flow — primary path
-```mermaid
-sequenceDiagram
-  actor U
-  participant UI
-  participant API
-  participant Svc as Service
-  participant DB
-  U-&gt;&gt;UI: action
-  UI-&gt;&gt;API: HTTPS
-  API-&gt;&gt;Svc: call
-  Svc-&gt;&gt;DB: query
-  DB--&gt;&gt;Svc: rows
-  Svc--&gt;&gt;API: dto
-  API--&gt;&gt;UI: json
-  UI--&gt;&gt;U: render
-```
-
-## 4. Module responsibilities
-| Module | Responsibility | Depends on |
-|--------|----------------|------------|
-| `src/&lt;App&gt;.Web` | UI host | Domain, Infra |
-| `src/&lt;App&gt;.Domain` | Entities, business rules | (none) |
-| `src/&lt;App&gt;.Infrastructure` | EF, external services | Domain |
-| `src/&lt;App&gt;.Rag` | TechieRag wiring (if applicable) | Domain |
-
-## 5. Cross-cutting concerns
-- Logging — Serilog / ILogger&lt;T&gt;
-- Error handling — global middleware; ProblemDetails responses
-- Auth — JWT / cookie / Azure AD
-- Caching — IMemoryCache / Redis
-- Telemetry — OpenTelemetry / Application Insights
-
-## 6. Deployment architecture
-```mermaid
-flowchart LR
-  Dev[Dev] --&gt; CI[GitHub Actions]
-  CI --&gt; Reg[Container Reg]
-  Reg --&gt; AKS[Azure App Service / AKS]
-  AKS --&gt; ProdDB[(SQL)]
-```
-
-## 7. Architectural decisions (ADR-style log)
-- **ADR-001 — Blazor Server over WASM.** Reason: …
-- **ADR-002 — SqliteVec for dev, PgVector for prod.** Reason: …
-
-## 8. Target architecture (brownfield only — if enhancement changes structure)
-```mermaid
-flowchart TB
-  …diff highlighting new modules / removed boxes…
-```
-Describe deltas: what's added, what's removed, what's renamed, migration path.
-
-## 9. Open questions / risks
-- …
-</code></pre>
-
-<h3 id="t-standards">13.3 <code>docs/&lt;APP&gt;-Coding-Standards.md</code> schema</h3>
-<pre><code class="lang-markdown"># &lt;APP&gt; Coding Standards
-
-**Last Updated:** YYYY-MM-DD
-**Status:** Authoritative for all code under `src/` and `tests/`. Conformance enforced via repo-root `.editorconfig` + verifier grep checks in §"Enforcement".
-
-## Database Naming Conventions
-
-### Tables and Columns
-- PascalCase: `CustomerOrder` NOT `customer_order`
-- Singular: `CustomerOrder` NOT `CustomerOrders`
-- **NEVER use underscores** in any DB object name
-- FK columns: `{TableName}Id` (e.g., `CustomerId`)
-- PK: `{TableName}Id` (e.g., `UserId`)
-
-### Stored Procedures &amp; Functions
-- PascalCase verb prefix: `GetCustomerOrders`, `InsertOrder`, `CalculateTotal`
-- Action prefixes: Get / Insert / Update / Delete / Calculate
-
-### Indexes &amp; Constraints
-- Index: `IX{Table}{Column}` · PK: `Pk{Table}` · FK: `Fk{Table}{Ref}` · Unique: `Uc{Table}{Column}`
-
-## C# Conventions
-
-### Classes &amp; Interfaces
-- PascalCase for classes; `I` prefix for interfaces; descriptive names.
-- Async methods end with `Async`.
-
-### Fields, Parameters, Locals (project convention)
-
-**NEVER use underscores** anywhere in any identifier.
-
-| Kind | Convention | Example |
-|------|-----------|---------|
-| **Instance fields** | PER-PROJECT day-1 decision. Default: `obj` prefix + PascalCase tail (no underscores). Some projects (e.g. AstroLyfe) use bare PascalCase, no prefix — THIS project's Coding-Standards.md is authoritative | `private readonly ILogger&lt;X&gt; objLogger;`<br>`private readonly HttpClient objHttpClient;`<br>`private string objCachedPublicKey;` |
-| **Static / `const` fields** | PascalCase, no prefix | `private const string CachePrefix = "…";` |
-| **Method parameters** | `a` prefix + PascalCase | `LoginAsync(string aEmail, string aPassword)` |
-| **Local variables** | `v` prefix + PascalCase | `var vResponse = await …` |
-| **Booleans** | same prefix + `Is`/`Has`/`Can` | `IsAuthenticated`, `vIsValid`, `aHasAccess` |
-| **Properties** | PascalCase, no prefix | `public string ConnectionString { get; set; }` |
-| **Constants** | PascalCase, no underscores | `MaxRetryCount` NOT `MAX_RETRY_COUNT` |
-| **Test methods** | Short PascalCase, no underscores — full scenario in XML `&lt;summary&gt;` | `LoginRejectsBadPassword` not `Login_BadPassword_ReturnsUnauthorized` |
-
-**Rejected forms:**
-- `_underscore` field prefixes (Microsoft default style)
-- snake_case anywhere
-- Hungarian-style type prefixes (`strName`, `intCount`)
-- Underscores in test method names
-
-### Controller-action parameters
-The `a`-prefix applies uniformly, including `[FromRoute]`/`[FromQuery]`/`[FromBody]`. Parameter name flows through to OpenAPI schema. Body DTO **property** names stay PascalCase no prefix; only the parameter symbol holding the deserialized DTO gets the `a` prefix.
-
-```csharp
-[HttpPost("login")]
-public async Task&lt;IActionResult&gt; LoginAsync([FromBody] LoginRequest aRequest)
-{
-    // aRequest.Email — DTO property is PascalCase, no prefix
-}
-```
-
-### Environment Variables
-**PascalCase, no separators.** `AppManagerBaseUrl` NOT `APPMANAGER_BASE_URL` and NOT `AppManager__BaseUrl`. Requires a custom configuration provider that maps PascalCase env vars → `:`-nested config paths. Application code reads via `IConfiguration["Section:Key"]` only — never `Environment.GetEnvironmentVariable(...)`.
-
-### File Structure
-```csharp
-// 1. Usings
-using System;
-
-// 2. File-scoped namespace
-namespace &lt;App&gt;.Services.Example;
-
-// 3. Class
-public class DatabaseService
-{
-    // 4. Instance fields — obj prefix (no underscores)
-    private readonly ILogger&lt;DatabaseService&gt; objLogger;
-    private readonly IConfiguration objConfiguration;
-
-    // 5. Constructor — a-prefix params
-    public DatabaseService(ILogger&lt;DatabaseService&gt; aLogger) { objLogger = aLogger; }
-
-    // 6. Properties — no prefix
-    public string ConnectionString { get; set; }
-
-    // 7. Methods — async + v-prefix locals
-    public async Task&lt;DataTable&gt; GetDataAsync(string aQueryName)
-    {
-        var vConnString = objLogger /* … */;
-        return …;
-    }
-}
-```
-
-### Best Practices
-- One class per file. File name matches class.
-- File-scoped namespaces. Nullable reference types enabled.
-- Methods small (&lt;20 lines). Single responsibility.
-- Max 3 nesting levels. Early returns for validation.
-- ConfigureAwait(false) in libraries.
-- StringBuilder for loop concatenation. Dispose IDisposable. Cache expensive ops.
-
-### XML Documentation (MANDATORY on public members)
-```csharp
-/// &lt;summary&gt;Brief description.&lt;/summary&gt;
-/// &lt;remarks&gt;Detailed flow.&lt;/remarks&gt;
-/// &lt;param name="aQuery"&gt;…&lt;/param&gt;
-/// &lt;returns&gt;…&lt;/returns&gt;
-/// &lt;exception cref="…"&gt;…&lt;/exception&gt;
-public async Task&lt;DataTable&gt; ExecuteQueryAsync(string aQuery) …
-```
-
-### Testing
-- Short PascalCase test name, no underscores. Full scenario in `&lt;summary&gt;`.
-- Arrange-Act-Assert. One assertion per test where practical.
-```csharp
-/// &lt;summary&gt;
-/// Verifies GetConnectionAsync returns Open state for a valid connection string.
-/// &lt;/summary&gt;
-[Test]
-public async Task ConnReturnsOpen() { … }
-```
-
-### Security
-- Never hardcode credentials. Parameterized queries. Validate all inputs. Log security events.
-
-## Enforcement
-
-### `.editorconfig` (machine-checkable subset — see §11.4 template)
-- File-scoped namespaces (`warning`)
-- Async-method suffix (`warning`)
-- `var` for locals (so `v`-prefix rule applies cleanly)
-- Nullable reference types enabled
-- No `_` prefix on private fields (`warning` via custom naming rule)
-
-### Verifier grep checks (non-machine-enforceable rules)
-The verifier runs these every functional-verify pass; non-zero exit = standards violation logged as a coverage miss.
-
-```bash
-# Forbidden underscore-prefix fields
-grep -rE "private(\s+readonly)?\s+\w+\s+_[a-z]" src/
-
-# Forbidden test-method underscores
-grep -rE "public\s+(async\s+)?Task\s+\w+_\w+\s*\(" tests/
-
-# Field missing obj prefix (must start with `obj`, not bare PascalCase)
-grep -rE "private(\s+readonly)?\s+\w+\s+(?!obj)[A-Z]\w+\s*[;=]" src/ \
-  | grep -v "static\|const"
-```
-
-### Severity
-- **Error** — must fix pre-commit (file-scoped namespace, underscore field prefix)
-- **Warning** — fix before merge (nullable, async suffix)
-- **Info** — consider fixing
-</code></pre>
-
-<h3 id="t-editorconfig">13.4 <code>.editorconfig</code> at repo root</h3>
-<pre><code class="lang-ini">root = true
-
-[*]
-indent_style = space
-indent_size = 4
-end_of_line = lf
-charset = utf-8
-trim_trailing_whitespace = true
-insert_final_newline = true
-
-[*.cs]
-# File-scoped namespaces
-csharp_style_namespace_declarations = file_scoped:warning
-
-# Async suffix
-dotnet_naming_rule.async_methods_end_in_async.severity = warning
-dotnet_naming_rule.async_methods_end_in_async.symbols  = async_methods
-dotnet_naming_rule.async_methods_end_in_async.style    = end_in_async
-dotnet_naming_symbols.async_methods.applicable_kinds = method
-dotnet_naming_symbols.async_methods.required_modifiers = async
-dotnet_naming_style.end_in_async.required_suffix = Async
-dotnet_naming_style.end_in_async.capitalization = pascal_case
-
-# Prefer var
-csharp_style_var_for_built_in_types     = true:warning
-csharp_style_var_when_type_is_apparent  = true:warning
-csharp_style_var_elsewhere              = true:warning
-
-# Forbid _underscore on private fields
-dotnet_naming_rule.private_fields_no_underscore.severity = warning
-dotnet_naming_rule.private_fields_no_underscore.symbols  = private_fields
-dotnet_naming_rule.private_fields_no_underscore.style    = pascal_no_underscore
-dotnet_naming_symbols.private_fields.applicable_kinds           = field
-dotnet_naming_symbols.private_fields.applicable_accessibilities = private
-dotnet_naming_style.pascal_no_underscore.required_prefix =
-dotnet_naming_style.pascal_no_underscore.capitalization  = pascal_case
-
-# Nullable reference types
-dotnet_diagnostic.CS8600.severity = warning
-dotnet_diagnostic.CS8602.severity = warning
-dotnet_diagnostic.CS8603.severity = warning
-
-# Suppress StyleCop conflicts (uncomment if StyleCop.Analyzers added)
-# dotnet_diagnostic.SA1101.severity = none   # don't require this. qualification
-</code></pre>
-
-<h3 id="t-status-md">13.5 <code>PROJECT-STATUS.md</code> schema</h3>
-<pre><code class="lang-markdown">---
-project: &lt;APP&gt;
-stack: .NET 9 / Blazor [Server|WASM|Auto] / TrBlazeUI / TechieRag / [MAUI]
-last_updated: 2026-05-23
-current_phase: Discovery | Build | Verify | Handoff | Released
-last_verified_build: PASS | FAIL | not-run
-last_verified_date: 2026-05-23
----
-
-# &lt;APP&gt; — Status
-
-## Where I am
-&lt;one short paragraph — current STATE only (phase, what's built/verified, what's open); NOT a technical to-do list&gt;
-
-## Next command to run
-&lt;-- command-against-checklist ONLY; no prose narrative of the technical work (that lives in the checklist REQ rows) --&gt;
-```
-/&lt;agent&gt; &lt;exact prompt&gt;
-```
-&lt;one optional line naming the target checklist or REQ IDs&gt;
-
-## Open requirements
-- [ ] REQ-UI-013 — &lt;desc&gt;
-- [ ] REQ-FN-007 — &lt;desc&gt;
-
-## Known blockers
-- None / &lt;list&gt;
-
-## Verification log
-| Date | Phase | Result | Status table |
-|------|-------|--------|--------------|
-| 2026-05-23 | Verify | 14/14 Verified | docs/&lt;APP&gt;-Checklist.md#requirements-status |
-
-## Library feedback summary
-- TrBlazeUI: 1 major, 0 minor — docs/&lt;APP&gt;-TrBlazeUI-Feedback.md
-- TechieRag: 0 major, 1 minor — docs/&lt;APP&gt;-TechieRag-Feedback.md
-
-## Standards compliance (last verifier check)
-- Underscore fields: 0 hits
-- Test method underscores: 0 hits
-- Mis-prefixed fields: 0 hits
-
-## Deferred / future
-- &lt;parked ideas&gt;
-</code></pre>
-
-<h3 id="t-html-render">13.6 HTML rendering — <code>/generate-html</code> &amp; friends</h3>
-
-<p><strong>You normally don't run anything:</strong> the day-1 tasks auto-render every human deliverable (BRD, Architecture, UIDesign/mockups, UsageGuide, PROJECT-STATUS) to a sibling <code>.html</code> as their final step (§7.5 in the task files). The commands below are for <em>re-renders after you edit an MD</em> and for ad-hoc files. (The one <code>&lt;APP&gt;-Checklist.md</code> is markdown-only — never rendered.)</p>
-
-<p><strong><code>/generate-html</code> — render any markdown, no agent needed</strong> (same short form in Claude Code and OpenCode):</p>
-
-<pre><code class="lang-bash"># Single file
-/generate-html @docs/AstroLyfe-BRD.md
-
-# Multiple specific files
-/generate-html @docs/AstroLyfe-BRD.md @docs/AstroLyfe-Architecture.md @docs/AstroLyfe-UIDesign.md
-
-# All .md files in a folder — TOP-LEVEL ONLY, non-recursive (docs/OldDocs/ untouched)
-/generate-html @docs/
-
-# Forgot to render something during a phase? Run it now:
-/generate-html @ImplDocs/FinOpsDocs/</code></pre>
-
-<ul class="tight">
-  <li>Output: sibling <code>.html</code> next to each source (<code>docs/X.md</code> → <code>docs/X.html</code>), overwritten if present.</li>
-  <li>Missing paths are skipped with a note; the task halts only if <em>zero</em> paths resolve.</li>
-  <li>Fallback if the short form doesn't resolve (session not restarted since framework update): <code>/TechieFlow:tasks:generate-html</code> (Claude Code) / <code>/techieflow:tasks:generate-html</code> (OpenCode), or <code>*generate-html</code> inside <code>/TechieFlow:agents:flow-master</code>.</li>
-</ul>
-
-<p><strong><code>*render-workflow-docs &lt;APP&gt;</code></strong> (on <code>/TechieFlow:agents:flow-master</code>) — re-renders just the canonical trio: BRD + Architecture + PROJECT-STATUS with the big "NEXT COMMAND TO RUN" call-to-action box. If multiple BRD/Architecture variants exist (legacy pre-OldDocs projects), it asks which one to render.</p>
-
-<p><strong>Which docs get HTML?</strong> Only human-readable deliverables: BRD, Architecture, UIDesign (mockups spec), UsageGuide, DevGuide, ProductGuide, PROJECT-STATUS. The one <code>&lt;APP&gt;-Checklist.md</code> is an AI-agent working document and is <strong>never rendered to HTML</strong> — rendering it burns tokens and lets the HTML drift from the markdown source. This rule is enforced in day-1-greenfield, day-1-brownfield, mockups, split-brd, build-phase, verify-phase, handoff-phase, refresh-status, amend-docs, the status-update-gate, generate-html, and render-workflow-docs.</p>
-
-<p><strong><code>PROJECT-STATUS.html</code> is re-rendered on every status update.</strong> Updating PROJECT-STATUS always means <em>both</em> the <code>.md</code> and the <code>.html</code> — the status-update-gate (run at the end of every build/verify/handoff phase) re-renders <code>PROJECT-STATUS.html</code> in the same turn it edits the markdown, because the owner reads the HTML page. A status update that touches only the markdown is treated as <strong>incomplete</strong>. (Likewise, the "Next command to run" section is a command-against-checklist pointer, not a paragraph describing the technical work to do next — that <em>what</em> lives in the checklist REQ rows.)</p>
-
-<p><strong>What every rendered page contains</strong> (single source of truth: <code>.tfcore/templates/v4custom/html-render-shell.md</code> — agents must use it, never hand-roll):</p>
-<ul class="tight">
-  <li>Self-contained single file; only CDN deps are mermaid + svg-pan-zoom.</li>
-  <li><strong>Light/dark theme toggle</strong> — floating top-right button. Default is set by time of day on first open (light 07:00–19:00 local, softened dark at night); the user's explicit choice is then remembered in <code>localStorage</code>. Light mode uses a warm off-white background (not bright white); dark is softened.</li>
-  <li><strong>Copy button</strong> on every code/command block.</li>
-  <li><strong>Mermaid toolbar</strong> per diagram: − / + zoom (also Ctrl+wheel), Fit, 1:1, ⛶ full-screen, ↗ open in new tab with print, PNG/SVG export, full pan-and-zoom, keyboard shortcuts.</li>
-  <li><strong>Table of contents</strong>: inline TOC when the doc has ≥2 H2s; sticky sidebar TOC when &gt;6 H2s. Heading ids and TOC links use one slug rule (shell §1) so anchors always work.</li>
-</ul>
-
-<h3 id="t-ui">13.7 <code>docs/&lt;APP&gt;-Checklist.md</code> schema — the ONE checklist</h3>
-<p class="small">One file holds EVERY REQ class (UI / FN / RAG / NFR) in a SINGLE Requirements Status table. <code>*build-phase</code>, the self-smoke, and the verifier all write into this one table; <code>*verify ui|functional|all</code> filter it by REQ prefix (they do not pick a separate file). Markdown-only — never rendered to HTML.</p>
-<pre><code class="lang-markdown"># &lt;APP&gt; — Checklist
-
-## Goal
-&lt;one paragraph; ties back to BRD §1&gt;
-
-## Requirements Status
-
-&lt;!-- SINGLE SOURCE OF TRUTH: build, self-smoke, and the verifier ALL write
-     their outcomes into THIS one table — never into a separate dated docs/qa file. --&gt;
-
-| ID | Requirement | Status | % | Remarks | Details |
-|----|-------------|--------|---|---------|---------|
-| REQ-UI-001  | Dashboard top nav | Not Started | 0% | — | [view](#d-req-ui-001) |
-| REQ-FN-001  | &lt;short name&gt; | Not Started | 0% | — | [view](#d-req-fn-001) |
-| REQ-RAG-001 | &lt;short name&gt; | Not Started | 0% | — | [view](#d-req-rag-001) |
-| REQ-NFR-001 | &lt;short name&gt; | Not Started | 0% | — | [view](#d-req-nfr-001) |
-
-**Status values:** `Not Started` · `In Progress` · `Implemented` · `Verified` ·
-`Done (pre-existing)` · `PARTIAL` · `FAIL` · `Blocked` (library gap) · `N/A`
-
-**% guide:** 0 not started · 25 scaffolded · 50 in progress · 75 implemented-unverified · 100 verified.
-
-## UI / Pages
-
-### Page: Dashboard (`/dashboard`)
-
-&lt;a id="d-req-ui-001"&gt;&lt;/a&gt;
-- **REQ-UI-001** — TrBlazeUI top nav (logo, user menu, theme toggle). *Mockup:* docs/mockups/dashboard.html.
-  - *Acceptance:* page renders; nav fixed-top; theme toggle persists; controls do not overlap at desktop + mobile (visual gate).
-
-## Functional requirements
-
-&lt;a id="d-req-fn-001"&gt;&lt;/a&gt;
-- **REQ-FN-001** — &lt;trigger / acceptance&gt; (BRD-X).
-
-## RAG / AI requirements (→ /techierag)
-
-&lt;a id="d-req-rag-001"&gt;&lt;/a&gt;
-- **REQ-RAG-001** — &lt;trigger / acceptance via TechieRag&gt; (BRD-X).
-
-## Non-functional
-
-&lt;a id="d-req-nfr-001"&gt;&lt;/a&gt;
-- **REQ-NFR-001** — &lt;perf / security / accessibility&gt; (BRD-X).
-</code></pre>
-
-<h3 id="t-prd">13.8 <code>docs/&lt;APP&gt;-UIDesign.md</code> + <code>docs/mockups/*.html</code> — greenfield UI mockups</h3>
-<p class="small">Produced by <code>*mockups &lt;APP&gt;</code> (auto-run at greenfield day-1; §7.10). The analyst reads the TrBlazeUI component catalog first and designs ONLY with controls that exist, so <code>/trblazeui</code> can reproduce the screens 1:1. <code>UIDesign.md</code> is a human doc (rendered to HTML); the <code>docs/mockups/*.html</code> screens are HTML by construction. These are approved with the BRD + Architecture, are what <code>*build-phase</code> builds REQ-UI-* from, and are the baseline the verifier's visual-truth gate (§4b) diffs the live screen against. <strong>Mockups are greenfield only</strong> (a new app has no code to screenshot yet); once built, every app — greenfield or brownfield — gets real per-screen screenshots from the DevGuide's OBSERVE pass (<code>docs/screenshots/&lt;APP&gt;/</code>, <a href="#t-devguide">§13.12</a>).</p>
-<pre><code class="lang-markdown"># &lt;APP&gt; — UI Design / Mockups
-
-## Design system
-- Layout shell: &lt;TrBlazeUI shell&gt; · Theme: &lt;name&gt; · Controls used: &lt;inventory&gt;
-
-## Screens
-
-### Screen: Dashboard (`/dashboard`)
-- **Mockup:** docs/mockups/dashboard.html
-- **Component map** (region → TrBlazeUI control):
-
-  | Region | TrBlazeUI control | Shows | Empty / loading / error |
-  |--------|-------------------|-------|--------------------------|
-  | Top nav | `&lt;TrNavBar&gt;` | logo, user menu, theme toggle | — |
-  | KPI row | `&lt;StatCard&gt;` ×3 | totals | skeleton → "no data" |
-  | Orders grid | `&lt;TrDataGrid&gt;` | recent orders | spinner → "no orders" |
-
-- **Layout:** nav fixed-top; KPI row above a full-width grid.
-- **Interaction / state notes:** &lt;…&gt;
-</code></pre>
-
-<h3 id="t-libfb">13.9 <code>docs/&lt;APP&gt;-&lt;Library&gt;-Feedback.md</code> schema — ONE FILE PER LIBRARY</h3>
-
-<p class="small">TrBlazeUI and TechieRag are separate codebases with separate teams — each gets its own file (<code>&lt;APP&gt;-TrBlazeUI-Feedback.md</code> with <code>TR-NNN</code> IDs, <code>&lt;APP&gt;-TechieRag-Feedback.md</code> with <code>TR-RAG-NNN</code> IDs) so you can hand the file to its owning team directly. Created on the first issue for that library; never combined.</p>
-
-<pre><code class="lang-markdown"># &lt;Library&gt; Feedback — surfaced during &lt;APP&gt;
-
-## Summary (filled by /flow-master on consolidation)
-- 1 blocker, 1 major, 0 minor, 0 nice-to-have
-- Last consolidated: YYYY-MM-DD
-
-## Issues
-
-### TR-001 — &lt;short title&gt;          ← TR-RAG-NNN in the TechieRag file
-- **Severity:** blocker | major | minor | nice-to-have
-- **Repro:** &lt;code snippet&gt;
-- **Expected:** …
-- **Actual:** …
-- **Encountered in:** REQ-UI-013
-- **Workaround:** …
-- **Suggested fix:** …
-</code></pre>
-
-<h3 id="t-usage">13.10 <code>docs/&lt;APP&gt;-UsageGuide.md</code> schema</h3>
-<p class="small">Created at day-1 (<code>day1-*</code> §7.4), finalized at handoff. Canonical registry of <strong>test users</strong> + the screen-by-screen <strong>test plan</strong> — every self-smoke, the verifier, and the human UAT use the SAME accounts from here, so nobody invents throwaway users (<code>.tfcore/tasks/_smoke-test-policy.md</code>).</p>
-<pre><code class="lang-markdown"># &lt;APP&gt; — Usage Guide (Test Users · Test Plan · Setup)
-
-## Test users (canonical — use THESE for all smoke / verify / UAT)
-| # | Username / Email | Password | Role | Created? | Notes |
-|---|------------------|----------|------|----------|-------|
-| 1 | admin@&lt;app&gt;.test | &lt;pass&gt; | Admin | ✅ / ⬜ | … |
-&lt;!-- Created? ✅ = exists in DB; ⬜ = planned (create only after confirming with owner) --&gt;
-
-## How to test — screen by screen / menu by menu
-### &lt;Screen / Menu name&gt;
-- Log in as: &lt;user # from table&gt;
-- Steps: 1) … 2) …
-- Expected: …
-- Covers: &lt;BRD-N / REQ-*&gt;
-
-## Prerequisites
-- .NET 9 SDK
-- &lt;other&gt;
-
-## Setup / Deployment steps (runbook — one command per line)
-1. git clone &lt;repo&gt; && cd &lt;repo&gt;
-2. dotnet restore
-3. &lt;db setup / test-user seed&gt;
-4. dotnet build
-5. &lt;run backend&gt;  6. &lt;run frontend&gt;  7. Open http://localhost:5099
-
-## Test
-```bash
-dotnet test
-```
-
-## Smoke checklist
-- [ ] …
-
-## Known limitations
-- &lt;TR-001, etc.&gt;
-</code></pre>
-
-<h3 id="t-claudemd">13.11 <code>CLAUDE.md</code> at repo root (auto-loaded by Claude Code)</h3>
-<pre><code class="lang-markdown"># &lt;APP&gt; — Claude Code session memory
-
-## Required reading before any code change
-ALWAYS read and follow:
-- **docs/&lt;APP&gt;-Coding-Standards.md** — strict compliance for every line of code you write or modify.
-- **docs/&lt;APP&gt;-Architecture.md** — respect module boundaries.
-- **PROJECT-STATUS.md** — for current phase &amp; next-step context.
-
-## Project basics
-- Stack: .NET 9, Blazor [Server], TrBlazeUI, [TechieRag if AI features].
-- Field-prefix convention: instance-field prefix per this project's Coding Standards (`obj` prefix or no-prefix — day-1 decision; e.g. `private readonly ILogger&lt;X&gt; objLogger;`). See Coding Standards §"Fields, Parameters, Locals".
-- Test naming: short PascalCase, NO underscores. Full scenario in XML `&lt;summary&gt;` doc.
-
-## Requirement ID prefixes used in this repo
-- `REQ-UI-*` — UI work, routed to /trblazeui
-- `REQ-FN-*` — backend, routed to /flow-master
-- `REQ-RAG-*` — AI/RAG, routed to /techierag
-- `REQ-NFR-*` — non-functional
-
-Always reference REQ IDs in commit messages: `[REQ-UI-007] add settings form validation`.
-
-## Verification
-After every implementation phase, /verifier is invoked to write verdicts into the one checklist's Requirements Status table.
-Library issues go in the owning library's feedback file — docs/&lt;APP&gt;-TrBlazeUI-Feedback.md
-or docs/&lt;APP&gt;-TechieRag-Feedback.md (one file per library) — not silently worked around.
-
-## Permissions
-.claude/settings.json auto-allows everything inside the project; only rm/rmdir/git/gh/sudo prompt.
-</code></pre>
-
-<h3 id="t-devguide">13.12 <code>docs/&lt;APP&gt;-DevGuide.md</code> — screen-by-screen Developer Guide</h3>
-<p class="small">Generated by <code>*devguide {AppName}</code> on <code>/flow-master</code>. Task: <code>.tfcore/tasks/devguide.md</code>. Template: <code>.tfcore/templates/v4custom/app-devguide-tmpl.md</code>. Output: <code>docs/{AppName}-DevGuide.md</code> + sibling <code>.html</code> for a small app. Large apps (≥3 roles, or &gt;12 screens total, or any single role with &gt;8 screens) are split per role into a dedicated <code>docs/devguides/</code> subfolder — an index <code>docs/devguides/{AppName}-DevGuide.md</code> + one <code>docs/devguides/{AppName}-DevGuide-{Role}.md</code> per role (each with sibling <code>.html</code>) — so the many files don't clutter <code>docs/</code>.</p>
-<p class="small">The DevGuide documents the code <em>as built</em> — not the plan — so a human developer can trace any screen, control, or value from the UI down to the database. It is grouped by user role and covers the full stack: Razor page → control → service method → data-access method → stored procedure / query. Developers use it to find and fix bugs and to verify AI-generated code.</p>
-<p class="small"><strong>When:</strong> auto-run at <strong>brownfield day-1</strong> (day1-brownfield §7.6 — the repo already has code to map) and at handoff (handoff-phase §3a); re-runnable anytime with <code>*devguide {AppName}</code>; use <code>--update</code> to refresh only screens whose source files have changed since the last run.</p>
-
-<h4>Three-pass generation model</h4>
-<p class="small">DevGuide generation is a closed, runtime-grounded verification loop — not a static code-read:</p>
-<ol class="tight">
-  <li><strong>MAP</strong> — Static read: trace every page → control → service → data-access method → stored procedure / query. The post-login landing screen is READ from the redirect code in the auth flow, never inferred.</li>
-  <li><strong>OBSERVE</strong> — Boot the app via the build-invocation ladder, log in as each role's canonical test user from the UsageGuide, navigate every screen, capture a per-screen screenshot to <code>docs/screenshots/&lt;APP&gt;/</code>, and record for EVERY control whether it actually renders its data or is blank / empty / error. This pass reuses the verifier as the runtime engine. <strong>Screenshot capture happens for BOTH brownfield and greenfield-built apps</strong> — any time there is built code to boot. (Brownfield's DevGuide runs at day-1 because the repo already has code; a greenfield DevGuide is generated post-build at handoff and gets screenshots exactly the same way — screenshots are NOT brownfield-only.) The captured images serve three purposes: a runtime <strong>visual baseline</strong>, the <strong>owner visual-review</strong> gate, and the <strong>source images the Product Guide (<a href="#t-productguide">§13.13</a>) reuses</strong>.</li>
-  <li><strong>RECONCILE</strong> — Diff documented vs observed. Log any deviation to the checklist. Write each control's render-status as an OBSERVED fact (not an assumption). The Controls table gains an <strong>Observed</strong> column: <code>✅ renders</code> / <code>⚠ blank</code> / <code>❌ error</code>.</li>
-</ol>
-<div class="panel warn">
-  <strong>If the app cannot be booted</strong> (build fails, environment not available), the DevGuide is stamped with a <code>⚠ STATIC-ONLY — not runtime-verified</code> banner at the top. Render-status fields are omitted rather than faked. The OBSERVE and RECONCILE passes are deferred until the app can be booted.
-</div>
-<p class="small"><strong>The DevGuide is the verifier's per-control test map.</strong> The verifier's render gate (verify-phase §4a) uses the DevGuide Controls table as its assertion list: for every in-scope screen it asserts each listed control actually renders its data. A REQ can reach <code>Verified</code> only if its acceptance test passes AND all its controls render (no blank table, no count-over-zero-rows that shows empty, no empty chart). After each verify run, Vidur writes the verdict back to the checklist AND refreshes the DevGuide's observed render-status tags — keeping DevGuide ⇄ Checklist ⇄ Verifier runtime-true.</p>
-<pre><code class="lang-markdown"># &lt;APP&gt; — Developer Guide
-
-## Roles covered
-- Admin · Member · Guest  (adjust per app)
-
----
-
-## Role: Admin
-
-### Screen: Dashboard (`/dashboard`)
-
-#### Flowchart
-```mermaid
-flowchart TD
-  A[User opens /dashboard] --> B[DashboardPage.razor]
-  B --> C[IDashboardService.GetSummaryAsync]
-  C --> D[DashboardService.GetSummaryAsync]
-  D --> E[IDashboardRepository.FetchTotalsAsync]
-  E --> F[(SP: GetDashboardTotals)]
-```
-
-#### Controls
-| Control | Type | Bound to | Notes |
-|---------|------|----------|-------|
-| Summary cards | TrBlazeUI `&lt;StatCard&gt;` | `DashboardSummaryDto.TotalOrders` | … |
-
-#### Data lineage
-| UI value | Razor property | Service method | Data-access method | DB object |
-|----------|---------------|----------------|--------------------|-----------|
-| Total orders | `Model.TotalOrders` | `DashboardService.GetSummaryAsync` | `DashboardRepository.FetchTotalsAsync` | `SP: GetDashboardTotals` |
-</code></pre>
-
-<h3 id="t-productguide">13.13 <code>docs/&lt;APP&gt;-ProductGuide.md</code> — end-user Product Guide</h3>
-<p class="small">Generated by <code>*productguide {AppName} [scope] [--update]</code> on <code>/flow-master</code>. Task: <code>.tfcore/tasks/productguide.md</code>. Output: <code>docs/{AppName}-ProductGuide.md</code> + sibling <code>.html</code> for a small app; large apps fan out per role into a <code>docs/productguides/</code> subfolder — an index <code>docs/productguides/{AppName}-ProductGuide.md</code> + one <code>docs/productguides/{AppName}-ProductGuide-{Role}.md</code> per role (each with a sibling <code>.html</code>). It <strong>always emits both MD and HTML</strong> (it's a human-facing doc). On-demand; <code>--update</code> refreshes only the screens that changed.</p>
-<p class="small"><strong>DevGuide vs ProductGuide — same screens, opposite audience.</strong> The DevGuide (<a href="#t-devguide">§13.12</a>) is the <em>developer-facing code map</em>: page → control → service → data-access → stored procedure, used to trace bugs and verify AI-generated code. The ProductGuide is the <em>end-user how-to manual</em> for EXTERNAL users: what each screen is for and how to accomplish each task, written in plain language and <strong>illustrated with screenshots</strong>. Both are built from the SAME screen inventory and the SAME images — the per-screen screenshots the DevGuide's OBSERVE pass captured under <code>docs/screenshots/&lt;APP&gt;/</code> (the Product Guide re-shoots any missing screen via the verifier render sweep). The DevGuide tells a developer <em>how it works</em>; the ProductGuide tells a user <em>how to use it</em>.</p>
-<p class="small"><strong>When:</strong> on-demand, owned by <code>/flow-master</code> (the doc hub that already owns the DevGuide, HTML generation, and handoff). The handoff step points owners at it once the DevGuide screenshots exist. Re-run with <code>--update</code> after a UI change to refresh only the affected screens.</p>
-<pre><code class="lang-markdown"># &lt;APP&gt; — Product Guide
-
-## What this app does
-&lt;one short paragraph for an end user — the value, not the architecture&gt;
-
-## Role: Member
-
-### Screen: Dashboard
-![Dashboard](screenshots/&lt;APP&gt;/dashboard.png)
-
-**What this screen is for:** &lt;plain-language purpose&gt;
-
-**How to …**
-1. &lt;step&gt; 2. &lt;step&gt; 3. &lt;step&gt;
-
-**Tips / gotchas:** &lt;…&gt;
-</code></pre>
-
-<!-- ============================================================ -->
-<h2 id="agents">14. Agent cheat sheet<span class="anchor-link"><a href="#agents">#</a></span></h2>
+<h2 id="agents">13. Agent cheat sheet<span class="anchor-link"><a href="#agents">#</a></span></h2>
 
 <div class="panel">
   <strong>These six are the COMPLETE agent roster.</strong> The stock TechieFlow story-flow agents (<code>dev</code>, <code>pm</code>, <code>po</code>, <code>qa</code>, <code>sm</code>, <code>ux-expert</code>) and their story tasks/templates/workflows were trimmed from the scaffold on 2026-06-12 — the compressed flow never used them, and several behaved wrongly in it (wrong stack assumptions, dated <code>docs/qa</code> outputs). They are no longer included; obtain a full story-by-story agent set separately if you ever need that classic flow.
@@ -1575,7 +1055,7 @@ flowchart TD
 </table>
 
 <!-- ============================================================ -->
-<h2 id="quickref">15. Quick command reference<span class="anchor-link"><a href="#quickref">#</a></span></h2>
+<h2 id="quickref">14. Quick command reference<span class="anchor-link"><a href="#quickref">#</a></span></h2>
 
 <div class="panel warn">
   <strong>Slash-command syntax — Claude Code vs OpenCode:</strong>
@@ -1599,8 +1079,8 @@ flowchart TD
   <tr><td>Verify + standards greps + data &amp; visual gates</td><td><code>/TechieFlow:agents:verifier *verify &lt;scope&gt;</code> — scope is <code>ui</code> | <code>functional</code> | <code>all</code> | explicit REQ IDs; <strong>filters the one checklist by REQ prefix</strong> (no separate file). Runs standards-compliance greps, acceptance tests, the <strong>render gate</strong> (verify-phase §4a: every control renders its data) AND the <strong>visual-truth gate</strong> (§4b: no overlap, every control in-viewport and non-zero-size at desktop + mobile, screenshot inspected, mockup-diffed where one exists). A REQ is <code>Verified</code> only if acceptance passes AND data renders AND the screen looks right. <code>Done (pre-existing)</code> gets the full sweep. Verdicts land in the checklist; Vidur also refreshes the DevGuide's observed render/visual tags.</td></tr>
   <tr><td>End-of-session</td><td><code>/TechieFlow:agents:flow-master Update PROJECT-STATUS.md (phase, next, log); regenerate PROJECT-STATUS.html.</code></td></tr>
   <tr><td>Final handoff (incl. DevGuide)</td><td><code>/TechieFlow:agents:flow-master *handoff-phase {AppName}</code></td></tr>
-  <tr><td>Generate / refresh Developer Guide</td><td><code>/TechieFlow:agents:flow-master *devguide {AppName}</code> — generates <code>docs/{AppName}-DevGuide.md</code> + <code>.html</code> (split per role for large apps) via the 3-pass MAP → OBSERVE → RECONCILE model (§13.12). Add <code>--update</code> to refresh only changed screens. Stamped <code>⚠ STATIC-ONLY</code> if the app cannot be booted. Auto-run at handoff; re-runnable anytime. The DevGuide is the verifier's per-control test map — see §13.12.</td></tr>
-  <tr><td>Generate / refresh end-user Product Guide (<a href="#t-productguide">§13.13</a>)</td><td><code>/TechieFlow:agents:flow-master *productguide {AppName} [scope] [--update]</code> — the screenshot-illustrated, task-oriented how-to manual for EXTERNAL users (what each screen is for + how to do things). Reuses the DevGuide's screen inventory + the screenshots under <code>docs/screenshots/&lt;APP&gt;/</code> (re-shoots any missing via the verifier render sweep); fans out per role, splitting large apps into <code>docs/productguides/</code>. <strong>Always emits MD + HTML.</strong> On-demand; <code>--update</code> refreshes only changed screens. The user-facing sibling of the DevGuide.</td></tr>
+  <tr><td>Generate / refresh Developer Guide</td><td><code>/TechieFlow:agents:flow-master *devguide {AppName}</code> — generates <code>docs/{AppName}-DevGuide.md</code> + <code>.html</code> (split per role for large apps) via the 3-pass MAP → OBSERVE → RECONCILE model (§6). Add <code>--update</code> to refresh only changed screens. Stamped <code>⚠ STATIC-ONLY</code> if the app cannot be booted. Auto-run at handoff; re-runnable anytime. The DevGuide is the verifier's per-control test map — see §6.</td></tr>
+  <tr><td>Generate / refresh end-user Product Guide (<a href="#docs">§6</a>)</td><td><code>/TechieFlow:agents:flow-master *productguide {AppName} [scope] [--update]</code> — the screenshot-illustrated, task-oriented how-to manual for EXTERNAL users (what each screen is for + how to do things). Reuses the DevGuide's screen inventory + the screenshots under <code>docs/screenshots/&lt;APP&gt;/</code> (re-shoots any missing via the verifier render sweep); fans out per role, splitting large apps into <code>docs/productguides/</code>. <strong>Always emits MD + HTML.</strong> On-demand; <code>--update</code> refreshes only changed screens. The user-facing sibling of the DevGuide.</td></tr>
   <tr><td>Token efficiency guide</td><td><code>.tfcore/TOKEN-GUIDE.md</code> — ships with every project. Explains where AI tokens go and the levers to keep usage low (don't load whole docs/repos; checklists markdown-only; fan out to subagents; incremental updates via <code>*amend-docs</code> / <code>*devguide --update</code>; recover with <code>*refresh-status</code> instead of re-running).</td></tr>
   <tr><td><strong>Recover broken session</strong> (status stale/wrong)</td><td><code>/TechieFlow:agents:flow-master *refresh-status {AppName}</code> — rebuilds PROJECT-STATUS from ground truth (checklist tables + working-tree files &amp; mtimes + fresh build; no git — git is manual) when a phase died before its status gate ran. Add <code>verify</code> to re-verify ambiguous REQs. Never edits source. See §8a.</td></tr>
   <tr><td>MAUI from WSL</td><td><code>winrun "dotnet build &amp;&amp; dotnet test"</code></td></tr>
@@ -1610,7 +1090,7 @@ flowchart TD
 <p><small>The trblazeui and techierag personas are NuGet-deployed to <code>.claude/&lt;name&gt;.md</code> and <code>.opencode/command/&lt;name&gt;.md</code>. Claude Code only scans <code>.claude/commands/</code>, so the scaffold/update scripts copy them to <code>.claude/commands/&lt;name&gt;.md</code> (the short <code>/trblazeui</code> <code>/techierag</code> forms then work). If the short form is missing: <code>dotnet build</code>, then re-run <code>update-framework.sh</code>.</small></p>
 
 <!-- ============================================================ -->
-<h2 id="faq">16. FAQ &amp; gotchas<span class="anchor-link"><a href="#faq">#</a></span></h2>
+<h2 id="faq">15. FAQ &amp; gotchas<span class="anchor-link"><a href="#faq">#</a></span></h2>
 
 <details>
   <summary>What if the agent ignores the coding standards mid-implementation?</summary>
@@ -1694,12 +1174,12 @@ flowchart TD
 
 <details>
   <summary>How does a developer understand or verify the AI-generated code?</summary>
-  <p>Run <code>/TechieFlow:agents:flow-master *devguide {AppName}</code> (also auto-run at handoff). It produces <code>docs/{AppName}-DevGuide.md</code> + a styled <code>.html</code>: every screen grouped by user role, each with a flowchart tracing the full stack (Razor page → service → data-access → stored procedure/query), a Controls table (with observed render-status from the OBSERVE pass), and a Data-lineage table. Use it to find the right service method for a bug, confirm the correct stored procedure is called, or check that a control is bound to the right DTO property. Re-run with <code>--update</code> after implementing changes to refresh only the affected screens. See <a href="#t-devguide">§13.12</a> for the full schema and the 3-pass generation model.</p>
+  <p>Run <code>/TechieFlow:agents:flow-master *devguide {AppName}</code> (also auto-run at handoff). It produces <code>docs/{AppName}-DevGuide.md</code> + a styled <code>.html</code>: every screen grouped by user role, each with a flowchart tracing the full stack (Razor page → service → data-access → stored procedure/query), a Controls table (with observed render-status from the OBSERVE pass), and a Data-lineage table. Use it to find the right service method for a bug, confirm the correct stored procedure is called, or check that a control is bound to the right DTO property. Re-run with <code>--update</code> after implementing changes to refresh only the affected screens. See <a href="#docs">§6</a> for the full schema and the 3-pass generation model.</p>
 </details>
 
-<h2 id="platforms">17. Running on macOS / native Windows / Linux<span class="anchor-link"><a href="#platforms">#</a></span></h2>
+<h2 id="platforms">16. Running on macOS / native Windows / Linux<span class="anchor-link"><a href="#platforms">#</a></span></h2>
 
-<p>This framework was built on the owner's <strong>WSL-on-Windows</strong> machine, so §0/§11 and the build-invocation ladder describe that setup. But the framework itself is <strong>portable</strong> — the agents, tasks, templates, and slash-commands are plain Markdown and run identically under Claude Code or OpenCode on <strong>macOS, native Windows, or native Linux</strong>. Only two things are environment-specific: how <code>dotnet</code> is invoked, and the headless-Playwright/MAUI bridge. Here is what changes per platform.</p>
+<p>This framework was built on the owner's <strong>WSL-on-Windows</strong> machine, so §0/§11 and the build-invocation ladder describe that setup. But the framework itself is <strong>portable</strong> — the agents, tasks, templates, and slash-commands are plain Markdown and run identically under Claude Code or OpenCode on <strong>macOS, native Windows, or native Linux</strong>. Only two things are environment-specific: how <code>dotnet</code> is invoked, and the runtime-verification bridges (headless Playwright for Blazor; the §0b Appium endpoints for MAUI Android/iOS/Mac-Catalyst; FlaUI/Appium-Windows for the MAUI Windows head). Here is what changes per platform.</p>
 
 <div class="panel">
   <strong>What is the SAME everywhere:</strong> the <code>scaffold-*.sh</code> / <code>update-framework.sh</code> scripts (bash), all <code>/TechieFlow:*</code> slash commands, the day-1 → split → build → verify → handoff flow, every doc template, and the <code>.claude/settings.json</code> permission model. The scaffold scripts need <code>bash</code> + <code>rsync</code> + <code>realpath</code> (preinstalled on macOS 12.3+ and Linux; on native Windows run them from <strong>WSL or Git Bash</strong>).
@@ -1712,6 +1192,7 @@ flowchart TD
   <tr><td>MAUI Android</td><td>Windows side via <code>cmd.exe</code></td><td>native — Android SDK + JDK</td><td>native — Android SDK + JDK</td><td>native — Android SDK + JDK</td></tr>
   <tr><td>MAUI Windows head</td><td>Windows side via <code>cmd.exe</code></td><td>not supported</td><td>native</td><td>not supported</td></tr>
   <tr><td>Browser verification (verifier)</td><td>headless Playwright CLI (§0 bootstrap)</td><td>Playwright with system Chromium</td><td>Playwright with system browser</td><td>headless Playwright CLI</td></tr>
+  <tr><td>Native UI verification (Android/iOS/Catalyst)</td><td><strong>Appium endpoints (§0b)</strong>: Android on Windows host, iOS/Catalyst on a LAN Mac</td><td>local Appium (Android emulator + iOS Sim + Catalyst, all native)</td><td>local Appium (Android emulator + Catalyst); iOS via the paired Mac's Appium</td><td>local Appium (Android only)</td></tr>
   <tr><td>Scaffold scripts</td><td>run in WSL</td><td>run in Terminal (zsh/bash)</td><td>run in WSL or Git Bash</td><td>run in shell</td></tr>
 </table>
 
@@ -1748,6 +1229,12 @@ The <code>winrun</code> bridge and <code>cmd.exe</code> rungs simply don't apply
 </main>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>
+  if (window.mermaid) {
+    mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose', flowchart: { useMaxWidth: true, htmlLabels: true } });
+  }
+</script>
 <script>
   document.querySelectorAll('.tabs').forEach(group => {
     const buttons = group.querySelectorAll('button');
@@ -1761,7 +1248,7 @@ The <code>winrun</code> bridge and <code>cmd.exe</code> rungs simply don't apply
       });
     });
   });
-  document.querySelectorAll('pre').forEach(pre => {
+  document.querySelectorAll('pre:not(.mermaid)').forEach(pre => {
     const btn = document.createElement('button');
     btn.className = 'copy';
     btn.textContent = 'copy';

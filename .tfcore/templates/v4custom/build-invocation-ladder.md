@@ -150,6 +150,25 @@ The user has the bridge set up. Their projects build green on the right rung. Do
 - Paths in commands use the project's actual location (e.g. `C:\src\App\App.sln`). Single commands, no `if/for` wrappers (same permission-prompt reason as §B).
 - `NETSDK1178` / "workload not installed" → run `dotnet workload install <id>` once; there is no alternate rung to switch to.
 
+## D. Runtime-observe leg — reaching the RUNNING UI after a green build
+
+Building is only half of "verify". Once a head builds green, the verifier / devguide OBSERVE / smoke gates must **drive the running UI** to apply the data-render (§4a) and visual-truth (§4b) gates. The driver depends on the head — this is the runtime counterpart to the build rungs above, and it does NOT change how anything builds:
+
+| Head | Build (above) | **Runtime driver** | Where it runs |
+|------|---------------|--------------------|---------------|
+| Blazor | rung #1/#2 | headless **Playwright** (system Chromium) | WSL |
+| MAUI **Windows** | §B rung #4 / §C native | **FlaUI / Appium-Windows** | Windows side |
+| MAUI **Android** | §B rung #4 / §A/§C native | **Appium** (`uiautomator2`) → emulator/device | Windows host (SDK + emulator); WSL drives over HTTP |
+| MAUI **iOS** | paired Mac (Xcode) | **Appium** (`xcuitest`) → iOS Simulator | LAN Mac; WSL drives over HTTP |
+| MAUI **Mac Catalyst** | paired Mac (Xcode) | **Appium** (`mac2`) → the running .app | LAN Mac; WSL drives over HTTP |
+
+**Appium is the native analogue of Playwright** — same WebDriver protocol, returns a `base64` screenshot (visual-truth) + an element tree with `rect`/text (data-render). So the gates' assertions are identical; only the driver differs.
+
+- The endpoints live in `core-config.yaml → runtimeVerification.appium` (per app, opt-in). The WSL side needs only the **HTTP url** — no `adb`, emulator, or Xcode inside WSL.
+- **Android** runs entirely on the Windows host; the verifier boots the emulator + Appium itself via the registry `launch` command (you may launch it through `winrun`), then drives it over `http://localhost:4723` (Win11 mirrored networking) — booting it yourself, never asking the owner, is the same rule as the build ladder.
+- **iOS / Mac Catalyst** depend on the **LAN Mac being up**. `curl http://<mac>:4723/status` first; if unreachable, that head degrades to `⚠ STATIC-ONLY` (a session dependency, like "stack down"), never a faked `Verified`.
+- One-time host setup (Android SDK + AVD + Appium on Windows; Xcode + Appium + xcuitest/mac2 on the Mac; the `.wslconfig` mirrored-networking switch) is **`WORKFLOW.html §0b`**.
+
 ## Recording the result (all platforms)
 
 After a successful build, note **which platform + invocation** produced it (e.g. "built on macOS via `dotnet build` (rung #1)", "built on WSL via `cmd.exe /c` (rung #4)") in the PROJECT-STATUS verification-log row or Remarks — so a reader on a different machine knows what to expect. The §B "what NEVER goes into Known blockers" list applies to WSL specifically; on §A/§C the equivalent non-blocker is "workload not yet installed — run `dotnet workload install`", which is a one-time user setup step, not a project defect.

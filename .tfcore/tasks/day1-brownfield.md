@@ -260,6 +260,12 @@ public class DatabaseService
 ### Security
 - Never hardcode credentials. Parameterized queries. Validate inputs. Log security events.
 
+### MAUI UI testability — stable AutomationId (MAUI apps only)
+- Every interactive or data-bound control the verifier must reach (buttons, entries, pickers, list/collection views, key labels/values) carries a stable, unique **`AutomationId`** — the native analogue of a stable DOM id for Playwright. Without it Appium selectors drift and the runtime gates (`verify-phase §4a/§4b`) can't reliably find controls on the Android/iOS/Mac Catalyst heads.
+- Name them by intent, not layout: `AutomationId="LoginSubmitButton"`, `AutomationId="ClientsGrid"`, `AutomationId="TotalBalanceValue"` — never positional (`Button2`).
+- Set it on the control whose data the gate asserts (the grid/list itself, the value label), so "rows present AND non-empty" / "value not blank" maps to one addressable element.
+- (Blazor screens use the equivalent `data-testid`/stable element ids for Playwright — same principle.)
+
 ## Enforcement
 
 ### .editorconfig (machine-checkable)
@@ -307,7 +313,7 @@ Load `.tfcore/templates/v4custom/app-project-status-tmpl.md` and substitute:
 - `last_verified_date:` → today
 - `current_phase:` → `Discovery`; if §3.5 ran (dev plan migrated), use `Discovery — requirements split done; next build phase: {first incomplete phase from the dev plan}` instead.
 - **Where I am:** one paragraph from §2's findings — what exists, what state it's in. If §3.5 ran, include which dev-plan phases are already complete.
-- **Next command to run:** HTML is rendered by this task itself (§7.5), so point at the real next step: `/TechieFlow:agents:analyst *split-brd {AppName}` — or, if §3.5 ran (split already done), `/TechieFlow:agents:flow-master *build-phase {AppName}` (the unified build; it calls trblazeui/techierag itself).
+- **Next command to run:** HTML is rendered by this task itself (§7.5), so point at the real next step: `/TechieFlow:agents:analyst *split-brd {AppName}` — or, if §3.5 ran (split already done), `/TechieFlow:agents:flow-master *build-phase {AppName}` (the unified build; it calls trblazeui/techierag itself). **NEVER set `*verify all` as the day-1 next command** — day-1 has verified nothing and a brownfield repo virtually always has unbuilt/PARTIAL features in the freshly-migrated checklist; per the Build → Verify → Handoff ladder (`_status-update-gate.md` item 5), the next step after a brownfield day-1 is `*split-brd` (to create the checklist) or, once the checklist exists, `*build-phase` (to finish building). Verification comes only after the build is substantially complete.
 - **Open requirements:** empty list — populated later by `*split-brd`. If §3.5 ran, list the REQ-* counts per type with phase tags (already populated; `*split-brd` is NOT needed).
 - **Known blockers:** from §2 (build failure, standards drift, etc.) — otherwise "None".
 - **Verification log:** empty table with headers only.

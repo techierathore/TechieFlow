@@ -56,7 +56,9 @@ Only write a checklist cell when evidence **contradicts** what's there (e.g. tab
 
 ### 4. Rewrite PROJECT-STATUS.md (the whole point)
 
-Overwrite `PROJECT-STATUS.md` to reflect the reconstructed reality, honoring every minimum in `.tfcore/tasks/_status-update-gate.md`:
+Overwrite `PROJECT-STATUS.md` to reflect the reconstructed reality, honoring every minimum in `.tfcore/tasks/_status-update-gate.md`.
+
+**Rebuild to the CRISP, FIXED-SHAPE template** (`.tfcore/templates/v4custom/app-project-status-tmpl.md`) — the gate's §"CRISP, FIXED-SHAPE snapshot" applies in full to a reconstruction. Start from the template's section set; do NOT copy forward the old file's per-run dated sections (`## *verify all — formal coverage matrix (…)`, `## *fix-issues — …`, `## *build-phase — …`) or its paragraph-stuffed `current_phase`. If the file you are rebuilding has them, they are the mess this task exists to clean up — drop them, fold any still-true facts into the one-paragraph `## Where I am` + the `## Verification log` table, and keep the result well under ~60 lines. The ONE extra section a reconstruction adds is the `## Recovery note` (item 8) — and only because this was an interrupted-session rebuild. Concretely:
 
 1. `last_updated: {today YYYY-MM-DD}`.
 2. `current_phase` = where the evidence says the project actually is (not what the file claimed).

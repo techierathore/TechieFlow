@@ -34,6 +34,8 @@ The verifier MUST run the application **LOCALLY**. Never propose, suggest, or in
 
 The user runs Claude Code on their own machine. Local boot is always possible. If you find yourself drafting "let me deploy this to X first" — STOP, that is a banned escape hatch. The user has explicitly called this out as an "idiotic option" — do not repeat it.
 
+**Local device hosts are NOT cloud.** Driving the MAUI Android head via the Appium server on the **Windows host** and the MAUI iOS / Mac Catalyst heads via the Appium server on the **LAN Mac** (`runtimeVerification.appium` in `core-config.yaml`, see §3b) is local infrastructure the owner set up once (`WORKFLOW.html §0b`) — it is the native analogue of headless Playwright, not a remote deploy. Use it. Only the cloud-deploy escape hatches above are banned.
+
 If the WSL-side `dotnet run` is unreachable by Playwright (port collision, WSL networking quirks, missing browser deps), the correct escalation order is:
 
 1. **Try a different rung of the build invocation ladder.** Rung #4 `cmd.exe /c "dotnet run --project ..."` launches Windows-side dotnet on a Windows-side port; that port IS reachable from WSL Playwright via the WSL host IP (`$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}')` or `host.docker.internal` analog). Try this BEFORE asking the user anything.
@@ -59,7 +61,7 @@ This applies to EVERY phase task that boots an app (the `build-phase` self-smoke
 
 ### 0. Load inputs and build the working list
 
-- Load `.tfcore/core-config.yaml`; resolve `{AppName}` per Inputs above.
+- Load `.tfcore/core-config.yaml`; resolve `{AppName}` per Inputs above. Note any `runtimeVerification.appium` endpoints — they tell you which MAUI native heads (Android/iOS/Mac Catalyst) this app ships and how to reach them (§3b).
 - Determine the scope from the command argument (`ui` / `functional` / `all` / explicit REQ IDs / legacy `phase-N`). **When this task is chained from `build-phase` or `fix-issues`, the caller has already stated the scope — use it and ask nothing.** Only if invoked standalone with NO scope: ask the user once "Verify which scope — ui, functional, all, or specific REQ IDs?" — this is the ONLY question you may ask.
 - **Checklist path (normal):** open the one checklist `docs/{AppName}-Checklist.md`. From the **Requirements Status** table, filter rows by the scope's REQ prefix (`REQ-UI-*` for `ui`; `REQ-FN/NFR/RAG-*` for `functional`; all rows for `all`) and build the working list `[{id, text, status, type-guess}]` (type-guess ∈ {ui, behavioral, backend-logic, nonfunctional}; pull each REQ's acceptance criteria from its Details anchor section).
 - **`Done (pre-existing)` is NOT a free pass — it is an unverified migrated claim.** Do NOT skip those rows. They were carried over from a dev-plan and have **never been runtime-verified** — this is exactly how blank-rendering screens slipped through (a `Done (pre-existing)` home page with an empty table and a blank list). Every in-scope row, **including `Done (pre-existing)`**, gets the **§4a DevGuide render sweep** at minimum (load its screens, confirm every control actually renders its data). Only `N/A` rows are skipped. Rows already `Verified` get a fast re-confirm (render sweep + re-run their test); `Done (pre-existing)` that passes the render sweep gets a `runtime render-confirmed {date}` remark and may stay Done; anything that renders blank/empty/errors → `Needs re-verify`/`FAIL` (§6).
@@ -85,7 +87,7 @@ Run these checks yourself and act on them. Echo a one-line summary of what you d
 
 ### 3. Boot the app headless in the background
 
-- **Pick the right rung first** — read the startup `.csproj`. If it has `<UseMaui>`, MAUI SDK, or `-android`/`-ios`/`-maccatalyst` target frameworks → use rung #4 (`cmd.exe /c "dotnet run --project ..."`); MAUI workloads aren't on WSL. Otherwise rung #2 (`~/.dotnet/dotnet run --project ...`).
+- **Pick the right rung first** — read the startup `.csproj`. If it targets a MAUI **Android / iOS / Mac Catalyst** head (`<UseMaui>` + `-android`/`-ios`/`-maccatalyst`) → this section (Playwright boot) does not apply; jump to **§3b** to drive it over Appium. The MAUI **Windows** head builds/runs via rung #4 (`cmd.exe /c "dotnet run ..."`) and is driven by FlaUI/Appium-Windows as before. Otherwise (Blazor) rung #2 (`~/.dotnet/dotnet run --project ...`).
 - Start it yourself, detached, capturing logs:
   `nohup ~/.dotnet/dotnet run --project <csproj> --urls http://localhost:5099 > .verify/app.log 2>&1 &`
   (Pin a known free port like 5099 so the test URL is deterministic. Create `.verify/` if needed.)
@@ -101,6 +103,21 @@ If the boot doesn't succeed in 60s, OR Playwright cannot connect to it (e.g. WSL
 3. If both fail, fall through to the **ask-user flow** (per the "Local-only deployment policy" at the top of this file). Output the two-terminal shell recipe. **Wait for `go`** and proceed.
 
 **NEVER**: propose cloud deploy, propose skipping verification, propose "let me push to staging", propose "let me deploy to Cloudflare Pages so Playwright can reach it." Banned escape hatches.
+
+### 3b. MAUI native heads — drive with Appium, not Playwright
+
+§3/§3a boot a **Blazor** app for **Playwright**. A MAUI **Android / iOS / Mac Catalyst** screen has no browser — it is driven over the **Appium** WebDriver endpoint instead. Appium is the native analogue of Playwright: it returns a `base64` screenshot (for §4b) and an element tree with `rect` + text + page source (for §4a), so **the §4a render gate and §4b visual-truth gate run unchanged — only the driver differs.** The MAUI **Windows** head keeps its existing FlaUI / Appium-Windows path (out of scope here); Blazor keeps Playwright.
+
+Trigger: the startup/owning `.csproj` has `<UseMaui>` / MAUI SDK and a `-android` / `-ios` / `-maccatalyst` target framework. For each such head in scope:
+
+1. **Resolve the endpoint** from `core-config.yaml → runtimeVerification.appium.{android|ios|maccatalyst}`. If the app didn't register that head, note "no Appium endpoint configured for {head}" and stamp the head `⚠ STATIC-ONLY` (do NOT fake a pass); tell the user in §8 to add it per `WORKFLOW.html §0b`.
+2. **Bring the device host up yourself** (boot-it-yourself rule, same as §3):
+   - **Android** — run the registry `launch` command (e.g. `winrun "powershell -File start-android-verify.ps1"`) to start the emulator (`avd`) + Appium on the Windows host; then poll `curl http://localhost:4723/status` (Win11 mirrored networking → `localhost`) until `{"ready":true}` (emulator cold start can take minutes — poll, don't assume).
+   - **iOS / Mac Catalyst** — the LAN Mac runs Appium; `curl http://<mac>:4723/status`. You do **not** start the Mac; if it is unreachable, that is a session dependency → stamp the head `⚠ STATIC-ONLY` with "Mac build host unreachable" and continue with the heads you can reach. Never mark those REQs `Verified` on visual grounds you couldn't observe.
+3. **Build + install + launch the app on the device** via the build ladder runtime-observe leg (`build-invocation-ladder.md §D`): Android via rung #4 (`cmd.exe`), iOS/Catalyst on the Mac. Start an Appium session with the right driver (`uiautomator2` / `xcuitest` / `mac2`) pointed at the built `.apk`/`.app`.
+4. Hand the live session to §4a/§4b: the fan-out subagents target this Appium session (selectors by `AutomationId` per the coding standard) instead of a Playwright `baseURL`. Screenshots land under `test-results/` exactly as Playwright's do.
+
+If a head genuinely can't be reached after this escalation, it is `⚠ STATIC-ONLY` for that head — never a faked `Verified`. Tear the Appium session + any emulator you started down in §7.
 
 ### 4. Generate / refresh tests from the scoped requirement IDs (PARALLEL FAN-OUT)
 
@@ -145,6 +162,8 @@ For **every in-scope screen** in the DevGuide map (including those backing `Done
 
 A screen with any RENDER-EMPTY / RENDER-ERROR control **fails the render gate** for every REQ that owns a control on it (§6). Capture a screenshot for each failing control. These observations are also what feed the DevGuide refresh in §6b — the DevGuide's render-status tags become *observed runtime facts*, not static inferences.
 
+**For MAUI native heads (§3b),** run the identical assertions over the **Appium** session instead of Playwright: locate each control by its `AutomationId`, read the element's text / child count from the page source (grid rows non-empty, value non-blank), and treat a missing/empty element exactly as RENDER-EMPTY. Same verdicts, same screenshots — only the locator API changes.
+
 ### 4b. VISUAL-TRUTH gate — does the screen actually LOOK right (run for every in-scope screen)
 
 The §4a render gate proves the data is *present in the DOM*; it does NOT prove the screen is *usable*. The exact failure the owner hit: every control renders its data, the verifier passes — but the controls **overlap, sit off-screen, are clipped to zero height, or the layout is broken**, so the running app is unusable. "Has data" ≠ "looks right." This gate closes that hole.
@@ -157,6 +176,8 @@ For **every in-scope screen** (same screens as §4a, same role login), at **at l
 - **Mockup diff (greenfield, when a mockup exists):** compare the screen against its mockup (`docs/mockups/{screen}.html` named in the REQ's checklist row). The same regions/controls should be present in roughly the same layout. A large structural deviation = `MOCKUP-DRIFT` (a `VISUAL-FAIL` sub-type); a match = `MOCKUP-MATCH`. Brownfield has no mockup — rely on the geometry + vision checks (and, where present, the reviewed DevGuide screenshots from `docs/screenshots/{AppName}/`).
 
 Record per screen: **VISUAL-OK** / **VISUAL-FAIL** (with the failing controls + which width + a screenshot path) / **MOCKUP-DRIFT**. A screen with any `VISUAL-FAIL` fails the visual gate for every REQ that owns a control on it (§6). These observations also feed the DevGuide refresh (§6b).
+
+**For MAUI native heads (§3b),** run the identical overlap / in-viewport / sized / screenshot-inspection checks over the **Appium** session: `element.rect` gives each control's bounding box (overlap + zero-size + off-screen detection), and `driver.get_screenshot_as_base64()` gives the full-screen image to inspect. Drive the device's natural size plus, where the simulator/emulator supports it, a phone vs tablet/desktop variant. Same `VISUAL-OK` / `VISUAL-FAIL` verdicts.
 
 ### 5. Run the tests
 
@@ -206,6 +227,7 @@ If no DevGuide exists, skip this and add to the report: "No DevGuide to refresh 
 ### 7. Tear down
 
 - Kill the app process you started (by the pinned port / stored PID). Confirm the port is free.
+- For MAUI native heads (§3b): quit the Appium session, and shut down any **emulator** you started yourself (leave a pre-existing/owner-run emulator or the LAN Mac's Appium server up — only tear down what you booted).
 
 ### 8. Report and HALT
 
@@ -230,7 +252,7 @@ Source checklist(s): <path(s)>   |   Requirements graded: N
 ```
 
 - The per-REQ detail now lives in the checklist Status table (§6) — do NOT also save a dated `docs/verify/*.md` report. The console report above plus the updated Status table ARE the deliverable.
-- **FINAL GATE — update PROJECT-STATUS (MANDATORY, non-skippable).** Before you HALT, update PROJECT-STATUS — **both `PROJECT-STATUS.md` AND re-rendered `PROJECT-STATUS.html`** — per `.tfcore/tasks/_status-update-gate.md`: `last_updated`, `last_verified_build`/`last_verified_date`, sync Open requirements to the Status table (anything not `Verified` stays open), set the Next command (**command-against-checklist only — re-run the phase naming the FAILed REQ IDs if there are FAILs; advance if all `Verified` — no prose to-do narrative**), and add a verification-log row pointing at the checklist's `#requirements-status`. A verification run that updates the markdown but not the HTML, or that does not update PROJECT-STATUS at all, is incomplete.
+- **FINAL GATE — update PROJECT-STATUS (MANDATORY, non-skippable).** Before you HALT, update PROJECT-STATUS — **both `PROJECT-STATUS.md` AND re-rendered `PROJECT-STATUS.html`** — per `.tfcore/tasks/_status-update-gate.md`: `last_updated`, `last_verified_build`/`last_verified_date`, sync Open requirements to the Status table (anything not `Verified` stays open), set the Next command (**command-against-checklist only — re-run the phase naming the FAILed REQ IDs if there are FAILs; advance if all `Verified` — no prose to-do narrative**), and add a verification-log row pointing at the checklist's `#requirements-status`. **Record this run's outcome as that ONE Verification-log row + the per-REQ Remarks you wrote in the checklist (§6) — do NOT add a `## *verify all — coverage matrix (date)` section (or any new H2) to PROJECT-STATUS; it is a fixed-shape snapshot you overwrite, never an append-log (see `_status-update-gate.md`).** A verification run that updates the markdown but not the HTML, or that does not update PROJECT-STATUS at all, is incomplete.
 - Do not fix source. If the user wants fixes, that is a separate instruction to the dev/orchestrator agent referencing the miss list.
 - HALT.
 

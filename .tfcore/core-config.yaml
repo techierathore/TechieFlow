@@ -25,3 +25,21 @@ devLoadAlwaysFiles: []
 devDebugLog: .ai/debug-log.md
 devStoryLocation: docs/stories
 slashPrefix: TechieFlow
+# runtimeVerification: per-app, OPT-IN. Only set the heads this app actually ships.
+# The verifier/devguide/smoke gates drive Blazor with headless Playwright and the MAUI
+# Windows head with FlaUI/Appium-Win (unchanged). For MAUI Android / iOS / Mac Catalyst
+# they drive the RUNNING UI via an Appium WebDriver endpoint and feed the SAME screenshots +
+# element tree into the data-render (§4a) and visual-truth (§4b) gates. The WSL side only needs
+# the HTTP url — no adb/emulator/Xcode in WSL. An absent/unreachable endpoint degrades that head
+# to `⚠ STATIC-ONLY` (never a faked pass). One-time host setup: WORKFLOW.html §0b.
+# runtimeVerification:
+#   appium:
+#     android:
+#       url: http://localhost:4723        # Win11 mirrored networking ON → localhost reaches the Windows-host Appium
+#       avd: Pixel_API_34                 # the AVD to boot
+#       launch: winrun "powershell -File start-android-verify.ps1"   # how the verifier boots emulator + Appium itself
+#     ios:
+#       url: http://192.168.1.50:4723     # the LAN Mac (stable IP via DHCP reservation); Appium bound to 0.0.0.0
+#       simulator: "iPhone 15"
+#     maccatalyst:
+#       url: http://192.168.1.50:4723     # same Mac, mac2 driver
