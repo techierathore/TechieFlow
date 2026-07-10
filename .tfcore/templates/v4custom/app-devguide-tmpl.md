@@ -8,11 +8,33 @@
 >
 > It documents the **AS-BUILT code**, not the plan. Regenerate it with `*devguide {AppName}` after meaningful code changes (it is also refreshed automatically at handoff). It is a **human-readable** doc — it is rendered to HTML; it is NOT one of the AI checklists.
 
-> **Depth mandate — read before drafting.** Every screen entry must connect the visible UI to the code that produces it: the Razor page/component (with file path), each meaningful **control** on it, and the full **data lineage** for each control/action — `Razor component → service method → data-access method → stored procedure name / SQL query`. If a value is *calculated*, say where and how. "It's handled in the service" is NOT acceptable — name the method and the file. A developer who has never seen the code must be able to open this guide, find the screen, and know exactly which files to open to fix a bug.
->
-> **Two rules that keep this guide TRUE (not hallucinated):**
-> - **Landing-truth** — a screen's "Reached via" / where a role lands after login MUST be read from the routing/redirect code (the `NavigateTo(...)` after login, the default `@page "/"`, the auth redirect) and cite `file:line`. NEVER infer it from the folder a page lives in or its name (e.g. don't assume an Admin lands on an Admin Dashboard just because the page is under `Admin/`).
-> - **Render-truth** — confirm the data actually **reaches and renders** in each control, not merely that a method/proc exists. Check the `@if` guards, whether the query's columns map to the model (case/underscore), computed getters that can throw/blank, and required component parameters that must be declared (e.g. a grid's `Pagination`). Tag each control **renders** / **renders-empty (suspected defect — why)** / **{unresolved — TODO}**; a suspected defect is also logged to the checklist.
+<!-- AGENT-ONLY AUTHORING NOTES. Everything in this comment is an instruction to the DRAFTING
+     AGENT, not content for the document's human reader. Carry it into the generated document
+     ONLY as this HTML comment (or drop it entirely) — NEVER as visible text: the owner reads
+     the rendered HTML and must not see authoring instructions (generate-html.md strips any
+     that leaked from older templates). The two blockquotes ABOVE (verification-status banner +
+     Purpose) ARE reader-facing and stay visible.
+
+  DEPTH MANDATE (read before drafting): every screen entry must connect the visible UI to the
+  code that produces it: the Razor page/component (with file path), each meaningful CONTROL on
+  it, and the full DATA LINEAGE for each control/action — Razor component → service method →
+  data-access method → stored procedure name / SQL query. If a value is calculated, say where
+  and how. "It's handled in the service" is NOT acceptable — name the method and the file.
+  A developer who has never seen the code must be able to open this guide, find the screen,
+  and know exactly which files to open to fix a bug.
+
+  TWO RULES THAT KEEP THIS GUIDE TRUE (not hallucinated):
+  • Landing-truth — a screen's "Reached via" / where a role lands after login MUST be read from
+    the routing/redirect code (the NavigateTo(...) after login, the default @page "/", the auth
+    redirect) and cite file:line. NEVER infer it from the folder a page lives in or its name
+    (e.g. don't assume an Admin lands on an Admin Dashboard just because the page is under Admin/).
+  • Render-truth — confirm the data actually REACHES AND RENDERS in each control, not merely
+    that a method/proc exists. Check the @if guards, whether the query's columns map to the
+    model (case/underscore), computed getters that can throw/blank, and required component
+    parameters that must be declared (e.g. a grid's Pagination). Tag each control renders /
+    renders-empty (suspected defect — why) / {unresolved — TODO}; a suspected defect is also
+    logged to the checklist.
+-->
 
 ## Table of Contents
 

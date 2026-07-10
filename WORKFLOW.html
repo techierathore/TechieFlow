@@ -447,6 +447,8 @@ cd /path/to/your-app
   </tr>
 </table>
 
+<p>The scaffolders and the updater also <strong>ensure the project's <code>.gitignore</code> ignores the deployed framework copies</strong> (<code>.tfcore/</code>, <code>.claude/</code>, <code>.opencode/</code>, <code>/CLAUDE.md</code>, <code>/WORKFLOW.html</code>, <code>/opencode.jsonc</code>, <code>/.tf-scaffold-note.txt</code>) — everything the framework drops into an app is a <em>copy</em> (source of truth: the reference repo, or the NuGet package for the library personas) and must never be committed in the app repo. The step is append-only and idempotent: your own <code>.gitignore</code> entries are respected, nothing is removed. Note git never <em>un</em>tracks a file just because it became ignored — if a framework file was committed before the entry existed, run <code>git rm -r --cached &lt;path&gt;</code> once yourself (git is manual in TechieFlow; agents never run it).</p>
+
 <div class="panel warn">
   <strong>After every update: restart Claude Code</strong> in that project. New/changed tasks and agents under <code>.claude/commands/TechieFlow/</code> are only registered as skills at session start — without a restart, a freshly-synced command like <code>/TechieFlow:tasks:generate-html</code> won't resolve.
 </div>
@@ -529,6 +531,8 @@ cd /path/to/your-app
 
 <!-- ============================================================ -->
 <h2 id="docs">6. Doc artifacts &amp; audiences<span class="anchor-link"><a href="#docs">#</a></span></h2>
+
+<p class="small"><strong>Agent-facing authoring notes never render.</strong> The doc templates carry drafting-agent instructions (the "Depth mandate" / "Mermaid mandate" notes) as HTML comments, so they are invisible in both the generated <code>.md</code> and the rendered HTML — the human reader must never see them. Docs generated from pre-2026-07 templates may still show them as visible blockquotes; the next HTML render strips them automatically (<code>html-render-shell.md §6b</code>).</p>
 
 <table>
   <tr><th>File</th><th>Audience</th><th>Format</th><th>Created by</th><th>Purpose</th></tr>
@@ -954,6 +958,12 @@ dotnet build</code></pre>
   </div>
 </div>
 
+<div class="panel">
+  <strong>Standing standard — Serilog file logging in EVERY .NET app (2026-07-09).</strong> Every executable head — Blazor web, API, MAUI, desktop, console/CLI, background service — wires <strong>Serilog with a rolling file sink</strong> (<code>logs/&lt;app&gt;-.log</code>, daily rolling; MAUI/desktop root it in the per-app data dir) at startup, logs unhandled exceptions, and exposes app logging only through <code>ILogger&lt;T&gt;</code> (class libraries reference logging abstractions, never Serilog). This is baked in end-to-end so you never have to ask: the BRD template carries a standing Observability NFR, day-1 always emits it (brownfield marks it <code>Done (pre-existing)</code> when an equivalent stack is already wired), <code>*split-brd</code> turns it into a <code>REQ-NFR-*</code> row, the coding-standards §Logging block carries the wiring recipe, and <code>*build-phase</code> wires Serilog into any new head it scaffolds even when no REQ names logging.</div>
+
+<div class="panel">
+  <strong>Standing standard — the primary head carries the PRODUCT name (2026-07-10).</strong> The product's primary executable head project is named exactly <code>&lt;APP&gt;</code> (<code>src/&lt;APP&gt;/&lt;APP&gt;.csproj</code>); a single-head product's one head IS <code>&lt;APP&gt;</code>. <strong><code>&lt;APP&gt;.App</code> is banned</strong> — "App" says nothing the product name doesn't. Secondary heads of a multi-head product take a <em>descriptive</em> dotted suffix (<code>&lt;APP&gt;.Api</code>, <code>&lt;APP&gt;.Desktop</code>, <code>&lt;APP&gt;.Cli</code>); satellites keep their conventional names (<code>&lt;APP&gt;.Core</code>, <code>&lt;APP&gt;UI</code> RCL, <code>&lt;APP&gt;.Core.Tests</code>). Baked into the coding-standards canonical block (day1-brownfield §4 → "Project &amp; solution naming") and <code>*build-phase</code> §3 (scaffold-time rule; an existing <code>&lt;APP&gt;.App</code> gets a rename REQ, never propagated).</div>
+
 <p>The grep patterns belong inside <code>docs/&lt;APP&gt;-Coding-Standards.md</code> under an "Enforcement" section. Sample grep block (already in §11.3 template):</p>
 
 <pre><code class="lang-bash"># Forbidden field forms
@@ -990,6 +1000,10 @@ winrun "dotnet build -t:Run -f net9.0-windows10.0.19041.0"</code></pre>
 </table>
 <p>Selectors target each control's <code>AutomationId</code> (a coding standard, §10). A head with no registered endpoint in <code>core-config.yaml → runtimeVerification.appium</code>, or an unreachable host, is stamped <code>⚠ STATIC-ONLY</code> for that head — never a faked <code>Verified</code>.</p>
 
+<div class="panel warn">
+  <strong>Window binding &amp; input discipline (all native heads, especially MAUI Windows):</strong> the driver session is bound to the app under test <em>by identity</em> — the PID the agent launched → that process's top-level window handle (Appium Windows <code>appium:appTopLevelWindow</code> / FlaUI <code>Application.Attach(pid)</code>), or the app package/bundle id on mobile — and every interaction is <strong>element-scoped via <code>AutomationId</code> inside that bound window</strong>, with focus verified before input and handles re-resolved after dialogs. Global keyboard/mouse injection (FlaUI <code>Keyboard.Type</code>, coordinate clicks, <code>SendKeys</code>) is <strong>banned</strong>: it types into whatever window happens to hold focus — historically, a completely different window than the app. Full rules: <code>verify-phase.md §3b</code>.
+</div>
+
 <!-- ============================================================ -->
 <h2 id="permissions">12. Permissions (yolo-except-git)<span class="anchor-link"><a href="#permissions">#</a></span></h2>
 
@@ -997,10 +1011,14 @@ winrun "dotnet build -t:Run -f net9.0-windows10.0.19041.0"</code></pre>
   <strong>TechieFlow's <code>*yolo</code> vs Claude Code permissions:</strong> <code>*yolo</code> is an AGENT mode (don't ask elicitation questions). Claude Code's tool-permission layer is separate. The fix is <code>.claude/settings.json</code>, dropped by the scaffold scripts.
 </div>
 
-<p>The pre-built config <strong>auto-allows</strong> Read/Glob/Grep/Edit/Write/MultiEdit and <strong>all Bash</strong> (bare <code>"Bash"</code>) — so create/update/<strong>move</strong> run with zero prompts. <strong>Asks</strong> for <strong>deletes</strong> (<code>Bash(rm *)</code>, <code>Bash(rmdir *)</code>) and for <code>Bash(git *)</code>, <code>Bash(gh *)</code>, <code>Bash(sudo *)</code>. <strong>Denies</strong> catastrophic <code>rm -rf</code> root/home paths. Permission precedence is <code>deny → ask → allow</code>, so the delete/git/sudo <em>ask</em> rules still fire even though everything is allowed. <em>(Cross-project tip: to let a session work in another app's folder without per-path prompts, add that root to <code>permissions.additionalDirectories</code> in this project's settings.json — keep those machine-specific paths out of any shared template.)</em></p>
+<p>The pre-built config <strong>auto-allows</strong> Read/Glob/Grep/Edit/Write/MultiEdit and <strong>all Bash</strong> (bare <code>"Bash"</code>) — so create/update/<strong>move</strong> run with zero prompts. <strong>Asks</strong> for <strong>deletes</strong> (<code>Bash(rm *)</code>, <code>Bash(rmdir *)</code>) and <code>Bash(sudo *)</code>. <strong>Denies</strong> catastrophic <code>rm -rf</code> root/home paths <strong>and <code>git</code>/<code>gh</code> outright</strong> — git is manual in TechieFlow; agents never run it, so it is a hard deny, not an ask. Permission precedence is <code>deny → ask → allow</code>. <em>(Cross-project tip: to let a session work in another app's folder without per-path prompts, add that root to <code>permissions.additionalDirectories</code> in this project's settings.json — keep those machine-specific paths out of any shared template.)</em></p>
 
 <div class="panel warn">
-  <strong>Why bare <code>"Bash"</code> and NOT a per-command list:</strong> a <code>Bash(prefix *)</code> rule is a literal prefix match. On WSL the agent can't call plain <code>dotnet</code> (not in PATH) — it calls <code>~/.dotnet/dotnet build</code>, <code>cmd.exe /c "dotnet build"</code>, <code>dotnet dev-certs</code>, or compound <code>cd … &amp;&amp; …</code>, none of which match an enumerated <code>Bash(dotnet *)</code>. The old list-everything config prompted ~100× in a single UI phase. Allowing all Bash and asking only on git is immune to command-path variants.
+  <strong>The git deny is TWO layers, because prefix rules alone leak.</strong> <code>Bash(git *)</code> is a literal prefix match — it never sees <code>cd src &amp;&amp; git log</code> or <code>echo done; git add -A</code>, which the bare <code>"Bash"</code> allow would wave straight through. That is exactly how agents kept "accidentally" running git during status updates. So the config also wires a <strong>PreToolUse hook</strong> — <code>.tfcore/hooks/block-git.sh</code> — that inspects every Bash call and blocks <code>git</code>/<code>gh</code> used as a command word anywhere in the command line, replying with the local-evidence recipe (checklist tables + working-tree files + fresh build) so the agent continues correctly instead of flailing. You still run git yourself: in a separate terminal, or by typing <code>!git …</code> in the session (user-typed bang commands bypass agent tool permissions).
+</div>
+
+<div class="panel warn">
+  <strong>Why bare <code>"Bash"</code> and NOT a per-command list:</strong> a <code>Bash(prefix *)</code> rule is a literal prefix match. On WSL the agent can't call plain <code>dotnet</code> (not in PATH) — it calls <code>~/.dotnet/dotnet build</code>, <code>cmd.exe /c "dotnet build"</code>, <code>dotnet dev-certs</code>, or compound <code>cd … &amp;&amp; …</code>, none of which match an enumerated <code>Bash(dotnet *)</code>. The old list-everything config prompted ~100× in a single UI phase. Allowing all Bash and restricting only deletes/sudo (ask) and git/gh (deny + hook) is immune to command-path variants.
 </div>
 
 <details>
@@ -1013,11 +1031,34 @@ winrun "dotnet build -t:Run -f net9.0-windows10.0.19041.0"</code></pre>
       "Edit", "Write", "MultiEdit", "NotebookEdit",
       "Read", "Glob", "Grep", "TodoWrite", "WebFetch", "WebSearch", "Task"
     ],
-    "ask": [ "Bash(rm *)", "Bash(rmdir *)", "Bash(git *)", "Bash(gh *)", "Bash(sudo *)" ],
-    "deny": [ "Bash(rm -rf /)", "Bash(rm -rf /*)", "Bash(rm -rf ~)", "Bash(rm -rf ~/*)" ]
+    "ask": [ "Bash(rm *)", "Bash(rmdir *)", "Bash(sudo *)" ],
+    "deny": [
+      "Bash(rm -rf /)", "Bash(rm -rf /*)", "Bash(rm -rf ~)", "Bash(rm -rf ~/*)",
+      "Bash(git)", "Bash(git *)", "Bash(gh)", "Bash(gh *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash",
+        "hooks": [ { "type": "command",
+                     "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/block-git.sh\"" } ] },
+      { "matcher": "Write|Edit|MultiEdit",
+        "hooks": [ { "type": "command",
+                     "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status.sh\"" },
+                   { "type": "command",
+                     "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-verify.sh\"" } ] }
+    ]
   }
 }</code></pre>
 </details>
+
+<div class="panel">
+  <strong>PROJECT-STATUS shape is enforced mechanically too (2026-07-09).</strong> A second PreToolUse hook — <code>.tfcore/hooks/guard-status.sh</code>, matcher <code>Write|Edit|MultiEdit</code> — blocks any write to <code>PROJECT-STATUS.md</code> that violates the crisp fixed-shape snapshot rule: an H2 outside the template's section set (per-run dated sections like <code>## *verify all — coverage matrix (DATE)</code> are the classic disease), a heading naming a command run, a paragraph stuffed into <code>current_phase:</code>, or a full-file write past ~120 lines. The block message tells the agent exactly how to reshape (overwrite the template sections in place, ONE Verification-log row per run, detail into the checklist Remarks). Same philosophy as the git ban: prose rules kept failing, so the harness enforces it. See <code>.tfcore/tasks/_status-update-gate.md</code>.
+</div>
+
+<div class="panel">
+  <strong><code>Verified</code> verdicts are enforced mechanically too (2026-07-10).</strong> A third PreToolUse hook — <code>.tfcore/hooks/guard-verify.sh</code>, matcher <code>Write|Edit|MultiEdit</code> — blocks any write to a <code>*-Checklist.md</code> that <em>introduces</em> a <code>Verified</code> status cell unless a same-day run ledger <code>docs/.last-verify.json</code> exists, which only an <em>executed</em> <code>verify-phase</code> run writes (verify-phase §6: boot → scoped tests → §4a data-render + §4b visual-truth gates → ledger → verdicts). This exists because a build orchestrator did its own smoke and wrote the <code>Verified</code> verdicts itself (TrSetup, 2026-07-09) — self-attestation the "chain the verifier" prose didn't stop. A self-smoke's ceiling is <code>Implemented</code> (<code>_smoke-test-policy.md §"Smoke is NOT verify"</code>); <code>*refresh-status</code> may reconcile a lagging Status column to a row's <em>pre-existing</em> dated verdict by writing the ledger with <code>"mode":"reconcile"</code>. Demotions (e.g. <code>Verified → Needs re-verify</code>) are never blocked.
+</div>
 
 <div class="panel">
   <strong>Existing project still prompting?</strong> Just run the normal framework update — <code>update-framework.sh</code> now <strong>refreshes <code>settings.json</code> to this config by default</strong>, so every app stays in sync without any special flag:
@@ -1224,7 +1265,7 @@ The <code>winrun</code> bridge and <code>cmd.exe</code> rungs simply don't apply
 <p><strong>Notes.</strong> The framework never <em>requires</em> MAUI — many apps are Blazor-only and build with plain <code>dotnet build</code> everywhere. The full per-platform <code>dotnet</code> invocation detail lives in <code>.tfcore/templates/v4custom/build-invocation-ladder.md</code> (what the agents read); this section is the human-facing summary.</p>
 
 <hr>
-<p class="small">Last revised 2026-06-26. Edit freely. When the workflow changes, update <code>~/.claude/projects/-mnt-c-3AIGenCode-TechieFlow/memory/MEMORY.md</code> and <code>WorkFlow-Context.md</code> (the AI-agent context doc) too.</p>
+<p class="small">Last revised 2026-07-10. Edit freely. When the workflow changes, update <code>~/.claude/projects/-mnt-c-3AIGenCode-TechieFlow/memory/MEMORY.md</code> and <code>WorkFlow-Context.md</code> (the AI-agent context doc) too.</p>
 
 </main>
 </div>

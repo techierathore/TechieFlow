@@ -6,6 +6,12 @@ ALWAYS read and follow:
 - **docs/{AppName}-Architecture.md** — respect module boundaries.
 - **PROJECT-STATUS.md** — for current phase & next-step context.
 
+## Hard rules (non-negotiable — the harness enforces #1)
+
+1. **Git is manual — agents NEVER run `git` or `gh`.** Not to commit, and not to read (`status`/`log`/`diff`/`grep`/`blame`). `.claude/settings.json` DENIES git/gh, and a PreToolUse hook (`.tfcore/hooks/block-git.sh`) blocks compound forms — a blocked git call is the policy working, not an obstacle to route around. Evidence for status updates / "what changed" = the checklist Requirements Status table + the working-tree files (+ mtimes) + a fresh `dotnet build` (`.tfcore/tasks/_status-update-gate.md`). The OWNER commits, in a separate terminal or via `!git …`.
+2. **Run the app yourself — the test harness is fully set up.** Headless Playwright + Chromium live in WSL; the Windows/MAUI dotnet bridge is rung #4 of the build ladder; MAUI Android/iOS/Mac Catalyst are driven over the Appium bridge (`core-config.yaml → runtimeVerification.appium`). NEVER ask the owner to boot the app, run a build, or execute a command — "can't run on Linux/WSL", "it targets Windows", "it's MAUI", "Playwright needs a GUI", "the dependent service is down" are BANNED excuses (`.tfcore/tasks/_smoke-test-policy.md`). Asking the owner is the LAST resort, only after the build ladder + `verify-phase §3a` escalation genuinely fail — and even then you still run the test yourself once they reply.
+3. **Native-head automation binds to the app's own window.** Drive a MAUI head only through a session attached to the app under test (Windows: launched PID → its top-level window handle; Android/iOS/Catalyst: the app's package/bundle id), interact element-by-element via `AutomationId`, and NEVER inject global keyboard/mouse input — it lands in whatever window happens to have focus, not the app (`verify-phase.md §3b`).
+
 ## Project basics
 - Stack: .NET 9, Blazor [Server], TrBlazeUI, [TechieRag if AI features].
 - Field-prefix convention: {obj prefix on instance fields (e.g. `private readonly ILogger<X> objLogger;`) | bare PascalCase, no prefix} — PER-PROJECT day-1 decision; this project's choice is recorded in Coding Standards §"Fields, Parameters, Locals", which is authoritative.
@@ -17,7 +23,7 @@ ALWAYS read and follow:
 - `REQ-RAG-*` — AI/RAG, routed to /techierag
 - `REQ-NFR-*` — non-functional
 
-Always reference REQ IDs in commit messages: `[REQ-UI-007] add settings form validation`.
+Always tag work with its REQ ID in the checklist's Requirements Status **Remarks** cell (e.g. `[REQ-UI-007] settings form validation added`). Agents never git-commit (Hard rule 1); the owner's own manual commits use the same `[REQ-*]` tags.
 
 ## Verification
 After every implementation phase, the verifier runs and writes per-REQ verdicts into the
@@ -29,7 +35,7 @@ never silently worked around.
 
 ## Permissions and tool preference (read before using Bash)
 
-`.claude/settings.json` auto-allows every dedicated tool (Read, Edit, Write, Glob, Grep, MultiEdit, Task, WebFetch, WebSearch, TodoWrite, NotebookEdit) and **all Bash** (bare `Bash` allow). Only deletes (`rm`, `rmdir`) and `git` / `gh` / `sudo` prompt; catastrophic `rm -rf` paths are denied.
+`.claude/settings.json` auto-allows every dedicated tool (Read, Edit, Write, Glob, Grep, MultiEdit, Task, WebFetch, WebSearch, TodoWrite, NotebookEdit) and **all Bash** (bare `Bash` allow). Only deletes (`rm`, `rmdir`) and `sudo` prompt; **`git` / `gh` are DENIED** (Hard rule 1 — git is manual; a PreToolUse hook also blocks compound forms like `cd x && git log`); catastrophic `rm -rf` paths are denied.
 
 **Still: never reach for bash for file inspection or file writing.** The dedicated tools are faster, diff-aware, and keep the transcript readable:
 

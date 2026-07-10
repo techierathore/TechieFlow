@@ -6,7 +6,7 @@ Rebuild `PROJECT-STATUS.md` from **ground-truth evidence** after a development s
 
 The normal flow guarantees PROJECT-STATUS is accurate because every phase ends by writing it. When a phase is killed mid-flight, that guarantee is broken: code may have been written, checklist tables may be half-updated, and PROJECT-STATUS still points at an old "Next command" that no longer matches reality. **This task does NOT trust PROJECT-STATUS.** It reconstructs the true state from the evidence that actually exists in this framework — the checklist Requirements Status tables, what is really in the working tree (the source files and when they were last touched), and a fresh build — then rewrites PROJECT-STATUS to match and tells you the exact next command.
 
-> **No git.** In this framework git is **manual and agent-owned by the human, never by an agent** — no task commits, and nothing here keys off commit history. Ground truth lives in the checklist tables, the files on disk, and the build. (This is a deliberate design rule; see the CLAUDE.md "Permissions" section, which gates `git` behind an ask precisely so agents stay out of it.) Do **not** run `git` in this task.
+> **No git.** In this framework git is **manual and agent-owned by the human, never by an agent** — no task commits, and nothing here keys off commit history. Ground truth lives in the checklist tables, the files on disk, and the build. (This is a deliberate design rule, mechanically enforced: `.claude/settings.json` DENIES `git`/`gh` and the `.tfcore/hooks/block-git.sh` PreToolUse hook blocks compound forms — see the CLAUDE.md "Hard rules" section.) Do **not** run `git` in this task.
 
 This is a **read-and-reconcile** task. It NEVER edits application source code and NEVER implements requirements. Its only writes are to `PROJECT-STATUS.md`, its `.html`, the checklist Requirements Status tables (Status/%/Remarks cells only, never new files, and only when hard evidence says a cell is wrong), and the BRD's **§4 Development status** table — the derived feature-level snapshot (§4.5), including inserting that section into a legacy BRD that predates it.
 
@@ -53,6 +53,8 @@ For each REQ in the checklist, settle on a status from evidence, in this precede
 5. **No evidence of any work** → leave as the original open status.
 
 Only write a checklist cell when evidence **contradicts** what's there (e.g. table says `FAIL` but the implementing files are present and the build now passes → set `Implemented` with a dated Remark `recovered by refresh-status: files present + build PASS, pending re-verify`). When in doubt, prefer the *less complete* status — under-claiming triggers a re-verify; over-claiming ships a bug. Never invent `Verified`.
+
+**Reconciling a Status column UP to `Verified`** is allowed in exactly one case: the row's Remarks **already carry a dated verifier verdict** (e.g. `VERIFIED 2026-07-07 …`) that the Status column merely lagged. The PreToolUse hook `.tfcore/hooks/guard-verify.sh` blocks any checklist write introducing `Verified` without a same-day run ledger, so first Write `docs/.last-verify.json` as `{"date":"<today>","app":"{AppName}","mode":"reconcile","evidence":"<the pre-existing verdict date(s) + REQ IDs>"}`, then make the cell edit. Reconcile-mode is ONLY for surfacing a pre-existing verdict — never for promoting smoke results or files-on-disk evidence to `Verified`.
 
 ### 4. Rewrite PROJECT-STATUS.md (the whole point)
 

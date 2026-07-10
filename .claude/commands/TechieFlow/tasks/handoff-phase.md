@@ -6,6 +6,8 @@ Final-phase wrap-up: usage doc + status refresh + library-feedback consolidation
 
 After the checklist's Requirements Status table is green (or `Blocked` library-gap items accepted), produce the artifacts the user needs to ship and the artifacts future-you needs to resume.
 
+**Run-once-per-UAT-cycle guard:** handoff *produces* the UAT bundle — it runs BEFORE owner UAT, once. If the PROJECT-STATUS Verification log already has a READY-FOR-UAT handoff row for the current cycle and the only open rows are documented owner-run UAT, there is nothing for this task to add: say so and point at the UsageGuide UAT plan instead of re-running. Execute anyway ONLY when the owner explicitly invoked `*handoff-phase` themselves, or when substantive doc-affecting work landed after the last handoff (then note in the Verification log row what changed). Agents never *suggest* a repeat handoff while non-terminal rows remain (`_status-update-gate.md` item 5, UAT tier).
+
 ## Inputs
 
 - `{AppName}` argument (required; or resolve from core-config.yaml).

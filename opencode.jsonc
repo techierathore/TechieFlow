@@ -83,7 +83,7 @@
     },
     "techieflow:tasks:refresh-status": {
       "template": "{file:./.tfcore/tasks/refresh-status.md}",
-      "description": "RECOVERY: rebuild PROJECT-STATUS.md from ground truth (git + working tree + checklist tables + fresh build) after a session died mid-phase and the status gate never ran. Distrusts stale status; never edits source."
+      "description": "RECOVERY: rebuild PROJECT-STATUS.md from ground truth (checklist tables + working-tree files + fresh build — NEVER git; git is manual) after a session died mid-phase and the status gate never ran. Distrusts stale status; never edits source."
     },
     "techieflow:tasks:render-workflow-docs": {
       "template": "{file:./.tfcore/tasks/render-workflow-docs.md}",

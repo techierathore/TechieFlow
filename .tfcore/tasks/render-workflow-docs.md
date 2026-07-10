@@ -36,7 +36,7 @@ For the "Last rendered" subtitle, use today's date — do not bash-fetch file mt
 
 ### 2. Read the shared HTML rendering shell
 
-Read **`.tfcore/templates/v4custom/html-render-shell.md`** in full. Apply every section (§1 slug rule, §2 CSS, §3 skeleton, §4 anchors, §5 mermaid wrapper, §6 code blocks, §7 JS, §8 inline TOC, §9 checklist) to each HTML you write below.
+Read **`.tfcore/templates/v4custom/html-render-shell.md`** in full. Apply every section (§1 slug rule, §2 CSS, §3 skeleton, §4 anchors, §5 mermaid wrapper, §6 code blocks, §6b agent-note strip, §7 JS, §8 inline TOC, §9 checklist) to each HTML you write below.
 
 Do NOT hand-roll a different CSS palette or skip the scripts. If the BRD/Architecture/PROJECT-STATUS HTMLs ever drift from the shared shell, the user's mermaid toolbar / copy buttons / TOC links break.
 

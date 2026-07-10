@@ -106,7 +106,7 @@ If the boot doesn't succeed in 60s, OR Playwright cannot connect to it (e.g. WSL
 
 ### 3b. MAUI native heads — drive with Appium, not Playwright
 
-§3/§3a boot a **Blazor** app for **Playwright**. A MAUI **Android / iOS / Mac Catalyst** screen has no browser — it is driven over the **Appium** WebDriver endpoint instead. Appium is the native analogue of Playwright: it returns a `base64` screenshot (for §4b) and an element tree with `rect` + text + page source (for §4a), so **the §4a render gate and §4b visual-truth gate run unchanged — only the driver differs.** The MAUI **Windows** head keeps its existing FlaUI / Appium-Windows path (out of scope here); Blazor keeps Playwright.
+§3/§3a boot a **Blazor** app for **Playwright**. A MAUI **Android / iOS / Mac Catalyst** screen has no browser — it is driven over the **Appium** WebDriver endpoint instead. Appium is the native analogue of Playwright: it returns a `base64` screenshot (for §4b) and an element tree with `rect` + text + page source (for §4a), so **the §4a render gate and §4b visual-truth gate run unchanged — only the driver differs.** The MAUI **Windows** head keeps its existing FlaUI / Appium-Windows path (its boot is rung #4, not this section — but the **window-binding & input discipline below applies to it in full**); Blazor keeps Playwright.
 
 Trigger: the startup/owning `.csproj` has `<UseMaui>` / MAUI SDK and a `-android` / `-ios` / `-maccatalyst` target framework. For each such head in scope:
 
@@ -116,6 +116,14 @@ Trigger: the startup/owning `.csproj` has `<UseMaui>` / MAUI SDK and a `-android
    - **iOS / Mac Catalyst** — the LAN Mac runs Appium; `curl http://<mac>:4723/status`. You do **not** start the Mac; if it is unreachable, that is a session dependency → stamp the head `⚠ STATIC-ONLY` with "Mac build host unreachable" and continue with the heads you can reach. Never mark those REQs `Verified` on visual grounds you couldn't observe.
 3. **Build + install + launch the app on the device** via the build ladder runtime-observe leg (`build-invocation-ladder.md §D`): Android via rung #4 (`cmd.exe`), iOS/Catalyst on the Mac. Start an Appium session with the right driver (`uiautomator2` / `xcuitest` / `mac2`) pointed at the built `.apk`/`.app`.
 4. Hand the live session to §4a/§4b: the fan-out subagents target this Appium session (selectors by `AutomationId` per the coding standard) instead of a Playwright `baseURL`. Screenshots land under `test-results/` exactly as Playwright's do.
+
+**Window binding & input discipline (ALL native heads, INCLUDING MAUI Windows).** The classic desktop-automation failure is typing into the WRONG window: a global keystroke goes to whatever happens to hold focus (the IDE, a terminal, another app) — not the app under test. This has actually happened; it is banned, mechanically:
+
+- **Bind the session to the app under test, by identity, before any interaction.** MAUI **Windows**: you launched the app, so you know its **PID** — attach the driver to THAT process's top-level window (Appium Windows: `appium:appTopLevelWindow` = the window handle resolved from the PID; FlaUI: `Application.Attach(pid).GetMainWindow(...)`). Never attach by "the active window" or a partial title search across the desktop. **Android / iOS / Catalyst**: the Appium session you created with the app's package/bundle id IS the binding — assert `currentPackage` / the active app id matches before interacting.
+- **Element-scoped input ONLY.** Locate every target by `AutomationId` (the coding standard) *within the bound session/window*, and act on the **element** — `element.Click()`, `element.SendKeys(...)` / ValuePattern `SetValue(...)`. **NEVER inject global input**: FlaUI `Keyboard.Type(...)` / `Mouse.Click(x, y)` at desktop coordinates, PowerShell `SendKeys` / `SendInput`, `wshell.SendKeys`, or `adb shell input` aimed outside the app — all of these write into whichever window has focus and are BANNED.
+- **Focus is verified, not assumed.** Before any input burst, assert the bound window is foreground (title + PID match); if it isn't, activate it through the automation API (`window.SetForeground()` / `driver.activateApp(...)`) and re-assert — never "just type".
+- **Re-resolve after window changes.** A login dialog, popup, or navigation that spawns a new top-level window means you re-resolve the handle from the app's PID before continuing — a stale handle is how input lands in a dead or foreign window.
+- **A missing `AutomationId` is a defect, not a license.** If a control can't be located by `AutomationId`, log it to the owning REQ's Remarks as a coding-standard defect (MAUI UI-testability rule, day1 §4) and fall back to name/type lookup *within the bound window* — never to screen coordinates or global keys.
 
 If a head genuinely can't be reached after this escalation, it is `⚠ STATIC-ONLY` for that head — never a faked `Verified`. Tear the Appium session + any emulator you started down in §7.
 
@@ -197,6 +205,14 @@ Map every requirement ID to exactly one verdict:
 - `NOT-OBSERVABLE` — backend/nonfunctional requirement with no test project to assert it; needs a human or a test to be written.
 
 **STRICT GATE (non-negotiable):** a REQ may be `Verified` **only if** its acceptance test passes AND all its DevGuide-listed controls RENDER their data (§4a) AND every screen it owns passes VISUAL-TRUTH (§4b). Never mark `Verified` when any owned control is RENDER-EMPTY/RENDER-ERROR or any owned screen is VISUAL-FAIL — those are the exact failure modes these gates exist to stop (data-present-but-blank, and data-present-but-visually-broken). A `Done (pre-existing)` REQ whose screens pass both gates stays `Done (pre-existing)` with a `runtime render+visual-confirmed {date}` remark; one that fails either drops to `Needs re-verify`.
+
+**Write the run ledger FIRST (mechanical unlock).** Immediately before recording the first verdict, Write `docs/.last-verify.json` (overwrite the previous run's file; it lives next to the checklist):
+
+```json
+{"date":"<today YYYY-MM-DD>","app":"{AppName}","scope":"{scope}","booted":"<rung/URL or Appium target>","gates":["acceptance","data-render","visual-truth"],"evidence":"<test-results/ path or one-line pointer>"}
+```
+
+The PreToolUse hook `.tfcore/hooks/guard-verify.sh` BLOCKS any checklist write that introduces a `Verified` status without a same-day ledger — this is what makes "only the verifier writes `Verified`" mechanical rather than prose. You may write the ledger ONLY after actually executing §3–§5 above (boot + scoped tests + both gates); writing it without having run them is falsifying the audit record.
 
 Then **write each verdict into the Requirements Status table** of the one checklist `docs/{AppName}-Checklist.md` (find the row by its REQ ID). This is the single source of truth; there are no dated coverage files. Update only the Status / % / Remarks cells (never the requirement text or app source). Map verdict → table Status:
 

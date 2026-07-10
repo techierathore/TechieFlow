@@ -89,7 +89,11 @@
       "Bash(rsync -a --delete .tfcore/tasks/ .claude/commands/TechieFlow/tasks/)",
       "Bash(mv .tfcore .tfcore)",
       "Bash(mv .tfcore/data/techieflow-kb.md .tfcore/data/techieflow-kb.md)",
-      "Bash(mv .tfcore/utils/techieflow-doc-template.md .tfcore/utils/techieflow-doc-template.md)"
+      "Bash(mv .tfcore/utils/techieflow-doc-template.md .tfcore/utils/techieflow-doc-template.md)",
+      "Bash(cp .tfcore/tasks/generate-html.md .claude/commands/TechieFlow/tasks/generate-html.md)",
+      "Bash(cp .tfcore/tasks/render-workflow-docs.md .claude/commands/TechieFlow/tasks/render-workflow-docs.md)",
+      "Bash(cp /mnt/c/3AIGenCode/TrBlazeUI/docs/skills/claude-code-trblazeui.md .claude/trblazeui.md)",
+      "Bash(cp /mnt/c/3AIGenCode/TrBlazeUI/docs/skills/claude-code-trblazeui.md .claude/commands/trblazeui.md)"
     ]
   }
 }

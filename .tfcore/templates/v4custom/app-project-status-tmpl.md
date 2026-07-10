@@ -24,6 +24,9 @@ last_verified_date: {YYYY-MM-DD}
     - A paragraph crammed into `current_phase:` or "## Where I am". `current_phase`
       is ONE short line. The blow-by-blow lives in the checklist Remarks + .verify/.
   See .tfcore/tasks/_status-update-gate.md §"CRISP, FIXED-SHAPE snapshot".
+  ENFORCED MECHANICALLY: the .tfcore/hooks/guard-status.sh PreToolUse hook
+  BLOCKS any write that adds a non-template H2, a command-run heading, a
+  paragraph current_phase, or a file longer than ~120 lines.
   ============================================================================
 -->
 

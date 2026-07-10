@@ -3,9 +3,24 @@
 **Last updated:** {YYYY-MM-DD}
 **Status:** Current (brownfield) | Target (greenfield) | Current + planned target (brownfield with structural change)
 
-> **Depth mandate:** this is a HUMAN document, read as rendered HTML. Module rows in §4 with non-trivial behavior get a prose paragraph beneath the table, and every significant runtime flow beyond §3's primary path (background jobs, ingestion pipelines, auth handshakes, external-API round-trips) gets its own `sequenceDiagram`/`flowchart`. When harvesting source docs, preserve their architecture content — superset, never summary.
+<!-- AGENT-ONLY AUTHORING NOTES. Everything in this comment is an instruction to the DRAFTING
+     AGENT, not content for the document's human reader. Carry it into the generated document
+     ONLY as this HTML comment (or drop it entirely) — NEVER as visible text: the owner reads
+     the rendered HTML and must not see authoring instructions (generate-html.md strips any
+     that leaked from older templates).
 
-> **Mermaid mandate.** Every diagram MUST follow the authoring rules in `.tfcore/templates/v4custom/html-render-shell.md §5.5` — **quote every node/edge/subgraph label** (`API["ASP.NET API (v2)"]`, not `API[ASP.NET API (v2)]`) and never use `end` as a node id. Unquoted special characters (`(`, `)`, `/`, `&`, `:`, …) in flowchart labels are the #1 cause of "Syntax error" diagrams in the rendered HTML.
+  DEPTH MANDATE: this is a HUMAN document, read as rendered HTML. Module rows in §4 with
+  non-trivial behavior get a prose paragraph beneath the table, and every significant runtime
+  flow beyond §3's primary path (background jobs, ingestion pipelines, auth handshakes,
+  external-API round-trips) gets its own sequenceDiagram/flowchart. When harvesting source
+  docs, preserve their architecture content — superset, never summary.
+
+  MERMAID MANDATE: every diagram MUST follow the authoring rules in
+  .tfcore/templates/v4custom/html-render-shell.md §5.5 — quote every node/edge/subgraph label
+  (API["ASP.NET API (v2)"], not API[ASP.NET API (v2)]) and never use `end` as a node id.
+  Unquoted special characters ( ( ) / & : , … ) in flowchart labels are the #1 cause of
+  "Syntax error" diagrams in the rendered HTML.
+-->
 
 ## Table of Contents
 
@@ -81,7 +96,7 @@ sequenceDiagram
 | `src/{AppName}.Rag` | TechieRag wiring (if applicable) | Domain |
 
 ## 5. Cross-cutting concerns
-- Logging — Serilog / ILogger<T>
+- Logging — Serilog file-based logging (rolling file sink under `logs/`, wired at startup in EVERY executable head — web, API, MAUI, desktop, console; app code logs via `ILogger<T>`). This is a TechieFlow standing requirement, not a per-app choice — see Coding Standards §Logging.
 - Error handling — global middleware; ProblemDetails responses
 - Auth — JWT / cookie / Azure AD
 - Caching — IMemoryCache / Redis

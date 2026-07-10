@@ -285,6 +285,12 @@ Escape `<`, `>`, `&` in the code content. Preserve newlines and whitespace.
 
 ---
 
+## 6b. Agent-facing authoring notes NEVER render as visible text
+
+The doc templates carry instructions for the DRAFTING AGENT (the "Depth mandate", "Mermaid mandate", "read before drafting" notes, how-to-use-this-template guidance) as **HTML comments** — those pass through invisibly, which is correct. If the source MD still carries such a note as a **visible** blockquote or paragraph (docs generated from pre-2026-07 templates did), **omit it from the rendered HTML** and report the omission in your output summary — the human reading the HTML must never see authoring instructions. The test: is the text addressed to the agent writing the document, or to the document's human reader? Reader-facing blockquotes (a DevGuide's verification-status banner or Purpose note, a UsageGuide's test-user rules, a UIDesign's "What this is") stay.
+
+---
+
 ## 7. JavaScript (inline at end of `<body>`, verbatim)
 
 ```javascript
@@ -481,6 +487,7 @@ The inline `<div class="toc-inline">` mirrors the MD Table of Contents. When the
 - [ ] Every mermaid fence is wrapped in `<div class="diagram">` with the §5 toolbar
 - [ ] Every mermaid diagram passes the §5.5 self-check — each non-trivial node/edge/subgraph label is double-quoted, no reserved-word (`end`) node ids; bare labels were fixed, not emitted
 - [ ] Every non-mermaid code fence is `<pre><code>...</code></pre>` and JS in §7 adds the copy button
+- [ ] No agent-facing authoring note rendered as visible text (§6b) — leaked mandate blockquotes omitted and reported
 - [ ] Mermaid + svg-pan-zoom CDN scripts loaded
 - [ ] §7 JS pasted at end of body
 - [ ] Sidebar TOC present iff doc has >6 H2 headings

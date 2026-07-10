@@ -143,15 +143,43 @@ if [[ ! -f .claude/settings.json ]]; then
     "ask": [
       "Bash(rm *)",
       "Bash(rmdir *)",
-      "Bash(git *)",
-      "Bash(gh *)",
       "Bash(sudo *)"
     ],
     "deny": [
       "Bash(rm -rf /)",
       "Bash(rm -rf /*)",
       "Bash(rm -rf ~)",
-      "Bash(rm -rf ~/*)"
+      "Bash(rm -rf ~/*)",
+      "Bash(git)",
+      "Bash(git *)",
+      "Bash(gh)",
+      "Bash(gh *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/block-git.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-verify.sh\""
+          }
+        ]
+      }
     ]
   }
 }
@@ -187,6 +215,7 @@ Added (only missing files filled — re-runs are safe):
   .opencode/command/TechieFlow/      ← OpenCode slash commands
   WORKFLOW.html                ← the human workflow guide (open in a browser; §17 = macOS / Windows / Linux)
   opencode.jsonc               ← OpenCode config
+  .gitignore                   ← framework entries appended (deployed copies stay uncommitted)
 
 All TechieFlow templates the analyst will need live LOCALLY in this project under:
   .tfcore/templates/v4custom/
@@ -217,6 +246,29 @@ Next step (brownfield day-1):
 
 You can delete this note once you've read it.
 NOTE
+fi
+
+# 8. .gitignore — ensure the framework block. Everything this script deploys
+#    is a COPY (source of truth: the TechieFlow reference repo, or the NuGet
+#    package for library personas) and must never be committed in the app repo.
+#    Append-only + idempotent: existing anchored/slash variants are respected;
+#    user content is never rewritten.
+GI_LINES=(".tfcore/" ".claude/" ".opencode/" "/CLAUDE.md" "/WORKFLOW.html" "/opencode.jsonc" "/.tf-scaffold-note.txt")
+GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?CLAUDE\.md$' '^/?WORKFLOW\.html$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$')
+GI_MISSING=()
+for i in "${!GI_LINES[@]}"; do
+  # tr strips CR so CRLF .gitignore files (Windows-authored) still match the $-anchor
+  [[ -f .gitignore ]] && tr -d '\r' < .gitignore | grep -qE "${GI_PATS[$i]}" && continue
+  GI_MISSING+=("${GI_LINES[$i]}")
+done
+if [[ ${#GI_MISSING[@]} -gt 0 ]]; then
+  { echo ""
+    echo "# TechieFlow framework — deployed copies, never commit (managed by scaffold/update-framework.sh)"
+    printf '%s\n' "${GI_MISSING[@]}"
+  } >> .gitignore
+  echo "  .gitignore — added framework entries: ${GI_MISSING[*]}"
+else
+  echo "  .gitignore — framework entries already present"
 fi
 
 echo ""

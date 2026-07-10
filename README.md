@@ -239,6 +239,8 @@ Note: the script is NOT on your PATH — always invoke it with the full path sho
 | --- | --- |
 | `.tfcore/{tasks,templates,agents,checklists,data,utils,workflows,agent-teams}/` `.claude/commands/TechieFlow/` subtree            `.claude/commands/*.md` top-level commands (generate-html etc.)            `.opencode/command/TechieFlow/` subtree            `WORKFLOW.html` `.claude/settings.json` (refreshed to canonical config by default; old file → `settings.json.bak`; `--keep-permissions` to skip; `settings.local.json` never touched) | `docs/`, `src/`, `tests/` `PROJECT-STATUS.md`, `CLAUDE.md`, `.editorconfig` `.tfcore/core-config.yaml` `opencode.jsonc` `.claude/{trblazeui,techierag}.md` + `.opencode/command/{trblazeui,techierag}.md` (NuGet-deployed) |
 
+The scaffolders and the updater also **ensure the project's `.gitignore` ignores the deployed framework copies** (`.tfcore/`, `.claude/`, `.opencode/`, `/CLAUDE.md`, `/WORKFLOW.html`, `/opencode.jsonc`, `/.tf-scaffold-note.txt`). Everything the framework drops into an app is a *copy* — the source of truth is this reference repo (or the NuGet package, for the library personas) — so it must never be committed in the app repo. The step is append-only and idempotent: existing entries in any anchored/slash variant are respected, and your own `.gitignore` content is never rewritten. Note git never *un*tracks a file just because it became ignored — if a framework file was committed before the entry existed, run `git rm -r --cached <path>` once yourself (git is manual in TechieFlow; agents never run it).
+
 ## 4. File-naming convention — `<APP>` prefix
 
 Every per-project document filename starts with the application name. Examples from the user's existing projects: `AppManager-Coding-Standards.md`, `AstroLyfe-Coding-Standards.md`. Same convention applies to every doc:
@@ -314,6 +316,8 @@ your-app/                              ← e.g. AppManager/
 ```
 
 ## 6. Doc artifacts & audiences
+
+**Agent-facing authoring notes never render.** The doc templates carry drafting-agent instructions (the "Depth mandate" / "Mermaid mandate" notes) as HTML comments, so they are invisible in both the generated `.md` and the rendered HTML — the human reader must never see them. Docs generated from pre-2026-07 templates may still show them as visible blockquotes; the next HTML render strips them automatically (`html-render-shell.md §6b`).
 
 | File | Audience | Format | Created by | Purpose |
 | --- | --- | --- | --- | --- |
@@ -501,6 +505,10 @@ Claude Code auto-loads `CLAUDE.md` at project root into every session. It says "
 
 Machine-checkable rules go in `.editorconfig` (Roslyn enforces in the IDE / build). Non-checkable rules (a/v prefixes, test-name underscores) become grep patterns the verifier runs in the verify pass.
 
+**Standing standard — Serilog file logging in EVERY .NET app (2026-07-09).** Every executable head — Blazor web, API, MAUI, desktop, console/CLI, background service — wires **Serilog with a rolling file sink** (`logs/<app>-.log`, daily rolling; MAUI/desktop root it in the per-app data dir) at startup, logs unhandled exceptions, and exposes app logging only through `ILogger<T>` (class libraries reference logging abstractions, never Serilog). This is baked in end-to-end so you never have to ask: the BRD template carries a standing Observability NFR, day-1 always emits it (brownfield marks it `Done (pre-existing)` when an equivalent stack is already wired), `*split-brd` turns it into a `REQ-NFR-*` row, the coding-standards §Logging block carries the wiring recipe, and `*build-phase` wires Serilog into any new head it scaffolds even when no REQ names logging.
+
+**Standing standard — the primary head carries the PRODUCT name (2026-07-10).** The product's primary executable head project is named exactly `<APP>` (`src/<APP>/<APP>.csproj`); a single-head product's one head IS `<APP>`. **`<APP>.App` is banned** — "App" says nothing the product name doesn't. Secondary heads of a multi-head product take a *descriptive* dotted suffix (`<APP>.Api`, `<APP>.Desktop`, `<APP>.Cli`); satellites keep their conventional names (`<APP>.Core`, `<APP>UI` RCL, `<APP>.Core.Tests`). Baked into the coding-standards canonical block (day1-brownfield §4 → "Project & solution naming") and `*build-phase` §3 (scaffold-time rule; an existing `<APP>.App` gets a rename REQ, never propagated).
+
 The grep patterns belong inside `docs/<APP>-Coding-Standards.md` under an "Enforcement" section. Sample grep block (already in §11.3 template):
 
 ```bash
@@ -540,9 +548,13 @@ The §4a data-render and §4b visual-truth gates reach the MAUI **Android / iOS 
 
 Selectors target each control's `AutomationId` (a coding standard, §10). A head with no registered endpoint in `core-config.yaml → runtimeVerification.appium`, or an unreachable host, is stamped `⚠ STATIC-ONLY` for that head — never a faked `Verified`.
 
+**Window binding & input discipline (all native heads, especially MAUI Windows):** the driver session is bound to the app under test *by identity* — the PID the agent launched → that process's top-level window handle (Appium Windows `appium:appTopLevelWindow` / FlaUI `Application.Attach(pid)`), or the app package/bundle id on mobile — and every interaction is **element-scoped via `AutomationId` inside that bound window**, with focus verified before input and handles re-resolved after dialogs. Global keyboard/mouse injection (FlaUI `Keyboard.Type`, coordinate clicks, `SendKeys`) is **banned**: it types into whatever window happens to hold focus — historically, a completely different window than the app. Full rules: `verify-phase.md §3b`.
+
 ## 12. Permissions (yolo-except-git)
 
-The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **all Bash** (bare `"Bash"`) — so create/update/**move** run with zero prompts. **Asks** for **deletes** (`Bash(rm *)`, `Bash(rmdir *)`) and for `Bash(git *)`, `Bash(gh *)`, `Bash(sudo *)`. **Denies** catastrophic `rm -rf` root/home paths. Permission precedence is `deny → ask → allow`, so the delete/git/sudo *ask* rules still fire even though everything is allowed. *(Cross-project tip: to let a session work in another app's folder without per-path prompts, add that root to `permissions.additionalDirectories` in this project's settings.json — keep those machine-specific paths out of any shared template.)*
+The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **all Bash** (bare `"Bash"`) — so create/update/**move** run with zero prompts. **Asks** for **deletes** (`Bash(rm *)`, `Bash(rmdir *)`) and `Bash(sudo *)`. **Denies** catastrophic `rm -rf` root/home paths **and `git`/`gh` outright** — git is manual in TechieFlow; agents never run it, so it is a hard deny, not an ask. Permission precedence is `deny → ask → allow`. *(Cross-project tip: to let a session work in another app's folder without per-path prompts, add that root to `permissions.additionalDirectories` in this project's settings.json — keep those machine-specific paths out of any shared template.)*
+
+**The git deny is TWO layers, because prefix rules alone leak.** `Bash(git *)` is a literal prefix match — it never sees `cd src && git log` or `echo done; git add -A`, which the bare `"Bash"` allow would wave straight through. That is exactly how agents kept "accidentally" running git during status updates. So the config also wires a **PreToolUse hook** — `.tfcore/hooks/block-git.sh` — that inspects every Bash call and blocks `git`/`gh` used as a command word anywhere in the command line, replying with the local-evidence recipe (checklist tables + working-tree files + fresh build) so the agent continues correctly instead of flailing. You still run git yourself: in a separate terminal, or by typing `!git …` in the session (user-typed bang commands bypass agent tool permissions).
 
 **Q: Config (canonical version in scaffold-brownfield.sh / scaffold-greenfield.sh)**
 
@@ -555,11 +567,30 @@ The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **a
       "Edit", "Write", "MultiEdit", "NotebookEdit",
       "Read", "Glob", "Grep", "TodoWrite", "WebFetch", "WebSearch", "Task"
     ],
-    "ask": [ "Bash(rm *)", "Bash(rmdir *)", "Bash(git *)", "Bash(gh *)", "Bash(sudo *)" ],
-    "deny": [ "Bash(rm -rf /)", "Bash(rm -rf /*)", "Bash(rm -rf ~)", "Bash(rm -rf ~/*)" ]
+    "ask": [ "Bash(rm *)", "Bash(rmdir *)", "Bash(sudo *)" ],
+    "deny": [
+      "Bash(rm -rf /)", "Bash(rm -rf /*)", "Bash(rm -rf ~)", "Bash(rm -rf ~/*)",
+      "Bash(git)", "Bash(git *)", "Bash(gh)", "Bash(gh *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash",
+        "hooks": [ { "type": "command",
+                     "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/block-git.sh\"" } ] },
+      { "matcher": "Write|Edit|MultiEdit",
+        "hooks": [ { "type": "command",
+                     "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status.sh\"" },
+                   { "type": "command",
+                     "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-verify.sh\"" } ] }
+    ]
   }
 }
 ```
+
+**PROJECT-STATUS shape is enforced mechanically too (2026-07-09).** A second PreToolUse hook — `.tfcore/hooks/guard-status.sh`, matcher `Write|Edit|MultiEdit` — blocks any write to `PROJECT-STATUS.md` that violates the crisp fixed-shape snapshot rule: an H2 outside the template's section set (per-run dated sections like `## *verify all — coverage matrix (DATE)` are the classic disease), a heading naming a command run, a paragraph stuffed into `current_phase:`, or a full-file write past ~120 lines. The block message tells the agent exactly how to reshape (overwrite the template sections in place, ONE Verification-log row per run, detail into the checklist Remarks). Same philosophy as the git ban: prose rules kept failing, so the harness enforces it. See `.tfcore/tasks/_status-update-gate.md`.
+
+**`Verified` verdicts are enforced mechanically too (2026-07-10).** A third PreToolUse hook — `.tfcore/hooks/guard-verify.sh`, matcher `Write|Edit|MultiEdit` — blocks any write to a `*-Checklist.md` that *introduces* a `Verified` status cell unless a same-day run ledger `docs/.last-verify.json` exists, which only an *executed* `verify-phase` run writes (verify-phase §6: boot → scoped tests → §4a data-render + §4b visual-truth gates → ledger → verdicts). This exists because a build orchestrator did its own smoke and wrote the `Verified` verdicts itself (TrSetup, 2026-07-09) — self-attestation the "chain the verifier" prose didn't stop. A self-smoke's ceiling is `Implemented` (`_smoke-test-policy.md §"Smoke is NOT verify"`); `*refresh-status` may reconcile a lagging Status column to a row's *pre-existing* dated verdict by writing the ledger with `"mode":"reconcile"`. Demotions (e.g. `Verified → Needs re-verify`) are never blocked.
 
 ```bash
 /mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/app
@@ -717,4 +748,4 @@ The framework never *requires* MAUI — many apps are Blazor-only and build with
 
 ---
 
-Last revised 2026-06-26. Edit freely. When the workflow changes, update `~/.claude/projects/-mnt-c-3AIGenCode-TechieFlow/memory/MEMORY.md` and `WorkFlow-Context.md` (the AI-agent context doc) too.
+Last revised 2026-07-10. Edit freely. When the workflow changes, update `~/.claude/projects/-mnt-c-3AIGenCode-TechieFlow/memory/MEMORY.md` and `WorkFlow-Context.md` (the AI-agent context doc) too.

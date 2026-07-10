@@ -138,6 +138,7 @@ The user has the bridge set up. Their projects build green on the right rung. Do
 - Do NOT wrap the probe in `if [ -x ... ]; then ... else ... fi` — that triggers a permission prompt. Run probes as plain single commands.
 - Do NOT log workload-missing / NETSDK1178 / wrong-rung errors as "Known blockers". They are wrong-rung errors. Switch and retry.
 - Do NOT claim ".NET is unavailable on this system" unless ALL five rungs failed AND your probe commands also failed. Even then, report which rungs you tried verbatim.
+- **Do NOT let a host limitation cancel a cross-OS deliverable.** A MAUI Mac Catalyst / iOS head genuinely cannot be built from Windows/WSL (`-r osx-arm64` only cross-compiles *plain* .NET — a Catalyst `.app` needs Xcode's toolchain, macOS only; `NETSDK1005`/`NETSDK1139`/a maccatalyst TFM guarded by `IsOSPlatform('OSX')` is that fact surfacing, not a failure). That is a **rung-selection fact, never a reason to drop the native head, declare it impossible, or quietly substitute another head** (e.g. a web-head publish) as "the" deliverable. The app's BuildAndRun guide documents the owner-run on-Mac path — prepare the source + the exact on-Mac commands, state plainly "the Catalyst `.app` is built on the Mac per the guide §<n> (one command, owner-run)", and treat any substitute you can build locally as a *complement*, offered alongside, never a silent replacement.
 
 ---
 
@@ -168,6 +169,7 @@ Building is only half of "verify". Once a head builds green, the verifier / devg
 - **Android** runs entirely on the Windows host; the verifier boots the emulator + Appium itself via the registry `launch` command (you may launch it through `winrun`), then drives it over `http://localhost:4723` (Win11 mirrored networking) — booting it yourself, never asking the owner, is the same rule as the build ladder.
 - **iOS / Mac Catalyst** depend on the **LAN Mac being up**. `curl http://<mac>:4723/status` first; if unreachable, that head degrades to `⚠ STATIC-ONLY` (a session dependency, like "stack down"), never a faked `Verified`.
 - One-time host setup (Android SDK + AVD + Appium on Windows; Xcode + Appium + xcuitest/mac2 on the Mac; the `.wslconfig` mirrored-networking switch) is **`WORKFLOW.html §0b`**.
+- **Input discipline (all native heads, esp. MAUI Windows):** bind the driver to the app under test by identity — the **PID you launched → its top-level window handle** (Appium Windows `appium:appTopLevelWindow` / FlaUI `Application.Attach(pid)`) or the app **package/bundle id** on mobile — and interact **element-by-element via `AutomationId`** inside that bound window. NEVER global keyboard/mouse injection (FlaUI `Keyboard.Type`, coordinate clicks, `SendKeys`): it lands in whatever window has focus, not the app. Full rules: `verify-phase.md §3b`.
 
 ## Recording the result (all platforms)
 

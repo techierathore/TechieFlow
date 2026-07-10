@@ -143,12 +143,13 @@ persona:
       @using TrBlazeUI.Components
       @using TrBlazeUI.Primitives.Services
       @using TrBlazeUI.Icons.Lucide
-    layout_requirement: Add <PortalHost /> at end of root layout for overlay components (Dialog, Sheet, Popover, Tooltip, etc.)
+    layout_requirement: Add <PortalHost /> at end of root layout for overlay components (Dialog, Sheet, Popover, Tooltip, etc.). The hosting layout MUST be in an interactive render tree — use global interactivity (<Routes @rendermode="InteractiveServer" /> + <HeadOutlet @rendermode="InteractiveServer" /> in App.razor) or an interactive boundary around the PortalHost; a static layout + per-page interactivity silently breaks Toast/Dialog and degrades Select/Popover/DropdownMenu to their inline fallback.
     existing_app_notes:
       - Check if nuget.config already exists; if so, add TrBlazeUI source to existing config rather than overwriting
       - Check existing _Imports.razor and append TrBlazeUI usings rather than replacing
       - Check existing Program.cs service registration and add TrBlazeUI services alongside existing ones
       - Check existing App.razor/layout and add CSS references and PortalHost without disrupting existing structure
+      - If the project has no .razor.css scoped-CSS files, remove the <link href="{AssemblyName}.styles.css" /> line from App.razor (the bundle is never generated, so the link 404s on every page)
       - TrBlazeUI works with all Blazor hosting models: Server, WebAssembly, Auto (Hybrid)
       - Pre-built CSS is included - no Tailwind CSS setup, Node.js, or build tools required
     ci_cd_github_actions: |

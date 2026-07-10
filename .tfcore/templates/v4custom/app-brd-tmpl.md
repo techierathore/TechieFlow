@@ -1,10 +1,30 @@
 # {AppName} — Business Requirements
 
-> Stable IDs: every requirement has a BRD-{N} ID. IDs are append-only across revisions.
+<!-- AGENT-ONLY AUTHORING NOTES. Everything in this comment is an instruction to the DRAFTING
+     AGENT, not content for the document's human reader. Carry it into the generated document
+     ONLY as this HTML comment (or drop it entirely) — NEVER as visible text: the owner reads
+     the rendered HTML and must not see authoring instructions (generate-html.md strips any
+     that leaked from older templates).
 
-> **Depth mandate — read before drafting.** This is a HUMAN document, read as rendered HTML by the product owner. It is NOT the coding checklist (that's `docs/{AppName}-Checklist.md` / split-brd output). One-line entries belong ONLY in §10's requirements ledger. Every other section is full prose, tables, and Mermaid diagrams. §9 Feature catalog is the heart of the document — one detailed subsection per feature, with screens, workflows, and a diagram wherever the flow is non-trivial. When harvesting existing source docs, this document must be an information-preserving SUPERSET of their requirements content: carry their tables, matrices, screen inventories, and menus forward (updated, not summarized away). If a reader of the old doc would miss something in this one, the draft is wrong.
+  STABLE IDS: every requirement has a BRD-{N} ID. IDs are append-only across revisions.
 
-> **Mermaid mandate.** Every diagram MUST follow the authoring rules in `.tfcore/templates/v4custom/html-render-shell.md §5.5` — **quote every node/edge/subgraph label** (`A["Order Service (v2)"]`, not `A[Order Service (v2)]`) and never use `end` as a node id. Unquoted special characters (`(`, `)`, `/`, `&`, `:`, …) in flowchart labels are the #1 cause of "Syntax error" diagrams in the rendered HTML.
+  DEPTH MANDATE (read before drafting): this is a HUMAN document, read as rendered HTML by the
+  product owner. It is NOT the coding checklist (that's docs/{AppName}-Checklist.md / split-brd
+  output). One-line entries belong ONLY in §10's requirements ledger. Every other section is
+  full prose, tables, and Mermaid diagrams. §9 Feature catalog is the heart of the document —
+  one detailed subsection per feature, with screens, workflows, and a diagram wherever the flow
+  is non-trivial. When harvesting existing source docs, this document must be an
+  information-preserving SUPERSET of their requirements content: carry their tables, matrices,
+  screen inventories, and menus forward (updated, not summarized away). If a reader of the old
+  doc would miss something in this one, the draft is wrong.
+
+  MERMAID MANDATE: every diagram MUST follow the authoring rules in
+  .tfcore/templates/v4custom/html-render-shell.md §5.5 — quote every node/edge/subgraph label
+  (A["Order Service (v2)"], not A[Order Service (v2)]) and never use `end` as a node id.
+  Unquoted special characters ( ( ) / & : , … ) in flowchart labels are the #1 cause of
+  "Syntax error" diagrams in the rendered HTML.
+-->
+
 
 ## Table of Contents
 
@@ -145,10 +165,14 @@ flowchart LR
 
 ## 11. Non-functional requirements
 <!-- Keep the BRD-N IDs, but give each NFR its target table when there are concrete numbers
-     (latency, uptime, concurrency, import throughput), as a human reader expects. -->
+     (latency, uptime, concurrency, import throughput), as a human reader expects.
+     The Observability/logging NFR below is a TechieFlow STANDING requirement — it appears in
+     EVERY .NET app's BRD (web, API, MAUI, desktop, console, background service), never gets
+     dropped, and split-brd turns it into a REQ-NFR row like any other NFR. -->
 - **BRD-N** — Performance: …
 - **BRD-N+1** — Security: …
 - **BRD-N+2** — Accessibility: …
+- **BRD-N+3** — Observability: Serilog file-based logging in every executable head — rolling file sink under `logs/`, wired at startup, unhandled exceptions logged (see Coding Standards §Logging).
 
 ## 12. Constraints & assumptions
 - …

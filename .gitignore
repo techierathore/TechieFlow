@@ -1,0 +1,19 @@
+# TechieFlow FRAMEWORK repo — NOTE: unlike consumer apps, .tfcore/, the
+# .claude/ + .opencode/ harness mirrors, WORKFLOW.html and opencode.jsonc are
+# the framework's SOURCE OF TRUTH here (scaffold-*.sh / update-framework.sh
+# rsync FROM this repo into apps), so they stay TRACKED in this repo.
+# Consumer apps get the opposite policy — their .gitignore framework block
+# (.tfcore/, .claude/, .opencode/, /CLAUDE.md, /WORKFLOW.html, …) is managed
+# automatically by the scaffold/update scripts.
+
+# Per-machine / local-only — never commit
+.claude/settings.local.json
+.opencode/session/
+*.bak
+tmpclaude-*
+**/tmpclaude-*
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini

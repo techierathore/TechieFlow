@@ -269,6 +269,15 @@ Add `<PortalHost />` at the end of your root layout for overlay components (Dial
 <PortalHost />
 ```
 
+> **The layout hosting `PortalHost` (and `ToastProvider`) MUST be in an interactive render tree.**
+> A static-SSR layout with per-page `@rendermode InteractiveServer` silently breaks all overlays:
+> toasts never appear, dialogs don't open, and Select popups time out
+> (`Portal … render timeout` / `Floating element is not ready`). Prefer global interactivity —
+> `<Routes @rendermode="InteractiveServer" />` + `<HeadOutlet @rendermode="InteractiveServer" />`
+> in `App.razor` — or place an interactive boundary around the PortalHost. (Select/Popover/DropdownMenu
+> fall back to inline rendering with a console warning when no interactive PortalHost is attached,
+> but Toast and Dialog still require one.)
+
 ### Integration Notes for Existing Apps
 
 - Check if `nuget.config` already exists; add TrBlazeUI source alongside existing sources
@@ -276,6 +285,9 @@ Add `<PortalHost />` at the end of your root layout for overlay components (Dial
 - Add TrBlazeUI services alongside existing registrations in `Program.cs`
 - Add CSS references and `PortalHost` without disrupting existing layout structure
 - Pre-built CSS is included — no Tailwind CSS setup or Node.js required
+- If the project has no `.razor.css` scoped-CSS files, remove (or don't scaffold) the
+  `<link rel="stylesheet" href="{AssemblyName}.styles.css" />` line from `App.razor` —
+  the bundle is never generated and the link 404s on every page load
 
 ### CI/CD (GitHub Actions)
 

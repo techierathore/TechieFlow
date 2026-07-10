@@ -259,6 +259,14 @@ public Task ConnRejectsNull()
 - Sanitize user data
 - Log security events
 
+### Logging — Serilog file sink (MANDATORY, every .NET app type)
+
+- Every executable head (web host, API, MAUI, desktop, console/CLI, background service) wires **Serilog with a rolling file sink** at startup — `logs/{appname}-.log`, daily rolling, ~14 files retained, plus console. No exceptions; never wait for the owner to ask.
+- Hosts: `builder.Host.UseSerilog()` / `builder.Services.AddSerilog()`; MAUI: `builder.Logging.AddSerilog()` in `MauiProgram.CreateMauiApp`, log path rooted in `FileSystem.AppDataDirectory` (desktop: `LocalApplicationData`), never the install dir. Read overrides from the `Serilog` section of `appsettings.json` where the host has one.
+- Log unhandled exceptions at the head boundary (`Log.Fatal` around startup, `AppDomain.CurrentDomain.UnhandledException`, `TaskScheduler.UnobservedTaskException`) and `Log.CloseAndFlush()` on exit.
+- Class libraries never reference Serilog — they log via `ILogger<T>` / logging abstractions only. App code logs through injected `ILogger<T>` with structured templates, not static `Log.*`.
+- The `logs/` output folder is gitignored (owner adds the entry — agents never run git).
+
 ### MAUI UI testability — stable AutomationId (MAUI apps only)
 
 - Every interactive or data-bound control the verifier must reach (buttons, entries, pickers, list/collection views, key labels/values) carries a stable, unique `AutomationId` — the native analogue of a stable DOM id for Playwright. Without it, Appium selectors drift and the runtime gates (`verify-phase §4a/§4b`) can't reliably find controls on the Android/iOS/Mac Catalyst heads.

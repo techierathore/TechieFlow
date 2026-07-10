@@ -119,7 +119,7 @@ This is the friction-removal step. **Do NOT run `author-brd`. Do NOT prompt the 
 - **§4 Development status (brownfield: the reader's first question — "what's built, what's pending?"):** fill the §4 table with ONE row per §9 feature-catalog F-code. Derive each row's Status / % / Phase / Notes from the **strongest evidence available**, in priority order: (1) a migrated dev/phase plan (§3.5) — carry its phase + completion verbatim; (2) the code scan from §2 — a feature whose screens/handlers actually compile and exist is `Done`, partially-present is `Partial`, absent is `Planned`; (3) source-doc status notes. Set the "Snapshot as of" date to today. This is a feature-level SUMMARY only — do NOT restate per-REQ status (that's PROJECT-STATUS + the checklists). Keep it consistent with §3.5's migrated statuses and with PROJECT-STATUS.
 - **§9 Feature catalog (the heart of the doc):** one `### F-{CODE}: {Name}` subsection per feature/capability area found in the source docs and the codebase. Per feature: personas + phase, 1-2 paragraphs of what/why, a screens & routes table, a numbered workflow (inputs → outputs), and the owning BRD-N IDs. If a source doc already has a feature catalog, preserve its feature codes and per-feature detail. Depth scales with the app (8–25 features is normal) — there is NO cap. Every F-code MUST also appear as a row in the §4 Development status table.
 - For §10 Functional requirements ledger: walk the feature catalog and emit `BRD-1`, `BRD-2`, … as one-line `<actor> can <action>` or `system shall <behavior>` statements, each tagged with its catalog feature `(F-CODE)`. Number monotonically. **One BRD per discrete capability — the count scales with the app (20–60 is normal for a real product); NEVER merge capabilities to keep the count low.** If a BRD came directly from a source doc, suffix the line with `<!-- from: <source-file> -->`.
-- For §11 Non-functional: cover performance, security, accessibility, scalability, reliability based on visible NFR signals (auth scheme, target framework, any `aria-` attrs in Razor). Where concrete targets exist (latency, uptime, concurrency), present them as a target table, not buried in prose.
+- For §11 Non-functional: cover performance, security, accessibility, scalability, reliability based on visible NFR signals (auth scheme, target framework, any `aria-` attrs in Razor). Where concrete targets exist (latency, uptime, concurrency), present them as a target table, not buried in prose. **ALWAYS include the standing Observability NFR: Serilog file-based logging in every executable head** — if the §5 cross-cutting scan found Serilog (or an equivalent structured file-logging stack) already wired, record it as met/`Done (pre-existing)`; if the app logs only to console or not at all, add the NFR as `Planned` so it becomes a `REQ-NFR-*` row and gets built (recipe: coding-standards §Logging).
 - **Mermaid mandate:** §6, §7, §8 (context, journey, component) are the MINIMUM — build them from §2's component map (copy verbatim if identical). Additionally, every feature-catalog entry with a multi-step or multi-actor flow gets its own diagram (`flowchart` or `sequenceDiagram`). Target: a reader skimming only the diagrams should grasp how the app works. Simple CRUD features may skip the diagram. **Every diagram MUST follow the authoring rules in `.tfcore/templates/v4custom/html-render-shell.md §5.5` — quote every node/edge/subgraph label and never use `end` as a node id; unquoted special characters in flowchart labels are the #1 cause of broken diagrams in the rendered HTML.**
 - Append a footer:
   ```
@@ -214,6 +214,11 @@ The `a`-prefix applies uniformly to `[FromRoute]`/`[FromQuery]`/`[FromBody]`. Pa
 ### Environment Variables
 **PascalCase, no separators.** `{AppName}BaseUrl` NOT `APPNAME_BASE_URL` and NOT `AppName__BaseUrl`. Use a custom configuration provider mapping PascalCase env vars → `:`-nested config paths. Read via `IConfiguration["Section:Key"]` only — never `Environment.GetEnvironmentVariable(...)`.
 
+### Project & solution naming — the primary head carries the PRODUCT name
+- The product's **primary executable head** project is named exactly `{AppName}` — `src/{AppName}/{AppName}.csproj`. A single-head product's one head IS `{AppName}`.
+- **`{AppName}.App` is BANNED** (owner rule 2026-07-10): "App" says nothing — the product name already names the app. Never scaffold it; if the codebase has one, log a rename REQ (dir + `.csproj` + sln entry + namespaces) in the checklist instead of propagating the name.
+- Secondary heads of a multi-head product take a **descriptive** dotted suffix: `{AppName}.Api`, `{AppName}.Desktop`, `{AppName}.Cli`. Satellites keep their conventional names: `{AppName}.Core` (engine), `{AppName}UI` (RCL), `{AppName}.Core.Tests` / `{AppName}.Tests`.
+
 ### File Structure
 ```csharp
 using System;
@@ -259,6 +264,15 @@ public class DatabaseService
 
 ### Security
 - Never hardcode credentials. Parameterized queries. Validate inputs. Log security events.
+
+### Logging — Serilog file sink (MANDATORY, every .NET app type)
+- **Every executable head gets Serilog with a rolling FILE sink — web (Blazor Server/WASM host), API, MAUI, WinForms/WPF desktop, console/CLI, background service. No exceptions, and never wait for the owner to ask.**
+- Wire at startup, before anything else can fail: `Log.Logger = new LoggerConfiguration().MinimumLevel.Information().WriteTo.Console().WriteTo.File("logs/{appname}-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14).CreateLogger();` then plug into DI (`builder.Services.AddSerilog()` / `builder.Host.UseSerilog()` for hosts; `builder.Logging.AddSerilog()` in `MauiProgram.CreateMauiApp`). Read overrides from `appsettings.json` (`Serilog` section) where the host has one. For MAUI/desktop, root the path in a writable per-app location (`FileSystem.AppDataDirectory` / `Environment.SpecialFolder.LocalApplicationData`), not the install dir.
+- Log unhandled exceptions at the head boundary: `try/catch` + `Log.Fatal` around startup, `AppDomain.CurrentDomain.UnhandledException` / `TaskScheduler.UnobservedTaskException` handlers, and `Log.CloseAndFlush()` on exit.
+- **Class libraries never reference Serilog** — they log through `ILogger<T>` / `Microsoft.Extensions.Logging.Abstractions` only; the head's Serilog config picks those up automatically.
+- App code logs through injected `ILogger<T>` (structured message templates, e.g. `logger.LogInformation("Imported {Count} rows", n)`), not static `Log.*`, outside the startup boundary.
+- The `logs/` output folder is gitignored (the owner adds it — agents never run git).
+- Brownfield: an app already on a working structured file-logging stack (e.g. NLog-to-file) is compliant — record the stack in this section; new heads added to it still use Serilog.
 
 ### MAUI UI testability — stable AutomationId (MAUI apps only)
 - Every interactive or data-bound control the verifier must reach (buttons, entries, pickers, list/collection views, key labels/values) carries a stable, unique **`AutomationId`** — the native analogue of a stable DOM id for Playwright. Without it Appium selectors drift and the runtime gates (`verify-phase §4a/§4b`) can't reliably find controls on the Android/iOS/Mac Catalyst heads.

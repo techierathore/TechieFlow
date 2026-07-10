@@ -44,7 +44,7 @@ In ONE turn, route each issue to its builder as a sub-agent, in parallel where t
 - **`layout` / UI** → invoke **`/trblazeui`** as a sub-agent: fix the Razor/CSS/component so it renders correctly and matches the mockup (greenfield) / intended layout; cite the REQ + the symptom + the screenshot. Page-layout fixes are trblazeui's job.
 - **`render-empty` / `data` / `logic`** → spawn a **flow-master general-purpose subagent**: fix the binding/guard/column-mapping/service/query so the control actually renders its data (the `verify-phase §4a` failure modes — undeclared params, column→property mismatch, throwing computed getters, null guards).
 - **`rag`** → invoke **`/techierag`** as a sub-agent: fix the RAG flow (ingestion/search/prompt/provider config).
-- Each sub-agent commits with the `[REQ-*]` tag, logs any library gap to the owning feedback file, and returns `{ reqsFixed[], filesChanged[], notes[] }`. Wait for all to return.
+- Each sub-agent tags its fix with the `[REQ-*]` tag in the checklist Remarks (**NEVER a git commit — git is manual; agents never run git/gh**), logs any library gap to the owning feedback file, and returns `{ reqsFixed[], filesChanged[], notes[] }`. Every sub-agent prompt MUST carry the two standing rules from `build-phase.md §3` verbatim (no git; smoke it yourself — library agents don't read `.tfcore/` tasks). Wait for all to return.
 
 ### 5. Re-smoke (data + visual) then re-verify the affected REQs
 

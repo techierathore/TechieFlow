@@ -45,7 +45,7 @@ Echo a one-line summary: `Rendering N markdown file(s): file1.md, file2.md, ...`
 
 ### 2. For each MD, build the HTML
 
-Read **`.tfcore/templates/v4custom/html-render-shell.md`** for the full rendering specification. Apply every section (§1 slug rule, §2 CSS, §3 skeleton, §4 anchors, §5 mermaid wrapper, §6 code blocks, §7 JS, §8 inline TOC). Use the Write tool to create the sibling HTML — never bash heredocs.
+Read **`.tfcore/templates/v4custom/html-render-shell.md`** for the full rendering specification. Apply every section (§1 slug rule, §2 CSS, §3 skeleton, §4 anchors, §5 mermaid wrapper, §6 code blocks, §6b agent-note strip, §7 JS, §8 inline TOC). Use the Write tool to create the sibling HTML — never bash heredocs.
 
 For each MD file:
 
@@ -62,6 +62,7 @@ For each MD file:
    - Code fences: `` ```mermaid `` → §5 `<div class="diagram">` wrapper with toolbar buttons; any other code fence → §6 `<pre><code class="language-{lang}">{escaped}</code></pre>`.
    - Inline code: `<code>...</code>`.
    - HTML comments in source (`<!-- ... -->`): pass through.
+   - **Agent-facing authoring notes NEVER render as visible text.** The doc templates carry drafting-agent instructions (the "Depth mandate", "Mermaid mandate", "read before drafting" notes, how-to-use-this-template guidance) as HTML comments, which pass through invisibly. If the source MD still carries such a note as a **visible** blockquote or paragraph — text addressed to the drafting/authoring AGENT rather than to the document's human reader (typical in docs generated from pre-2026-07 templates) — **OMIT it from the rendered HTML** and, if you are also allowed to edit the MD, convert it to an HTML comment there. List every such omission in the output summary. Reader-facing blockquotes (a DevGuide's verification-status banner or Purpose note, a UsageGuide's test-user rules, etc.) stay.
 7. **Assemble** using the §3 skeleton, with §2 CSS inlined verbatim in `<head>`, and §7 JS inlined verbatim at end of `<body>`. The mermaid + svg-pan-zoom CDN scripts go just before the JS.
 8. **Write** the output to `{same-dir}/{basename}.html` (replace `.md` with `.html`). If the file already exists, overwrite.
 
@@ -94,4 +95,5 @@ Print one line per rendered file: the absolute output path. End with: `Open each
 - [ ] Every heading has an id matching the TOC link
 - [ ] Mermaid diagrams have working toolbar (zoom, fit, 1:1, fullscreen, popout)
 - [ ] Mermaid validity pass done (shell §5.5): every non-trivial label double-quoted, no `end` node ids, bare labels fixed not emitted
+- [ ] No agent-facing authoring note (Depth/Mermaid mandate, template how-to) rendered as visible text — leaked ones omitted and reported
 - [ ] Copy buttons present on every `<pre>` (added by JS, no need to inject manually)

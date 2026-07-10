@@ -18,19 +18,47 @@
     "ask": [
       "Bash(rm *)",
       "Bash(rmdir *)",
-      "Bash(git *)",
-      "Bash(gh *)",
       "Bash(sudo *)"
     ],
     "deny": [
       "Bash(rm -rf /)",
       "Bash(rm -rf /*)",
       "Bash(rm -rf ~)",
-      "Bash(rm -rf ~/*)"
+      "Bash(rm -rf ~/*)",
+      "Bash(git)",
+      "Bash(git *)",
+      "Bash(gh)",
+      "Bash(gh *)"
     ],
     "additionalDirectories": [
       "/mnt/c/1MyCode",
       "/mnt/c/3AIGenCode"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/block-git.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-verify.sh\""
+          }
+        ]
+      }
     ]
   }
 }

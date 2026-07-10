@@ -19,7 +19,10 @@
 #   /mnt/c/3AIGenCode/TechieFlow/update-framework.sh   (defaults to $PWD)
 #
 # .claude/settings.json is REFRESHED BY DEFAULT to the canonical yolo-except-git
-# block (allow all Bash, ask only on rm/rmdir/git/gh/sudo) so every project stays in sync
+# block (allow all Bash; ask only on rm/rmdir/sudo; DENY git/gh outright — git is
+# manual in TechieFlow, agents never run it — plus a PreToolUse hook,
+# .tfcore/hooks/block-git.sh, that also blocks compound forms like
+# "cd x && git log" which prefix rules miss) so every project stays in sync
 # automatically — no per-app flag needed. This kills the "asked for permission
 # 100 times" friction: the old enumerated allow-list missed WSL command variants
 # (e.g. ~/.dotnet/dotnet build) and prompted on every one. The refresh is
@@ -28,7 +31,7 @@
 # which is never touched. Opt out for a locked-down project with --keep-permissions.
 #
 # Force-overwritten (framework — reference repo is source of truth):
-#   .tfcore/{tasks,templates,agents,checklists,data,utils}/ (stock workflows/agent-teams trimmed)
+#   .tfcore/{tasks,templates,agents,checklists,data,utils,hooks}/ (stock workflows/agent-teams trimmed)
 #   .tfcore/{enhanced-ide-development-workflow,user-guide,working-in-the-brownfield}.md
 #   .tfcore/install-manifest.yaml
 #   .tfcore/TOKEN-GUIDE.md
@@ -36,6 +39,12 @@
 #   .opencode/command/TechieFlow/ subtree
 #   .claude/settings.json               (yolo-except-git; --keep-permissions to skip)
 #   WORKFLOW.html
+#
+# Ensured (append-only, idempotent):
+#   .gitignore — framework block (.tfcore/, .claude/, .opencode/, /CLAUDE.md,
+#   /WORKFLOW.html, /opencode.jsonc, /.tf-scaffold-note.txt): deployed copies
+#   must never be committed in an app repo. Existing entries are respected;
+#   nothing is removed or rewritten.
 #
 # Preserved (per-project work product — never touched):
 #   .tfcore/core-config.yaml         (customTechnicalDocuments paths)
@@ -198,6 +207,7 @@ FRAMEWORK_SUBDIRS=(
   checklists
   data
   utils
+  hooks
   workflows
   agent-teams
 )
@@ -272,7 +282,8 @@ for src in "$TEMPLATE"/.claude/commands/*.md; do
 done
 
 # .claude/settings.json — REFRESHED BY DEFAULT to the canonical yolo-except-git
-# block (allow all Bash, ask only on rm/rmdir/git/gh/sudo) so every project stays in sync
+# block (allow all Bash; ask on rm/rmdir/sudo; DENY git/gh + the block-git.sh
+# PreToolUse hook — git is manual, agents never run it) so every project stays in sync
 # without per-app fiddling. settings.json is framework baseline; genuine
 # per-project approvals belong in settings.local.json (which is NEVER touched).
 # Opt out for a deliberately locked-down project with --keep-permissions.
@@ -298,15 +309,43 @@ CANONICAL_SETTINGS='{
     "ask": [
       "Bash(rm *)",
       "Bash(rmdir *)",
-      "Bash(git *)",
-      "Bash(gh *)",
       "Bash(sudo *)"
     ],
     "deny": [
       "Bash(rm -rf /)",
       "Bash(rm -rf /*)",
       "Bash(rm -rf ~)",
-      "Bash(rm -rf ~/*)"
+      "Bash(rm -rf ~/*)",
+      "Bash(git)",
+      "Bash(git *)",
+      "Bash(gh)",
+      "Bash(gh *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/block-git.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-verify.sh\""
+          }
+        ]
+      }
     ]
   }
 }'
@@ -440,6 +479,36 @@ if [[ ${#STALE_HITS[@]} -gt 0 ]]; then
   echo "    Update the pointers (.bmad-core→.tfcore, /BMad:→/TechieFlow:,"
   echo "    bmad-master/bmad-orchestrator→flow-master) or regenerate them"
   echo "    (re-run day-1 / *refresh-status / *render-workflow-docs)."
+fi
+
+# --------------------------------------------------------------------------
+# 8. .gitignore — ensure the framework block. Everything the framework deploys
+#    into a project is a COPY (source of truth: the TechieFlow reference repo,
+#    or the NuGet package for the library personas) — committing the copies
+#    just adds churn on every refresh. Append-only + idempotent: any existing
+#    anchored/slash variant of an entry is respected; user content is never
+#    rewritten. NOTE: ignore rules do not UNtrack already-committed files —
+#    if any of these are already tracked, the owner must run
+#    `git rm -r --cached <path>` once (git is manual, owner-only).
+# --------------------------------------------------------------------------
+GI_LINES=(".tfcore/" ".claude/" ".opencode/" "/CLAUDE.md" "/WORKFLOW.html" "/opencode.jsonc" "/.tf-scaffold-note.txt")
+GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?CLAUDE\.md$' '^/?WORKFLOW\.html$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$')
+GI_MISSING=()
+for i in "${!GI_LINES[@]}"; do
+  # tr strips CR so CRLF .gitignore files (Windows-authored) still match the $-anchor
+  [[ -f .gitignore ]] && tr -d '\r' < .gitignore | grep -qE "${GI_PATS[$i]}" && continue
+  GI_MISSING+=("${GI_LINES[$i]}")
+done
+if [[ ${#GI_MISSING[@]} -eq 0 ]]; then
+  echo "  .gitignore — framework entries already present"
+elif [[ $DRY_RUN -eq 1 ]]; then
+  echo "  .gitignore — WOULD add framework entries: ${GI_MISSING[*]}"
+else
+  { echo ""
+    echo "# TechieFlow framework — deployed copies, never commit (managed by scaffold/update-framework.sh)"
+    printf '%s\n' "${GI_MISSING[@]}"
+  } >> .gitignore
+  echo "  .gitignore — added framework entries: ${GI_MISSING[*]}"
 fi
 
 # --------------------------------------------------------------------------
