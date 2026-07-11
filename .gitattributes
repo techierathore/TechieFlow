@@ -1,2 +1,15 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# TechieFlow line-ending policy — this repo is consumed by bash on WSL, macOS and Linux.
+# A CRLF checkout breaks every shell script ("/usr/bin/env: 'bash\r'") INCLUDING the
+# .tfcore/hooks/*.sh PreToolUse guards, which then lock the AI agents out of Bash AND
+# Write/Edit. "text=auto" alone is NOT enough: it normalizes the committed blobs but
+# lets core.autocrlf=true (the Git-for-Windows default) smudge the working tree to
+# CRLF on checkout — which is exactly what broke the scripts on 2026-07-11.
+# "eol=lf" pins the WORKING TREE to LF on every platform.
+#
+# After changing this file, the owner runs once:
+#   git add --renormalize . && git commit
+* text=auto eol=lf
+*.sh text eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
