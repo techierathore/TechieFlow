@@ -78,6 +78,8 @@ flowchart TD
 
 **Run this once per WSL distro.** Installs headless-Chromium system libs + the MAUI bridge.
 
+> **On macOS: skip this section — your one-time setup is §0a instead.** There is no `winrun` bridge on a Mac (`dotnet` and MAUI run natively) and Playwright's Chromium needs no apt libraries.
+
 ```bash
 sudo apt-get update && sudo apt-get install -y \
   libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 \
@@ -92,6 +94,38 @@ SH
 chmod +x ~/bin/winrun
 grep -q 'HOME/bin' ~/.bashrc || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
 ```
+
+## 0a. macOS bootstrap — DO ONCE, EVER
+
+**Run this once per Mac.** The native equivalent of §0: everything the agents need to build, run, and *see* your apps on macOS. There is no `winrun` bridge to install — `dotnet`, Playwright, and Appium all run natively — but the machine still needs its toolchain once.
+
+```bash
+# 1. Xcode Command Line Tools — provides git AND python3 (the framework's
+#    guard-status/guard-verify hooks silently fail open without python3)
+xcode-select --install
+
+# If full Xcode is installed (required for MAUI iOS / Mac Catalyst builds),
+# accept its license once or python3/git error out with a license prompt:
+sudo xcodebuild -license accept
+
+# 2. Homebrew (skip if `brew --version` already works)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# 3. The toolchain: .NET SDK + Node.js (Node powers Playwright and Appium)
+brew install dotnet-sdk node
+
+# 4. MAUI workload — only if any of your apps ships a MAUI head.
+#    sudo is REQUIRED on macOS: the SDK lives in root-owned /usr/local/share/dotnet,
+#    so without it this (and any `dotnet workload update` / SDK update) fails with
+#    "Inadequate permissions. Run the command with elevated privileges."
+sudo dotnet workload install maui
+```
+
+**Playwright — nothing for you to do.** The verifier **self-provisions** it per project the first time it runs (`verify-phase.md §1`, also used by every self-smoke): it creates `package.json` if missing, runs `npm install -D @playwright/test` + `npx playwright install chromium`, and writes a minimal `playwright.config.ts`. The only machine-level prerequisite is **Node** (step 3 above). The Chromium download is cached once under `~/Library/Caches/ms-playwright` and shared by every project, so only the first project ever pays it — and unlike WSL there are no system libraries to install.
+
+**Verify:** `dotnet --info` prints an SDK, `node --version` answers, and `python3 --version` answers *without* an Xcode-license error. The agents handle everything else per project.
+
+**MAUI native-UI testing** (Android emulator / iOS Simulator / Mac Catalyst): continue with §0b — on a Mac-native setup every piece of it (Android Studio + emulator, Appium + drivers, the Simulator) runs on this same machine, and all endpoints are `http://localhost:4723`.
 
 ## 0b. Device-host bootstrap (MAUI Android / iOS / Mac Catalyst) — DO ONCE PER HOST
 
@@ -127,6 +161,8 @@ appium --address 0.0.0.0 --port 4723
 
 **Step 4 — register the endpoints per app** in `core-config.yaml → runtimeVerification.appium` (only the heads that app ships). The verifier auto-discovers them; an absent/unreachable endpoint degrades that head to `⚠ STATIC-ONLY`, never a faked pass.
 
+**WSL-on-Windows setup (Android on this PC, Apple on the LAN Mac):**
+
 ```yaml
 runtimeVerification:
   appium:
@@ -135,7 +171,19 @@ runtimeVerification:
     maccatalyst: { url: http://192.168.1.50:4723 }
 ```
 
-**Verify:** from WSL, `curl http://localhost:4723/status` (Android) and `curl http://<mac-ip>:4723/status` (iOS/Catalyst). Reliable selectors need a stable `AutomationId` on key controls (a coding standard — see §10).
+**macOS-native setup (everything on this Mac — no winrun, no LAN address):**
+
+```yaml
+runtimeVerification:
+  appium:
+    android:     { url: http://localhost:4723, avd: Pixel_API_34 }
+    ios:         { url: http://localhost:4723, simulator: "iPhone 15" }
+    maccatalyst: { url: http://localhost:4723 }
+```
+
+**Running Claude Code natively on a Mac?** Everything above collapses onto the one machine: do Step 3 (and Step 2's Android pieces if needed) in the Mac's own Terminal, skip Step 1 (mirrored networking) entirely, and use `http://localhost:4723` for every head.
+
+**Verify:** from WSL, `curl http://localhost:4723/status` (Android) and `curl http://<mac-ip>:4723/status` (iOS/Catalyst); on a Mac-native setup it's `curl http://localhost:4723/status` for everything. Reliable selectors need a stable `AutomationId` on key controls (a coding standard — see §10).
 
 ## 1. Overview & principles
 
@@ -193,20 +241,43 @@ Three scripts: two scaffolders (one per flow) plus an updater for projects scaff
 
 ### Brownfield (existing app) — `scaffold-brownfield.sh`
 
+**WSL (Windows):**
+
 ```bash
 cd /path/to/existing-app
 /mnt/c/3AIGenCode/TechieFlow/scaffold-brownfield.sh .
+```
+
+**macOS:**
+
+```bash
+cd /path/to/existing-app
+/Volumes/MacD/MyCode/TechieFlow/scaffold-brownfield.sh .
 ```
 
 Adds `.tfcore/`, `.claude/commands/`, `.opencode/command/TechieFlow/`, `WORKFLOW.html`, `opencode.jsonc`, and `.claude/settings.json`. **Does NOT touch** existing `src/`, `tests/`, or other `docs/` contents. Warns (non-blocking) if no `.csproj`/`.sln` found within 4 levels. Refuses if the target directory doesn't exist (use greenfield script for that).
 
 ### Greenfield (new app) — `scaffold-greenfield.sh`
 
+**WSL (Windows):**
+
 ```bash
 mkdir /path/to/my-new-app && cd /path/to/my-new-app
 git init
 /mnt/c/3AIGenCode/TechieFlow/scaffold-greenfield.sh .
+```
 
+**macOS:**
+
+```bash
+mkdir /path/to/my-new-app && cd /path/to/my-new-app
+git init
+/Volumes/MacD/MyCode/TechieFlow/scaffold-greenfield.sh .
+```
+
+**Then, on either machine:**
+
+```bash
 dotnet new sln -n MyNewApp
 dotnet new blazor -n MyNewApp.Web -o src/MyNewApp.Web
 dotnet sln add src/MyNewApp.Web
@@ -219,7 +290,9 @@ Same framework drop as brownfield, plus creates empty `src/`, `tests/playwright/
 
 ### Updating an already-scaffolded project — `update-framework.sh`
 
-When the reference framework at `/mnt/c/3AIGenCode/TechieFlow/` evolves (new tasks, updated templates, agent fixes), pull those changes into an existing project with the updater. Unlike the scaffolders (`--ignore-existing`: never touch a file that's already there), the updater **force-overwrites framework files** and preserves everything that contains your work product.
+When the reference framework repo (WSL: `/mnt/c/3AIGenCode/TechieFlow` · macOS: `/Volumes/MacD/MyCode/TechieFlow`) evolves (new tasks, updated templates, agent fixes), pull those changes into an existing project with the updater. Unlike the scaffolders (`--ignore-existing`: never touch a file that's already there), the updater **force-overwrites framework files** and preserves everything that contains your work product. The scripts self-locate — invoke whichever machine's copy you're on and it uses itself as the source.
+
+**WSL (Windows):**
 
 ```bash
 # Preview what would change (recommended first):
@@ -228,18 +301,34 @@ When the reference framework at `/mnt/c/3AIGenCode/TechieFlow/` evolves (new tas
 # Apply:
 /mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/your-app
 
-# Run from inside the project (defaults to $PWD):
+# Or run from inside the project (defaults to $PWD):
 cd /path/to/your-app
 /mnt/c/3AIGenCode/TechieFlow/update-framework.sh
 ```
 
-Note: the script is NOT on your PATH — always invoke it with the full path shown above (a bare `update-framework.sh` gives *"command not found"*). Optional alias: `echo "alias update-framework.sh='/mnt/c/3AIGenCode/TechieFlow/update-framework.sh'" >> ~/.bashrc`.
+**macOS:**
+
+```bash
+# Preview what would change (recommended first):
+/Volumes/MacD/MyCode/TechieFlow/update-framework.sh /path/to/your-app --dry-run
+
+# Apply:
+/Volumes/MacD/MyCode/TechieFlow/update-framework.sh /path/to/your-app
+
+# Or run from inside the project (defaults to $PWD):
+cd /path/to/your-app
+/Volumes/MacD/MyCode/TechieFlow/update-framework.sh
+```
+
+Note: the script is NOT on your PATH — always invoke it with the full path shown above (a bare `update-framework.sh` gives *"command not found"*). Optional alias — WSL: `echo "alias update-framework.sh='/mnt/c/3AIGenCode/TechieFlow/update-framework.sh'" >> ~/.bashrc` · macOS (zsh): `echo "alias update-framework.sh='/Volumes/MacD/MyCode/TechieFlow/update-framework.sh'" >> ~/.zshrc`.
 
 | Force-overwritten (framework — reference repo wins) | Preserved (your work product — never touched) |
 | --- | --- |
 | `.tfcore/{tasks,templates,agents,checklists,data,utils,workflows,agent-teams}/` `.claude/commands/TechieFlow/` subtree            `.claude/commands/*.md` top-level commands (generate-html etc.)            `.opencode/command/TechieFlow/` subtree            `WORKFLOW.html` `.claude/settings.json` (refreshed to canonical config by default; old file → `settings.json.bak`; `--keep-permissions` to skip; `settings.local.json` never touched) | `docs/`, `src/`, `tests/` `PROJECT-STATUS.md`, `CLAUDE.md`, `.editorconfig` `.tfcore/core-config.yaml` `opencode.jsonc` `.claude/{trblazeui,techierag}.md` + `.opencode/command/{trblazeui,techierag}.md` (NuGet-deployed) |
 
 The scaffolders and the updater also **ensure the project's `.gitignore` ignores the deployed framework copies** (`.tfcore/`, `.claude/`, `.opencode/`, `/CLAUDE.md`, `/WORKFLOW.html`, `/opencode.jsonc`, `/.tf-scaffold-note.txt`). Everything the framework drops into an app is a *copy* — the source of truth is this reference repo (or the NuGet package, for the library personas) — so it must never be committed in the app repo. The step is append-only and idempotent: existing entries in any anchored/slash variant are respected, and your own `.gitignore` content is never rewritten. Note git never *un*tracks a file just because it became ignored — if a framework file was committed before the entry existed, run `git rm -r --cached <path>` once yourself (git is manual in TechieFlow; agents never run it).
+
+They also manage a second block — **agent test-harness & log artifacts** (`node_modules/`, `/package.json`, `/package-lock.json`, `test-results/`, `playwright-report/`, `.verify/`, `logs/`, `/docs/.last-verify.json`, `.DS_Store`). These are machine-generated by the verifier's npm/Playwright self-provisioning (verify-phase §1) and the standing Serilog default, and are fully regenerable — **you should never have to triage them at commit time**. verify-phase §1 also self-heals the block whenever it provisions, so even a project scaffolded before this block existed gets it on its next verify. `playwright.config.ts` deliberately stays *tracked* — committed test suites depend on it. Same caveat as above: already-tracked artifacts need a one-time `git rm -r --cached <path>` from you.
 
 ## 4. File-naming convention — `<APP>` prefix
 
@@ -524,7 +613,9 @@ grep -rE "public\s+(async\s+)?Task\s+\w+_\w+\s*\(" tests/
 grep -rE "\(\s*\w+\s+[A-Z]\w+\s*[,)]" src/
 ```
 
-## 11. MAUI builds & runs from WSL
+## 11. MAUI builds & runs — from WSL (bridged) or macOS (native)
+
+**WSL (Windows) — bridge every dotnet call to the Windows side via `winrun` (§0):**
 
 ```bash
 cd /mnt/c/path/to/maui-project
@@ -533,18 +624,30 @@ winrun "dotnet test"
 winrun "dotnet build -t:Run -f net9.0-windows10.0.19041.0"
 ```
 
-For verifier on a MAUI **Windows** app: *"This is a MAUI Windows app. Build/run/test via `winrun`. UI automation: FlaUI or Appium-Windows-driver Windows-side, NOT Playwright. Output evidence the same as Blazor projects."*
+**macOS — no bridge; dotnet runs natively (ladder §A):**
+
+```bash
+cd /path/to/maui-project
+dotnet build -c Release
+dotnet test
+dotnet build -t:Run -f net9.0-maccatalyst      # desktop head on Mac = Mac Catalyst
+dotnet build -t:Run -f net9.0-android          # Android head (emulator via Android Studio)
+```
+
+On macOS the Windows head (`net9.0-windows…`) can't build — the Mac desktop head is **Mac Catalyst**, and iOS builds natively too (Xcode required, §16). The `winrun` lines apply only inside WSL.
+
+For verifier on a MAUI **Windows** app: *"This is a MAUI Windows app. Build/run/test via `winrun`. UI automation: FlaUI or Appium-Windows-driver Windows-side, NOT Playwright. Output evidence the same as Blazor projects."* On a Mac the equivalent prompt names the **Catalyst** head and the local `mac2` Appium driver instead.
 
 ### Mobile & Mac-desktop heads — runtime-observe over Appium
 
-The §4a data-render and §4b visual-truth gates reach the MAUI **Android / iOS / Mac Catalyst** heads through an **Appium** WebDriver endpoint — the native analogue of Playwright (same screenshot + element-tree evidence, so the gates run unchanged). One-time host setup is §0b; the per-head driver map lives in `build-invocation-ladder.md §D`. **Builds don't change** — Android still builds via `cmd.exe` (ladder rung #4), iOS/Catalyst on the paired Mac; this is purely how the verifier reaches the *running* UI after a green build.
+The §4a data-render and §4b visual-truth gates reach the MAUI **Android / iOS / Mac Catalyst** heads through an **Appium** WebDriver endpoint — the native analogue of Playwright (same screenshot + element-tree evidence, so the gates run unchanged). One-time host setup is §0b; the per-head driver map lives in `build-invocation-ladder.md §D`. **Builds don't change** — on WSL, Android still builds via `cmd.exe` (ladder rung #4) and iOS/Catalyst on the paired Mac; on a Mac-native setup all three build locally with plain `dotnet build` and the Appium endpoints are all `localhost`. This is purely how the verifier reaches the *running* UI after a green build.
 
-| Head | Where it runs | Appium driver | WSL reaches it via |
-|------|---------------|---------------|--------------------|
-| MAUI Android | emulator on the Windows host (Android SDK) | `uiautomator2` | `http://localhost:4723` (mirrored networking); verifier boots emulator + Appium itself |
-| MAUI iOS | Simulator on a LAN Mac | `xcuitest` | `http://<mac-ip>:4723`; Mac must be up or head is `⚠ STATIC-ONLY` |
-| MAUI Mac Catalyst | the same LAN Mac (desktop .app) | `mac2` | `http://<mac-ip>:4723` |
-| MAUI Windows | Windows side | FlaUI / Appium-Windows (unchanged) | `winrun` / `cmd.exe` |
+| Head | Where it runs (WSL setup) | Appium driver | WSL reaches it via | macOS-native reaches it via |
+|------|---------------|---------------|--------------------|------------------------------|
+| MAUI Android | emulator on the Windows host (Android SDK) | `uiautomator2` | `http://localhost:4723` (mirrored networking); verifier boots emulator + Appium itself | `http://localhost:4723` — emulator + Appium run on the Mac itself |
+| MAUI iOS | Simulator on a LAN Mac | `xcuitest` | `http://<mac-ip>:4723`; Mac must be up or head is `⚠ STATIC-ONLY` | `http://localhost:4723` — local Simulator (Xcode) |
+| MAUI Mac Catalyst | the same LAN Mac (desktop .app) | `mac2` | `http://<mac-ip>:4723` | `http://localhost:4723` — the .app runs right here |
+| MAUI Windows | Windows side | FlaUI / Appium-Windows (unchanged) | `winrun` / `cmd.exe` | n/a — this head doesn't exist on a Mac |
 
 Selectors target each control's `AutomationId` (a coding standard, §10). A head with no registered endpoint in `core-config.yaml → runtimeVerification.appium`, or an unreachable host, is stamped `⚠ STATIC-ONLY` for that head — never a faked `Verified`.
 
@@ -592,8 +695,16 @@ The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **a
 
 **`Verified` verdicts are enforced mechanically too (2026-07-10).** A third PreToolUse hook — `.tfcore/hooks/guard-verify.sh`, matcher `Write|Edit|MultiEdit` — blocks any write to a `*-Checklist.md` that *introduces* a `Verified` status cell unless a same-day run ledger `docs/.last-verify.json` exists, which only an *executed* `verify-phase` run writes (verify-phase §6: boot → scoped tests → §4a data-render + §4b visual-truth gates → ledger → verdicts). This exists because a build orchestrator did its own smoke and wrote the `Verified` verdicts itself (TrSetup, 2026-07-09) — self-attestation the "chain the verifier" prose didn't stop. A self-smoke's ceiling is `Implemented` (`_smoke-test-policy.md §"Smoke is NOT verify"`); `*refresh-status` may reconcile a lagging Status column to a row's *pre-existing* dated verdict by writing the ledger with `"mode":"reconcile"`. Demotions (e.g. `Verified → Needs re-verify`) are never blocked.
 
+**WSL (Windows):**
+
 ```bash
 /mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/app
+```
+
+**macOS:**
+
+```bash
+/Volumes/MacD/MyCode/TechieFlow/update-framework.sh /path/to/app
 ```
 
 ## 13. Agent cheat sheet
@@ -622,7 +733,7 @@ The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **a
 | --- | --- |
 | Scaffold (brownfield) | `./scaffold-brownfield.sh /path/to/existing-app` (or run from the template repo) |
 | Scaffold (greenfield) | `./scaffold-greenfield.sh /path/to/new-app` (or run from the template repo) |
-| Update framework in existing project (§3) | `/mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/app` (add `--dry-run` to preview; restart Claude Code after) |
+| Update framework in existing project (§3) | WSL: `/mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/app` · macOS: `/Volumes/MacD/MyCode/TechieFlow/update-framework.sh /path/to/app` (add `--dry-run` to preview; restart Claude Code after) |
 | Render any MD → HTML (ad-hoc) | `/generate-html @docs/File.md` (multiple `@paths` ok; `@dir/` = top-level *.md, non-recursive; day-1 auto-renders its own docs — this is for re-renders after edits) |
 | Day-1 brownfield (6 deliverables + UsageGuide + DevGuide) | `/TechieFlow:agents:analyst *day1-brownfield {AppName}` |
 | Day-1 greenfield (6 deliverables) | `/TechieFlow:agents:analyst *day1-greenfield {AppName}` |
@@ -639,7 +750,7 @@ The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **a
 | Generate / refresh end-user Product Guide (§6) | `/TechieFlow:agents:flow-master *productguide {AppName} [scope] [--update]` — the screenshot-illustrated, task-oriented how-to manual for EXTERNAL users (what each screen is for + how to do things). Reuses the DevGuide's screen inventory + the screenshots under `docs/screenshots/<APP>/` (re-shoots any missing via the verifier render sweep); fans out per role, splitting large apps into `docs/productguides/`. **Always emits MD + HTML.** On-demand; `--update` refreshes only changed screens. The user-facing sibling of the DevGuide. |
 | Token efficiency guide | `.tfcore/TOKEN-GUIDE.md` — ships with every project. Explains where AI tokens go and the levers to keep usage low (don't load whole docs/repos; checklists markdown-only; fan out to subagents; incremental updates via `*amend-docs` / `*devguide --update`; recover with `*refresh-status` instead of re-running). |
 | **Recover broken session** (status stale/wrong) | `/TechieFlow:agents:flow-master *refresh-status {AppName}` — rebuilds PROJECT-STATUS from ground truth (checklist tables + working-tree files & mtimes + fresh build; no git — git is manual) when a phase died before its status gate ran. Add `verify` to re-verify ambiguous REQs. Never edits source. See §8a. |
-| MAUI from WSL | `winrun "dotnet build && dotnet test"` |
+| MAUI build+test | WSL: `winrun "dotnet build && dotnet test"` · macOS: `dotnet build && dotnet test` (native, no bridge — §11) |
 | Resume cold project (status trustworthy) | Open `PROJECT-STATUS.html` + `<APP>-BRD.html` + `<APP>-Architecture.html` → `git status && dotnet build` → `/TechieFlow:agents:verifier` re-verify → execute "Next command". If the last session was cut off mid-phase, run `*refresh-status` first (row above). |
 
 The trblazeui and techierag personas are NuGet-deployed to `.claude/<name>.md` and `.opencode/command/<name>.md`. Claude Code only scans `.claude/commands/`, so the scaffold/update scripts copy them to `.claude/commands/<name>.md` (the short `/trblazeui` `/techierag` forms then work). If the short form is missing: `dotnet build`, then re-run `update-framework.sh`.
@@ -724,18 +835,25 @@ TechieFlow was authored on the owner's **WSL-on-Windows** machine, so §0/§11 a
 | Concern | WSL-on-Windows | macOS | native Windows | native Linux |
 |---|---|---|---|---|
 | `dotnet` | ladder §B (`~/.dotnet/dotnet`, `cmd.exe`, `winrun`) | **§A: `dotnet build`** | **§C: `dotnet build`** | **§A: `dotnet build`** |
-| MAUI iOS / Mac Catalyst | Windows side via `cmd.exe` | native (Xcode + `dotnet workload install maui`) | needs paired Mac | not supported |
+| MAUI iOS / Mac Catalyst | Windows side via `cmd.exe` | native (Xcode + `sudo dotnet workload install maui`) | needs paired Mac | not supported |
 | MAUI Android | Windows side | native (Android SDK + JDK) | native | native |
 | MAUI Windows head | Windows side | not supported | native | not supported |
 | Native UI verification (Android/iOS/Catalyst) | Appium endpoints (§0b): Android on Windows host, iOS/Catalyst on a LAN Mac | local Appium (all native) | local Appium (Android+Catalyst); iOS via paired Mac | local Appium (Android only) |
 
-The build ladder (`.tfcore/templates/v4custom/build-invocation-ladder.md`) auto-detects the host (`uname -a` → `Darwin` = macOS, `…microsoft…` = WSL, plain `Linux` = native Linux, absent = native Windows) and picks §A/§B/§C. On macOS/Windows/Linux there is one rung — `dotnet build` — and a missing workload is a one-time `dotnet workload install maui`, never a project blocker. Running the scaffold scripts needs `bash` + `rsync` + `realpath` (preinstalled on macOS 12.3+ and Linux; on native Windows run them from **WSL or Git Bash**).
+The build ladder (`.tfcore/templates/v4custom/build-invocation-ladder.md`) auto-detects the host (`uname -a` → `Darwin` = macOS, `…microsoft…` = WSL, plain `Linux` = native Linux, absent = native Windows) and picks §A/§B/§C. On macOS/Windows/Linux there is one rung — `dotnet build` — and a missing workload is a one-time `dotnet workload install maui` (on macOS with `sudo`: the SDK dir `/usr/local/share/dotnet` is root-owned, and without it workload/SDK updates fail with *"Inadequate permissions. Run the command with elevated privileges."*), never a project blocker. Running the scaffold scripts needs `bash` + `rsync` + `realpath` (preinstalled on macOS 12.3+ and Linux; on native Windows run them from **WSL or Git Bash**).
 
 **macOS quick start:**
-1. Install the .NET SDK (`brew install dotnet-sdk` or the official installer); confirm `dotnet --info`.
-2. For MAUI: `dotnet workload install maui`; install **Xcode** (iOS / Mac Catalyst) and/or the Android SDK + a JDK.
-3. Scaffold: `/path/to/TechieFlow/scaffold-brownfield.sh /path/to/your-app` (or `scaffold-greenfield.sh`).
-4. Start Claude Code in the app folder: `/TechieFlow:agents:analyst *day1-brownfield <AppName>` — identical to WSL. The `winrun`/`cmd.exe` rungs don't apply once `uname` reports `Darwin`.
+1. Run the one-time **§0a macOS bootstrap** — Xcode CLT/license, Homebrew, .NET SDK + Node, Playwright per project; `sudo dotnet workload install maui` (sudo required on macOS) + Xcode / Android SDK only for MAUI apps.
+2. Scaffold: `/path/to/TechieFlow/scaffold-brownfield.sh /path/to/your-app` (or `scaffold-greenfield.sh`).
+3. Start Claude Code in the app folder: `/TechieFlow:agents:analyst *day1-brownfield <AppName>` — identical to WSL. The `winrun`/`cmd.exe` rungs don't apply once `uname` reports `Darwin`.
+
+**Moving an existing project (or this framework repo) from Windows/WSL to a Mac:**
+1. **Can't see `.tfcore/`, `.claude/`, `.opencode/` in Finder?** Finder hides dot-files by default. Press **Cmd+Shift+.** in any Finder window to toggle them on (the setting sticks), or run `defaults write com.apple.finder AppleShowAllFiles -bool true && killall Finder`. The Terminal always sees them: `ls -la`. Nothing is missing just because Finder doesn't show it — check with `ls -la` first.
+2. **Moved an APP repo via git (clone/pull)?** Then the framework folders genuinely AREN'T there — every deployed framework copy (`.tfcore/`, `.claude/`, `.opencode/`, `/CLAUDE.md`, `/WORKFLOW.html`, `/opencode.jsonc`) is *gitignored by design* (they're copies; this repo is the source of truth). Re-deploy them: `ls -la` the app — if `.tfcore/` exists, run `/path/to/TechieFlow/update-framework.sh /path/to/app`; if it's absent, run `/path/to/TechieFlow/scaffold-brownfield.sh /path/to/app` (safe on an app with existing docs/code — it uses `--ignore-existing` and never touches `src/`, `docs/`, or tests). Add `--dry-run` to `update-framework.sh` to preview.
+3. **Per-project gitignored files don't come back from a scaffold.** `CLAUDE.md`, `.tfcore/core-config.yaml` customizations, and `.claude/settings.local.json` are per-project work product that git never carried. A plain *folder copy* from the old machine keeps them; a git clone loses them — copy them over from the Windows machine, or regenerate (`CLAUDE.md` comes back via day-1 / `*refresh-status`).
+4. **Scripts won't execute (`permission denied`)?** A copy through a Windows filesystem drops the executable bit. Fix once: `chmod +x /path/to/TechieFlow/*.sh /path/to/TechieFlow/.tfcore/hooks/*.sh` (or run them as `bash script.sh`). Hooks inside apps are invoked via `bash` so they don't need it, but the same `chmod` doesn't hurt.
+5. **No path edits needed:** since 2026-07-11 the three scripts locate the framework from their own directory (no hardcoded `/mnt/c/…`), and they run fine on macOS's stock `bash`/`rsync`.
+6. **Afterwards, restart Claude Code** in the app folder so the freshly deployed agent/task definitions and `settings.json` load.
 
 **native Windows quick start (Claude Code / OpenCode on Windows, not WSL):**
 1. Install the .NET SDK (winget / official installer); confirm `dotnet --info`.
@@ -748,4 +866,4 @@ The framework never *requires* MAUI — many apps are Blazor-only and build with
 
 ---
 
-Last revised 2026-07-10. Edit freely. When the workflow changes, update `~/.claude/projects/-mnt-c-3AIGenCode-TechieFlow/memory/MEMORY.md` and `WorkFlow-Context.md` (the AI-agent context doc) too.
+Last revised 2026-07-11. Edit freely. When the workflow changes, update the session memory `MEMORY.md` under `~/.claude/projects/<this-repo's-slug>/memory/` and `WorkFlow-Context.md` (the AI-agent context doc) too.

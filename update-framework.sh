@@ -2,9 +2,9 @@
 # update-framework.sh — Refresh the TechieFlow v4 framework in an ALREADY-SCAFFOLDED
 # project, without touching any of your work product.
 #
-# Use this when the reference framework at /mnt/c/3AIGenCode/TechieFlow/ has
-# evolved (new tasks, updated workflows, agent fixes) and you want those
-# changes in an existing project.
+# Use this when the reference framework repo (wherever it lives — this script
+# finds it from its own location) has evolved (new tasks, updated workflows,
+# agent fixes) and you want those changes in an existing project.
 #
 # Differs from scaffold-brownfield.sh:
 #   scaffold-*  → rsync --ignore-existing (never updates existing files)
@@ -12,11 +12,11 @@
 #                 explicit preserve-list for everything that contains your
 #                 per-project content.
 #
-# Usage:
-#   /mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/existing-app
-#   /mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/app --dry-run
-#   /mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/app --keep-permissions
-#   /mnt/c/3AIGenCode/TechieFlow/update-framework.sh   (defaults to $PWD)
+# Usage (run from wherever the TechieFlow repo lives — WSL, macOS, Linux):
+#   /path/to/TechieFlow/update-framework.sh /path/to/existing-app
+#   /path/to/TechieFlow/update-framework.sh /path/to/app --dry-run
+#   /path/to/TechieFlow/update-framework.sh /path/to/app --keep-permissions
+#   /path/to/TechieFlow/update-framework.sh   (defaults to $PWD)
 #
 # .claude/settings.json is REFRESHED BY DEFAULT to the canonical yolo-except-git
 # block (allow all Bash; ask only on rm/rmdir/sudo; DENY git/gh outright — git is
@@ -62,7 +62,9 @@
 
 set -euo pipefail
 
-TEMPLATE="/mnt/c/3AIGenCode/TechieFlow"
+# The reference framework is wherever this script lives — no hardcoded path,
+# so the repo works from WSL (/mnt/c/...), macOS (/Volumes/...), or Linux.
+TEMPLATE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 DRY_RUN=0
 KEEP_PERMS=0
@@ -139,9 +141,12 @@ if [[ ! -d "$TARGET/.tfcore" && -d "$TARGET/.bmad-core" ]]; then
 
   # Patch the preserved (not force-synced) core-config.yaml.
   if [[ -f "$TARGET/.tfcore/core-config.yaml" ]]; then
-    sed -i -e 's/\.bmad-core/.tfcore/g' \
-           -e 's/^slashPrefix:[[:space:]]*BMad/slashPrefix: TechieFlow/' \
-           "$TARGET/.tfcore/core-config.yaml"
+    # temp-file + mv instead of sed -i: BSD sed (macOS) treats "-i -e" as a
+    # backup suffix and would litter a core-config.yaml-e file
+    sed -e 's/\.bmad-core/.tfcore/g' \
+        -e 's/^slashPrefix:[[:space:]]*BMad/slashPrefix: TechieFlow/' \
+        "$TARGET/.tfcore/core-config.yaml" > "$TARGET/.tfcore/core-config.yaml.tmp" \
+      && mv "$TARGET/.tfcore/core-config.yaml.tmp" "$TARGET/.tfcore/core-config.yaml"
     echo "  patched .tfcore/core-config.yaml (slashPrefix: TechieFlow, .tfcore paths)"
   fi
 
@@ -509,6 +514,35 @@ else
     printf '%s\n' "${GI_MISSING[@]}"
   } >> .gitignore
   echo "  .gitignore — added framework entries: ${GI_MISSING[*]}"
+fi
+
+# --------------------------------------------------------------------------
+# 8b. .gitignore — agent test-harness & log artifacts. The verifier SELF-
+#     PROVISIONS npm/Playwright per project (verify-phase §1) and Serilog
+#     writes logs/ by standing default — all machine-generated, all
+#     regenerable, never the owner's to triage at commit time. Root-anchored
+#     (/package.json) so a genuine nested frontend package is not swept up.
+#     playwright.config.ts stays TRACKED (committed test suites depend on it).
+#     Same reminder as 8: ignore rules don't UNtrack already-committed files —
+#     run `git rm -r --cached <path>` once for any of these already tracked.
+# --------------------------------------------------------------------------
+GI2_LINES=("node_modules/" "/package.json" "/package-lock.json" "test-results/" "playwright-report/" ".verify/" "logs/" "/docs/.last-verify.json" ".DS_Store")
+GI2_PATS=('^/?node_modules/?$' '^/?package\.json$' '^/?package-lock\.json$' '^/?test-results/?$' '^/?playwright-report/?$' '^/?\.verify/?$' '^/?logs/?$' '^/?docs/\.last-verify\.json$' '^\.DS_Store$')
+GI2_MISSING=()
+for i in "${!GI2_LINES[@]}"; do
+  [[ -f .gitignore ]] && tr -d '\r' < .gitignore | grep -qE "${GI2_PATS[$i]}" && continue
+  GI2_MISSING+=("${GI2_LINES[$i]}")
+done
+if [[ ${#GI2_MISSING[@]} -eq 0 ]]; then
+  echo "  .gitignore — agent-artifact entries already present"
+elif [[ $DRY_RUN -eq 1 ]]; then
+  echo "  .gitignore — WOULD add agent-artifact entries: ${GI2_MISSING[*]}"
+else
+  { echo ""
+    echo "# TechieFlow agent artifacts — machine-generated test harness & logs, never commit (managed by scaffold/update-framework.sh)"
+    printf '%s\n' "${GI2_MISSING[@]}"
+  } >> .gitignore
+  echo "  .gitignore — added agent-artifact entries: ${GI2_MISSING[*]}"
 fi
 
 # --------------------------------------------------------------------------

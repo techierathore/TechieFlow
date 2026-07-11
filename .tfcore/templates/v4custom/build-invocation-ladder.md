@@ -24,9 +24,9 @@ One-liner to detect: `uname -a 2>/dev/null || echo windows` — `Darwin…` = ma
 → **Start (and stay) at rung #1: `dotnet build`.** The .NET SDK installer puts `dotnet` on the `PATH`; there is no interop layer.
 
 - **Non-MAUI projects** (Web, API, library, console, test): `dotnet build` / `dotnet test` / `dotnet run` directly.
-- **MAUI on macOS:** builds natively once the workload + toolchains are installed — `dotnet workload install maui`. iOS / Mac Catalyst targets require **Xcode** (and `xcode-select --install`); Android targets require the **Android SDK + a JDK** (`dotnet workload install maui-android`). With those present, `dotnet build -t:Run -f net9.0-maccatalyst` (or `-f net9.0-ios`) just works — no `cmd.exe`.
+- **MAUI on macOS:** builds natively once the workload + toolchains are installed — `sudo dotnet workload install maui`. **`sudo` is REQUIRED on macOS**: the SDK lives in root-owned `/usr/local/share/dotnet`, so any `dotnet workload install/update` (and SDK updates) without it fails with `Inadequate permissions. Run the command with elevated privileges.` — that error is a sudo signal, NEVER a project blocker. iOS / Mac Catalyst targets require **Xcode** (and `xcode-select --install`); Android targets require the **Android SDK + a JDK** (`sudo dotnet workload install maui-android`). With those present, `dotnet build -t:Run -f net9.0-maccatalyst` (or `-f net9.0-ios`) just works — no `cmd.exe`.
 - **MAUI on native Linux:** only the **Android** target head is supported (`net9.0-android`); iOS / Mac Catalyst / Windows heads cannot build on Linux (no Apple/Windows toolchain). That is a genuine platform limitation, NOT a wrong-rung error — note it plainly if a project needs those heads.
-- If `dotnet build` fails with `NETSDK1178` / "workload not installed", the fix is `dotnet workload install <id>` (a one-time setup step the user runs), not a rung change — there is no other rung on this platform.
+- If `dotnet build` fails with `NETSDK1178` / "workload not installed", the fix is `dotnet workload install <id>` — with `sudo` on macOS (root-owned SDK dir; see above) — a one-time setup step the user runs, not a rung change; there is no other rung on this platform. If the user reports `Inadequate permissions` from a workload/SDK command, give them the exact `sudo` form of the same command.
 
 ---
 

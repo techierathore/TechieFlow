@@ -4,9 +4,9 @@
 # For a NEW project use scaffold-greenfield.sh instead — it creates empty
 # src/ and tests/ folders that would be redundant here.
 #
-# Usage:
-#   /mnt/c/3AIGenCode/TechieFlow/scaffold-brownfield.sh /path/to/existing-app
-#   /mnt/c/3AIGenCode/TechieFlow/scaffold-brownfield.sh    (defaults to $PWD)
+# Usage (run from wherever the TechieFlow repo lives — WSL, macOS, Linux):
+#   /path/to/TechieFlow/scaffold-brownfield.sh /path/to/existing-app
+#   /path/to/TechieFlow/scaffold-brownfield.sh    (defaults to $PWD)
 #
 # What it does:
 #   - Adds .tfcore/, .claude/commands/, .opencode/command/TechieFlow/ if missing
@@ -29,7 +29,9 @@
 
 set -euo pipefail
 
-TEMPLATE="/mnt/c/3AIGenCode/TechieFlow"
+# The reference framework is wherever this script lives — no hardcoded path,
+# so the repo works from WSL (/mnt/c/...), macOS (/Volumes/...), or Linux.
+TEMPLATE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET="${1:-$PWD}"
 TARGET="$(realpath "$TARGET")"
 
@@ -269,6 +271,29 @@ if [[ ${#GI_MISSING[@]} -gt 0 ]]; then
   echo "  .gitignore — added framework entries: ${GI_MISSING[*]}"
 else
   echo "  .gitignore — framework entries already present"
+fi
+
+# 8b. .gitignore — agent test-harness & log artifacts. The verifier SELF-
+#     PROVISIONS npm/Playwright per project (verify-phase §1) and Serilog
+#     writes logs/ by standing default — all machine-generated, all
+#     regenerable, never the owner's to triage at commit time. Root-anchored
+#     (/package.json) so a genuine nested frontend package is not swept up.
+#     playwright.config.ts stays TRACKED (committed test suites depend on it).
+GI2_LINES=("node_modules/" "/package.json" "/package-lock.json" "test-results/" "playwright-report/" ".verify/" "logs/" "/docs/.last-verify.json" ".DS_Store")
+GI2_PATS=('^/?node_modules/?$' '^/?package\.json$' '^/?package-lock\.json$' '^/?test-results/?$' '^/?playwright-report/?$' '^/?\.verify/?$' '^/?logs/?$' '^/?docs/\.last-verify\.json$' '^\.DS_Store$')
+GI2_MISSING=()
+for i in "${!GI2_LINES[@]}"; do
+  [[ -f .gitignore ]] && tr -d '\r' < .gitignore | grep -qE "${GI2_PATS[$i]}" && continue
+  GI2_MISSING+=("${GI2_LINES[$i]}")
+done
+if [[ ${#GI2_MISSING[@]} -gt 0 ]]; then
+  { echo ""
+    echo "# TechieFlow agent artifacts — machine-generated test harness & logs, never commit (managed by scaffold/update-framework.sh)"
+    printf '%s\n' "${GI2_MISSING[@]}"
+  } >> .gitignore
+  echo "  .gitignore — added agent-artifact entries: ${GI2_MISSING[*]}"
+else
+  echo "  .gitignore — agent-artifact entries already present"
 fi
 
 echo ""

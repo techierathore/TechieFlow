@@ -77,6 +77,7 @@ Run these checks yourself and act on them. Echo a one-line summary of what you d
 - Check Playwright: run `npx playwright --version`. If it errors or is absent: `npm install -D @playwright/test`.
 - Check browsers: attempt `npx playwright install chromium`. If it reports missing system libraries (common on a fresh WSL/Ubuntu): run `npx playwright install --with-deps chromium`. If that needs sudo and sudo is unavailable, run `sudo npx playwright install --with-deps chromium`; if sudo also fails, report the single apt command the user must run once and HALT (this is the only situation where a manual step is unavoidable, and it happens at most once per machine).
 - Ensure a minimal `playwright.config.ts` exists at repo root. If absent, create one with: testDir `./tests/verify`, `use: { screenshot: 'only-on-failure', trace: 'retain-on-failure', headless: true }`, and `reporter: 'line'`.
+- **Gitignore what you provision — in this same step, never later.** Git is manual in TechieFlow: the owner runs every commit and must NEVER have to triage machine artifacts. Check `.gitignore` for each of: `node_modules/`, `/package.json`, `/package-lock.json`, `test-results/`, `playwright-report/`, `.verify/`, `logs/`, `/docs/.last-verify.json`, `.DS_Store` — append any that are missing under a `# TechieFlow agent artifacts — machine-generated test harness & logs, never commit` header (the scaffold/update scripts manage the same block since 2026-07-11; doing it here too self-heals projects refreshed earlier). Match tolerantly (strip `\r`, accept anchored/slash variants) and never rewrite existing owner content. `playwright.config.ts` stays TRACKED — committed test suites depend on it. This rule generalizes: **any machine-generated file a task introduces (npm, Playwright output, logs, caches) gets its `.gitignore` entry in the same step that creates it.**
 - In SETUP-ONLY mode: print "Verification environment ready." and HALT here.
 
 ### 2. Locate and characterize the Blazor app
@@ -87,8 +88,8 @@ Run these checks yourself and act on them. Echo a one-line summary of what you d
 
 ### 3. Boot the app headless in the background
 
-- **Pick the right rung first** — read the startup `.csproj`. If it targets a MAUI **Android / iOS / Mac Catalyst** head (`<UseMaui>` + `-android`/`-ios`/`-maccatalyst`) → this section (Playwright boot) does not apply; jump to **§3b** to drive it over Appium. The MAUI **Windows** head builds/runs via rung #4 (`cmd.exe /c "dotnet run ..."`) and is driven by FlaUI/Appium-Windows as before. Otherwise (Blazor) rung #2 (`~/.dotnet/dotnet run --project ...`).
-- Start it yourself, detached, capturing logs:
+- **Pick the right rung first** — read the startup `.csproj`. If it targets a MAUI **Android / iOS / Mac Catalyst** head (`<UseMaui>` + `-android`/`-ios`/`-maccatalyst`) → this section (Playwright boot) does not apply; jump to **§3b** to drive it over Appium. The MAUI **Windows** head builds/runs via rung #4 (`cmd.exe /c "dotnet run ..."`) and is driven by FlaUI/Appium-Windows as before. Otherwise (Blazor) use the ladder's platform rung: on WSL rung #2 (`~/.dotnet/dotnet run --project ...`); on macOS / native Linux `dotnet` is on PATH — plain `dotnet run` (ladder §A; `~/.dotnet/dotnet` does not exist there).
+- Start it yourself, detached, capturing logs (WSL form shown — on macOS/Linux substitute plain `dotnet`):
   `nohup ~/.dotnet/dotnet run --project <csproj> --urls http://localhost:5099 > .verify/app.log 2>&1 &`
   (Pin a known free port like 5099 so the test URL is deterministic. Create `.verify/` if needed.)
 - Poll `http://localhost:5099` (curl, up to ~60s) until it returns HTTP 200, or until `app.log` shows "Now listening on".
