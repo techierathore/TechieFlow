@@ -15,7 +15,7 @@
         "edit": true,
         "bash": true
       },
-      "description": "Madhav — the single super-agent. Orchestrates the full pipeline (*run-workflow, *phase) with parallel subagents, runs the unified build (*build-phase — calls /trblazeui + /techierag as sub-agents), fixes bugs from screenshots (*fix-issues), and handles doc/status utilities (*render-workflow-docs, *generate-html, *handoff-phase, *refresh-status, *devguide) plus any one-off task."
+      "description": "Madhav — the single super-agent. Orchestrates the full pipeline (*run-workflow, *phase) with parallel subagents, runs the unified build (*build-phase — calls /trblazeui + /techierag as sub-agents), fixes bugs from screenshots (*fix-issues), analyzes + logs human-found bugs without fixing (*triage-issues), and handles doc/status utilities (*render-workflow-docs, *generate-html, *handoff-phase, *refresh-status, *devguide) plus any one-off task."
     },
     "flow-architect": {
       "prompt": "{file:./.tfcore/agents/architect.md}",
@@ -72,6 +72,10 @@
     "techieflow:tasks:fix-issues": {
       "template": "{file:./.tfcore/tasks/fix-issues.md}",
       "description": "Bug-fix front door: given a folder of screenshots (+ optional description), reproduce with Playwright, triage (layout/data/logic/RAG), fan fixes to the right builder, re-smoke (data+visual) + re-verify, update docs. Driven by /flow-master."
+    },
+    "techieflow:tasks:triage-issues": {
+      "template": "{file:./.tfcore/tasks/triage-issues.md}",
+      "description": "ANALYZE-ONLY bug front door for human-found (UAT/production) bugs: reproduce with Playwright, triage to the owning REQ, log in the checklist (demote to Needs re-verify / new Planned rows), optional scoped regression re-verify, update PROJECT-STATUS with the *fix-issues pointer. NEVER edits code. Driven by /flow-master."
     },
     "techieflow:tasks:verify-phase": {
       "template": "{file:./.tfcore/tasks/verify-phase.md}",

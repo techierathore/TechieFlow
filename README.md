@@ -23,6 +23,8 @@ flowchart TD
   F --> G{"All REQ Verified?"}
   G -->|"bugs found"| X["/flow-master *fix-issues {App} {screenshots-folder}"]
   X --> F
+  G -->|"UAT/prod bugs — log, don't fix yet"| T["/flow-master *triage-issues {App} {evidence}"]
+  T --> X
   G -->|"yes"| H["/flow-master *handoff-phase"]
 ```
 
@@ -39,6 +41,8 @@ flowchart TD
   F --> G{"All REQ Verified?"}
   G -->|"bugs found"| X["/flow-master *fix-issues {App} {screenshots-folder}"]
   X --> F
+  G -->|"UAT/prod bugs — log, don't fix yet"| T["/flow-master *triage-issues {App} {evidence}"]
+  T --> X
   G -->|"yes"| H["/flow-master *handoff-phase"]
 ```
 
@@ -518,7 +522,15 @@ When the verifier passed but the running UI is still broken — overlapping cont
 
 `/flow-master` `*fix-issues MyApp ./bugshots`
 
-Drop a folder of **screenshots** (plus an optional `bugs.md` describing what's wrong on each) and flow-master: reads every screenshot (vision), reproduces each issue live with Playwright, triages it (layout / data / logic / RAG), and **fans the fix out to the right builder** — `/trblazeui` for layout, its own subagents for data/logic, `/techierag` for RAG. **You never invoke a builder agent yourself — flow-master calls them as sub-agents.** It then re-smokes (data + visual) and re-verifies the affected REQs, and updates the DevGuide + the one checklist + PROJECT-STATUS. This is the answer to "the verifier passed but the UI is broken — who do I call?". Task: `.tfcore/tasks/fix-issues.md`.
+Drop a folder of **screenshots** (plus an optional `bugs.md` describing what's wrong on each) and flow-master: reads every screenshot (vision), reproduces each issue live with Playwright, triages it (layout / data / logic / RAG), and **fans the fix out to the right builder** — `/trblazeui` for layout, its own subagents for data/logic, `/techierag` for RAG. **You never invoke a builder agent yourself — flow-master calls them as sub-agents.** It then re-smokes (data + visual) and re-verifies the affected REQs, and updates the DevGuide + the one checklist + PROJECT-STATUS. This is the answer to "the verifier passed but the UI is broken — who do I call?". Task: `.tfcore/tasks/fix-issues.md`. Only want the bugs *analyzed and logged*, not fixed? That's `*triage-issues` (§7.12).
+
+### 7.12 Analyzing UAT / production bugs WITHOUT fixing (`*triage-issues`)
+
+Bugs found at UAT or in production usually need a **plan and a paper trail before anyone touches code**: which REQs regressed, what's a brand-new defect, what still passes. `*fix-issues` is the wrong tool for that moment — its deliverable is fixed code. The analyze-only front door is:
+
+`/flow-master` `*triage-issues MyApp ./uat-bugs` — add `verify` to also regression-re-verify sibling features
+
+Hand it a folder of screenshots *and/or a written bug list* (UAT reports often arrive as prose). Flow-master reproduces each issue live with Playwright and delivers **documentation only**: regressed REQs are demoted to `Needs re-verify` with a dated `⚠ UAT bug` remark, unspecified defects become new `Planned` REQ rows with acceptance criteria, the DevGuide's known-issues lines are refreshed, and PROJECT-STATUS's "Next command" points at `*fix-issues {App} {folder}` naming the REQ IDs. With the optional `verify` argument it also EXECUTES a scoped verify-phase over the affected screens' sibling REQs ("check the rest still works"). **It never edits `src/` or `tests/` and never spawns a builder sub-agent** — fixing is a separate decision you make afterwards by running `*fix-issues`. Task: `.tfcore/tasks/triage-issues.md`.
 
 ## 8. Resuming a cold project
 
@@ -713,6 +725,7 @@ The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **a
 - Writing code → `/flow-master *build-phase` (the ONE unified build — it calls `/trblazeui` and `/techierag` as sub-agents; you don't invoke them directly).
 - Proving it works → `/verifier` (`*verify ui|functional|all` — filters the one checklist; data + visual gates).
 - The verifier passed but the running UI is broken → `/flow-master *fix-issues` (drop screenshots; it triages + routes the fix).
+- UAT / production bugs you want analyzed + logged in the checklist, NOT fixed yet → `/flow-master *triage-issues` (docs-only deliverable; fixing stays your call).
 - Developer code-map (screen → control → service → proc) → `/flow-master *devguide`.
 - End-user how-to manual (what each screen is for + how to do things) → `/flow-master *productguide`.
 - Docs/HTML/status/handoff chores → `/flow-master`.
@@ -723,7 +736,7 @@ The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **a
 | `/analyst` | Chanakya, business analyst | Reverse-doc; BRD; Architecture; Coding Standards; **mockups** (`*mockups`, greenfield); the one Checklist (`*split-brd`); status init; .editorconfig; CLAUDE.md | `<APP>-BRD.md`, `<APP>-Architecture.md`, `<APP>-Coding-Standards.md`, `<APP>-UIDesign.md` + `docs/mockups/*.html`, `<APP>-Checklist.md`, `PROJECT-STATUS.md`, `CLAUDE.md`, `.editorconfig` |
 | `/trblazeui` | Blazor + TrBlazeUI **(library agent — called as a sub-agent by `*build-phase` / `*fix-issues`)** | REQ-UI-* per the mockups; reads coding standards | `src/` (Razor), `<APP>-TrBlazeUI-Feedback.md` |
 | `/techierag` | TechieRag RAG/LLM **(library agent — called as a sub-agent by `*build-phase` / `*fix-issues`)** | REQ-RAG-* items; reads coding standards | `src/` (RAG services), `<APP>-TechieRag-Feedback.md` |
-| `/flow-master` | Madhav, master & orchestrator | The single super-agent. Runs the **unified `*build-phase`** (clusters all open REQs, calls `/trblazeui` + `/techierag` as sub-agents, builds REQ-FN-*/REQ-NFR-* itself, self-smokes data+visual, chains the verifier); the **`*fix-issues`** bug-fix front door (triages screenshots → routes the fix); HTML renders, status refresh, consolidation, handoff doc; the screen-by-screen Developer Guide (`*devguide`) and the end-user Product Guide (`*productguide`) | `src/`, `tests/unit/`, `<APP>-BRD.html`, `<APP>-Architecture.html`, `PROJECT-STATUS.md/html`, `<APP>-UsageGuide.md`, `<APP>-DevGuide.md/html`, `<APP>-ProductGuide.md/html`, `<APP>-Checklist.md` (verdicts), `<APP>-<Library>-Feedback.md` (per-library consolidation) |
+| `/flow-master` | Madhav, master & orchestrator | The single super-agent. Runs the **unified `*build-phase`** (clusters all open REQs, calls `/trblazeui` + `/techierag` as sub-agents, builds REQ-FN-*/REQ-NFR-* itself, self-smokes data+visual, chains the verifier); the **`*fix-issues`** bug-fix front door (triages screenshots → routes the fix) and its analyze-only sibling **`*triage-issues`** (logs UAT/prod bugs in the checklist, never fixes); HTML renders, status refresh, consolidation, handoff doc; the screen-by-screen Developer Guide (`*devguide`) and the end-user Product Guide (`*productguide`) | `src/`, `tests/unit/`, `<APP>-BRD.html`, `<APP>-Architecture.html`, `PROJECT-STATUS.md/html`, `<APP>-UsageGuide.md`, `<APP>-DevGuide.md/html`, `<APP>-ProductGuide.md/html`, `<APP>-Checklist.md` (verdicts), `<APP>-<Library>-Feedback.md` (per-library consolidation) |
 | `/verifier` | Vidur, autonomous test runner | Verifying any scope + standards grep checks + the **render gate (§4a)** (every control listed in the DevGuide renders its data) AND the **visual-truth gate (§4b)** (no overlap, every control in-viewport and non-zero-size at desktop + mobile, screenshot inspected, diffed against the mockup when one exists). A REQ is `Verified` only if acceptance passes AND data renders AND the screen looks right. `Done (pre-existing)` gets the full sweep — stays Done only if it runtime-renders + looks right, else `Needs re-verify`. After each run Vidur writes verdicts to the one checklist AND refreshes the DevGuide's observed render/visual tags. | `<APP>-Checklist.md` Requirements Status table (verdicts), DevGuide observed render/visual tags, `tests/playwright/*`, `<APP>-<Library>-Feedback.md` (on library bugs — the owning library's file) |
 | `/architect` | Solutions architect | Optional deep arch dive; `/analyst` does basic architecture by default | `<APP>-Architecture.md` (delegated by analyst, optional) |
 
@@ -743,6 +756,7 @@ The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **a
 | **Amend docs as the project evolves** (§7.9) | `/TechieFlow:agents:analyst *amend-docs {AppName} "<what changed>"` (or `/flow-master`) — surgically updates BRD + Architecture in place (append-only IDs), ripples to PROJECT-STATUS / BRD §4 / the checklist, re-renders. Incremental alternative to re-running day-1. |
 | **Build — ONE unified phase** (chains self-smoke + verifier) | `/TechieFlow:agents:flow-master *build-phase {AppName}` (OpenCode: `/flow-master *build-phase {AppName}`) — clusters all open REQs, calls `/trblazeui` (REQ-UI-*, from the mockups) and `/techierag` (REQ-RAG-*) as sub-agents, builds REQ-FN-*/REQ-NFR-* itself, self-smokes (data + visual), then chains the verifier. Re-run for FIX mode on flagged REQs. (The old separate UI / RAG / functional build commands are dissolved into this one.) |
 | **Fix issues found by running the app** (§7.11) | `/TechieFlow:agents:flow-master *fix-issues {AppName} {folder}` — drop a folder of screenshots (+ optional `bugs.md`); flow-master reproduces each with Playwright, triages (layout/data/logic/RAG), fans the fix to the right builder (trblazeui / its subagents / techierag), re-smokes + re-verifies, updates DevGuide + checklist + PROJECT-STATUS. The answer to "verifier passed but the UI is broken." |
+| **Analyze + log UAT/production bugs WITHOUT fixing** (§7.12) | `/TechieFlow:agents:flow-master *triage-issues {AppName} {evidence} [verify]` — screenshots folder and/or a written bug list; flow-master reproduces each with Playwright, demotes regressed REQs to `Needs re-verify` (dated `⚠ UAT bug` remarks), adds new `Planned` rows for unspecified defects, optionally re-verifies sibling features (`verify`), updates DevGuide known-issues + PROJECT-STATUS (next command = the `*fix-issues` pointer). Never edits code — fixing stays your decision. |
 | Verify + standards greps + data & visual gates | `/TechieFlow:agents:verifier *verify <scope>` — scope is `ui` \| `functional` \| `all` \| explicit REQ IDs; **filters the one checklist by REQ prefix** (no separate file). Runs standards-compliance greps, acceptance tests, the **render gate** (verify-phase §4a: every control renders its data) AND the **visual-truth gate** (§4b: no overlap, every control in-viewport and non-zero-size at desktop + mobile, screenshot inspected, mockup-diffed where one exists). A REQ is `Verified` only if acceptance passes AND data renders AND the screen looks right. `Done (pre-existing)` gets the full sweep. Verdicts land in the checklist; Vidur also refreshes the DevGuide's observed render/visual tags. |
 | End-of-session | `/TechieFlow:agents:flow-master Update PROJECT-STATUS.md (phase, next, log); regenerate PROJECT-STATUS.html.` |
 | Final handoff (incl. DevGuide) | `/TechieFlow:agents:flow-master *handoff-phase {AppName}` |
@@ -822,6 +836,10 @@ A REQ is `Verified` only if acceptance passes AND data renders AND the screen lo
 
 `/TechieFlow:agents:flow-master *fix-issues {AppName} {folder}` (§7.11). Drop a folder of screenshots of the broken screens (optionally a `bugs.md` naming what's wrong on each). Flow-master reads them (vision), reproduces each issue live with Playwright, triages it (layout / data / logic / RAG), and **fans the fix out to the right builder** — `/trblazeui` for layout, its own subagents for data/logic, `/techierag` for RAG. You never invoke a builder agent yourself. It then re-smokes (data + visual), re-verifies the affected REQs, and updates the DevGuide + checklist + PROJECT-STATUS.
 
+**Q: I found bugs at UAT / in production — I want them analyzed and logged, but NOT fixed yet**
+
+`/TechieFlow:agents:flow-master *triage-issues {AppName} {evidence}` (§7.12). Same evidence channel as `*fix-issues` (a screenshots folder), plus it accepts a written bug list. Flow-master reproduces each issue live and delivers **docs only**: regressed REQs demoted to `Needs re-verify` with dated `⚠ UAT bug` remarks, new `Planned` REQ rows for unspecified defects, refreshed DevGuide known-issues, and a PROJECT-STATUS whose next command is the `*fix-issues` pointer naming the REQ IDs. Add `verify` to also regression-re-verify the affected screens' sibling REQs. It never edits `src/`/`tests/` and never spawns a builder — you decide when the fixing starts.
+
 **Q: How does a developer understand or verify the AI-generated code?**
 
 Run `/TechieFlow:agents:flow-master *devguide {AppName}` (also auto-run at handoff). It produces `docs/{AppName}-DevGuide.md` + a styled `.html`: every screen grouped by user role, each with a flowchart tracing the full stack (Razor page → service → data-access → stored procedure/query), a Controls table (with observed render-status from the OBSERVE pass), and a Data-lineage table. Use it to find the right service method for a bug, confirm the correct stored procedure is called, or check that a control is bound to the right DTO property. Re-run with `--update` after implementing changes to refresh only the affected screens. See §6 for the full schema and the 3-pass generation model.
@@ -866,4 +884,4 @@ The framework never *requires* MAUI — many apps are Blazor-only and build with
 
 ---
 
-Last revised 2026-07-11. Edit freely. When the workflow changes, update the session memory `MEMORY.md` under `~/.claude/projects/<this-repo's-slug>/memory/` and `WorkFlow-Context.md` (the AI-agent context doc) too.
+Last revised 2026-07-16. Edit freely. When the workflow changes, update the session memory `MEMORY.md` under `~/.claude/projects/<this-repo's-slug>/memory/` and `WorkFlow-Context.md` (the AI-agent context doc) too.

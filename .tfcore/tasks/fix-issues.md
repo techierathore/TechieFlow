@@ -4,7 +4,7 @@ The single front door for fixing bugs the owner found by running the app — UI 
 
 ## Why this exists
 
-When the verifier passes but the running UI is still broken (overlapping controls, blank screens, wrong behavior), the owner needs ONE command to hand a pile of evidence to and have it fixed end-to-end — not to choreograph trblazeui, techierag, and the verifier by hand. `*fix-issues` is that command. It is generic: a bug can be anywhere (layout, data, logic, RAG), so it triages first and routes second.
+When the verifier passes but the running UI is still broken (overlapping controls, blank screens, wrong behavior), the owner needs ONE command to hand a pile of evidence to and have it fixed end-to-end — not to choreograph trblazeui, techierag, and the verifier by hand. `*fix-issues` is that command. It is generic: a bug can be anywhere (layout, data, logic, RAG), so it triages first and routes second. (Analysis WITHOUT fixing — "log these UAT bugs, don't fix yet" — is `*triage-issues`, not this task; see §0.)
 
 ## Inputs
 
@@ -12,6 +12,10 @@ When the verifier passes but the running UI is still broken (overlapping control
 - `{Folder}` (required) — a path to a folder the owner filled with **screenshots** of the broken screens and, optionally, a **description file** (`bugs.md` / `README.md` / `notes.txt`) naming what's wrong on each (e.g. "Dashboard: KPI cards overlap the chart; Clients list shows count 16 but rows are blank"). If `{Folder}` is omitted, ask once for the folder path. (Screenshots-in-a-folder is the intended evidence channel — do not require the owner to describe bugs in chat.)
 
 ## SEQUENTIAL Execution
+
+### 0. Scope guard — was a FIX actually requested?
+
+**`*fix-issues` fixes.** If the owner's words ask only to **analyze / triage / log / document** the bugs, update the checklist, or re-verify other features — and do NOT ask for a fix — STOP: execute `.tfcore/tasks/triage-issues.md` instead (same evidence channel, docs-only deliverable) and let the owner decide about fixing afterwards. "Analyze these bugs" is NEVER permission to edit code.
 
 ### 1. Ingest the evidence
 
@@ -71,6 +75,7 @@ Next: {if open issues → re-run *fix-issues with the still-broken shots / *veri
 
 ## Hard rules
 
+- **A fix must be ASKED for.** Analyze/log/document-only requests route to `.tfcore/tasks/triage-issues.md` (§0) — never start fixing on an analysis request.
 - **One front door, flow-master routes.** The owner runs only `*fix-issues`; flow-master calls trblazeui / techierag / its own subagents. Never tell the owner to invoke a builder agent themselves.
 - **Triage from what you OBSERVE, not just the owner's words.** Reproduce live before fixing; classify by the actual data + visual gates.
 - **Both gates before "fixed".** A fix is done only when the screen renders its data AND looks right (no overlap/clip/off-viewport), confirmed by re-smoke + the verifier.
