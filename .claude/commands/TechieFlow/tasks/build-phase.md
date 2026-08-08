@@ -17,6 +17,10 @@ There is no separate `build-ui-phase` / `build-rag-phase` command — those were
 
 ## SEQUENTIAL Execution
 
+### 0. Stamp the start time
+
+Run `date -u +%Y-%m-%dT%H:%M:%SZ` and keep the value — it is this run's `started` for the §7a telemetry emit. It cannot be reconstructed at the end, and an invented duration is a fabricated measurement.
+
 ### 1. Required reading
 1. `docs/{AppName}-Coding-Standards.md` — strict compliance (`obj` field prefix where the project uses one, `a`/`v` prefixes, no underscores, file-scoped namespace, XML docs)
 2. `docs/{AppName}-Architecture.md` — module boundaries
@@ -127,6 +131,29 @@ If the verifier reports any `FAIL` / `Needs re-verify` items: return to the user
 - Log a verification-log row (Status table column → `docs/{AppName}-Checklist.md#requirements-status`).
 - Update "Library feedback summary" counts and "Standards compliance".
 
+### 7a. Emit the run record
+
+Same turn as the status gate, right after it. Doctrine + the nine constraints: `.tfcore/tasks/_metrics-emit-gate.md`. Schema: `.tfcore/telemetry/SCHEMA.md` §2.
+
+```bash
+cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
+{"kind":"run","app":"{AppName}","cmd":"build-phase","mode":"build",
+ "started":"<the §0 timestamp>","ended":"<now>","duration_s":<n>,
+ "reqs_touched":["REQ-UI-004","REQ-FN-011"],"reqs_count":2,
+ "subagents":["trblazeui"],"files_written":14,"build_result":"pass"}
+JSON
+```
+
+- **`mode` is the rework metric — get it right.** `"fix"` when §2a detected FIX mode (re-entry over `FAIL`/`Needs re-verify` rows), `"build"` on a FRESH pass. The ratio of the two is how the framework measures how much work is rework; a mislabelled run corrupts it silently.
+- `subagents` = which of `trblazeui` / `techierag` / `general-purpose` you actually fanned out to this pass. Empty array if you built everything yourself.
+- `files_written` is a count you already know — **do not shell out to compute it.**
+- `build_result` = `pass` / `fail` / `not-run` — honestly, including when the phase ended badly.
+- `reqs_touched` carries **REQ IDs only**. Never requirement text (constraint 7).
+
+The verify pass chained in §6b emits its own `gates.jsonl` records (verify-phase §6a) — do not emit those yourself; the verifier owns that stream, exactly as it owns the `Verified` verdict.
+
+**Telemetry has no veto.** If the emit fails, the phase still succeeded: do not retry, do not diagnose, do not mention it.
+
 ## Output Checklist
 
 - [ ] All open `REQ-UI/FN/RAG/NFR-*` from the checklist implemented (terminal rows untouched)
@@ -140,3 +167,4 @@ If the verifier reports any `FAIL` / `Needs re-verify` items: return to the user
 - [ ] Library issues (if any) logged to the owning per-library file
 - [ ] Standards-compliance greps clean (or violations noted)
 - [ ] **PROJECT-STATUS.md updated — FINAL GATE (phase, next command, open reqs, log row) + re-rendered HTML**
+- [ ] **`runs.jsonl` record emitted (§7a) with the correct `mode` (build vs fix)**

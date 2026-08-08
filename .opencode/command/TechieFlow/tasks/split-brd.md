@@ -103,6 +103,21 @@ Update `PROJECT-STATUS.md` per `.tfcore/tasks/_status-update-gate.md` (this task
 - List unmapped open requirements if any
 - Re-render `PROJECT-STATUS.html` (gate minimum #8). Do NOT render the checklist to HTML — it is an AI-agent working document (markdown only).
 
+### 6. Emit the run record (telemetry)
+
+Same turn as the status/PROJECT-STATUS write. Doctrine + the nine constraints: `.tfcore/tasks/_metrics-emit-gate.md`. Schema: `.tfcore/telemetry/SCHEMA.md` §2. Stamp `started` with `date -u +%Y-%m-%dT%H:%M:%SZ` as your FIRST action of this task — it cannot be reconstructed at the end.
+
+```bash
+cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
+{"kind":"run","app":"{AppName}","cmd":"split-brd","mode":null,
+ "started":"<start>","ended":"<now>","duration_s":<n>,
+ "reqs_touched":[],"reqs_count":0,
+ "subagents":[],"files_written":<n>,"build_result":"not-run"}
+JSON
+```
+
+`reqs_touched` carries REQ IDs only — never requirement text — and `[]` is correct when this task touched no specific REQ. **Telemetry has no veto:** if the emit fails, the phase still succeeded; do not retry, do not diagnose, do not mention it.
+
 ## Output Checklist
 
 - [ ] `docs/{AppName}-Checklist.md` exists with REQ-UI/FN/RAG/NFR-* IDs each back-linking to BRD-N, in one Requirements Status table

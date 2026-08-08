@@ -124,6 +124,21 @@ Always create this — follow day1-brownfield §7.4, with the greenfield differe
 
 Follow day1-brownfield §7.5 exactly: render `docs/{AppName}-BRD.md`, `docs/{AppName}-Architecture.md`, `docs/{AppName}-UsageGuide.md`, `docs/{AppName}-UIDesign.md` (the mockup spec, if §3.6 produced one), `PROJECT-STATUS.md` (no-toc + "NEXT COMMAND TO RUN" CTA box), each to its sibling `.html`, using `.tfcore/tasks/generate-html.md` with the shared shell. (`mockups.md` already rendered the `docs/mockups/*.html` screens.) **Do NOT render the checklist to HTML** — if §3.5 produced it, it stays markdown (AI-agent working document). Write tool only, no bash heredocs. The user must NEVER be told to run a render command after day-1.
 
+### 7a. Emit the run record (telemetry)
+
+Same turn as the status/PROJECT-STATUS write. Doctrine + the nine constraints: `.tfcore/tasks/_metrics-emit-gate.md`. Schema: `.tfcore/telemetry/SCHEMA.md` §2. Stamp `started` with `date -u +%Y-%m-%dT%H:%M:%SZ` as your FIRST action of this task — it cannot be reconstructed at the end.
+
+```bash
+cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
+{"kind":"run","app":"{AppName}","cmd":"day1-greenfield","mode":null,
+ "started":"<start>","ended":"<now>","duration_s":<n>,
+ "reqs_touched":[],"reqs_count":0,
+ "subagents":[],"files_written":<n>,"build_result":"not-run"}
+JSON
+```
+
+`reqs_touched` carries REQ IDs only — never requirement text — and `[]` is correct when this task touched no specific REQ. **Telemetry has no veto:** if the emit fails, the phase still succeeded; do not retry, do not diagnose, do not mention it.
+
 ### 8. HALT — summary + next-step pointer
 
 Output a numbered summary listing what was created (same shape as day1-brownfield §8, including the HTML renders). Then say:

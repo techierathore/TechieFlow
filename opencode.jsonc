@@ -15,7 +15,7 @@
         "edit": true,
         "bash": true
       },
-      "description": "Madhav — the single super-agent. Orchestrates the full pipeline (*run-workflow, *phase) with parallel subagents, runs the unified build (*build-phase — calls /trblazeui + /techierag as sub-agents), fixes bugs from screenshots (*fix-issues), analyzes + logs human-found bugs without fixing (*triage-issues), and handles doc/status utilities (*render-workflow-docs, *generate-html, *handoff-phase, *refresh-status, *devguide) plus any one-off task."
+      "description": "Madhav — the single super-agent. Orchestrates the full pipeline (*run-workflow, *phase) with parallel subagents, runs the unified build (*build-phase — calls /trblazeui + /techierag as sub-agents), fixes bugs from screenshots (*fix-issues), analyzes + logs human-found bugs without fixing (*triage-issues), reports development telemetry (*metrics), and handles doc/status utilities (*render-workflow-docs, *generate-html, *handoff-phase, *refresh-status, *devguide) plus any one-off task."
     },
     "flow-architect": {
       "prompt": "{file:./.tfcore/agents/architect.md}",
@@ -88,6 +88,10 @@
     "techieflow:tasks:refresh-status": {
       "template": "{file:./.tfcore/tasks/refresh-status.md}",
       "description": "RECOVERY: rebuild PROJECT-STATUS.md from ground truth (checklist tables + working-tree files + fresh build — NEVER git; git is manual) after a session died mid-phase and the status gate never ran. Distrusts stale status; never edits source."
+    },
+    "techieflow:tasks:metrics-report": {
+      "template": "{file:./.tfcore/tasks/metrics-report.md}",
+      "description": "Development telemetry report (*metrics): reads the append-only docs/metrics/ streams (runs / gates / sessions / commits) and writes docs/metrics/METRICS.md + .html — first-pass rate, gate catch distribution, escape rate, rework ratio, throughput, commit cadence. NEVER prints a figure that pools live with backfilled records, or app with library/docs. Never runs git."
     },
     "techieflow:tasks:render-workflow-docs": {
       "template": "{file:./.tfcore/tasks/render-workflow-docs.md}",

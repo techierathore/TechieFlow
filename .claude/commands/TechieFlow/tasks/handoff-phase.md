@@ -60,6 +60,21 @@ Detection sources for each section:
 - Append a "Verification log" row for the handoff (Result = ship-readiness verdict; Status table column → `docs/{AppName}-Checklist.md#requirements-status`)
 - **BRD §4 Development status** — per the gate's item 9, roll the now-final checklist statuses up into the BRD §4 table (at handoff, most features should land on `Done`). If the BRD has no §4 section (legacy), say so and point the user at `*refresh-status {AppName}` to add it. The re-render in §3 picks up the change.
 
+### 2a. Emit the run record (telemetry)
+
+Same turn as the status/PROJECT-STATUS write. Doctrine + the nine constraints: `.tfcore/tasks/_metrics-emit-gate.md`. Schema: `.tfcore/telemetry/SCHEMA.md` §2. Stamp `started` with `date -u +%Y-%m-%dT%H:%M:%SZ` as your FIRST action of this task — it cannot be reconstructed at the end.
+
+```bash
+cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
+{"kind":"run","app":"{AppName}","cmd":"handoff-phase","mode":null,
+ "started":"<start>","ended":"<now>","duration_s":<n>,
+ "reqs_touched":[],"reqs_count":0,
+ "subagents":[],"files_written":<n>,"build_result":"not-run"}
+JSON
+```
+
+`reqs_touched` carries REQ IDs only — never requirement text — and `[]` is correct when this task touched no specific REQ. **Telemetry has no veto:** if the emit fails, the phase still succeeded; do not retry, do not diagnose, do not mention it.
+
 ### 3. Re-render the HTMLs
 
 Invoke `render-workflow-docs {AppName}` as a subtask. Specifically:

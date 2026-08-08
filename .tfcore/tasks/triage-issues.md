@@ -21,6 +21,10 @@ The **ANALYZE-ONLY** front door for bugs a human found by running the app — UA
 
 ## SEQUENTIAL Execution
 
+### 0. Stamp the start time
+
+`date -u +%Y-%m-%dT%H:%M:%SZ` — keep it. It is this run's `started` and `run_id` for §6a.
+
 ### 1. Ingest the evidence
 
 - If a folder was given: list it, **read every screenshot** (vision) and the description file if present.
@@ -62,6 +66,43 @@ The owner often wants "and check the rest still works". With `verify`: read `.tf
 - **PROJECT-STATUS (FINAL GATE, per `_status-update-gate.md`):** overwrite in place, `.md` AND `.html`. Phase reflects reality (open bug rows pull the project back to Build/Verify per the ladder). **Next command:** the bug rows just logged are build-tier work whose front door is **`*fix-issues {AppName} {Folder}`** — point there, naming the REQ IDs (fall back to `*build-phase {AppName}` when there is no evidence folder to hand it). Add a Verification-log row ONLY if §5 ran — triage by itself is not a verify pass.
 - **Never run git.**
 
+### 6a. Emit telemetry — this is where ESCAPE RATE comes from
+
+Doctrine: `.tfcore/tasks/_metrics-emit-gate.md`. Schema: `.tfcore/telemetry/SCHEMA.md` §3.
+
+A bug reaching this task means **every gate missed it** — it got past acceptance, data-render, visual-truth and standards, and a human found it in UAT or production. That fact exists nowhere else in the framework, and it is the only way escape rate can be computed. Emit it.
+
+**One `gates.jsonl` record per REQ you demoted or newly logged in §4**, with `gate:"escaped"`:
+
+```bash
+ATT=$(bash .tfcore/utils/tf-emit.sh --next-attempt REQ-UI-009)
+cat <<JSON | bash .tfcore/utils/tf-emit.sh gates
+{"kind":"gate","app":"{AppName}","run_id":"<the run start timestamp>",
+ "req_id":"REQ-UI-009","req_class":"UI","attempt":$ATT,"verdict":"Needs re-verify",
+ "gate":"escaped","gates_run":[],"failure_class":"overlap","prior_verdict":"Verified"}
+JSON
+```
+
+- `gate` is **always `"escaped"`** here. Never name a real gate — none of them fired; that is the entire finding.
+- `gates_run` is `[]` — this task runs no gates. (Records written by the §5 verify pass are the verifier's, emitted by verify-phase §6a with real gate names. Do not duplicate them.)
+- `prior_verdict` is the Status you demoted **from** — `Verified` there is the strongest possible signal and must be recorded faithfully.
+- `failure_class` from the closed enum only. **Never the symptom text** — the symptom belongs in the checklist Remark, never in telemetry (constraint 7).
+- **Could-not-reproduce → emit nothing.** No defect was established; a record would inflate the escape rate with a non-event.
+- New `Planned` rows for never-specified behaviour: emit with `verdict:"FAIL"`, `prior_verdict:null` — the gap escaped just as surely, it simply had no REQ to escape from.
+
+Then one `runs.jsonl` record:
+
+```bash
+cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
+{"kind":"run","app":"{AppName}","cmd":"triage-issues","mode":null,
+ "started":"<start>","ended":"<now>","duration_s":<n>,
+ "reqs_touched":["REQ-UI-009"],"reqs_count":1,
+ "subagents":[],"files_written":<n>,"build_result":"not-run"}
+JSON
+```
+
+`build_result` is `"not-run"` unless you actually built something (you did not — this task never touches code). **Telemetry has no veto:** a failed emit changes nothing and is not worth reporting.
+
 ### 7. HALT — report (and DO NOT fix)
 
 ```
@@ -91,3 +132,4 @@ Next: /TechieFlow:agents:flow-master *fix-issues {AppName} {Folder}   (targets: 
 - [ ] `verify` arg honoured (scoped verify-phase EXECUTED, ledger written) — or verifier untouched
 - [ ] DevGuide known-issues refreshed; PROJECT-STATUS `.md` + `.html` updated; next command = `*fix-issues` pointer with REQ IDs
 - [ ] ZERO source/test files modified; no builder sub-agent spawned
+- [ ] `gates.jsonl` record with `gate:"escaped"` emitted per demoted/new REQ, + one `runs.jsonl` record (§6a)

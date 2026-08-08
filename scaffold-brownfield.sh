@@ -182,6 +182,16 @@ if [[ ! -f .claude/settings.json ]]; then
           }
         ]
       }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/metrics-session.sh\""
+          }
+        ]
+      }
     ]
   }
 }
@@ -294,6 +304,43 @@ if [[ ${#GI2_MISSING[@]} -gt 0 ]]; then
   echo "  .gitignore — added agent-artifact entries: ${GI2_MISSING[*]}"
 else
   echo "  .gitignore — agent-artifact entries already present"
+fi
+
+# 8c. Telemetry — docs/metrics/, the project classification, and the post-commit
+#     hook. Set up HERE, as part of the scaffold, so there is no second command
+#     for the owner to remember. The setup script never invokes git: it finds
+#     .git/hooks by reading the filesystem, because installing a hook is a file
+#     copy, not a git operation. block-git.sh is untouched.
+#     docs/metrics/ is TRACKED on purpose — it is the project's own development
+#     history, and the one thing the framework cannot reconstruct afterwards.
+bash "$TEMPLATE/.tfcore/telemetry/install-metrics.sh" . || true
+
+# 8d. .gitattributes — union-merge the telemetry streams. They are append-only
+#     logs edited on more than one machine (the portfolio is split across a Mac
+#     and WSL, and several repos are cloned on both). Two machines appending to
+#     the same file conflict on every sync, and resolving such a conflict by hand
+#     silently DROPS records — the one failure mode an append-only log must not
+#     have. `merge=union` is a built-in low-level driver: it keeps BOTH sides'
+#     added lines, needs no per-machine config, and is exactly right here.
+#     Trade-off, documented in SCHEMA.md: a union merge can duplicate a record
+#     that was written on both sides, and line order stops being chronological.
+#     Both are harmless — every consumer parses line-by-line and sorts on `ts`,
+#     and commit records de-duplicate on sha. Losing a record is not harmless.
+GA_LINES=("docs/metrics/*.jsonl merge=union")
+GA_PATS=('^docs/metrics/\*\.jsonl[[:space:]]+merge=union$')
+GA_MISSING=()
+for i in "${!GA_LINES[@]}"; do
+  [[ -f .gitattributes ]] && tr -d '\r' < .gitattributes | grep -qE "${GA_PATS[$i]}" && continue
+  GA_MISSING+=("${GA_LINES[$i]}")
+done
+if [[ ${#GA_MISSING[@]} -eq 0 ]]; then
+  echo "  .gitattributes — telemetry merge strategy already present"
+else
+  { echo ""
+    echo "# TechieFlow telemetry — append-only logs; keep BOTH sides on merge (managed by scaffold/update-framework.sh)"
+    printf '%s\n' "${GA_MISSING[@]}"
+  } >> .gitattributes
+  echo "  .gitattributes — added telemetry merge strategy: ${GA_MISSING[*]}"
 fi
 
 echo ""

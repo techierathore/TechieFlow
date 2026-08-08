@@ -61,6 +61,7 @@ This applies to EVERY phase task that boots an app (the `build-phase` self-smoke
 
 ### 0. Load inputs and build the working list
 
+- **First action, before anything else:** run `date -u +%Y-%m-%dT%H:%M:%SZ` and keep the value. It is this run's `started` **and** its `run_id` for the §6a telemetry emit. You cannot reconstruct it at the end, and an invented duration is a fabricated measurement.
 - Load `.tfcore/core-config.yaml`; resolve `{AppName}` per Inputs above. Note any `runtimeVerification.appium` endpoints — they tell you which MAUI native heads (Android/iOS/Mac Catalyst) this app ships and how to reach them (§3b).
 - Determine the scope from the command argument (`ui` / `functional` / `all` / explicit REQ IDs / legacy `phase-N`). **When this task is chained from `build-phase` or `fix-issues`, the caller has already stated the scope — use it and ask nothing.** Only if invoked standalone with NO scope: ask the user once "Verify which scope — ui, functional, all, or specific REQ IDs?" — this is the ONLY question you may ask.
 - **Checklist path (normal):** open the one checklist `docs/{AppName}-Checklist.md`. From the **Requirements Status** table, filter rows by the scope's REQ prefix (`REQ-UI-*` for `ui`; `REQ-FN/NFR/RAG-*` for `functional`; all rows for `all`) and build the working list `[{id, text, status, type-guess}]` (type-guess ∈ {ui, behavioral, backend-logic, nonfunctional}; pull each REQ's acceptance criteria from its Details anchor section).
@@ -230,6 +231,46 @@ Then **write each verdict into the Requirements Status table** of the one checkl
 A FAIL counts as "caused by a library gap" when the failing behavior traces to TrBlazeUI/TechieRag rather than app code (matches an entry in the owning library's feedback file, or your diagnosis pins it on the library). `Blocked` rows pass through phase-completion checks — they are not the app's fault.
 
 If a graded ID has no row in the Status table yet, add one.
+
+### 6a. Emit gate telemetry (immediately after the ledger + verdicts)
+
+Read `.tfcore/tasks/_metrics-emit-gate.md` once; it carries the constraints. Schema: `.tfcore/telemetry/SCHEMA.md` §3.
+
+`docs/.last-verify.json` is the *same-day unlock ledger* and is overwritten every run — it is not history. This step is what makes the run durable. **Emit ONE `gates.jsonl` record per REQ you evaluated in §6** — pass or fail, no exceptions, including `Blocked` and `Done (pre-existing)`.
+
+For each REQ:
+
+1. **`gate` — the FIRST gate that failed, or `null` on a pass.** This one field produces the whole gate-catch distribution; get it right and everything else is secondary. Execution order is `build` → `acceptance` → `render` → `visual` → `standards`. A REQ that failed §4a *and* §4b records `render`, not `visual` — recording the later gate inflates the visual gate's apparent catch rate.
+2. **`attempt` — derive it, never guess it:** `bash .tfcore/utils/tf-emit.sh --next-attempt REQ-UI-004` prints the number. Run it per REQ.
+3. **`gates_run`** — only the gates that actually executed this pass. A `⚠ STATIC-ONLY` head did not run `render` or `visual`; leave them out rather than crediting a gate that never fired.
+4. **`prior_verdict`** — the Status cell value you just overwrote (`null` if the row is new).
+5. **`failure_class`** — from the closed enum only (`blank-data` · `zero-rows` · `overlap` · `clipped` · `offscreen` · `exception` · `assert-fail` · `naming` · `build-error` · `other`). **Never free text** — a description here would leak requirement and client detail.
+6. **`run_id`** — the same value for every REQ in this pass: the timestamp you noted when the verify run started.
+
+```bash
+ATT=$(bash .tfcore/utils/tf-emit.sh --next-attempt REQ-UI-009)
+cat <<JSON | bash .tfcore/utils/tf-emit.sh gates
+{"kind":"gate","app":"{AppName}","run_id":"2026-08-08T03:41:02Z",
+ "req_id":"REQ-UI-009","req_class":"UI","attempt":$ATT,"verdict":"Needs re-verify",
+ "gate":"visual","gates_run":["acceptance","render","visual"],
+ "failure_class":"overlap","prior_verdict":"Implemented"}
+JSON
+```
+
+Map the §6 verdict table to the record: PASS → `verdict:"Verified"`, `gate:null` · RENDER-FAIL → `"Needs re-verify"`, `gate:"render"` · VISUAL-FAIL → `"Needs re-verify"`, `gate:"visual"` · FAIL → `"FAIL"`, `gate:"acceptance"` (or `"build"` if it never compiled/booted) · library-caused FAIL → `"Blocked"`, `gate` = whatever actually failed · NOT-IMPLEMENTED → `"FAIL"`, `gate:"build"`, `failure_class:"other"` · NOT-OBSERVABLE → **emit nothing**; there was no gate and no verdict, and a fabricated record would poison the distribution.
+
+Then emit ONE `runs.jsonl` record for the verify pass itself:
+
+```bash
+cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
+{"kind":"run","app":"{AppName}","cmd":"verify-phase","mode":null,
+ "started":"<run start>","ended":"<now>","duration_s":<n>,
+ "reqs_touched":["REQ-UI-009","REQ-FN-011"],"reqs_count":2,
+ "subagents":[],"files_written":<n>,"build_result":"pass"}
+JSON
+```
+
+**Hard rules for this step.** Telemetry has **no veto** — if an emit fails, the verify run still succeeded; do not retry, do not diagnose, do not mention it, and never let it change a verdict. Do not touch `docs/.last-verify.json`. Do not write metrics into the checklist or PROJECT-STATUS. Never emit `"backfilled":true` — only the owner-run `tf-metrics.sh` writes those.
 
 ### 6b. Refresh the DevGuide render-status (close the loop)
 

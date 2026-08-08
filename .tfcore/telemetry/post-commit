@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# TechieFlow telemetry — post-commit hook TEMPLATE.
+# Installed into <app>/.git/hooks/post-commit by .tfcore/telemetry/install-metrics.sh.
+#
+# This fires inside the OWNER's own `git commit`. No agent is involved, and no
+# agent may install, edit, or trigger it — agents never run git (see
+# .tfcore/hooks/block-git.sh). This is the only automated path that touches git,
+# and it only READS the commit that just happened.
+#
+# KNOWN LIMITATION (documented in SCHEMA.md §5): post-commit fires AFTER the
+# commit is sealed, so the line appended here lands in the NEXT commit. Metrics
+# lag reality by one commit. Do NOT "fix" this with pre-commit + `git add` —
+# that would put git inside an automated path, and the whole design depends on
+# git staying manual and owner-driven.
+#
+# Never stores the commit subject — only its conventional-commit prefix, if any.
+# Subjects leak project detail. Exits 0 unconditionally: a commit must never fail
+# because of telemetry.
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+[[ -n "$ROOT" ]] || exit 0
+EMIT="$ROOT/.tfcore/utils/tf-emit.sh"
+[[ -x "$EMIT" ]] || [[ -f "$EMIT" ]] || exit 0
+
+SHA="$(git rev-parse --short HEAD 2>/dev/null)"          || exit 0
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"  || BRANCH="detached"
+WHEN="$(TZ=UTC0 git log -1 --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd 2>/dev/null)"
+SUBJ="$(git log -1 --format=%s 2>/dev/null)"
+STAT="$(git show --shortstat --format= HEAD 2>/dev/null | tail -1)"
+
+# Conventional-commit prefix ONLY — the rest of the subject is discarded right here
+# and never leaves this script. Matches the first token when it is one of the seven.
+PREFIX="$(printf '%s' "$SUBJ" | sed -n 's/^\(feat\|fix\|docs\|chore\|refactor\|test\|build\)\([(!: ].*\)\?$/\1/p' | head -1)"
+
+FILES="$(printf '%s' "$STAT"  | grep -oE '[0-9]+ files? changed'  | grep -oE '^[0-9]+')"
+INS="$(printf '%s'   "$STAT"  | grep -oE '[0-9]+ insertions?'     | grep -oE '^[0-9]+')"
+DEL="$(printf '%s'   "$STAT"  | grep -oE '[0-9]+ deletions?'      | grep -oE '^[0-9]+')"
+: "${FILES:=0}" "${INS:=0}" "${DEL:=0}"
+
+if [[ -n "$PREFIX" ]]; then PJ="\"$PREFIX\""; else PJ="null"; fi
+TS_FIELD=""
+[[ -n "$WHEN" ]] && TS_FIELD="\"ts\":\"$WHEN\","
+
+printf '{%s"kind":"commit","sha":"%s","files":%s,"insertions":%s,"deletions":%s,"subject_prefix":%s,"branch":"%s"}\n' \
+  "$TS_FIELD" "$SHA" "$FILES" "$INS" "$DEL" "$PJ" "$BRANCH" \
+  | TF_METRICS_ROOT="$ROOT" bash "$EMIT" commits >/dev/null 2>&1
+
+exit 0

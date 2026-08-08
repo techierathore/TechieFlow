@@ -136,6 +136,7 @@
     <li><a href="#quickref">Command reference</a></li>
     <li><a href="#faq">FAQ &amp; gotchas</a></li>
     <li><a href="#platforms">Running on macOS / Windows / Linux</a></li>
+    <li><a href="#telemetry">Development telemetry</a></li>
   </ol>
 </nav>
 
@@ -1217,6 +1218,8 @@ dotnet build -t:Run -f net9.0-android          # Android head (emulator via Andr
   <tr><td><strong>Recover broken session</strong> (status stale/wrong)</td><td><code>/TechieFlow:agents:flow-master *refresh-status {AppName}</code> — rebuilds PROJECT-STATUS from ground truth (checklist tables + working-tree files &amp; mtimes + fresh build; no git — git is manual) when a phase died before its status gate ran. Add <code>verify</code> to re-verify ambiguous REQs. Never edits source. See §8a.</td></tr>
   <tr><td>MAUI build+test</td><td>WSL: <code>winrun "dotnet build &amp;&amp; dotnet test"</code> · macOS: <code>dotnet build &amp;&amp; dotnet test</code> (native, no bridge — <a href="#wsl-runtime">§11</a>)</td></tr>
   <tr><td>Resume cold project (status trustworthy)</td><td>Open <code>PROJECT-STATUS.html</code> + <code>&lt;APP&gt;-BRD.html</code> + <code>&lt;APP&gt;-Architecture.html</code> → <code>git status &amp;&amp; dotnet build</code> → <code>/TechieFlow:agents:verifier</code> re-verify → execute "Next command". If the last session was cut off mid-phase, run <code>*refresh-status</code> first (row above).</td></tr>
+  <tr><td>Development telemetry report (<a href="#telemetry">§17</a>)</td><td><code>/TechieFlow:agents:flow-master *metrics {AppName}</code> &mdash; writes <code>docs/metrics/METRICS.md</code> + <code>.html</code></td></tr>
+  <tr><td>Telemetry, quick look in the terminal (<a href="#telemetry">§17</a>)</td><td><code>cd /path/to/app &amp;&amp; .tfcore/telemetry/tf-metrics.sh --report .</code> &mdash; read-only, no agent</td></tr>
 </table>
 
 <p><small>The trblazeui and techierag personas are NuGet-deployed to <code>.claude/&lt;name&gt;.md</code> and <code>.opencode/command/&lt;name&gt;.md</code>. Claude Code only scans <code>.claude/commands/</code>, so the scaffold/update scripts copy them to <code>.claude/commands/&lt;name&gt;.md</code> (the short <code>/trblazeui</code> <code>/techierag</code> forms then work). If the short form is missing: <code>dotnet build</code>, then re-run <code>update-framework.sh</code>.</small></p>
@@ -1369,8 +1372,142 @@ The <code>winrun</code> bridge and <code>cmd.exe</code> rungs simply don't apply
 
 <p><strong>Notes.</strong> The framework never <em>requires</em> MAUI — many apps are Blazor-only and build with plain <code>dotnet build</code> everywhere. The full per-platform <code>dotnet</code> invocation detail lives in <code>.tfcore/templates/v4custom/build-invocation-ladder.md</code> (what the agents read); this section is the human-facing summary.</p>
 
+<h2 id="telemetry">17. Development telemetry — what the framework measures about itself<span class="anchor-link"><a href="#telemetry">#</a></span></h2>
+
+<p>TechieFlow already produced this evidence and used to throw it away. Every <code>*verify</code> run applies four separately-named gates to individually-identified requirements and writes verdicts into the Requirements Status table; <code>docs/.last-verify.json</code> recorded the run. Then the next run overwrote it, the table was mutated in place, and the history was gone. Telemetry keeps it.</p>
+
+<p><strong>Three questions, and nothing else:</strong></p>
+<ol>
+  <li><strong>First-pass rate</strong> — what fraction of REQs reach <code>Verified</code> on attempt 1?</li>
+  <li><strong>Gate catch distribution</strong> — of all failures, which gate caught them?</li>
+  <li><strong>Escape rate</strong> — what fraction of defects reached UAT/production (logged by <code>*triage-issues</code>) instead of being caught by a gate?</li>
+</ol>
+
+<p>There is deliberately <strong>no cycle-time-per-feature</strong>. The unit of work here is <em>the run</em>, not the ticket.</p>
+
+<h3>Where it lands</h3>
+
+<p>Four append-only JSONL streams in <code>docs/metrics/</code>, <strong>tracked by version control on purpose</strong> — this is the project's own development history, and the one thing the framework cannot reconstruct afterwards.</p>
+
+<table>
+<thead><tr><th>File</th><th>One record per</th><th>Written by</th></tr></thead>
+<tbody>
+<tr><td><code>runs.jsonl</code></td><td>framework command run</td><td>each phase task, at completion (the status gate is the trigger)</td></tr>
+<tr><td><code>gates.jsonl</code></td><td>REQ verdict per verify run — <strong>the primary stream</strong></td><td><code>verify-phase</code> §6a, and <code>triage-issues</code> for escapes</td></tr>
+<tr><td><code>sessions.jsonl</code></td><td>agent session</td><td>the <code>SessionEnd</code> hook (<code>.tfcore/hooks/metrics-session.sh</code>)</td></tr>
+<tr><td><code>commits.jsonl</code></td><td>commit</td><td>your own <code>post-commit</code> hook — never an agent</td></tr>
+</tbody>
+</table>
+
+<p>Schema, enums and every known limitation: <code>.tfcore/telemetry/SCHEMA.md</code>. Doctrine for agents: <code>.tfcore/tasks/_metrics-emit-gate.md</code>.</p>
+
+<h3>Setup — there isn't one</h3>
+
+<p>Telemetry rides the normal framework refresh. There is <strong>no separate install command</strong>:</p>
+
+<p><strong>on WSL/Linux:</strong></p>
+<pre><code>/mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/YourApp
+</code></pre>
+
+<p><strong>on macOS:</strong></p>
+<pre><code>/Volumes/MacD/MyCode/TechieFlow/update-framework.sh /path/to/YourApp
+</code></pre>
+
+<p>That one command creates <code>docs/metrics/</code>, seeds the four streams, installs the <code>post-commit</code> hook, and warns if an ignore rule would swallow the data. The scaffolds do the same on a fresh project. It is idempotent, so every later refresh keeps it current.</p>
+
+<p><strong>project_type is auto-detected once</strong> (a packable <code>.csproj</code> → <code>library</code>; <code>.razor</code>/<code>.xaml</code> present → <code>app</code>; no source → <code>docs</code>; this repo → <code>framework</code>), printed loudly, written to <code>core-config.yaml</code>, and then never guessed again — <code>core-config.yaml</code> is a preserved file, so your classification survives every refresh. Correct a wrong guess with:</p>
+
+<pre><code>.tfcore/telemetry/install-metrics.sh . --type app|library|docs|framework
+</code></pre>
+
+<p><strong>Nothing here invokes git.</strong> The hooks directory is found by reading the filesystem — installing a hook is a file copy, not a git operation — so <code>block-git.sh</code> is untouched and no permission prompt appears, whoever runs the refresh.</p>
+
+<h3>Updating the metrics — you don't</h3>
+
+<p>There is no "update metrics" step. The streams fill themselves as you work: every <code>*build-phase</code>, <code>*verify all</code>, <code>*fix-issues</code>, <code>*triage-issues</code>, <code>*handoff-phase</code> and day-1 run appends its own record as its last action, the <code>SessionEnd</code> hook adds a session, and your own commits add themselves. If you never think about telemetry again, it still accumulates.</p>
+
+<p>The only thing that needs doing per repo is the framework refresh you already run:</p>
+
+<pre><code>/mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/YourApp
+</code></pre>
+
+<h3>Viewing the metrics — two ways</h3>
+
+<p><strong>1. Quick look, in the terminal.</strong> No agent, no tokens, read-only — run it from inside the app repo:</p>
+
+<pre><code>cd /path/to/YourApp
+.tfcore/telemetry/tf-metrics.sh --report .
+</code></pre>
+
+<p>Prints first-pass rate, gate catch distribution, escape rate, rework ratio, batch size, throughput and commit cadence — already segmented, with <code>insufficient data</code> wherever there are fewer than three supporting records.</p>
+
+<p><strong>2. The full report, as a document.</strong> Ask flow-master; it writes <code>docs/metrics/METRICS.md</code> and renders <code>docs/metrics/METRICS.html</code> (open that in a browser — it uses the same themed shell as your other docs):</p>
+
+<p><strong>Claude Code:</strong></p>
+<pre><code>/TechieFlow:agents:flow-master *metrics YourApp
+</code></pre>
+
+<p><strong>OpenCode:</strong></p>
+<pre><code>/flow-master *metrics YourApp
+</code></pre>
+
+<h3>Across several projects at once</h3>
+
+<pre><code>.tfcore/telemetry/tf-metrics.sh --rollup . /path/to/OtherApp /path/to/Third
+</code></pre>
+
+<p>Still segmented — <code>app</code> and <code>library</code> repos are reported side by side, never averaged together. Or hand the same paths to the command: <code>*metrics YourApp /path/to/OtherApp</code>.</p>
+
+<h3>Seeding history from what you already have (optional, once per repo)</h3>
+
+<p>Your repos have years of history the streams know nothing about. Two backfills can import some of it. <strong>Both are yours to run, never an agent's</strong> — and always preview with <code>--dry-run</code> first:</p>
+
+<pre><code>cd /path/to/YourApp
+.tfcore/telemetry/tf-metrics.sh --backfill-commits . --dry-run
+.tfcore/telemetry/tf-metrics.sh --backfill-commits .
+</code></pre>
+
+<p><strong>Commit backfill is trustworthy.</strong> It walks the commit log, which is itself an append-only log, so reconstructed commits are exactly as good as live ones and are reported together with them. This is also the reason the <code>post-commit</code> hook is optional.</p>
+
+<pre><code>.tfcore/telemetry/tf-metrics.sh --backfill-gates . --dry-run
+</code></pre>
+
+<p><strong>Gate backfill is context, not evidence.</strong> It reads each REQ's current row in <code>&lt;APP&gt;-Checklist.md</code> plus any dated remarks. But that table is a snapshot that gets overwritten in place, not a log — a REQ that failed three times and then passed looks identical to one that passed first try. Every record it writes is stamped <code>backfilled: true</code> with an <code>inferred</code> list, is reported in its own separate column, and <strong>can never support a published first-pass rate</strong>. Useful for volume and shape; not for a number you would defend.</p>
+
+<h3>If a project is classified wrong</h3>
+
+<p>The refresh auto-detects <code>project_type</code> once and prints what it chose. If it guessed wrong — the giveaway is a library reported as though the visual gate could fire on it — correct it and it stays corrected:</p>
+
+<pre><code>.tfcore/telemetry/install-metrics.sh . --type app|library|docs|framework
+</code></pre>
+
+<h3>What to expect early on</h3>
+
+<p>The streams start empty, and the report refuses to invent numbers from thin data — you will see <code>insufficient data (n=…)</code> on most rows until roughly three verify runs have happened. That is the report working, not a fault. The first genuinely interesting reading usually comes after a build → verify → fix cycle or two.</p>
+
+<table>
+<thead><tr><th>You want to…</th><th>Run</th></tr></thead>
+<tbody>
+<tr><td>Turn telemetry on for a repo</td><td><code>update-framework.sh /path/to/YourApp</code> (nothing else)</td></tr>
+<tr><td>Glance at the numbers now</td><td><code>.tfcore/telemetry/tf-metrics.sh --report .</code></td></tr>
+<tr><td>Produce the readable report</td><td><code>*metrics YourApp</code> → <code>docs/metrics/METRICS.html</code></td></tr>
+<tr><td>Compare several projects</td><td><code>tf-metrics.sh --rollup . /path/to/OtherApp</code></td></tr>
+<tr><td>Import commit history</td><td><code>tf-metrics.sh --backfill-commits .</code></td></tr>
+<tr><td>Import checklist history</td><td><code>tf-metrics.sh --backfill-gates .</code> (context only)</td></tr>
+<tr><td>Fix a wrong classification</td><td><code>install-metrics.sh . --type library</code></td></tr>
+</tbody>
+</table>
+
+<div class="panel"><strong>Why some figures are never combined.</strong> The report will not print a single first-pass rate, gate catch distribution, or escape rate that pools <em>live</em> with <em>backfilled</em> records, or pools <code>app</code> with <code>library</code>/<code>docs</code> — not as a total row, not as an "overall" line. A backfilled attempt count is inferred from a status table that never recorded attempts, so a merged first-pass rate cannot be defended when someone asks how attempts were counted. A pooled gate distribution understates the visual gate, because library and docs projects never had screens to fail on. One indefensible figure contaminates every other number on the page. Commit-derived metrics are exempt — the commit log is a real append-only log, and commit volume is comparable across project types.</div>
+
+<div class="panel"><strong>The one-commit lag.</strong> <code>post-commit</code> fires <em>after</em> the commit is sealed, so the record it appends rides in the <em>next</em> commit. Metrics lag reality by one commit. This is deliberate — the workaround would be a <code>pre-commit</code> hook that stages the file, which puts version control inside an automated path, and the whole design depends on <a href="#permissions">commits staying manual and owner-driven</a>. Agents are not involved in this stream at all: the only script containing version-control commands (<code>.tfcore/telemetry/tf-metrics.sh</code>) is owner-run, and <code>block-git.sh</code> is untouched by this feature.</div>
+
+<div class="panel"><strong>Privacy — assume every record could become public.</strong> Records carry IDs, counts, durations, verdicts and file paths <em>at most</em>. Never requirement text, prompt text, file contents, or commit subjects — only a commit's conventional-commit prefix (<code>feat</code>/<code>fix</code>/…) is kept, and the subject is discarded on the spot. <code>failure_class</code> is a closed vocabulary for exactly this reason. This framework is used on employer projects, and these files are append-only: a leaked field is not something you fix later.</div>
+
+<div class="panel"><strong>Telemetry has no veto.</strong> No metrics write can fail a build, block a tool call, abort a phase, or print an error. <code>tf-emit.sh</code> exits 0 unconditionally — missing directory, malformed JSON, absent <code>python3</code>, full disk — and the event is simply dropped. Same fail-open posture as the <code>guard-status</code> / <code>guard-verify</code> hooks. A telemetry bug must never cost you a working session.</div>
+
 <hr>
-<p class="small">Last revised 2026-07-16. Edit freely. When the workflow changes, update the session memory <code>MEMORY.md</code> under <code>~/.claude/projects/&lt;this-repo's-slug&gt;/memory/</code> and <code>WorkFlow-Context.md</code> (the AI-agent context doc) too.</p>
+<p class="small">Last revised 2026-08-08. Edit freely. When the workflow changes, update the session memory <code>MEMORY.md</code> under <code>~/.claude/projects/&lt;this-repo's-slug&gt;/memory/</code> and <code>WorkFlow-Context.md</code> (the AI-agent context doc) too.</p>
 
 </main>
 </div>

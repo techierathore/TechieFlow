@@ -374,6 +374,21 @@ A brownfield project already has built code, so the screen-by-screen **Developer
   - **If §3.5 ran** (a dev plan was migrated → `docs/{AppName}-Checklist.md` exists): the devguide logs every confirmed defect into the owning `REQ-*`'s Remarks (and flags `Needs re-verify` where the feature is actually broken) per its §6a — markdown only, never checklist HTML.
   - **If §3.5 did NOT run** (no checklist until `*split-brd`): the devguide cannot map screen → `REQ-*` yet, so its findings stay in the DevGuide's own "Known issues" prose. **Tell the user in §8** to run `*devguide {AppName} --update` immediately AFTER `*split-brd` so those findings get pushed into the freshly-created checklist (otherwise the day-1 defects are lost when the verifier later trusts a clean checklist).
 
+### 7a. Emit the run record (telemetry)
+
+Same turn as the status/PROJECT-STATUS write. Doctrine + the nine constraints: `.tfcore/tasks/_metrics-emit-gate.md`. Schema: `.tfcore/telemetry/SCHEMA.md` §2. Stamp `started` with `date -u +%Y-%m-%dT%H:%M:%SZ` as your FIRST action of this task — it cannot be reconstructed at the end.
+
+```bash
+cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
+{"kind":"run","app":"{AppName}","cmd":"day1-brownfield","mode":null,
+ "started":"<start>","ended":"<now>","duration_s":<n>,
+ "reqs_touched":[],"reqs_count":0,
+ "subagents":[],"files_written":<n>,"build_result":"not-run"}
+JSON
+```
+
+`reqs_touched` carries REQ IDs only — never requirement text — and `[]` is correct when this task touched no specific REQ. **Telemetry has no veto:** if the emit fails, the phase still succeeded; do not retry, do not diagnose, do not mention it.
+
 ### 8. HALT — produce a summary and stop
 
 Output a numbered summary listing what was created:

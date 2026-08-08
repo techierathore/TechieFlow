@@ -1,0 +1,264 @@
+#!/usr/bin/env bash
+# TechieFlow telemetry — per-repo setup. Called AUTOMATICALLY by
+# update-framework.sh, scaffold-brownfield.sh and scaffold-greenfield.sh.
+#
+#   You do NOT normally run this yourself. Refreshing the framework sets up
+#   telemetry as part of the same command — there is no separate install step.
+#
+#   Run it directly only to CORRECT the project classification:
+#       .tfcore/telemetry/install-metrics.sh <repo> --type library
+#
+# WHAT IT DOES (idempotent, non-interactive, safe on every re-run):
+#   1. creates docs/metrics/ and seeds the four empty streams
+#   2. writes docs/metrics/README.md (for a human who finds the files)
+#   3. records metrics.project_type in .tfcore/core-config.yaml — auto-detected
+#      ONCE, printed loudly, then never touched again (core-config.yaml is a
+#      preserved file, so the classification survives every framework refresh)
+#   4. installs .git/hooks/post-commit
+#   5. warns if a .gitignore pattern would swallow docs/metrics/
+#
+# IT NEVER INVOKES GIT. The hooks directory is located by reading the filesystem
+# (.git/ as a directory, or the `gitdir:` pointer when .git is a file), so this
+# script runs identically whether a human or an agent triggered the refresh, and
+# .tfcore/hooks/block-git.sh stays exactly as it is. Installing a hook is a file
+# copy; it is not a git operation.
+#
+# Telemetry has no veto: this script prints warnings, never aborts its caller.
+set -uo pipefail
+
+TEMPLATE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+TARGET=""
+PTYPE=""
+DRY=0
+QUIET=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --type)     PTYPE="${2:-}"; shift 2 ;;
+    --dry-run)  DRY=1; shift ;;
+    --quiet)    QUIET=1; shift ;;
+    -h|--help)  sed -n '2,20p' "$0"; exit 0 ;;
+    *)          TARGET="$1"; shift ;;
+  esac
+done
+
+say() { [[ $QUIET -eq 1 ]] || echo "$@"; }
+
+[[ -n "$TARGET" ]] || { echo "usage: install-metrics.sh <repo> [--type app|library|docs|framework] [--dry-run]" >&2; exit 1; }
+[[ -d "$TARGET" ]] || { echo "not a directory: $TARGET" >&2; exit 1; }
+cd "$TARGET" || exit 1
+TARGET="$(pwd -P)"
+
+[[ -d .tfcore ]] || { say "  telemetry — no .tfcore/ here, skipped"; exit 0; }
+
+CFG=".tfcore/core-config.yaml"
+
+# --- 1. project_type -----------------------------------------------------
+# Read whatever is already recorded. Once set, it is NEVER re-guessed — the
+# owner's classification always wins over the heuristic.
+EXISTING=""
+if [[ -f "$CFG" ]]; then
+  EXISTING="$(sed -n '/^metrics:[[:space:]]*$/,/^[^[:space:]#]/p' "$CFG" 2>/dev/null \
+              | sed -n 's/^[[:space:]]\{1,\}project_type:[[:space:]]*["'"'"']\{0,1\}\([a-z]*\).*/\1/p' | head -1)"
+fi
+
+# Heuristic, run ONCE per repo and then never again (the answer is preserved in
+# core-config.yaml). Kept deliberately cheap: build output and package caches are
+# PRUNED and the walk is depth-limited, because an unpruned scan of a large repo on
+# a /mnt/c mount takes minutes — and this runs inside every framework refresh.
+_scan() {  # _scan <maxdepth> <find-expr...>   -> prints the first match, then stops
+  find . -maxdepth "$1" \
+       \( -type d \( -name bin -o -name obj -o -name node_modules -o -name .git \
+                     -o -name .vs -o -name artifacts -o -name TestResults \) -prune \) \
+       -o "${@:2}" -print 2>/dev/null | head -1
+}
+
+_csprojs() {
+  find . -maxdepth 5 \
+       \( -type d \( -name bin -o -name obj -o -name node_modules -o -name .git \
+                     -o -name .vs -o -name artifacts \) -prune \) \
+       -o -name '*.csproj' -print 2>/dev/null | head -60
+}
+
+detect_type() {
+  # framework: this repo DEPLOYS the framework rather than consuming it
+  [[ -f scaffold-brownfield.sh && -d .tfcore/tasks ]] && { echo framework; return; }
+
+  local projects packable heads name
+  projects="$(_csprojs)"
+
+  # docs: a markdown/spec repo — no source at all
+  [[ -z "$projects" ]] && { echo docs; return; }
+
+  # Packable = genuinely published. IsPackable is usually <IsPackable>false</IsPackable>
+  # on test projects, so only an explicit `true` counts.
+  packable="$(printf '%s\n' "$projects" | xargs -r grep -lE \
+      '<(PackageId>|GeneratePackageOnBuild>[[:space:]]*true|IsPackable>[[:space:]]*true)' 2>/dev/null)"
+
+  # A shipped executable/hostable head: console/desktop (Exe), MAUI, or ASP.NET/Blazor host.
+  heads="$(printf '%s\n' "$projects" | xargs -r grep -lE \
+      '<OutputType>[[:space:]]*Exe|<UseMaui>[[:space:]]*true|Sdk="Microsoft\.NET\.Sdk\.(Web|BlazorWebAssembly)"' 2>/dev/null)"
+
+  # THE DECIDING TEST: is a packaged project the product, or merely a helper?
+  # A library repo's package carries the repo's own name (TrBlazeUI.Components);
+  # an app's packable support libs do not (AstroLyfe ships AstroCore, SwissEphStd
+  # and is still an app). Name-match beats "has any packable project", which would
+  # misclassify every app that factors a NuGet-published helper out of its solution.
+  name="$(ls docs/*-Checklist.md 2>/dev/null | head -1)"
+  name="$(basename "${name:-$PWD}" 2>/dev/null)"; name="${name%-Checklist.md}"
+  [[ -z "$name" ]] && name="$(basename "$PWD")"
+  if [[ -n "$packable" ]] && printf '%s\n' "$packable" \
+       | grep -qiE "/${name}(\.[A-Za-z0-9._-]+)?\.csproj$"; then
+    echo library; return
+  fi
+
+  # A shipped head means it is an app, however many helper packages ride along.
+  [[ -n "$heads" ]] && { echo app; return; }
+
+  # No head at all, but something is published -> a library.
+  [[ -n "$packable" ]] && { echo library; return; }
+
+  # Last resorts: runtime screens -> app; otherwise assume app and let the owner correct.
+  [[ -n "$(_scan 6 \( -name '*.razor' -o -name '*.xaml' \))" ]] && { echo app; return; }
+  echo app
+}
+
+GUESSED=0
+if [[ -n "$PTYPE" ]]; then
+  :
+elif [[ -n "$EXISTING" ]]; then
+  PTYPE="$EXISTING"
+else
+  PTYPE="$(detect_type)"
+  GUESSED=1
+fi
+
+case "$PTYPE" in
+  app|library|docs|framework) ;;
+  *) echo "  ⚠ telemetry — invalid project_type '$PTYPE' (app|library|docs|framework); leaving unset" >&2; PTYPE="$EXISTING" ;;
+esac
+
+if [[ -n "$PTYPE" && "$EXISTING" != "$PTYPE" ]]; then
+  if [[ $DRY -eq 1 ]]; then
+    if [[ $GUESSED -eq 1 ]]; then
+      say "  $CFG — WOULD set metrics.project_type: $PTYPE  (auto-detected)"
+    else
+      say "  $CFG — WOULD set metrics.project_type: $PTYPE"
+    fi
+  elif [[ -n "$EXISTING" ]]; then
+    python3 - "$CFG" "$PTYPE" <<'PY' 2>/dev/null
+import re, sys
+p, t = sys.argv[1], sys.argv[2]
+s = open(p, encoding="utf-8").read()
+s = re.sub(r"(^metrics:[ \t]*\n(?:[ \t]+.*\n)*?[ \t]+project_type:[ \t]*)\S+",
+           lambda m: m.group(1) + t, s, count=1, flags=re.M)
+open(p, "w", encoding="utf-8").write(s)
+PY
+    say "  $CFG — metrics.project_type changed to '$PTYPE'"
+  else
+    {
+      echo ""
+      echo "# metrics: telemetry classification. PRESERVED per-project — the framework"
+      echo "# scripts never overwrite core-config.yaml, so this survives every refresh."
+      echo "# app | library | docs | framework — see .tfcore/telemetry/SCHEMA.md §1."
+      echo "# Gate-catch metrics are only comparable between projects of the SAME type:"
+      echo "# a library has no screens, so it can never fail the visual-truth gate."
+      echo "metrics:"
+      echo "  project_type: $PTYPE"
+    } >> "$CFG"
+    if [[ $GUESSED -eq 1 ]]; then
+      say "  $CFG — metrics.project_type: $PTYPE  (AUTO-DETECTED — correct it with:"
+      say "                  .tfcore/telemetry/install-metrics.sh . --type app|library|docs|framework)"
+    else
+      say "  $CFG — metrics.project_type: $PTYPE"
+    fi
+  fi
+fi
+
+# --- 2. docs/metrics/ + the four streams ---------------------------------
+if [[ $DRY -eq 1 ]]; then
+  [[ -d docs/metrics ]] && say "  docs/metrics/ — present" \
+                        || say "  docs/metrics/ — WOULD create + seed runs/gates/sessions/commits.jsonl"
+else
+  mkdir -p docs/metrics
+  NEW=()
+  for s in runs gates sessions commits; do
+    [[ -f "docs/metrics/$s.jsonl" ]] || { : > "docs/metrics/$s.jsonl"; NEW+=("$s"); }
+  done
+  [[ ${#NEW[@]} -gt 0 ]] && say "  docs/metrics/ — seeded ${NEW[*]}" || say "  docs/metrics/ — streams present"
+fi
+
+# --- 3. docs/metrics/README.md -------------------------------------------
+if [[ $DRY -eq 0 ]]; then
+cat > docs/metrics/README.md <<'MD'
+# docs/metrics — development telemetry
+
+Append-only JSONL. **Tracked by git on purpose** — this is the project's own
+development history, and it is the one thing the framework cannot reconstruct
+after the fact.
+
+| File | One record per | Written by |
+|---|---|---|
+| `runs.jsonl` | framework command run | the task, at completion |
+| `gates.jsonl` | REQ verdict per verify run — **the primary stream** | `verify-phase` §6a, `triage-issues` |
+| `sessions.jsonl` | agent session | the `SessionEnd` hook |
+| `commits.jsonl` | commit | the repo's own `post-commit` hook |
+
+Schema, enums, and every known limitation: `.tfcore/telemetry/SCHEMA.md`.
+Report: `/TechieFlow:agents:flow-master *metrics <AppName>` → `METRICS.md`.
+
+**Never edit these files by hand, never sort them, never compact them.** They are
+a log. Rewriting one destroys exactly the history it exists to keep.
+
+**No secrets, no content, no client data** — records carry IDs, counts, durations,
+verdicts and file paths at most. Never requirement text, prompt text, file
+contents, or commit subjects. Assume every line here could become public.
+
+`commits.jsonl` lags by one commit: the `post-commit` hook fires after the commit
+is sealed, so its record rides in the next one. If that bothers you, delete the
+hook — `.tfcore/telemetry/tf-metrics.sh --backfill-commits` reconstructs the same
+data perfectly at any time, because the commit log is itself an append-only log.
+MD
+fi
+
+# --- 4. post-commit hook — located WITHOUT invoking git ------------------
+HOOKS_DIR=""
+if [[ -d .git ]]; then
+  HOOKS_DIR=".git/hooks"
+elif [[ -f .git ]]; then
+  # worktree / submodule: ".git" is a file containing "gitdir: <path>"
+  GD="$(sed -n 's/^gitdir:[[:space:]]*//p' .git | head -1)"
+  [[ -n "$GD" ]] && { [[ "$GD" = /* ]] || GD="$TARGET/$GD"; [[ -d "$GD" ]] && HOOKS_DIR="$GD/hooks"; }
+fi
+
+if [[ -z "$HOOKS_DIR" ]]; then
+  say "  post-commit — not a work tree yet; commits.jsonl stays empty (re-run the updater after init)"
+elif [[ $DRY -eq 1 ]]; then
+  if [[ -f "$HOOKS_DIR/post-commit" ]] && cmp -s "$TEMPLATE/.tfcore/telemetry/post-commit" "$HOOKS_DIR/post-commit"; then
+    say "  $HOOKS_DIR/post-commit — already current"
+  else
+    say "  $HOOKS_DIR/post-commit — WOULD install the commit-telemetry hook"
+  fi
+else
+  mkdir -p "$HOOKS_DIR" 2>/dev/null
+  SRC="$TEMPLATE/.tfcore/telemetry/post-commit"
+  DEST="$HOOKS_DIR/post-commit"
+  if [[ -f "$DEST" ]] && cmp -s "$SRC" "$DEST"; then
+    say "  $DEST — already current"
+  else
+    if [[ -f "$DEST" ]] && ! grep -q 'TechieFlow telemetry' "$DEST" 2>/dev/null; then
+      cp "$DEST" "$DEST.pre-techieflow.bak"
+      say "  ⚠ $DEST — YOUR existing hook was backed up to post-commit.pre-techieflow.bak and REPLACED,"
+      say "    not merged. Chain it back in by hand if you need both."
+    fi
+    cp "$SRC" "$DEST" && chmod +x "$DEST" && say "  $DEST — installed"
+  fi
+fi
+
+# --- 5. the data must stay TRACKED --------------------------------------
+if [[ -f .gitignore ]] && tr -d '\r' < .gitignore | grep -qE '^/?docs/?$|^/?docs/metrics'; then
+  echo "  ⚠ .gitignore has a pattern that would swallow docs/metrics/ — the telemetry data"
+  echo "    MUST be tracked. Add an explicit negation:  !docs/metrics/  and  !docs/metrics/**"
+fi
+
+exit 0

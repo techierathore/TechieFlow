@@ -158,6 +158,21 @@ For each **confirmed** defect (not a `{unresolved — TODO}` you couldn't verify
 
 Add/refresh one line under "Where I am" / artifacts: `DevGuide generated {date}: docs/{AppName}-DevGuide.md (single) or docs/devguides/ (split) (+ .html); {N} defects logged to the checklists`. This task does not change build/verify state, so do not touch `current_phase` or `last_verified_build`; the only Requirements Status table edits allowed are the §6a defect remarks/flags. Re-render `PROJECT-STATUS.html` only if you edited it.
 
+### 7a. Emit the run record (telemetry)
+
+Same turn as the status/PROJECT-STATUS write. Doctrine + the nine constraints: `.tfcore/tasks/_metrics-emit-gate.md`. Schema: `.tfcore/telemetry/SCHEMA.md` §2. Stamp `started` with `date -u +%Y-%m-%dT%H:%M:%SZ` as your FIRST action of this task — it cannot be reconstructed at the end.
+
+```bash
+cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
+{"kind":"run","app":"{AppName}","cmd":"devguide","mode":null,
+ "started":"<start>","ended":"<now>","duration_s":<n>,
+ "reqs_touched":[],"reqs_count":0,
+ "subagents":[],"files_written":<n>,"build_result":"not-run"}
+JSON
+```
+
+`reqs_touched` carries REQ IDs only — never requirement text — and `[]` is correct when this task touched no specific REQ. **Telemetry has no veto:** if the emit fails, the phase still succeeded; do not retry, do not diagnose, do not mention it.
+
 ### 8. HALT — report
 
 ```

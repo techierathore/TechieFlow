@@ -62,6 +62,21 @@ In ONE turn, route each issue to its builder as a sub-agent, in parallel where t
 - **PROJECT-STATUS (FINAL GATE, per `_status-update-gate.md`):** update `PROJECT-STATUS.md` AND re-render `PROJECT-STATUS.html` — open requirements, a verification-log row, next command. A markdown-only update is incomplete.
 - **Never run git.** Investigate by reading working-tree files at `file:line`, never a diff.
 
+### 6a. Emit the run record
+
+Same turn as the status gate. Doctrine: `.tfcore/tasks/_metrics-emit-gate.md`; schema `.tfcore/telemetry/SCHEMA.md` §2. Stamp `started` with `date -u +%Y-%m-%dT%H:%M:%SZ` at §1, before you ingest anything.
+
+```bash
+cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
+{"kind":"run","app":"{AppName}","cmd":"fix-issues","mode":"fix",
+ "started":"<start>","ended":"<now>","duration_s":<n>,
+ "reqs_touched":["REQ-UI-009"],"reqs_count":1,
+ "subagents":["trblazeui"],"files_written":<n>,"build_result":"pass"}
+JSON
+```
+
+`mode` is always `"fix"` here — that is the whole point of this command. The verifier chained in §5 emits its own `gates.jsonl` records; do not emit those yourself. **Telemetry has no veto:** a failed emit never changes the outcome and is not worth reporting.
+
 ### 7. HALT — report
 
 ```
@@ -91,4 +106,5 @@ Next: {if open issues → re-run *fix-issues with the still-broken shots / *veri
 - [ ] Fixes fanned out to the right builder (trblazeui / flow-master subagent / techierag) — owner did NOT invoke any agent
 - [ ] Re-smoked (data + visual) and verifier re-run on the affected REQs (verdicts in the checklist)
 - [ ] DevGuide affected screens refreshed; PROJECT-STATUS.md + .html updated (status gate)
+- [ ] `runs.jsonl` record emitted with `cmd:"fix-issues"`, `mode:"fix"` (§6a)
 - [ ] Report printed with fixed vs still-open counts

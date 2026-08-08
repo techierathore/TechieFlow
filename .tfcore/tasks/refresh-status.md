@@ -86,6 +86,21 @@ Bring `docs/{AppName}-BRD.md`'s **§4 Development status** table in line with th
 - Re-render `docs/{AppName}-BRD.html` via `.tfcore/tasks/generate-html.md` (shared shell). If you renumbered, double-check every BRD diagram still passes the §5.5 mermaid self-check (you didn't touch them, but the re-render must not introduce bare labels).
 - Note in the §6 report whether §4 was refreshed in place or inserted (migration), and which features changed status.
 
+### 4a. Emit the run record (telemetry)
+
+Same turn as the status/PROJECT-STATUS write. Doctrine + the nine constraints: `.tfcore/tasks/_metrics-emit-gate.md`. Schema: `.tfcore/telemetry/SCHEMA.md` §2. Stamp `started` with `date -u +%Y-%m-%dT%H:%M:%SZ` as your FIRST action of this task — it cannot be reconstructed at the end.
+
+```bash
+cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
+{"kind":"run","app":"{AppName}","cmd":"refresh-status","mode":null,
+ "started":"<start>","ended":"<now>","duration_s":<n>,
+ "reqs_touched":[],"reqs_count":0,
+ "subagents":[],"files_written":<n>,"build_result":"not-run"}
+JSON
+```
+
+`reqs_touched` carries REQ IDs only — never requirement text — and `[]` is correct when this task touched no specific REQ. **Telemetry has no veto:** if the emit fails, the phase still succeeded; do not retry, do not diagnose, do not mention it.
+
 ### 5. Optional verify pass (only if `verify` flag given, or you flagged ambiguity)
 
 If invoked with `verify`, or if step 3 left any REQ in an evidence-ambiguous state (files present but never smoked/verified), chain the verifier: read `.tfcore/tasks/verify-phase.md` and execute it inline with the narrowest scope that covers the ambiguous REQs (`ui` / `functional` / `all` / explicit REQ-ID list) — skip its §0 question, scope is known. The verifier writes verdicts into the tables; then re-run step 4's PROJECT-STATUS write so it reflects the fresh verdicts. The verifier never edits source, so this stays safe to run during recovery.

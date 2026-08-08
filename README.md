@@ -748,6 +748,8 @@ The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **a
 | Scaffold (greenfield) | `./scaffold-greenfield.sh /path/to/new-app` (or run from the template repo) |
 | Update framework in existing project (§3) | WSL: `/mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/app` · macOS: `/Volumes/MacD/MyCode/TechieFlow/update-framework.sh /path/to/app` (add `--dry-run` to preview; restart Claude Code after) |
 | Render any MD → HTML (ad-hoc) | `/generate-html @docs/File.md` (multiple `@paths` ok; `@dir/` = top-level *.md, non-recursive; day-1 auto-renders its own docs — this is for re-renders after edits) |
+| Development telemetry report (§17) | `/TechieFlow:agents:flow-master *metrics {AppName}` — writes `docs/metrics/METRICS.md` + `.html` (first-pass rate, gate catch distribution, escape rate) |
+| Telemetry, quick look in the terminal (§17) | `cd /path/to/app && .tfcore/telemetry/tf-metrics.sh --report .` — read-only, no agent |
 | Day-1 brownfield (6 deliverables + UsageGuide + DevGuide) | `/TechieFlow:agents:analyst *day1-brownfield {AppName}` |
 | Day-1 greenfield (6 deliverables) | `/TechieFlow:agents:analyst *day1-greenfield {AppName}` |
 | Re-render BRD/Architecture/Status trio (day-1 renders these automatically) | `/TechieFlow:agents:flow-master *render-workflow-docs {AppName}` |
@@ -884,4 +886,149 @@ The framework never *requires* MAUI — many apps are Blazor-only and build with
 
 ---
 
-Last revised 2026-07-16. Edit freely. When the workflow changes, update the session memory `MEMORY.md` under `~/.claude/projects/<this-repo's-slug>/memory/` and `WorkFlow-Context.md` (the AI-agent context doc) too.
+## 17. Development telemetry — what the framework measures about itself
+
+TechieFlow already produced this evidence and used to throw it away. Every `*verify` run applies four separately-named gates to individually-identified requirements and writes verdicts into the Requirements Status table; `docs/.last-verify.json` recorded the run. Then the next run overwrote it, the table was mutated in place, and the history was gone. Telemetry keeps it.
+
+**Three questions, and nothing else:**
+
+1. **First-pass rate** — what fraction of REQs reach `Verified` on attempt 1?
+2. **Gate catch distribution** — of all failures, which gate caught them?
+3. **Escape rate** — what fraction of defects reached UAT/production (logged by `*triage-issues`) instead of being caught by a gate?
+
+There is deliberately **no cycle-time-per-feature**. The unit of work here is *the run*, not the ticket.
+
+### Where it lands
+
+Four append-only JSONL streams in `docs/metrics/`, **tracked by version control on purpose** — this is the project's own development history, and the one thing the framework cannot reconstruct afterwards.
+
+| File | One record per | Written by |
+| --- | --- | --- |
+| `runs.jsonl` | framework command run | each phase task, at completion (the status gate is the trigger) |
+| `gates.jsonl` | REQ verdict per verify run — **the primary stream** | `verify-phase` §6a, and `triage-issues` for escapes |
+| `sessions.jsonl` | agent session | the `SessionEnd` hook (`.tfcore/hooks/metrics-session.sh`) |
+| `commits.jsonl` | commit | your own `post-commit` hook — never an agent |
+
+Schema, enums and every known limitation: `.tfcore/telemetry/SCHEMA.md`. Doctrine for agents: `.tfcore/tasks/_metrics-emit-gate.md`.
+
+### Setup — there isn't one
+
+Telemetry rides the normal framework refresh. There is **no separate install command**:
+
+**on WSL/Linux:**
+
+```bash
+/mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/YourApp
+```
+
+**on macOS:**
+
+```bash
+/Volumes/MacD/MyCode/TechieFlow/update-framework.sh /path/to/YourApp
+```
+
+That one command creates `docs/metrics/`, seeds the four streams, installs the `post-commit` hook, and warns if an ignore rule would swallow the data. The scaffolds do the same on a fresh project. It is idempotent, so every later refresh keeps it current.
+
+**project_type is auto-detected once** (a packable `.csproj` → `library`; `.razor`/`.xaml` present → `app`; no source → `docs`; this repo → `framework`), printed loudly, written to `core-config.yaml`, and then never guessed again — `core-config.yaml` is a preserved file, so your classification survives every refresh. Correct a wrong guess with:
+
+```bash
+.tfcore/telemetry/install-metrics.sh . --type app|library|docs|framework
+```
+
+**Nothing here invokes git.** The hooks directory is found by reading the filesystem — installing a hook is a file copy, not a git operation — so `block-git.sh` is untouched and no permission prompt appears, whoever runs the refresh.
+
+### Updating the metrics — you don't
+
+There is no "update metrics" step. The streams fill themselves as you work: every `*build-phase`, `*verify all`, `*fix-issues`, `*triage-issues`, `*handoff-phase` and day-1 run appends its own record as its last action, the `SessionEnd` hook adds a session, and your own commits add themselves. If you never think about telemetry again, it still accumulates.
+
+The only thing that needs doing per repo is the framework refresh you already run:
+
+```bash
+/mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/YourApp
+```
+
+### Viewing the metrics — two ways
+
+**1. Quick look, in the terminal.** No agent, no tokens, read-only — run it from inside the app repo:
+
+```bash
+cd /path/to/YourApp
+.tfcore/telemetry/tf-metrics.sh --report .
+```
+
+Prints first-pass rate, gate catch distribution, escape rate, rework ratio, batch size, throughput and commit cadence — already segmented, with `insufficient data` wherever there are fewer than three supporting records.
+
+**2. The full report, as a document.** Ask flow-master; it writes `docs/metrics/METRICS.md` and renders `docs/metrics/METRICS.html` (open that in a browser — it uses the same themed shell as your other docs):
+
+**Claude Code:**
+
+```
+/TechieFlow:agents:flow-master *metrics YourApp
+```
+
+**OpenCode:**
+
+```
+/flow-master *metrics YourApp
+```
+
+### Across several projects at once
+
+```bash
+.tfcore/telemetry/tf-metrics.sh --rollup . /path/to/OtherApp /path/to/Third
+```
+
+Still segmented — `app` and `library` repos are reported side by side, never averaged together. Or hand the same paths to the command: `*metrics YourApp /path/to/OtherApp`.
+
+### Seeding history from what you already have (optional, once per repo)
+
+Your repos have years of history the streams know nothing about. Two backfills can import some of it. **Both are yours to run, never an agent's** — and always preview with `--dry-run` first:
+
+```bash
+cd /path/to/YourApp
+.tfcore/telemetry/tf-metrics.sh --backfill-commits . --dry-run
+.tfcore/telemetry/tf-metrics.sh --backfill-commits .
+```
+
+**Commit backfill is trustworthy.** It walks the commit log, which is itself an append-only log, so reconstructed commits are exactly as good as live ones and are reported together with them. This is also the reason the `post-commit` hook is optional.
+
+```bash
+.tfcore/telemetry/tf-metrics.sh --backfill-gates . --dry-run
+```
+
+**Gate backfill is context, not evidence.** It reads each REQ's current row in `<APP>-Checklist.md` plus any dated remarks. But that table is a snapshot that gets overwritten in place, not a log — a REQ that failed three times and then passed looks identical to one that passed first try. Every record it writes is stamped `backfilled: true` with an `inferred` list, is reported in its own separate column, and **can never support a published first-pass rate**. Useful for volume and shape; not for a number you would defend.
+
+### If a project is classified wrong
+
+The refresh auto-detects `project_type` once and prints what it chose. If it guessed wrong — the giveaway is a library reported as though the visual gate could fire on it — correct it and it stays corrected:
+
+```bash
+.tfcore/telemetry/install-metrics.sh . --type app|library|docs|framework
+```
+
+### What to expect early on
+
+The streams start empty, and the report refuses to invent numbers from thin data — you will see `insufficient data (n=…)` on most rows until roughly three verify runs have happened. That is the report working, not a fault. The first genuinely interesting reading usually comes after a build → verify → fix cycle or two.
+
+| You want to… | Run |
+| --- | --- |
+| Turn telemetry on for a repo | `update-framework.sh /path/to/YourApp` (nothing else) |
+| Glance at the numbers now | `.tfcore/telemetry/tf-metrics.sh --report .` |
+| Produce the readable report | `*metrics YourApp` → `docs/metrics/METRICS.html` |
+| Compare several projects | `tf-metrics.sh --rollup . /path/to/OtherApp` |
+| Import commit history | `tf-metrics.sh --backfill-commits .` |
+| Import checklist history | `tf-metrics.sh --backfill-gates .` (context only) |
+| Fix a wrong classification | `install-metrics.sh . --type library` |
+
+**Why some figures are never combined.** The report will not print a single first-pass rate, gate catch distribution, or escape rate that pools *live* with *backfilled* records, or pools `app` with `library`/`docs` — not as a total row, not as an "overall" line. A backfilled attempt count is inferred from a status table that never recorded attempts, so a merged first-pass rate cannot be defended when someone asks how attempts were counted. A pooled gate distribution understates the visual gate, because library and docs projects never had screens to fail on. One indefensible figure contaminates every other number on the page. Commit-derived metrics are exempt — the commit log is a real append-only log, and commit volume is comparable across project types.
+
+**The one-commit lag.** `post-commit` fires *after* the commit is sealed, so the record it appends rides in the *next* commit. Metrics lag reality by one commit. This is deliberate — the workaround would be a `pre-commit` hook that stages the file, which puts version control inside an automated path, and the whole design depends on commits staying manual and owner-driven (§12). Agents are not involved in this stream at all: the only script containing version-control commands (`.tfcore/telemetry/tf-metrics.sh`) is owner-run, and `block-git.sh` is untouched by this feature.
+
+**Privacy — assume every record could become public.** Records carry IDs, counts, durations, verdicts and file paths *at most*. Never requirement text, prompt text, file contents, or commit subjects — only a commit's conventional-commit prefix (`feat`/`fix`/…) is kept, and the subject is discarded on the spot. `failure_class` is a closed vocabulary for exactly this reason. This framework is used on employer projects, and these files are append-only: a leaked field is not something you fix later.
+
+**Telemetry has no veto.** No metrics write can fail a build, block a tool call, abort a phase, or print an error. `tf-emit.sh` exits 0 unconditionally — missing directory, malformed JSON, absent `python3`, full disk — and the event is simply dropped. Same fail-open posture as the `guard-status` / `guard-verify` hooks. A telemetry bug must never cost you a working session.
+
+---
+
+
+Last revised 2026-08-08. Edit freely. When the workflow changes, update the session memory `MEMORY.md` under `~/.claude/projects/<this-repo's-slug>/memory/` and `WorkFlow-Context.md` (the AI-agent context doc) too.
