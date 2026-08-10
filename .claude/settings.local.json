@@ -104,7 +104,9 @@
       "Bash(bash .tfcore/telemetry/tf-metrics.sh --report /mnt/c/1MyCode/TechieBlog)",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); l=d['levels'][0]; print\\(' status:',d['status'],'| p95 load:',l['load_ms']['p95'],'ms | samples:',l['samples'],'| weak:',l['weak']\\)\")",
       "Bash(cp .tfcore/tasks/verify-phase.md .claude/commands/TechieFlow/tasks/verify-phase.md)",
-      "Bash(./update-framework.sh /mnt/c/1MyCode/TechieBlog)"
+      "Bash(./update-framework.sh /mnt/c/1MyCode/TechieBlog)",
+      "Bash(mkdir -p /tmp/claude-1000/-mnt-c-3AIGenCode-TechieFlow/0f7441a7-2289-40d9-8c58-5031caeb2bb3/scratchpad/techieblog-scripts-cluster-backup)",
+      "Bash(cp -r scripts-cluster-b scripts-cluster-f scripts-cluster-g scripts-cluster-i /tmp/claude-1000/-mnt-c-3AIGenCode-TechieFlow/0f7441a7-2289-40d9-8c58-5031caeb2bb3/scratchpad/techieblog-scripts-cluster-backup/)"
     ]
   }
 }
