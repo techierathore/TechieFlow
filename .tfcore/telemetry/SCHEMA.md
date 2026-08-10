@@ -121,7 +121,7 @@ Failure:
 | `attempt` | int | See §3.1. Derive it; never guess it. |
 | `verdict` | string | Mirrors the checklist vocabulary **exactly**: `Verified` \| `Needs re-verify` \| `FAIL` \| `Blocked` \| `Implemented` \| `Done (pre-existing)`. |
 | `gate` | string \| null | **The FIRST gate that failed**, or `null` on a pass. See §3.2. |
-| `gates_run` | string[] | Which gates actually executed this pass — subset of `["build","acceptance","render","visual","standards"]`, in execution order. A gate absent here did **not** run and cannot be credited or blamed. |
+| `gates_run` | string[] | Which gates actually executed this pass — subset of `["build","acceptance","render","visual","perf","standards"]`, in execution order. A gate absent here did **not** run and cannot be credited or blamed. For `perf` this carries real weight: see §3.5. |
 | `failure_class` | string \| null | Controlled vocabulary only, §3.3. `null` on a pass. |
 | `prior_verdict` | string \| null | The Status cell value **before** this run wrote over it. `null` if the row is new. |
 | `proof` | string \| null | Optional, §3.4. |
@@ -154,25 +154,44 @@ Get this right; everything else on the record is secondary.
 | `acceptance` | The REQ's acceptance test ran and failed (Playwright spec, `dotnet test`). |
 | `render` | verify-phase §4a data-render gate — a control is `RENDER-EMPTY` / `RENDER-ERROR` (blank table, count-vs-rows mismatch, empty chart). |
 | `visual` | verify-phase §4b visual-truth gate — overlap, clip, off-viewport, unstyled fallback, mockup drift. |
+| `perf` | verify-phase §4c performance gate — measured p95 exceeded the REQ's declared `perf-budget:` by more than 25%. **Added 2026-08-10; see §3.5 before reading its share of the distribution.** |
 | `standards` | The standards grep — naming/prefix/structure violation against `docs/{AppName}-Coding-Standards.md`. |
 | `escaped` | **Not a gate.** A defect that reached UAT/production and was logged by `*triage-issues` — i.e. *every* gate missed it. This value is what makes escape rate computable. Written only by `triage-issues.md`. |
 | `null` | Nothing failed. |
 
-**"First" means first in execution order** (`build` → `acceptance` → `render` → `visual` → `standards`). If a REQ fails render *and* visual, `gate` is `render`. Recording the later one inflates the visual gate's apparent catch rate.
+**"First" means first in execution order** (`build` → `acceptance` → `render` → `visual` → `perf` → `standards`). If a REQ fails render *and* visual, `gate` is `render`. Recording the later one inflates the visual gate's apparent catch rate.
 
 `gate: "escaped"` is deliberately in the same field rather than a separate one: escape rate is "which gate caught it — none of them", and keeping it on one axis means a single `group by gate` answers questions 2 and 3 together. Reports must nonetheless present `escaped` as its own row, never folded into a gate's share.
 
 ### 3.3 `failure_class` — controlled vocabulary, no free text
 
-`blank-data` · `zero-rows` · `overlap` · `clipped` · `offscreen` · `exception` · `assert-fail` · `naming` · `build-error` · `other`
+`blank-data` · `zero-rows` · `overlap` · `clipped` · `offscreen` · `slow-ttfb` · `slow-load` · `timeout` · `exception` · `assert-fail` · `naming` · `build-error` · `other`
 
 If none fits, use `other`. **Do not** write a description. Free text here would leak requirement and client detail — the exact thing constraint 8 forbids.
+
+`slow-ttfb` / `slow-load` / `timeout` (added 2026-08-10) name *which metric* the budget was written against, or — for `timeout` — that the run failed by shedding load rather than by being slow (requests never completed at the declared concurrency). Nothing more. **Never record the measured milliseconds anywhere in a record.** A latency figure is a property of one machine on one day — these streams are read across hosts and pooled across months, so a number here would be compared with numbers it was never comparable to. The measurement itself belongs in the run's JSON under `tests/.artifacts/perf/` and in the checklist Remark a human reads.
 
 ### 3.4 `proof` — optional, cross-edition
 
 `executed` \| `code-audit` \| `null`.
 
 Reserved for the shared schema with the AI-First-Playbook team edition (see §8). TechieFlow's solo edition emits `executed` normally; it may emit `code-audit` **only** where a run stamped `⚠ STATIC-ONLY` because a runtime bridge was unreachable. It never converts a `code-audit` proof into a `Verified` verdict — `guard-verify.sh` already refuses that.
+
+### 3.5 Gates added after the stream started — read their share against `gates_run`, never against the total
+
+`perf` entered the enum on **2026-08-10**, long after `gates.jsonl` started collecting. Every record written before that date had **zero chance** of recording `gate:"perf"`, and even after it, most records still will not: the gate fires only for a REQ carrying a `perf-budget:`, never for a native head, and never on a Debug build or a thin sample (`verify-phase` §4c).
+
+So the raw gate catch distribution — a `Counter` over `gate` across all failures — **understates `perf` structurally**, and the size of the understatement is not knowable from that count alone. The correct denominator is *records that actually ran the gate*:
+
+```
+perf catch rate = failures with gate="perf"  ÷  records with "perf" in gates_run
+```
+
+This is why `gates_run` must be populated truthfully rather than padded with every gate name. Listing `perf` on a REQ that had no budget would silently inflate the denominator and drive the gate's apparent catch rate toward zero — the same class of error as recording a later failing gate in `gate`, and just as invisible after the fact.
+
+**The rule for any future gate.** A gate added mid-stream carries this hazard permanently; the fix is never to backfill the old records with a verdict they never had. Instead: record its introduction date here, populate `gates_run` honestly, and let a report present its coverage (`n` records that ran it) beside its count. `tf-metrics.sh --report` prints exactly that for `perf` and refuses to print a share without it.
+
+The reasoning, recorded because it will be questioned later: a gate distribution is a claim about *what catches what*. A gate that only ran on 6 of 400 records did not fail to catch things — it was not asked. Presenting those as the same number is the same indefensible merge the provenance rule (§5) forbids for backfilled data, arriving by a different route.
 
 ---
 

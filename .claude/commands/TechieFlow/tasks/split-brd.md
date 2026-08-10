@@ -73,6 +73,12 @@ Schema per `.tfcore/templates/v4custom/app-checklist-tmpl.md` — the **Requirem
 <a id="d-req-fn-001"></a>
 - **REQ-FN-001** — {trigger / acceptance} (BRD-X)
 
+<!-- If the source BRD NFR carried a `perf-budget:` line, copy it into the REQ's Acceptance
+     bullet VERBATIM — same grammar, same numbers. verify-phase §4c reads it literally and
+     grades speed only where it exists. Never synthesize one for an NFR that lacked it, and
+     never drop one that was there: both silently change what "Verified" means for that REQ. -->
+
+
 ## RAG / AI requirements (→ /techierag)
 <a id="d-req-rag-001"></a>
 - **REQ-RAG-001** — {trigger / acceptance via TechieRag} (BRD-X)

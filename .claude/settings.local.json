@@ -96,7 +96,15 @@
       "Bash(cp /mnt/c/3AIGenCode/TrBlazeUI/docs/skills/claude-code-trblazeui.md .claude/commands/trblazeui.md)",
       "Bash(cp .tfcore/tasks/verify-phase.md .tfcore/tasks/_smoke-test-policy.md .claude/commands/TechieFlow/tasks/)",
       "Bash(bash -n scaffold-brownfield.sh)",
-      "Bash(bash -n scaffold-greenfield.sh)"
+      "Bash(bash -n scaffold-greenfield.sh)",
+      "Bash(bash .tfcore/utils/tf-perf.sh --base http://127.0.0.1:8791 --paths \"/\" --levels 1 --requests 8 --build-config Release --json-out tests/.artifacts/perf/selftest.json)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(' status:',d['status'],'| p95 load:',d['levels'][0]['load_ms']['p95'],'ms | weak:',d['levels'][0]['weak']\\)\")",
+      "Bash(grep -qE '^/?tests/\\\\.artifacts/?$')",
+      "Bash(bash -n .tfcore/utils/tf-perf.sh)",
+      "Bash(bash .tfcore/telemetry/tf-metrics.sh --report /mnt/c/1MyCode/TechieBlog)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); l=d['levels'][0]; print\\(' status:',d['status'],'| p95 load:',l['load_ms']['p95'],'ms | samples:',l['samples'],'| weak:',l['weak']\\)\")",
+      "Bash(cp .tfcore/tasks/verify-phase.md .claude/commands/TechieFlow/tasks/verify-phase.md)",
+      "Bash(./update-framework.sh /mnt/c/1MyCode/TechieBlog)"
     ]
   }
 }

@@ -534,11 +534,17 @@ fi
 #     regenerable, never the owner's to triage at commit time. Root-anchored
 #     (/package.json) so a genuine nested frontend package is not swept up.
 #     playwright.config.ts stays TRACKED (committed test suites depend on it).
+#     CANONICAL LOCATION since 2026-08-10: every run artifact goes under
+#     tests/.artifacts/ (pinned by playwright.config.ts outputDir). The bare
+#     test-results/ and the test-results-*/ glob are LEGACY-ONLY entries — agents
+#     used to write per-cluster siblings (test-results-cluster-a/ ...) that the
+#     bare pattern never matched, so screenshot dumps piled up untracked at the
+#     repo root. A compliant run now writes none of them.
 #     Same reminder as 8: ignore rules don't UNtrack already-committed files —
 #     run `git rm -r --cached <path>` once for any of these already tracked.
 # --------------------------------------------------------------------------
-GI2_LINES=("node_modules/" "/package.json" "/package-lock.json" "test-results/" "playwright-report/" ".verify/" "logs/" "/docs/.last-verify.json" ".DS_Store")
-GI2_PATS=('^/?node_modules/?$' '^/?package\.json$' '^/?package-lock\.json$' '^/?test-results/?$' '^/?playwright-report/?$' '^/?\.verify/?$' '^/?logs/?$' '^/?docs/\.last-verify\.json$' '^\.DS_Store$')
+GI2_LINES=("node_modules/" "/package.json" "/package-lock.json" "tests/.artifacts/" "test-results/" "test-results-*/" "playwright-report/" ".verify/" "logs/" "/docs/.last-verify.json" ".DS_Store")
+GI2_PATS=('^/?node_modules/?$' '^/?package\.json$' '^/?package-lock\.json$' '^/?tests/\.artifacts/?$' '^/?test-results/?$' '^/?test-results-\*/?$' '^/?playwright-report/?$' '^/?\.verify/?$' '^/?logs/?$' '^/?docs/\.last-verify\.json$' '^\.DS_Store$')
 GI2_MISSING=()
 for i in "${!GI2_LINES[@]}"; do
   [[ -f .gitignore ]] && tr -d '\r' < .gitignore | grep -qE "${GI2_PATS[$i]}" && continue

@@ -37,7 +37,14 @@ from collections import Counter, defaultdict, OrderedDict
 
 STREAMS = ("runs", "gates", "sessions", "commits")
 VERDICTS = ("Verified", "Needs re-verify", "FAIL", "Blocked", "Implemented", "Done (pre-existing)")
-GATE_ORDER = ("build", "acceptance", "render", "visual", "standards", "escaped")
+GATE_ORDER = ("build", "acceptance", "render", "visual", "perf", "standards", "escaped")
+
+# Gates that entered the enum after gates.jsonl started collecting. Their share of a raw
+# distribution is structurally understated — records written before the date never had the
+# chance to record them, and (for `perf`) most records after it still do not run the gate.
+# The honest denominator is "records that actually ran it", i.e. gates_run membership.
+# SCHEMA.md §3.5. Keep this table in sync when a gate is added.
+LATE_GATES = {"perf": "2026-08-10"}
 MIN_N = 3  # fewer supporting records than this -> "insufficient data", never a number
 
 
@@ -361,6 +368,12 @@ def analyse(repos):
                     (g, dist.get(g, 0)) for g in GATE_ORDER + ("unattributed",) if dist.get(g)),
                 "gate_distribution_n": len(failures),
                 "gate_distribution_note": None if len(failures) >= MIN_N else "insufficient data (n=%d)" % len(failures),
+                # Coverage for late-added gates: how many records actually RAN each one.
+                # Reported beside the count so nobody reads a share off the wrong denominator.
+                "late_gate_coverage": OrderedDict(
+                    (g, {"ran": sum(1 for r in recs if g in (r.get("gates_run") or [])),
+                         "caught": dist.get(g, 0), "since": since})
+                    for g, since in LATE_GATES.items()),
                 "escape_rate": pct(len(escaped_reqs), len(failed_reqs)) if len(failed_reqs) >= MIN_N
                                else "insufficient data (n=%d)" % len(failed_reqs),
             }
@@ -426,7 +439,20 @@ def print_report(a, repos):
                 print("     gate catch dist.    : (%d failures)" % total)
                 for g, n in m["gate_distribution"].items():
                     tag = "  <- escaped: NO gate caught it" if g == "escaped" else ""
+                    if g in LATE_GATES:
+                        tag = "  <- see coverage below (added %s)" % LATE_GATES[g]
                     print("         %-14s %4d  %s%s" % (g, n, pct(n, total), tag))
+            # A late-added gate's share of the total above is NOT its catch rate. Print the
+            # real denominator, or say plainly that the gate has not run yet. SCHEMA.md §3.5.
+            for g, cov in m.get("late_gate_coverage", {}).items():
+                if cov["ran"] == 0 and cov["caught"] == 0:
+                    print("     %-19s: not yet run on this data (gate added %s)" % (g + " gate", cov["since"]))
+                else:
+                    rate = (pct(cov["caught"], cov["ran"]) if cov["ran"] >= MIN_N
+                            else "insufficient data (n=%d)" % cov["ran"])
+                    print("     %-19s: ran on %d records, caught %d -> %s"
+                          % (g + " gate", cov["ran"], cov["caught"], rate))
+                    print("                          (share of the distribution above is NOT this rate)")
             print("")
 
     if len(a["live"]) > 1 or (a["live"] and a["backfilled"]):

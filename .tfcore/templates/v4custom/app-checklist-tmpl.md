@@ -52,7 +52,14 @@
 <!-- Each REQ carries an explicit `<a id="d-REQ-ID">` anchor (lowercase) so the
      Details column above links straight to it in both Markdown and rendered HTML.
      UI REQs are built by /trblazeui from the approved mockups (docs/{AppName}-UIDesign.md
-     + docs/mockups/*.html); cite the mockup screen each REQ realizes. -->
+     + docs/mockups/*.html); cite the mockup screen each REQ realizes.
+
+     A REQ whose BRD NFR declared a `perf-budget:` carries that line VERBATIM in its
+     Acceptance bullet — split-brd copies it across unchanged. It is machine-read by
+     verify-phase §4c, which grades speed only where such a line exists. Never add one
+     that the BRD did not state, and never paraphrase it: the grammar is
+         perf-budget: <p50|p95|max> <ttfb|load> <= <N>ms [@ concurrency <N>] -->
+
 
 ### Page: Dashboard (`/dashboard`)
 
@@ -64,6 +71,13 @@
 
 <a id="d-req-fn-001"></a>
 - **REQ-FN-001** — <trigger / acceptance>.
+
+<!-- Example of a perf-gated NFR row (only where the BRD declared the budget):
+<a id="d-req-nfr-001"></a>
+- **REQ-NFR-001** — Public pages stay responsive under normal load. (BRD-N)
+  - *Acceptance:* pages return 200 and render their data; perf-budget: p95 load <= 2000ms @ concurrency 1
+-->
+
 
 ## RAG / AI requirements (→ /techierag)
 

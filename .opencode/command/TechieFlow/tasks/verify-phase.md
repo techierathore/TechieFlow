@@ -64,7 +64,7 @@ This applies to EVERY phase task that boots an app (the `build-phase` self-smoke
 - **First action, before anything else:** run `date -u +%Y-%m-%dT%H:%M:%SZ` and keep the value. It is this run's `started` **and** its `run_id` for the §6a telemetry emit. You cannot reconstruct it at the end, and an invented duration is a fabricated measurement.
 - Load `.tfcore/core-config.yaml`; resolve `{AppName}` per Inputs above. Note any `runtimeVerification.appium` endpoints — they tell you which MAUI native heads (Android/iOS/Mac Catalyst) this app ships and how to reach them (§3b).
 - Determine the scope from the command argument (`ui` / `functional` / `all` / explicit REQ IDs / legacy `phase-N`). **When this task is chained from `build-phase` or `fix-issues`, the caller has already stated the scope — use it and ask nothing.** Only if invoked standalone with NO scope: ask the user once "Verify which scope — ui, functional, all, or specific REQ IDs?" — this is the ONLY question you may ask.
-- **Checklist path (normal):** open the one checklist `docs/{AppName}-Checklist.md`. From the **Requirements Status** table, filter rows by the scope's REQ prefix (`REQ-UI-*` for `ui`; `REQ-FN/NFR/RAG-*` for `functional`; all rows for `all`) and build the working list `[{id, text, status, type-guess}]` (type-guess ∈ {ui, behavioral, backend-logic, nonfunctional}; pull each REQ's acceptance criteria from its Details anchor section).
+- **Checklist path (normal):** open the one checklist `docs/{AppName}-Checklist.md`. From the **Requirements Status** table, filter rows by the scope's REQ prefix (`REQ-UI-*` for `ui`; `REQ-FN/NFR/RAG-*` for `functional`; all rows for `all`) and build the working list `[{id, text, status, type-guess, perf-budget}]` (type-guess ∈ {ui, behavioral, backend-logic, nonfunctional}; pull each REQ's acceptance criteria from its Details anchor section). While reading the acceptance criteria, capture any `perf-budget:` line verbatim — that, and only that, is what makes a REQ perf-gradeable in §4c. Most REQs will have none; that is expected and is not a gap to fill.
 - **`Done (pre-existing)` is NOT a free pass — it is an unverified migrated claim.** Do NOT skip those rows. They were carried over from a dev-plan and have **never been runtime-verified** — this is exactly how blank-rendering screens slipped through (a `Done (pre-existing)` home page with an empty table and a blank list). Every in-scope row, **including `Done (pre-existing)`**, gets the **§4a DevGuide render sweep** at minimum (load its screens, confirm every control actually renders its data). Only `N/A` rows are skipped. Rows already `Verified` get a fast re-confirm (render sweep + re-run their test); `Done (pre-existing)` that passes the render sweep gets a `runtime render-confirmed {date}` remark and may stay Done; anything that renders blank/empty/errors → `Needs re-verify`/`FAIL` (§6).
 - **Load the DevGuide map.** Read the DevGuide (`docs/{AppName}-DevGuide.md`, or the split set under `docs/devguides/`) and, for each in-scope screen, extract the list of controls + their expected data source from the *Controls*/*Data lineage* tables. This is the checklist of what must render in §4a. If no DevGuide exists, note it and fall back to acceptance-criteria-only grading, and recommend `*devguide {AppName}` in the report.
 - **Legacy BRD path (only for `phase-N` scope on pre-split projects):** locate the BRD (`customTechnicalDocuments`, then `docs/{AppName}-BRD*.md`, then `docs/brd*.md`/`docs/BRD*.md`) and extract that phase's numbered IDs (`BRD-12`, `REQ-12`, `FR-12`, `[BRD-12]`). If no numbered IDs exist, STOP auto-grading and tell the user: "This phase has no numbered, checkable requirements, so coverage cannot be graded by ID. Number them as BRD-N (or run `*split-brd`) and re-run." Then offer a loose best-effort prose verification.
@@ -77,8 +77,24 @@ Run these checks yourself and act on them. Echo a one-line summary of what you d
 - If no `package.json` in repo root: `npm init -y`.
 - Check Playwright: run `npx playwright --version`. If it errors or is absent: `npm install -D @playwright/test`.
 - Check browsers: attempt `npx playwright install chromium`. If it reports missing system libraries (common on a fresh WSL/Ubuntu): run `npx playwright install --with-deps chromium`. If that needs sudo and sudo is unavailable, run `sudo npx playwright install --with-deps chromium`; if sudo also fails, report the single apt command the user must run once and HALT (this is the only situation where a manual step is unavoidable, and it happens at most once per machine).
-- Ensure a minimal `playwright.config.ts` exists at repo root. If absent, create one with: testDir `./tests/verify`, `use: { screenshot: 'only-on-failure', trace: 'retain-on-failure', headless: true }`, and `reporter: 'line'`.
-- **Gitignore what you provision — in this same step, never later.** Git is manual in TechieFlow: the owner runs every commit and must NEVER have to triage machine artifacts. Check `.gitignore` for each of: `node_modules/`, `/package.json`, `/package-lock.json`, `test-results/`, `playwright-report/`, `.verify/`, `logs/`, `/docs/.last-verify.json`, `.DS_Store` — append any that are missing under a `# TechieFlow agent artifacts — machine-generated test harness & logs, never commit` header (the scaffold/update scripts manage the same block since 2026-07-11; doing it here too self-heals projects refreshed earlier). Match tolerantly (strip `\r`, accept anchored/slash variants) and never rewrite existing owner content. `playwright.config.ts` stays TRACKED — committed test suites depend on it. This rule generalizes: **any machine-generated file a task introduces (npm, Playwright output, logs, caches) gets its `.gitignore` entry in the same step that creates it.**
+- **Ensure `playwright.config.ts` at repo root, and ensure it pins `outputDir`.** If absent, create it. If present but missing `outputDir` (or pointing anywhere outside `tests/`), **edit it** — an unpinned config defaults to a repo-root `test-results/`, which is the exact litter this rule exists to stop. Canonical config:
+
+  ```ts
+  import { defineConfig } from '@playwright/test';
+  export default defineConfig({
+    testDir: './tests/verify',
+    outputDir: './tests/.artifacts/test-results',   // ALL run artifacts live under tests/ — never the repo root
+    reporter: 'line',                                // if you add 'html', set outputFolder: 'tests/.artifacts/playwright-report'
+    use: { headless: true, screenshot: 'only-on-failure', trace: 'retain-on-failure' },
+  });
+  ```
+
+- **ARTIFACT-LOCATION RULE (hard, no exceptions).** Every machine-generated test artifact — Playwright output, screenshots, traces, videos, Appium captures, HTML reports — lands under **`tests/.artifacts/`**. Consequences you must honor:
+  - **NEVER create a repo-root `test-results/` or any `test-results-<something>/` sibling.** Suffixed per-run/per-cluster output directories at the root (`test-results-cluster-a/`, `test-results-<slug>/`) are BANNED: they escape the `test-results/` ignore pattern, so they land in the owner's `git status` as untracked screenshot dumps, and they accumulate one directory per run forever. This has actually happened — a single app ended up with fourteen of them.
+  - **Never pass `--output test-results-…`.** The config's `outputDir` is the single answer, and Playwright already namespaces per test *inside* it and **wipes it at the start of every run**, which is what keeps the tree from growing. If a parallel fan-out genuinely needs isolation, the only permitted form is a **subfolder**: `--output tests/.artifacts/<slug>`.
+  - Screenshots are **failure evidence with a session lifetime**, not work product. They exist so §6 can cite a path in a Remark during this run. Nothing under `tests/.artifacts/` is ever committed, and nothing there is expected to survive the next run. Evidence that must outlive the run is the one-line Remark in the checklist, and — for reviewed screens only — the deliberately tracked `docs/screenshots/{AppName}/` set the DevGuide owns.
+- **Gitignore what you provision — in this same step, never later.** Git is manual in TechieFlow: the owner runs every commit and must NEVER have to triage machine artifacts. Check `.gitignore` for each of: `node_modules/`, `/package.json`, `/package-lock.json`, `tests/.artifacts/`, `test-results/`, `test-results-*/`, `playwright-report/`, `.verify/`, `logs/`, `/docs/.last-verify.json`, `.DS_Store` — append any that are missing under a `# TechieFlow agent artifacts — machine-generated test harness & logs, never commit` header (the scaffold/update scripts manage the same block since 2026-07-11; doing it here too self-heals projects refreshed earlier). `test-results/` and `test-results-*/` are kept for **legacy** trees only — a compliant run writes neither. Match tolerantly (strip `\r`, accept anchored/slash variants) and never rewrite existing owner content. `playwright.config.ts` stays TRACKED — committed test suites depend on it. This rule generalizes: **any machine-generated file a task introduces (npm, Playwright output, logs, caches) gets its `.gitignore` entry in the same step that creates it.**
+- **Sweep legacy artifact dirs once, here.** If any repo-root `test-results/` or `test-results-*/` directory exists, it is leftover machine output from a pre-`outputDir` run. Delete those directories (`rm -rf`), report the count in your one-line summary, and move on. Delete **only** repo-root directories whose name matches `test-results*`; never touch `tests/`, `docs/screenshots/`, or anything else. They are fully regenerable — that is the whole reason they were never work product.
 - In SETUP-ONLY mode: print "Verification environment ready." and HALT here.
 
 ### 2. Locate and characterize the Blazor app
@@ -117,7 +133,7 @@ Trigger: the startup/owning `.csproj` has `<UseMaui>` / MAUI SDK and a `-android
    - **Android** — run the registry `launch` command (e.g. `winrun "powershell -File start-android-verify.ps1"`) to start the emulator (`avd`) + Appium on the Windows host; then poll `curl http://localhost:4723/status` (Win11 mirrored networking → `localhost`) until `{"ready":true}` (emulator cold start can take minutes — poll, don't assume).
    - **iOS / Mac Catalyst** — the LAN Mac runs Appium; `curl http://<mac>:4723/status`. You do **not** start the Mac; if it is unreachable, that is a session dependency → stamp the head `⚠ STATIC-ONLY` with "Mac build host unreachable" and continue with the heads you can reach. Never mark those REQs `Verified` on visual grounds you couldn't observe.
 3. **Build + install + launch the app on the device** via the build ladder runtime-observe leg (`build-invocation-ladder.md §D`): Android via rung #4 (`cmd.exe`), iOS/Catalyst on the Mac. Start an Appium session with the right driver (`uiautomator2` / `xcuitest` / `mac2`) pointed at the built `.apk`/`.app`.
-4. Hand the live session to §4a/§4b: the fan-out subagents target this Appium session (selectors by `AutomationId` per the coding standard) instead of a Playwright `baseURL`. Screenshots land under `test-results/` exactly as Playwright's do.
+4. Hand the live session to §4a/§4b: the fan-out subagents target this Appium session (selectors by `AutomationId` per the coding standard) instead of a Playwright `baseURL`. Screenshots land under `tests/.artifacts/` exactly as Playwright's do — the §1 artifact-location rule is driver-independent, so an Appium capture never gets its own root-level folder either.
 
 **Window binding & input discipline (ALL native heads, INCLUDING MAUI Windows).** The classic desktop-automation failure is typing into the WRONG window: a global keystroke goes to whatever happens to hold focus (the IDE, a terminal, another app) — not the app under test. This has actually happened; it is banned, mechanically:
 
@@ -189,30 +205,85 @@ Record per screen: **VISUAL-OK** / **VISUAL-FAIL** (with the failing controls + 
 
 **For MAUI native heads (§3b),** run the identical overlap / in-viewport / sized / screenshot-inspection checks over the **Appium** session: `element.rect` gives each control's bounding box (overlap + zero-size + off-screen detection), and `driver.get_screenshot_as_base64()` gives the full-screen image to inspect. Drive the device's natural size plus, where the simulator/emulator supports it, a phone vs tablet/desktop variant. Same `VISUAL-OK` / `VISUAL-FAIL` verdicts.
 
+### 4c. PERFORMANCE gate — is it fast enough to meet the budget the BRD declared
+
+§4a proves the data is there; §4b proves the screen is usable. Neither says anything about *speed* — a page that renders every control perfectly and takes nine seconds passes both gates today. This gate closes that, and it is deliberately the narrowest of the three.
+
+**THE GOVERNING RULE: this gate never invents a budget.** It runs for a REQ **only** if that REQ's acceptance criteria declare one, in this exact form:
+
+```
+perf-budget: p95 ttfb <= 500ms @ concurrency 50
+perf-budget: p95 load <= 2000ms @ concurrency 1
+```
+
+`p50|p95|max` · `ttfb|load` · a millisecond number · optional `@ concurrency N` (default 1). **No `perf-budget:` line → the gate does not run for that REQ**, it is omitted from `gates_run`, and nothing is reported. That is not a gap to fill by picking a sensible-sounding number: a threshold the owner never agreed to would produce failures they never asked for, and the first false failure is the moment gate verdicts stop being believed. A REQ whose prose says "should be fast" without a number is **not** perf-gated — flag it in §8 as *"REQ-NFR-00X asks for performance but declares no `perf-budget:` — add one to the BRD to make it gradeable"* and move on.
+
+**Measure with the shipped harness — never hand-roll timing:**
+
+```bash
+bash .tfcore/utils/tf-perf.sh --base http://localhost:5099 \
+     --paths "/,/posts,/admin/dashboard" --levels 1,50 --requests 8 \
+     --build-config Release --label REQ-NFR-001 \
+     --json-out tests/.artifacts/perf/REQ-NFR-001.json
+```
+
+Paths come from the DevGuide screens the REQ owns (its routes), not from a guess. Exit `2` means the app was unreachable — that is a `build`-gate problem, not a perf result. The harness prints one JSON object: `levels[].ttfb_ms.{p50,p95,max}`, `load_ms`, a `per_path` breakdown (which page is the slow one), `samples`, `errors`, and a `weak` flag.
+
+**Grading — three bands, and the middle one exists specifically so this gate does not cry wolf:**
+
+| Measured vs budget | Verdict | Effect |
+|---|---|---|
+| ≤ budget | `PERF-OK` | gate passes |
+| > budget, ≤ budget × 1.25 | `PERF-MARGINAL` | **does NOT block `Verified`** — writes a dated remark `⚠ perf: p95 {metric} {measured}ms vs budget {budget}ms (marginal)` so the drift is visible before it becomes a failure |
+| > budget × 1.25 | `PERF-FAIL` | fails the gate for that REQ (§6) |
+
+**Errors during the run — read the RATE, not the count.** This is the one place where "an error occurred" does not mean "do not grade", and getting it backwards makes the gate useless at exactly the concurrency levels it exists for:
+
+- **`error_rate` ≥ 0.10 with timeout/connection error kinds → `PERF-FAIL`, `failure_class: "timeout"`.** The app did not serve the declared concurrency. Requests timing out under load **is** the perf result, not an obstacle to measuring it — a budget of `@ concurrency 100` is precisely a claim that this does not happen. Report the completed/attempted split and the p95 of what *did* complete, and say plainly that the latency figure describes only the survivors.
+- **`0 < error_rate < 0.10` → `PERF-UNMEASURED (errors during run)`.** A handful of failures in an otherwise healthy run tells you the sample is contaminated, not that the app is overloaded. Re-run; if it persists, the failure belongs to the `acceptance` gate.
+- **Any `non_200` → `PERF-UNMEASURED (non-200 responses)`** regardless of rate. A 404 means the path set is wrong (a test-setup bug), and a 5xx is a correctness failure the `acceptance` gate owns. Neither is a latency verdict.
+
+**Three further conditions under which you must NOT record `PERF-FAIL`** — each produces `PERF-UNMEASURED` plus a one-line reason in §8, because a wrong perf failure costs more than a missing one:
+
+1. **`build_config` is not `Release`.** A Debug-build number is not evidence — no tiered JIT steady state, no optimizations. Boot the app `-c Release` and re-measure, or stamp `PERF-UNMEASURED (Debug build)`.
+2. **`weak: true`** (fewer than 20 samples behind the p95). Raise `--requests` and re-run; if you still cannot get samples, the number is indicative only. Note the interaction with the rule above: a run that shed most of its load can be *both* `weak` and a genuine `PERF-FAIL` — the load-shed verdict wins, because it does not depend on the latency distribution being trustworthy.
+3. **The host is visibly contended** — you are running builds or other agents concurrently, or `wall_s` is wildly inconsistent between levels. Re-run once when quiet; if it stays noisy, say so rather than grading it.
+
+**Never compare across machines or across runs on different hosts.** The harness stamps a `machine` block for exactly this reason. The budget is absolute (the BRD declared it); the measurement is local; a number from the Mac and a number from WSL are not the same measurement, and neither is a trend.
+
+**MAUI native heads (§3b) are not perf-gated.** The harness speaks HTTP; an Appium-driven Android/iOS/Catalyst screen has no URL to sample, and app-launch/frame timing is a different discipline with different tooling. For a native head, the gate does not run — omit `perf` from `gates_run` and never substitute a Blazor measurement for a native one (same rule as `⚠ STATIC-ONLY`: an unmeasured thing is unmeasured, not passed).
+
+**This gate is informational during a self-smoke.** `_smoke-test-policy.md` lets build-phase run the harness to catch an obvious regression early, but a self-smoke may never write a perf verdict into the checklist — the smoke ceiling stays `Implemented`, exactly as it does for §4a/§4b.
+
 ### 5. Run the tests
 
-- Playwright: `npx playwright test --reporter=line`.
+- Playwright: `npx playwright test --reporter=line`. **No `--output` flag** — the config's `outputDir` (`tests/.artifacts/test-results`) is the single artifact destination (§1 artifact-location rule). If you must isolate a parallel run, the only permitted override is a subfolder: `--output tests/.artifacts/<slug>`.
 - Unit/integration (if a test project exists): `dotnet test --nologo`.
-- Collect: per-test pass/fail, and for FAILURES only, the screenshot path under `test-results/` and the relevant assertion message. Do not open artifacts for passing tests.
+- Collect: per-test pass/fail, and for FAILURES only, the screenshot path under `tests/.artifacts/` and the relevant assertion message. Do not open artifacts for passing tests.
 
 ### 6. Build the coverage matrix AND write it into the Status table
 
 Map every requirement ID to exactly one verdict:
 
-- `PASS` — a real test for this ID passed against the running app / a unit test passed, **AND** every control the DevGuide attributes to this REQ's screens passed the §4a render gate **AND** the §4b visual-truth gate.
+- `PASS` — a real test for this ID passed against the running app / a unit test passed, **AND** every control the DevGuide attributes to this REQ's screens passed the §4a render gate **AND** the §4b visual-truth gate **AND** (only if the REQ declared a `perf-budget:`) the §4c perf gate.
 - `RENDER-FAIL` — the acceptance behavior may work, but at least one of the REQ's controls is **RENDER-EMPTY / RENDER-ERROR** (blank table, count-vs-rows mismatch, empty chart, blank value, Blazor error). Include the control + screenshot. This is a real defect even if an old status said `Done`.
 - `VISUAL-FAIL` — the data renders, but the screen does not LOOK right: controls overlap, sit off-viewport, are clipped to zero size, the layout is broken/unstyled, or it drifts structurally from its mockup (§4b). Include the failing control(s), the width, and a screenshot. A real defect even if §4a passed and an old status said `Done`.
+- `PERF-FAIL` — the REQ declared a `perf-budget:` and the measured p95 exceeded it by more than 25% under the four measurement preconditions of §4c. Include metric, measured value, budget, and concurrency. **Only for REQs that declared a budget** — a REQ with no `perf-budget:` line is never graded here.
 - `FAIL` — a test for this ID ran and failed (include the one-line reason + screenshot path).
 - `NOT-IMPLEMENTED` — feature/element the requirement needs was absent (test could not even find it).
 - `NOT-OBSERVABLE` — backend/nonfunctional requirement with no test project to assert it; needs a human or a test to be written.
 
-**STRICT GATE (non-negotiable):** a REQ may be `Verified` **only if** its acceptance test passes AND all its DevGuide-listed controls RENDER their data (§4a) AND every screen it owns passes VISUAL-TRUTH (§4b). Never mark `Verified` when any owned control is RENDER-EMPTY/RENDER-ERROR or any owned screen is VISUAL-FAIL — those are the exact failure modes these gates exist to stop (data-present-but-blank, and data-present-but-visually-broken). A `Done (pre-existing)` REQ whose screens pass both gates stays `Done (pre-existing)` with a `runtime render+visual-confirmed {date}` remark; one that fails either drops to `Needs re-verify`.
+**STRICT GATE (non-negotiable):** a REQ may be `Verified` **only if** its acceptance test passes AND all its DevGuide-listed controls RENDER their data (§4a) AND every screen it owns passes VISUAL-TRUTH (§4b) AND — *where and only where the REQ declared a `perf-budget:`* — it is not `PERF-FAIL` (§4c). Never mark `Verified` when any owned control is RENDER-EMPTY/RENDER-ERROR or any owned screen is VISUAL-FAIL — those are the exact failure modes these gates exist to stop (data-present-but-blank, and data-present-but-visually-broken). A `Done (pre-existing)` REQ whose screens pass both gates stays `Done (pre-existing)` with a `runtime render+visual-confirmed {date}` remark; one that fails either drops to `Needs re-verify`.
+
+**The perf gate never widens the `Verified` bar for a REQ that never declared a budget.** Most REQs are not perf-gated and must not be treated as if they failed something they were never measured against — `PERF-UNMEASURED` and "no budget declared" are both simply *absent* from the verdict, not a demotion.
 
 **Write the run ledger FIRST (mechanical unlock).** Immediately before recording the first verdict, Write `docs/.last-verify.json` (overwrite the previous run's file; it lives next to the checklist):
 
 ```json
-{"date":"<today YYYY-MM-DD>","app":"{AppName}","scope":"{scope}","booted":"<rung/URL or Appium target>","gates":["acceptance","data-render","visual-truth"],"evidence":"<test-results/ path or one-line pointer>"}
+{"date":"<today YYYY-MM-DD>","app":"{AppName}","scope":"{scope}","booted":"<rung/URL or Appium target>","gates":["acceptance","data-render","visual-truth"],"evidence":"<tests/.artifacts/ path or one-line pointer>"}
 ```
+
+List in `gates` the gates this run actually applied — add `"performance"` when §4c graded at least one REQ. (`guard-verify.sh` reads only `date`; the array is the human-readable record of what the run did, so an accurate list costs nothing and a padded one is a false audit trail.)
 
 The PreToolUse hook `.tfcore/hooks/guard-verify.sh` BLOCKS any checklist write that introduces a `Verified` status without a same-day ledger — this is what makes "only the verifier writes `Verified`" mechanical rather than prose. You may write the ledger ONLY after actually executing §3–§5 above (boot + scoped tests + both gates); writing it without having run them is falsifying the audit record.
 
@@ -223,6 +294,10 @@ Then **write each verdict into the Requirements Status table** of the one checkl
 | PASS | `Verified` | 100% | date + test path + `render+visual gate: all controls render and look right` |
 | RENDER-FAIL | `Needs re-verify` | lower to reflect reality | date + `⚠ render gate: {control} renders empty/error on {screen}` + screenshot path |
 | VISUAL-FAIL | `Needs re-verify` | lower to reflect reality | date + `⚠ visual: {control(s)} overlap/clip/off-viewport on {screen} @ {width}` (or `⚠ visual: drifts from mockup`) + screenshot path |
+| PERF-FAIL (slow) | `Needs re-verify` | lower to reflect reality | date + `⚠ perf: p95 {metric} {measured}ms vs budget {budget}ms @ concurrency {n}` + the slowest path from `per_path` |
+| PERF-FAIL (load shed) | `Needs re-verify` | lower to reflect reality | date + `⚠ perf: {failed}/{attempted} requests timed out @ concurrency {n} — budget {budget}ms not servable` + the p95 of the completed subset, labelled as survivors only |
+| PERF-MARGINAL | **unchanged** (may still be `Verified`) | keep | date + `⚠ perf: p95 {metric} {measured}ms vs budget {budget}ms (marginal)` — a warning, never a demotion |
+| PERF-UNMEASURED | **unchanged** | keep | date + `perf: not measured — {Debug build / weak sample / errors during run / host contended}` |
 | FAIL | `FAIL` | keep | date + one-line reason + screenshot path |
 | FAIL caused by a library gap | `Blocked` | keep | date + link the `TR-NNN` entry in `docs/{AppName}-TrBlazeUI-Feedback.md` or the `TR-RAG-NNN` entry in `docs/{AppName}-TechieRag-Feedback.md` (add the entry if the implementing agent didn't — one feedback file per library) |
 | NOT-IMPLEMENTED | `In Progress` | 25% | date + "element/feature absent" |
@@ -240,11 +315,11 @@ Read `.tfcore/tasks/_metrics-emit-gate.md` once; it carries the constraints. Sch
 
 For each REQ:
 
-1. **`gate` — the FIRST gate that failed, or `null` on a pass.** This one field produces the whole gate-catch distribution; get it right and everything else is secondary. Execution order is `build` → `acceptance` → `render` → `visual` → `standards`. A REQ that failed §4a *and* §4b records `render`, not `visual` — recording the later gate inflates the visual gate's apparent catch rate.
+1. **`gate` — the FIRST gate that failed, or `null` on a pass.** This one field produces the whole gate-catch distribution; get it right and everything else is secondary. Execution order is `build` → `acceptance` → `render` → `visual` → `perf` → `standards`. A REQ that failed §4a *and* §4b records `render`, not `visual` — recording the later gate inflates the visual gate's apparent catch rate. Same for `perf`: a REQ that was already `VISUAL-FAIL` records `visual`, even if its p95 also blew the budget.
 2. **`attempt` — derive it, never guess it:** `bash .tfcore/utils/tf-emit.sh --next-attempt REQ-UI-004` prints the number. Run it per REQ.
-3. **`gates_run`** — only the gates that actually executed this pass. A `⚠ STATIC-ONLY` head did not run `render` or `visual`; leave them out rather than crediting a gate that never fired.
+3. **`gates_run`** — only the gates that actually executed this pass. A `⚠ STATIC-ONLY` head did not run `render` or `visual`; leave them out rather than crediting a gate that never fired. **`perf` belongs here only when a `perf-budget:` existed AND the §4c preconditions held** — a REQ with no budget, a native head, a Debug build, or a `PERF-UNMEASURED` outcome did not run the perf gate, and listing it would silently inflate the gate's measured coverage. This field is the only thing that makes the perf gate's catch rate readable at all (SCHEMA §3.5), so it is worth getting exactly right.
 4. **`prior_verdict`** — the Status cell value you just overwrote (`null` if the row is new).
-5. **`failure_class`** — from the closed enum only (`blank-data` · `zero-rows` · `overlap` · `clipped` · `offscreen` · `exception` · `assert-fail` · `naming` · `build-error` · `other`). **Never free text** — a description here would leak requirement and client detail.
+5. **`failure_class`** — from the closed enum only (`blank-data` · `zero-rows` · `overlap` · `clipped` · `offscreen` · `slow-ttfb` · `slow-load` · `timeout` · `exception` · `assert-fail` · `naming` · `build-error` · `other`). **Never free text** — a description here would leak requirement and client detail. A `perf` gate failure is `slow-ttfb` or `slow-load` depending on which metric the budget named, or `timeout` when the run failed by shedding load rather than by being slow; **never emit the measured milliseconds** — a number is a measurement of this machine on this day and does not belong in an append-only stream that is read across hosts.
 6. **`run_id`** — the same value for every REQ in this pass: the timestamp you noted when the verify run started.
 
 ```bash
@@ -257,7 +332,9 @@ cat <<JSON | bash .tfcore/utils/tf-emit.sh gates
 JSON
 ```
 
-Map the §6 verdict table to the record: PASS → `verdict:"Verified"`, `gate:null` · RENDER-FAIL → `"Needs re-verify"`, `gate:"render"` · VISUAL-FAIL → `"Needs re-verify"`, `gate:"visual"` · FAIL → `"FAIL"`, `gate:"acceptance"` (or `"build"` if it never compiled/booted) · library-caused FAIL → `"Blocked"`, `gate` = whatever actually failed · NOT-IMPLEMENTED → `"FAIL"`, `gate:"build"`, `failure_class:"other"` · NOT-OBSERVABLE → **emit nothing**; there was no gate and no verdict, and a fabricated record would poison the distribution.
+Map the §6 verdict table to the record: PASS → `verdict:"Verified"`, `gate:null` · RENDER-FAIL → `"Needs re-verify"`, `gate:"render"` · VISUAL-FAIL → `"Needs re-verify"`, `gate:"visual"` · **PERF-FAIL → `"Needs re-verify"`, `gate:"perf"`, `failure_class:"slow-ttfb"|"slow-load"|"timeout"`** · FAIL → `"FAIL"`, `gate:"acceptance"` (or `"build"` if it never compiled/booted) · library-caused FAIL → `"Blocked"`, `gate` = whatever actually failed · NOT-IMPLEMENTED → `"FAIL"`, `gate:"build"`, `failure_class:"other"` · NOT-OBSERVABLE → **emit nothing**; there was no gate and no verdict, and a fabricated record would poison the distribution.
+
+**`PERF-MARGINAL` and `PERF-UNMEASURED` are NOT failures and must not be emitted as one.** A marginal REQ that otherwise passed emits an ordinary pass (`gate:null`) with `perf` present in `gates_run` — the warning lives in the checklist Remark, where a human reads it, and not in a stream whose whole purpose is counting what each gate caught. `PERF-UNMEASURED` emits a pass with `perf` **absent** from `gates_run`. Inventing a failure record for a warning would corrupt the one number this gate exists to produce.
 
 Then emit ONE `runs.jsonl` record for the verify pass itself:
 
@@ -286,6 +363,7 @@ If no DevGuide exists, skip this and add to the report: "No DevGuide to refresh 
 
 - Kill the app process you started (by the pinned port / stored PID). Confirm the port is free.
 - For MAUI native heads (§3b): quit the Appium session, and shut down any **emulator** you started yourself (leave a pre-existing/owner-run emulator or the LAN Mac's Appium server up — only tear down what you booted).
+- **Leave no artifact directory outside `tests/.artifacts/`.** If this run produced a repo-root `test-results/` or `test-results-*/` anyway (a stray `--output`, a tool default you didn't pin), delete it now — you created it, you remove it. `tests/.artifacts/` itself STAYS: it is gitignored, Playwright wipes it at the start of the next run, and the paths you cited in §6 Remarks must still resolve for the owner reading the report today.
 
 ### 8. Report and HALT
 
@@ -298,7 +376,7 @@ Source checklist(s): <path(s)>   |   Requirements graded: N
 | ID      | Requirement (short)        | Status          | Evidence                          |
 |---------|----------------------------|-----------------|-----------------------------------|
 | BRD-10  | ...                        | PASS            | tests/verify/phase-2.spec.ts      |
-| BRD-12  | ...                        | FAIL            | screenshot: test-results/.../...png — "expected grid rows > 0" |
+| BRD-12  | ...                        | FAIL            | screenshot: tests/.artifacts/.../...png — "expected grid rows > 0" |
 | BRD-13  | ...                        | NOT-IMPLEMENTED | element [data-testid=status] absent |
 | BRD-14  | ...                        | NOT-OBSERVABLE  | no test project; logic-only       |
 
@@ -307,7 +385,10 @@ Source checklist(s): <path(s)>   |   Requirements graded: N
 - BRD-13 NOT-IMPLEMENTED — <one line>
 
 ## Summary: PASS x / FAIL y / BLOCKED b / NOT-IMPLEMENTED z / NOT-OBSERVABLE w
+## Perf (§4c): graded p of q budget-carrying REQs — PERF-OK a / MARGINAL m / FAIL f / UNMEASURED u
 ```
+
+Print the Perf line **only when at least one in-scope REQ declared a `perf-budget:`** — on a project where none do, the gate did not run and a line saying so is noise. When you did skip REQs for a missing budget, name them once: *"REQ-NFR-003, REQ-NFR-007 ask for performance but declare no `perf-budget:` — add one to the BRD to make them gradeable."*
 
 - The per-REQ detail now lives in the checklist Status table (§6) — do NOT also save a dated `docs/verify/*.md` report. The console report above plus the updated Status table ARE the deliverable.
 - **FINAL GATE — update PROJECT-STATUS (MANDATORY, non-skippable).** Before you HALT, update PROJECT-STATUS — **both `PROJECT-STATUS.md` AND re-rendered `PROJECT-STATUS.html`** — per `.tfcore/tasks/_status-update-gate.md`: `last_updated`, `last_verified_build`/`last_verified_date`, sync Open requirements to the Status table (anything not `Verified` stays open), set the Next command (**command-against-checklist only — re-run the phase naming the FAILed REQ IDs if there are FAILs; advance if all `Verified` — no prose to-do narrative**), and add a verification-log row pointing at the checklist's `#requirements-status`. **Record this run's outcome as that ONE Verification-log row + the per-REQ Remarks you wrote in the checklist (§6) — do NOT add a `## *verify all — coverage matrix (date)` section (or any new H2) to PROJECT-STATUS; it is a fixed-shape snapshot you overwrite, never an append-log (see `_status-update-gate.md`).** A verification run that updates the markdown but not the HTML, or that does not update PROJECT-STATUS at all, is incomplete.
@@ -319,6 +400,7 @@ Source checklist(s): <path(s)>   |   Requirements graded: N
 - The user typed one command. You did everything else.
 - Grade only against numbered IDs; never inflate coverage.
 - **A feature is not "done" until its UI renders its data AND looks right.** Behaves-correctly AND renders-its-data (§4a) AND looks-right (§4b) are ALL required for `Verified`. HTTP 200 with a blank table is a FAIL; data-present-but-overlapping/clipped/off-screen is also a FAIL. This is the gap that let "verified" screens be visibly broken.
+- **Speed is graded only against a budget someone declared** (§4c). The perf gate is the narrowest of the four on purpose: it fires only for a REQ carrying a `perf-budget:`, it warns before it fails, and it refuses to grade a Debug build or a thin sample. A gate that produces false failures teaches the owner to ignore verdicts, which costs more than the defects it would have caught.
 - **`Done (pre-existing)` is an unverified claim, not a pass** — it gets the render sweep like everything else. The first runtime pass either confirms it or flags it.
 - **Close the loop:** the DevGuide is your control map (§0/§4a) and you write your runtime observations back into it (§6b). DevGuide ⇄ Checklist ⇄ Verifier stay in sync; a build phase marking a REQ done → this verifier → updated checklist + DevGuide → repeat.
 - Results go in the checklist Status table + PROJECT-STATUS (+ the DevGuide render tags) — never a separate dated file.

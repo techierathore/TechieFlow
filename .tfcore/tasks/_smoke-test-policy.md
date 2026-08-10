@@ -22,6 +22,15 @@ A screen passes the smoke only if it clears **two** gates. Both have shipped rea
 
 Where a DevGuide exists (`docs/{AppName}-DevGuide.md`, or the split set under `docs/devguides/`), it lists the controls each screen must render — use it as the per-control checklist. The verifier formalizes both gates: the **render gate** (`verify-phase.md §4a/§6`) and the **visual-truth gate** (`verify-phase.md §4b/§6`). A REQ is `Verified` only when it passes acceptance AND render-truth AND visual-truth.
 
+**Performance during a smoke is informational only.** If a REQ you just built declares a `perf-budget:` in its acceptance criteria, you MAY run the harness to catch an obvious regression while the app is already up:
+
+```bash
+bash .tfcore/utils/tf-perf.sh --base http://localhost:5099 --paths "/,/your/route" \
+     --build-config Release --json-out tests/.artifacts/perf/smoke.json
+```
+
+Report a blown budget in your summary so it gets fixed now rather than at verify time. But **a smoke never writes a perf verdict** into the checklist — the §4c grading bands, the Debug/weak-sample preconditions, and the `gates_run` telemetry all belong to an executed verify-phase. Same ceiling as everything else here: `Implemented`, never `Verified`.
+
 This is the difference between "the method exists / the page compiled" and "the feature works". Only the latter — data present AND looking right — counts.
 
 ## Smoke is NOT verify — a self-smoke's ceiling is `Implemented`
@@ -32,7 +41,7 @@ Your smoke (this policy) and the verifier gate (`verify-phase.md`) are **differe
 
 The owner did the one-time setup (`WORKFLOW.html §0` on WSL / `§0a` on macOS) precisely so the agent can smoke-test without help. These capabilities are PERMANENTLY available on the host:
 
-- **Headless Playwright + Chromium** are available on every supported host (WSL: system libs from the §0 bootstrap; macOS/Linux: nothing beyond Node). Browser smoke tests run **headless** — no GUI, no display server needed. **Never ask the owner to install Playwright** — `verify-phase.md §1` self-provisions it per project (`npm install -D @playwright/test` + `npx playwright install chromium`; the browser binary is a shared per-machine cache, so only the first project pays the download). The same step **gitignores every artifact it creates** (`node_modules/`, `/package.json`, `/package-lock.json`, `test-results/`, `playwright-report/`, `.verify/`, `logs/`, …) — git checkin is the owner's manual job and they must never have to triage machine artifacts; any file YOUR run generates that isn't work product gets its `.gitignore` entry in the same step.
+- **Headless Playwright + Chromium** are available on every supported host (WSL: system libs from the §0 bootstrap; macOS/Linux: nothing beyond Node). Browser smoke tests run **headless** — no GUI, no display server needed. **Never ask the owner to install Playwright** — `verify-phase.md §1` self-provisions it per project (`npm install -D @playwright/test` + `npx playwright install chromium`; the browser binary is a shared per-machine cache, so only the first project pays the download). The same step **gitignores every artifact it creates** (`node_modules/`, `/package.json`, `/package-lock.json`, `tests/.artifacts/`, `test-results/`, `test-results-*/`, `playwright-report/`, `.verify/`, `logs/`, …) — git checkin is the owner's manual job and they must never have to triage machine artifacts; any file YOUR run generates that isn't work product gets its `.gitignore` entry in the same step. **All run artifacts go under `tests/.artifacts/`** — a smoke run may never create a repo-root `test-results/` or a suffixed `test-results-<slug>/` sibling, and may never pass `--output test-results-…`; see `verify-phase.md` §1 (artifact-location rule), which binds every self-smoke exactly as it binds the verifier.
 - **The MAUI / Windows-side dotnet bridge** exists (`build-invocation-ladder.md §B`, rungs #3–#4). Windows-targeted code and MAUI code **build AND run** on the right rung (`cmd.exe /c "dotnet run ..."` / `winrun`). WSL2 forwards `localhost`, so WSL-side Playwright reaches a Windows-side port.
 - **The MAUI mobile/desktop runtime bridge** exists for any app that registers it (`core-config.yaml → runtimeVerification.appium`; one-time host setup `WORKFLOW.html §0b`; driver detail `build-invocation-ladder.md §D`). MAUI **Android** runs on an emulator on the Windows host; MAUI **iOS / Mac Catalyst** run on the LAN Mac — both driven over an **Appium** WebDriver endpoint that returns the same screenshot + element tree the gates consume. Appium is the native analogue of Playwright. The MAUI Windows head keeps its FlaUI/Appium-Windows path.
 

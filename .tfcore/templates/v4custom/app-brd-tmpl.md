@@ -168,8 +168,21 @@ flowchart LR
      (latency, uptime, concurrency, import throughput), as a human reader expects.
      The Observability/logging NFR below is a TechieFlow STANDING requirement — it appears in
      EVERY .NET app's BRD (web, API, MAUI, desktop, console, background service), never gets
-     dropped, and split-brd turns it into a REQ-NFR row like any other NFR. -->
+     dropped, and split-brd turns it into a REQ-NFR row like any other NFR.
+
+     PERFORMANCE — the `perf-budget:` line is MACHINE-READ. verify-phase §4c grades a REQ on
+     speed if and ONLY if it carries one, in exactly this grammar:
+         perf-budget: <p50|p95|max> <ttfb|load> <= <N>ms [@ concurrency <N>]
+     Omit it and the perf gate simply never fires for that REQ — which is the correct outcome
+     when there is no agreed number. Do NOT invent a budget to make the row look complete: a
+     threshold nobody agreed to produces failures nobody asked for, and the first false failure
+     is the moment gate verdicts stop being believed. Write one only where the owner states it.
+     Prose like "should feel fast" is not a budget and is deliberately not gradeable. -->
 - **BRD-N** — Performance: …
+      <!-- e.g.  Public pages stay responsive under normal load.
+                 perf-budget: p95 load <= 2000ms @ concurrency 1
+                 perf-budget: p95 ttfb <= 500ms @ concurrency 50   -->
+
 - **BRD-N+1** — Security: …
 - **BRD-N+2** — Accessibility: …
 - **BRD-N+3** — Observability: Serilog file-based logging in every executable head — rolling file sink under `logs/`, wired at startup, unhandled exceptions logged (see Coding Standards §Logging).
