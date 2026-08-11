@@ -1027,7 +1027,18 @@ The refresh auto-detects `project_type` once and prints what it chose. If it gue
 
 The streams start empty, and the report refuses to invent numbers from thin data — you will see `insufficient data (n=…)` on most rows until roughly three verify runs have happened. That is the report working, not a fault. The first genuinely interesting reading usually comes after a build → verify → fix cycle or two.
 
-**An empty stream file is by design, not a bug.** `install-metrics.sh` seeds all four so every repo has the same shape and no writer has to guess whether its stream exists — then each fills only when its event actually occurs: `gates.jsonl` on the first `*verify`, `runs.jsonl` on the first framework command, `sessions.jsonl` when the first agent session ends, and **`commits.jsonl` on your first commit after telemetry was installed**. `commits.jsonl` is the one most likely to sit at zero bytes for a long time, because it is written by *your own* `.git/hooks/post-commit` — no agent path touches it (agents can't run git at all) — so a repo you scaffolded but haven't committed to since 2026-08-08 will simply show it empty. Commit the empty files with everything else: a tracked empty stream makes the first real record a one-line diff instead of a file appearing from nowhere.
+**An empty stream file is by design, not a bug.** `install-metrics.sh` seeds all four so every repo has the same shape and no writer has to guess whether its stream exists — then each fills only when its event actually occurs: `gates.jsonl` on the first `*verify`, `runs.jsonl` on the first framework command, `sessions.jsonl` when the first agent session ends, and **`commits.jsonl` on your first commit after telemetry was installed**. Commit the empty files with everything else: a tracked empty stream makes the first real record a one-line diff instead of a file appearing from nowhere.
+
+### Working across several machines
+
+The streams are files in the repo, so they travel with `push`/`pull` like everything else. Two rules make that painless, and both are set up for you by the refresh:
+
+- **`merge=union` on `docs/metrics/*.jsonl`** (`.gitattributes`). Two machines appending to the same log would otherwise conflict on nearly every sync, and hand-resolving a conflict in an append-only log is precisely how records get silently dropped. Union merge keeps **both** sides' lines. The price is that a record can end up duplicated or out of chronological order — every consumer sorts on `ts`, and commit records de-duplicate on `sha`, so it costs you nothing.
+- **`eol=lf`** on the same paths (and repo-wide, with `*.bat`/`*.cmd` pinned back to CRLF). Without it, Git for Windows checks these files out as CRLF, which mixes line endings inside a machine-appended log and is what produces GitHub Desktop's *"This file uses 'LF' line endings, but Git is configured to convert them to 'CRLF' the next time the file is checked out."*
+
+**`commits.jsonl` collects itself.** The `post-commit` hook *reconciles* rather than appends: on every commit it writes a record for every commit reachable from `HEAD` that the file doesn't already have. Pull the other machine's work, commit here, and its history is recorded too — `git log` is already an append-only log that push and pull replicate everywhere, and this stream is just a projection of it. Nothing to gather by hand.
+
+The one thing that does **not** travel is the hook itself: `.git/hooks/` is not part of the repository, so each clone needs its own. `update-framework.sh <repo>` installs it, and `tf-metrics.sh --report` warns when the clone you're standing in has none. To fill a machine's history immediately instead of waiting for the next commit: `tf-metrics.sh --backfill-commits .` — idempotent, so run it whenever you like.
 
 | You want to… | Run |
 | --- | --- |
@@ -1035,13 +1046,13 @@ The streams start empty, and the report refuses to invent numbers from thin data
 | Glance at the numbers now | `.tfcore/telemetry/tf-metrics.sh --report .` |
 | Produce the readable report | `*metrics YourApp` → `docs/metrics/METRICS.html` |
 | Compare several projects | `tf-metrics.sh --rollup . /path/to/OtherApp` |
-| Import commit history | `tf-metrics.sh --backfill-commits .` |
+| Import / reconcile commit history | `tf-metrics.sh --backfill-commits .` |
 | Import checklist history | `tf-metrics.sh --backfill-gates .` (context only) |
 | Fix a wrong classification | `install-metrics.sh . --type library` |
 
 **Why some figures are never combined.** The report will not print a single first-pass rate, gate catch distribution, or escape rate that pools *live* with *backfilled* records, or pools `app` with `library`/`docs` — not as a total row, not as an "overall" line. A backfilled attempt count is inferred from a status table that never recorded attempts, so a merged first-pass rate cannot be defended when someone asks how attempts were counted. A pooled gate distribution understates the visual gate, because library and docs projects never had screens to fail on. One indefensible figure contaminates every other number on the page. Commit-derived metrics are exempt — the commit log is a real append-only log, and commit volume is comparable across project types.
 
-**The one-commit lag.** `post-commit` fires *after* the commit is sealed, so the record it appends rides in the *next* commit. Metrics lag reality by one commit. This is deliberate — the workaround would be a `pre-commit` hook that stages the file, which puts version control inside an automated path, and the whole design depends on commits staying manual and owner-driven (§12). Agents are not involved in this stream at all: the only script containing version-control commands (`.tfcore/telemetry/tf-metrics.sh`) is owner-run, and `block-git.sh` is untouched by this feature.
+**The one-commit lag.** `post-commit` fires *after* the commit is sealed, so the record for the newest commit rides in the *next* one. Metrics lag reality by a commit. This is deliberate — the workaround would be a `pre-commit` hook that stages the file, which puts version control inside an automated path, and the whole design depends on commits staying manual and owner-driven (§12). Because the hook reconciles from the log rather than appending one line, the lag never turns into a *loss*: whichever machine commits next writes the missing record. Agents are not involved in this stream at all: the only script containing version-control commands (`.tfcore/telemetry/tf-metrics.sh`) is owner-run, and `block-git.sh` is untouched by this feature.
 
 **Privacy — assume every record could become public.** Records carry IDs, counts, durations, verdicts and file paths *at most*. Never requirement text, prompt text, file contents, or commit subjects — only a commit's conventional-commit prefix (`feat`/`fix`/…) is kept, and the subject is discarded on the spot. `failure_class` is a closed vocabulary for exactly this reason. This framework is used on employer projects, and these files are append-only: a leaked field is not something you fix later.
 
@@ -1077,4 +1088,4 @@ here depends on the Playbook, and nothing there depends on this.
 ---
 
 
-Last revised 2026-08-10. Edit freely. When the workflow changes, update the session memory `MEMORY.md` under `~/.claude/projects/<this-repo's-slug>/memory/` and `WorkFlow-Context.md` (the AI-agent context doc) too.
+Last revised 2026-08-11. Edit freely. When the workflow changes, update the session memory `MEMORY.md` under `~/.claude/projects/<this-repo's-slug>/memory/` and `WorkFlow-Context.md` (the AI-agent context doc) too.

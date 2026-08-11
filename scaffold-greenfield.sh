@@ -295,32 +295,62 @@ fi
 #     history, and the one thing the framework cannot reconstruct afterwards.
 bash "$TEMPLATE/.tfcore/telemetry/install-metrics.sh" . || true
 
-# 8d. .gitattributes — union-merge the telemetry streams. They are append-only
-#     logs edited on more than one machine (the portfolio is split across a Mac
-#     and WSL, and several repos are cloned on both). Two machines appending to
-#     the same file conflict on every sync, and resolving such a conflict by hand
-#     silently DROPS records — the one failure mode an append-only log must not
-#     have. `merge=union` is a built-in low-level driver: it keeps BOTH sides'
-#     added lines, needs no per-machine config, and is exactly right here.
-#     Trade-off, documented in SCHEMA.md: a union merge can duplicate a record
-#     that was written on both sides, and line order stops being chronological.
-#     Both are harmless — every consumer parses line-by-line and sorts on `ts`,
-#     and commit records de-duplicate on sha. Losing a record is not harmless.
-GA_LINES=("docs/metrics/*.jsonl merge=union")
-GA_PATS=('^docs/metrics/\*\.jsonl[[:space:]]+merge=union$')
+# 8d. .gitattributes — line endings, and the append-only merge strategy.
+#     TWO problems live in this one file.
+#
+#     (a) LINE ENDINGS. This portfolio is worked on from macOS, WSL and native
+#         Windows. With core.autocrlf=true (the Git-for-Windows default) and
+#         nothing but `* text=auto`, git normalises the COMMITTED blob to LF but
+#         still smudges the WORKING TREE to CRLF on checkout. GitHub Desktop
+#         reports that as "This file uses 'LF' line endings, but Git is configured
+#         to convert them to 'CRLF' the next time the file is checked out" — and
+#         it is the same mechanism that CRLF-broke every *.sh in this framework on
+#         2026-07-11. `eol=lf` pins the WORKING TREE to LF on every platform.
+#         *.bat/*.cmd are pinned back to CRLF: the Windows command processor
+#         requires it. docs/metrics/*.jsonl is named explicitly as well as covered
+#         by the `*` rule — a log appended to by machine must never acquire mixed
+#         endings, and that line has to carry merge=union anyway.
+#
+#     (b) MERGING. Two machines appending to the same append-only log conflict on
+#         every sync, and resolving such a conflict by hand silently DROPS
+#         records — the one failure mode an append-only log must not have.
+#         `merge=union` is a built-in low-level driver: it keeps BOTH sides' added
+#         lines and needs no per-machine config. Trade-off, documented in
+#         SCHEMA.md: a union merge can duplicate a record written on both sides,
+#         and line order stops being chronological. Both are harmless — every
+#         consumer parses line-by-line and sorts on `ts`, and commit records
+#         de-duplicate on sha. Losing a record is not harmless.
+#
+#     Append-only and idempotent like the .gitignore blocks above: an existing
+#     equivalent line wins and user content is never rewritten. The ONE exception
+#     is the un-pinned telemetry line written by the 2026-08-10 version of this
+#     block, which is replaced — leaving both would mean two rules for one path.
+GA_LINES=("* text=auto eol=lf" "*.bat text eol=crlf" "*.cmd text eol=crlf" "docs/metrics/*.jsonl text eol=lf merge=union")
+GA_PATS=('^\*[[:space:]]+text=auto[[:space:]]+eol=lf$' '^\*\.bat[[:space:]]+text[[:space:]]+eol=crlf$' '^\*\.cmd[[:space:]]+text[[:space:]]+eol=crlf$' '^docs/metrics/\*\.jsonl[[:space:]]+text[[:space:]]+eol=lf[[:space:]]+merge=union$')
+GA_LEGACY='^docs/metrics/\*\.jsonl[[:space:]]+merge=union[[:space:]]*$'
 GA_MISSING=()
 for i in "${!GA_LINES[@]}"; do
   [[ -f .gitattributes ]] && tr -d '\r' < .gitattributes | grep -qE "${GA_PATS[$i]}" && continue
   GA_MISSING+=("${GA_LINES[$i]}")
 done
+if [[ -f .gitattributes ]] && tr -d '\r' < .gitattributes | grep -qE "$GA_LEGACY"; then
+  awk '!/^docs\/metrics\/\*\.jsonl[[:space:]]+merge=union[[:space:]]*$/ &&
+       !/^# TechieFlow telemetry . append-only logs; keep BOTH sides on merge/' .gitattributes > .gitattributes.tf-tmp \
+    && mv .gitattributes.tf-tmp .gitattributes \
+    && echo "  .gitattributes — dropped the legacy un-pinned telemetry line (superseded)"
+fi
 if [[ ${#GA_MISSING[@]} -eq 0 ]]; then
-  echo "  .gitattributes — telemetry merge strategy already present"
+  echo "  .gitattributes — line-ending + merge rules already present"
 else
   { echo ""
-    echo "# TechieFlow telemetry — append-only logs; keep BOTH sides on merge (managed by scaffold/update-framework.sh)"
+    echo "# TechieFlow — LF working tree on every platform (CRLF only where Windows demands it),"
+    echo "# and append-only telemetry logs that keep BOTH sides on merge."
+    echo "# Managed by scaffold/update-framework.sh."
     printf '%s\n' "${GA_MISSING[@]}"
   } >> .gitattributes
-  echo "  .gitattributes — added telemetry merge strategy: ${GA_MISSING[*]}"
+  echo "  .gitattributes — added: ${GA_MISSING[*]}"
+  echo "    RENORMALIZE ONCE, yourself, in this repo so the committed blobs match:"
+  echo "        git add --renormalize . && git commit -m \"Normalize line endings\""
 fi
 
 echo ""

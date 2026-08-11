@@ -11,6 +11,13 @@
 #
 # STREAMS: runs | gates | sessions | commits   (anything else is dropped)
 #
+# ONE RECORD OR MANY. stdin is normally a single JSON object. It may also be a
+# JSONL *stream* — one object per line — and every line is appended in ONE
+# process. That exists for the reconcilers (the post-commit hook and
+# tf-metrics.sh --backfill-*), which can have hundreds of records to write and
+# used to pay a bash+python startup per record. A malformed line is dropped on
+# its own; the rest of the batch still lands.
+#
 # WHAT IT INJECTS when the record does not already carry them:
 #   v                       -> 1
 #   ts                      -> now, ISO-8601 UTC, second precision, Z suffix
@@ -124,28 +131,40 @@ if not raw.strip():
     warn("empty stdin — event dropped")
     raise SystemExit(0)
 
+# One object, or a JSONL stream of them. The single-object form is tried first so
+# a pretty-printed record spanning several lines still works exactly as before;
+# only if that fails is the input read line-by-line as a batch.
+records = []
 try:
-    rec = json.loads(raw)
-except Exception as e:
-    warn("stdin is not valid JSON (%s) — event dropped" % e)
+    one = json.loads(raw)
+    records = one if isinstance(one, list) else [one]
+except Exception as whole_err:
+    for n, line in enumerate(raw.splitlines(), 1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except Exception as e:
+            warn("stdin line %d is not valid JSON (%s) — line dropped" % (n, e))
+    if not records:
+        warn("stdin is not valid JSON (%s) — event dropped" % whole_err)
+        raise SystemExit(0)
+
+records = [r for r in records if isinstance(r, dict)]
+if not records:
+    warn("no JSON object in stdin — event dropped")
     raise SystemExit(0)
 
-if not isinstance(rec, dict):
-    warn("record is not a JSON object — event dropped")
-    raise SystemExit(0)
-
-# --- injected fields -----------------------------------------------------
-rec.setdefault("v", 1)
-rec.setdefault(
-    "ts",
-    datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-)
+# --- values resolved ONCE for the whole batch ----------------------------
+# project_type, harness and app are properties of the repo and the process, not
+# of the individual record, so a 400-record reconcile reads core-config.yaml and
+# walks the process tree once rather than 400 times.
 
 # project_type from core-config.yaml : metrics.project_type
 #   metrics:
 #     project_type: app
-if "project_type" not in rec:
-    ptype = None
+def _project_type():
     cfg = os.path.join(root, ".tfcore", "core-config.yaml")
     try:
         with open(cfg, "r", encoding="utf-8") as fh:
@@ -157,15 +176,12 @@ if "project_type" not in rec:
             re.M,
         )
         if m:
-            ptype = m.group(1)
+            return m.group(1)
     except Exception:
-        ptype = None
-    if ptype:
-        rec["project_type"] = ptype
-    else:
-        # Default, but NEVER silently — the report labels these unclassified.
-        rec["project_type"] = "app"
-        rec["project_type_inferred"] = True
+        pass
+    return None
+
+PTYPE = _project_type()
 
 # harness — DETECTED, never taken on trust. The task markdown is shared by both
 # harnesses, so an agent copying a template literal would stamp whichever harness
@@ -173,68 +189,99 @@ if "project_type" not in rec:
 # process chain (OpenCode sets no OPENCODE_* vars, so the process name is the only
 # honest signal). Undeterminable -> null: a wrong label silently corrupts any
 # per-harness comparison, a missing one is merely missing.
-if "harness" not in rec:
-    def _detect_harness():
-        for k in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ID",
-                  "CLAUDE_PROJECT_DIR"):
-            if os.environ.get(k):
-                return "claude-code"
-        for k in os.environ:
-            if k.startswith("OPENCODE"):
-                return "opencode"
-        # Walk the process ancestry (bounded). Linux/WSL via /proc; macOS via ps.
-        try:
-            pid, seen = os.getppid(), 0
-            while pid and pid > 1 and seen < 12:
-                seen += 1
-                name = ppid = None
-                try:
-                    with open("/proc/%d/stat" % pid) as fh:
-                        stat = fh.read()
-                    name = stat[stat.find("(") + 1: stat.rfind(")")]
-                    ppid = int(stat[stat.rfind(")") + 2:].split()[1])
-                except Exception:
-                    import subprocess
-                    out = subprocess.run(["ps", "-o", "comm=,ppid=", "-p", str(pid)],
-                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-                    parts = out.stdout.decode("utf-8", "replace").split()
-                    if len(parts) >= 2:
-                        name, ppid = os.path.basename(parts[0]), int(parts[1])
-                if name and "opencode" in name.lower():
-                    return "opencode"
-                if name and "claude" in name.lower():
-                    return "claude-code"
-                pid = ppid
-        except Exception:
-            pass
-        return None
+def _detect_harness():
+    for k in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ID",
+              "CLAUDE_PROJECT_DIR"):
+        if os.environ.get(k):
+            return "claude-code"
+    for k in os.environ:
+        if k.startswith("OPENCODE"):
+            return "opencode"
+    # Walk the process ancestry (bounded). Linux/WSL via /proc; macOS via ps.
     try:
-        rec["harness"] = _detect_harness()
+        pid, seen = os.getppid(), 0
+        while pid and pid > 1 and seen < 12:
+            seen += 1
+            name = ppid = None
+            try:
+                with open("/proc/%d/stat" % pid) as fh:
+                    stat = fh.read()
+                name = stat[stat.find("(") + 1: stat.rfind(")")]
+                ppid = int(stat[stat.rfind(")") + 2:].split()[1])
+            except Exception:
+                import subprocess
+                out = subprocess.run(["ps", "-o", "comm=,ppid=", "-p", str(pid)],
+                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                parts = out.stdout.decode("utf-8", "replace").split()
+                if len(parts) >= 2:
+                    name, ppid = os.path.basename(parts[0]), int(parts[1])
+            if name and "opencode" in name.lower():
+                return "opencode"
+            if name and "claude" in name.lower():
+                return "claude-code"
+            pid = ppid
     except Exception:
-        rec["harness"] = None
+        pass
+    return None
+
+try:
+    HARNESS = _detect_harness()
+except Exception:
+    HARNESS = None
 
 # app name — inferred from the one checklist, else the repo directory name
-if "app" not in rec:
-    app = None
+def _app_name():
     try:
         hits = glob.glob(os.path.join(root, "docs", "*-Checklist.md"))
         if len(hits) == 1:
-            app = os.path.basename(hits[0])[: -len("-Checklist.md")]
+            return os.path.basename(hits[0])[: -len("-Checklist.md")]
     except Exception:
-        app = None
-    rec["app"] = app or os.path.basename(os.path.abspath(root))
+        pass
+    return None
+
+APP = _app_name() or os.path.basename(os.path.abspath(root))
+
+NOW = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def enrich(rec):
+    """Fill the injected fields on ONE record. Nothing else is ever added,
+    reordered, or rewritten."""
+    rec.setdefault("v", 1)
+    rec.setdefault("ts", NOW)
+    if "project_type" not in rec:
+        if PTYPE:
+            rec["project_type"] = PTYPE
+        else:
+            # Default, but NEVER silently — the report labels these unclassified.
+            rec["project_type"] = "app"
+            rec["project_type_inferred"] = True
+    rec.setdefault("harness", HARNESS)
+    rec.setdefault("app", APP)
+    return rec
 
 # --- append --------------------------------------------------------------
+# newline="\n" is NOT optional. Python's text mode translates "\n" to the
+# platform separator, so on native Windows every append would land as CRLF —
+# mixing line endings inside an append-only log, and tripping Git's
+# "this file uses LF but will be checked out as CRLF" warning on a stream the
+# .gitattributes block pins to LF. These files are LF on every platform.
+lines = []
+for rec in records:
+    line = json.dumps(enrich(rec), separators=(",", ":"), ensure_ascii=False)
+    if "\n" in line or "\r" in line:
+        warn("record serialised with a newline — record dropped")
+        continue
+    lines.append(line + "\n")
+
+if not lines:
+    raise SystemExit(0)
+
 try:
     os.makedirs(met_dir, exist_ok=True)
-    line = json.dumps(rec, separators=(",", ":"), ensure_ascii=False)
-    if "\n" in line or "\r" in line:
-        warn("record serialised with a newline — event dropped")
-        raise SystemExit(0)
-    with open(os.path.join(met_dir, stream + ".jsonl"), "a", encoding="utf-8") as fh:
-        fh.write(line + "\n")
-except SystemExit:
-    raise
+    with open(os.path.join(met_dir, stream + ".jsonl"), "a",
+              encoding="utf-8", newline="\n") as fh:
+        fh.write("".join(lines))
 except Exception as e:
     warn("append failed (%s) — event dropped" % e)
     raise SystemExit(0)

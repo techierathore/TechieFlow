@@ -33,6 +33,8 @@ For a cross-project view, pass every repo: `bash .tfcore/telemetry/tf-metrics.sh
 
 `--report` and `--rollup` are read-only and run no git. **Never run `--backfill-commits` or `--backfill-gates`** — those are owner-only, and `--backfill-commits` invokes git, which agents never do.
 
+`--json` carries `per_repo[].commit_hook`. When it is `false`, this clone has no `post-commit` hook, so commit telemetry is not being written **on this machine** — the commit count is understated for a reason that has nothing to do with how the project is going. Say so in §5 "What is missing" and point at `update-framework.sh <repo>` (or the owner running `--backfill-commits`). **Do not act on it yourself**: installing the hook is a framework refresh, and backfilling it is git.
+
 If the streams are empty or the script reports nothing: say so plainly, write no report, and point at re-running `update-framework.sh` on the repo (which sets telemetry up). Do not produce a page of zeroes.
 
 ### 2. THE PROVENANCE RULE — this is what the task exists to enforce

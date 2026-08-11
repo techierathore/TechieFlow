@@ -10,6 +10,12 @@
 #   git add --renormalize . && git commit
 * text=auto eol=lf
 *.sh text eol=lf
+# The Windows command processor requires CRLF in batch files.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+# Append-only telemetry logs: keep BOTH sides' lines on merge, never conflict.
+# (Deployed repos get this line from the scaffold/update scripts' managed block.)
+docs/metrics/*.jsonl text eol=lf merge=union
 *.png binary
 *.jpg binary
 *.ico binary

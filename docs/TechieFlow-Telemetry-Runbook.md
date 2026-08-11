@@ -108,7 +108,8 @@ Written by a session-end hook. See §3.4 — **verify the hook event name agains
 ```
 
 - `subject_prefix`: first token of the commit subject if it matches `feat|fix|docs|chore|refactor|test|build`, else `null`. Never store the full subject — subjects leak project detail.
-- **Known limitation, document it in `SCHEMA.md`:** `post-commit` fires after the commit is sealed, so the record it appends is included in the *next* commit. Metrics lag reality by one commit. Do not attempt to work around this with `pre-commit` + `git add` — that puts git inside an automated path, and the whole design depends on git staying manual and owner-driven.
+- **Known limitation, document it in `SCHEMA.md`:** `post-commit` fires after the commit is sealed, so the record for the newest commit is included in the *next* one. Metrics lag reality by a commit. Do not attempt to work around this with `pre-commit` + `git add` — that puts git inside an automated path, and the whole design depends on git staying manual and owner-driven.
+- **Revised 2026-08-11 — the hook reconciles rather than appends.** On each commit it writes a record for *every* commit reachable from HEAD the stream lacks (skipping on `sha`), which is the same operation as `--backfill-commits`. The lag stays; the *loss* goes. That matters because this portfolio is worked on from more than one machine, where a naive appending hook drops the trailing record on a machine you stop using, records nothing at all in a clone that has no hook (`.git/` is not part of the repository), and never sees what the other machine committed. `git log` is already replicated by push/pull, so the stream is a projection of it. Constraint 1 is untouched — still the owner's own `git commit`, still nothing added to the commit being made.
 
 ### 2.5 Derived metrics — computed at report time, never stored
 
@@ -134,7 +135,7 @@ All paths relative to the TechieFlow reference repo root.
 | `.tfcore/telemetry/SCHEMA.md` | Canonical schema doc. Every field, every enum, every known limitation. Agents and future-you read this before emitting. |
 | `.tfcore/utils/tf-emit.sh` | The single append primitive. Takes a stream name and a JSON object on stdin; validates it parses, appends one line, exits 0 no matter what. Every other component calls this and only this. |
 | `.tfcore/telemetry/install-metrics.sh` | One-time per-app-repo installer, run by the owner. Creates `docs/metrics/`, seeds empty streams, installs the `post-commit` hook, writes `docs/metrics/README.md`. Idempotent. |
-| `.tfcore/telemetry/post-commit` | The git hook template. Pure bash, no agent involvement, ~15 lines. |
+| `.tfcore/telemetry/post-commit` | The git hook template. No agent involvement. Reconciles the stream against the log via `tf-metrics.sh --backfill-commits --quiet`, falling back to a pure-bash single-record append when `python3` is absent. |
 | `.tfcore/telemetry/tf-metrics.sh` | Owner-run script: `--backfill-commits` (walk `git log`, populate `commits.jsonl`), `--backfill-gates` (parse existing `<APP>-Checklist.md` Requirements Status tables + dated Remarks into partial `gates.jsonl` history), `--report` (roll up to stdout), `--rollup <path>` (merge several app repos into one cross-project view). **This is the only file allowed to contain git commands, and the owner invokes it himself.** |
 | `.tfcore/hooks/metrics-session.sh` | Session-end hook → `sessions.jsonl`. Reads the hook payload from stdin, locates the transcript, extracts usage. Silent on any failure. |
 | `.tfcore/tasks/_metrics-emit-gate.md` | The doctrine doc — the sibling of `_status-update-gate.md`. States when each stream is written, by whom, and the eight constraints from §1. Every task that emits references this. |

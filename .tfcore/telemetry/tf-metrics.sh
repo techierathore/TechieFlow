@@ -76,8 +76,15 @@ def read_stream(repo, stream):
     return out
 
 
-def emit(repo, stream, records, dry_run):
-    """Append via tf-emit.sh — the single append primitive. Never write JSONL directly."""
+def emit(repo, stream, records, dry_run, quiet=False):
+    """Append via tf-emit.sh — the single append primitive. Never write JSONL directly.
+
+    The whole batch goes down ONE pipe as JSONL. The post-commit hook reconciles
+    on every commit, so the per-record process spawn this used to do turned a
+    first-run catch-up of a few hundred commits into a visible stall inside the
+    owner's `git commit`."""
+    if not records:
+        return
     emitter = os.path.join(repo, ".tfcore", "utils", "tf-emit.sh")
     if dry_run:
         for r in records[:3]:
@@ -86,11 +93,13 @@ def emit(repo, stream, records, dry_run):
             print("  WOULD append: ... and %d more" % (len(records) - 3))
         return
     if not os.path.isfile(emitter):
+        if quiet:
+            return
         die("no %s — run update-framework.sh on this repo first" % emitter)
     env = dict(os.environ, TF_METRICS_ROOT=os.path.abspath(repo))
-    for r in records:
-        p = subprocess.Popen(["bash", emitter, stream], stdin=subprocess.PIPE, env=env)
-        p.communicate(json.dumps(r, separators=(",", ":")).encode("utf-8"))
+    payload = "".join(json.dumps(r, separators=(",", ":")) + "\n" for r in records)
+    p = subprocess.Popen(["bash", emitter, stream], stdin=subprocess.PIPE, env=env)
+    p.communicate(payload.encode("utf-8"))
 
 
 def app_name(repo):
@@ -114,12 +123,39 @@ def project_type(repo):
     return (m.group(1), False) if m else ("app", True)
 
 
-def run_git(repo, args):
+def has_commit_hook(repo):
+    """Is the commit-telemetry hook installed in THIS clone? A filesystem read,
+    never a git call, so --report stays agent-safe. The hook lives in .git/, which
+    is not part of the repository, so every clone needs its own — a machine that
+    never ran update-framework.sh records nothing until it does."""
+    git = os.path.join(repo, ".git")
+    hooks = None
+    if os.path.isdir(git):
+        hooks = os.path.join(git, "hooks")
+    elif os.path.isfile(git):
+        try:
+            for line in open(git, encoding="utf-8"):
+                if line.startswith("gitdir:"):
+                    gd = line.split(":", 1)[1].strip()
+                    if not os.path.isabs(gd):
+                        gd = os.path.join(repo, gd)
+                    hooks = os.path.join(gd, "hooks")
+                    break
+        except Exception:
+            return None
+    if not hooks:
+        return None          # not a work tree — say nothing rather than warn
+    return os.path.isfile(os.path.join(hooks, "post-commit"))
+
+
+def run_git(repo, args, soft=False):
     try:
         out = subprocess.run(["git"] + args, cwd=repo, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE, check=True)
         return out.stdout.decode("utf-8", "replace")
     except Exception as e:
+        if soft:
+            return None      # the hook path: a commit must never fail over telemetry
         die("git failed in %s: %s" % (repo, e))
 
 
@@ -128,14 +164,30 @@ PREFIX_RE = re.compile(r"^(feat|fix|docs|chore|refactor|test|build)([(!: ]|$)")
 SHORTSTAT_RE = re.compile(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?")
 
 
-def backfill_commits(repo, dry_run):
-    """git log is an append-only log, so these records are as trustworthy as live
-    ones. They are NOT flagged backfilled and need no separation in reporting."""
+def backfill_commits(repo, dry_run, limit=None, quiet=False):
+    """Reconcile commits.jsonl against `git log` — the ONE source that is already
+    replicated to every machine by push/pull.
+
+    git log is itself an append-only log, so these records are as trustworthy as
+    live ones. They are NOT flagged backfilled and need no separation in reporting.
+
+    Idempotent and gap-filling: every sha already in the stream is skipped, so
+    running this repeatedly is free, and a commit made on another machine (or on
+    this one before the hook existed) is picked up the next time it runs. That is
+    what makes the post-commit hook a reconciler rather than a lossy appender."""
     app = app_name(repo)
     existing = {r.get("sha") for r in read_stream(repo, "commits")}
-    branch = run_git(repo, ["rev-parse", "--abbrev-ref", "HEAD"]).strip() or "detached"
-    raw = run_git(repo, ["log", "--reverse", "--shortstat", "--date=format-local:%Y-%m-%dT%H:%M:%SZ",
-                         "--format=\x01%h\x02%cd\x02%s"])
+    branch = run_git(repo, ["rev-parse", "--abbrev-ref", "HEAD"], soft=quiet)
+    if branch is None:
+        return 0
+    branch = branch.strip() or "detached"
+    log_args = ["log", "--reverse", "--shortstat", "--date=format-local:%Y-%m-%dT%H:%M:%SZ",
+                "--format=\x01%h\x02%cd\x02%s"]
+    if limit:
+        log_args.insert(1, "-n%d" % limit)
+    raw = run_git(repo, log_args, soft=quiet)
+    if raw is None:
+        return 0
     records, skipped = [], 0
     for chunk in raw.split("\x01"):
         if not chunk.strip():
@@ -159,8 +211,9 @@ def backfill_commits(repo, dry_run):
             ("subject_prefix", pm.group(1) if pm else None),  # subject itself is DISCARDED
             ("branch", branch),
         ]))
-    print("→ backfill-commits %s: %d new, %d already recorded" % (repo, len(records), skipped))
-    emit(repo, "commits", records, dry_run)
+    if not quiet:
+        print("→ backfill-commits %s: %d new, %d already recorded" % (repo, len(records), skipped))
+    emit(repo, "commits", records, dry_run, quiet=quiet)
     return len(records)
 
 
@@ -327,7 +380,8 @@ def analyse(repos):
         per_repo.append({"repo": repo, "app": app_name(repo),
                          "project_type": project_type(repo)[0],
                          "gates": len(g), "gates_backfilled": sum(1 for x in g if x.get("backfilled")),
-                         "runs": len(r), "sessions": len(s), "commits": len(c)})
+                         "runs": len(r), "sessions": len(s), "commits": len(c),
+                         "commit_hook": has_commit_hook(repo)})
 
     def seg(records):
         d = defaultdict(list)
@@ -415,6 +469,16 @@ def print_report(a, repos):
         print("  %-16s %-10s gates %4d (%d backfilled)  runs %3d  sessions %3d  commits %4d"
               % (r["app"], r["project_type"], r["gates"], r["gates_backfilled"],
                  r["runs"], r["sessions"], r["commits"]))
+    # The hook is per-CLONE (.git/ is not part of the repository), so a machine
+    # that has never been refreshed silently records no commits at all. Say so —
+    # this is the one telemetry gap the owner cannot see by reading the files.
+    missing = [r["app"] for r in a["per_repo"] if r["commit_hook"] is False]
+    if missing:
+        print("")
+        print("  ⚠ no post-commit hook in THIS clone of: %s" % ", ".join(missing))
+        print("    Commit telemetry is not being written here. Fix it for good with")
+        print("    update-framework.sh <repo>, or reconcile what is already in the log:")
+        print("      .tfcore/telemetry/tf-metrics.sh --backfill-commits <repo>")
     print("")
 
     for label in ("live", "backfilled"):
@@ -496,7 +560,10 @@ def main(argv):
         print("")
         print("  --report           [<repo>] [--json]   roll up one repo to stdout")
         print("  --rollup <repo>...          [--json]   cross-project view, still segmented")
-        print("  --backfill-commits [<repo>] [--dry-run]  walk git log -> commits.jsonl")
+        print("  --backfill-commits [<repo>] [--limit N] [--quiet] [--dry-run]")
+        print("                     reconcile commits.jsonl against git log — idempotent,")
+        print("                     gap-filling, and safe to run on any machine at any time.")
+        print("                     This is how commits made on ANOTHER machine get recorded.")
         print("  --backfill-gates   [<repo>] [--dry-run]  parse the checklist -> gates.jsonl")
         print("")
         print("Live and backfilled figures are NEVER combined, and app/library/docs are")
@@ -508,13 +575,25 @@ def main(argv):
     rest = argv[1:]
     dry_run = "--dry-run" in rest
     as_json = "--json" in rest
-    repos = [a for a in rest if not a.startswith("--")] or ["."]
+    quiet = "--quiet" in rest
+    limit = None
+    for i, a in enumerate(rest):
+        if a == "--limit" and i + 1 < len(rest):
+            try:
+                limit = int(rest[i + 1])
+            except ValueError:
+                die("--limit takes an integer")
+    skip = set()
+    for i, a in enumerate(rest):
+        if a == "--limit":
+            skip.add(i + 1)
+    repos = [a for i, a in enumerate(rest) if not a.startswith("--") and i not in skip] or ["."]
     for r in repos:
         if not os.path.isdir(r):
             die("not a directory: %s" % r)
 
     if mode == "--backfill-commits":
-        backfill_commits(repos[0], dry_run)
+        backfill_commits(repos[0], dry_run, limit=limit, quiet=quiet)
     elif mode == "--backfill-gates":
         backfill_gates(repos[0], dry_run)
     elif mode in ("--report", "--rollup"):

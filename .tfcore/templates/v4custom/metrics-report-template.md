@@ -103,8 +103,12 @@ per-token cost is not the real unit. Multiplying tokens by a rate card would be 
 estimate presented as a measurement, so the row says tokens and stops.
 
 `commits.jsonl` lags reality by one commit — the `post-commit` hook fires after the
-commit is sealed, so its record rides in the next one. By design: the alternative
-puts git inside an automated path, and git stays manual here.
+commit is sealed, so the newest record rides in the next one. By design: the
+alternative puts git inside an automated path, and git stays manual here. The hook
+reconciles against the log rather than appending a single line, so the lag never
+becomes a loss and commits made on another machine appear after a pull + commit.
+If this repo's clone has no hook installed, `tf-metrics.sh --report` says so — note
+it in §5 rather than treating a thin commit count as a finding.
 
 ---
 

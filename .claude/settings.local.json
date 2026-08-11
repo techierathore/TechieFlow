@@ -106,7 +106,9 @@
       "Bash(cp .tfcore/tasks/verify-phase.md .claude/commands/TechieFlow/tasks/verify-phase.md)",
       "Bash(./update-framework.sh /mnt/c/1MyCode/TechieBlog)",
       "Bash(mkdir -p /tmp/claude-1000/-mnt-c-3AIGenCode-TechieFlow/0f7441a7-2289-40d9-8c58-5031caeb2bb3/scratchpad/techieblog-scripts-cluster-backup)",
-      "Bash(cp -r scripts-cluster-b scripts-cluster-f scripts-cluster-g scripts-cluster-i /tmp/claude-1000/-mnt-c-3AIGenCode-TechieFlow/0f7441a7-2289-40d9-8c58-5031caeb2bb3/scratchpad/techieblog-scripts-cluster-backup/)"
+      "Bash(cp -r scripts-cluster-b scripts-cluster-f scripts-cluster-g scripts-cluster-i /tmp/claude-1000/-mnt-c-3AIGenCode-TechieFlow/0f7441a7-2289-40d9-8c58-5031caeb2bb3/scratchpad/techieblog-scripts-cluster-backup/)",
+      "Bash(mkdir -p app/.tfcore/tasks app/docs app/.git/hooks app/src)",
+      "Bash(bash /Users/MyCode/TechieFlow/update-framework.sh app)"
     ]
   }
 }

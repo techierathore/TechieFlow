@@ -212,12 +212,9 @@ The installer seeds the set so every repo has the same shape and no writer has t
 guess whether its stream exists. A stream stays at zero bytes until something
 actually happens: `gates.jsonl` until the first `*verify`, `runs.jsonl` until the
 first framework command, `sessions.jsonl` until the first agent session ends, and
-**`commits.jsonl` until your first commit after telemetry was installed** — that
-one is written by *your* `git commit`, never by an agent, so a repo you haven't
-committed to since the refresh will show it empty indefinitely. Nothing is broken;
-`.git/hooks/post-commit` is sitting there waiting. Commit these empty files along
-with the rest — a tracked empty stream is what makes the first record a one-line
-diff instead of a new file appearing from nowhere.
+`commits.jsonl` until your first commit after telemetry was installed. Commit
+these empty files along with the rest — a tracked empty stream is what makes the
+first record a one-line diff instead of a new file appearing from nowhere.
 
 **Never edit these files by hand, never sort them, never compact them.** They are
 a log. Rewriting one destroys exactly the history it exists to keep.
@@ -226,10 +223,36 @@ a log. Rewriting one destroys exactly the history it exists to keep.
 verdicts and file paths at most. Never requirement text, prompt text, file
 contents, or commit subjects. Assume every line here could become public.
 
-`commits.jsonl` lags by one commit: the `post-commit` hook fires after the commit
-is sealed, so its record rides in the next one. If that bothers you, delete the
-hook — `.tfcore/telemetry/tf-metrics.sh --backfill-commits` reconstructs the same
-data perfectly at any time, because the commit log is itself an append-only log.
+## Working on more than one machine
+
+`.gitattributes` gives these streams `merge=union`, so two machines appending to
+the same file keep **both** sides' lines instead of conflicting. Pull, push, carry
+on — you never hand-resolve a log, which is the one way records get silently
+dropped. Union merge can leave a record duplicated or out of chronological order;
+every consumer sorts on `ts` and de-duplicates commits on `sha`, so neither costs
+you anything.
+
+**`commits.jsonl` needs no collecting.** The `post-commit` hook *reconciles*: on
+each commit it appends a record for every commit reachable from HEAD that the file
+does not already have. So after you pull another machine's work, your next commit
+here backfills all of it. The commit log is itself an append-only log that push
+and pull already replicate everywhere; this stream is a projection of it.
+
+Two things worth knowing:
+
+- The record for the newest commit lands in the **next** commit — the hook fires
+  after the commit is sealed. Nothing is lost; whichever machine commits next
+  writes it.
+- The hook lives in `.git/hooks/`, which is **not** part of the repository, so
+  every clone needs its own. `update-framework.sh <repo>` installs it, and
+  `tf-metrics.sh --report` warns when the clone you are standing in has none.
+
+To fill in a machine's history immediately rather than waiting for a commit:
+
+    .tfcore/telemetry/tf-metrics.sh --backfill-commits .
+
+Idempotent — already-recorded shas are skipped — so run it as often as you like.
+It is also why the hook is optional: delete it and reconcile by hand instead.
 MD
 fi
 
