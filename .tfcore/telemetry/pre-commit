@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# TechieFlow telemetry — pre-commit hook TEMPLATE.
+# Installed into <app>/.git/hooks/pre-commit by .tfcore/telemetry/install-metrics.sh.
+# It REPLACES the older post-commit hook (which that installer removes).
+#
+# WHY PRE-COMMIT, WHEN THE DESIGN SAID POST-COMMIT (owner decision, 2026-08-11).
+#
+#   post-commit can only write the record for commit N *after* N exists, so that
+#   line can never be inside N. The file was therefore dirty the instant every
+#   commit finished — permanently, with no reachable clean state: committing the
+#   pending line creates a new commit, whose record is then pending in turn.
+#   "Just commit it first" is circular advice, and on a repo worked from more
+#   than one machine it also blocks `git pull` every time.
+#
+#   Writing before the commit is sealed fixes that, at the price this hook is
+#   honest about: it stages one file into the commit you are making.
+#
+# WHAT IT STAGES, AND NOTHING ELSE:  docs/metrics/commits.jsonl
+#
+#   Not `git add -A`, not a directory, not anything you did not already have.
+#   If that file is unchanged the add is a no-op. It cannot introduce source
+#   changes into a commit, because it only ever touches this one path.
+#
+# THE LAG MOVES BUT DOES NOT GO AWAY. At pre-commit time HEAD is still the
+# PREVIOUS commit, so this records everything up to N-1; commit N's own record
+# ships inside N+1. The difference from before is that the record is *committed*
+# rather than *pending* — the working tree is clean when the commit finishes.
+#
+# EVERY SKIP IS SELF-HEALING, because this reconciles from the log rather than
+# appending one line. Merge commits (git runs pre-merge-commit instead),
+# `--no-verify`, rebase, cherry-pick and partial commits all record nothing here
+# — and the next ordinary commit, on this machine or any other that pulls, finds
+# them missing from the file and writes them. Nothing needs to be caught up by
+# hand, ever.
+#
+# NEVER STORES THE COMMIT SUBJECT — only its conventional-commit prefix, if any.
+#
+# IT NEVER FAILS YOUR COMMIT. A pre-commit hook that exits non-zero ABORTS the
+# commit, and telemetry has no veto in this framework (.tfcore/tasks/
+# _metrics-emit-gate.md). Every path here ends in `exit 0`.
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+[[ -n "$ROOT" ]] || exit 0
+EMIT="$ROOT/.tfcore/utils/tf-emit.sh"
+[[ -f "$EMIT" ]] || exit 0
+STREAM="docs/metrics/commits.jsonl"
+
+# --- 1. reconcile the stream against the log ------------------------------
+RECONCILED=0
+METRICS="$ROOT/.tfcore/telemetry/tf-metrics.sh"
+LIMIT="${TF_COMMIT_RECONCILE_LIMIT:-500}"
+if [[ -f "$METRICS" ]] && command -v python3 >/dev/null 2>&1; then
+  bash "$METRICS" --backfill-commits "$ROOT" --limit "$LIMIT" --quiet >/dev/null 2>&1 && RECONCILED=1
+fi
+
+if [[ $RECONCILED -eq 0 ]]; then
+  # Fallback: record HEAD only, in pure bash. Reached when python3 is absent.
+  # HEAD is the PREVIOUS commit here — that is the one we can describe.
+  SHA="$(git rev-parse --short HEAD 2>/dev/null)"
+  if [[ -n "$SHA" ]] && ! grep -q "\"sha\":\"$SHA\"" "$ROOT/$STREAM" 2>/dev/null; then
+    BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || BRANCH="detached"
+    WHEN="$(TZ=UTC0 git log -1 --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd 2>/dev/null)"
+    SUBJ="$(git log -1 --format=%s 2>/dev/null)"
+    STAT="$(git show --shortstat --format= HEAD 2>/dev/null | tail -1)"
+
+    # Conventional-commit prefix ONLY — the rest of the subject is discarded here
+    # and never leaves this script.
+    PREFIX="$(printf '%s' "$SUBJ" | sed -n 's/^\(feat\|fix\|docs\|chore\|refactor\|test\|build\)\([(!: ].*\)\?$/\1/p' | head -1)"
+    FILES="$(printf '%s' "$STAT" | grep -oE '[0-9]+ files? changed' | grep -oE '^[0-9]+')"
+    INS="$(printf '%s'   "$STAT" | grep -oE '[0-9]+ insertions?'    | grep -oE '^[0-9]+')"
+    DEL="$(printf '%s'   "$STAT" | grep -oE '[0-9]+ deletions?'     | grep -oE '^[0-9]+')"
+    : "${FILES:=0}" "${INS:=0}" "${DEL:=0}"
+    if [[ -n "$PREFIX" ]]; then PJ="\"$PREFIX\""; else PJ="null"; fi
+    TS_FIELD=""
+    [[ -n "$WHEN" ]] && TS_FIELD="\"ts\":\"$WHEN\","
+
+    printf '{%s"kind":"commit","sha":"%s","files":%s,"insertions":%s,"deletions":%s,"subject_prefix":%s,"branch":"%s"}\n' \
+      "$TS_FIELD" "$SHA" "$FILES" "$INS" "$DEL" "$PJ" "$BRANCH" \
+      | TF_METRICS_ROOT="$ROOT" bash "$EMIT" commits >/dev/null 2>&1
+  fi
+fi
+
+# --- 2. stage it, but ONLY on a full commit -------------------------------
+# A partial commit (`git commit -- <paths>`, and some GUI flows) runs this hook
+# against a TEMPORARY index; staging into it means quietly adding a file the
+# author explicitly scoped out, and git's handling of hook-made changes to that
+# temp index is not something to rely on. So: write the record either way, stage
+# only when this is a normal, whole-index commit. The unstaged record is not
+# lost — the next ordinary commit reconciles and stages it.
+case "${GIT_INDEX_FILE:-}" in
+  ""|.git/index|*/.git/index) git add -- "$STREAM" >/dev/null 2>&1 ;;
+esac
+
+exit 0

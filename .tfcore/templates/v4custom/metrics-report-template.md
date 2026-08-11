@@ -102,13 +102,15 @@ per-message dollar cost, and this framework runs on a subscription where margina
 per-token cost is not the real unit. Multiplying tokens by a rate card would be an
 estimate presented as a measurement, so the row says tokens and stops.
 
-`commits.jsonl` lags reality by one commit — the `post-commit` hook fires after the
-commit is sealed, so the newest record rides in the next one. By design: the
-alternative puts git inside an automated path, and git stays manual here. The hook
-reconciles against the log rather than appending a single line, so the lag never
-becomes a loss and commits made on another machine appear after a pull + commit.
-If this repo's clone has no hook installed, `tf-metrics.sh --report` says so — note
-it in §5 rather than treating a thin commit count as a finding.
+`commits.jsonl` lags reality by one commit — at `pre-commit` time HEAD is still the
+previous commit, so the newest record ships in the next one. Unavoidable in either
+direction: a record of commit N cannot predate N. The hook reconciles against the
+log rather than appending a single line, so the lag never becomes a loss, and
+commits made on another machine appear after a pull + commit. If this repo's clone
+has no hook installed, `tf-metrics.sh --report` says so — note it in §5 rather than
+treating a thin commit count as a finding. The report also de-duplicates commits on
+`sha`; if it says duplicates were collapsed, that is a normal union merge, not data
+corruption, and needs no comment.
 
 ---
 

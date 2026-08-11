@@ -15,7 +15,7 @@ Implemented from `docs/TechieFlow-Telemetry-Runbook.md`. Full maintenance-log en
 | `gates.jsonl` | **live** | `verify-phase` §6a (one record per REQ graded, first-failing gate) + `triage-issues` §6a (`gate:"escaped"`). The primary stream. |
 | `runs.jsonl` | **live** | Emitted by 13 tasks at the status gate. `_status-update-gate.md` item 10 is the trigger for every task that cites the gate; the three light-touch tasks (`devguide`, `productguide`, `mockups`) carry their own explicit step. |
 | `sessions.jsonl` | **live** | `SessionEnd` hook. See §2. |
-| `commits.jsonl` | **live, owner-side only** | Written by `.git/hooks/post-commit`, installed as part of a normal framework refresh. The hook runs inside your own `git commit`; no agent path writes it. **Optional** — `tf-metrics.sh --backfill-commits` reconstructs the same data perfectly, so deleting the hook costs nothing. |
+| `commits.jsonl` | **live, owner-side only** | Written by `.git/hooks/pre-commit`, installed as part of a normal framework refresh. The hook runs inside your own `git commit`; no agent path writes it. **Optional** — `tf-metrics.sh --backfill-commits` reconstructs the same data perfectly, so deleting the hook costs nothing. |
 
 **Nothing was skipped.** Two fields are deliberately `null` rather than fabricated:
 
@@ -34,7 +34,20 @@ The hook emits **only** into a repo that already has `docs/metrics/`. A session 
 
 **Constraint 1 (agents never run git) → the one-commit lag is permanent.** `post-commit` fires after the commit is sealed, so its record rides in the *next* commit. The obvious fix — `pre-commit` + staging the file — was rejected: it puts version control inside an automated path, and the entire design depends on commits staying manual and owner-driven. Documented in `SCHEMA.md` §5, the app-side `docs/metrics/README.md`, and WORKFLOW §17.
 
-**Revised 2026-08-11 — the lag was permanent, the data loss was not.** The hook now *reconciles*: on each commit it appends a record for every commit reachable from HEAD that the stream lacks, skipping on `sha`. That leaves constraint 1 untouched (still the owner's own `git commit`, still nothing added to the commit being made) while removing what actually hurt — a portfolio worked on from a Mac and from Windows/WSL, where the trailing record was never pushed, a clone with no hook recorded nothing, and the other machine's commits were invisible. `git log` is already replicated by push/pull, so the stream reduced to a projection of it. Paired with `merge=union` on the streams so two machines never conflict, and `eol=lf` so a machine-appended log never acquires mixed line endings.
+**Revised 2026-08-11 (a) — the lag was permanent, the data loss was not.** The hook now *reconciles*: it writes a record for every commit reachable from HEAD that the stream lacks, skipping on `sha`. That removed what actually hurt — a portfolio worked on from a Mac and from Windows/WSL, where the trailing record was never pushed, a clone with no hook recorded nothing, and the other machine's commits were invisible. `git log` is already replicated by push/pull, so the stream reduced to a projection of it. Paired with `merge=union` so two machines never conflict, `eol=lf` so a machine-appended log never acquires mixed line endings, and de-duplication on `sha` at read time so the union merge cannot inflate a count.
+
+**Revised 2026-08-11 (b) — REVERSED: it is a `pre-commit` hook now, and it stages one file.** The decision above rejected exactly this. The owner rejected the rejection, and the reasoning that overturned it is worth keeping:
+
+*The stated cost of post-commit was "metrics lag by one commit." The real cost was different and larger: `commits.jsonl` was **dirty the instant every commit finished, permanently**, because a record of commit N cannot exist before N does.* There is no reachable clean state — committing the pending line creates a new commit whose record is then pending in turn. The advice that follows from the old design ("commit the one-line diff, then pull") is circular. On a repo worked from more than one machine it also blocked `git pull` every time the file had changed upstream. A design whose steady state is "your tree is never clean" is not a lag; it is a defect that was mislabelled as a caveat.
+
+What the original decision got right is the *risk*, and it is not waived — it is bounded:
+
+- The hook stages **exactly one path**, `docs/metrics/commits.jsonl`. Never `-A`, never a directory. It cannot pull source changes into a commit.
+- On a **partial commit** (`git commit -- <paths>`, detected via `GIT_INDEX_FILE`) it writes the record and does **not** stage — it can never add a file to a commit you deliberately scoped down.
+- It **cannot fail a commit**. A pre-commit hook exiting non-zero aborts the commit, so every path ends `exit 0`. Telemetry keeps its no-veto property (constraint 9).
+- Everything it skips — merges, `--no-verify`, rebase, cherry-pick, partial commits — is picked up by the next ordinary commit's reconcile. Skipping is never losing.
+
+Constraint 1 (*agents* never run git) is untouched: this is the owner's own `git commit`, no agent path reaches it, and `block-git.sh` is unchanged. What moved is the narrower rule that the framework's git usage stays read-only — which was never a stated constraint, only an inherited habit of the post-commit design.
 
 **Constraint 1 also split `tf-metrics.sh` by mode.** `--backfill-commits` and `--backfill-gates` are **owner-run only**; `--report` and `--rollup` are read-only, invoke no git, and are what the `*metrics` task calls. Making the agent do the arithmetic by hand over raw JSONL was considered and rejected — see §Provenance below.
 
@@ -42,7 +55,7 @@ The hook emits **only** into a repo that already has `docs/metrics/`. A session 
 
 **Constraint 7 (telemetry never blocks) → `tf-emit.sh` exits 0 unconditionally,** and on a failure it *drops the event silently*. That means a genuinely broken emitter loses data with no visible signal. Accepted deliberately: a telemetry bug must never cost a working session. `TF_METRICS_DEBUG=1` is the escape hatch, and the streams are inspectable at any time.
 
-**Constraint 8 (no content) → `failure_class` is a closed enum** rather than a description, and commit **subjects** are discarded inside `post-commit`, keeping only a `feat|fix|docs|chore|refactor|test|build` prefix. This costs real diagnostic richness — you cannot ask "what actually broke" from telemetry alone — and that is the correct trade for data that could become public.
+**Constraint 8 (no content) → `failure_class` is a closed enum** rather than a description, and commit **subjects** are discarded inside the commit hook, keeping only a `feat|fix|docs|chore|refactor|test|build` prefix. This costs real diagnostic richness — you cannot ask "what actually broke" from telemetry alone — and that is the correct trade for data that could become public.
 
 **Constraint 9 (provenance never merges) → `attempt` counts live records only,** which creates a known hole: on a backfilled app, the first *live* verify of an old REQ records `attempt: 1` even though it is not that REQ's first attempt. Rather than silently correcting it, **`*metrics` excludes any REQ carrying backfilled history from the live first-pass rate entirely**, and names the excluded REQs. The exclusion is the fix; the field is never quietly patched.
 
@@ -74,7 +87,7 @@ There isn't one. Telemetry rides the normal refresh:
 /Volumes/MacD/MyCode/TechieFlow/update-framework.sh /path/to/YourApp
 ```
 
-That creates `docs/metrics/`, seeds the four streams, writes the README, installs the `post-commit` hook, and warns if an ignore rule would swallow the data. The scaffolds do the same on a fresh project. Idempotent, so every later refresh keeps it current, and `--dry-run` previews it.
+That creates `docs/metrics/`, seeds the four streams, writes the README, installs the `pre-commit` hook, and warns if an ignore rule would swallow the data. The scaffolds do the same on a fresh project. Idempotent, so every later refresh keeps it current, and `--dry-run` previews it.
 
 **`project_type` is auto-detected once** — a packable `.csproj` → `library`; `.razor`/`.xaml` present → `app`; no source → `docs`; this repo → `framework` — printed loudly, written to the preserved `core-config.yaml`, and never re-guessed afterwards. Correct a wrong guess with the one command you may ever need to type by hand:
 
@@ -116,7 +129,7 @@ Every record carries `backfilled: true` and an `inferred[]` list. Fields inferre
 
 `--backfill-commits` is a different matter and genuinely reliable: the commit log is a real append-only log, so those records are as trustworthy as live ones and need no separation in reporting. It has not been run — it invokes version control, so it is owner-only.
 
-**Which makes the `post-commit` hook optional, and worth saying out loud.** It is the weakest component in the design: it is the only piece with a known defect (the one-commit lag), and it is the only piece whose data can be reconstructed perfectly without it. If a hook in `.git/hooks/` is unwelcome, delete it and run `--backfill-commits` before you want a report — you lose nothing. That is the opposite of `gates.jsonl`, whose history genuinely cannot be recovered and is why the rest of the telemetry has to be written as it happens.
+**Which makes the commit hook optional, and worth saying out loud.** It is the weakest component in the design: it is the only piece with a known limitation (the one-commit lag), the only piece that writes to your index, and the only piece whose data can be reconstructed perfectly without it. If a hook in `.git/hooks/` is unwelcome, delete it and run `--backfill-commits` before you want a report — you lose nothing. That is the opposite of `gates.jsonl`, whose history genuinely cannot be recovered and is why the rest of the telemetry has to be written as it happens.
 
 **Observation, not acted on** (per "do not refactor unrelated parts of the framework while in here"): AstroLyfe's checklist carries free-text status variants such as `Implemented (re-verify pending formal pass)` that are outside the documented Status vocabulary. The backfill reports them as skipped rather than guessing. Worth normalising in that checklist at some point; not a telemetry problem.
 

@@ -562,7 +562,7 @@ else
   echo "  .gitignore — added agent-artifact entries: ${GI2_MISSING[*]}"
 fi
 
-# 8c. Telemetry — docs/metrics/, the project classification, and the post-commit
+# 8c. Telemetry — docs/metrics/, the project classification, and the pre-commit
 #     hook, refreshed on every update so a repo can never drift out of it. There
 #     is deliberately no separate install command: telemetry rides this script.
 #     The setup script never invokes git — it locates .git/hooks by reading the

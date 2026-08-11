@@ -14,7 +14,7 @@
 #   3. records metrics.project_type in .tfcore/core-config.yaml — auto-detected
 #      ONCE, printed loudly, then never touched again (core-config.yaml is a
 #      preserved file, so the classification survives every framework refresh)
-#   4. installs .git/hooks/post-commit
+#   4. installs .git/hooks/pre-commit (and retires the old post-commit)
 #   5. warns if a .gitignore pattern would swallow docs/metrics/
 #
 # IT NEVER INVOKES GIT. The hooks directory is located by reading the filesystem
@@ -202,7 +202,7 @@ after the fact.
 | `runs.jsonl` | framework command run | the task, at completion |
 | `gates.jsonl` | REQ verdict per verify run — **the primary stream** | `verify-phase` §6a, `triage-issues` |
 | `sessions.jsonl` | agent session | the `SessionEnd` hook |
-| `commits.jsonl` | commit | the repo's own `post-commit` hook |
+| `commits.jsonl` | commit | the repo's own `pre-commit` hook |
 
 Schema, enums, and every known limitation: `.tfcore/telemetry/SCHEMA.md`.
 Report: `/TechieFlow:agents:flow-master *metrics <AppName>` → `METRICS.md`.
@@ -232,20 +232,32 @@ dropped. Union merge can leave a record duplicated or out of chronological order
 every consumer sorts on `ts` and de-duplicates commits on `sha`, so neither costs
 you anything.
 
-**`commits.jsonl` needs no collecting.** The `post-commit` hook *reconciles*: on
-each commit it appends a record for every commit reachable from HEAD that the file
-does not already have. So after you pull another machine's work, your next commit
-here backfills all of it. The commit log is itself an append-only log that push
-and pull already replicate everywhere; this stream is a projection of it.
+**`commits.jsonl` needs no collecting.** The `pre-commit` hook *reconciles*: it
+writes a record for every commit reachable from HEAD that the file does not
+already have, then stages that one file so the records ship **inside** the commit
+you are making. So after you pull another machine's work, your next commit here
+records all of it. The commit log is itself an append-only log that push and pull
+already replicate everywhere; this stream is a projection of it.
 
-Two things worth knowing:
+Three things worth knowing:
 
-- The record for the newest commit lands in the **next** commit — the hook fires
-  after the commit is sealed. Nothing is lost; whichever machine commits next
-  writes it.
+- **It stages exactly one path** — `docs/metrics/commits.jsonl`, nothing else. On
+  a partial commit (`git commit -- <paths>`) it writes the record but does **not**
+  stage, so it can never smuggle a file into a commit you deliberately scoped.
+- **The lag is one commit, and it is committed rather than pending.** At
+  pre-commit time HEAD is still the previous commit, so the record for the commit
+  you are making ships in the next one. Your working tree is clean when the commit
+  finishes — that is the whole reason this is a pre-commit hook and not a
+  post-commit one.
 - The hook lives in `.git/hooks/`, which is **not** part of the repository, so
   every clone needs its own. `update-framework.sh <repo>` installs it, and
-  `tf-metrics.sh --report` warns when the clone you are standing in has none.
+  `tf-metrics.sh --report` warns when the clone you are standing in has none. If
+  you already have your own `pre-commit` hook, the installer leaves it alone and
+  tells you — add `bash .tfcore/telemetry/pre-commit` to it if you want both.
+
+Merge commits, `--no-verify`, rebases and cherry-picks skip the hook entirely.
+Nothing is lost: reconciling means the next ordinary commit — here or on any
+machine that pulls — notices those commits are missing and writes them.
 
 To fill in a machine's history immediately rather than waiting for a commit:
 
@@ -256,7 +268,12 @@ It is also why the hook is optional: delete it and reconcile by hand instead.
 MD
 fi
 
-# --- 4. post-commit hook — located WITHOUT invoking git ------------------
+# --- 4. pre-commit hook — located WITHOUT invoking git -------------------
+# Since 2026-08-11 the commit-telemetry hook is **pre**-commit, so the record
+# ships INSIDE the commit and the working tree is clean afterwards. The old
+# post-commit hook wrote its line after the commit was sealed, which left
+# commits.jsonl permanently dirty with no reachable clean state. Our own
+# post-commit is therefore REMOVED here; a foreign one is never touched.
 HOOKS_DIR=""
 if [[ -d .git ]]; then
   HOOKS_DIR=".git/hooks"
@@ -267,25 +284,37 @@ elif [[ -f .git ]]; then
 fi
 
 if [[ -z "$HOOKS_DIR" ]]; then
-  say "  post-commit — not a work tree yet; commits.jsonl stays empty (re-run the updater after init)"
-elif [[ $DRY -eq 1 ]]; then
-  if [[ -f "$HOOKS_DIR/post-commit" ]] && cmp -s "$TEMPLATE/.tfcore/telemetry/post-commit" "$HOOKS_DIR/post-commit"; then
-    say "  $HOOKS_DIR/post-commit — already current"
-  else
-    say "  $HOOKS_DIR/post-commit — WOULD install the commit-telemetry hook"
-  fi
+  say "  pre-commit — not a work tree yet; commits.jsonl stays empty (re-run the updater after init)"
 else
-  mkdir -p "$HOOKS_DIR" 2>/dev/null
-  SRC="$TEMPLATE/.tfcore/telemetry/post-commit"
-  DEST="$HOOKS_DIR/post-commit"
-  if [[ -f "$DEST" ]] && cmp -s "$SRC" "$DEST"; then
-    say "  $DEST — already current"
-  else
-    if [[ -f "$DEST" ]] && ! grep -q 'TechieFlow telemetry' "$DEST" 2>/dev/null; then
-      cp "$DEST" "$DEST.pre-techieflow.bak"
-      say "  ⚠ $DEST — YOUR existing hook was backed up to post-commit.pre-techieflow.bak and REPLACED,"
-      say "    not merged. Chain it back in by hand if you need both."
+  SRC="$TEMPLATE/.tfcore/telemetry/pre-commit"
+  DEST="$HOOKS_DIR/pre-commit"
+  OLD="$HOOKS_DIR/post-commit"
+
+  # 4a. retire OUR post-commit. Identified by the template's own marker, so a
+  #     hook you wrote yourself is left exactly where it is.
+  if [[ -f "$OLD" ]] && grep -q 'TechieFlow telemetry' "$OLD" 2>/dev/null; then
+    if [[ $DRY -eq 1 ]]; then
+      say "  $OLD — WOULD remove (superseded by pre-commit)"
+    else
+      rm -f "$OLD" && say "  $OLD — removed (superseded by pre-commit)"
     fi
+  fi
+
+  # 4b. install pre-commit. A pre-commit hook is where people put lint and test
+  #     gates, so unlike the old post-commit path this NEVER replaces one it did
+  #     not write. Losing someone's lint gate to a telemetry install would be a
+  #     far worse outcome than not collecting commit records.
+  if [[ -f "$DEST" ]] && ! grep -q 'TechieFlow telemetry' "$DEST" 2>/dev/null; then
+    echo "  ⚠ $DEST already exists and is NOT the TechieFlow hook — left untouched."
+    echo "    Commit telemetry is not installed here. To have both, add this line to"
+    echo "    your hook:  bash .tfcore/telemetry/pre-commit"
+    echo "    (or reconcile by hand: tf-metrics.sh --backfill-commits .)"
+  elif [[ -f "$DEST" ]] && cmp -s "$SRC" "$DEST"; then
+    say "  $DEST — already current"
+  elif [[ $DRY -eq 1 ]]; then
+    say "  $DEST — WOULD install the commit-telemetry hook"
+  else
+    mkdir -p "$HOOKS_DIR" 2>/dev/null
     cp "$SRC" "$DEST" && chmod +x "$DEST" && say "  $DEST — installed"
   fi
 fi

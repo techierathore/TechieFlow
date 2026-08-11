@@ -27,7 +27,7 @@ Everything else in this runbook is in service of those three.
 
 ## 1. Hard constraints — violating any of these is a failed implementation
 
-1. **Agents never run `git` or `gh`.** `.tfcore/hooks/block-git.sh` stays exactly as it is. Do not weaken the deny list. Do not add a git call to any task, agent, or hook that an agent triggers. The only git-derived stream comes from a `post-commit` hook that fires inside the owner's own `git commit`, and a backfill script the owner runs himself.
+1. **Agents never run `git` or `gh`.** `.tfcore/hooks/block-git.sh` stays exactly as it is. Do not weaken the deny list. Do not add a git call to any task, agent, or hook that an agent triggers. The only git-derived stream comes from a `pre-commit` hook that fires inside the owner's own `git commit`, and a backfill script the owner runs himself.
 2. **Metrics data must be tracked by git.** `docs/metrics/` must NOT land in the framework's managed `.gitignore` blocks (the one carrying `.tfcore/`, `.claude/`, etc., or the one carrying `test-results/`, `logs/`, `/docs/.last-verify.json`). After implementing, re-read the gitignore-management step in `scaffold-brownfield.sh`, `scaffold-greenfield.sh`, and `update-framework.sh` and confirm no pattern catches `docs/metrics/`. If one does, add an explicit negation.
 3. **Never write metrics into `PROJECT-STATUS.md`.** `.tfcore/hooks/guard-status.sh` blocks any H2 outside the template's section set and any full-file write past ~120 lines. A metrics section there will be rejected. Same for `<APP>-Checklist.md` — `guard-verify.sh` inspects those writes and a stray edit risks a false block.
 4. **Do not change `docs/.last-verify.json` semantics.** It is the same-day gate ledger that `guard-verify.sh` depends on to permit a `Verified` cell. It stays ephemeral, stays gitignored, stays exactly the shape `verify-phase §6` writes today. Telemetry *reads alongside* it; it never replaces it.
@@ -100,7 +100,7 @@ On failure:
 
 Written by a session-end hook. See §3.4 — **verify the hook event name against the installed Claude Code version before wiring it; do not assume.** If no suitable event exists in this version, emit nothing and report that back rather than faking the stream.
 
-### 2.4 `docs/metrics/commits.jsonl` — one record per commit, written by the owner's `post-commit` hook
+### 2.4 `docs/metrics/commits.jsonl` — one record per commit, written by the owner's `pre-commit` hook
 
 ```json
 {"v":1,"ts":"2026-08-08T09:30:11Z","kind":"commit","app":"TrSetup","sha":"a1b2c3d",
@@ -108,7 +108,8 @@ Written by a session-end hook. See §3.4 — **verify the hook event name agains
 ```
 
 - `subject_prefix`: first token of the commit subject if it matches `feat|fix|docs|chore|refactor|test|build`, else `null`. Never store the full subject — subjects leak project detail.
-- **Known limitation, document it in `SCHEMA.md`:** `post-commit` fires after the commit is sealed, so the record for the newest commit is included in the *next* one. Metrics lag reality by a commit. Do not attempt to work around this with `pre-commit` + `git add` — that puts git inside an automated path, and the whole design depends on git staying manual and owner-driven.
+- **Known limitation, document it in `SCHEMA.md`:** the record for the newest commit is included in the *next* one. Metrics lag reality by a commit — unavoidable in either direction, since a record of commit N cannot predate N.
+- **Superseded 2026-08-11 (owner decision).** This runbook originally specified `post-commit` and told the implementer *not* to use `pre-commit` + `git add`. That was reversed. `post-commit` cannot put its line inside the commit it describes, so `commits.jsonl` was permanently dirty with no reachable clean state, and it blocked `git pull` on any repo worked from two machines. The hook is now `pre-commit`: it reconciles from the log, then stages **exactly one path** (`docs/metrics/commits.jsonl` — never a directory, never `-A`), skips staging on a partial commit (detected via `GIT_INDEX_FILE`), and exits 0 on every path so it can never abort a commit. Constraint 1 above is unaffected: *agents* still never run git, and `block-git.sh` is unchanged.
 - **Revised 2026-08-11 — the hook reconciles rather than appends.** On each commit it writes a record for *every* commit reachable from HEAD the stream lacks (skipping on `sha`), which is the same operation as `--backfill-commits`. The lag stays; the *loss* goes. That matters because this portfolio is worked on from more than one machine, where a naive appending hook drops the trailing record on a machine you stop using, records nothing at all in a clone that has no hook (`.git/` is not part of the repository), and never sees what the other machine committed. `git log` is already replicated by push/pull, so the stream is a projection of it. Constraint 1 is untouched — still the owner's own `git commit`, still nothing added to the commit being made.
 
 ### 2.5 Derived metrics — computed at report time, never stored
@@ -134,8 +135,8 @@ All paths relative to the TechieFlow reference repo root.
 |---|---|
 | `.tfcore/telemetry/SCHEMA.md` | Canonical schema doc. Every field, every enum, every known limitation. Agents and future-you read this before emitting. |
 | `.tfcore/utils/tf-emit.sh` | The single append primitive. Takes a stream name and a JSON object on stdin; validates it parses, appends one line, exits 0 no matter what. Every other component calls this and only this. |
-| `.tfcore/telemetry/install-metrics.sh` | One-time per-app-repo installer, run by the owner. Creates `docs/metrics/`, seeds empty streams, installs the `post-commit` hook, writes `docs/metrics/README.md`. Idempotent. |
-| `.tfcore/telemetry/post-commit` | The git hook template. No agent involvement. Reconciles the stream against the log via `tf-metrics.sh --backfill-commits --quiet`, falling back to a pure-bash single-record append when `python3` is absent. |
+| `.tfcore/telemetry/install-metrics.sh` | One-time per-app-repo installer, run by the owner. Creates `docs/metrics/`, seeds empty streams, installs the `pre-commit` hook, writes `docs/metrics/README.md`. Idempotent. |
+| `.tfcore/telemetry/pre-commit` | The commit hook template. No agent involvement. Reconciles the stream against the log via `tf-metrics.sh --backfill-commits --quiet`, falling back to a pure-bash single-record append when `python3` is absent. |
 | `.tfcore/telemetry/tf-metrics.sh` | Owner-run script: `--backfill-commits` (walk `git log`, populate `commits.jsonl`), `--backfill-gates` (parse existing `<APP>-Checklist.md` Requirements Status tables + dated Remarks into partial `gates.jsonl` history), `--report` (roll up to stdout), `--rollup <path>` (merge several app repos into one cross-project view). **This is the only file allowed to contain git commands, and the owner invokes it himself.** |
 | `.tfcore/hooks/metrics-session.sh` | Session-end hook → `sessions.jsonl`. Reads the hook payload from stdin, locates the transcript, extracts usage. Silent on any failure. |
 | `.tfcore/tasks/_metrics-emit-gate.md` | The doctrine doc — the sibling of `_status-update-gate.md`. States when each stream is written, by whom, and the eight constraints from §1. Every task that emits references this. |
@@ -175,7 +176,7 @@ Work in this order. Each step has a done-condition; do not proceed past a failin
 **Step 4 — the run stream.** `build-phase` first, then `fix-issues` and `triage-issues`, then the remaining tasks.
 *Done when:* a build→verify cycle produces ≥2 `runs.jsonl` records with sane `duration_s`.
 
-**Step 5 — git side.** `post-commit`, `install-metrics.sh`, `tf-metrics.sh --backfill-commits`.
+**Step 5 — git side.** `pre-commit`, `install-metrics.sh`, `tf-metrics.sh --backfill-commits`.
 
 `install-metrics.sh` prompts once for `project_type` (`app` | `library` | `docs` | `framework`) and writes it to `core-config.yaml → metrics.project_type`. It is a preserved file, so the classification survives every `update-framework.sh`.
 

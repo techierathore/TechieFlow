@@ -312,7 +312,7 @@ else
   echo "  .gitignore — agent-artifact entries already present"
 fi
 
-# 8c. Telemetry — docs/metrics/, the project classification, and the post-commit
+# 8c. Telemetry — docs/metrics/, the project classification, and the pre-commit
 #     hook. Set up HERE, as part of the scaffold, so there is no second command
 #     for the owner to remember. The setup script never invokes git: it finds
 #     .git/hooks by reading the filesystem, because installing a hook is a file

@@ -233,19 +233,30 @@ Written by `.tfcore/hooks/metrics-session.sh`, wired to the **`SessionEnd`** hoo
  "sha":"a1b2c3d","files":9,"insertions":412,"deletions":57,"subject_prefix":"feat","branch":"main"}
 ```
 
-Written by the repo's `post-commit` hook (`.tfcore/telemetry/post-commit`, installed by the framework scripts during a normal refresh — that install is a **file copy** and invokes no git), or reconstructed by `tf-metrics.sh --backfill-commits`. The hook runs inside the owner's own `git commit`. **No agent ever writes this stream.**
+Written by the repo's `pre-commit` hook (`.tfcore/telemetry/pre-commit`, installed by the framework scripts during a normal refresh — that install is a **file copy** and invokes no git), or reconstructed by `tf-metrics.sh --backfill-commits`. The hook runs inside the owner's own `git commit`. **No agent ever writes this stream.**
 
-**The hook reconciles; it does not merely append.** On every commit it appends a record for **every** commit reachable from HEAD that the stream does not already carry, skipping on `sha`. `--backfill-commits` is the same operation run by hand. This matters because the naive one-record-per-commit hook loses data in exactly the situation this portfolio lives in — one repo, several machines:
+**The hook reconciles; it does not merely append.** It writes a record for **every** commit reachable from HEAD that the stream does not already carry, skipping on `sha`, then stages that one file so the records ship *inside* the commit being made. `--backfill-commits` is the same operation run by hand. Reconciling matters because a one-record-per-commit hook loses data in exactly the situation this portfolio lives in — one repo, several machines:
 
-| Gap | Why the appending hook loses it | Why reconciling closes it |
+| Gap | Why an appending hook loses it | Why reconciling closes it |
 |---|---|---|
-| The newest record is always uncommitted (the hook fires *after* the commit is sealed) | If you stop working on that machine it is never pushed | The next commit on **any** machine writes it, because the log says it is missing |
 | A clone with no hook (`.git/` is not part of the repository) records nothing, silently | Nothing to notice until you look | The first reconcile on that clone fills its whole history; `--report` also warns when the hook is absent |
 | Commits made on the other machine while this one was idle | Never seen here | After a pull, they are in `git log`, so the next reconcile records them |
+| Merge commits, `--no-verify`, rebase, cherry-pick — the hook does not run | Permanently unrecorded | The next ordinary commit sees them in the log and writes them |
+
+**Why `pre`-commit, reversing the original design (owner decision, 2026-08-11).** `post-commit` can only describe commit N once N exists, so its line can never be *inside* N — `commits.jsonl` was dirty the moment every commit finished, permanently, with no reachable clean state (committing the pending line creates a new commit whose record is then pending). It also blocked `git pull` whenever the file had also changed upstream. Moving the write earlier costs one thing, stated plainly: **the hook stages a file into your commit.** Scope is exactly one path, `docs/metrics/commits.jsonl`; on a partial commit (`git commit -- <paths>`, detected via `GIT_INDEX_FILE`) it writes the record but does **not** stage, so it can never add a file to a commit you deliberately scoped down. A pre-commit hook that exits non-zero aborts the commit, so every path in it ends `exit 0` — telemetry still has no veto (§10).
 
 **This hook is optional.** `--backfill-commits` reconstructs the identical data from `git log` at any time, and reconstructs it *perfectly* — see the exemption note below. Delete `.git/hooks/post-commit` if you would rather not have a hook, and backfill before you want a report; nothing else in the schema changes.
 
 **Files are `merge=union`** (`.gitattributes`, managed by the scaffold/update scripts). Two machines appending never conflict, so no record is ever lost to a hand-resolved merge. The cost is that a record can appear twice and line order stops being chronological — consumers sort on `ts`, and commit records de-duplicate on `sha`.
+
+**Duplicate shas are expected, and are the other half of the union-merge trade.** Machine A commits `N`; A's *next* commit records `N` and carries it. If A has not pushed that yet by the time machine B pulls commit `N` itself, B's reconcile reconstructs the same record from the log. Both are now genuine lines in two branches of one file, and union merge — whose entire job is to never drop a line — keeps both. So:
+
+- **Nothing is ever missing.** Whatever a machine failed to push, the next machine rebuilds from `git log`, because the log is what actually replicates.
+- **Nothing is ever double-counted.** `tf-metrics.sh` de-duplicates commit records on `sha` at read time and prints how many it collapsed. `--backfill-commits` skips shas already present.
+
+Only `commits.jsonl` needs this. `runs`/`gates`/`sessions` record events that happen on one machine and cannot be independently reconstructed elsewhere, so a union merge has no way to manufacture a second copy of them.
+
+**Practical note:** the record for your latest commit is written by the *next* commit's hook, so between commits the file matches HEAD. Nothing pending, nothing blocking a pull.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -254,9 +265,9 @@ Written by the repo's `post-commit` hook (`.tfcore/telemetry/post-commit`, insta
 | `subject_prefix` | string \| null | First token of the subject **only if** it matches `feat\|fix\|docs\|chore\|refactor\|test\|build`, else `null`. **Never store the full subject** — subjects leak project detail. |
 | `branch` | string | The branch **at the moment the record was written**, not necessarily the branch the commit was made on. Live records are written seconds later, so they are right; a record filled in by a reconcile — after a pull, or on a clone that had no hook — carries the reconciling clone's current branch. `git log` does not retain per-commit branch membership, so this cannot be recovered. Treat `branch` as approximate on anything but the newest record. |
 
-**Known limitation — the one-commit lag.** `post-commit` fires *after* the commit is sealed, so the record it appends lands in the **next** commit. Metrics lag reality by one commit. Since the hook reconciles, the lag never becomes a *loss*: the missing record is written by whichever commit comes next, on whichever machine.
+**Known limitation — the one-commit lag.** At `pre-commit` time HEAD is still the *previous* commit, so the record for the commit being made ships inside the **next** one. Metrics lag reality by a commit. The lag is unavoidable in either direction — a record of commit N cannot predate N — but it is now *committed* rather than *pending*, so the working tree is clean when a commit finishes. And because the hook reconciles, the lag never becomes a *loss*: the missing record is written by whichever commit comes next, on whichever machine.
 
-Do **not** work around this with `pre-commit` + `git add`. That would put git inside an automated path, and the whole design depends on git staying manual and owner-driven. Reconciling from the log gets the same completeness without touching the commit being made.
+**Practical note:** `commits.jsonl` no longer carries a permanently pending line, so it no longer blocks a `git pull` the way the post-commit form did.
 
 **Commit records are exempt from both provenance separations** (§6). `git log` is a real append-only log, so a backfilled commit is exactly as trustworthy as a live one; and commit volume/cadence is comparable across every `project_type`.
 

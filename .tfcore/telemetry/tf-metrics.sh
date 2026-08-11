@@ -102,6 +102,35 @@ def emit(repo, stream, records, dry_run, quiet=False):
     p.communicate(payload.encode("utf-8"))
 
 
+def dedupe_commits(records):
+    """Collapse commit records that share a sha, keeping the first.
+
+    Duplicates are EXPECTED, not corruption. A commit made on machine A is
+    recorded there by the hook; if that record has not been pushed when machine B
+    pulls the commit itself, B's reconcile reconstructs the same record from the
+    log. Both are then real lines in two branches of the same file, and
+    `merge=union` — which exists so that no record is ever lost to a hand-resolved
+    conflict — keeps both. De-duplicating on read is the other half of that trade:
+    union merge guarantees nothing is dropped, this guarantees nothing is counted
+    twice. `sha` is the natural key; a commit happens once.
+
+    Only commits need this. runs/gates/sessions record events that happen on ONE
+    machine and are never independently reconstructible, so a union merge cannot
+    manufacture a second copy of them."""
+    seen, out, dupes = set(), [], 0
+    for r in records:
+        sha = r.get("sha")
+        if sha is None:
+            out.append(r)
+            continue
+        if sha in seen:
+            dupes += 1
+            continue
+        seen.add(sha)
+        out.append(r)
+    return out, dupes
+
+
 def app_name(repo):
     hits = glob.glob(os.path.join(repo, "docs", "*-Checklist.md"))
     if len(hits) == 1:
@@ -145,7 +174,10 @@ def has_commit_hook(repo):
             return None
     if not hooks:
         return None          # not a work tree — say nothing rather than warn
-    return os.path.isfile(os.path.join(hooks, "post-commit"))
+    # pre-commit since 2026-08-11; post-commit is the retired form, still counted
+    # so a clone that has not been refreshed does not read as "no telemetry".
+    return any(os.path.isfile(os.path.join(hooks, h))
+               for h in ("pre-commit", "post-commit"))
 
 
 def run_git(repo, args, soft=False):
@@ -371,11 +403,14 @@ def analyse(repos):
     and there is no code path that produces a combined figure."""
     gates, runs, sessions, commits = [], [], [], []
     per_repo = []
+    commit_dupes = 0
     for repo in repos:
         g = read_stream(repo, "gates")
         r = read_stream(repo, "runs")
         s = read_stream(repo, "sessions")
-        c = read_stream(repo, "commits")
+        # Per repo, not across them: two repos may legitimately share a short sha.
+        c, d = dedupe_commits(read_stream(repo, "commits"))
+        commit_dupes += d
         gates += g; runs += r; sessions += s; commits += c
         per_repo.append({"repo": repo, "app": app_name(repo),
                          "project_type": project_type(repo)[0],
@@ -454,6 +489,7 @@ def analyse(repos):
                                    if verified_transitions >= MIN_N and tok else None,
         "cost_usd": None,  # never estimated — see SCHEMA.md §4
         "commits": len(commits),
+        "commit_duplicates_collapsed": commit_dupes,
         "active_days": len(days),
         "commits_per_active_day": round(float(len(commits)) / len(days), 2) if days else None,
     }
@@ -475,7 +511,7 @@ def print_report(a, repos):
     missing = [r["app"] for r in a["per_repo"] if r["commit_hook"] is False]
     if missing:
         print("")
-        print("  ⚠ no post-commit hook in THIS clone of: %s" % ", ".join(missing))
+        print("  ⚠ no commit-telemetry hook in THIS clone of: %s" % ", ".join(missing))
         print("    Commit telemetry is not being written here. Fix it for good with")
         print("    update-framework.sh <repo>, or reconcile what is already in the log:")
         print("      .tfcore/telemetry/tf-metrics.sh --backfill-commits <repo>")
@@ -549,6 +585,10 @@ def print_report(a, repos):
     print("  commit cadence      : %s commits/active day (%d commits over %d days)" %
           (p["commits_per_active_day"] if p["commits_per_active_day"] is not None else "—",
            p["commits"], p["active_days"]))
+    if p["commit_duplicates_collapsed"]:
+        print("                        (%d duplicate sha(s) collapsed — normal after a union"
+              % p["commit_duplicates_collapsed"])
+        print("                         merge; the same commit was recorded on two machines)")
     print("=" * W)
 
 
