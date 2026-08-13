@@ -1,4 +1,13 @@
+---
+description: Convert one or more human-readable markdown files (or a non-recursive directory) to self-contained HTML using the shared render shell.
+---
+
 # /generate-html Task
+
+> OpenCode note: this command file is the OpenCode-flavored copy. In OpenCode, a leading
+> `@` on an argument is a *file-content-inclusion* sigil, NOT a file mention — so when you
+> pass paths, use plain paths (no `@`). The task body below still strips a stray `@` just in
+> case a prompt carries one through from Claude Code habits.
 
 When this command is used, execute the following task:
 
@@ -16,23 +25,22 @@ Convert one or more **human-readable** markdown files to self-contained HTML usi
 ## Invocation forms
 
 ```
-*generate-html @path/to/file.md
-*generate-html @path/to/file1.md @path/to/file2.md @path/to/file3.md
-*generate-html @docs/SomeFolder/
+*generate-html path/to/file.md
+*generate-html path/to/file1.md path/to/file2.md path/to/file3.md
+*generate-html docs/SomeFolder/
 ```
 
-(Or via the slash-command wrapper: `/TechieFlow:tasks:generate-html @path/to/file.md`)
+(Or via the slash-command wrapper: `/generate-html path/to/file.md` — OpenCode: plain paths, no `@`.)
 
 - **Single file:** convert that one MD to a sibling HTML.
 - **Multiple files:** convert each. List separated by spaces. Each becomes a sibling HTML.
 - **Directory:** convert every `*.md` directly inside that directory. **Non-recursive** — do not descend into subdirectories. If the user wants subdirectories included, they can pass each subdir as another argument.
 
-If no arguments are passed, HALT and tell the user: `Usage: *generate-html @<path-to-md-or-dir> [@<more-paths>]`.
+If no arguments are passed, HALT and tell the user: `Usage: *generate-html <path-to-md-or-dir> [<more-paths>]`.
 
 ## Inputs
 
-- One or more `@`-prefixed paths (the `@` is Claude Code's file-mention sigil; strip it when resolving the actual path).
-- Paths may be absolute or relative to project root.
+- One or more paths. A leading `@` may arrive from a Claude Code habit (`@path` file-mention sigil); strip it when resolving the actual path. In OpenCode, pass plain paths.
 
 ## SEQUENTIAL Execution
 

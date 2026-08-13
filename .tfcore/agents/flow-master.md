@@ -69,7 +69,7 @@ brd_coverage_protocol:
     - Status values - IMPLEMENTED (cite file path / agent that did it), PARTIAL (state what is missing), DEFERRED (state why), OUT-OF-SCOPE (only if user removed it during confirmation).
     - Reconcile against any BRD Coverage Report the previous agent (e.g. trblazeui) emitted - if your finding disagrees, explicitly flag the row as DISAGREEMENT and explain.
     - End with one-line summary - 'Implemented x / Partial y / Deferred z / Disagreement w'.
-    - Recommend the verifier (`/TechieFlow:agents:verifier *verify <scope>` — ui / functional / all / phase-N) as the next step to grade this report against the running app.
+    - Recommend the verifier (`/TechieFlow:agents:verifier *verify <scope>` — OpenCode: `/flow-verifier *verify <scope>` — ui / functional / all / phase-N) as the next step to grade this report against the running app.
 commands: # All commands require * prefix when used (e.g., *help, *run-workflow MyApp)
   - help: Show these listed commands in a numbered list
   - run-workflow {AppName}: Orchestrate the FULL pipeline for an app under brd_coverage_protocol — day-1 docs → (greenfield: mockups) → split-brd → the unified build-phase → verify → handoff. Assess what already exists from PROJECT-STATUS + the checklist Requirements Status table, run only the open legs, fan work out across parallel subagents by cluster where it helps, declare BRD-N coverage before each build leg, emit a Coverage Report after, and chain the verifier. Pauses for confirmation at each phase boundary.

@@ -1,51 +1,87 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "instructions": [
-    ".tfcore/core-config.yaml"
+    ".tfcore/core-config.yaml",
+    "AGENTS.md"
   ],
   // Solo-dev TechieFlow v4: only the agents the compressed workflow actually uses.
   // Stock story-flow agents (dev/pm/po/qa/sm/ux-expert) were trimmed 2026-06-12
   // and are no longer included.
+  //
+  // NOTE on `tools` vs `permission`: the legacy `tools` key (e.g.
+  // {write/edit/bash: true}) is deprecated and auto-normalized to a `permission`
+  // block, and listing only three tools left read/grep/glob/task at their
+  // defaults anyway. We use `permission` explicitly so intent is unambiguous.
+  //
+  // NOTE on git/gh: "GIT IS MANUAL" is enforced here for OpenCode the same way
+  // `.claude/settings.json` + block-git.sh enforce it for Claude Code. The root
+  // `permission` block below denies git/gh in bash (OpenCode has no settings-level
+  // hooks; this is the mechanical gate). Compound forms like `cd x && git log`
+  // are NOT matched by prefix rules — the agent personas repeat the rule in prose
+  // and the owner reviews all bash output, same as the Claude-side contract.
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "git": "deny",
+      "git *": "deny",
+      "gh": "deny",
+      "gh *": "deny"
+    }
+  },
   "agent": {
     "flow-master": {
       "prompt": "{file:./.tfcore/agents/flow-master.md}",
       "mode": "primary",
-      "tools": {
-        "write": true,
-        "edit": true,
-        "bash": true
+      "permission": {
+        "edit": "allow",
+        "bash": "allow"
       },
       "description": "Madhav — the single super-agent. Orchestrates the full pipeline (*run-workflow, *phase) with parallel subagents, runs the unified build (*build-phase — calls /trblazeui + /techierag as sub-agents), fixes bugs from screenshots (*fix-issues), analyzes + logs human-found bugs without fixing (*triage-issues), reports development telemetry (*metrics), and handles doc/status utilities (*render-workflow-docs, *generate-html, *handoff-phase, *refresh-status, *devguide) plus any one-off task."
     },
     "flow-architect": {
       "prompt": "{file:./.tfcore/agents/architect.md}",
       "mode": "all",
-      "tools": {
-        "write": true,
-        "edit": true,
-        "bash": true
+      "permission": {
+        "edit": "allow",
+        "bash": "allow"
       },
       "description": "Optional deep architecture dive; /analyst covers day-1 architecture by default"
     },
     "flow-analyst": {
       "prompt": "{file:./.tfcore/agents/analyst.md}",
       "mode": "all",
-      "tools": {
-        "write": true,
-        "edit": true,
-        "bash": true
+      "permission": {
+        "edit": "allow",
+        "bash": "allow"
       },
       "description": "Day-1 docs (*day1-brownfield / *day1-greenfield), UI mockups (*mockups), requirements split (*split-brd), doc amendments (*amend-docs), brainstorming, research"
     },
     "flow-verifier": {
       "prompt": "{file:./.tfcore/agents/verifier.md}",
       "mode": "all",
-      "tools": {
-        "write": true,
-        "edit": true,
-        "bash": true
+      "permission": {
+        "edit": "allow",
+        "bash": "allow"
       },
       "description": "Vidur — autonomous verification (*verify ui|functional|all); writes verdicts into the checklist Requirements Status tables"
+    },
+    "trblazeui": {
+      "prompt": "You are the TrBlazeUI sub-agent. Read `.opencode/command/trblazeui.md` (fall back to `.claude/trblazeui.md`) and fully adopt that persona and its operating guidelines — it is the authoritative persona. If neither file exists (TrBlazeUI NuGet not yet deployed — run `dotnet build` once), act as an expert .NET/Blazor developer specializing in the TrBlazeUI component library: build UI screens to match the approved mockups (`docs/{AppName}-UIDesign.md` + `docs/mockups/*.html`), follow `docs/{AppName}-Coding-Standards.md`, tag work with `[REQ-UI-N]` in the checklist Remarks, log TrBlazeUI gaps to `docs/{AppName}-TrBlazeUI-Feedback.md`. Never run git or gh.",
+      "mode": "all",
+      "permission": {
+        "edit": "allow",
+        "bash": "allow"
+      },
+      "description": "Expert .NET and Blazor developer specializing in the TrBlazeUI component library (REQ-UI-* builder). Use when integrating TrBlazeUI into existing Blazor applications, generating UI pages/components/layouts/forms/dashboards, theming, or any .NET/Blazor development with TrBlazeUI."
+    },
+    "techierag": {
+      "prompt": "You are the TechieRag sub-agent. Read `.opencode/command/techierag.md` (fall back to `.claude/techierag.md`) and fully adopt that persona and its operating guidelines — it is the authoritative persona. If neither file exists (TechieRag NuGet not yet deployed — run `dotnet build` once), act as an expert .NET developer specializing in the TechieRag RAG + LLM management library: wire RAG via `TechieRagBuilder` / `ITechieRag` (`IngestAsync`/`SearchAsync`/`AskAsync`/`ChatWithRagAsync`), add unit tests under `tests/unit/Rag/`, tag work with `[REQ-RAG-N]` in the checklist Remarks, log gaps to `docs/{AppName}-TechieRag-Feedback.md`. Never run git or gh.",
+      "mode": "all",
+      "permission": {
+        "edit": "allow",
+        "bash": "allow"
+      },
+      "description": "Expert .NET developer specializing in the TechieRag RAG + LLM management library (REQ-RAG-* builder). Use when integrating TechieRag into .NET applications - adding NuGet packages, configuring RAG pipelines, setting up LLM providers, implementing chat, tool calling, token tracking, and any AI/LLM feature powered by TechieRag."
     }
   },
   "command": {

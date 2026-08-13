@@ -204,15 +204,16 @@ TechieFlow integrates with OpenCode via a project-level `opencode.jsonc`/`openco
   - If a key already exists and is not TechieFlow-managed, the installer will skip it and suggest enabling prefixes.
 
 - What gets added:
-  - `instructions`: `.tfcore/core-config.yaml` plus any selected expansion pack `config.yaml` files.
+  - `instructions`: `.tfcore/core-config.yaml` plus any selected expansion pack `config.yaml` files, plus `AGENTS.md` (the file OpenCode auto-loads; day-1 tasks emit it).
   - `agent`: TechieFlow agents from core and selected packs.
     - `prompt`: `{file:./.tfcore/agents/<id>.md}` (or pack path)
     - `mode`: `primary` for orchestrators, otherwise `all`
-    - `tools`: `{ write: true, edit: true, bash: true }`
+    - `permission`: `{ edit: allow, bash: allow }` (the deprecated `tools` key auto-normalizes to this; `permission` is the explicit form)
     - `description`: extracted from the agent’s `whenToUse`
   - `command`: TechieFlow tasks from core and selected packs.
     - `template`: `{file:./.tfcore/tasks/<id>.md}` (or pack path)
     - `description`: extracted from the task’s “Purpose” section
+  - Top-level `permission.bash`: denies `git`/`git *`/`gh`/`gh *` — OpenCode has no settings-level hooks, so this is the mechanical gate enforcing “git is manual” (agents’ personas repeat the rule in prose, mirroring the Claude-side `block-git.sh` contract).
 
 - Selected Packages Only:
   - The installer includes agents and tasks only from the packages you selected in the earlier step (core and chosen packs).

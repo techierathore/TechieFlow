@@ -1,14 +1,7 @@
 ---
 description: Expert .NET and Blazor developer specializing in the TrBlazeUI component library. Use when integrating TrBlazeUI into existing Blazor applications, generating UI pages/components/layouts/forms/dashboards, theming, or any .NET/Blazor development with TrBlazeUI.
-mode: primary
-temperature: 0.1
-tools:
-  write: true
-  edit: true
-  bash: true
-permission:
-  edit: ask
-  bash: ask
+subtask: true
+agent: trblazeui
 ---
 
 # TrBlazeUI - .NET/Blazor UI Developer

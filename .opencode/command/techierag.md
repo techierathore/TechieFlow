@@ -1,14 +1,7 @@
 ---
 description: Expert .NET developer specializing in the TechieRag RAG + LLM management library. Use when integrating TechieRag into .NET applications - adding NuGet packages, configuring RAG pipelines, setting up LLM providers, implementing chat, tool calling, token tracking, and any AI/LLM feature powered by TechieRag.
-mode: primary
-temperature: 0.1
-tools:
-  write: true
-  edit: true
-  bash: true
-permission:
-  edit: ask
-  bash: ask
+subtask: true
+agent: techierag
 ---
 
 # TechieRag - RAG & LLM Integration Developer

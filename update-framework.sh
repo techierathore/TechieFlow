@@ -36,9 +36,13 @@
 #   .tfcore/install-manifest.yaml
 #   .tfcore/TOKEN-GUIDE.md
 #   .claude/commands/TechieFlow/ subtree (TechieFlow agents + skills)
-#   .opencode/command/TechieFlow/ subtree
+#   .opencode/command/ root top-level short-form commands (e.g. /generate-html)
 #   .claude/settings.json               (yolo-except-git; --keep-permissions to skip)
 #   WORKFLOW.html
+#
+# OpenCode agents/tasks are NOT mirrored to .opencode/command/TechieFlow/ (that
+# subtree was removed — it only registered phantom slash commands). OpenCode
+# loads them from opencode.jsonc via {file:./.tfcore/...} references.
 #
 # Ensured (append-only, idempotent):
 #   .gitignore — framework block (.tfcore/, .claude/, .opencode/, /CLAUDE.md,
@@ -150,7 +154,8 @@ if [[ ! -d "$TARGET/.tfcore" && -d "$TARGET/.bmad-core" ]]; then
     echo "  patched .tfcore/core-config.yaml (slashPrefix: TechieFlow, .tfcore paths)"
   fi
 
-  # Old harness mirror dirs — removed; the TechieFlow/ subtrees are recreated below.
+  # Old harness mirror dirs — removed; the Claude Code TechieFlow/ subtree is
+  # recreated below (OpenCode no longer uses a .opencode/command/TechieFlow/ mirror).
   rm -rf "$TARGET/.claude/commands/BMad" "$TARGET/.opencode/command/BMad"
   echo "  removed legacy .claude/commands/BMad/ and .opencode/command/BMad/"
 
@@ -197,10 +202,11 @@ else
 fi
 
 # Library agents are NuGet-deployed at the command ROOTS only
-# (.claude/<lib>.md, .opencode/command/<lib>.md). The TechieFlow subtrees and
-# .tfcore/ never receive NuGet files, so those rsyncs run WITHOUT excludes —
-# letting --delete purge any stale legacy copies of trblazeui.md/techierag.md.
-# The top-level command loops below skip those basenames explicitly instead.
+# (.claude/<lib>.md, .opencode/command/<lib>.md). The .claude/commands/TechieFlow/
+# subtree and .tfcore/ never receive NuGet files, so those rsyncs run WITHOUT
+# excludes — letting --delete purge any stale legacy copies of
+# trblazeui.md/techierag.md. The top-level command loops below skip those
+# basenames explicitly instead.
 
 # --------------------------------------------------------------------------
 # 1. .tfcore/ — framework subdirs only; core-config.yaml is per-project
@@ -391,21 +397,12 @@ for f in trblazeui.md techierag.md; do
 done
 
 # --------------------------------------------------------------------------
-# 3. .opencode/command/TechieFlow/ — force-overwrite
+# 3. .opencode/command/ root — top-level short-form commands only.
+# The old .opencode/command/TechieFlow/ mirror is GONE: OpenCode loads agents
+# and tasks from opencode.jsonc {file:./.tfcore/...} references, and the mirror
+# only registered phantom slash commands. NuGet-deployed library personas are
+# skipped — never overwrite them.
 # --------------------------------------------------------------------------
-[[ $DRY_RUN -eq 1 ]] || mkdir -p .opencode/command/TechieFlow
-echo "  .opencode/command/TechieFlow/"
-rsync $RSYNC_FLAGS --delete \
-  "$TEMPLATE/.opencode/command/TechieFlow/" .opencode/command/TechieFlow/
-
-# Sync canonical agents → opencode harness path. Sourced from the TEMPLATE,
-# not the target's .tfcore/agents/ — equivalent after step 1, but keeps
-# --dry-run previews accurate.
-rsync $RSYNC_FLAGS \
-  "$TEMPLATE/.tfcore/agents/" .opencode/command/TechieFlow/agents/
-
-# Top-level short-form commands for OpenCode (e.g. /generate-html).
-# NuGet-deployed library personas are skipped — never overwrite them.
 for src in "$TEMPLATE"/.opencode/command/*.md; do
   [[ -f "$src" ]] || continue
   f="$(basename "$src")"

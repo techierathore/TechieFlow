@@ -58,9 +58,9 @@ Reserve Bash for things that genuinely need a shell: `dotnet build`, `dotnet tes
 | Agent | Claude Code | OpenCode |
 |-------|-------------|----------|
 | analyst | `/TechieFlow:agents:analyst` (or `/analyst` if it resolves) | `/flow-analyst` |
+| architect | `/TechieFlow:agents:architect` | `/flow-architect` |
 | flow-master | `/TechieFlow:agents:flow-master` | `/flow-master` |
-| flow-master | `/TechieFlow:agents:flow-master` | `/flow-master` |
-| verifier | `/TechieFlow:agents:verifier` | (add to opencode.jsonc) |
+| verifier | `/TechieFlow:agents:verifier` | `/flow-verifier` |
 | trblazeui | `/trblazeui` (NuGet-deployed; scaffold/update shims it into `.claude/commands/`) | `/trblazeui` |
 | techierag | `/techierag` (NuGet-deployed; scaffold/update shims it into `.claude/commands/`) | `/techierag` |
 

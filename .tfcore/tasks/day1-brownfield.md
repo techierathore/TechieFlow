@@ -327,7 +327,7 @@ Load `.tfcore/templates/v4custom/app-project-status-tmpl.md` and substitute:
 - `last_verified_date:` → today
 - `current_phase:` → `Discovery`; if §3.5 ran (dev plan migrated), use `Discovery — requirements split done; next build phase: {first incomplete phase from the dev plan}` instead.
 - **Where I am:** one paragraph from §2's findings — what exists, what state it's in. If §3.5 ran, include which dev-plan phases are already complete.
-- **Next command to run:** HTML is rendered by this task itself (§7.5), so point at the real next step: `/TechieFlow:agents:analyst *split-brd {AppName}` — or, if §3.5 ran (split already done), `/TechieFlow:agents:flow-master *build-phase {AppName}` (the unified build; it calls trblazeui/techierag itself). **NEVER set `*verify all` as the day-1 next command** — day-1 has verified nothing and a brownfield repo virtually always has unbuilt/PARTIAL features in the freshly-migrated checklist; per the Build → Verify → Handoff ladder (`_status-update-gate.md` item 5), the next step after a brownfield day-1 is `*split-brd` (to create the checklist) or, once the checklist exists, `*build-phase` (to finish building). Verification comes only after the build is substantially complete.
+- **Next command to run:** HTML is rendered by this task itself (§7.5), so point at the real next step: `/TechieFlow:agents:analyst *split-brd {AppName}` (OpenCode: `/flow-analyst *split-brd {AppName}`) — or, if §3.5 ran (split already done), `/TechieFlow:agents:flow-master *build-phase {AppName}` (OpenCode: `/flow-master *build-phase {AppName}`) (the unified build; it calls trblazeui/techierag itself). **NEVER set `*verify all` as the day-1 next command** — day-1 has verified nothing and a brownfield repo virtually always has unbuilt/PARTIAL features in the freshly-migrated checklist; per the Build → Verify → Handoff ladder (`_status-update-gate.md` item 5), the next step after a brownfield day-1 is `*split-brd` (to create the checklist) or, once the checklist exists, `*build-phase` (to finish building). Verification comes only after the build is substantially complete.
 - **Open requirements:** empty list — populated later by `*split-brd`. If §3.5 ran, list the REQ-* counts per type with phase tags (already populated; `*split-brd` is NOT needed).
 - **Known blockers:** from §2 (build failure, standards drift, etc.) — otherwise "None".
 - **Verification log:** empty table with headers only.
@@ -338,6 +338,30 @@ Load `.tfcore/templates/v4custom/app-project-status-tmpl.md` and substitute:
 ### 7. Create `CLAUDE.md` at the repo root
 
 Copy `.tfcore/templates/v4custom/app-claude-md-tmpl.md` and substitute `{AppName}` throughout. Resolve the field-prefix line to THIS project's §4 decision, e.g.: "Field-prefix convention: `obj` prefix on instance fields (e.g. `private readonly ILogger<X> objLogger;`) — see Coding Standards." or "...bare PascalCase, no prefix — see Coding Standards."
+
+### 7.2. Create `AGENTS.md` (OpenCode auto-loads this, not CLAUDE.md)
+
+OpenCode's root-scan file is `AGENTS.md` (it never reads `CLAUDE.md`; `opencode.jsonc` `instructions` already lists it). Write `AGENTS.md` at the repo root as a **harness-neutral pointer** with the same substituted `{AppName}`:
+
+```markdown
+# {AppName} — session memory (OpenCode)
+
+This project's full memory is `CLAUDE.md` (same content the Claude Code harness loads).
+Read it before any code change. Required reading:
+- **docs/{AppName}-Coding-Standards.md** — strict compliance for every line of code.
+- **docs/{AppName}-Architecture.md** — respect module boundaries.
+- **PROJECT-STATUS.md** — current phase & next-step context.
+
+Hard rule: git/gh are MANUAL. Agents NEVER run `git` or `gh` (opencode.jsonc denies
+both). Evidence for status = the checklist Requirements Status table + working-tree
+files + a fresh `dotnet build`, never git history. The owner commits.
+
+Slash-command syntax: /flow-master, /flow-analyst, /flow-architect, /flow-verifier,
+/trblazeui, /techierag (the last two are NuGet-deployed — run `dotnet build` once if
+missing). Tasks invoke as `*command args` after the agent is loaded.
+```
+
+No substitution beyond `{AppName}`. If a previous `AGENTS.md` exists, archive it per the §1.6 collision policy and write fresh.
 
 ### 7.4. Create the Usage Guide (test users + test plan) → `docs/{AppName}-UsageGuide.md`
 
@@ -398,6 +422,7 @@ Output a numbered summary listing what was created:
 4. `.editorconfig` — created
 5. `PROJECT-STATUS.md` — current_phase = Discovery
 6. `CLAUDE.md` — created with the project's field-prefix decision pinned
+6a. `AGENTS.md` — created (OpenCode pointer; same content via §7.2)
 7. `docs/{AppName}-UsageGuide.md` — test-users registry (N accounts: M existing ✅ / K planned ⬜) + screen-by-screen test plan
 8. *(only if §3.5 ran)* `docs/{AppName}-Checklist.md` — migrated from `{plan-file}` (X REQs done pre-existing, Y open); the old dev plan is archived to docs/OldDocs/; `*split-brd` is NOT needed for this project
 9. *(§7.6)* DevGuide — `docs/{AppName}-DevGuide.md` (single) or `docs/devguides/` (split): R roles, M screens mapped, {STATIC-ONLY | runtime-verified}, {k} unresolved paths, {d} defects logged ({to the checklist if §3.5 ran, else "in DevGuide prose — run `*devguide --update` after `*split-brd`"}); screenshots in `docs/screenshots/{AppName}/` (if runtime-verified). *(Or "skipped — no built code yet" if the self-guard tripped.)*
@@ -427,7 +452,7 @@ If you edit any .md afterwards, re-render just that file:
                                               multiple @paths allowed; @docs/ = all
                                               top-level .md, non-recursive)
 
-Next workflow step (after your review): *split-brd {AppName} via /TechieFlow:agents:analyst —
+Next workflow step (after your review): *split-brd {AppName} via /TechieFlow:agents:analyst (OpenCode: /flow-analyst) —
 unless this run already migrated a dev plan (§3.5), in which case the next step is
 *build-phase {AppName} shown in PROJECT-STATUS.md.
 {If §3.5 did NOT run AND the DevGuide flagged defects: immediately after *split-brd, run
@@ -450,6 +475,7 @@ Do NOT auto-advance past day-1 (no split/build without the user). Rendering HTML
 - [ ] `.editorconfig` exists at repo root
 - [ ] `PROJECT-STATUS.md` exists with current_phase=Discovery and a "Next command to run" pointer
 - [ ] `CLAUDE.md` exists at repo root
+- [ ] `AGENTS.md` exists at repo root (§7.2 OpenCode pointer)
 - [ ] `docs/{AppName}-UsageGuide.md` exists — Test-users table populated (existing accounts from the DB marked ✅, planned ones ⬜; NO users were created in day-1) + screen-by-screen test plan
 - [ ] If a dev/phase plan existed (§3.5): the one `docs/{AppName}-Checklist.md` written with phase tags and pre-existing completions marked `Done` — NOT left for a separate `*split-brd` run
 - [ ] Collision policy §1.6 followed: all deliverables at canonical names, pre-existing versions + superseded source docs moved to `docs/OldDocs/`, NO merge-vs-new question asked, NO `-v2` variants written

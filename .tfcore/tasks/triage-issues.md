@@ -112,7 +112,7 @@ Reproduced: {r} → {d} REQs demoted to Needs re-verify, {p} new Planned rows | 
 Regression re-verify: {ran on <scope> — <pass>/<fail> | not requested}
 Docs: checklist + DevGuide known-issues + PROJECT-STATUS (.md + .html) updated
 NOTHING in src/ or tests/ was changed — fixing was not requested.
-Next: /TechieFlow:agents:flow-master *fix-issues {AppName} {Folder}   (targets: {REQ IDs})
+Next: /TechieFlow:agents:flow-master *fix-issues {AppName} {Folder}   (OpenCode: /flow-master)   (targets: {REQ IDs})
 ```
 
 ## Hard rules

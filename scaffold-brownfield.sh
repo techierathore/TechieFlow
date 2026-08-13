@@ -9,7 +9,7 @@
 #   /path/to/TechieFlow/scaffold-brownfield.sh    (defaults to $PWD)
 #
 # What it does:
-#   - Adds .tfcore/, .claude/commands/, .opencode/command/TechieFlow/ if missing
+#   - Adds .tfcore/, .claude/commands/ if missing
 #   - Adds .claude/settings.json (yolo-except-git) if missing
 #   - Copies WORKFLOW.html and opencode.jsonc if missing
 #   - Drops a note pointing to the brownfield day-1 /analyst prompt
@@ -23,9 +23,10 @@
 # auto-deploy on the project's next `dotnet build`.
 #
 # Idempotent: re-running won't overwrite existing files — with one exception:
-# the harness agent mirrors (.claude/commands/TechieFlow/agents/ and
-# .opencode/command/TechieFlow/agents/) are force-synced from .tfcore/agents/
-# on every run, and NuGet persona shims are refreshed from .claude/<lib>.md.
+# the harness agent mirror (.claude/commands/TechieFlow/agents/) is force-synced
+# from .tfcore/agents/ on every run, and NuGet persona shims are refreshed from
+# .claude/<lib>.md. (The .opencode/command/TechieFlow/ mirror was removed —
+# OpenCode loads agents/tasks from opencode.jsonc {file:...} refs instead.)
 
 set -euo pipefail
 
@@ -102,21 +103,19 @@ mkdir -p .claude/commands
 rsync -a --ignore-existing "${LIB_EXCLUDES[@]}" \
   "$TEMPLATE/.claude/commands/" .claude/commands/
 
-# 3. OpenCode commands
-mkdir -p .opencode/command/TechieFlow
-rsync -a --ignore-existing "${LIB_EXCLUDES[@]}" \
-  "$TEMPLATE/.opencode/command/TechieFlow/" .opencode/command/TechieFlow/
+# 3. (Removed) OpenCode command mirror (.opencode/command/TechieFlow/) is NOT
+# deployed. OpenCode loads agents/tasks from opencode.jsonc via {file:./.tfcore/...}
+# references; the mirror only registered phantom slash commands. Claude Code is
+# the only harness that reads .claude/commands/TechieFlow/ (synced in 3b).
 
-# 3b. FORCE-sync agent files from .tfcore/agents/ to both harness paths.
+# 3b. FORCE-sync agent files from .tfcore/agents/ to the Claude harness path.
 # .tfcore/agents/ is canonical (TechieFlow personas + commands). The harness
-# folders MUST mirror it or slash commands like *day1-brownfield won't appear.
-# This step overwrites the harness copies — do NOT edit them directly; edit
+# folder MUST mirror it or slash commands like *day1-brownfield won't appear.
+# This step overwrites the harness copy — do NOT edit it directly; edit
 # .tfcore/agents/ and re-run the scaffold.
-echo "  syncing agent files from .tfcore/agents/ → harness paths"
+echo "  syncing agent files from .tfcore/agents/ → .claude/commands/TechieFlow/agents/"
 rsync -a \
   .tfcore/agents/ .claude/commands/TechieFlow/agents/
-rsync -a \
-  .tfcore/agents/ .opencode/command/TechieFlow/agents/
 
 # 4. Reference files at root — only if missing
 [[ -f WORKFLOW.html ]]  || cp "$TEMPLATE/WORKFLOW.html"  .
@@ -224,9 +223,8 @@ Added (only missing files filled — re-runs are safe):
   .tfcore/                  ← TechieFlow v4 customized (agents, tasks, templates)
   .claude/commands/            ← Claude Code slash commands (TechieFlow agents)
   .claude/settings.json        ← yolo-except-git permissions
-  .opencode/command/TechieFlow/      ← OpenCode slash commands
   WORKFLOW.html                ← the human workflow guide (open in a browser; §17 = macOS / Windows / Linux)
-  opencode.jsonc               ← OpenCode config
+  opencode.jsonc               ← OpenCode config (loads agents/tasks from .tfcore/ via {file:...} refs)
   .gitignore                   ← framework entries appended (deployed copies stay uncommitted)
 
 All TechieFlow templates the analyst will need live LOCALLY in this project under:

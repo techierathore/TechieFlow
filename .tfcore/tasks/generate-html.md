@@ -16,7 +16,9 @@ Convert one or more **human-readable** markdown files to self-contained HTML usi
 *generate-html @docs/SomeFolder/
 ```
 
-(Or via the slash-command wrapper: `/TechieFlow:tasks:generate-html @path/to/file.md`)
+(Or via the slash-command wrapper: `/TechieFlow:tasks:generate-html @path/to/file.md` in Claude Code; `/techieflow:tasks:generate-html path/to/file.md` in OpenCode.)
+
+Note: the `@` prefix is Claude Code's file-mention sigil. OpenCode treats a leading `@` as file-content-inclusion, so pass plain paths there.
 
 - **Single file:** convert that one MD to a sibling HTML.
 - **Multiple files:** convert each. List separated by spaces. Each becomes a sibling HTML.

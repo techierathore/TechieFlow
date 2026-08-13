@@ -54,7 +54,7 @@ If `metrics.project_type` is absent: default to `app` **and** set `project_type_
 
 ### `harness` — detected, never declared
 
-The framework runs under **two harnesses**: Claude Code (`.claude/commands/TechieFlow/`) and OpenCode (`.opencode/command/TechieFlow/`), from byte-identical task files. A task template therefore **cannot know which one is executing it** — an agent copying a literal from the markdown would stamp whichever harness the example happened to name, and every per-harness comparison would be quietly wrong.
+The framework runs under **two harnesses**: Claude Code (`.claude/commands/TechieFlow/`) and OpenCode (agents/tasks loaded from `opencode.jsonc` via `{file:./.tfcore/...}` references). The task content is identical across harnesses. A task template therefore **cannot know which one is executing it** — an agent copying a literal from the markdown would stamp whichever harness the example happened to name, and every per-harness comparison would be quietly wrong.
 
 So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit template.** Detection order:
 

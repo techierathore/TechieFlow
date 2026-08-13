@@ -447,7 +447,7 @@ appium --address 0.0.0.0 --port 4723   # start the remote control (leave this ru
 <pre><code class="lang-bash">cd /path/to/existing-app
 /Volumes/MacD/MyCode/TechieFlow/scaffold-brownfield.sh .</code></pre>
 
-<p>Adds <code>.tfcore/</code>, <code>.claude/commands/</code>, <code>.opencode/command/TechieFlow/</code>, <code>WORKFLOW.html</code>, <code>opencode.jsonc</code>, and <code>.claude/settings.json</code>. <strong>Does NOT touch</strong> existing <code>src/</code>, <code>tests/</code>, or other <code>docs/</code> contents. Warns (non-blocking) if no <code>.csproj</code>/<code>.sln</code> found within 4 levels. Refuses if the target directory doesn't exist (use greenfield script for that).</p>
+<p>Adds <code>.tfcore/</code>, <code>.claude/commands/</code>, <code>WORKFLOW.html</code>, <code>opencode.jsonc</code>, and <code>.claude/settings.json</code>. <strong>Does NOT touch</strong> existing <code>src/</code>, <code>tests/</code>, or other <code>docs/</code> contents. Warns (non-blocking) if no <code>.csproj</code>/<code>.sln</code> found within 4 levels. Refuses if the target directory doesn't exist (use greenfield script for that). (No <code>.opencode/command/TechieFlow/</code> mirror is deployed — OpenCode loads agents/tasks from <code>opencode.jsonc</code> <code>{file:./.tfcore/...}</code> references instead.)</p>
 
 <h3>Greenfield (new app) — <code>scaffold-greenfield.sh</code></h3>
 <p class="small"><strong>WSL (Windows):</strong></p>
@@ -505,7 +505,7 @@ cd /path/to/your-app
     <td><code>.tfcore/{tasks,templates,agents,checklists,data,utils,workflows,agent-teams}/</code><br>
         <code>.claude/commands/TechieFlow/</code> subtree<br>
         <code>.claude/commands/*.md</code> top-level commands (generate-html etc.)<br>
-        <code>.opencode/command/TechieFlow/</code> subtree<br>
+        <code>.opencode/command/*.md</code> top-level commands (generate-html etc.)<br>
         <code>WORKFLOW.html</code><br>
         <code>.claude/settings.json</code> (refreshed to canonical config by default; old file → <code>settings.json.bak</code>; <code>--keep-permissions</code> to skip; <code>settings.local.json</code> never touched)</td>
     <td><code>docs/</code>, <code>src/</code>, <code>tests/</code><br>
@@ -571,7 +571,7 @@ cd /path/to/your-app
 │   ├── trblazeui.md                   ← from `dotnet build` (TrBlazeUI NuGet)
 │   └── techierag.md                   ← from `dotnet build` (TechieRag NuGet)
 ├── .opencode/command/
-│   ├── TechieFlow/...                       ← from scaffold
+│   ├── generate-html.md                ← from scaffold
 │   ├── trblazeui.md                   ← from dotnet build
 │   └── techierag.md                   ← from dotnet build
 ├── .trblazeui/TrBlazeUI-AI-Reference.md   ← from dotnet build
@@ -741,10 +741,10 @@ cd /path/to/your-app
 <div class="panel warn">
   <strong>If <code>*&lt;command&gt;</code> says "I don't have that command":</strong> Claude Code cached the old agent persona. Two things to check:
   <ol class="tight">
-    <li>Re-run the scaffold for this project: <code>scaffold-brownfield.sh .</code> or <code>scaffold-greenfield.sh .</code>. It includes a force-sync step that copies agent files from <code>.tfcore/agents/</code> to <code>.claude/commands/TechieFlow/agents/</code> and <code>.opencode/command/TechieFlow/agents/</code> (the paths the harnesses actually load).</li>
+    <li>Re-run the scaffold for this project: <code>scaffold-brownfield.sh .</code> or <code>scaffold-greenfield.sh .</code>. It includes a force-sync step that copies agent files from <code>.tfcore/agents/</code> to <code>.claude/commands/TechieFlow/agents/</code> (the path Claude Code actually loads).</li>
     <li><strong>Restart Claude Code</strong> in this project so it re-scans skills. The slash-command registry only refreshes at startup.</li>
   </ol>
-  Rule of thumb: edit agent files only in <code>.tfcore/agents/</code>; the scaffold force-mirrors them to the two harness paths. Never edit the harness copies directly — they'll be overwritten next scaffold.
+  Rule of thumb: edit agent files only in <code>.tfcore/agents/</code>; the scaffold force-mirrors them to <code>.claude/commands/TechieFlow/agents/</code>. Never edit the harness copy directly — it'll be overwritten next scaffold.
 </div>
 
 <div class="tabs">
@@ -1318,7 +1318,7 @@ docs/metrics/*.jsonl text eol=lf merge=union</code></pre>
 
 <details>
   <summary><code>scaffold-brownfield.sh</code> / <code>scaffold-greenfield.sh</code> re-run wiped my work?</summary>
-  <p>No for your work product — framework files copy with <code>rsync --ignore-existing</code>. EXCEPTION: the harness agent mirrors under <code>.claude/commands/TechieFlow/agents/</code> and <code>.opencode/command/TechieFlow/agents/</code> are force-synced from <code>.tfcore/agents/</code> on every run — edit agents only in <code>.tfcore/agents/</code>.</p>
+  <p>No for your work product — framework files copy with <code>rsync --ignore-existing</code>. EXCEPTION: the harness agent mirror under <code>.claude/commands/TechieFlow/agents/</code> is force-synced from <code>.tfcore/agents/</code> on every run — edit agents only in <code>.tfcore/agents/</code>. (The old <code>.opencode/command/TechieFlow/</code> mirror no longer exists — OpenCode loads agents/tasks from <code>opencode.jsonc</code> <code>{file:./.tfcore/...}</code> references.)</p>
 </details>
 
 <details>
