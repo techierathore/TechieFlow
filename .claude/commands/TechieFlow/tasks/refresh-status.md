@@ -67,9 +67,9 @@ Overwrite `PROJECT-STATUS.md` to reflect the reconstructed reality, honoring eve
 3. `last_verified_build` + `last_verified_date` from step 1.3's real build.
 4. **Open requirements** = every non-terminal REQ from the reconciled tables.
 5. **Next command to run** = the exact command that resumes from the true state (Claude Code + OpenCode forms). Examples:
-   - in-flight build work → `/TechieFlow:agents:flow-master *build-phase {AppName}` (FIX/FRESH mode will re-detect the open REQs from the now-correct table; it calls trblazeui/techierag itself).
-   - smoke-without-verify → `/TechieFlow:agents:verifier *verify ui` (or `functional`/`all`).
-   - all built, verify open → `/TechieFlow:agents:verifier *verify all`.
+   - in-flight build work → `/TechieFlow:agents:flow-master *build-phase {AppName}` (OpenCode: `/flow-master *build-phase {AppName}`) (FIX/FRESH mode will re-detect the open REQs from the now-correct table; it calls trblazeui/techierag itself).
+   - smoke-without-verify → `/TechieFlow:agents:verifier *verify ui` (OpenCode: `/flow-verifier *verify ui`) (or `functional`/`all`).
+   - all built, verify open → `/TechieFlow:agents:verifier *verify all` (OpenCode: `/flow-verifier *verify all`).
 6. A **Verification log** row only if a verifier actually ran this session (don't fabricate one); otherwise leave the log untouched.
 7. Library-feedback + standards-compliance lines refreshed only if evidence changed them.
 8. Add a one-block **`## Recovery note ({today})`** section at the end recording: the interruption signature (step 2), which files were found newer-than-status / present-for-open-REQs, which checklist cells were corrected and why, and any REQ now flagged for re-verify. This is the audit trail so the next session — human or AI — knows this status was reconstructed, not gate-written.

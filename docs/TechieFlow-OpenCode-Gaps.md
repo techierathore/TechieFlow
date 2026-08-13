@@ -165,3 +165,15 @@ Status: **FIXED** — all 8 gaps closed 2026-08-13. Each gap records evidence, i
 - `bash -n` clean on scaffold-greenfield.sh, scaffold-brownfield.sh, update-framework.sh.
 - `diff -r .tfcore/agents/ .claude/commands/TechieFlow/agents/` clean (Claude mirror in sync).
 - Claude Code side: only `.claude/commands/TechieFlow/agents/flow-master.md` changed (the harness-neutral dual-form line, mirroring the canonical `.tfcore/agents/flow-master.md`); nothing else under `.claude/` touched.
+
+---
+
+## Post-audit addendum (2026-08-13, same day — independent re-verification)
+
+An independent re-run of every check above confirmed all 8 fixes live (including a runtime git-deny intercept). The audit surfaced three *documentation/consistency* residues the original sweep missed, all closed the same day:
+
+1. **README.md was not swept** alongside WORKFLOW.html — five spots still described the deleted `.opencode/command/TechieFlow/` mirror (scaffold "Adds" list, updater force-refresh table, directory tree, the §7 force-sync step, and the scaffold-rerun FAQ — two of them repeating the exact "paths the harnesses actually load" claim GAP 1 refuted). All five now state OpenCode loads from `opencode.jsonc` `{file:./.tfcore/...}` refs, matching WORKFLOW.html.
+2. **`WorkFlow-Context.md` §7 standing contract still mandated** byte-identical mirroring to `.opencode/command/TechieFlow/{agents,tasks}/` (layout table + rule 1 + rule 2). Left standing, that rule would have an agent *re-create* the phantom-command mirror. §7 now reads: mirror parity is mandatory **for Claude Code only**, and `.opencode/command/TechieFlow/` must never be created. Dated §5 log entry added.
+3. **Claude-side *task* mirror had drifted** (6 files the GAP 5/6/8 sweep edited only in `.tfcore/tasks/`). Harmless to Claude Code (old files are valid there; OpenCode reads `.tfcore` directly), but it violated the repo's own §7 parity rule and meant a Claude-Code-run day-1 would skip AGENTS.md emission (§7.2). The 6 files were re-synced; `diff -rq` is now clean for **both** agents and tasks mirrors. The dual-form lines and §7.2 are harness-neutral prose — safe under Claude Code, and day-1 now emits `AGENTS.md` from either harness.
+
+Known cosmetic leftover (not fixed, pre-existing): three stock config commands carry no `description` in `opencode.jsonc` (`techieflow:tasks:create-doc`, `facilitate-brainstorming-session`, `execute-checklist`) — so the GAP 2 line "every `techieflow:tasks:*` carries its description" overstates by three. No functional impact.

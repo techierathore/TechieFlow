@@ -66,6 +66,6 @@ Reserve Bash for things that genuinely need a shell: `dotnet build`, `dotnet tes
 
 If `/trblazeui` or `/techierag` is missing: run `dotnet build` (NuGet deploy target), then `update-framework.sh` (copies the persona into `.claude/commands/`), then restart Claude Code.
 
-If `/flow-master *render-workflow-docs <App>` returns "Unknown command", use `/TechieFlow:agents:flow-master *render-workflow-docs <App>` instead.
+Under Claude Code, if `/flow-master *render-workflow-docs <App>` returns "Unknown command", use `/TechieFlow:agents:flow-master *render-workflow-docs <App>` instead. (Under OpenCode `/flow-master` is the registered agent name — there is no fuller form to fall back to.)
 
 After the agent is loaded, every TechieFlow-native agent (analyst, architect, flow-master, verifier) accepts `*command args` style invocations. trblazeui and techierag are free-form personas — normally `flow-master *build-phase <App>` calls them as sub-agents, but you can also drive them directly with prompts like `Implement REQ-UI-* from docs/<App>-Checklist.md to match the mockups in docs/mockups/.`

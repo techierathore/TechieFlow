@@ -79,7 +79,7 @@ def read_stream(repo, stream):
 def emit(repo, stream, records, dry_run, quiet=False):
     """Append via tf-emit.sh — the single append primitive. Never write JSONL directly.
 
-    The whole batch goes down ONE pipe as JSONL. The post-commit hook reconciles
+    The whole batch goes down ONE pipe as JSONL. The pre-commit hook reconciles
     on every commit, so the per-record process spawn this used to do turned a
     first-run catch-up of a few hundred commits into a visible stall inside the
     owner's `git commit`."""

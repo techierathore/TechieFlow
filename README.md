@@ -263,7 +263,7 @@ cd /path/to/existing-app
 /Volumes/MacD/MyCode/TechieFlow/scaffold-brownfield.sh .
 ```
 
-Adds `.tfcore/`, `.claude/commands/`, `.opencode/command/TechieFlow/`, `WORKFLOW.html`, `opencode.jsonc`, and `.claude/settings.json`. **Does NOT touch** existing `src/`, `tests/`, or other `docs/` contents. Warns (non-blocking) if no `.csproj`/`.sln` found within 4 levels. Refuses if the target directory doesn't exist (use greenfield script for that).
+Adds `.tfcore/`, `.claude/commands/`, `WORKFLOW.html`, `opencode.jsonc`, and `.claude/settings.json`. **Does NOT touch** existing `src/`, `tests/`, or other `docs/` contents. Warns (non-blocking) if no `.csproj`/`.sln` found within 4 levels. Refuses if the target directory doesn't exist (use greenfield script for that). (No `.opencode/command/TechieFlow/` mirror is deployed — OpenCode loads agents/tasks from `opencode.jsonc` `{file:./.tfcore/...}` references instead.)
 
 ### Greenfield (new app) — `scaffold-greenfield.sh`
 
@@ -332,7 +332,7 @@ Note: the script is NOT on your PATH — always invoke it with the full path sho
 
 | Force-overwritten (framework — reference repo wins) | Preserved (your work product — never touched) |
 | --- | --- |
-| `.tfcore/{tasks,templates,agents,checklists,data,utils,workflows,agent-teams}/` `.claude/commands/TechieFlow/` subtree            `.claude/commands/*.md` top-level commands (generate-html etc.)            `.opencode/command/TechieFlow/` subtree            `WORKFLOW.html` `.claude/settings.json` (refreshed to canonical config by default; old file → `settings.json.bak`; `--keep-permissions` to skip; `settings.local.json` never touched) | `docs/`, `src/`, `tests/` `PROJECT-STATUS.md`, `CLAUDE.md`, `.editorconfig` `.tfcore/core-config.yaml` `opencode.jsonc` `.claude/{trblazeui,techierag}.md` + `.opencode/command/{trblazeui,techierag}.md` (NuGet-deployed) |
+| `.tfcore/{tasks,templates,agents,checklists,data,utils,workflows,agent-teams}/` `.claude/commands/TechieFlow/` subtree            `.claude/commands/*.md` top-level commands (generate-html etc.)            `.opencode/command/*.md` top-level commands (generate-html etc.)            `WORKFLOW.html` `.claude/settings.json` (refreshed to canonical config by default; old file → `settings.json.bak`; `--keep-permissions` to skip; `settings.local.json` never touched) | `docs/`, `src/`, `tests/` `PROJECT-STATUS.md`, `CLAUDE.md`, `.editorconfig` `.tfcore/core-config.yaml` `opencode.jsonc` `.claude/{trblazeui,techierag}.md` + `.opencode/command/{trblazeui,techierag}.md` (NuGet-deployed) |
 
 The scaffolders and the updater also **ensure the project's `.gitignore` ignores the deployed framework copies** (`.tfcore/`, `.claude/`, `.opencode/`, `/CLAUDE.md`, `/WORKFLOW.html`, `/opencode.jsonc`, `/.tf-scaffold-note.txt`). Everything the framework drops into an app is a *copy* — the source of truth is this reference repo (or the NuGet package, for the library personas) — so it must never be committed in the app repo. The step is append-only and idempotent: existing entries in any anchored/slash variant are respected, and your own `.gitignore` content is never rewritten. Note git never *un*tracks a file just because it became ignored — if a framework file was committed before the entry existed, run `git rm -r --cached <path>` once yourself (git is manual in TechieFlow; agents never run it).
 
@@ -382,7 +382,7 @@ your-app/                              ← e.g. AppManager/
 │   ├── trblazeui.md                   ← from `dotnet build` (TrBlazeUI NuGet)
 │   └── techierag.md                   ← from `dotnet build` (TechieRag NuGet)
 ├── .opencode/command/
-│   ├── TechieFlow/...                       ← from scaffold
+│   ├── generate-html.md               ← from update-framework.sh
 │   ├── trblazeui.md                   ← from dotnet build
 │   └── techierag.md                   ← from dotnet build
 ├── .trblazeui/TrBlazeUI-AI-Reference.md   ← from dotnet build
@@ -441,7 +441,7 @@ your-app/                              ← e.g. AppManager/
 
 ## 7. Workflows
 
-1. Re-run the scaffold for this project: `scaffold-brownfield.sh .` or `scaffold-greenfield.sh .`. It includes a force-sync step that copies agent files from `.tfcore/agents/` to `.claude/commands/TechieFlow/agents/` and `.opencode/command/TechieFlow/agents/` (the paths the harnesses actually load).
+1. Re-run the scaffold for this project: `scaffold-brownfield.sh .` or `scaffold-greenfield.sh .`. It includes a force-sync step that copies agent files from `.tfcore/agents/` to `.claude/commands/TechieFlow/agents/` (the path Claude Code actually loads — OpenCode reads agents from `opencode.jsonc`, no mirror).
 2. **Restart Claude Code** in this project so it re-scans skills. The slash-command registry only refreshes at startup.
 
 #### Reverse-doc + create all six day-1 deliverables
@@ -808,7 +808,7 @@ Yes. Handoff includes "if the architecture changed during implementation, update
 
 **Q: `scaffold-brownfield.sh` / `scaffold-greenfield.sh` re-run wiped my work?**
 
-No for your work product — framework files copy with `rsync --ignore-existing`. EXCEPTION: the harness agent mirrors under `.claude/commands/TechieFlow/agents/` and `.opencode/command/TechieFlow/agents/` are force-synced from `.tfcore/agents/` on every run — edit agents only in `.tfcore/agents/`.
+No for your work product — framework files copy with `rsync --ignore-existing`. EXCEPTION: the harness agent mirror under `.claude/commands/TechieFlow/agents/` is force-synced from `.tfcore/agents/` on every run — edit agents only in `.tfcore/agents/`. (The old `.opencode/command/TechieFlow/` mirror no longer exists — OpenCode loads agents/tasks from `opencode.jsonc` `{file:./.tfcore/...}` references.)
 
 **Q: `*yolo` doesn't stop Bash prompts.**
 
