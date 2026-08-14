@@ -47,6 +47,7 @@
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
   table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0}
+  table.quickref-legacy{display:none}
   th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
   th{background:var(--panel2);color:#cfd5e3;font-weight:600}
   tr:nth-child(even) td{background:#13171f}
@@ -1206,14 +1207,42 @@ dotnet build -t:Run -f net9.0-android          # Android head (emulator via Andr
 </table>
 
 <!-- ============================================================ -->
-<h2 id="quickref">14. Quick command reference<span class="anchor-link"><a href="#quickref">#</a></span></h2>
+<h2 id="quickref">14. Full command reference<span class="anchor-link"><a href="#quickref">#</a></span></h2>
 
 <div class="panel warn">
   <strong>Slash-command syntax — Claude Code vs OpenCode:</strong>
-  Claude Code registers TechieFlow-native agents under the path-derived namespace <code>TechieFlow:agents:&lt;name&gt;</code>. The short <code>/&lt;agent&gt;</code> form does NOT always resolve. If you see <em>"Unknown command: /flow-master"</em>, use the full <code>/TechieFlow:agents:flow-master</code> instead. The table below shows the Claude Code form. OpenCode users substitute the form from their <code>opencode.jsonc</code> (e.g. <code>/flow-master</code>, <code>/flow-analyst</code>, <code>/flow-architect</code>, <code>/flow-verifier</code>).
+  Claude Code registers TechieFlow-native agents under the path-derived namespace <code>TechieFlow:agents:&lt;name&gt;</code>. OpenCode registers the equivalent agents as <code>/flow-master</code>, <code>/flow-analyst</code>, <code>/flow-architect</code>, and <code>/flow-verifier</code>. Each command cell below is an exact, copyable command. Use the macOS framework path where applicable.
 </div>
 
 <table>
+  <tr><th>Goal</th><th>Command Purpose / Definition</th><th>Claude Command</th><th>OpenCode Command</th></tr>
+  <tr><td>Scaffold (brownfield)</td><td>Deploy the framework into an existing application.</td><td><pre><code>./scaffold-brownfield.sh /path/to/existing-app</code></pre></td><td><pre><code>./scaffold-brownfield.sh /path/to/existing-app</code></pre></td></tr>
+  <tr><td>Scaffold (greenfield)</td><td>Deploy the framework and starter folders into a new application.</td><td><pre><code>./scaffold-greenfield.sh /path/to/new-app</code></pre></td><td><pre><code>./scaffold-greenfield.sh /path/to/new-app</code></pre></td></tr>
+  <tr><td>Update framework</td><td>Force-refresh framework files in an existing project; preserves work product.</td><td><pre><code>/mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/app</code></pre></td><td><pre><code>/mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/app</code></pre></td></tr>
+  <tr><td>Render MD → HTML</td><td>Re-render one or more human-facing Markdown documents as HTML.</td><td><pre><code>/generate-html @docs/File.md</code></pre></td><td><pre><code>/generate-html @docs/File.md</code></pre></td></tr>
+  <tr><td>Day-1 brownfield</td><td>Reverse-document an existing app and create the day-1 deliverables, UsageGuide, and DevGuide.</td><td><pre><code>/TechieFlow:agents:analyst *day1-brownfield {AppName}</code></pre></td><td><pre><code>/flow-analyst *day1-brownfield {AppName}</code></pre></td></tr>
+  <tr><td>Day-1 greenfield</td><td>Create the BRD, Architecture, Coding Standards, status, CLAUDE.md, and UI mockups for a new app.</td><td><pre><code>/TechieFlow:agents:analyst *day1-greenfield {AppName}</code></pre></td><td><pre><code>/flow-analyst *day1-greenfield {AppName}</code></pre></td></tr>
+  <tr><td>Re-render workflow docs</td><td>Refresh the BRD, Architecture, and PROJECT-STATUS HTML documents.</td><td><pre><code>/TechieFlow:agents:flow-master *render-workflow-docs {AppName}</code></pre></td><td><pre><code>/flow-master *render-workflow-docs {AppName}</code></pre></td></tr>
+  <tr><td>Greenfield UI mockups</td><td>Create or update the per-screen UI design specification and TrBlazeUI-styled mockups.</td><td><pre><code>/TechieFlow:agents:analyst *mockups {AppName}</code></pre></td><td><pre><code>/flow-analyst *mockups {AppName}</code></pre></td></tr>
+  <tr><td>Split BRD → Checklist</td><td>Turn BRD items into the single Checklist with REQ-UI/FN/RAG/NFR requirements.</td><td><pre><code>/TechieFlow:agents:analyst *split-brd {AppName}</code></pre></td><td><pre><code>/flow-analyst *split-brd {AppName}</code></pre></td></tr>
+  <tr><td>Amend docs</td><td>Apply an incremental requirements or architecture change without regenerating unchanged documents.</td><td><pre><code>/TechieFlow:agents:analyst *amend-docs {AppName} "&lt;what changed&gt;"</code></pre></td><td><pre><code>/flow-analyst *amend-docs {AppName} "&lt;what changed&gt;"</code></pre></td></tr>
+  <tr><td>Build — unified phase</td><td>Build all open REQs, route UI/RAG work to library agents, self-smoke, and chain verification.</td><td><pre><code>/TechieFlow:agents:flow-master *build-phase {AppName}</code></pre></td><td><pre><code>/flow-master *build-phase {AppName}</code></pre></td></tr>
+  <tr><td>Fix issues</td><td>Reproduce screenshot-reported issues, route fixes, then re-smoke and re-verify.</td><td><pre><code>/TechieFlow:agents:flow-master *fix-issues {AppName} {folder}</code></pre></td><td><pre><code>/flow-master *fix-issues {AppName} {folder}</code></pre></td></tr>
+  <tr><td>Triage UAT/production bugs</td><td>Analyze and log bugs without editing code; optionally regression-verify sibling features.</td><td><pre><code>/TechieFlow:agents:flow-master *triage-issues {AppName} {evidence} [verify]</code></pre></td><td><pre><code>/flow-master *triage-issues {AppName} {evidence} [verify]</code></pre></td></tr>
+  <tr><td>Verify gates and standards</td><td>Run acceptance tests, standards greps, data-render, visual-truth, and applicable performance gates.</td><td><pre><code>/TechieFlow:agents:verifier *verify &lt;scope&gt;</code></pre></td><td><pre><code>/flow-verifier *verify &lt;scope&gt;</code></pre></td></tr>
+  <tr><td>End of session</td><td>Update project status and regenerate its HTML representation.</td><td><pre><code>/TechieFlow:agents:flow-master Update PROJECT-STATUS.md (phase, next, log); regenerate PROJECT-STATUS.html.</code></pre></td><td><pre><code>/flow-master Update PROJECT-STATUS.md (phase, next, log); regenerate PROJECT-STATUS.html.</code></pre></td></tr>
+  <tr><td>Final handoff</td><td>Generate the final UsageGuide, DevGuide, status, and library-feedback consolidation.</td><td><pre><code>/TechieFlow:agents:flow-master *handoff-phase {AppName}</code></pre></td><td><pre><code>/flow-master *handoff-phase {AppName}</code></pre></td></tr>
+  <tr><td>Generate / refresh Developer Guide</td><td>Map the implemented screens, observe the running app, and reconcile the Developer Guide.</td><td><pre><code>/TechieFlow:agents:flow-master *devguide {AppName}</code></pre></td><td><pre><code>/flow-master *devguide {AppName}</code></pre></td></tr>
+  <tr><td>Generate / refresh Product Guide</td><td>Generate the screenshot-illustrated, task-oriented manual for external users.</td><td><pre><code>/TechieFlow:agents:flow-master *productguide {AppName} [scope] [--update]</code></pre></td><td><pre><code>/flow-master *productguide {AppName} [scope] [--update]</code></pre></td></tr>
+  <tr><td>Token efficiency guide</td><td>Open the framework guidance for reducing unnecessary AI context and token usage.</td><td><pre><code>less .tfcore/TOKEN-GUIDE.md</code></pre></td><td><pre><code>less .tfcore/TOKEN-GUIDE.md</code></pre></td></tr>
+  <tr><td>Recover broken session</td><td>Rebuild PROJECT-STATUS from ground truth after an interrupted phase.</td><td><pre><code>/TechieFlow:agents:flow-master *refresh-status {AppName}</code></pre></td><td><pre><code>/flow-master *refresh-status {AppName}</code></pre></td></tr>
+  <tr><td>MAUI build + test</td><td>Build and test the MAUI project through the Windows bridge or natively on macOS.</td><td><pre><code>winrun "dotnet build &amp;&amp; dotnet test"</code></pre></td><td><pre><code>winrun "dotnet build &amp;&amp; dotnet test"</code></pre></td></tr>
+  <tr><td>Resume project</td><td>Check the working tree and perform a fresh build before continuing.</td><td><pre><code>git status &amp;&amp; dotnet build</code></pre></td><td><pre><code>git status &amp;&amp; dotnet build</code></pre></td></tr>
+  <tr><td>Development telemetry report</td><td>Generate the aggregated development metrics report.</td><td><pre><code>/TechieFlow:agents:flow-master *metrics {AppName}</code></pre></td><td><pre><code>/flow-master *metrics {AppName}</code></pre></td></tr>
+  <tr><td>Telemetry quick look</td><td>Print the read-only telemetry report directly in the terminal.</td><td><pre><code>.tfcore/telemetry/tf-metrics.sh --report .</code></pre></td><td><pre><code>.tfcore/telemetry/tf-metrics.sh --report .</code></pre></td></tr>
+</table>
+
+<table class="quickref-legacy">
   <tr><th>Goal</th><th>Command (Claude Code form)</th></tr>
   <tr><td>Scaffold (brownfield)</td><td><code>./scaffold-brownfield.sh /path/to/existing-app</code> (or run from the template repo)</td></tr>
   <tr><td>Scaffold (greenfield)</td><td><code>./scaffold-greenfield.sh /path/to/new-app</code> (or run from the template repo)</td></tr>
