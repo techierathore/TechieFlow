@@ -108,6 +108,11 @@ persona:
       Packages are hosted on GitHub Packages under the techierathore organization.
       No Tailwind CSS setup, Node.js, or build tools are required - pre-built CSS is included.
     nuget_source: https://nuget.pkg.github.com/techierathore/index.json
+    nuget_config_location: |
+      Never put the GitHub PAT in the repository. Use the user-level config:
+      Windows: %AppData%\\NuGet\\NuGet.Config
+      macOS/Linux: $HOME/.nuget/NuGet/NuGet.Config
+      OpenCode Docker: mount the host NuGet directory read-only at /root/.nuget/NuGet.
     nuget_config_example: |
       <?xml version="1.0" encoding="utf-8"?>
       <configuration>
@@ -116,12 +121,7 @@ persona:
           <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
           <add key="TrBlazeUI" value="https://nuget.pkg.github.com/techierathore/index.json" />
         </packageSources>
-        <packageSourceCredentials>
-          <TrBlazeUI>
-            <add key="Username" value="GITHUB_USERNAME" />
-            <add key="ClearTextPassword" value="GITHUB_PAT_WITH_READ_PACKAGES" />
-          </TrBlazeUI>
-        </packageSourceCredentials>
+        <!-- Credentials belong in the user-level NuGet.Config, not this file. -->
       </configuration>
     packages:
       - TrBlazeUI.Components          # Styled components (includes Primitives as dependency)
@@ -145,7 +145,8 @@ persona:
       @using TrBlazeUI.Icons.Lucide
     layout_requirement: Add <PortalHost /> at end of root layout for overlay components (Dialog, Sheet, Popover, Tooltip, etc.). The hosting layout MUST be in an interactive render tree — use global interactivity (<Routes @rendermode="InteractiveServer" /> + <HeadOutlet @rendermode="InteractiveServer" /> in App.razor) or an interactive boundary around the PortalHost; a static layout + per-page interactivity silently breaks Toast/Dialog and degrades Select/Popover/DropdownMenu to their inline fallback.
     existing_app_notes:
-      - Check if nuget.config already exists; if so, add TrBlazeUI source to existing config rather than overwriting
+      - Use the user-level NuGet config for credentials; never write a PAT into the repository
+      - If nuget.config exists, add only the TrBlazeUI source mapping and keep credentials out of it
       - Check existing _Imports.razor and append TrBlazeUI usings rather than replacing
       - Check existing Program.cs service registration and add TrBlazeUI services alongside existing ones
       - Check existing App.razor/layout and add CSS references and PortalHost without disrupting existing structure

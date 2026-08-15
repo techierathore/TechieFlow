@@ -244,6 +244,36 @@ grep -q 'HOME/bin' ~/.bashrc || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashr
 
 <div class="panel ok"><strong>Verify:</strong> open a new WSL terminal and run <code>which winrun</code> → <code>/home/&lt;you&gt;/bin/winrun</code>.</div>
 
+<div class="panel warn"><strong>OpenCode in Docker on Windows is different from WSL:</strong> a Linux container cannot execute Windows <code>cmd.exe</code> or see the Windows .NET workloads. Do not install a fake <code>cmd.exe</code>. The supplied <code>docs/Dockerfile</code> installs <code>maui-android</code> and <code>maui-tizen</code>; build the Windows head through its SSH-backed <code>winrun</code> bridge to the Windows host.</div>
+
+<h3 id="opencode-docker">Containerized OpenCode — one-time Windows host bridge</h3>
+<p>On Windows PowerShell, enable OpenSSH on the host and use a key-authenticated, non-administrator account for the bridge:</p>
+<pre><code class="lang-powershell">Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+Start-Service sshd
+Set-Service -Name sshd -StartupType Automatic
+New-NetFirewallRule -Name OpenSSH-Server-In-TCP -DisplayName "OpenSSH Server (sshd)" -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.ssh" | Out-Null
+ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\opencode-docker" -N ""
+Get-Content "$env:USERPROFILE\.ssh\opencode-docker.pub" | Add-Content "$env:USERPROFILE\.ssh\authorized_keys"</code></pre>
+<p>Run the first four commands in an elevated PowerShell window. Then open a normal PowerShell window as the same non-administrator Windows user that will run the launcher, run the key commands, and verify the key before starting Docker:</p>
+<pre><code class="lang-powershell">ssh -i "$env:USERPROFILE\.ssh\opencode-docker" "$env:USERNAME@localhost" powershell.exe -NoProfile -NonInteractive -Command "dotnet --info"</code></pre>
+<p>Keep <code>Dockerfile</code> and <code>opencode-docker.cmd</code> in <code>%USERPROFILE%\\.opencode-docker-config</code>. Build the image once from that folder, then put that folder on <code>PATH</code> so the command is available in every application PowerShell:</p>
+<pre><code class="lang-powershell">Set-Location "$env:USERPROFILE\.opencode-docker-config"
+docker build --pull --no-cache -t my-opencode-dotnet .</code></pre>
+<p>From the application folder, run <code>opencode-docker.cmd</code>. It uses the existing <code>my-opencode-dotnet</code> image, gives each app its own OpenCode data directory, mounts NuGet and SSH credentials read-only, and passes the Windows app path to the bridge:</p>
+<pre><code class="lang-powershell">opencode-docker.cmd</code></pre>
+<p>The equivalent expanded container command is:</p>
+<pre><code class="lang-powershell">docker run --rm -it `
+  -v "${APPDATA}\NuGet:/root/.nuget/NuGet:ro" `
+  -v "${USERPROFILE}\.ssh:/root/.ssh:ro" `
+  -v "${PWD}:/workspace" -w /workspace `
+  -e TF_WINDOWS_SSH_HOST=host.docker.internal `
+  -e TF_WINDOWS_SSH_USER="$env:USERNAME" `
+  -e TF_WINDOWS_SSH_KEY=/root/.ssh/opencode-docker `
+  -e TF_WINDOWS_APP_PATH="C:\\path\\to\\app" `
+  my-opencode-dotnet opencode</code></pre>
+<p>Inside the container use <code>dotnet build</code> for Linux-compatible projects and <code>winrun "dotnet build -c Release"</code> for the Windows MAUI head. <code>TF_WINDOWS_APP_PATH</code> is the Windows path to the same app mounted as <code>/workspace</code>. Android emulator/Appium and Windows UI automation remain host-side services; expose their Appium endpoint and configure <code>core-config.yaml</code>.</p>
+
 <!-- ============================================================ -->
 <h2 id="mac-bootstrap">0a. macOS bootstrap — <span class="pill once">DO ONCE, EVER</span><span class="anchor-link"><a href="#mac-bootstrap">#</a></span></h2>
 
@@ -1270,7 +1300,7 @@ dotnet build -t:Run -f net9.0-android          # Android head (emulator via Andr
   <tr><td>Telemetry, quick look in the terminal (<a href="#telemetry">§17</a>)</td><td><code>cd /path/to/app &amp;&amp; .tfcore/telemetry/tf-metrics.sh --report .</code> &mdash; read-only, no agent</td></tr>
 </table>
 
-<p><small>The trblazeui and techierag personas are NuGet-deployed to <code>.claude/&lt;name&gt;.md</code> and <code>.opencode/command/&lt;name&gt;.md</code>. Claude Code only scans <code>.claude/commands/</code>, so the scaffold/update scripts copy them to <code>.claude/commands/&lt;name&gt;.md</code> (the short <code>/trblazeui</code> <code>/techierag</code> forms then work). If the short form is missing: <code>dotnet build</code>, then re-run <code>update-framework.sh</code>.</small></p>
+<p><small>The trblazeui and techierag personas are NuGet-deployed to <code>.claude/&lt;name&gt;.md</code> and <code>.opencode/command/&lt;name&gt;.md</code>. Claude Code only scans <code>.claude/commands/</code>, so the scaffold/update scripts copy them to <code>.claude/commands/&lt;name&gt;.md</code> (the short <code>/trblazeui</code> <code>/techierag</code> forms then work). If the short form is missing: <code>dotnet build</code>, then re-run <code>update-framework.sh</code>. Library maintainers must update the package source files listed in <code>docs/TechieFlow-Library-Persona-Propagation.md</code>; consumer copies are not the source of truth.</small></p>
 
 <!-- ============================================================ -->
 <h2 id="faq">15. FAQ &amp; gotchas<span class="anchor-link"><a href="#faq">#</a></span></h2>
@@ -1444,6 +1474,8 @@ docs/metrics/*.jsonl text eol=lf merge=union</code></pre>
 </ol>
 The <code>winrun</code> bridge and <code>cmd.exe</code> rungs simply don't apply on Mac; the agents won't reach for them once <code>uname</code> reports <code>Darwin</code>.</div>
 
+<div class="panel ok"><strong>NuGet credentials for macOS:</strong> store the private GitHub Packages source in <code>$HOME/.nuget/NuGet/NuGet.Config</code> (for example <code>/Users/srkra/.nuget/NuGet/NuGet.Config</code>), not in the project. NuGet, Claude Code, and native OpenCode discover it automatically. Windows uses <code>%AppData%\NuGet\NuGet.Config</code>. OpenCode Docker mounts the Windows directory read-only at <code>/root/.nuget/NuGet</code>. A repository <code>nuget.config</code>, if needed for source mapping, must contain no PAT.</div>
+
 <div class="panel warn"><strong>Moving an existing project (or this framework repo) from Windows/WSL to a Mac:</strong>
 <ol>
   <li><strong>Can't see <code>.tfcore/</code>, <code>.claude/</code>, <code>.opencode/</code> in Finder?</strong> Finder hides dot-files by default. Press <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>.</kbd> in any Finder window to toggle them on (the setting sticks), or run <code>defaults write com.apple.finder AppleShowAllFiles -bool true &amp;&amp; killall Finder</code>. The Terminal always sees them: <code>ls -la</code>. Nothing is missing just because Finder doesn't show it — check with <code>ls -la</code> first.</li>
@@ -1460,6 +1492,8 @@ The <code>winrun</code> bridge and <code>cmd.exe</code> rungs simply don't apply
   <li>For MAUI: <code>dotnet workload install maui</code>. Windows + Android heads build natively; <strong>iOS / Mac Catalyst need a paired Mac build host</strong>.</li>
   <li>Run the scaffold scripts from <strong>WSL or Git Bash</strong> (they're bash). Then drive the framework from Claude Code on Windows normally — the ladder uses §C (<code>dotnet build</code>).</li>
 </ol></div>
+
+<div class="panel ok"><strong>OpenCode in a Windows Docker container:</strong> use the dedicated <a href="#opencode-docker">Containerized OpenCode host bridge</a> under §0. The container is Linux, so it uses the SSH-backed <code>winrun</code> wrapper rather than direct <code>cmd.exe</code> interop.</div>
 
 <div class="panel"><strong>native Linux quick start:</strong>
 <ol>

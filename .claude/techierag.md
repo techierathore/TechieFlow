@@ -97,6 +97,11 @@ persona:
       for offline ONNX-based embeddings. On first build after install, agent skill files and
       API reference documentation are auto-deployed to the project.
     nuget_source: https://nuget.pkg.github.com/techierathore/index.json
+    nuget_config_location: |
+      Never put the GitHub PAT in the repository. Use the user-level config:
+      Windows: %AppData%\\NuGet\\NuGet.Config
+      macOS/Linux: $HOME/.nuget/NuGet/NuGet.Config
+      OpenCode Docker: mount the host NuGet directory read-only at /root/.nuget/NuGet.
     nuget_config_example: |
       <?xml version="1.0" encoding="utf-8"?>
       <configuration>
@@ -105,12 +110,7 @@ persona:
           <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
           <add key="TechieRag" value="https://nuget.pkg.github.com/techierathore/index.json" />
         </packageSources>
-        <packageSourceCredentials>
-          <TechieRag>
-            <add key="Username" value="GITHUB_USERNAME" />
-            <add key="ClearTextPassword" value="GITHUB_PAT_WITH_READ_PACKAGES" />
-          </TechieRag>
-        </packageSourceCredentials>
+        <!-- Credentials belong in the user-level NuGet.Config, not this file. -->
       </configuration>
     packages:
       - TechieRag                # Core library - embeddings, vector stores, LLM, tools, everything
@@ -161,8 +161,9 @@ dependencies:
 When the user runs `*integrate`, perform these steps:
 
 1. **Examine the project** - Read the `.csproj` file to understand: target framework, existing NuGet packages, project type (Blazor, API, Console, Worker)
-2. **Check for existing nuget.config** - If one exists, ADD the TechieRag source to it. If not, create one
-3. **Install NuGet package(s)** - Run `dotnet add package TechieRag` (and TechieRag.Embedded if user wants offline embeddings)
+2. **Locate NuGet credentials** - Use the user-level config above; never create a PAT-bearing config in the repository. In Docker, verify `/root/.nuget/NuGet/NuGet.Config` is mounted.
+3. **Check for an existing repository nuget.config** - If one exists, add only source mapping and no credentials; otherwise rely on the user-level config
+4. **Install NuGet package(s)** - Run `dotnet add package TechieRag` (and TechieRag.Embedded if user wants offline embeddings)
 4. **Configure DI** (for ASP.NET Core apps):
    - Add `builder.Services.AddTechieRag(builder.Configuration);` to Program.cs
    - OR use the fluent builder: `builder.Services.AddTechieRag(rag => { ... });`

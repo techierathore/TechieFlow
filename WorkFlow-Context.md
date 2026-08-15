@@ -79,6 +79,14 @@ It rebuilds PROJECT-STATUS from **ground-truth evidence** (the checklist Require
 
 ## 5. Maintenance log (what has been done, newest first)
 
+### 2026-08-15 — OpenCode Docker verification prerequisites fixed
+
+Containerized OpenCode on Windows is a Linux container, not WSL: it cannot execute `cmd.exe` through Linux interop. The owner keeps `Dockerfile` and `opencode-docker.cmd` in `%USERPROFILE%\\.opencode-docker-config`, builds the reusable `my-opencode-dotnet` image once with `docker build --pull --no-cache -t my-opencode-dotnet .`, and invokes the launcher from `PATH` in each app folder. The image uses the Debian .NET 9 SDK, installs `maui-android` and `maui-tizen`, and provides an SSH-backed `/usr/local/bin/winrun` wrapper for Windows-host builds. `WORKFLOW.html` and `README.md` document the Windows OpenSSH setup, Docker environment variables (`TF_WINDOWS_SSH_HOST`, `TF_WINDOWS_SSH_USER`, and `TF_WINDOWS_APP_PATH`), and the limitation that an unavailable bridge makes only the Windows head `STATIC-ONLY`.
+
+NuGet authentication is now documented as user-level configuration, never a repository PAT: Windows `%AppData%\\NuGet\\NuGet.Config`, macOS/Linux `$HOME/.nuget/NuGet/NuGet.Config`, and the Docker read-only mount at `/root/.nuget/NuGet`. The TechieRag and TrBlazeUI personas no longer instruct agents to create credential-bearing project configs; they use project `nuget.config` only for non-secret source mapping.
+
+Added `docs/TechieFlow-Library-Persona-Propagation.md`, which records the exact source files in the TrBlazeUI and TechieRag repositories, their `.targets` deployment mappings, and the consumer `.opencode/command/*.md` paths. This prevents framework snapshots from being mistaken for the NuGet package source of truth.
+
 ### 2026-08-13 — OpenCode-harness audit: 8 gaps fixed; the OpenCode mirror is gone for good; mirror parity is now Claude-only
 
 A full audit of the OpenCode harness against the OpenCode 1.18.18 binary (evidence + fixes: `docs/TechieFlow-OpenCode-Gaps.md`) found and closed 8 gaps. The durable rule changes:

@@ -10,7 +10,7 @@ Run a single probe to classify the host:
 |---|---|---|
 | `uname` → `Darwin` | **macOS** (Claude Code / OpenCode native, or via Terminal) | §A — dotnet in PATH, MAUI/iOS native via Xcode |
 | `uname` → `Linux` **and** `/proc/version` contains `microsoft` / `WSL` | **WSL-on-Windows** (the reference machine) | §B — the WSL↔Windows interop ladder |
-| `uname` → `Linux`, no `microsoft` in `/proc/version` | **native Linux** | §A (Linux notes) — dotnet in PATH, Android-only MAUI |
+| `uname` → `Linux`, no `microsoft` in `/proc/version` | **native Linux** (including OpenCode Docker) | §A (Linux notes) — dotnet in PATH, Android/Tizen MAUI only; Windows heads use §E |
 | `uname` not found / shell is `cmd`/`PowerShell`; paths look like `C:\…` | **native Windows** (Claude Code / OpenCode on Windows, not WSL) | §C — dotnet in PATH, MAUI native |
 
 One-liner to detect: `uname -a 2>/dev/null || echo windows` — `Darwin…` = macOS, `…microsoft…`/`…WSL…` = WSL, plain `Linux` = native Linux, `windows` (uname absent) = native Windows.
@@ -170,6 +170,16 @@ Building is only half of "verify". Once a head builds green, the verifier / devg
 - **iOS / Mac Catalyst** depend on the **LAN Mac being up**. `curl http://<mac>:4723/status` first; if unreachable, that head degrades to `⚠ STATIC-ONLY` (a session dependency, like "stack down"), never a faked `Verified`.
 - One-time host setup (Android SDK + AVD + Appium on Windows; Xcode + Appium + xcuitest/mac2 on the Mac; the `.wslconfig` mirrored-networking switch) is **`WORKFLOW.html §0b`**.
 - **Input discipline (all native heads, esp. MAUI Windows):** bind the driver to the app under test by identity — the **PID you launched → its top-level window handle** (Appium Windows `appium:appTopLevelWindow` / FlaUI `Application.Attach(pid)`) or the app **package/bundle id** on mobile — and interact **element-by-element via `AutomationId`** inside that bound window. NEVER global keyboard/mouse injection (FlaUI `Keyboard.Type`, coordinate clicks, `SendKeys`): it lands in whatever window has focus, not the app. Full rules: `verify-phase.md §3b`.
+
+## E. OpenCode Docker on Windows — host bridge
+
+An OpenCode Linux container is not WSL: `/proc/version` does not expose Windows interop, and `cmd.exe` cannot be installed into it. The framework Dockerfile installs `maui-android` and `maui-tizen` for Linux-compatible builds. For a Windows-targeted project, use the image's `winrun` wrapper, which sends the command over SSH to the Windows host and starts it in `TF_WINDOWS_APP_PATH`.
+
+- Probe: `test -x /usr/local/bin/winrun && test -n "$TF_WINDOWS_SSH_USER" && test -n "$TF_WINDOWS_APP_PATH"`.
+- Build: `winrun "dotnet build -c Release"`.
+- Do not report missing `cmd.exe` as a code blocker when the bridge probe succeeds.
+- If the bridge is absent or SSH fails, report the exact setup failure and mark only the Windows head `STATIC-ONLY`; continue Linux-compatible builds and Appium HTTP verification.
+- Never mount a PAT-bearing project config. Mount the host user config read-only at `/root/.nuget/NuGet/NuGet.Config`.
 
 ## Recording the result (all platforms)
 

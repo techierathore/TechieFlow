@@ -30,7 +30,13 @@ Packages are hosted on **GitHub Packages**:
 
 ### NuGet Configuration
 
-If the project has an existing `nuget.config`, add the TechieRag source to it. Otherwise create:
+Do **not** put a PAT in a repository `nuget.config`. Configure the authenticated source in the user-level NuGet config. NuGet loads these locations automatically:
+
+- Windows: `%AppData%\\NuGet\\NuGet.Config` (for example `C:\\Users\\srkra\\AppData\\Roaming\\NuGet\\NuGet.Config`)
+- macOS/Linux: `$HOME/.nuget/NuGet/NuGet.Config` (for example `/Users/srkra/.nuget/NuGet/NuGet.Config`)
+- OpenCode Docker: mount the host directory read-only at `/root/.nuget/NuGet`.
+
+The config should contain the source and credentials, for example:
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
@@ -40,12 +46,7 @@ If the project has an existing `nuget.config`, add the TechieRag source to it. O
     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
     <add key="TechieRag" value="https://nuget.pkg.github.com/techierathore/index.json" />
   </packageSources>
-  <packageSourceCredentials>
-    <TechieRag>
-      <add key="Username" value="GITHUB_USERNAME" />
-      <add key="ClearTextPassword" value="GITHUB_PAT_WITH_READ_PACKAGES" />
-    </TechieRag>
-  </packageSourceCredentials>
+  <!-- Credentials belong in the user-level NuGet.Config, not this file. -->
 </configuration>
 ```
 

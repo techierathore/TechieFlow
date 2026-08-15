@@ -84,6 +84,9 @@ flowchart TD
 
 ## 0. WSL bootstrap — DO ONCE, EVER
 
+Library persona source files and their NuGet deployment paths are documented
+in [`docs/TechieFlow-Library-Persona-Propagation.md`](docs/TechieFlow-Library-Persona-Propagation.md).
+
 **Run this once per WSL distro.** Installs headless-Chromium system libs + the MAUI bridge.
 
 > **On macOS: skip this section — your one-time setup is §0a instead.** There is no `winrun` bridge on a Mac (`dotnet` and MAUI run natively) and Playwright's Chromium needs no apt libraries.
@@ -102,6 +105,48 @@ SH
 chmod +x ~/bin/winrun
 grep -q 'HOME/bin' ~/.bashrc || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
 ```
+
+### OpenCode in Docker on Windows
+
+A Linux container cannot execute `cmd.exe`. `docs/Dockerfile` uses the Debian .NET SDK image and installs `maui-android` plus `maui-tizen`; Windows-head builds use its SSH-backed `/usr/local/bin/winrun` wrapper instead. Run the first four commands in an elevated PowerShell window. Then use a normal PowerShell window as the non-administrator Windows account used by Docker for the remaining commands:
+
+```powershell
+Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+Start-Service sshd
+Set-Service -Name sshd -StartupType Automatic
+New-NetFirewallRule -Name OpenSSH-Server-In-TCP -DisplayName "OpenSSH Server (sshd)" -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.ssh" | Out-Null
+ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\opencode-docker" -N ""
+Get-Content "$env:USERPROFILE\.ssh\opencode-docker.pub" | Add-Content "$env:USERPROFILE\.ssh\authorized_keys"
+ssh -i "$env:USERPROFILE\.ssh\opencode-docker" "$env:USERNAME@localhost" powershell.exe -NoProfile -NonInteractive -Command "dotnet --info"
+```
+
+Keep `Dockerfile` and `opencode-docker.cmd` in `%USERPROFILE%\.opencode-docker-config`. Build the image once from that folder:
+
+```powershell
+Set-Location "$env:USERPROFILE\.opencode-docker-config"
+docker build --pull --no-cache -t my-opencode-dotnet .
+```
+
+Put that folder on `PATH`. From any application folder, run `opencode-docker.cmd`; it uses the existing `my-opencode-dotnet` image and mounts the host NuGet and SSH directories:
+
+```powershell
+docker run --rm -it `
+  -v "${APPDATA}\NuGet:/root/.nuget/NuGet:ro" `
+  -v "${USERPROFILE}\.ssh:/root/.ssh:ro" `
+  -v "${PWD}:/workspace" -w /workspace `
+  -e TF_WINDOWS_SSH_HOST=host.docker.internal `
+  -e TF_WINDOWS_SSH_USER="$env:USERNAME" `
+  -e TF_WINDOWS_SSH_KEY=/root/.ssh/opencode-docker `
+  -e TF_WINDOWS_APP_PATH="C:\path\to\app" `
+  my-opencode-dotnet opencode
+```
+
+Use `dotnet build` for Linux-compatible projects and `winrun "dotnet build -c Release"` for the Windows head. The container is not WSL; if the SSH bridge is unavailable, only the Windows head is `STATIC-ONLY`.
+
+### NuGet credentials
+
+Keep GitHub Packages credentials out of the repository. Use `%AppData%\NuGet\NuGet.Config` on Windows and `$HOME/.nuget/NuGet/NuGet.Config` on macOS/Linux. Native Claude Code and OpenCode discover the user config automatically. Mount the Windows directory read-only at `/root/.nuget/NuGet` for OpenCode Docker. A project `nuget.config` may provide source mapping but must contain no PAT.
 
 ## 0a. macOS bootstrap — DO ONCE, EVER
 

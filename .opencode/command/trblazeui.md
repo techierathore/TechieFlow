@@ -198,12 +198,7 @@ TrBlazeUI packages are hosted on **GitHub Packages**. If your project already ha
     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
     <add key="TrBlazeUI" value="https://nuget.pkg.github.com/techierathore/index.json" />
   </packageSources>
-  <packageSourceCredentials>
-    <TrBlazeUI>
-      <add key="Username" value="GITHUB_USERNAME" />
-      <add key="ClearTextPassword" value="GITHUB_PAT_WITH_READ_PACKAGES" />
-    </TrBlazeUI>
-  </packageSourceCredentials>
+        <!-- Credentials belong in the user-level NuGet.Config, not this file. -->
 </configuration>
 ```
 
