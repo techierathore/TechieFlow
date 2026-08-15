@@ -38,7 +38,7 @@ The user runs Claude Code on their own machine. Local boot is always possible. I
 
 If the WSL-side `dotnet run` is unreachable by Playwright (port collision, WSL networking quirks, missing browser deps), the correct escalation order is:
 
-1. **Try a different rung of the build invocation ladder.** Rung #4 `cmd.exe /c "dotnet run --project ..."` launches Windows-side dotnet on a Windows-side port; that port IS reachable from WSL Playwright via the WSL host IP (`$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}')` or `host.docker.internal` analog). Try this BEFORE asking the user anything.
+1. **Use the platform-specific bridge.** In WSL, rung #4 `cmd.exe /c "dotnet run --project ..."` launches Windows-side dotnet. In OpenCode Docker, use `winrun "dotnet run --project ..."`; direct `cmd.exe` is expected to be absent. The Windows-side port is reachable through the configured Docker host bridge. Try the appropriate bridge BEFORE asking the user anything.
 2. **Try a different port** if rung #2 is on a busy port (5099 → 5599).
 3. **Ask the user to run it locally themselves.** Output the EXACT two-line shell recipe and a `go` prompt:
 

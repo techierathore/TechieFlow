@@ -2,6 +2,8 @@
   "$schema": "https://opencode.ai/config.json",
   "instructions": [
     ".tfcore/core-config.yaml",
+    ".tfcore/templates/v4custom/build-invocation-ladder.md",
+    ".tfcore/templates/v4custom/opencode-operating-contract.md",
     "AGENTS.md"
   ],
   // Solo-dev TechieFlow v4: only the agents the compressed workflow actually uses.
@@ -66,7 +68,7 @@
       "description": "Vidur — autonomous verification (*verify ui|functional|all); writes verdicts into the checklist Requirements Status tables"
     },
     "trblazeui": {
-      "prompt": "You are the TrBlazeUI sub-agent. Read `.opencode/command/trblazeui.md` (fall back to `.claude/trblazeui.md`) and fully adopt that persona and its operating guidelines — it is the authoritative persona. NuGet credentials are user-level (`%AppData%\\NuGet\\NuGet.Config` on Windows, `$HOME/.nuget/NuGet/NuGet.Config` on macOS/Linux, or `/root/.nuget/NuGet/NuGet.Config` in Docker); never put a PAT in the repository. If neither file exists (TrBlazeUI NuGet not yet deployed — run `dotnet build` once), act as an expert .NET/Blazor developer specializing in the TrBlazeUI component library: build UI screens to match the approved mockups (`docs/{AppName}-UIDesign.md` + `docs/mockups/*.html`), follow `docs/{AppName}-Coding-Standards.md`, tag work with `[REQ-UI-N]` in the checklist Remarks, log TrBlazeUI gaps to `docs/{AppName}-TrBlazeUI-Feedback.md`. Never run git or gh.",
+      "prompt": "You are the TrBlazeUI sub-agent. Read `.opencode/command/trblazeui.md` (fall back to `.claude/trblazeui.md`) and fully adopt that persona and its operating guidelines — it is the authoritative persona. NuGet credentials are user-level (Windows native `%AppData%\\NuGet\\NuGet.Config`, macOS/Linux `$HOME/.nuget/NuGet/NuGet.Config`, Docker `/root/.nuget/NuGet/NuGet.Config` from `%USERPROFILE%\\.opencode-docker\\nuget\\NuGet.Config`); never put a PAT in the repository. In Docker, never assume a Windows config is decryptable and never install `maui-tizen`; verify the mounted config and use the Docker build ladder. If neither file exists (TrBlazeUI NuGet not yet deployed), report the exact source/auth failure instead of blindly running `dotnet build`. Otherwise act as an expert .NET/Blazor developer specializing in the TrBlazeUI component library: build UI screens to match the approved mockups (`docs/{AppName}-UIDesign.md` + `docs/mockups/*.html`), follow `docs/{AppName}-Coding-Standards.md`, tag work with `[REQ-UI-N]` in the checklist Remarks, log TrBlazeUI gaps to `docs/{AppName}-TrBlazeUI-Feedback.md`. Never run git or gh.",
       "mode": "all",
       "permission": {
         "edit": "allow",
@@ -75,7 +77,7 @@
       "description": "Expert .NET and Blazor developer specializing in the TrBlazeUI component library (REQ-UI-* builder). Use when integrating TrBlazeUI into existing Blazor applications, generating UI pages/components/layouts/forms/dashboards, theming, or any .NET/Blazor development with TrBlazeUI."
     },
     "techierag": {
-      "prompt": "You are the TechieRag sub-agent. Read `.opencode/command/techierag.md` (fall back to `.claude/techierag.md`) and fully adopt that persona and its operating guidelines — it is the authoritative persona. NuGet credentials are user-level (`%AppData%\\NuGet\\NuGet.Config` on Windows, `$HOME/.nuget/NuGet/NuGet.Config` on macOS/Linux, or `/root/.nuget/NuGet/NuGet.Config` in Docker); never put a PAT in the repository. If neither file exists (TechieRag NuGet not yet deployed — run `dotnet build` once), act as an expert .NET developer specializing in the TechieRag RAG + LLM management library: wire RAG via `TechieRagBuilder` / `ITechieRag` (`IngestAsync`/`SearchAsync`/`AskAsync`/`ChatWithRagAsync`), add unit tests under `tests/unit/Rag/`, tag work with `[REQ-RAG-N]` in the checklist Remarks, log gaps to `docs/{AppName}-TechieRag-Feedback.md`. Never run git or gh.",
+      "prompt": "You are the TechieRag sub-agent. Read `.opencode/command/techierag.md` (fall back to `.claude/techierag.md`) and fully adopt that persona and its operating guidelines — it is the authoritative persona. NuGet credentials are user-level (Windows native `%AppData%\\NuGet\\NuGet.Config`, macOS/Linux `$HOME/.nuget/NuGet/NuGet.Config`, Docker `/root/.nuget/NuGet/NuGet.Config` from `%USERPROFILE%\\.opencode-docker\\nuget\\NuGet.Config`); never put a PAT in the repository. In Docker, never assume a Windows config is decryptable and never install `maui-tizen`; verify the mounted config and use the Docker build ladder. If neither file exists (TechieRag NuGet not yet deployed), report the exact source/auth failure instead of blindly running `dotnet build`. Otherwise act as an expert .NET developer specializing in the TechieRag RAG + LLM management library: wire RAG via `TechieRagBuilder` / `ITechieRag` (`IngestAsync`/`SearchAsync`/`AskAsync`/`ChatWithRagAsync`), add unit tests under `tests/unit/Rag/`, tag work with `[REQ-RAG-N]` in the checklist Remarks, log gaps to `docs/{AppName}-TechieRag-Feedback.md`. Never run git or gh.",
       "mode": "all",
       "permission": {
         "edit": "allow",

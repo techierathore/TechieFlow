@@ -10,12 +10,13 @@ Run a single probe to classify the host:
 |---|---|---|
 | `uname` → `Darwin` | **macOS** (Claude Code / OpenCode native, or via Terminal) | §A — dotnet in PATH, MAUI/iOS native via Xcode |
 | `uname` → `Linux` **and** `/proc/version` contains `microsoft` / `WSL` | **WSL-on-Windows** (the reference machine) | §B — the WSL↔Windows interop ladder |
-| `uname` → `Linux`, no `microsoft` in `/proc/version` | **native Linux** (including OpenCode Docker) | §A (Linux notes) — dotnet in PATH, Android/Tizen MAUI only; Windows heads use §E |
+| `TF_OPENCODE_DOCKER=1` (or `uname` → `Linux`, no `microsoft` in `/proc/version`, and `/usr/local/bin/winrun` exists with `TF_WINDOWS_APP_PATH` set) | **OpenCode Docker on Windows** | §E — .NET in container, Windows head through SSH bridge |
+| `uname` → `Linux`, no `microsoft` in `/proc/version`, and no Docker bridge | **native Linux** | §A (Linux notes) — standard .NET only; Windows/Apple heads are unavailable |
 | `uname` not found / shell is `cmd`/`PowerShell`; paths look like `C:\…` | **native Windows** (Claude Code / OpenCode on Windows, not WSL) | §C — dotnet in PATH, MAUI native |
 
 One-liner to detect: `uname -a 2>/dev/null || echo windows` — `Darwin…` = macOS, `…microsoft…`/`…WSL…` = WSL, plain `Linux` = native Linux, `windows` (uname absent) = native Windows.
 
-> The §B WSL ladder below was the framework's original default because the owner's primary machine is WSL-on-Windows (`WORKFLOW.html §0`). It is **one platform's** ladder, not the universal one. On macOS / native Windows / native Linux, `dotnet` is on the `PATH` and there is **no WSL→Windows interop** — `cmd.exe`, `winrun`, and `/home/srkra/.dotnet/` do **not** exist there. Use §A/§C and never log their absence as a blocker.
+> The §B WSL ladder below was the framework's original default because the owner's primary machine is WSL-on-Windows (`WORKFLOW.html §0`). It is **one platform's** ladder, not the universal one. A plain native Linux process has no Windows interop, but OpenCode Docker is a deliberate exception: when `/usr/local/bin/winrun` and `TF_WINDOWS_APP_PATH` are present, use §E and probe the SSH bridge. Never report `cmd.exe` missing inside the container; it is expected not to exist there.
 
 ---
 
@@ -25,7 +26,7 @@ One-liner to detect: `uname -a 2>/dev/null || echo windows` — `Darwin…` = ma
 
 - **Non-MAUI projects** (Web, API, library, console, test): `dotnet build` / `dotnet test` / `dotnet run` directly.
 - **MAUI on macOS:** builds natively once the workload + toolchains are installed — `sudo dotnet workload install maui`. **`sudo` is REQUIRED on macOS**: the SDK lives in root-owned `/usr/local/share/dotnet`, so any `dotnet workload install/update` (and SDK updates) without it fails with `Inadequate permissions. Run the command with elevated privileges.` — that error is a sudo signal, NEVER a project blocker. iOS / Mac Catalyst targets require **Xcode** (and `xcode-select --install`); Android targets require the **Android SDK + a JDK** (`sudo dotnet workload install maui-android`). With those present, `dotnet build -t:Run -f net9.0-maccatalyst` (or `-f net9.0-ios`) just works — no `cmd.exe`.
-- **MAUI on native Linux:** only the **Android** target head is supported (`net9.0-android`); iOS / Mac Catalyst / Windows heads cannot build on Linux (no Apple/Windows toolchain). That is a genuine platform limitation, NOT a wrong-rung error — note it plainly if a project needs those heads.
+- **MAUI on native Linux:** this framework's Docker image installs no MAUI workloads. Windows MAUI Blazor Desktop uses §E; mobile/iOS/Mac Catalyst work belongs on a native Mac. Do not install or report `maui-tizen` as a Docker prerequisite.
 - If `dotnet build` fails with `NETSDK1178` / "workload not installed", the fix is `dotnet workload install <id>` — with `sudo` on macOS (root-owned SDK dir; see above) — a one-time setup step the user runs, not a rung change; there is no other rung on this platform. If the user reports `Inadequate permissions` from a workload/SDK command, give them the exact `sudo` form of the same command.
 
 ---
@@ -173,13 +174,14 @@ Building is only half of "verify". Once a head builds green, the verifier / devg
 
 ## E. OpenCode Docker on Windows — host bridge
 
-An OpenCode Linux container is not WSL: `/proc/version` does not expose Windows interop, and `cmd.exe` cannot be installed into it. The framework Dockerfile installs `maui-android` and `maui-tizen` for Linux-compatible builds. For a Windows-targeted project, use the image's `winrun` wrapper, which sends the command over SSH to the Windows host and starts it in `TF_WINDOWS_APP_PATH`.
+An OpenCode Linux container is not WSL: `/proc/version` does not expose Windows interop, and `cmd.exe` cannot be installed into it. The framework Dockerfile uses the .NET 10 SDK and deliberately installs no MAUI workloads. Standard .NET projects build and test in the container. For a Windows MAUI Blazor Desktop target, use the image's `winrun` wrapper, which sends the command over SSH to the Windows host and starts it in `TF_WINDOWS_APP_PATH`. Mobile/iOS/Mac Catalyst builds and runtime tests belong on a native Mac.
 
-- Probe: `test -x /usr/local/bin/winrun && test -n "$TF_WINDOWS_SSH_USER" && test -n "$TF_WINDOWS_APP_PATH"`.
+- Probe: `test -x /usr/local/bin/winrun && test -n "$TF_WINDOWS_SSH_USER" && test -n "$TF_WINDOWS_APP_PATH"` followed by `winrun "dotnet --info"`. The first checks configuration; the second proves the SSH bridge actually works. The Docker launcher may mount `/root/.ssh` read-only; `winrun` copies the key to a writable `/tmp` file with mode `0600` and maintains host trust in `/tmp`, so do not attempt to `chmod` the mounted key.
 - Build: `winrun "dotnet build -c Release"`.
 - Do not report missing `cmd.exe` as a code blocker when the bridge probe succeeds.
+- Do not check for or install `maui-tizen` in the container. The image intentionally contains no MAUI workloads.
 - If the bridge is absent or SSH fails, report the exact setup failure and mark only the Windows head `STATIC-ONLY`; continue Linux-compatible builds and Appium HTTP verification.
-- Never mount a PAT-bearing project config. Mount the host user config read-only at `/root/.nuget/NuGet/NuGet.Config`.
+- For private feeds, use the Docker-specific user config mounted at `/root/.nuget/NuGet/NuGet.Config`. A Windows `%AppData%\NuGet\NuGet.Config` may contain DPAPI-encrypted credentials that cannot be decrypted in Linux. Never put the Docker config in the repository.
 
 ## Recording the result (all platforms)
 

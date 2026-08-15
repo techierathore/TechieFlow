@@ -108,18 +108,34 @@ grep -q 'HOME/bin' ~/.bashrc || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashr
 
 ### OpenCode in Docker on Windows
 
-A Linux container cannot execute `cmd.exe`. `docs/Dockerfile` uses the Debian .NET SDK image and installs `maui-android` plus `maui-tizen`; Windows-head builds use its SSH-backed `/usr/local/bin/winrun` wrapper instead. Run the first four commands in an elevated PowerShell window. Then use a normal PowerShell window as the non-administrator Windows account used by Docker for the remaining commands:
+A Linux container cannot execute `cmd.exe`. `docs/Dockerfile` uses the Debian .NET 10 SDK image and deliberately installs no MAUI workloads. Standard .NET apps build and test inside the container. Windows MAUI Blazor Desktop builds use the image's SSH-backed `/usr/local/bin/winrun` wrapper and run on the Windows host. Mobile, iOS, and Mac Catalyst builds and runtime tests should run natively on a Mac. This bridge is only needed for Windows-host builds. The first command uses Windows Update and can take several minutes, but it should not remain at `Operation [Running]` indefinitely. Run the following capability, service, and firewall commands separately in an **elevated PowerShell** window:
 
 ```powershell
-Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+$cap = Get-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+$cap.State
+if ($cap.State -ne 'Installed') {
+    Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+}
 Start-Service sshd
 Set-Service -Name sshd -StartupType Automatic
-New-NetFirewallRule -Name OpenSSH-Server-In-TCP -DisplayName "OpenSSH Server (sshd)" -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22
-New-Item -ItemType Directory -Force "$env:USERPROFILE\.ssh" | Out-Null
-ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\opencode-docker" -N ""
-Get-Content "$env:USERPROFILE\.ssh\opencode-docker.pub" | Add-Content "$env:USERPROFILE\.ssh\authorized_keys"
-ssh -i "$env:USERPROFILE\.ssh\opencode-docker" "$env:USERNAME@localhost" powershell.exe -NoProfile -NonInteractive -Command "dotnet --info"
+if (-not (Get-NetFirewallRule -Name OpenSSH-Server-In-TCP -ErrorAction SilentlyContinue)) {
+    New-NetFirewallRule -Name OpenSSH-Server-In-TCP -DisplayName "OpenSSH Server (sshd)" -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22
+}
 ```
+
+When the capability reports `Installed`, open a **normal PowerShell** window as the Windows account that will run Docker. Copy and paste this key setup as one complete line; it is safe to run again:
+
+```powershell
+$ssh="$env:USERPROFILE\.ssh"; New-Item -ItemType Directory -Force $ssh | Out-Null; if (-not (Test-Path "$ssh\opencode-docker")) { ssh-keygen -t ed25519 -f "$ssh\opencode-docker" -N "" }; $publicKey=(Get-Content "$ssh\opencode-docker.pub" -Raw).Trim(); $auth="$ssh\authorized_keys"; if (-not (Test-Path $auth)) { Set-Content -Path $auth -Value $publicKey } elseif ((Get-Content $auth) -notcontains $publicKey) { Add-Content -Path $auth -Value $publicKey }
+```
+
+Verify the bridge before starting Docker. This test disables password fallback. A successful test prints the Windows host's `.NET` information and never asks for a password:
+
+```powershell
+ssh -o BatchMode=yes -o PreferredAuthentications=publickey -o PasswordAuthentication=no -i "$env:USERPROFILE\.ssh\opencode-docker" "$env:USERNAME@localhost" powershell.exe -NoProfile -NonInteractive -Command "dotnet --info"
+```
+
+If `Add-WindowsCapability` stays at `Operation [Running]` for about 10 minutes, press `Ctrl+C`; the later commands have not run. Check `Get-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0` and the `Microsoft-Windows-DISM/Operational` event log, or install **OpenSSH Server** through Settings > System > Optional features > View features. Retry only after the capability reports `Installed`.
 
 Keep `Dockerfile` and `opencode-docker.cmd` in `%USERPROFILE%\.opencode-docker-config`. Build the image once from that folder:
 
@@ -132,21 +148,33 @@ Put that folder on `PATH`. From any application folder, run `opencode-docker.cmd
 
 ```powershell
 docker run --rm -it `
-  -v "${APPDATA}\NuGet:/root/.nuget/NuGet:ro" `
+  -v "${USERPROFILE}\.opencode-docker\nuget:/root/.nuget/NuGet:ro" `
   -v "${USERPROFILE}\.ssh:/root/.ssh:ro" `
   -v "${PWD}:/workspace" -w /workspace `
   -e TF_WINDOWS_SSH_HOST=host.docker.internal `
   -e TF_WINDOWS_SSH_USER="$env:USERNAME" `
   -e TF_WINDOWS_SSH_KEY=/root/.ssh/opencode-docker `
   -e TF_WINDOWS_APP_PATH="C:\path\to\app" `
+  -e TF_OPENCODE_DOCKER=1 `
   my-opencode-dotnet opencode
 ```
 
 Use `dotnet build` for Linux-compatible projects and `winrun "dotnet build -c Release"` for the Windows head. The container is not WSL; if the SSH bridge is unavailable, only the Windows head is `STATIC-ONLY`.
 
+The SSH directory is intentionally mounted read-only. Docker Desktop can expose the mounted private key with Linux mode `0777`, which OpenSSH rejects, and the mounted directory cannot accept a new `known_hosts` file. The image's `winrun` wrapper copies the key to writable `/tmp/opencode-docker/opencode-docker` with mode `0600` and creates its writable host-trust file there. Do not try to repair the mounted file from inside the container.
+
+If the test reports `Permission denied (publickey)`, do not enter the VPS password or Windows password. Because the generated key has no passphrase, this means public-key authentication was rejected. If `whoami /groups | Select-String 'S-1-5-32-544'` prints a result, the account is an Administrator and Windows OpenSSH uses `%ProgramData%\ssh\administrators_authorized_keys` rather than the profile `authorized_keys` file. Add the same public key there from elevated PowerShell and apply `icacls` permissions, as shown in `WORKFLOW.html`.
+
 ### NuGet credentials
 
-Keep GitHub Packages credentials out of the repository. Use `%AppData%\NuGet\NuGet.Config` on Windows and `$HOME/.nuget/NuGet/NuGet.Config` on macOS/Linux. Native Claude Code and OpenCode discover the user config automatically. Mount the Windows directory read-only at `/root/.nuget/NuGet` for OpenCode Docker. A project `nuget.config` may provide source mapping but must contain no PAT.
+Keep GitHub Packages credentials out of the repository. Native Windows uses `%AppData%\NuGet\NuGet.Config`; macOS/Linux uses `$HOME/.nuget/NuGet/NuGet.Config`. Docker uses the separate user-level `%USERPROFILE%\.opencode-docker\nuget\NuGet.Config`, mounted read-only by `opencode-docker.cmd`. Do not mount the normal Windows config for private feeds: its password may be DPAPI-encrypted and therefore unusable inside Linux. Create the Docker config with a Linux-readable credential, for example:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.opencode-docker\nuget" | Out-Null
+dotnet nuget add source "https://nuget.pkg.github.com/OWNER/index.json" --name github --username GITHUB_USER --password GITHUB_TOKEN --store-password-in-clear-text --configfile "$env:USERPROFILE\.opencode-docker\nuget\NuGet.Config"
+```
+
+Replace the placeholders with the package owner's values. The token is stored only in the user profile, not the repository. A project `nuget.config` may provide source mapping but must contain no PAT.
 
 ## 0a. macOS bootstrap — DO ONCE, EVER
 

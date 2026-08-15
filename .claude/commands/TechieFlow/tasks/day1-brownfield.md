@@ -318,12 +318,12 @@ Load `.tfcore/templates/v4custom/app-project-status-tmpl.md` and substitute:
 - `{YYYY-MM-DD}` → today
 - `stack:` line → from §2 detection (e.g. `.NET 9 / Blazor Server / TrBlazeUI`)
 - `last_verified_build:` → run the build using the **invocation ladder** at `.tfcore/templates/v4custom/build-invocation-ladder.md`. MANDATORY workflow:
-  1. **Solution-scan FIRST** — Read the `.sln`/`.slnx` file. Grep each referenced `.csproj` for `<UseMaui>`, `Microsoft.NET.Sdk.Maui`, or target frameworks with `-android`/`-ios`/`-maccatalyst`. If ANY project is MAUI → start at rung #4 (`cmd.exe /c "dotnet build <slnx>"`), not rung #2.
-  2. **Symptom-based escalation** — if a build fails with `NETSDK1178`, `Microsoft.iOS.Sdk` missing, `Microsoft.Android.Sdk` missing, `Workload ID not recognized`, or any workload-related error → you are on the WRONG RUNG. Switch to rung #4 and retry. Do NOT log workload errors as Known blockers.
+  1. **Platform probe FIRST** — Read ladder §0. In OpenCode Docker, prove `winrun "dotnet --info"` before building. Then scan the `.sln`/`.slnx` file. A Windows MAUI project uses `winrun "dotnet build <slnx>"`; a standard .NET solution uses container `dotnet build`. Do not check/install `maui-tizen`.
+  2. **Symptom-based escalation** — if a build fails with `NETSDK1178`, `Microsoft.iOS.Sdk` missing, `Microsoft.Android.Sdk` missing, `Workload ID not recognized`, or any workload-related error → you are on the WRONG RUNG. In Docker use `winrun` for the Windows head; in WSL switch to rung #4. Do NOT log workload errors as Known blockers.
   3. Try rungs 1-5 in order; do NOT report `not-run` unless ALL five rungs genuinely failed (workload errors don't count — they're wrong-rung signals).
   4. Record `PASS`, `FAIL`, or `not-run` per the ladder's rules. If `FAIL` from a REAL compile error (CS#### codes, missing source references), add a one-line summary to "Known blockers".
   5. **BANNED Known-blocker entries** (these are wrong-rung confessions, not project issues — see the ladder doc's "What NEVER goes into Known blockers" section): "MAUI build cannot run on WSL", "NETSDK1178 workload missing", "iOS/Android SDK missing", "dotnet not in PATH". If you wrote one of these, you didn't follow the ladder. Switch rungs and rebuild.
-  6. If the solution mixes MAUI + non-MAUI projects: log the per-rung result for transparency, e.g. "5 non-MAUI projects build green on rung #2 (`~/.dotnet/dotnet`); MAUI project builds green on rung #4 (`cmd.exe /c`); solution-level build uses rung #4."
+  6. If the solution mixes MAUI + non-MAUI projects: log the per-platform result for transparency, e.g. "standard projects build in the container; Windows MAUI project builds through `winrun`; solution-level build uses `winrun`."
 - `last_verified_date:` → today
 - `current_phase:` → `Discovery`; if §3.5 ran (dev plan migrated), use `Discovery — requirements split done; next build phase: {first incomplete phase from the dev plan}` instead.
 - **Where I am:** one paragraph from §2's findings — what exists, what state it's in. If §3.5 ran, include which dev-plan phases are already complete.

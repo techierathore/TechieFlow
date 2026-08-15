@@ -83,8 +83,9 @@ Gaps in TrBlazeUI → `docs/{AppName}-TrBlazeUI-Feedback.md` (TR-NNN); gaps in T
 ### 5. Build (must PASS before self-smoke)
 
 Run the build using the **invocation ladder** at `.tfcore/templates/v4custom/build-invocation-ladder.md`. MANDATORY:
-- **Solution-scan first** — `.sln`/`.slnx` containing ANY MAUI/iOS/Android project → start at rung #4 (`cmd.exe /c "dotnet build ..."`), not rung #2.
-- **Workload errors are wrong-rung signals, not project blockers** — `NETSDK1178`, `Microsoft.iOS.Sdk missing`, `Workload ID … not recognized` → switch to rung #4 and retry. Do NOT log these as failures.
+- **Platform probe first** — read ladder §0. In OpenCode Docker, confirm `/usr/local/bin/winrun`, `TF_WINDOWS_APP_PATH`, and the mounted `/root/.nuget/NuGet/NuGet.Config`; prove the bridge with `winrun "dotnet --info"`. Do not probe direct `cmd.exe` in the container.
+- **Solution-scan second** — in OpenCode Docker, a solution containing a Windows MAUI head uses `winrun "dotnet build ..."`; a solution containing only standard .NET projects uses container `dotnet build`. Never install/check for `maui-tizen`; this image intentionally has no MAUI workloads.
+- **Workload errors are wrong-rung signals, not project blockers** — `NETSDK1178`, `Microsoft.iOS.Sdk missing`, `Workload ID … not recognized` → on WSL switch to rung #4; in OpenCode Docker use `winrun` for a Windows MAUI head, and never install a workload in the container. Do NOT log these as failures.
 - **Real compile errors** (CS####, missing source references) → fan out fix subagents (group by file) and retry.
 - Never accept "command not found" as a stop condition — that means wrong rung, not missing dotnet.
 

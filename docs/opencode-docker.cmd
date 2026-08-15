@@ -20,12 +20,16 @@ for /f "delims=" %%I in ('powershell -NoProfile -Command "'%APP_NAME%'.ToLowerIn
 set "DOCKER_DATA=%USERPROFILE%\.opencode-docker\%APP_NAME%\data"
 set "WIN_DATA=%USERPROFILE%\.local\share\opencode"
 set "WIN_CONFIG=%USERPROFILE%\.config\opencode"
-set "NUGET_CONFIG=%APPDATA%\NuGet"
+REM Windows NuGet.Config may contain DPAPI-encrypted passwords that Linux
+REM containers cannot decrypt. Use a separate user-level config for Docker;
+REM create it with --store-password-in-clear-text only outside the repository.
+set "NUGET_CONFIG=%USERPROFILE%\.opencode-docker\nuget"
 set "SSH_DIR=%USERPROFILE%\.ssh"
 set "IMAGE_NAME=my-opencode-dotnet"
 set "WINDOWS_APP_PATH=%CD%"
 
 if not exist "%DOCKER_DATA%" mkdir "%DOCKER_DATA%"
+if not exist "%NUGET_CONFIG%" mkdir "%NUGET_CONFIG%"
 
 REM ----- Copy your login once so you don't have to re-authenticate ----
 if not exist "%DOCKER_DATA%\auth.json" (
@@ -47,6 +51,7 @@ docker run --rm -it ^
     -e "TF_WINDOWS_SSH_USER=%USERNAME%" ^
     -e "TF_WINDOWS_SSH_KEY=/root/.ssh/opencode-docker" ^
     -e "TF_WINDOWS_APP_PATH=%WINDOWS_APP_PATH%" ^
+    -e "TF_OPENCODE_DOCKER=1" ^
     "%IMAGE_NAME%" ^
     opencode
 

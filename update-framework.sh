@@ -465,6 +465,22 @@ if [[ -f opencode.jsonc ]] && grep -qE 'agents/(dev|pm|po|qa|sm|ux-expert)\.md' 
   echo "    opencode.jsonc ($TEMPLATE/opencode.jsonc) or delete those agent entries."
 fi
 
+if [[ -f opencode.jsonc ]] && ! grep -qF '.tfcore/templates/v4custom/build-invocation-ladder.md' opencode.jsonc; then
+  echo ""
+  echo "  ⚠ opencode.jsonc is missing the mandatory build-invocation ladder instruction."
+  echo "    OpenCode Docker may choose direct dotnet/cmd.exe and report false blockers."
+  echo "    Copy the current template's instructions entry from:"
+  echo "    $TEMPLATE/opencode.jsonc"
+fi
+
+if [[ -f opencode.jsonc ]] && ! grep -qF '.tfcore/templates/v4custom/opencode-operating-contract.md' opencode.jsonc; then
+  echo ""
+  echo "  ⚠ opencode.jsonc is missing the OpenCode operating contract instruction."
+  echo "    OpenCode may stop after a green build instead of running smoke + verify + status gates."
+  echo "    Add the current template instruction from:"
+  echo "    $TEMPLATE/opencode.jsonc"
+fi
+
 # --------------------------------------------------------------------------
 # 7. Stale framework refs in YOUR work product — flagged, never auto-edited.
 #    After a layout change, per-project files you own (CLAUDE.md, PROJECT-STATUS,
