@@ -18,7 +18,8 @@ In OpenCode Docker:
 3. Run `winrun "dotnet --info"` before any Windows-head build or run. This is the bridge probe, not a suggestion.
 4. Use container `dotnet build` / `dotnet test` for standard .NET projects.
 5. Use `winrun "dotnet build ..."` / `winrun "dotnet test ..."` for a Windows MAUI Blazor Desktop project or a solution containing one.
-6. Use `/root/.nuget/NuGet/NuGet.Config` for restore. If restore returns `401`, inspect that mounted Docker config and its source credentials; do not switch to a Windows `C:\...` source, add a PAT to the repository, or declare the application broken.
+6. Before any package restore, run `test -s "$NUGET_CONFIG_FILE"` and `dotnet nuget list source --configfile "$NUGET_CONFIG_FILE"`. A missing file is a mount/launcher problem; a missing private URL is a config problem; an HTTP `401` is an authentication problem. If restore returns `401`, inspect that mounted Docker config and its source credentials; do not switch to a Windows `C:\...` source, add a PAT to the repository, or declare the application broken.
+7. For container restore, use `dotnet restore --configfile "$NUGET_CONFIG_FILE"` followed by the build with `--no-restore` when a private feed is involved. Do not let an implicit restore silently select a Windows source.
 
 ## Build-Phase Completion Contract
 

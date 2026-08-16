@@ -204,6 +204,8 @@ TrBlazeUI packages are hosted on **GitHub Packages**. If your project already ha
 
 > The PAT needs the `read:packages` scope. Do not commit tokens to source control.
 
+**OpenCode Docker preflight:** before `dotnet add package`, restore, or declaring TrBlazeUI blocked, run `test -s "$NUGET_CONFIG_FILE"` and `dotnet nuget list source --configfile "$NUGET_CONFIG_FILE"`. The Docker launcher mounts `%USERPROFILE%\.opencode-docker\nuget\NuGet.Config` at `/root/.nuget/NuGet/NuGet.Config`. A missing file, missing GitHub URL, and HTTP `401` are different failures and must be reported separately. Never use a `C:\...` source path in Docker, never install `maui-tizen`, and never declare the package unavailable until the configured source has actually been tested.
+
 ### Step 2: Install Packages
 
 ```bash

@@ -34,6 +34,7 @@ ENV TF_OPENCODE_DOCKER=1
 ENV TF_WINDOWS_SSH_HOST=host.docker.internal
 ENV TF_WINDOWS_SSH_USER=
 ENV TF_WINDOWS_APP_PATH=
+ENV NUGET_CONFIG_FILE=/root/.nuget/NuGet/NuGet.Config
 
 RUN install -d /usr/local/bin && printf '%s\n' \
     '#!/usr/bin/env bash' \

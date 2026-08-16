@@ -52,6 +52,7 @@ docker run --rm -it ^
     -e "TF_WINDOWS_SSH_KEY=/root/.ssh/opencode-docker" ^
     -e "TF_WINDOWS_APP_PATH=%WINDOWS_APP_PATH%" ^
     -e "TF_OPENCODE_DOCKER=1" ^
+    -e "NUGET_CONFIG_FILE=/root/.nuget/NuGet/NuGet.Config" ^
     "%IMAGE_NAME%" ^
     opencode
 
