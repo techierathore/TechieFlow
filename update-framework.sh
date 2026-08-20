@@ -37,6 +37,11 @@
 #   .tfcore/TOKEN-GUIDE.md
 #   .claude/commands/TechieFlow/ subtree (TechieFlow agents + skills)
 #   .opencode/command/ root top-level short-form commands (e.g. /generate-html)
+#   .opencode/plugin/*.js               (guard bridge + telemetry — runs the same
+#                                        .tfcore/hooks/ guards Claude Code runs)
+#   .opencode/opencode.jsonc            (framework config copy; wins over the
+#                                        root opencode.jsonc on conflicting keys;
+#                                        {file:} refs rewritten to ../.tfcore/)
 #   .claude/settings.json               (yolo-except-git; --keep-permissions to skip)
 #   WORKFLOW.html
 #
@@ -59,7 +64,9 @@
 #   .claude/settings.local.json         (per-machine one-off approvals — never touched)
 #   .claude/{trblazeui,techierag}.md    (NuGet-deployed library agents)
 #   .opencode/command/{trblazeui,techierag}.md
-#   opencode.jsonc                      (may have project-specific agents)
+#   opencode.jsonc                      (may have project-specific agents; the
+#                                        framework's keys now arrive via the
+#                                        refreshed .opencode/opencode.jsonc)
 #   .tf-scaffold-note.txt
 #
 # Idempotent: re-running with the same reference repo produces the same result.
@@ -411,9 +418,46 @@ for src in "$TEMPLATE"/.opencode/command/*.md; do
   rsync $RSYNC_FLAGS "$src" ".opencode/command/$f"
 done
 
-# opencode.jsonc preserved (may have project-specific agent block)
+# --------------------------------------------------------------------------
+# 3c. OpenCode harness bridge — FRAMEWORK-OWNED, always refreshed (D-1 fix,
+# DECISIONS.md 2026-08-20). Two pieces:
+#   .opencode/plugin/*.js       guard bridge: runs the same .tfcore/hooks/
+#                               guards Claude Code runs (git ban, status shape,
+#                               Verified ledger) + telemetry with real cost
+#   .opencode/opencode.jsonc    the framework's OpenCode config, a copy of the
+#                               template's opencode.jsonc
+# OpenCode merges .opencode/opencode.jsonc AFTER the root opencode.jsonc, so
+# the framework file WINS on conflicting keys (verified against OpenCode
+# 1.18.18 — DECISIONS.md 2026-08-19 §7). The root file stays preserved below
+# for project-specific additions (extra agents, MCP, LSP). Both paths are
+# inside .opencode/, which the managed .gitignore block already ignores.
+# --------------------------------------------------------------------------
+[[ $DRY_RUN -eq 1 ]] || mkdir -p .opencode/plugin
+for src in "$TEMPLATE"/.opencode/plugin/*.js; do
+  [[ -f "$src" ]] || continue
+  f="$(basename "$src")"
+  echo "  .opencode/plugin/$f — framework-owned, refreshed"
+  rsync $RSYNC_FLAGS "$src" ".opencode/plugin/$f" || true
+done
+echo "  .opencode/opencode.jsonc — framework-owned, refreshed (wins over root opencode.jsonc on conflicting keys)"
+# {file:...} refs resolve relative to the CONFIG FILE's directory, so the
+# template's ./.tfcore/ paths must become ../.tfcore/ when the copy lives in
+# .opencode/ (verified: a bad ref hard-fails the whole config load).
+[[ $DRY_RUN -eq 1 ]] || sed 's|{file:\./\.tfcore/|{file:../.tfcore/|g' "$TEMPLATE/opencode.jsonc" > ".opencode/opencode.jsonc"
+
+# Root opencode.jsonc preserved (project-specific agents/MCP/LSP; every
+# framework key now also arrives via .opencode/opencode.jsonc, which wins).
+# Warn when it still carries the pre-2026-08-20 bare agent-level
+# "bash": "allow" — under OpenCode's last-match-wins permission evaluation
+# that shape voided the root git/gh denies for the agent (DECISIONS.md
+# 2026-08-20 §2). The refreshed .opencode/opencode.jsonc re-arms the denies.
 if [[ -f opencode.jsonc ]]; then
-  echo "  opencode.jsonc — preserved (per-project)"
+  echo "  opencode.jsonc — preserved (per-project; framework config refreshed at .opencode/opencode.jsonc)"
+  if tr -d ' \t\r\n' < opencode.jsonc | grep -q '"bash":"allow"'; then
+    echo "  ⚠ root opencode.jsonc has a bare agent-level \"bash\": \"allow\" — that shape voided the"
+    echo "    git/gh denies for the agent. The refreshed .opencode/opencode.jsonc re-arms them;"
+    echo "    delete the stale agent block from the root file when convenient."
+  fi
 fi
 
 # Library agents under .opencode/command/ root preserved

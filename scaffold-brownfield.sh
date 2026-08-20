@@ -121,6 +121,20 @@ rsync -a \
 [[ -f WORKFLOW.html ]]  || cp "$TEMPLATE/WORKFLOW.html"  .
 [[ -f opencode.jsonc ]] || cp "$TEMPLATE/opencode.jsonc" .
 
+# 4b. OpenCode harness bridge — framework-owned, ALWAYS refreshed (like 3b):
+# the guard-bridge plugin (runs the same .tfcore/hooks/ guards Claude Code
+# runs) and the framework's config copy. OpenCode merges .opencode/opencode.jsonc
+# AFTER the root file, so the framework copy wins on conflicting keys
+# (DECISIONS.md 2026-08-20).
+mkdir -p .opencode/plugin
+for src in "$TEMPLATE"/.opencode/plugin/*.js; do
+  [[ -f "$src" ]] || continue
+  cp "$src" .opencode/plugin/
+done
+# {file:...} refs resolve relative to the config file's directory — rewrite
+# ./.tfcore/ to ../.tfcore/ for the copy living inside .opencode/.
+sed 's|{file:\./\.tfcore/|{file:../.tfcore/|g' "$TEMPLATE/opencode.jsonc" > .opencode/opencode.jsonc
+
 # 5. .claude/settings.json — yolo-except-git, only if missing
 if [[ ! -f .claude/settings.json ]]; then
   cat > .claude/settings.json <<'JSON'
