@@ -998,166 +998,39 @@ The framework never *requires* MAUI — many apps are Blazor-only and build with
 
 ## 17. Development telemetry — what the framework measures about itself
 
-TechieFlow already produced this evidence and used to throw it away. Every `*verify` run applies four separately-named gates to individually-identified requirements and writes verdicts into the Requirements Status table; `docs/.last-verify.json` recorded the run. Then the next run overwrote it, the table was mutated in place, and the history was gone. Telemetry keeps it.
+> **Full guide with annotated example records, the report walkthrough, and the FAQ:**
+> **[docs/TechieFlow-Telemetry-Guide.md](docs/TechieFlow-Telemetry-Guide.md)** (open `docs/TechieFlow-Telemetry-Guide.html` in a browser for the rendered version).
+> Field-by-field contract: `.tfcore/telemetry/SCHEMA.md`.
 
-**Three questions, and nothing else:**
+The framework keeps append-only JSONL streams under `docs/metrics/` (tracked in git) to answer three questions: **first-pass rate** (how often a REQ passes verification on attempt 1), **gate catch distribution** (which gate catches the failures), and **escape rate** (what gets past every gate to a human). Four streams:
 
-1. **First-pass rate** — what fraction of REQs reach `Verified` on attempt 1?
-2. **Gate catch distribution** — of all failures, which gate caught them?
-3. **Escape rate** — what fraction of defects reached UAT/production (logged by `*triage-issues`) instead of being caught by a gate?
+| Stream | One record per… | Written by |
+|---|---|---|
+| `runs.jsonl` | framework command run — since 2026-08-20 with **model, tier, tokens and (OpenCode) real cost** | each phase task at its status gate |
+| `gates.jsonl` | REQ verdict per verify run (the primary stream) | `verify-phase` / `triage-issues` |
+| `sessions.jsonl` | agent session token totals | Claude `SessionEnd` hook · OpenCode guard-bridge plugin (real cost) |
+| `commits.jsonl` | git commit | YOUR own `pre-commit` hook — agents never run git |
 
-There is deliberately **no cycle-time-per-feature**. The unit of work here is *the run*, not the ticket.
+Read the results with `*metrics {App}` → `docs/metrics/METRICS.md` + `.html`. The standing rules: **provenance never merges** (live vs backfilled, app vs library, dollars across harnesses), **privacy** (ids/counts/paths at most — never requirement text, prompt text, or commit subjects), **telemetry has no veto** (every writer exits 0 unconditionally; a bug drops a record, never breaks a session), **agents never write what they can't know** (harness detected, attempts computed, tokens read from the harness's own store).
 
-### Where it lands
+## 17b. Model routing — run cheap phases on cheap models
 
-Four append-only JSONL streams in `docs/metrics/`, **tracked by version control on purpose** — this is the project's own development history, and the one thing the framework cannot reconstruct afterwards.
+> **Full guide with the complete phase + persona/subagent tables, per-tier change recipes, the TUI walkthrough, and troubleshooting:**
+> **[docs/TechieFlow-Routing-Guide.md](docs/TechieFlow-Routing-Guide.md)** (open `docs/TechieFlow-Routing-Guide.html` in a browser for the rendered version).
+> Design rationale: `docs/Adapter-Design.md §5`.
 
-| File | One record per | Written by |
-| --- | --- | --- |
-| `runs.jsonl` | framework command run | each phase task, at completion (the status gate is the trigger) |
-| `gates.jsonl` | REQ verdict per verify run — **the primary stream** | `verify-phase` §6a, and `triage-issues` for escapes |
-| `sessions.jsonl` | agent session | the `SessionEnd` hook (`.tfcore/hooks/metrics-session.sh`) |
-| `commits.jsonl` | commit | your own `pre-commit` hook — never an agent |
+Each phase and subagent gets a **tier** — `frontier` (day-1, BRD work, fix-issues diagnosis), `standard` (build, verify, the builder subagents), `economy` (renders, reports, status) — and each tier maps to a real model per harness (Claude `opus`/`sonnet`/`haiku`; OpenCode `provider/model` ids). OFF by default, per-app, fully reversible, **observed never enforced** (drift shows as `routed:false` in the telemetry, nothing blocks). Measured example: a full `metrics-report` phase on economy cost **$0.036**.
 
-Schema, enums and every known limitation: `.tfcore/telemetry/SCHEMA.md`. Doctrine for agents: `.tfcore/tasks/_metrics-emit-gate.md`.
-
-### Setup — there isn't one
-
-Telemetry rides the normal framework refresh. There is **no separate install command**:
-
-**on WSL/Linux:**
+One script does everything (edits `routing.yaml`, regenerates all bindings — you never touch a generated file):
 
 ```bash
-/mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/YourApp
+bash .tfcore/utils/tf-routing.sh status    # the live tier/model/phase table (read-only)
+bash .tfcore/utils/tf-routing.sh on        # enable;  'off' disables and removes all generated files
+bash .tfcore/utils/tf-routing.sh set-tier  verify-phase economy
+bash .tfcore/utils/tf-routing.sh set-model economy opencode opencode-go/deepseek-v4-flash
 ```
 
-**on macOS:**
-
-```bash
-/Volumes/MacD/MyCode/TechieFlow/update-framework.sh /path/to/YourApp
-```
-
-That one command creates `docs/metrics/`, seeds the four streams, installs the `pre-commit` hook, and warns if an ignore rule would swallow the data. The scaffolds do the same on a fresh project. It is idempotent, so every later refresh keeps it current.
-
-**project_type is auto-detected once** (a packable `.csproj` → `library`; `.razor`/`.xaml` present → `app`; no source → `docs`; this repo → `framework`), printed loudly, written to `core-config.yaml`, and then never guessed again — `core-config.yaml` is a preserved file, so your classification survives every refresh. Correct a wrong guess with:
-
-```bash
-.tfcore/telemetry/install-metrics.sh . --type app|library|docs|framework
-```
-
-**Nothing here invokes git.** The hooks directory is found by reading the filesystem — installing a hook is a file copy, not a git operation — so `block-git.sh` is untouched and no permission prompt appears, whoever runs the refresh.
-
-### Updating the metrics — you don't
-
-There is no "update metrics" step. The streams fill themselves as you work: every `*build-phase`, `*verify all`, `*fix-issues`, `*triage-issues`, `*handoff-phase` and day-1 run appends its own record as its last action, the `SessionEnd` hook adds a session, and your own commits add themselves. If you never think about telemetry again, it still accumulates.
-
-The only thing that needs doing per repo is the framework refresh you already run:
-
-```bash
-/mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/YourApp
-```
-
-### Viewing the metrics — two ways
-
-**1. Quick look, in the terminal.** No agent, no tokens, read-only — run it from inside the app repo:
-
-```bash
-cd /path/to/YourApp
-.tfcore/telemetry/tf-metrics.sh --report .
-```
-
-Prints first-pass rate, gate catch distribution, escape rate, rework ratio, batch size, throughput and commit cadence — already segmented, with `insufficient data` wherever there are fewer than three supporting records.
-
-**2. The full report, as a document.** Ask flow-master; it writes `docs/metrics/METRICS.md` and renders `docs/metrics/METRICS.html` (open that in a browser — it uses the same themed shell as your other docs):
-
-**Claude Code:**
-
-```
-/TechieFlow:agents:flow-master *metrics YourApp
-```
-
-**OpenCode:**
-
-```
-/flow-master *metrics YourApp
-```
-
-### Across several projects at once
-
-```bash
-.tfcore/telemetry/tf-metrics.sh --rollup . /path/to/OtherApp /path/to/Third
-```
-
-Still segmented — `app` and `library` repos are reported side by side, never averaged together. Or hand the same paths to the command: `*metrics YourApp /path/to/OtherApp`.
-
-### Seeding history from what you already have (optional, once per repo)
-
-Your repos have years of history the streams know nothing about. Two backfills can import some of it. **Both are yours to run, never an agent's** — and always preview with `--dry-run` first:
-
-```bash
-cd /path/to/YourApp
-.tfcore/telemetry/tf-metrics.sh --backfill-commits . --dry-run
-.tfcore/telemetry/tf-metrics.sh --backfill-commits .
-```
-
-**Commit backfill is trustworthy.** It walks the commit log, which is itself an append-only log, so reconstructed commits are exactly as good as live ones and are reported together with them. This is also the reason the `pre-commit` hook is optional.
-
-```bash
-.tfcore/telemetry/tf-metrics.sh --backfill-gates . --dry-run
-```
-
-**Gate backfill is context, not evidence.** It reads each REQ's current row in `<APP>-Checklist.md` plus any dated remarks. But that table is a snapshot that gets overwritten in place, not a log — a REQ that failed three times and then passed looks identical to one that passed first try. Every record it writes is stamped `backfilled: true` with an `inferred` list, is reported in its own separate column, and **can never support a published first-pass rate**. Useful for volume and shape; not for a number you would defend.
-
-### If a project is classified wrong
-
-The refresh auto-detects `project_type` once and prints what it chose. If it guessed wrong — the giveaway is a library reported as though the visual gate could fire on it — correct it and it stays corrected:
-
-```bash
-.tfcore/telemetry/install-metrics.sh . --type app|library|docs|framework
-```
-
-### What to expect early on
-
-The streams start empty, and the report refuses to invent numbers from thin data — you will see `insufficient data (n=…)` on most rows until roughly three verify runs have happened. That is the report working, not a fault. The first genuinely interesting reading usually comes after a build → verify → fix cycle or two.
-
-**An empty stream file is by design, not a bug.** `install-metrics.sh` seeds all four so every repo has the same shape and no writer has to guess whether its stream exists — then each fills only when its event actually occurs: `gates.jsonl` on the first `*verify`, `runs.jsonl` on the first framework command, `sessions.jsonl` when the first agent session ends, and **`commits.jsonl` on your first commit after telemetry was installed**. Commit the empty files with everything else: a tracked empty stream makes the first real record a one-line diff instead of a file appearing from nowhere.
-
-### Working across several machines
-
-The streams are files in the repo, so they travel with `push`/`pull` like everything else. Two rules make that painless, and both are set up for you by the refresh:
-
-- **`merge=union` on `docs/metrics/*.jsonl`** (`.gitattributes`). Two machines appending to the same log would otherwise conflict on nearly every sync, and hand-resolving a conflict in an append-only log is precisely how records get silently dropped. Union merge keeps **both** sides' lines. The price is that a record can end up duplicated or out of chronological order — every consumer sorts on `ts`, and commit records de-duplicate on `sha`, so it costs you nothing.
-- **`eol=lf`** on the same paths (and repo-wide, with `*.bat`/`*.cmd` pinned back to CRLF). Without it, Git for Windows checks these files out as CRLF, which mixes line endings inside a machine-appended log and is what produces GitHub Desktop's *"This file uses 'LF' line endings, but Git is configured to convert them to 'CRLF' the next time the file is checked out."*
-
-**`commits.jsonl` collects itself.** The `pre-commit` hook *reconciles* rather than appends: it writes a record for every commit reachable from `HEAD` that the file doesn't already have, then stages that one file so the records ship inside the commit. Pull the other machine's work, commit here, and its history is recorded too — `git log` is already an append-only log that push and pull replicate everywhere, and this stream is just a projection of it. Nothing to gather by hand.
-
-The one thing that does **not** travel is the hook itself: `.git/hooks/` is not part of the repository, so each clone needs its own. `update-framework.sh <repo>` installs it, and `tf-metrics.sh --report` warns when the clone you're standing in has none. To fill a machine's history immediately instead of waiting for the next commit: `tf-metrics.sh --backfill-commits .` — idempotent, so run it whenever you like.
-
-**"Won't I lose the last, unpushed line when I pull elsewhere?"** No — that line *describes* a commit, and the commit is pushed. The other machine pulls it, sees it in `git log`, finds it missing from the file, and writes it. A brand-new machine is the same case at full scale: one reconcile reproduces the entire history. The log is what git already replicates, so the log is the only thing that has to survive.
-
-The flip side is handled too: the original machine also recorded that commit, so once both versions land, union merge keeps the same `sha` twice. That's the deliberate trade — union merge guarantees nothing is *dropped*, and `tf-metrics.sh` de-duplicates commits on `sha` at read time (and says how many it collapsed) so nothing is *double-counted*.
-
-| You want to… | Run |
-| --- | --- |
-| Turn telemetry on for a repo | `update-framework.sh /path/to/YourApp` (nothing else) |
-| Glance at the numbers now | `.tfcore/telemetry/tf-metrics.sh --report .` |
-| Produce the readable report | `*metrics YourApp` → `docs/metrics/METRICS.html` |
-| Compare several projects | `tf-metrics.sh --rollup . /path/to/OtherApp` |
-| Import / reconcile commit history | `tf-metrics.sh --backfill-commits .` |
-| Import checklist history | `tf-metrics.sh --backfill-gates .` (context only) |
-| Fix a wrong classification | `install-metrics.sh . --type library` |
-
-**Why some figures are never combined.** The report will not print a single first-pass rate, gate catch distribution, or escape rate that pools *live* with *backfilled* records, or pools `app` with `library`/`docs` — not as a total row, not as an "overall" line. A backfilled attempt count is inferred from a status table that never recorded attempts, so a merged first-pass rate cannot be defended when someone asks how attempts were counted. A pooled gate distribution understates the visual gate, because library and docs projects never had screens to fail on. One indefensible figure contaminates every other number on the page. Commit-derived metrics are exempt — the commit log is a real append-only log, and commit volume is comparable across project types.
-
-**The one-commit lag, and what the hook costs.** At `pre-commit` time HEAD is still the *previous* commit, so the record for the commit you're making ships inside the *next* one. Metrics lag reality by a commit, and that's unavoidable in either direction — a record of commit N can't predate N. What changed on 2026-08-11 is that it's *committed* rather than left *pending*: the original `post-commit` design wrote after the commit was sealed, which left `commits.jsonl` permanently dirty with no reachable clean state (committing the pending line creates a commit whose record is then pending), and blocked `git pull` whenever that file had also changed upstream.
-
-The price is stated plainly rather than buried: **the hook stages one file into your commit.** Exactly one path — `docs/metrics/commits.jsonl` — never a directory, never `-A`, so it can't pull source changes in. On a partial commit (`git commit -- <paths>`) it writes the record but does **not** stage. And it can never fail your commit: a pre-commit hook exiting non-zero would abort it, so every path exits 0 — telemetry keeps its no-veto property. Agents are still not involved: this is your own `git commit`, the only script containing version-control commands (`.tfcore/telemetry/tf-metrics.sh`) is owner-run, and `block-git.sh` is untouched.
-
-If your own `pre-commit` hook already exists, the installer leaves it alone and tells you — add `bash .tfcore/telemetry/pre-commit` to it if you want both.
-
-**Privacy — assume every record could become public.** Records carry IDs, counts, durations, verdicts and file paths *at most*. Never requirement text, prompt text, file contents, or commit subjects — only a commit's conventional-commit prefix (`feat`/`fix`/…) is kept, and the subject is discarded on the spot. `failure_class` is a closed vocabulary for exactly this reason. This framework is used on employer projects, and these files are append-only: a leaked field is not something you fix later.
-
-**Telemetry has no veto.** No metrics write can fail a build, block a tool call, abort a phase, or print an error. `tf-emit.sh` exits 0 unconditionally — missing directory, malformed JSON, absent `python3`, full disk — and the event is simply dropped. Same fail-open posture as the `guard-status` / `guard-verify` hooks. A telemetry bug must never cost you a working session.
+**The one thing everyone asks:** opening the TUI after enabling looks *unchanged* — deliberately. Your normal chat (default agent) is never routed; routing shows when you run a `/techieflow:tasks:*` command (footer shows the tier model), Tab to a persona, or read `runs.jsonl`. And (verified): in the OpenCode TUI a routed command's model **sticks** for the session afterwards — re-pick your model if you keep chatting; on Claude a `/tf:<phase>` wrapper's model lasts exactly one turn.
 
 ## 18. Team edition — the AI-First Playbook
 

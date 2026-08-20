@@ -138,6 +138,7 @@
     <li><a href="#faq">FAQ &amp; gotchas</a></li>
     <li><a href="#platforms">Running on macOS / Windows / Linux</a></li>
     <li><a href="#telemetry">Development telemetry</a></li>
+    <li><a href="#model-routing">Model routing (per-phase tiers)</a></li>
     <li><a href="#team-edition">Team edition — the AI-First Playbook</a></li>
   </ol>
 </nav>
@@ -1541,6 +1542,8 @@ The <code>winrun</code> bridge and <code>cmd.exe</code> rungs simply don't apply
 
 <h2 id="telemetry">17. Development telemetry — what the framework measures about itself<span class="anchor-link"><a href="#telemetry">#</a></span></h2>
 
+<div class="panel ok"><strong>Full guide</strong> — annotated example records for every stream, the report walkthrough, how model/tokens/cost land on run records, and the FAQ: <code>docs/TechieFlow-Telemetry-Guide.md</code> (+ rendered <code>.html</code>) <em>in the TechieFlow framework repo</em>. Field-by-field contract: <code>.tfcore/telemetry/SCHEMA.md</code> (deployed in this app).</div>
+
 <p>TechieFlow already produced this evidence and used to throw it away. Every <code>*verify</code> run applies four separately-named gates to individually-identified requirements and writes verdicts into the Requirements Status table; <code>docs/.last-verify.json</code> recorded the run. Then the next run overwrote it, the table was mutated in place, and the history was gone. Telemetry keeps it.</p>
 
 <p><strong>Three questions, and nothing else:</strong></p>
@@ -1676,6 +1679,59 @@ The <code>winrun</code> bridge and <code>cmd.exe</code> rungs simply don't apply
 <div class="panel"><strong>Privacy — assume every record could become public.</strong> Records carry IDs, counts, durations, verdicts and file paths <em>at most</em>. Never requirement text, prompt text, file contents, or commit subjects — only a commit's conventional-commit prefix (<code>feat</code>/<code>fix</code>/…) is kept, and the subject is discarded on the spot. <code>failure_class</code> is a closed vocabulary for exactly this reason. This framework is used on employer projects, and these files are append-only: a leaked field is not something you fix later.</div>
 
 <div class="panel"><strong>Telemetry has no veto.</strong> No metrics write can fail a build, block a tool call, abort a phase, or print an error. <code>tf-emit.sh</code> exits 0 unconditionally — missing directory, malformed JSON, absent <code>python3</code>, full disk — and the event is simply dropped. Same fail-open posture as the <code>guard-status</code> / <code>guard-verify</code> hooks. A telemetry bug must never cost you a working session.</div>
+
+<h2 id="model-routing">17b. Model routing — run cheap phases on cheap models<span class="anchor-link"><a href="#model-routing">#</a></span></h2>
+
+<div class="panel ok"><strong>Full guide</strong> — the complete phase AND persona/subagent tier tables, per-tier change recipes with examples, the TUI walkthrough, what gets generated under the hood, and troubleshooting: <code>docs/TechieFlow-Routing-Guide.md</code> (+ rendered <code>.html</code>) <em>in the TechieFlow framework repo</em>.</div>
+
+<p><strong>What it is, in one example.</strong> Without routing, day-1 architecture and re-rendering HTML cost the same per token. With routing ON, each phase gets a <strong>tier</strong>, each tier maps to a real model:</p>
+
+<table>
+<tr><th>Tier</th><th>Meant for</th><th>Claude</th><th>OpenCode (defaults — yours to change)</th></tr>
+<tr><td><code>frontier</code></td><td>expensive thinking: day-1, author-brd, amend-docs, fix-issues</td><td><code>opus</code></td><td><code>opencode-go/kimi-k3</code></td></tr>
+<tr><td><code>standard</code></td><td>everyday building: build, verify, mockups, split-brd, triage, devguide + builder subagents</td><td><code>sonnet</code></td><td><code>opencode-go/kimi-k2.7-code</code></td></tr>
+<tr><td><code>economy</code></td><td>mechanical: metrics, renders, refresh-status, productguide, handoff</td><td><code>haiku</code></td><td><code>opencode-go/deepseek-v4-flash</code></td></tr>
+</table>
+
+<p>Measured example (TechieBlog pilot): a complete <code>metrics-report</code> phase on economy — 14k output tokens, full report — cost <strong>$0.036</strong>. Builders stay on <code>standard</code> deliberately: a cheap builder that ships a blank table costs an entire verify-and-fix cycle.</p>
+
+<h3>Turn it on / off — one command</h3>
+<pre><code class="lang-bash">cd /path/to/YourApp
+bash .tfcore/utils/tf-routing.sh status     # read-only: the live tier/model/phase table
+bash .tfcore/utils/tf-routing.sh on         # enable — generates ~23 binding files
+bash .tfcore/utils/tf-routing.sh off        # disable — removes exactly those files</code></pre>
+
+<div class="panel warn"><strong>IMPORTANT — what you will (and won't) see in the TUI.</strong> Opening OpenCode looks <em>exactly the same as before</em>. That is deliberate: your normal chat runs on the default <code>build</code> agent, and routing never touches it — your conversation stays on the model YOU picked. Routing becomes visible in three places only: <strong>(1)</strong> run a phase command — <code>/techieflow:tasks:metrics-report YourApp</code> executes on the tier model and the footer shows it; <strong>(2)</strong> press <strong>Tab</strong> to a persona (<code>flow-master</code>, <code>flow-verifier</code>, …) — each carries its bound model; <strong>(3)</strong> the telemetry — every run lands in <code>docs/metrics/runs.jsonl</code> with declared tier, observed model, <code>routed: true/false</code>, tokens and (OpenCode) real cost.</div>
+
+<div class="panel warn"><strong>Verified gotcha:</strong> after a routed command, that TUI session <em>stays on the phase's model</em> — it does not bounce back. Pick your model from the model list or start a new session if you keep chatting. Claude Code is the mirror image: a <code>/tf:&lt;phase&gt;</code> wrapper's model lasts exactly one turn, then reverts automatically.</div>
+
+<h3>A concrete first run (safe even mid-UAT)</h3>
+<p><code>metrics-report</code> reads the telemetry streams and writes only <code>docs/metrics/METRICS.md</code> + <code>.html</code> — no code, no status, no checklist:</p>
+<pre><code>1. bash .tfcore/utils/tf-routing.sh on
+2. opencode
+3. /techieflow:tasks:metrics-report YourApp
+4. watch the footer: it runs on deepseek-v4-flash, not your chat model
+5. tail -1 docs/metrics/sessions.jsonl   →  "model":"opencode-go/deepseek-v4-flash","cost_usd":0.03…</code></pre>
+
+<h3>Changing the map — one command per change</h3>
+<pre><code class="lang-bash">bash .tfcore/utils/tf-routing.sh set-tier  mockups   frontier      # promote a phase
+bash .tfcore/utils/tf-routing.sh set-tier  verify-phase economy    # demote a phase
+bash .tfcore/utils/tf-routing.sh set-model standard opencode opencode-go/qwen3.7-max
+bash .tfcore/utils/tf-routing.sh set-model economy  claude   haiku
+bash .tfcore/utils/tf-routing.sh bind      # re-apply after hand-editing routing.yaml</code></pre>
+<p>Claude takes <code>opus</code>/<code>sonnet</code>/<code>haiku</code> (or a full id); OpenCode takes <code>provider/model</code> — list yours with <code>opencode models</code>.</p>
+
+<h3>Reading the results</h3>
+<p>Each run's record shows declared vs observed: <code>"tier":"standard", "model":"opencode-go/kimi-k2.7-code", "routed":true, "tokens_out":42310, "cost_usd":0.41</code>. The deciding question after a couple of weeks: <strong>does the rework ratio rise on cheaper tiers?</strong> If standard builders hold the first-pass rate, demote more; if <code>mode:"fix"</code> re-entries climb, promote. Data corrects the map, not opinion.</p>
+
+<h3>FAQ</h3>
+<ul>
+  <li><strong>"I turned it on and the TUI looks the same."</strong> Expected — see the IMPORTANT panel. Run a phase command or Tab to a persona.</li>
+  <li><strong>"How do I make my normal chat cheaper too?"</strong> Not routing's job — pick a cheaper model in the TUI model list, or set <code>"model"</code> in <code>~/.config/opencode/opencode.jsonc</code>.</li>
+  <li><strong>"status says flag and bindings disagree."</strong> <code>bash .tfcore/utils/tf-routing.sh bind</code>.</li>
+  <li><strong>"Does update-framework.sh wipe my routing?"</strong> No — <code>routing.yaml</code> is preserved forever; refreshes re-generate your bindings from YOUR map (verified in the pilot).</li>
+  <li><strong>"What gets generated?"</strong> OpenCode: <code>.opencode/opencode.json</code>. Claude: <code>.claude/commands/tf/*.md</code> + <code>.claude/agents/tf-*.md</code>. All gitignored, manifest-tracked, fully removed by <code>off</code>.</li>
+</ul>
 
 <h2 id="team-edition">18. Team edition — the AI-First Playbook<span class="anchor-link"><a href="#team-edition">#</a></span></h2>
 

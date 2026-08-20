@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TechieFlow Model Routing Guide — TechieFlow</title>
+<script>
+(function(){
+  try{
+    var t = localStorage.getItem('tf-theme');
+    if(t!=='light' && t!=='dark'){ var h = new Date().getHours(); t = (h>=7 && h<19) ? 'light' : 'dark'; }
+    document.documentElement.setAttribute('data-theme', t);
+  }catch(e){ document.documentElement.setAttribute('data-theme','light'); }
+})();
+</script>
+<style>/* LIGHT is the default theme — a warm off-white, easy on the eyes (never bright white). */
+:root{
+  --bg:#f4f1e9; --panel:#efe9db; --panel2:#e7e0cd; --line:#d8cfb6;
+  --ink:#2e2a22; --muted:#6f6857; --accent:#2f6f9f; --accent2:#3f7d54;
+  --warn:#9a6b15; --danger:#b03a52; --ok:#3f7d54;
+  --code-bg:#ece5d3; --code-ink:#332f26; --row-alt:#eae2cf;
+  --h3:#3a352b; --h4:#2f6f9f; --quote:#4a4537; --cta-bg:#e6eef5;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+/* DARK — softened near-black (warmer / less harsh than pure #0f1115). */
+html[data-theme="dark"]{
+  --bg:#11141a; --panel:#171b23; --panel2:#1e2430; --line:#2b3240;
+  --ink:#dfe3ea; --muted:#99a2b1; --accent:#7cc4ff; --accent2:#a6e3a1;
+  --warn:#f9c74f; --danger:#f38ba8; --ok:#a6e3a1;
+  --code-bg:#0c1016; --code-ink:#d8dde8; --row-alt:#141821;
+  --h3:#cfd5e3; --h4:#7cc4ff; --quote:#cfd5e3; --cta-bg:#0d2030;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:13px;background:var(--code-bg);color:var(--code-ink);padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
+pre{font-family:var(--mono);font-size:12.5px;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto;color:var(--code-ink);position:relative}
+pre code{background:none;border:none;padding:0}
+.copy{position:absolute;top:8px;right:8px;background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:11px;font-family:var(--sans);cursor:pointer}
+.copy:hover{color:var(--accent);border-color:var(--accent)}
+/* floating light/dark toggle (top-right) */
+.theme-toggle{position:fixed;top:12px;right:14px;z-index:10000;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:12.5px;font-family:var(--sans);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.theme-toggle:hover{color:var(--accent);border-color:var(--accent)}
+
+.layout{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+.layout.no-toc{grid-template-columns:1fr}
+nav.side{position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--line);background:var(--panel);padding:18px 14px}
+nav.side h1{font-size:14px;margin:0 0 4px;letter-spacing:.5px;color:var(--ink)}
+nav.side .sub{font-size:11.5px;color:var(--muted);margin-bottom:14px}
+nav.side ol,nav.side ul{list-style:none;padding:0;margin:0}
+nav.side li{font-size:13px;margin:2px 0}
+nav.side li a{display:block;padding:5px 8px;color:var(--ink);border-radius:6px}
+nav.side li a:hover{background:var(--panel2);text-decoration:none}
+nav.side li.h3 a{padding-left:22px;font-size:12.5px;color:var(--h3)}
+nav.side .group{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin:14px 8px 4px}
+
+main{padding:28px 40px 80px;max-width:1100px}
+.layout.no-toc main{margin:0 auto}
+
+h1{font-size:28px;margin:0 0 6px}
+h2{font-size:22px;margin:32px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);scroll-margin-top:16px}
+h3{font-size:17px;margin:22px 0 6px;color:var(--h3);scroll-margin-top:16px}
+h4{font-size:14px;margin:14px 0 4px;color:var(--h4);scroll-margin-top:16px}
+.subtitle{color:var(--muted);font-size:14px;margin-top:-4px;margin-bottom:18px}
+p{margin:6px 0 10px}
+blockquote{border-left:3px solid var(--accent);background:var(--panel);margin:8px 0;padding:8px 14px;color:var(--quote)}
+ul,ol{padding-left:22px}
+li{margin:2px 0}
+
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);color:var(--h3);font-weight:600}
+tr:nth-child(even) td{background:var(--row-alt)}
+
+hr{border:none;border-top:1px solid var(--line);margin:24px 0}
+.anchor-link{color:var(--muted);font-weight:400;font-size:0.85em;margin-left:8px;opacity:0;transition:opacity .15s;text-decoration:none}
+h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
+
+/* inline TOC at top of main content */
+.toc-inline{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 16px;margin:14px 0 24px}
+.toc-inline > div{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.toc-inline ol,.toc-inline ul{margin:4px 0;padding-left:18px}
+.toc-inline li{font-size:13px;margin:1px 0}
+.toc-inline a{color:var(--h3)}
+
+/* mermaid diagram wrapper + toolbar */
+.diagram{position:relative;border:1px solid var(--line);border-radius:8px;background:var(--code-bg);margin:14px 0;overflow:hidden}
+.diagram .mermaid{padding:14px;margin:0;background:transparent;border:none;overflow:auto}
+.diagram .dt{display:flex;gap:6px;justify-content:flex-end;padding:6px 8px;background:var(--row-alt);border-bottom:1px solid var(--line)}
+.diagram .dt button{background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 10px;font-size:12px;font-family:var(--sans);cursor:pointer;min-width:30px}
+.diagram .dt button:hover{color:var(--accent);border-color:var(--accent)}
+.diagram .dt .zlabel{padding:3px 6px;font-size:11px;color:var(--muted);font-family:var(--mono);align-self:center}
+.diagram.fs{position:fixed;inset:0;z-index:9999;border-radius:0;border:none}
+.diagram.fs .mermaid{height:calc(100vh - 40px);display:flex;align-items:center;justify-content:center}
+
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.side{position:static;height:auto}}</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" title="Toggle light / dark">☾ Dark</button>
+<div class="layout">
+<nav class="side"><h1>TechieFlow Model Routing Guide</h1><div class="sub">Last rendered: 2026-08-20</div><div class="group">Contents</div><ol><li><a href="#the-problem-routing-solves">1. The problem routing solves</a></li>
+<li><a href="#the-three-tiers">2. The three tiers</a></li>
+<li><a href="#the-complete-map-what-runs-on-what">3. The complete map — what runs on what</a></li>
+<li class="h3"><a href="#phases-the-commands-you-type">3.1 Phases (the commands you type)</a></li>
+<li class="h3"><a href="#personas-and-subagents-the-agents-that-do-the-work">3.2 Personas and subagents (the agents that do the work)</a></li>
+<li><a href="#turning-it-on-and-off">4. Turning it on and off</a></li>
+<li><a href="#what-you-will-and-won-t-see-in-the-tui">5. What you will — and won't — see in the TUI</a></li>
+<li><a href="#changing-the-map-every-case-with-examples">6. Changing the map — every case, with examples</a></li>
+<li class="h3"><a href="#moving-a-phase-between-tiers">6.1 Moving a phase between tiers</a></li>
+<li class="h3"><a href="#moving-a-subagent-between-tiers">6.2 Moving a subagent between tiers</a></li>
+<li class="h3"><a href="#changing-which-model-a-tier-means-per-tier-per-harness">6.3 Changing which model a tier means — per tier, per harness</a></li>
+<li class="h3"><a href="#editing-routing-yaml-by-hand">6.4 Editing routing.yaml by hand</a></li>
+<li><a href="#under-the-hood-what-actually-gets-generated">7. Under the hood — what actually gets generated</a></li>
+<li><a href="#reading-the-results-the-tuning-loop">8. Reading the results — the tuning loop</a></li>
+<li><a href="#troubleshooting">9. Troubleshooting</a></li></ol></nav><main>
+<h1>TechieFlow Model Routing Guide</h1>
+<div class="subtitle">Run cheap phases on cheap models — the owner&#x27;s guide to per-phase model tiers</div>
+<div class="toc-inline"><div>Contents</div><ol><li><a href="#the-problem-routing-solves">1. The problem routing solves</a></li>
+<li><a href="#the-three-tiers">2. The three tiers</a></li>
+<li><a href="#the-complete-map-what-runs-on-what">3. The complete map — what runs on what</a></li>
+<li><a href="#turning-it-on-and-off">4. Turning it on and off</a></li>
+<li><a href="#what-you-will-and-won-t-see-in-the-tui">5. What you will — and won't — see in the TUI</a></li>
+<li><a href="#changing-the-map-every-case-with-examples">6. Changing the map — every case, with examples</a></li>
+<li><a href="#under-the-hood-what-actually-gets-generated">7. Under the hood — what actually gets generated</a></li>
+<li><a href="#reading-the-results-the-tuning-loop">8. Reading the results — the tuning loop</a></li>
+<li><a href="#troubleshooting">9. Troubleshooting</a></li></ol></div>
+<p><strong>Audience:</strong> the framework owner. <strong>TL;DR:</strong> run cheap phases on cheap models, expensive thinking on expensive models — one script controls everything. <strong>Design doc:</strong> <code>docs/Adapter-Design.md §5</code> (the reasoning) · <strong>quick summary:</strong> README §17b / WORKFLOW.html §17b.</p>
+<h2 id="the-problem-routing-solves">1. The problem routing solves<a class="anchor-link" href="#the-problem-routing-solves">#</a></h2>
+<p>Every TechieFlow phase used to run on whatever model your session happened to be using. Day-1 architecture — where a wrong decision costs days of rework — and re-rendering markdown to HTML — pure mechanics — cost exactly the same per token. Over a project's life the mechanical phases (renders, status refreshes, reports) plus the bulk token spend of builder subagents dominate the bill, while the genuinely hard thinking is a handful of runs.</p>
+<p>Routing assigns every phase and every subagent a <strong>tier</strong>, and maps each tier to a real model per harness. It is:</p>
+<ul><li><strong>OFF by default</strong> — a freshly scaffolded or updated app changes nothing until you turn it on.</li><li><strong>Per-app</strong> — enable it on one project, leave the others alone.</li><li><strong>Reversible</strong> — <code>off</code> removes every generated file and your map survives for the next <code>on</code>.</li><li><strong>Observed, never enforced</strong> — nothing blocks a phase from running on the "wrong" model; the telemetry records what actually ran so drift is visible, not hidden.</li></ul>
+<p>A real measured datapoint (TechieBlog pilot, 2026-08-20): one complete <code>metrics-report</code> phase on the economy tier — 14,000 output tokens, full report written — cost <strong>$0.036</strong>. The same phase on the frontier model is roughly 10× that for identical output.</p>
+<h2 id="the-three-tiers">2. The three tiers<a class="anchor-link" href="#the-three-tiers">#</a></h2>
+<table>
+<tr><th>Tier</th><th>Mental model</th><th>Claude Code model</th><th>OpenCode model (shipped defaults)</th></tr>
+<tr><td><code>frontier</code></td><td>The expensive thinking. Mistakes here are the costliest to discover late.</td><td><code>opus</code></td><td><code>opencode-go/kimi-k3</code></td></tr>
+<tr><td><code>standard</code></td><td>The everyday building. Needs real competence, not brilliance.</td><td><code>sonnet</code></td><td><code>opencode-go/kimi-k2.7-code</code></td></tr>
+<tr><td><code>economy</code></td><td>The mechanical work. Format, assemble, scan, report.</td><td><code>haiku</code></td><td><code>opencode-go/deepseek-v4-flash</code></td></tr>
+</table>
+<p>The models are <strong>starting values, yours to change</strong> (§6). Claude side accepts the aliases <code>opus</code> / <code>sonnet</code> / <code>haiku</code> or a full model id; OpenCode side takes <code>provider/model</code> ids — list everything your account offers with <code>opencode models</code>.</p>
+<h2 id="the-complete-map-what-runs-on-what">3. The complete map — what runs on what<a class="anchor-link" href="#the-complete-map-what-runs-on-what">#</a></h2>
+<h3 id="phases-the-commands-you-type">3.1 Phases (the commands you type)<a class="anchor-link" href="#phases-the-commands-you-type">#</a></h3>
+<table>
+<tr><th>Phase</th><th>Tier</th><th>Why this tier</th></tr>
+<tr><td><code>day1-greenfield</code></td><td>frontier</td><td>Architecture + BRD from nothing; errors here poison everything downstream.</td></tr>
+<tr><td><code>day1-brownfield</code></td><td>frontier</td><td>Same, plus whole-codebase comprehension of an existing app.</td></tr>
+<tr><td><code>author-brd</code></td><td>frontier</td><td>Requirements authoring — bad acceptance criteria fail every later gate.</td></tr>
+<tr><td><code>amend-docs</code></td><td>frontier</td><td>Surgical edits to the day-1 docs; must understand the whole picture.</td></tr>
+<tr><td><code>fix-issues</code></td><td>frontier</td><td>The <em>diagnosis</em> half (root-causing from screenshots) is frontier work; the fixes themselves fan out to standard builders.</td></tr>
+<tr><td><code>mockups</code></td><td>standard</td><td>Bounded design from a known component catalog. Promote to frontier if greenfield first-pass mockups disappoint — it's the easiest override.</td></tr>
+<tr><td><code>split-brd</code></td><td>standard</td><td>BRD → checklist rows with acceptance authoring; not mechanical enough for economy.</td></tr>
+<tr><td><code>build-phase</code></td><td>standard</td><td>The orchestrator: clustering, fan-out, FIX-mode detection. The expensive judgement already lives in the BRD/architecture.</td></tr>
+<tr><td><code>verify-phase</code></td><td>standard</td><td>Test <em>generation</em> and the visual-truth eyeball need a capable vision model; the gates themselves are deterministic scripts.</td></tr>
+<tr><td><code>triage-issues</code></td><td>standard</td><td>Reproduce, classify, log — no code changes.</td></tr>
+<tr><td><code>devguide</code></td><td>standard</td><td>Large code-tracing; cheap models lose the thread across page → service → query.</td></tr>
+<tr><td><code>productguide</code></td><td>economy</td><td>Screenshot-illustrated how-to assembly from existing material.</td></tr>
+<tr><td><code>handoff-phase</code></td><td>economy</td><td>Wrap-up docs and re-renders.</td></tr>
+<tr><td><code>refresh-status</code></td><td>economy</td><td>Evidence gathering (build + mtimes + tables). Promote to standard if recovery notes look wrong — the reconcile judgement is occasionally subtle.</td></tr>
+<tr><td><code>render-workflow-docs</code></td><td>economy</td><td>Markdown → HTML.</td></tr>
+<tr><td><code>generate-html</code></td><td>economy</td><td>Markdown → HTML.</td></tr>
+<tr><td><code>metrics-report</code></td><td>economy</td><td>Runs <code>tf-metrics.sh</code> and formats the output.</td></tr>
+</table>
+<h3 id="personas-and-subagents-the-agents-that-do-the-work">3.2 Personas and subagents (the agents that do the work)<a class="anchor-link" href="#personas-and-subagents-the-agents-that-do-the-work">#</a></h3>
+<p>Personas get the tier of their <em>primary phase</em>; subagents get their own row in the map. This matters because typing <code>*verify all MyApp</code> inside the flow-verifier persona is routed through the <strong>persona's</strong> model, and every builder the build orchestrator spawns runs on the <strong>subagent's</strong> model.</p>
+<table>
+<tr><th>Agent</th><th>Kind</th><th>Tier</th><th>Claude model</th><th>OpenCode model</th><th>When it runs</th></tr>
+<tr><td><code>flow-master</code></td><td>persona</td><td>standard (= build-phase)</td><td>sonnet</td><td>opencode-go/kimi-k2.7-code</td><td>The super-agent: build, fix, triage, utilities typed as <code>*commands</code></td></tr>
+<tr><td><code>flow-analyst</code></td><td>persona</td><td>frontier (= day-1)</td><td>opus</td><td>opencode-go/kimi-k3</td><td>Day-1 docs, mockups, split-brd, amendments</td></tr>
+<tr><td><code>flow-architect</code></td><td>persona</td><td>frontier (= day-1)</td><td>opus</td><td>opencode-go/kimi-k3</td><td>Optional deep architecture dives</td></tr>
+<tr><td><code>flow-verifier</code></td><td>persona</td><td>standard (= verify-phase)</td><td>sonnet</td><td>opencode-go/kimi-k2.7-code</td><td><code>*verify ui/functional/all</code></td></tr>
+<tr><td><code>tf-builder</code></td><td>subagent</td><td>standard</td><td>sonnet</td><td>opencode-go/kimi-k2.7-code</td><td>One per FN/NFR cluster in build-phase §3 and fix-issues §4</td></tr>
+<tr><td><code>trblazeui</code></td><td>subagent</td><td>standard</td><td>sonnet</td><td>opencode-go/kimi-k2.7-code</td><td>UI clusters (REQ-UI-*) — wraps the NuGet-deployed persona</td></tr>
+<tr><td><code>techierag</code></td><td>subagent</td><td>standard</td><td>sonnet</td><td>opencode-go/kimi-k2.7-code</td><td>RAG clusters (REQ-RAG-*) — wraps the NuGet-deployed persona</td></tr>
+<tr><td><code>tf-test-writer</code></td><td>subagent</td><td>standard</td><td>sonnet</td><td>opencode-go/kimi-k2.7-code</td><td>Verify-phase §4 test generation, one per cluster</td></tr>
+<tr><td><code>tf-explorer</code></td><td>subagent</td><td>economy</td><td>haiku</td><td>opencode-go/deepseek-v4-flash</td><td>Read-only scans (devguide OBSERVE, index-docs)</td></tr>
+<tr><td><code>build</code> (OpenCode) / your session (Claude)</td><td>default chat</td><td><strong>never routed</strong></td><td>your <code>/model</code> choice</td><td>your TUI selection</td><td>Your normal conversation — routing deliberately leaves it alone</td></tr>
+</table>
+<blockquote><p><strong>Why builders are standard, not economy</strong> — the single most-challenged row. A cheap builder that ships a page with a blank data table doesn't save money: it costs a full verify → fix-issues → re-verify cycle, which dwarfs the per-token saving. This is a <em>hypothesis with a measurement attached</em>: the rework ratio in <code>runs.jsonl</code> (§8) confirms or overturns it with your own data.</p></blockquote>
+<h2 id="turning-it-on-and-off">4. Turning it on and off<a class="anchor-link" href="#turning-it-on-and-off">#</a></h2>
+<p>Everything is one script, run from the app repo. It edits <code>.tfcore/routing.yaml</code> for you and regenerates all harness bindings — you never touch a generated file.</p>
+<pre><code>cd /mnt/c/1MyCode/TechieBlog
+bash .tfcore/utils/tf-routing.sh status     # read-only: what routing is/would be doing
+bash .tfcore/utils/tf-routing.sh on         # enable  → generates ~23 binding files
+bash .tfcore/utils/tf-routing.sh off        # disable → removes exactly those files</code></pre>
+<p><code>status</code> prints the live tier/model/phase table for THIS app, whether the bindings on disk agree with the flag, and where routing shows up in the TUI.</p>
+<p>After <code>on</code>, <strong>you keep using the same commands you always used</strong>:</p>
+<table>
+<tr><th>Harness</th><th>You type</th><th>What changed</th></tr>
+<tr><td>OpenCode</td><td><code>/techieflow:tasks:verify-phase all MyApp</code> — unchanged</td><td>The phase now executes on its tier's model</td></tr>
+<tr><td>OpenCode</td><td>Tab to <code>flow-verifier</code>, then <code>*verify all MyApp</code> — unchanged</td><td>The persona carries its tier's model</td></tr>
+<tr><td>Claude Code</td><td><code>/tf:verify-phase all MyApp</code> — new short wrapper</td><td>Runs the phase on the tier model for that turn</td></tr>
+<tr><td>Claude Code</td><td><code>/TechieFlow:agents:verifier *verify all MyApp</code> — the old way</td><td>Still works, <strong>unrouted</strong> (session model)</td></tr>
+</table>
+<h2 id="what-you-will-and-won-t-see-in-the-tui">5. What you will — and won't — see in the TUI<a class="anchor-link" href="#what-you-will-and-won-t-see-in-the-tui">#</a></h2>
+<p><strong>Opening OpenCode looks exactly the same as before. That is deliberate.</strong> Your normal chat runs on the default <code>build</code> agent, and routing never binds it — your conversation stays on the model YOU picked. If you enable routing, open the TUI and see your usual model in the status bar: that is correct behavior, not a failure.</p>
+<p>Routing is visible in exactly three places:</p>
+<ol><li><strong>Running a phase command.</strong> <code>/techieflow:tasks:metrics-report MyApp</code> → the footer shows the run executing on <code>deepseek-v4-flash</code> while it works.</li><li><strong>Switching persona.</strong> Tab to <code>flow-master</code> / <code>flow-verifier</code> / <code>flow-analyst</code> — each shows and uses its bound model.</li><li><strong>The telemetry.</strong> Every run lands in <code>docs/metrics/runs.jsonl</code> with declared tier, observed model, <code>routed: true/false</code>, tokens, and (OpenCode) real dollar cost.</li></ol>
+<p><strong>Verified gotcha #1 — the model sticks (OpenCode).</strong> After a routed command finishes, that TUI session <strong>continues on the phase's model</strong>. It does not bounce back to your selection. If you finish an economy phase and keep chatting, you are chatting with the economy model until you pick another from the model list or start a new session.</p>
+<p><strong>Verified gotcha #2 — turn-scoped (Claude Code).</strong> The mirror image: a <code>/tf:&lt;phase&gt;</code> wrapper's model lasts exactly one turn; your next plain prompt reverts to the session model automatically.</p>
+<h2 id="changing-the-map-every-case-with-examples">6. Changing the map — every case, with examples<a class="anchor-link" href="#changing-the-map-every-case-with-examples">#</a></h2>
+<p>Each command edits <code>routing.yaml</code> and immediately regenerates the bindings. Verify any change with <code>status</code>.</p>
+<h3 id="moving-a-phase-between-tiers">6.1 Moving a phase between tiers<a class="anchor-link" href="#moving-a-phase-between-tiers">#</a></h3>
+<pre><code># Greenfield mockups keep missing the mark → give them the frontier model:
+bash .tfcore/utils/tf-routing.sh set-tier mockups frontier
+
+# Verify feels like overkill on standard for a stable app → try economy:
+bash .tfcore/utils/tf-routing.sh set-tier verify-phase economy
+
+# Recovery notes from refresh-status look sloppy → promote it:
+bash .tfcore/utils/tf-routing.sh set-tier refresh-status standard
+
+# Take a phase out of routing entirely (runs on the session model again):
+bash .tfcore/utils/tf-routing.sh set-tier devguide inherit</code></pre>
+<h3 id="moving-a-subagent-between-tiers">6.2 Moving a subagent between tiers<a class="anchor-link" href="#moving-a-subagent-between-tiers">#</a></h3>
+<pre><code># Test the &quot;cheap builders&quot; hypothesis yourself (watch the rework ratio!):
+bash .tfcore/utils/tf-routing.sh set-tier tf-builder economy
+
+# UI builders struggle with a complex design system → promote just them:
+bash .tfcore/utils/tf-routing.sh set-tier trblazeui frontier</code></pre>
+<h3 id="changing-which-model-a-tier-means-per-tier-per-harness">6.3 Changing which model a tier means — per tier, per harness<a class="anchor-link" href="#changing-which-model-a-tier-means-per-tier-per-harness">#</a></h3>
+<pre><code># FRONTIER — try a different top model on OpenCode:
+bash .tfcore/utils/tf-routing.sh set-model frontier opencode opencode-go/qwen3.8-max
+# ...and pin Claude&#x27;s frontier to opus explicitly:
+bash .tfcore/utils/tf-routing.sh set-model frontier claude opus
+
+# STANDARD — swap the workhorse:
+bash .tfcore/utils/tf-routing.sh set-model standard opencode opencode-go/kimi-k2.7-code
+bash .tfcore/utils/tf-routing.sh set-model standard claude sonnet
+
+# ECONOMY — chase the cheapest model that doesn&#x27;t degrade output:
+bash .tfcore/utils/tf-routing.sh set-model economy opencode opencode-go/mimo-v2.5
+bash .tfcore/utils/tf-routing.sh set-model economy claude haiku</code></pre>
+<p>Find OpenCode ids with <code>opencode models</code>. On the Claude side you can also repoint what the aliases mean machine-wide with environment variables: <code>ANTHROPIC_DEFAULT_OPUS_MODEL</code>, <code>ANTHROPIC_DEFAULT_SONNET_MODEL</code>, <code>ANTHROPIC_DEFAULT_HAIKU_MODEL</code>.</p>
+<h3 id="editing-routing-yaml-by-hand">6.4 Editing routing.yaml by hand<a class="anchor-link" href="#editing-routing-yaml-by-hand">#</a></h3>
+<p>The file is deliberately human-editable (flat, two-space indent, commented). After any manual edit:</p>
+<pre><code>bash .tfcore/utils/tf-routing.sh bind      # re-apply → regenerates all bindings</code></pre>
+<h2 id="under-the-hood-what-actually-gets-generated">7. Under the hood — what actually gets generated<a class="anchor-link" href="#under-the-hood-what-actually-gets-generated">#</a></h2>
+<p>You never need this section to <em>use</em> routing; it is here so nothing is a black box.</p>
+<table>
+<tr><th>File</th><th>Harness</th><th>What it does</th></tr>
+<tr><td><code>.opencode/opencode.json</code></td><td>OpenCode</td><td>Pure-JSON binding file loaded alongside the framework config. Adds <code>model</code> to each persona (deep-merges — prompt/permission preserved), registers <code>tf-builder</code>/<code>tf-test-writer</code>/<code>tf-explorer</code> as subagents with their models, and re-declares each <code>techieflow:tasks:*</code> command with its tier model.</td></tr>
+<tr><td><code>.claude/commands/tf/&lt;phase&gt;.md</code> × 17</td><td>Claude</td><td>Wrapper commands: frontmatter <code>model:</code> + <code>effort:</code> from the tier; body loads the owner persona then executes the task with your arguments.</td></tr>
+<tr><td><code>.claude/agents/{tf-builder, tf-test-writer, tf-explorer, trblazeui, techierag}.md</code></td><td>Claude</td><td>Tier-bound subagent definitions (the library two adopt the NuGet-deployed personas).</td></tr>
+<tr><td><code>.tfcore/.session/routing-bind.manifest</code></td><td>both</td><td>The exact list of generated files. <code>off</code> deletes precisely this list — never anything else.</td></tr>
+</table>
+<p>All generated files live under gitignored paths — <strong>nothing to commit in the app</strong>. <code>update-framework.sh</code> re-runs the generator on every refresh, so framework updates and your routing coexist: your <code>routing.yaml</code> is never overwritten, your bindings are always regenerated from it (verified in the TechieBlog pilot).</p>
+<h2 id="reading-the-results-the-tuning-loop">8. Reading the results — the tuning loop<a class="anchor-link" href="#reading-the-results-the-tuning-loop">#</a></h2>
+<p>Every phase run appends a record to <code>docs/metrics/runs.jsonl</code> (full field reference: <code>docs/TechieFlow-Telemetry-Guide.md</code>):</p>
+<pre><code>{&quot;kind&quot;:&quot;run&quot;,&quot;cmd&quot;:&quot;verify-phase&quot;,&quot;app&quot;:&quot;TechieBlog&quot;,&quot;harness&quot;:&quot;opencode&quot;,
+ &quot;tier&quot;:&quot;standard&quot;,
+ &quot;tier_model&quot;:&quot;opencode-go/kimi-k2.7-code&quot;,
+ &quot;model&quot;:&quot;opencode-go/kimi-k2.7-code&quot;,
+ &quot;routed&quot;:true,
+ &quot;tokens_in&quot;:784,&quot;tokens_out&quot;:42310,&quot;tokens_cache_read&quot;:310221,
+ &quot;cost_usd&quot;:0.41,&quot;tokens_scope&quot;:&quot;tree&quot;, &quot;...&quot;:&quot;...&quot;}</code></pre>
+<ul><li><code>tier</code> / <code>tier_model</code> — what routing <strong>declared</strong> should run.</li><li><code>model</code> — what <strong>actually</strong> ran (from the harness's own store, never self-reported).</li><li><code>routed</code> — do they match. <code>false</code> = drift (someone ran the phase unrouted); visible, never blocked.</li><li><code>cost_usd</code> — real dollars on OpenCode; always <code>null</code> on Claude (no cost source exists — the framework never estimates).</li></ul>
+<p><strong>The deciding question after ~2 weeks:</strong> does the rework ratio rise on cheaper tiers? Run <code>*metrics</code> (or read <code>runs.jsonl</code>): if standard-tier builders hold the first-pass rate, consider demoting more phases; if <code>mode:"fix"</code> re-entries climb after a demotion, promote back. Data corrects the map — not opinion, and not this guide.</p>
+<h2 id="troubleshooting">9. Troubleshooting<a class="anchor-link" href="#troubleshooting">#</a></h2>
+<table>
+<tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr>
+<tr><td>"I turned it on and the TUI looks the same"</td><td>Expected — the default chat agent is never routed (§5)</td><td>Run a phase command or Tab to a persona</td></tr>
+<tr><td><code>status</code> says flag and bindings disagree</td><td>An update or manual edit got out of sync</td><td><code>bash .tfcore/utils/tf-routing.sh bind</code></td></tr>
+<tr><td>A phase ran on the wrong model</td><td>Invoked unrouted (old Claude command form, or model picked manually)</td><td>Check <code>runs.jsonl</code> → <code>routed:false</code> confirms; use <code>/tf:&lt;phase&gt;</code> (Claude) or the <code>/techieflow:tasks:*</code> command (OpenCode)</td></tr>
+<tr><td>Follow-up chat is on the phase's model (OpenCode)</td><td>Verified behavior — the session keeps the command's model</td><td>Pick your model from the model list, or start a new session</td></tr>
+<tr><td>"I want my normal chat cheaper too"</td><td>That's not routing's job</td><td>TUI model list, or <code>"model"</code> in <code>~/.config/opencode/opencode.jsonc</code></td></tr>
+<tr><td>Config error mentioning <code>.opencode/opencode.json</code></td><td>Hand-edited generated file</td><td>Never edit generated files — <code>bind</code> regenerates them</td></tr>
+<tr><td>Want a clean slate</td><td>—</td><td><code>off</code> removes everything generated; your <code>routing.yaml</code> map survives for the next <code>on</code></td></tr>
+</table>
+</main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+<script>// Light/dark toggle. The initial theme was already applied flash-free by the
+// <head> script (saved choice, else time-of-day). Clicking flips it, saves the
+// choice, and reloads so Mermaid re-renders in the matching theme.
+(function(){
+  var btn = document.getElementById('themeToggle');
+  if(!btn) return;
+  var relabel = function(){
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    btn.textContent = dark ? '☀ Light' : '☾ Dark';
+  };
+  relabel();
+  btn.addEventListener('click', function(){
+    var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    try{ localStorage.setItem('tf-theme', next); }catch(e){}
+    location.reload();
+  });
+})();
+
+// Copy buttons on every code <pre> — but NEVER on a `pre.mermaid`:
+// mermaid reads the <pre>'s textContent as the diagram source, so a button
+// appended here glues "copy" onto the last line and breaks the parse
+// (flowcharts → "Syntax error"; sequence diagrams silently absorb it).
+// Mermaid blocks get copy/export from their own .diagram toolbar instead.
+document.querySelectorAll('pre:not(.mermaid)').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy';
+  btn.textContent = 'copy';
+  btn.addEventListener('click', () => {
+    const text = pre.querySelector('code') ? pre.querySelector('code').innerText : pre.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'copied';
+      setTimeout(() => { btn.textContent = 'copy'; }, 1200);
+    });
+  });
+  pre.appendChild(btn);
+});
+
+// Mermaid init — theme follows the resolved light/dark theme
+if (window.mermaid) {
+  var mermaidTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default';
+  mermaid.initialize({ startOnLoad: true, theme: mermaidTheme, securityLevel: 'loose' });
+}
+
+// Mermaid toolbar wiring — run after mermaid renders
+function wireMermaidToolbars() {
+  document.querySelectorAll('.diagram').forEach(dia => {
+    if (dia.dataset.wired) return;
+    const merm = dia.querySelector('.mermaid');
+    const svg = merm && merm.querySelector('svg');
+    if (!svg) return;
+    dia.dataset.wired = '1';
+    let scale = 1;
+    const label = dia.querySelector('.zlabel');
+    const apply = () => {
+      svg.style.transform = `scale(${scale})`;
+      svg.style.transformOrigin = 'top left';
+      if (label) label.textContent = Math.round(scale * 100) + '%';
+    };
+    const setScale = (s) => { scale = Math.max(0.25, Math.min(4, s)); apply(); };
+    dia.querySelector('[data-zin]').onclick = () => setScale(scale * 1.2);
+    dia.querySelector('[data-zout]').onclick = () => setScale(scale / 1.2);
+    dia.querySelector('[data-fit]').onclick = () => {
+      svg.style.transform = '';
+      svg.removeAttribute('width');
+      svg.style.maxWidth = '100%';
+      svg.style.height = 'auto';
+      scale = 1;
+      if (label) label.textContent = 'Fit';
+    };
+    dia.querySelector('[data-one]').onclick = () => {
+      svg.style.transform = '';
+      svg.style.maxWidth = 'none';
+      svg.style.width = '';
+      svg.style.height = '';
+      scale = 1;
+      if (label) label.textContent = '100%';
+    };
+    dia.querySelector('[data-fs]').onclick = () => {
+      dia.classList.toggle('fs');
+      if (dia.classList.contains('fs')) {
+        document.addEventListener('keydown', escFs);
+      } else {
+        document.removeEventListener('keydown', escFs);
+      }
+    };
+    function escFs(e) { if (e.key === 'Escape') { dia.classList.remove('fs'); document.removeEventListener('keydown', escFs); } }
+    dia.querySelector('[data-pop]').onclick = () => openInNewTab(svg);
+    // Ctrl+wheel zoom
+    merm.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setScale(scale * (e.deltaY < 0 ? 1.1 : 1/1.1));
+    }, { passive: false });
+  });
+}
+
+function openInNewTab(svg) {
+  const svgSource = new XMLSerializer().serializeToString(svg);
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Diagram</title>
+<style>
+  html,body{margin:0;height:100%;background:#0f1115;color:#e6e8ee;font-family:system-ui,sans-serif}
+  .bar{position:fixed;top:0;left:0;right:0;padding:8px 12px;background:#161a22;border-bottom:1px solid #2a3142;display:flex;gap:8px;z-index:10}
+  .bar button{background:#1c2230;color:#9aa3b2;border:1px solid #2a3142;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer}
+  .bar button:hover{color:#7cc4ff;border-color:#7cc4ff}
+  .bar .hint{margin-left:auto;color:#9aa3b2;font-size:11.5px;align-self:center}
+  #stage{position:absolute;top:42px;bottom:0;left:0;right:0;overflow:hidden}
+  #stage svg{width:100%;height:100%}
+</style>
+</head><body>
+<div class="bar">
+  <button onclick="zpz.zoomIn()">+</button>
+  <button onclick="zpz.zoomOut()">−</button>
+  <button onclick="zpz.fit();zpz.center()">Fit</button>
+  <button onclick="zpz.resetZoom();zpz.center()">1:1</button>
+  <button onclick="window.print()">Print</button>
+  <button onclick="dlPng()">PNG</button>
+  <button onclick="dlSvg()">SVG</button>
+  <span class="hint">Drag to pan · Ctrl+wheel to zoom · + / − keys</span>
+</div>
+<div id="stage">${svgSource}</div>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"><\/script>
+<script>
+  const el = document.querySelector('#stage svg');
+  const zpz = svgPanZoom(el, { zoomScaleSensitivity: .3, minZoom: .2, maxZoom: 10, controlIconsEnabled: false, fit: true, center: true });
+  document.addEventListener('keydown', e => {
+    if (e.key === '+' || e.key === '=') zpz.zoomIn();
+    if (e.key === '-' || e.key === '_') zpz.zoomOut();
+    if (e.key === '0') { zpz.resetZoom(); zpz.center(); }
+  });
+  function dlSvg() {
+    const blob = new Blob([new XMLSerializer().serializeToString(el)], { type: 'image/svg+xml' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'diagram.svg'; a.click();
+  }
+  function dlPng() {
+    const src = new XMLSerializer().serializeToString(el);
+    const img = new Image();
+    const url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(src)));
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = el.clientWidth * 2; c.height = el.clientHeight * 2;
+      const ctx = c.getContext('2d'); ctx.scale(2,2); ctx.drawImage(img, 0, 0);
+      c.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'diagram.png'; a.click(); });
+    };
+    img.src = url;
+  }
+<\/script>
+</body></html>`;
+  const w = window.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+// Run wiring after mermaid finishes (it renders async)
+if (window.mermaid) {
+  setTimeout(wireMermaidToolbars, 400);
+  setTimeout(wireMermaidToolbars, 1200);  // safety re-run for slow renders
+}</script>
+</body>
+</html>

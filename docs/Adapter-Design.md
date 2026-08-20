@@ -133,7 +133,7 @@ The **session pointer file** `.tfcore/.session/<harness>.json` is written by the
 
 - **Both** harnesses bind a model to a *subagent definition* and to a *command definition*. Neither lets the running agent re-route its own next step from inside a turn, and neither exposes a per-tool-call model. A plugin cannot change the model (`chat.params` has no model output; `permission.ask` is dead). **Routing is therefore declared at the harness boundary and observed by telemetry — never enforced mid-turn.**
 - Claude: a command's `model:` is **turn-scoped** (reverts on the next prompt); `context: fork` + `agent:` runs the command as a subagent with that model; subagent `model:` values are `sonnet|opus|haiku|inherit|<id>`; `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL` pin the aliases. ([skills](https://code.claude.com/docs/en/skills.md), [sub-agents](https://code.claude.com/docs/en/sub-agents.md), [env-vars](https://code.claude.com/docs/en/env-vars.md))
-- OpenCode: agent `model`, command `model` (**command beats agent**, `prompt.ts:1411-1419`), `task` uses the subagent's model else the parent's (`task.ts:174-184`); `opencode run --command <name> --model p/m`; the command's model is written to the session row (`prompt.ts:672-687`) — in the TUI the next plain send carries the TUI's own selection (UNVERIFIED), via SDK/`run -c` it persists.
+- OpenCode: agent `model`, command `model` (**command beats agent**, `prompt.ts:1411-1419`), `task` uses the subagent's model else the parent's (`task.ts:174-184`); `opencode run --command <name> --model p/m`; the command's model is written to the session row (`prompt.ts:672-687`) — **VERIFIED 2026-08-20 (owner TUI test + session-row probe): it persists everywhere, including the TUI** — the next plain send continues on the command's model; the TUI does NOT re-impose its own selection.
 
 ### 5.2 Declaration — `.tfcore/routing.yaml` (new, default off)
 
@@ -195,7 +195,7 @@ Generated into the framework-owned `.opencode/opencode.jsonc`:
 2. `agent.flow-verifier.model`, `agent.flow-analyst.model`, `agent.flow-master.model` (persona-level defaults when the phase is typed as `*verify …` inside a persona session), and `agent.trblazeui/techierag/tf-builder/tf-test-writer/tf-explorer.model` for subagents (`task.ts:174-184`).
 3. The TUI shows the active model per agent; **Tab** cycles primary agents, each remembering its own model (`local.tsx:164-179`) — the "bind different agents to different models" feature the owner heard about on Discord is exactly this (see §5.7).
 
-**Caveat (source-verified):** a command's model becomes the session's stored model. In the TUI this is harmless (the TUI re-sends its selection); for `opencode run -c` / SDK callers that omit `model`, a later prompt inherits the last command's tier. Mitigation: every `tf` command declares a model, and the persona agents declare theirs.
+**Caveat (fully verified 2026-08-20):** a command's model becomes the session's stored model **and sticks in every mode, TUI included** — the owner's TUI test showed a plain follow-up after a routed command continuing on the command's model (the earlier guess that the TUI re-sends its own selection was wrong). Practical rule, documented in README/WORKFLOW §17b: after a routed phase, pick your model from the model list (or start a new session) if you keep chatting and want a different tier. Mitigation unchanged: every `tf` command declares a model, and the persona agents declare theirs.
 
 ### 5.5 What is **not** possible, and the honest options
 
