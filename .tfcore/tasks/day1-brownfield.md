@@ -335,33 +335,15 @@ Load `.tfcore/templates/v4custom/app-project-status-tmpl.md` and substitute:
 - **Standards compliance:** "not yet run".
 - **Deferred / future:** empty.
 
-### 7. Create `CLAUDE.md` at the repo root
+### 7. Create `AGENTS.md` at the repo root (the harness-neutral session memory — both harnesses load it)
 
-Copy `.tfcore/templates/v4custom/app-claude-md-tmpl.md` and substitute `{AppName}` throughout. Resolve the field-prefix line to THIS project's §4 decision, e.g.: "Field-prefix convention: `obj` prefix on instance fields (e.g. `private readonly ILogger<X> objLogger;`) — see Coding Standards." or "...bare PascalCase, no prefix — see Coding Standards."
+Copy `.tfcore/templates/v4custom/app-agents-md-tmpl.md` and substitute `{AppName}` throughout. Resolve the field-prefix line to THIS project's §4 decision, e.g.: "Field-prefix convention: `obj` prefix on instance fields (e.g. `private readonly ILogger<X> objLogger;`) — see Coding Standards." or "...bare PascalCase, no prefix — see Coding Standards."
 
-### 7.2. Create `AGENTS.md` (OpenCode auto-loads this, not CLAUDE.md)
+`AGENTS.md` carries the CONTENT (required reading, hard rules, project basics, REQ prefixes, verification, slash-command table): OpenCode auto-loads it directly (and skips `CLAUDE.md` whenever an `AGENTS.md` exists); Claude Code loads it through `CLAUDE.md`'s `@AGENTS.md` import. **`AGENTS.md` is committed** (it is NOT in the gitignored framework block). If a previous `AGENTS.md` exists, archive it per the §1.6 collision policy and write fresh.
 
-OpenCode's root-scan file is `AGENTS.md` (it never reads `CLAUDE.md`; `opencode.jsonc` `instructions` already lists it). Write `AGENTS.md` at the repo root as a **harness-neutral pointer** with the same substituted `{AppName}`:
+### 7.2. Create `CLAUDE.md` (Claude-only wrapper — imports AGENTS.md)
 
-```markdown
-# {AppName} — session memory (OpenCode)
-
-This project's full memory is `CLAUDE.md` (same content the Claude Code harness loads).
-Read it before any code change. Required reading:
-- **docs/{AppName}-Coding-Standards.md** — strict compliance for every line of code.
-- **docs/{AppName}-Architecture.md** — respect module boundaries.
-- **PROJECT-STATUS.md** — current phase & next-step context.
-
-Hard rule: git/gh are MANUAL. Agents NEVER run `git` or `gh` (opencode.jsonc denies
-both). Evidence for status = the checklist Requirements Status table + working-tree
-files + a fresh `dotnet build`, never git history. The owner commits.
-
-Slash-command syntax: /flow-master, /flow-analyst, /flow-architect, /flow-verifier,
-/trblazeui, /techierag (the last two are NuGet-deployed — run `dotnet build` once if
-missing). Tasks invoke as `*command args` after the agent is loaded.
-```
-
-No substitution beyond `{AppName}`. If a previous `AGENTS.md` exists, archive it per the §1.6 collision policy and write fresh.
+Copy `.tfcore/templates/v4custom/app-claude-md-tmpl.md` and substitute `{AppName}` throughout. It is a thin wrapper: `@AGENTS.md` (Claude resolves the import) plus the Claude-only permissions/tool-preference section. `CLAUDE.md` stays gitignored as before.
 
 ### 7.4. Create the Usage Guide (test users + test plan) → `docs/{AppName}-UsageGuide.md`
 
@@ -448,8 +430,10 @@ is how each screen actually renders. For any screen that's visually broken or wr
 fixes UI + functional bugs and re-verifies.
 
 If you edit any .md afterwards, re-render just that file:
-  /generate-html @docs/{AppName}-BRD.md      (works in Claude Code and OpenCode;
-                                              multiple @paths allowed; @docs/ = all
+  /generate-html @docs/{AppName}-BRD.md      (Claude Code form; in OpenCode use the
+                                              plain path without @ — @ there inlines
+                                              the whole file into the prompt;
+                                              multiple paths allowed; docs/ = all
                                               top-level .md, non-recursive)
 
 Next workflow step (after your review): *split-brd {AppName} via /TechieFlow:agents:analyst (OpenCode: /flow-analyst) —

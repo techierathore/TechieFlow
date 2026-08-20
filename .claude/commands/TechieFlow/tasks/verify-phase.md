@@ -32,7 +32,7 @@ The verifier MUST run the application **LOCALLY**. Never propose, suggest, or in
 - Pushing to a remote branch so a preview environment builds
 - Asking the user to "deploy somewhere I can reach"
 
-The user runs Claude Code on their own machine. Local boot is always possible. If you find yourself drafting "let me deploy this to X first" — STOP, that is a banned escape hatch. The user has explicitly called this out as an "idiotic option" — do not repeat it.
+The user runs the harness (Claude Code or OpenCode, both in WSL) on their own machine. Local boot is always possible. If you find yourself drafting "let me deploy this to X first" — STOP, that is a banned escape hatch. The user has explicitly called this out as an "idiotic option" — do not repeat it.
 
 **Local device hosts are NOT cloud.** Driving the MAUI Android head via the Appium server on the **Windows host** and the MAUI iOS / Mac Catalyst heads via the Appium server on the **LAN Mac** (`runtimeVerification.appium` in `core-config.yaml`, see §3b) is local infrastructure the owner set up once (`WORKFLOW.html §0b`) — it is the native analogue of headless Playwright, not a remote deploy. Use it. Only the cloud-deploy escape hatches above are banned.
 

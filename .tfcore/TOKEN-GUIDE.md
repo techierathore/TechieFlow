@@ -42,7 +42,7 @@
 - **Keep `devLoadAlwaysFiles` lean** (`.tfcore/core-config.yaml`). Only the Coding-Standards + Architecture paths the day-1 tasks set belong there; every file listed is loaded on every relevant agent turn.
 - **Split large apps' DevGuide per role** (the default for big apps). A developer chasing a bug then loads only the one role file, not a 200-page guide.
 - **Watch usage where you can see it.** In Claude Code, `/cost` (or the usage view) shows session token spend; the Anthropic Console usage dashboard shows account-level trends. If a session's cost spikes, it's almost always a whole-doc or whole-repo load — check what got read.
-- **Prefer cheaper models for mechanical sub-steps** when you orchestrate them yourself (e.g. a pure file-mapping subagent can run on a smaller model than the architect-level reasoning).
+- **Prefer cheaper models for mechanical sub-steps** when you orchestrate them yourself (e.g. a pure file-mapping subagent can run on a smaller model than the architect-level reasoning). The framework's mechanism for this is `.tfcore/routing.yaml` (per-phase model tiers, default off) read through `tf-harness.sh tier|model` — see `docs/Adapter-Design.md §5`.
 
 ## What the framework already does for you (baked-in defaults)
 

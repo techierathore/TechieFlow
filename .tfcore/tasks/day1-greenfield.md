@@ -108,33 +108,13 @@ Load `.tfcore/templates/v4custom/app-project-status-tmpl.md` and substitute:
 - **Next command to run:** HTML is rendered by this task itself (§7.5) — point at the real next step: `/TechieFlow:agents:analyst *split-brd {AppName}` (OpenCode: `/flow-analyst *split-brd {AppName}`) (or the first build-phase command if §3.5 already split).
 - **Open requirements / blockers / verification log / library feedback:** empty (initial values from the template).
 
-### 7. Create `CLAUDE.md`
+### 7. Create `AGENTS.md` (the harness-neutral session memory — both harnesses load it)
 
-Copy `.tfcore/templates/v4custom/app-claude-md-tmpl.md` and substitute `{AppName}` throughout.
+Copy `.tfcore/templates/v4custom/app-agents-md-tmpl.md` and substitute `{AppName}` throughout; resolve the field-prefix line to this project's decision. `AGENTS.md` carries the CONTENT (required reading, hard rules, project basics, REQ prefixes, verification, slash-command table): OpenCode auto-loads it directly (and skips `CLAUDE.md` whenever an `AGENTS.md` exists); Claude Code loads it through `CLAUDE.md`'s `@AGENTS.md` import. **`AGENTS.md` is committed.** If a previous `AGENTS.md` exists, archive it per the §1 collision policy and write fresh.
 
-### 7.2. Create `AGENTS.md` (OpenCode auto-loads this, not CLAUDE.md)
+### 7.2. Create `CLAUDE.md` (Claude-only wrapper — imports AGENTS.md)
 
-OpenCode's root-scan file is `AGENTS.md` (it never reads `CLAUDE.md`; `opencode.jsonc` `instructions` already lists it). Write `AGENTS.md` at the repo root as a **harness-neutral pointer** with the same substituted `{AppName}`:
-
-```markdown
-# {AppName} — session memory (OpenCode)
-
-This project's full memory is `CLAUDE.md` (same content the Claude Code harness loads).
-Read it before any code change. Required reading:
-- **docs/{AppName}-Coding-Standards.md** — strict compliance for every line of code.
-- **docs/{AppName}-Architecture.md** — respect module boundaries.
-- **PROJECT-STATUS.md** — current phase & next-step context.
-
-Hard rule: git/gh are MANUAL. Agents NEVER run `git` or `gh` (opencode.jsonc denies
-both). Evidence for status = the checklist Requirements Status table + working-tree
-files + a fresh `dotnet build`, never git history. The owner commits.
-
-Slash-command syntax: /flow-master, /flow-analyst, /flow-architect, /flow-verifier,
-/trblazeui, /techierag (the last two are NuGet-deployed — run `dotnet build` once if
-missing). Tasks invoke as `*command args` after the agent is loaded.
-```
-
-No substitution beyond `{AppName}`. If a previous `AGENTS.md` exists, archive it per the §1 collision policy and write fresh.
+Copy `.tfcore/templates/v4custom/app-claude-md-tmpl.md` and substitute `{AppName}` throughout. It is a thin wrapper: `@AGENTS.md` plus the Claude-only permissions/tool-preference section. `CLAUDE.md` stays gitignored as before.
 
 ### 7.4. Create the Usage Guide (test users + test plan) → `docs/{AppName}-UsageGuide.md`
 
@@ -178,7 +158,7 @@ NOW, before build). To change a mockup, edit the concept and re-run, or run
 *mockups {AppName} --update later.
 
 If you edit any .md afterwards, re-render just that file:
-  /generate-html @docs/{AppName}-BRD.md      (works in Claude Code and OpenCode)
+  /generate-html @docs/{AppName}-BRD.md      (Claude Code form; in OpenCode use the plain path without @)
 
 Next workflow step (after you approve the BRD + Architecture + mockups): *split-brd {AppName}
 via /TechieFlow:agents:analyst (OpenCode: /flow-analyst) — unless this run already migrated a phased plan (§3.5), in

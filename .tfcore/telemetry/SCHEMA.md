@@ -91,6 +91,23 @@ So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit 
 
 ---
 
+### 2.5 Per-run routing + token fields (added 2026-08-20; injected by `tf-emit.sh`, never emitted by an agent)
+
+`tf-emit.sh` enriches `runs` and `gates` records at append time (docs/Telemetry-Hooks.md §2–§4). All fields are **optional — absent means "not captured", never `0`**:
+
+| Field | Type | Meaning / source |
+|---|---|---|
+| `tier` | string | Declared tier for `cmd` from `.tfcore/routing.yaml` — injected only when routing is `enabled: true`. |
+| `tier_model` | string | The model id the tier should have resolved to on this harness (from `routing.yaml` `tiers`). |
+| `model` | string | **Observed** dominant model in the run window (most output tokens). Claude: transcript `message.model`; OpenCode: `providerID/modelID` from `opencode.db`. |
+| `models` | string[] | Present only when more than one model was observed in the window. |
+| `routed` | bool | `model == tier_model`. Present only when both are known. Routing is observed, never enforced — `routed:false` is drift made visible, not an error. |
+| `tokens_in`, `tokens_out`, `tokens_cache_read`, `tokens_cache_write` | int | Σ over assistant messages whose timestamp ∈ [`started`, `ended`]. Requires the record to carry `started` + `ended` and the session pointer (`.tfcore/.session/<harness>.json` — written by the `session-pointer.sh` hook on Claude, by the plugin on OpenCode). |
+| `cost_usd` | number \| null | Σ real per-message cost from `opencode.db` on OpenCode; **always `null` on Claude Code** (the transcript has no cost and a rate-card estimate would be an estimate presented as a measurement). |
+| `tokens_scope` | string | `tree` = the full session tree — OpenCode: pointer session + descendant sessions; Claude: pointer transcript + the subagent transcripts beside it (`<transcript-dir>/<session-id>/subagents/agent-*.jsonl`, a deterministic path verified 2026-08-20 via a `SubagentStop` payload's `agent_transcript_path`). `main` = Claude main thread only (no subagents dir existed). `none` = window could not be computed (no pointer / unreadable store / empty window) — **tokens are never estimated**. |
+
+Provenance rule applied once more: **never pool `cost_usd` across harness** — Claude records are `null`, and a sum over mixed records silently under-reports. Tokens may be compared across harness; dollars may not.
+
 ## 3. `docs/metrics/gates.jsonl` — one record per REQ verdict per verify run
 
 **This is the primary stream.** If only one stream survives, it is this one.

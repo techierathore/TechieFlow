@@ -16,7 +16,7 @@ Convert one or more **human-readable** markdown files to self-contained HTML usi
 *generate-html @docs/SomeFolder/
 ```
 
-(Or via the slash-command wrapper: `/TechieFlow:tasks:generate-html @path/to/file.md` in Claude Code; `/techieflow:tasks:generate-html path/to/file.md` in OpenCode.)
+(Or via the slash-command wrapper: `/TechieFlow:tasks:generate-html @path/to/file.md` in Claude Code; `/techieflow:tasks:generate-html path/to/file.md` in OpenCode. **The `@` sigil is Claude Code's file-mention; under OpenCode type the plain path WITHOUT `@`** — an `@file` in an OpenCode prompt inlines the entire file into context, wasting tokens. This task accepts both forms and treats them identically.)
 
 Note: the `@` prefix is Claude Code's file-mention sigil. OpenCode treats a leading `@` as file-content-inclusion, so pass plain paths there.
 

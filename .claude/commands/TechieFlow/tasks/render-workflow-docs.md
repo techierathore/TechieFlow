@@ -26,7 +26,7 @@ For BRD and Architecture, locate the file using this priority:
 
 **If multiple variants are found, ASK before rendering** — list each candidate with its `Last updated:` value if visible, and ask which one to render. This is the one-and-only question this task may ask, and it's required to avoid the bug where a stale BRD gets rendered when a fresh versioned one (`-v2.md`) is sitting next to it.
 
-If the user wants to render a different file than what the canonical name pattern resolves to, tell them to use `*generate-html @docs/{the-file}.md` and HALT.
+If the user wants to render a different file than what the canonical name pattern resolves to, tell them to use `*generate-html @docs/{the-file}.md` (plain path without `@` under OpenCode) and HALT.
 
 PROJECT-STATUS is always at the repo root: `PROJECT-STATUS.md`.
 

@@ -35,7 +35,10 @@
       "git": "deny",
       "git *": "deny",
       "gh": "deny",
-      "gh *": "deny"
+      "gh *": "deny",
+      "rm *": "ask",
+      "rmdir *": "ask",
+      "sudo *": "ask"
     }
   },
   "agent": {
@@ -49,7 +52,10 @@
           "git": "deny",
           "git *": "deny",
           "gh": "deny",
-          "gh *": "deny"
+          "gh *": "deny",
+          "rm *": "ask",
+          "rmdir *": "ask",
+          "sudo *": "ask"
         }
       },
       "description": "Madhav — the single super-agent. Orchestrates the full pipeline (*run-workflow, *phase) with parallel subagents, runs the unified build (*build-phase — calls /trblazeui + /techierag as sub-agents), fixes bugs from screenshots (*fix-issues), analyzes + logs human-found bugs without fixing (*triage-issues), reports development telemetry (*metrics), and handles doc/status utilities (*render-workflow-docs, *generate-html, *handoff-phase, *refresh-status, *devguide) plus any one-off task."
@@ -64,7 +70,10 @@
           "git": "deny",
           "git *": "deny",
           "gh": "deny",
-          "gh *": "deny"
+          "gh *": "deny",
+          "rm *": "ask",
+          "rmdir *": "ask",
+          "sudo *": "ask"
         }
       },
       "description": "Optional deep architecture dive; /analyst covers day-1 architecture by default"
@@ -79,7 +88,10 @@
           "git": "deny",
           "git *": "deny",
           "gh": "deny",
-          "gh *": "deny"
+          "gh *": "deny",
+          "rm *": "ask",
+          "rmdir *": "ask",
+          "sudo *": "ask"
         }
       },
       "description": "Day-1 docs (*day1-brownfield / *day1-greenfield), UI mockups (*mockups), requirements split (*split-brd), doc amendments (*amend-docs), brainstorming, research"
@@ -94,7 +106,10 @@
           "git": "deny",
           "git *": "deny",
           "gh": "deny",
-          "gh *": "deny"
+          "gh *": "deny",
+          "rm *": "ask",
+          "rmdir *": "ask",
+          "sudo *": "ask"
         }
       },
       "description": "Vidur — autonomous verification (*verify ui|functional|all); writes verdicts into the checklist Requirements Status tables"
@@ -109,7 +124,10 @@
           "git": "deny",
           "git *": "deny",
           "gh": "deny",
-          "gh *": "deny"
+          "gh *": "deny",
+          "rm *": "ask",
+          "rmdir *": "ask",
+          "sudo *": "ask"
         }
       },
       "description": "Expert .NET and Blazor developer specializing in the TrBlazeUI component library (REQ-UI-* builder). Use when integrating TrBlazeUI into existing Blazor applications, generating UI pages/components/layouts/forms/dashboards, theming, or any .NET/Blazor development with TrBlazeUI."
@@ -124,7 +142,10 @@
           "git": "deny",
           "git *": "deny",
           "gh": "deny",
-          "gh *": "deny"
+          "gh *": "deny",
+          "rm *": "ask",
+          "rmdir *": "ask",
+          "sudo *": "ask"
         }
       },
       "description": "Expert .NET developer specializing in the TechieRag RAG + LLM management library (REQ-RAG-* builder). Use when integrating TechieRag into .NET applications - adding NuGet packages, configuring RAG pipelines, setting up LLM providers, implementing chat, tool calling, token tracking, and any AI/LLM feature powered by TechieRag."
@@ -204,21 +225,24 @@
       "description": "Generate comprehensive documentation for existing projects optimized for AI development agents."
     },
     "techieflow:tasks:create-doc": {
-      "template": "{file:./.tfcore/tasks/create-doc.md}"
+      "template": "{file:./.tfcore/tasks/create-doc.md}",
+      "description": "Create a document from a YAML-driven TechieFlow template (interactive, section by section)."
     },
     "techieflow:tasks:create-deep-research-prompt": {
       "template": "{file:./.tfcore/tasks/create-deep-research-prompt.md}",
       "description": "Generate well-structured research prompts."
     },
     "techieflow:tasks:facilitate-brainstorming-session": {
-      "template": "{file:./.tfcore/tasks/facilitate-brainstorming-session.md}"
+      "template": "{file:./.tfcore/tasks/facilitate-brainstorming-session.md}",
+      "description": "Run a structured brainstorming session; results land in docs/brainstorming-session-results.md."
     },
     "techieflow:tasks:advanced-elicitation": {
       "template": "{file:./.tfcore/tasks/advanced-elicitation.md}",
       "description": "Reflective/brainstorming actions for deeper exploration and iterative refinement of drafted content."
     },
     "techieflow:tasks:execute-checklist": {
-      "template": "{file:./.tfcore/tasks/execute-checklist.md}"
+      "template": "{file:./.tfcore/tasks/execute-checklist.md}",
+      "description": "Validate a document or work product against one of the TechieFlow checklists."
     },
     "techieflow:tasks:index-docs": {
       "template": "{file:./.tfcore/tasks/index-docs.md}",

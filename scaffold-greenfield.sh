@@ -174,6 +174,26 @@ if [[ ! -f .claude/settings.json ]]; then
         ]
       }
     ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/session-pointer.sh\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/session-pointer.sh\""
+          }
+        ]
+      }
+    ],
     "SessionEnd": [
       {
         "hooks": [
@@ -225,8 +245,10 @@ Next: create the .NET solution, add your library NuGet packages, build once:
   dotnet build       ← deploys .claude/<lib>.md, .opencode/command/<lib>.md,
                                 .<lib>/<Lib>-AI-Reference.md
 
-Then start Claude Code in this folder and run:
-  /analyst *day1-greenfield <AppName>
+Then start your harness in this folder and run day-1:
+  Claude Code:  /analyst *day1-greenfield <AppName>
+                (full form: /TechieFlow:agents:analyst *day1-greenfield <AppName>)
+  OpenCode:     /flow-analyst *day1-greenfield <AppName>
 (Replace <AppName> with PascalCase name, e.g. AppManager, AstroLyfe.)
 
 That single command will produce all six day-1 deliverables in one pass.

@@ -290,6 +290,16 @@ elif [[ -f "$TEMPLATE/.tfcore/routing.yaml" ]]; then
   echo "  .tfcore/routing.yaml — deployed (enabled: false; routing is opt-in per app)"
 fi
 
+# Re-emit (or clean) the routing bindings from THIS app's routing.yaml:
+# .claude/commands/tf/<phase>.md wrappers + .claude/agents/tf-*.md +
+# .opencode/opencode.json when enabled: true; all of them removed when false.
+# Manifest-driven — never touches files it did not generate.
+if [[ $DRY_RUN -eq 1 ]]; then
+  echo "  (routing bindings: tf-routing-bind.sh runs on a real update, per this app's routing.yaml)"
+else
+  bash .tfcore/utils/tf-routing-bind.sh . | sed 's/^/  /'
+fi
+
 # --------------------------------------------------------------------------
 # 2. .claude/commands/TechieFlow/ — force-overwrite; library agents at root preserved
 # --------------------------------------------------------------------------
@@ -379,6 +389,26 @@ CANONICAL_SETTINGS='{
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-verify.sh\""
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/session-pointer.sh\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/session-pointer.sh\""
           }
         ]
       }

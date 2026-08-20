@@ -254,7 +254,9 @@ NOW = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"
 
 def enrich(rec):
     """Fill the injected fields on ONE record. Nothing else is ever added,
-    reordered, or rewritten."""
+    reordered, or rewritten — except the per-run window/tier fields added by
+    enrich_run() below for runs/gates records (docs/Telemetry-Hooks.md §2-§4,
+    DECISIONS.md 2026-08-20)."""
     rec.setdefault("v", 1)
     rec.setdefault("ts", NOW)
     if "project_type" not in rec:
@@ -268,6 +270,210 @@ def enrich(rec):
     rec.setdefault("app", APP)
     return rec
 
+# --- per-run tier + token-window enrichment (runs/gates only) -------------
+# Declared tier comes from .tfcore/routing.yaml (only when enabled: true).
+# Observed model/tokens come from the harness's own store, windowed on the
+# record's started/ended: Claude Code = the transcript named by the session
+# pointer .tfcore/.session/claude-code.json (main thread only -> scope "main");
+# OpenCode = opencode.db messages for the pointer session + its descendants
+# (scope "tree", real cost). Every failure degrades to tokens_scope:"none" —
+# tokens are NEVER estimated. Dollars are never computed on Claude (no source).
+
+def _routing():
+    out = {"enabled": False, "phases": {}, "subagents": {}, "tiers": {}}
+    try:
+        sect, tier = None, None
+        with open(os.path.join(root, ".tfcore", "routing.yaml"), encoding="utf-8") as fh:
+            for line in fh:
+                line = line.rstrip("\n")
+                if not line.strip() or line.lstrip().startswith("#"):
+                    continue
+                if not line.startswith(" "):
+                    key, _, val = line.partition(":")
+                    sect, tier = key.strip(), None
+                    if sect == "enabled":
+                        out["enabled"] = val.strip() == "true"
+                elif sect == "tiers":
+                    if re.match(r"^  [a-z-]+:\s*$", line):
+                        tier = line.strip()[:-1]
+                        out["tiers"][tier] = {}
+                    elif tier and line.startswith("    "):
+                        k, _, v = line.strip().partition(":")
+                        out["tiers"][tier][k.strip()] = v.strip()
+                elif sect in ("phases", "subagents"):
+                    k, _, v = line.strip().partition(":")
+                    out[sect][k.strip()] = v.strip()
+    except Exception:
+        pass
+    return out
+
+ROUTING = _routing()
+
+def _iso_ms(s):
+    try:
+        return int(datetime.datetime.strptime(
+            s.replace("Z", "+0000"), "%Y-%m-%dT%H:%M:%S%z").timestamp() * 1000)
+    except Exception:
+        return None
+
+def _pointer(name):
+    try:
+        with open(os.path.join(root, ".tfcore", ".session", name + ".json"),
+                  encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return None
+
+def _sum_claude_transcript(path, t0, t1, tot, models):
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if '"assistant"' not in line:
+                continue
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            if r.get("type") != "assistant":
+                continue
+            ts = _iso_ms((r.get("timestamp") or "").split(".")[0].rstrip("Z") + "Z")
+            if ts is None or ts < t0 or ts > t1:
+                continue
+            msg = r.get("message") or {}
+            u = msg.get("usage") or {}
+            o = u.get("output_tokens") or 0
+            tot["in"] += u.get("input_tokens") or 0
+            tot["out"] += o
+            tot["cr"] += u.get("cache_read_input_tokens") or 0
+            tot["cw"] += u.get("cache_creation_input_tokens") or 0
+            m = msg.get("model")
+            if m:
+                models[m] = models.get(m, 0) + o
+
+def _window_claude(t0, t1):
+    ptr = _pointer("claude-code")
+    if not ptr:
+        return None
+    path = ptr.get("transcript_path")
+    if not path or not os.path.isfile(path):
+        return None
+    tot = {"in": 0, "out": 0, "cr": 0, "cw": 0}
+    models = {}
+    scope = "main"
+    try:
+        _sum_claude_transcript(path, t0, t1, tot, models)
+        # Subagent transcripts live at a deterministic path beside the parent's:
+        # <transcript-dir>/<session-id>/subagents/agent-*.jsonl (same JSONL
+        # format; verified 2026-08-20 via a SubagentStop payload's
+        # agent_transcript_path — DECISIONS.md 2026-08-20). Including them
+        # upgrades the window from "main" to "tree" with no hook needed.
+        if path.endswith(".jsonl"):
+            subdir = os.path.join(path[:-len(".jsonl")], "subagents")
+            if os.path.isdir(subdir):
+                scope = "tree"
+                for sub in glob.glob(os.path.join(subdir, "*.jsonl")):
+                    try:
+                        _sum_claude_transcript(sub, t0, t1, tot, models)
+                    except Exception:
+                        pass
+    except Exception:
+        return None
+    if tot["in"] + tot["out"] == 0:
+        return None
+    return {"tot": tot, "models": models, "cost": None, "scope": scope}
+
+def _window_opencode(t0, t1):
+    ptr = _pointer("opencode")
+    if not ptr:
+        return None
+    dbp = ptr.get("db_path")
+    sid = ptr.get("session_id")
+    if not dbp or not sid or not os.path.isfile(dbp):
+        return None
+    try:
+        import sqlite3
+        db = sqlite3.connect("file:%s?mode=ro" % dbp, uri=True)
+        pairs = db.execute("SELECT id, parent_id FROM session").fetchall()
+        kids = {}
+        for i, p in pairs:
+            kids.setdefault(p, []).append(i)
+        tree, queue = {sid}, [sid]
+        while queue:
+            for c in kids.get(queue.pop(), []):
+                if c not in tree:
+                    tree.add(c)
+                    queue.append(c)
+        tot = {"in": 0, "out": 0, "cr": 0, "cw": 0}
+        models = {}
+        cost = 0.0
+        q = "SELECT session_id, data FROM message WHERE time_created BETWEEN ? AND ?"
+        for msid, data in db.execute(q, (t0, t1)):
+            if msid not in tree:
+                continue
+            try:
+                d = json.loads(data)
+            except Exception:
+                continue
+            if d.get("role") != "assistant":
+                continue
+            t = d.get("tokens") or {}
+            cache = t.get("cache") or {}
+            o = t.get("output") or 0
+            tot["in"] += t.get("input") or 0
+            tot["out"] += o
+            tot["cr"] += cache.get("read") or 0
+            tot["cw"] += cache.get("write") or 0
+            cost += d.get("cost") or 0
+            m = (d.get("providerID", "") + "/" if d.get("providerID") else "") + (d.get("modelID") or "")
+            if m:
+                models[m] = models.get(m, 0) + o
+        db.close()
+    except Exception:
+        return None
+    if tot["in"] + tot["out"] == 0:
+        return None
+    return {"tot": tot, "models": models, "cost": round(cost, 6), "scope": "tree"}
+
+def enrich_run(rec):
+    if stream not in ("runs", "gates"):
+        return rec
+    try:
+        cmd = rec.get("cmd")
+        if ROUTING["enabled"] and cmd and "tier" not in rec:
+            tier = ROUTING["phases"].get(cmd)
+            if tier and tier != "inherit":
+                rec["tier"] = tier
+                key = {"claude-code": "claude", "opencode": "opencode"}.get(HARNESS)
+                tm = ROUTING["tiers"].get(tier, {}).get(key) if key else None
+                if tm:
+                    rec["tier_model"] = tm
+        if rec.get("started") and rec.get("ended") and "tokens_scope" not in rec:
+            t0, t1 = _iso_ms(rec["started"]), _iso_ms(rec["ended"])
+            win = None
+            if t0 is not None and t1 is not None and t1 >= t0:
+                if HARNESS == "claude-code":
+                    win = _window_claude(t0, t1)
+                elif HARNESS == "opencode":
+                    win = _window_opencode(t0, t1)
+            if win:
+                models = sorted(win["models"], key=win["models"].get, reverse=True)
+                if models:
+                    rec["model"] = models[0]
+                    if len(models) > 1:
+                        rec["models"] = models
+                rec["tokens_in"] = win["tot"]["in"]
+                rec["tokens_out"] = win["tot"]["out"]
+                rec["tokens_cache_read"] = win["tot"]["cr"]
+                rec["tokens_cache_write"] = win["tot"]["cw"]
+                rec["cost_usd"] = win["cost"]
+                rec["tokens_scope"] = win["scope"]
+                if rec.get("tier_model") and rec.get("model"):
+                    rec["routed"] = rec["model"] == rec["tier_model"]
+            else:
+                rec["tokens_scope"] = "none"
+    except Exception as e:
+        warn("run enrichment failed (%s) — record kept unenriched" % e)
+    return rec
+
 # --- append --------------------------------------------------------------
 # newline="\n" is NOT optional. Python's text mode translates "\n" to the
 # platform separator, so on native Windows every append would land as CRLF —
@@ -276,7 +482,7 @@ def enrich(rec):
 # .gitattributes block pins to LF. These files are LF on every platform.
 lines = []
 for rec in records:
-    line = json.dumps(enrich(rec), separators=(",", ":"), ensure_ascii=False)
+    line = json.dumps(enrich_run(enrich(rec)), separators=(",", ":"), ensure_ascii=False)
     if "\n" in line or "\r" in line:
         warn("record serialised with a newline — record dropped")
         continue

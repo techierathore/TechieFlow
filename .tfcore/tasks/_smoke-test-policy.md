@@ -78,3 +78,7 @@ Smoke and verify runs that create throwaway accounts (`smoketest_user_8472`, `te
 4. **Only after explicit confirmation,** create the user(s) — then **record them in `docs/{AppName}-UsageGuide.md`'s Test users table** (mark `Created? = ✅`) so the next phase and the verifier reuse the SAME accounts instead of making new ones.
 
 NEVER invent a throwaway user mid-smoke. NEVER create accounts without the user's confirmation. The UsageGuide Test-users table is the single source of truth for test accounts — every smoke, every verify, and the human UAT all draw from it, so the DB stays clean and reproducible.
+
+## Evidence discipline — state which command actually ran (both harnesses)
+
+When reporting a build, smoke, or verify result, name the exact command and where it ran. Distinguish: WSL `dotnet` vs Windows-host build/run through `winrun`/`cmd.exe` vs native Mac vs container; focused tests vs the full solution build; your self-smoke vs an executed verifier run. **Never convert a successful intermediate command into a full workflow pass.** These are incomplete outcomes, not completion: "build is green; run smoke later" · "bridge exists; user can verify it" · "tests passed" when only focused unit tests ran · "full build blocked" because the wrong ladder rung was used before trying the right one. (This section is the harness-neutral doctrine that also appears in `opencode-operating-contract.md` — this file is the canonical copy, loaded by every build/verify task in both harnesses.)

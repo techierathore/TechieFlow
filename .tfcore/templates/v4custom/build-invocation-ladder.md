@@ -35,7 +35,7 @@ One-liner to detect: `uname -a 2>/dev/null || echo windows` — `Darwin…` = ma
 
 The owner's machine is set up per `WORKFLOW.html §0` and has BOTH:
 
-- **WSL-side .NET** at `/home/srkra/.dotnet/dotnet` (rung #2) — *replace with your own WSL dotnet path if different*. Compiles non-MAUI projects green.
+- **WSL-side .NET** at `$HOME/.dotnet/dotnet` (rung #2) — *replace with your own WSL dotnet path if different*. Compiles non-MAUI projects green.
 - **Windows-side .NET** with full workloads — including MAUI / iOS / Android — reachable via `cmd.exe /c "dotnet …"` (rung #4) or the `winrun` bridge (rung #3). Compiles MAUI/iOS/Android workloads green.
 
 Both are PERMANENT setups — you are NEVER reporting "MAUI cannot build on WSL" or "MAUI workloads missing" as a project blocker. Those are environment-config misunderstandings, not project issues. If a build fails because the workload isn't where you tried, you are on the wrong rung — switch rungs.
@@ -45,8 +45,8 @@ Both are PERMANENT setups — you are NEVER reporting "MAUI cannot build on WSL"
 | # | Command | Works when |
 |---|---------|------------|
 | 1 | `dotnet build` | dotnet is in WSL `$PATH` (rare on this machine) |
-| 2 | `~/.dotnet/dotnet build` (or `/home/srkra/.dotnet/dotnet build`) | dotnet is WSL-installed but not in PATH (the user's default — confirmed present) |
-| 3 | `winrun "dotnet build"` | user's WSL→Windows helper at `/home/srkra/bin/winrun` |
+| 2 | `~/.dotnet/dotnet build` (or `$HOME/.dotnet/dotnet build`) | dotnet is WSL-installed but not in PATH (the user's default — confirmed present) |
+| 3 | `winrun "dotnet build"` | user's WSL→Windows helper at `$HOME/bin/winrun` |
 | 4 | `cmd.exe /c "dotnet build"` | Windows-side .NET 10 (full workloads — MAUI, iOS, Android, etc.) — works for any `/mnt/c/...` project |
 | 5 | `powershell.exe -Command "dotnet build"` | same as #4 with PowerShell |
 
@@ -98,7 +98,7 @@ If a build fails with ANY of these errors, you are on the WRONG RUNG — escalat
 
 If you want to detect availability before building (do this once per session, cache the result):
 
-1. `ls /home/srkra/.dotnet/dotnet 2>/dev/null` — fastest WSL probe
+1. `ls $HOME/.dotnet/dotnet 2>/dev/null` — fastest WSL probe
 2. `cmd.exe /c "where dotnet"` — fastest Windows probe (confirms rung #4 is available)
 3. `cmd.exe /c "dotnet workload list"` — see which workloads Windows-side has (one-time check)
 

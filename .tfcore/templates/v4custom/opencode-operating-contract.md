@@ -21,6 +21,8 @@ In OpenCode Docker:
 6. Before any package restore, run `test -s "$NUGET_CONFIG_FILE"` and `dotnet nuget list source --configfile "$NUGET_CONFIG_FILE"`. A missing file is a mount/launcher problem; a missing private URL is a config problem; an HTTP `401` is an authentication problem. If restore returns `401`, inspect that mounted Docker config and its source credentials; do not switch to a Windows `C:\...` source, add a PAT to the repository, or declare the application broken.
 7. For container restore, use `dotnet restore --configfile "$NUGET_CONFIG_FILE"` followed by the build with `--no-restore` when a private feed is involved. Do not let an implicit restore silently select a Windows source.
 
+> The two sections below are harness-neutral doctrine; the canonical copies live in `.tfcore/tasks/_smoke-test-policy.md` (§"Smoke is NOT verify", §"Evidence discipline") and `build-phase.md §6`, which BOTH harnesses load through the tasks. They are repeated here because this file is injected into every OpenCode session.
+
 ## Build-Phase Completion Contract
 
 `*build-phase` is an execution workflow, not a build command. A green compiler is an intermediate checkpoint and must never be reported as phase completion.
