@@ -4,6 +4,55 @@ Durable decisions taken while building the framework, with the reasoning that wo
 
 ---
 
+## 2026-08-19 — Harness adapter boundary, per-phase model routing, OpenCode deployment (design only)
+
+Investigation + design session; nothing implemented. Evidence and reasoning live in `docs/Capability-Matrix.md` (facts, source-cited: OpenCode 1.18.18 `file:line`, Claude Code doc URLs), `docs/Coupling-Points.md`, `docs/Adapter-Design.md` (Tasks 3+4), `docs/Telemetry-Hooks.md`, `docs/OpenCode-Deployment-Guide.md`. Constraints: not a rewrite; additive or behind a flag; the Claude Code daily path must not break.
+
+### 1. The adapter boundary — decision
+
+**A "harness profile" of four small pieces, no abstraction layer:** (a) a guard/telemetry *bridge* per harness — the existing `.claude/settings.json` hooks on Claude; a new local plugin `.opencode/plugin/techieflow.ts` on OpenCode that re-creates the Claude hook payload and shells out to the **same** `.tfcore/hooks/*.sh` (policy stays in bash, the plugin translates); (b) a framework-owned harness config per harness — `.claude/settings.json` as today; a new `.opencode/opencode.jsonc` that the scripts force-refresh (the root `opencode.jsonc` stops being the only carrier of framework config and becomes project-owned, mirroring `settings.json` vs `settings.local.json`); (c) `.tfcore/routing.yaml` — phase → tier, tier → model per harness, `enabled: false` by default; (d) a vocabulary rule — tasks name roles ("builder subagent") and resolve harness forms through `.tfcore/utils/tf-harness.sh` instead of Claude tool names (`Agent`, `general-purpose`, `subagent_type=`) — three task lines.
+
+**What stays framework code:** every task, persona, gate, template, the status gate, the guard scripts' logic, the telemetry streams and schema (extended additively). **Deliberately left harness-specific** (Adapter-Design §4): permission syntax, session/TUI UX, headless CLIs, `@`/`$ARGUMENTS` sigils, bash-guard depth, cost display, `*agent` transformation, the Docker launcher, the byte-identical Claude mirror, MCP/LSP/OTel.
+
+**Why this boundary and not another:** the only *breaks* items (Coupling-Points §1) are the two hooks that are unenforced under OpenCode, the config that never propagates, and the Docker runtime; each is a wiring problem at the harness edge, none is a phase-logic problem. The premise that blocked a plugin in the 2026-08-08 decision (§3b below — "npm plugin modules … do not fit the copy-files deployment model") is **wrong for OpenCode 1.18.18**: `.opencode/{plugin,plugins}/*.{ts,js}` are globbed and imported directly (`packages/opencode/src/config/plugin.ts:18-30`, `config/config.ts:462-465`, `plugin/loader.ts:139`); the `.opencode/package.json`/`node_modules` already sitting in this repo are OpenCode's own background type install, not something we did. §3b is superseded on that point; its other two findings (harness detection, root resolution) stand.
+
+### 2. Model routing — decision
+
+**Routing is declared at the harness boundary (command and subagent definitions) and observed by telemetry; it is never enforced mid-turn, because neither harness can change a running turn's model** (Claude: skill `model:` is turn-scoped; OpenCode: model fixed at message creation, `session/prompt.ts:646`, and no plugin hook can change it). Both harnesses bind a model to a subagent and to a command; that is the routing unit. Claude: generated wrapper commands `.claude/commands/tf/<phase>.md` (`model:`, `effort:`) + tier-bound `.claude/agents/tf-*.md`; OpenCode: `command.*.model` + `agent.*.model` in the framework-owned config, `opencode run --command … --model …` headless. Tier names (`frontier/standard/economy`) are abstract; ids are per harness and per machine (`ANTHROPIC_DEFAULT_*_MODEL`, root `opencode.jsonc`).
+
+**The one place routing touches phase wording** — `build-phase` §6b chains the verifier *inline*, so it inherits the build tier. Options recorded: (a) accept (both are `standard` in the starting map — chosen for now); (b) delegate §6b to a `tf-verifier` subagent with its own model (one paragraph, owner's call, only if telemetry shows verify dominating cost); (c) invoke build and verify as separate routed commands. Per-tool-call routing does not exist in either harness and is not a loss: deterministic steps should become scripts, not cheaper prompts.
+
+**Starting tier map** (Adapter-Design §5.6): frontier = day-1 ×2, author-brd, amend-docs, fix-issues (the *diagnosis* half); standard = build orchestrator **and builders**, verify (gates deterministic, test generation + screenshot judgement on the model), mockups, split-brd, triage, devguide; economy = productguide, handoff, refresh-status, render/generate-html, metrics, explorer. This *challenges* the working hypothesis in one place: builders should be standard, not economy — a cheap builder that ships a blank table costs a full verify cycle; the rework ratio (`runs.mode:"fix"`) by tier is the test that will confirm or overturn it.
+
+### 3. Telemetry — decision
+
+Add optional fields to `runs.jsonl`/`gates.jsonl`: `tier`, `tier_model`, `model`, `models[]`, `routed`, `tokens_in/out/cache_read/cache_write`, `cost_usd` (real on OpenCode, `null` on Claude), `tokens_scope` (`main|tree|none`). Source: a per-run **time window** over the harness's store — Claude transcript JSONL via a session pointer written by a `SessionStart`/`UserPromptSubmit` hook (subagent transcripts UNVERIFIED → `tokens_scope`), OpenCode SQLite `opencode.db` (root + children by `parent_id`) plus the plugin's `event` hook for `sessions.jsonl` with real cost. `attempt` stays per REQ on `gates`; a per-run retry counter was rejected (would require agent self-report). Dollars are never pooled across harness (provenance rule applied once more). No hook payload on Claude carries tokens — stated, not worked around.
+
+### 4. OpenCode deployment — decision
+
+**Run OpenCode in the WSL distro, as Claude Code is run; demote Docker to a fallback.** OpenCode's docs recommend WSL; the entire runtime harness (winrun/cmd.exe interop, headless Chromium, Appium on localhost) is already there; the Docker path had reconstructed a subset of it through an SSH bridge. The Bun-on-large-repos crash is UNVERIFIED in WSL; `watcher.ignore`, LSP off, `ulimit`, `.wslconfig` are the mitigations; the Docker image stays on disk. Ladder §E and `TF_OPENCODE_DOCKER` branches remain, dormant.
+
+### 5. Alternatives rejected, and why
+
+| Alternative | Rejected because |
+|---|---|
+| Prose-only ("OpenCode agents, follow the rules") | The 2026-07-09 self-attested-`Verified` incident is the counter-example; a rule called mechanical must be mechanical or it poisons `gates.jsonl`. |
+| A generic harness-abstraction layer / DSL generating both configs | More code than both harness configs combined, a third dialect to maintain, and it would have to model hooks vs plugins, which are genuinely different shapes. |
+| YAML frontmatter with `model:`/`tier:` on `.tfcore/tasks/*.md` | Breaks the byte-identical Claude mirror rule (§7 of WorkFlow-Context) and leaks frontmatter text into OpenCode prompts (`{file:}` inlines raw content). |
+| Relying on the user's `/model` switches for per-phase tiers | Manual, unrecorded, and the owner's stated pain is that the session model governs everything. |
+| Per-phase sessions as the only routing unit | Works but costs the owner an extra prompt per phase; kept as option (c), not the design. |
+| Subagents as the *only* routing unit (orchestrator stays frontier, everything delegated) | Would force every phase through a delegation step the phase logic does not have today — a restructuring; commands-with-models achieve the same without it. |
+| OTel collector for Claude token attribution | Exact, but a collector process for a solo WSL setup; transcript window is sufficient and degrades honestly (`tokens_scope:"none"`); OTel documented as the upgrade path. |
+| Reading OpenCode tokens only via `opencode stats` (owner-run) | Coarse (per project/day), not per run; kept as the reconciliation fallback. |
+| Keeping Docker as the OpenCode path and hardening the bridge further | Every hardening step (2026-08-15 log) was re-creating a capability WSL already has; the root cause was topology, not configuration. |
+| Deleting the Docker artefacts now | The WSL crash hypothesis is unverified; a fallback that costs nothing to keep is worth keeping. |
+
+### 6. UNVERIFIED items that gate implementation (each with its test)
+
+OpenCode: `tool.execute.before` fires for subagent sessions and `throw` blocks without killing the session (scratch repo, `opencode run`); `.opencode/opencode.jsonc` precedence over root `opencode.jsonc` (merge two keys, `opencode debug config`); compound `cd . && git status` denied by `permission.bash` (one prompt); TUI re-sends its own model after a routed command (type a follow-up, check `runs.model`); `shell.env` reaches child processes. Claude Code: `SubagentStop` payload's `transcript_path` is the subagent's (print the payload once); WSL OpenCode on the largest repo does not reproduce the Bun crash (run `*build-phase` on TechieBlog).
+
+---
+
 ## 2026-08-08 — Development telemetry
 
 Implemented from `docs/TechieFlow-Telemetry-Runbook.md`. Full maintenance-log entry in `WorkFlow-Context.md` §5; schema in `.tfcore/telemetry/SCHEMA.md`; doctrine in `.tfcore/tasks/_metrics-emit-gate.md`.
