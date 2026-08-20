@@ -174,6 +174,8 @@ Building is only half of "verify". Once a head builds green, the verifier / devg
 
 ## E. OpenCode Docker on Windows — host bridge
 
+> **FALLBACK ONLY (since 2026-08-20).** OpenCode's primary deployment is native WSL — the same distro as Claude Code, using the §B ladder like any other WSL process (`docs/OpenCode-Deployment-Guide.md`). This section applies only when the Docker container is deliberately in use (`TF_OPENCODE_DOCKER=1`); nothing here concerns a WSL OpenCode session.
+
 An OpenCode Linux container is not WSL: `/proc/version` does not expose Windows interop, and `cmd.exe` cannot be installed into it. The framework Dockerfile uses the .NET 10 SDK and deliberately installs no MAUI workloads. Standard .NET projects build and test in the container. For a Windows MAUI Blazor Desktop target, use the image's `winrun` wrapper, which sends the command over SSH to the Windows host and starts it in `TF_WINDOWS_APP_PATH`. Mobile/iOS/Mac Catalyst builds and runtime tests belong on a native Mac.
 
 - Probe: `test -x /usr/local/bin/winrun && test -n "$TF_WINDOWS_SSH_USER" && test -n "$TF_WINDOWS_APP_PATH"` followed by `winrun "dotnet --info"`. The first checks configuration; the second proves the SSH bridge actually works. The Docker launcher may mount `/root/.ssh` read-only; `winrun` copies the key to a writable `/tmp` file with mode `0600` and maintains host trust in `/tmp`, so do not attempt to `chmod` the mounted key.

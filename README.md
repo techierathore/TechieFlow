@@ -106,7 +106,25 @@ chmod +x ~/bin/winrun
 grep -q 'HOME/bin' ~/.bashrc || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
 ```
 
-### OpenCode in Docker on Windows
+### OpenCode in WSL — the primary path (same distro as Claude Code)
+
+Since 2026-08-20 OpenCode runs **natively inside the same WSL distro as Claude Code** (OpenCode's own docs recommend WSL over native Windows; full rationale, probe evidence, and the crash playbook are in `docs/OpenCode-Deployment-Guide.md`). It gets the entire runtime harness above — `winrun`, headless Chromium, Appium — for free, with no SSH bridge and no second NuGet config.
+
+```bash
+curl -fsSL https://opencode.ai/install | bash
+grep -q '.opencode/bin' ~/.bashrc || echo 'export PATH="$HOME/.opencode/bin:$PATH"' >> ~/.bashrc
+opencode auth login     # or copy a portable API-key entry into ~/.local/share/opencode/auth.json
+```
+
+The PATH line matters: WSL's Windows-interop otherwise resolves `opencode` to the Windows npm shim (`AppData\Roaming\npm\opencode`) — the native-Windows Bun build that breaks on large repos. Verify with `type -a opencode` (the `~/.opencode/bin` entry must come first) and `opencode --version`.
+
+The framework side needs no manual setup: `scaffold-*.sh` / `update-framework.sh` deploy `.opencode/plugin/techieflow.js` (the guard bridge — the same `.tfcore/hooks/` guards Claude Code runs: git ban, PROJECT-STATUS shape, Verified ledger — plus telemetry with real dollar cost into `docs/metrics/sessions.jsonl`) and a framework-owned `.opencode/opencode.jsonc` into every app. Check with `opencode agent list` in the app (the six TechieFlow agents must appear).
+
+**Large repos:** the failure historically blamed on Bun is a `/mnt/c` (9p filesystem) pathology — OpenCode's snapshot walk can take minutes there while the identical repo on WSL-native ext4 (`~/`) boots in seconds. Typical TechieFlow apps on `/mnt/c` are fine; genuinely large repos belong on ext4, or see the watcher/snapshot tuning in `docs/OpenCode-Deployment-Guide.md` §6.
+
+### OpenCode in Docker on Windows — FALLBACK ONLY
+
+> **Since 2026-08-20 this path is a fallback**, kept in case the WSL path ever reproduces the native-Windows crash. Use the WSL section above; nothing below is needed for it.
 
 A Linux container cannot execute `cmd.exe`. `docs/Dockerfile` uses the Debian .NET 10 SDK image and deliberately installs no MAUI workloads. Standard .NET apps build and test inside the container. Windows MAUI Blazor Desktop builds use the image's SSH-backed `/usr/local/bin/winrun` wrapper and run on the Windows host. Mobile, iOS, and Mac Catalyst builds and runtime tests should run natively on a Mac. This bridge is only needed for Windows-host builds. The first command uses Windows Update and can take several minutes, but it should not remain at `Operation [Running]` indefinitely. Run the following capability, service, and firewall commands separately in an **elevated PowerShell** window:
 
@@ -405,7 +423,7 @@ Note: the script is NOT on your PATH — always invoke it with the full path sho
 
 | Force-overwritten (framework — reference repo wins) | Preserved (your work product — never touched) |
 | --- | --- |
-| `.tfcore/{tasks,templates,agents,checklists,data,utils,workflows,agent-teams}/` `.claude/commands/TechieFlow/` subtree            `.claude/commands/*.md` top-level commands (generate-html etc.)            `.opencode/command/*.md` top-level commands (generate-html etc.)            `WORKFLOW.html` `.claude/settings.json` (refreshed to canonical config by default; old file → `settings.json.bak`; `--keep-permissions` to skip; `settings.local.json` never touched) | `docs/`, `src/`, `tests/` `PROJECT-STATUS.md`, `CLAUDE.md`, `.editorconfig` `.tfcore/core-config.yaml` `opencode.jsonc` `.claude/{trblazeui,techierag}.md` + `.opencode/command/{trblazeui,techierag}.md` (NuGet-deployed) |
+| `.tfcore/{tasks,templates,agents,checklists,data,utils,workflows,agent-teams}/` `.claude/commands/TechieFlow/` subtree            `.claude/commands/*.md` top-level commands (generate-html etc.)            `.opencode/command/*.md` top-level commands (generate-html etc.)            `.opencode/plugin/*.js` (guard bridge + telemetry)            `.opencode/opencode.jsonc` (framework config copy — wins over the root `opencode.jsonc` on conflicting keys)            `WORKFLOW.html` `.claude/settings.json` (refreshed to canonical config by default; old file → `settings.json.bak`; `--keep-permissions` to skip; `settings.local.json` never touched) | `docs/`, `src/`, `tests/` `PROJECT-STATUS.md`, `CLAUDE.md`, `.editorconfig` `.tfcore/core-config.yaml` `.tfcore/routing.yaml` (deployed once with `enabled: false`, then owner-tuned) `opencode.jsonc` (root — project-specific additions) `.claude/{trblazeui,techierag}.md` + `.opencode/command/{trblazeui,techierag}.md` (NuGet-deployed) |
 
 The scaffolders and the updater also **ensure the project's `.gitignore` ignores the deployed framework copies** (`.tfcore/`, `.claude/`, `.opencode/`, `/CLAUDE.md`, `/WORKFLOW.html`, `/opencode.jsonc`, `/.tf-scaffold-note.txt`). Everything the framework drops into an app is a *copy* — the source of truth is this reference repo (or the NuGet package, for the library personas) — so it must never be committed in the app repo. The step is append-only and idempotent: existing entries in any anchored/slash variant are respected, and your own `.gitignore` content is never rewritten. Note git never *un*tracks a file just because it became ignored — if a framework file was committed before the entry existed, run `git rm -r --cached <path>` once yourself (git is manual in TechieFlow; agents never run it).
 

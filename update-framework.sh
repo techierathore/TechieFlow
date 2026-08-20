@@ -57,6 +57,8 @@
 #
 # Preserved (per-project work product — never touched):
 #   .tfcore/core-config.yaml         (customTechnicalDocuments paths)
+#   .tfcore/routing.yaml             (per-project model routing; deployed once
+#                                     with enabled: false, then owner-tuned)
 #   docs/                               (BRD, Architecture, Coding-Standards, etc.)
 #   src/, tests/                        (your code)
 #   PROJECT-STATUS.md, CLAUDE.md        (per-project state)
@@ -271,6 +273,21 @@ done
 # core-config.yaml is preserved (per-project customTechnicalDocuments paths)
 if [[ -f .tfcore/core-config.yaml ]]; then
   echo "  .tfcore/core-config.yaml — preserved (per-project)"
+fi
+
+# routing.yaml — deployed if missing, PRESERVED if present (per-project: the
+# rollout plan flips `enabled: true` one app at a time and the owner tunes the
+# tier→model map per machine/provider; clobbering it would silently un-route
+# an app — see docs/Adapter-Design.md §5.2, DECISIONS.md 2026-08-19 §2).
+if [[ -f .tfcore/routing.yaml ]]; then
+  echo "  .tfcore/routing.yaml — preserved (per-project routing declaration)"
+elif [[ -f "$TEMPLATE/.tfcore/routing.yaml" ]]; then
+  if [[ $DRY_RUN -eq 1 ]]; then
+    rsync $RSYNC_FLAGS "$TEMPLATE/.tfcore/routing.yaml" ".tfcore/routing.yaml" || true
+  else
+    cp "$TEMPLATE/.tfcore/routing.yaml" ".tfcore/routing.yaml"
+  fi
+  echo "  .tfcore/routing.yaml — deployed (enabled: false; routing is opt-in per app)"
 fi
 
 # --------------------------------------------------------------------------

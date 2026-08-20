@@ -2,6 +2,8 @@
 
 Scope: correctness of the OpenCode harness implementation (`opencode.jsonc`, `.opencode/command/`, mirror-sync) as shipped, verified against the **OpenCode 1.18.18** binary (`/root/.opencode/bin/opencode`) and its docs (https://opencode.ai/docs/{config,agents,commands}/). Empirically confirmed with `opencode agent list`, `opencode debug config`, and scratch projects in `/tmp/opencode/{cmdtest,subtest,permtest2,instr}`.
 
+> **2026-08-20 update:** this document predates the harness-adapter work. Since then: OpenCode runs natively in WSL (Docker demoted to fallback — `docs/OpenCode-Deployment-Guide.md`); the `.tfcore/hooks/` guards are enforced under OpenCode via `.opencode/plugin/techieflow.js`; the agent-level `"bash": "allow"` permission hole was found and fixed (`DECISIONS.md` 2026-08-20); a framework-owned `.opencode/opencode.jsonc` is deployed to apps; and `sessions.jsonl` telemetry now works under OpenCode with real cost. See `docs/Coupling-Points.md` for the current per-item status.
+
 Status: **FIXED** — all 8 gaps closed 2026-08-13. Each gap records evidence, impact, the applied fix, and its current state. Verified post-fix: `opencode agent list` resolves exactly the registered agents; `opencode debug config` shows the cleaned command surface; Claude Code side untouched.
 
 ---

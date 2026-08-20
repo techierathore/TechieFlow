@@ -2,6 +2,8 @@
 
 **Date:** 2026-08-19 · **Scope:** Tasks 3 and 4 · **Status:** design only; nothing here is implemented. Inputs: `Capability-Matrix.md` (facts, cited), `Coupling-Points.md` (what is coupled, by severity).
 
+> **Implementation status (2026-08-20):** rollout §6 step 1 is DONE and live-verified — the guard-bridge plugin (§2.1, as `.opencode/plugin/techieflow.js`), the framework-owned `.opencode/opencode.jsonc` (§2.2; precedence VERIFIED — it wins over the root file; `{file:}` refs must be rewritten `../.tfcore/` because they resolve relative to the config file), the vocabulary edits (§2.3), `.tfcore/routing.yaml` (§5.2, `enabled: false`) and `tf-harness.sh` (§2.4 — subcommands `detect|root|enabled|tier|model|effort|invoke|session` all implemented). Step 2's probes all PASSED (DECISIONS.md 2026-08-19 §7). Step 3 (flip `enabled: true` on one app + emit the §5.3/§5.4 bindings) is NOT yet done — flipping the flag alone changes nothing by design. See DECISIONS.md 2026-08-20.
+
 **Non-negotiables honoured.** (1) No phase-logic restructuring — the adapter *wraps* four coupling points and touches task prose only to swap vocabulary. (2) Additive or behind a flag — the current Claude Code path (`/TechieFlow:agents:<persona> *<command>`, `.claude/settings.json` hooks, `sessions.jsonl`) is unchanged unless the owner opts in. (3) Capabilities that do not exist are named as such; uncertain ones are marked UNVERIFIED with the test that would settle them.
 
 One place where routing presses against constraint (1) is called out explicitly in §4.4 — the inline verifier chain in `build-phase` §6b — with the choice left to the owner.

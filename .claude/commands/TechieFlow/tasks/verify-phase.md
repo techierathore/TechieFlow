@@ -163,7 +163,7 @@ Group the working list by `type-guess`:
 - **Cluster API** — all `backend-logic` IDs with HTTP surface (Playwright `page.request` or dotnet test integration tests).
 - **Cluster Unit** — all `backend-logic` / `nonfunctional` IDs without HTTP surface (dotnet unit tests).
 
-For each non-empty cluster, spawn a parallel `Agent` (subagent_type=general-purpose) in ONE assistant turn. Each subagent prompt MUST include:
+For each non-empty cluster, spawn a parallel **test-writer subagent** in ONE assistant turn: `tf-test-writer` if the harness registers it, otherwise the harness's general subagent (Claude Code: the `Agent` tool, `subagent_type=tf-test-writer|general-purpose`; OpenCode: the `task` tool, `subagent_type=tf-test-writer|general`). Each subagent prompt MUST include:
 - The cluster's REQ IDs + requirement text.
 - The running app URL (`http://localhost:5099` or whatever §3/§3a resolved to).
 - Path to where the test files should land: `tests/verify/{scope}-{cluster}.spec.ts` (Playwright; scope slug = `ui` / `functional` / `req-list` / `phase-N`) or appropriate `*Tests.csproj` for dotnet tests.

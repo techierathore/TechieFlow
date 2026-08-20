@@ -2,6 +2,8 @@
 
 **Date:** 2026-08-19 · **Scope:** Task 5 · **Feeds:** the existing telemetry design (`.tfcore/telemetry/SCHEMA.md`, `_metrics-emit-gate.md`, DECISIONS.md 2026-08-08). **Inputs:** `Capability-Matrix.md` row (i), `Adapter-Design.md` §2.4 (session pointer), §5 (tiers).
 
+> **Implementation status (2026-08-20):** the OpenCode side of §3 is LIVE — `.opencode/plugin/techieflow.js` emits `sessions.jsonl` with real `cost_usd` + `children_sessions` (cumulative snapshot per root idle; dedupe rule in SCHEMA.md §4) and writes the session pointer `.tfcore/.session/opencode.json`; `tf-emit.sh` honors `TF_HARNESS` first in harness detection. NOT yet done: the Claude-side session pointer hook (§2), the per-run token window enrichment in `tf-emit.sh`, and the §4 run-level schema fields (`tier`, `model`, `tokens_*` on `runs`/`gates`).
+
 **Required minimum record:** `phase, model, tier, tokens_in, tokens_out, attempt, gate_verdict, project_type, timestamp`.
 
 **Doctrine carried forward unchanged:** telemetry has no veto; nothing is estimated from a rate card; no content is ever recorded; provenance never merges; `harness` is detected, never declared.

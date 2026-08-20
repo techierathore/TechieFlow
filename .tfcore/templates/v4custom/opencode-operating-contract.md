@@ -6,8 +6,8 @@ This file is loaded by OpenCode through `opencode.jsonc`. It is OpenCode-only; d
 
 At the beginning of every build, smoke, verify, devguide, or status-recovery task, classify the runtime before choosing a command:
 
-- `TF_OPENCODE_DOCKER=1`, or `/usr/local/bin/winrun` plus `TF_WINDOWS_APP_PATH` → OpenCode Docker on Windows.
-- `uname` containing `microsoft` / `WSL` → WSL on Windows.
+- `TF_OPENCODE_DOCKER=1`, or `/usr/local/bin/winrun` plus `TF_WINDOWS_APP_PATH` → OpenCode Docker on Windows (**fallback deployment only** — since 2026-08-20 OpenCode normally runs in WSL, next line).
+- `uname` containing `microsoft` / `WSL` → WSL on Windows (**the expected OpenCode runtime** — behave exactly as Claude Code does here: §B ladder, `~/bin/winrun`, `cmd.exe` interop all available).
 - `Darwin` → native macOS.
 - Other plain Linux → native Linux.
 

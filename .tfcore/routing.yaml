@@ -1,0 +1,83 @@
+# TechieFlow model routing — DECLARATION ONLY (docs/Adapter-Design.md §5.2;
+# decision: DECISIONS.md 2026-08-19 §2).
+#
+# enabled: false  ⇒  nothing changes anywhere. Phases keep running on whatever
+# model the session runs on, exactly as before this file existed.
+#
+# A phase declares a TIER, never a model. The tiers map resolves a tier to a
+# per-harness model id (Claude Code aliases: opus|sonnet|haiku|inherit|<id>,
+# pinnable via ANTHROPIC_DEFAULT_*_MODEL; OpenCode ids: provider/model, list
+# with `opencode models`). Routing is declared at the harness boundary and
+# OBSERVED by telemetry (runs.jsonl model/tier fields) — it is never enforced
+# mid-turn, because neither harness can switch a running turn's model.
+#
+# Read this file with:  bash .tfcore/utils/tf-harness.sh tier <phase>
+#                       bash .tfcore/utils/tf-harness.sh model <tier>
+#                       bash .tfcore/utils/tf-harness.sh effort <tier>
+# Parsing contract: two-space indent, one "key: value" per line — keep it flat.
+#
+# When flipped to enabled: true, the harness bindings still have to be emitted
+# (Claude: .claude/commands/tf/<phase>.md wrappers + .claude/agents/tf-*.md;
+# OpenCode: model fields in .opencode/opencode.jsonc) — see Adapter-Design
+# §5.3/§5.4 and the rollout order in §6. Flipping the flag alone changes
+# nothing; that is deliberate.
+
+enabled: false
+
+# ---------------------------------------------------------------------------
+# Tier → model id, per harness. STARTING VALUES — the owner tunes these.
+# OpenCode ids below are from this machine's `opencode models` (opencode-go /
+# Zen gateway); swap for anthropic/* ids if an Anthropic key is configured.
+# ---------------------------------------------------------------------------
+tiers:
+  frontier:
+    claude: opus
+    opencode: opencode-go/kimi-k3
+  standard:
+    claude: sonnet
+    opencode: opencode-go/kimi-k2.7-code
+  economy:
+    claude: haiku
+    opencode: opencode-go/deepseek-v4-flash
+
+# ---------------------------------------------------------------------------
+# Phase → tier. One line each; values: frontier | standard | economy | inherit.
+# Rationale per row: docs/Adapter-Design.md §5.6 (the tier map is a HYPOTHESIS
+# with a measurement attached — rework ratio by tier from runs.jsonl decides).
+# ---------------------------------------------------------------------------
+phases:
+  day1-greenfield: frontier
+  day1-brownfield: frontier
+  author-brd: frontier
+  amend-docs: frontier
+  mockups: standard
+  split-brd: standard
+  build-phase: standard
+  fix-issues: frontier
+  triage-issues: standard
+  verify-phase: standard
+  devguide: standard
+  productguide: economy
+  handoff-phase: economy
+  refresh-status: economy
+  render-workflow-docs: economy
+  generate-html: economy
+  metrics-report: economy
+
+# ---------------------------------------------------------------------------
+# Subagent → tier (builders are where the tokens go — Adapter-Design §5.6).
+# ---------------------------------------------------------------------------
+subagents:
+  tf-builder: standard
+  trblazeui: standard
+  techierag: standard
+  tf-test-writer: standard
+  tf-explorer: economy
+
+# ---------------------------------------------------------------------------
+# Tier → reasoning effort (Claude-only knob; ignored by OpenCode).
+# ---------------------------------------------------------------------------
+effort:
+  frontier: high
+  standard: medium
+  economy: low

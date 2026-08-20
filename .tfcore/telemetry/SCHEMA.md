@@ -84,7 +84,7 @@ So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit 
 | `duration_s` | int | `ended − started`, whole seconds. |
 | `reqs_touched` | string[] | REQ IDs the run acted on. IDs only — **never** requirement text. |
 | `reqs_count` | int | `len(reqs_touched)`. |
-| `subagents` | string[] | Sub-agents invoked: `trblazeui` \| `techierag` \| `verifier` \| `general-purpose`. Empty array if none. |
+| `subagents` | string[] | Sub-agents invoked: `trblazeui` \| `techierag` \| `verifier` \| `general-purpose` (Claude) \| `general` (OpenCode) \| `tf-builder` \| `tf-test-writer` \| `tf-explorer`. Empty array if none. |
 | `files_written` | int | A count the agent **already knows**. Do not shell out to compute it. |
 | `build_result` | string \| null | `pass` \| `fail` \| `not-run`. |
 | `harness` | string \| null | Injected by `tf-emit.sh` (§1). **Do not emit it yourself.** |
