@@ -190,6 +190,14 @@ PTYPE = _project_type()
 # honest signal). Undeterminable -> null: a wrong label silently corrupts any
 # per-harness comparison, a missing one is merely missing.
 def _detect_harness():
+    # TF_HARNESS is set by the harness bridge itself (the OpenCode plugin's
+    # shell.env / guard spawns — .opencode/plugin/techieflow.js), never by an
+    # agent, and beats the marker-variable scan: a process launched from inside
+    # the OTHER harness inherits that harness's markers (e.g. OpenCode started
+    # from a Claude Code bash still carries CLAUDE_PROJECT_DIR).
+    tf = os.environ.get("TF_HARNESS")
+    if tf in ("claude-code", "opencode"):
+        return tf
     for k in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ID",
               "CLAUDE_PROJECT_DIR"):
         if os.environ.get(k):

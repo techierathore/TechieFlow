@@ -17,10 +17,18 @@
   //
   // NOTE on git/gh: "GIT IS MANUAL" is enforced here for OpenCode the same way
   // `.claude/settings.json` + block-git.sh enforce it for Claude Code. The root
-  // `permission` block below denies git/gh in bash (OpenCode has no settings-level
-  // hooks; this is the mechanical gate). Compound forms like `cd x && git log`
-  // are NOT matched by prefix rules — the agent personas repeat the rule in prose
-  // and the owner reviews all bash output, same as the Claude-side contract.
+  // `permission` block below denies git/gh in bash. Verified at runtime
+  // (2026-08-20, OpenCode 1.18.18): compound forms like `cd x && git log` ARE
+  // caught — OpenCode tree-sitter-parses the command and checks each node.
+  // TWO FOOTGUNS (both proven, DECISIONS.md 2026-08-19 §7):
+  //   1. LAST matching rule wins. `"*": "allow"` must stay FIRST in every bash
+  //      map; written after the denies it silently disables them.
+  //   2. Agent-level `permission` rules are appended AFTER the root ruleset, so
+  //      a bare `"bash": "allow"` on an agent VOIDS the root git/gh denies for
+  //      that agent. Every agent below therefore repeats the full deny map —
+  //      never collapse it back to `"bash": "allow"`.
+  // Defense in depth: .opencode/plugin/techieflow.js additionally runs
+  // block-git.sh (throw = block) upstream of this permission check.
   "permission": {
     "bash": {
       "*": "allow",
@@ -36,7 +44,13 @@
       "mode": "primary",
       "permission": {
         "edit": "allow",
-        "bash": "allow"
+        "bash": {
+          "*": "allow",
+          "git": "deny",
+          "git *": "deny",
+          "gh": "deny",
+          "gh *": "deny"
+        }
       },
       "description": "Madhav — the single super-agent. Orchestrates the full pipeline (*run-workflow, *phase) with parallel subagents, runs the unified build (*build-phase — calls /trblazeui + /techierag as sub-agents), fixes bugs from screenshots (*fix-issues), analyzes + logs human-found bugs without fixing (*triage-issues), reports development telemetry (*metrics), and handles doc/status utilities (*render-workflow-docs, *generate-html, *handoff-phase, *refresh-status, *devguide) plus any one-off task."
     },
@@ -45,7 +59,13 @@
       "mode": "all",
       "permission": {
         "edit": "allow",
-        "bash": "allow"
+        "bash": {
+          "*": "allow",
+          "git": "deny",
+          "git *": "deny",
+          "gh": "deny",
+          "gh *": "deny"
+        }
       },
       "description": "Optional deep architecture dive; /analyst covers day-1 architecture by default"
     },
@@ -54,7 +74,13 @@
       "mode": "all",
       "permission": {
         "edit": "allow",
-        "bash": "allow"
+        "bash": {
+          "*": "allow",
+          "git": "deny",
+          "git *": "deny",
+          "gh": "deny",
+          "gh *": "deny"
+        }
       },
       "description": "Day-1 docs (*day1-brownfield / *day1-greenfield), UI mockups (*mockups), requirements split (*split-brd), doc amendments (*amend-docs), brainstorming, research"
     },
@@ -63,7 +89,13 @@
       "mode": "all",
       "permission": {
         "edit": "allow",
-        "bash": "allow"
+        "bash": {
+          "*": "allow",
+          "git": "deny",
+          "git *": "deny",
+          "gh": "deny",
+          "gh *": "deny"
+        }
       },
       "description": "Vidur — autonomous verification (*verify ui|functional|all); writes verdicts into the checklist Requirements Status tables"
     },
@@ -72,7 +104,13 @@
       "mode": "all",
       "permission": {
         "edit": "allow",
-        "bash": "allow"
+        "bash": {
+          "*": "allow",
+          "git": "deny",
+          "git *": "deny",
+          "gh": "deny",
+          "gh *": "deny"
+        }
       },
       "description": "Expert .NET and Blazor developer specializing in the TrBlazeUI component library (REQ-UI-* builder). Use when integrating TrBlazeUI into existing Blazor applications, generating UI pages/components/layouts/forms/dashboards, theming, or any .NET/Blazor development with TrBlazeUI."
     },
@@ -81,7 +119,13 @@
       "mode": "all",
       "permission": {
         "edit": "allow",
-        "bash": "allow"
+        "bash": {
+          "*": "allow",
+          "git": "deny",
+          "git *": "deny",
+          "gh": "deny",
+          "gh *": "deny"
+        }
       },
       "description": "Expert .NET developer specializing in the TechieRag RAG + LLM management library (REQ-RAG-* builder). Use when integrating TechieRag into .NET applications - adding NuGet packages, configuring RAG pipelines, setting up LLM providers, implementing chat, tool calling, token tracking, and any AI/LLM feature powered by TechieRag."
     }

@@ -17,6 +17,8 @@ What you give up: the container's **isolation** (a misbehaving agent in WSL can 
 
 **Risk that must be stated plainly (UNVERIFIED):** the "bun breaks on larger codebases" symptom was reported on native Windows and attributed by the OpenCode team to Bun. We have no evidence either way about WSL. Two WSL-specific aggravators exist — `/mnt/c` (9P/DrvFs) file I/O is slow and the file **watcher** may scan the whole repo — and §6 configures them away. If the crash reproduces in WSL, §7 says what to capture; the Docker image remains a fallback and is not deleted.
 
+> **2026-08-20 probe results (this risk is now measured — see DECISIONS.md 2026-08-19 §7).** WSL-native OpenCode 1.18.18 booted TechieFlow from `/mnt/c` in 18.7s cold (all agents/commands loaded, `{file:}` refs resolved) — no crash. On a genuinely large repo (the OpenCode monorepo, ~8.7k files) the `/mnt/c` run **timed out at 5 minutes**, stuck in the snapshot subsystem ("removing gitignored files from snapshot" in the log), while **the identical repo on ext4 (`~/`) completed in 30s**. So the large-repo failure is a 9p-filesystem pathology, not a Bun-in-WSL crash: moderate repos may stay on `/mnt/c`; large repos belong on ext4 (or need §6's snapshot/watcher tuning). Two install gotchas found: (1) WSL interop resolves `opencode` to the **Windows npm shim** (`/mnt/c/Users/<user>/AppData/Roaming/npm/opencode` — the crash-prone native-Windows build) unless `~/.opencode/bin` is put ahead of it on PATH; (2) the `opencode-go` API key in the Windows `auth.json` is portable — copying that one entry into `~/.local/share/opencode/auth.json` works, no interactive login needed.
+
 ---
 
 ## 1. Prerequisites (already true on the owner's machine)

@@ -9,6 +9,7 @@
 # Per-machine / local-only — never commit
 .claude/settings.local.json
 .opencode/session/
+.tfcore/.session/
 *.bak
 tmpclaude-*
 **/tmpclaude-*

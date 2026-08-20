@@ -205,9 +205,7 @@ The reasoning, recorded because it will be questioned later: a gate distribution
 
 Written by `.tfcore/hooks/metrics-session.sh`, wired to the **`SessionEnd`** hook event (verified present in Claude Code `2.1.226`; see `DECISIONS.md`). Never written by an agent.
 
-> **KNOWN GAP — this stream is Claude-Code-only.** OpenCode has no equivalent settings-level hook (its extension point is npm plugin modules, which the framework's copy-files deployment model does not use), and the transcript format this hook parses is Claude Code's. **Under OpenCode, `sessions.jsonl` stays empty.** Every other stream — `runs`, `gates`, `commits` — is harness-agnostic and works identically in both.
->
-> The equivalent data does exist on the OpenCode side, via `opencode stats` (sessions, input/output/cache tokens **and real dollar cost**) and per-session `opencode export`. It is not ingested today. Note this when reading a report: an empty `sessions.jsonl` means "not collected here", never "no work happened".
+> **OpenCode records (since 2026-08-20):** `.opencode/plugin/techieflow.js` (a local plugin file — auto-loaded by OpenCode, no npm install; the "npm plugin modules" premise in the old gap note was wrong, see DECISIONS.md 2026-08-19 §7) emits into this stream from the `message.updated` events, with **real `cost_usd`**, `children_sessions`, and child-session tokens rolled into the root by `parentID`. **Snapshot semantics differ from Claude:** the plugin appends a CUMULATIVE snapshot at every root-session idle (a TUI session idles after each turn; `opencode run` idles once), so several records may share a `session_id` — consumers take the record with the highest `output_tokens` (or the latest `ts`) per `session_id`. Claude Code records stay one-per-session via `SessionEnd` → `metrics-session.sh`. `opencode stats` / `opencode export` remain the owner-run reconciliation fallbacks.
 
 | Field | Type | Notes |
 |---|---|---|
