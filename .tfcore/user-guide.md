@@ -213,7 +213,7 @@ TechieFlow integrates with OpenCode via a project-level `opencode.jsonc`/`openco
   - `command`: TechieFlow tasks from core and selected packs.
     - `template`: `{file:./.tfcore/tasks/<id>.md}` (or pack path)
     - `description`: extracted from the task’s “Purpose” section
-  - Top-level `permission.bash`: denies `git`/`git *`/`gh`/`gh *` — OpenCode has no settings-level hooks, so this is the mechanical gate enforcing “git is manual” (agents’ personas repeat the rule in prose, mirroring the Claude-side `block-git.sh` contract).
+  - Top-level `permission.bash`: denies every git/gh **write** subcommand (`git commit*`, `git push*`, `git add*`, `git reset*`, `git checkout*`, …, `gh pr create*`, `gh pr merge*`, …) in every mode; read-only git is decided by the plugin-bridged `block-git.sh` (blocked normally, allowed in YOLO — see “YOLO / Goal Mode” below). This is the mechanical gate enforcing “git is manual” (agents’ personas repeat the rule in prose, mirroring the Claude-side `block-git.sh` contract).
 
 - Selected Packages Only:
   - The installer includes agents and tasks only from the packages you selected in the earlier step (core and chosen packs).
@@ -317,7 +317,65 @@ dependencies:
 #### Interactive Modes
 
 - **Incremental Mode**: Step-by-step with user input
-- **YOLO Mode**: Rapid generation with minimal interaction
+- **YOLO / Goal Mode**: `*yolo` (or YOLO in any command, an active `/goal`, a `tf-goal.sh` run) — no confirmations or elicitation pauses, deletes + read-only git allowed (git writes never), whole-checklist build passes with an automatic FIX loop, run until the goal is complete; unattended runs via `bash .tfcore/utils/tf-goal.sh <app> "<goal>"` wait out usage-limit windows and resume. Rule: `.tfcore/tasks/_yolo-mode.md`.
+
+## YOLO / Goal Mode (unattended runs)
+
+Full rule: `.tfcore/tasks/_yolo-mode.md`. Background + mechanics: README §12a / DECISIONS 2026-08-21.
+
+### What it means
+
+**YOLO = "I have given you all the permissions and all the access — run until the goal is complete."** Four ways to turn it on, all equivalent:
+
+| You do | What happens |
+|---|---|
+| `*yolo` in any TechieFlow agent | agent runs `bash .tfcore/utils/tf-yolo.sh on` (flag at `.tfcore/.session/yolo.json`) |
+| put **YOLO** anywhere in a command — `*build-phase MyApp yolo` | same, then the command |
+| Claude Code `/goal <condition>` | agent runs `tf-yolo.sh on --source goal`; start the session with `--permission-mode bypassPermissions` (or `auto`) |
+| `bash .tfcore/utils/tf-goal.sh <app> "<goal>"` | the supervisor sets it for you and keeps the run alive (below) |
+
+`*yolo` again (or `tf-yolo.sh off`) turns it off; `tf-yolo.sh status` shows the state.
+
+### What changes
+
+| | Normal | YOLO |
+|---|---|---|
+| `rm` / `rmdir` / `sudo` | prompt | allowed, no prompt (catastrophic `rm -rf /`, `~` still denied) |
+| git/gh **reads** (`status`/`log`/`diff`/`blame`, `gh pr view`) | blocked | allowed |
+| git/gh **writes** (`commit`/`push`/`add`/`reset`/`checkout`/`stash`/`tag`, `gh pr create\|merge`) | blocked | **still blocked — the owner commits** |
+| elicitation, BRD-N confirm pause, phase-boundary pauses, "ask once" questions | pause | agent takes the sensible default, records it in the checklist Remarks, continues |
+| build pass | whole checklist (build-phase §2b) | whole checklist **+ automatic FIX loop** on verifier FAIL rows (§6c, ≤5 cycles) |
+| turn ending | may hand back | only when the goal is complete (`tf-yolo.sh done complete`) or every remaining REQ needs the owner (`done blocked`) |
+
+YOLO does **not** relax the evidence rules: no self-attested `Verified`, PROJECT-STATUS (md + html) still ends every phase, smoke policy unchanged.
+
+### Running a goal unattended (VM recipe)
+
+```bash
+# Claude Code (default) — logs to <app>/.tfcore/.session/goal.log
+bash .tfcore/utils/tf-goal.sh /path/to/App "Take MyApp from its current PROJECT-STATUS to Handoff: build every open REQ, verify all, fix until every row is Verified, then *handoff-phase."
+
+# OpenCode
+bash .tfcore/utils/tf-goal.sh --harness opencode --model opencode-go/kimi-k3 /path/to/App @goal.md
+
+# after a reboot / to continue where it stopped
+bash .tfcore/utils/tf-goal.sh --resume /path/to/App
+```
+
+What the supervisor does for you:
+
+- **Usage limits (5-hour / weekly):** parses the reset time from the limit message (`resets 7pm (Asia/Kolkata)`, `resets in 2h 14m`, `usage limit reached|<epoch>`, weekly `resets Tue 3pm`), sleeps until **reset + 15 min** (`--buffer-min`), logs `RETRY AT …`, then **resumes the same session**. No parseable time → probes with a one-turn `claude -p "Reply OK"` every 15 min (`--probe-min`) until the API answers, then resumes.
+- **Crashes / API errors:** backs off 2 → 30 min and resumes.
+- **Agent stopped without finishing** (asked a question, summarised): re-prompts it after 30 s.
+- **Stops only on the agent's sentinel:** exit `0` complete · `3` blocked — read `.tfcore/.session/goal-done.json` for what the owner must do · `4` max cycles (`--max-cycles`, default 60).
+
+Files (never committed): `.tfcore/.session/goal.log`, `goal.json` (cycle, session id, `resume_at`), `goal-cycle-N.out`, `goal-done.json`.
+
+### If a YOLO run still prompts
+
+1. The app's `.claude/settings.json` predates 2026-08-21 and still has `Bash(rm *)` under `ask` — Claude Code prompts on a settings `ask` in *every* mode, even bypass. Run `update-framework.sh <app>`.
+2. The agent forgot `tf-yolo.sh on` — type `*yolo` again or run it yourself.
+3. It was a git **write** — that prompts for nobody; it is denied by design.
 
 ## IDE Integration
 

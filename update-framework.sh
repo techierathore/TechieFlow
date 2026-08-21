@@ -18,7 +18,7 @@
 #   /path/to/TechieFlow/update-framework.sh /path/to/app --keep-permissions
 #   /path/to/TechieFlow/update-framework.sh   (defaults to $PWD)
 #
-# .claude/settings.json is REFRESHED BY DEFAULT to the canonical yolo-except-git
+# .claude/settings.json is REFRESHED BY DEFAULT to the canonical yolo-except-git-writes-writes
 # block (allow all Bash; ask only on rm/rmdir/sudo; DENY git/gh outright — git is
 # manual in TechieFlow, agents never run it — plus a PreToolUse hook,
 # .tfcore/hooks/block-git.sh, that also blocks compound forms like
@@ -42,7 +42,7 @@
 #   .opencode/opencode.jsonc            (framework config copy; wins over the
 #                                        root opencode.jsonc on conflicting keys;
 #                                        {file:} refs rewritten to ../.tfcore/)
-#   .claude/settings.json               (yolo-except-git; --keep-permissions to skip)
+#   .claude/settings.json               (yolo-except-git-writes; --keep-permissions to skip)
 #   WORKFLOW.html
 #
 # OpenCode agents/tasks are NOT mirrored to .opencode/command/TechieFlow/ (that
@@ -327,9 +327,11 @@ for src in "$TEMPLATE"/.claude/commands/*.md; do
   rsync $RSYNC_FLAGS "$src" ".claude/commands/$f"
 done
 
-# .claude/settings.json — REFRESHED BY DEFAULT to the canonical yolo-except-git
-# block (allow all Bash; ask on rm/rmdir/sudo; DENY git/gh + the block-git.sh
-# PreToolUse hook — git is manual, agents never run it) so every project stays in sync
+# .claude/settings.json — REFRESHED BY DEFAULT to the canonical yolo-except-git-writes-writes
+# block (allow all Bash; DENY every git/gh WRITE subcommand in every mode; NO settings
+# `ask` rules — a settings ask prompts even in bypass mode, so rm/rmdir/sudo asks are
+# issued by the block-git.sh PreToolUse hook and withheld in YOLO (_yolo-mode.md,
+# 2026-08-21); read-only git is decided by the same hook) so every project stays in sync
 # without per-app fiddling. settings.json is framework baseline; genuine
 # per-project approvals belong in settings.local.json (which is NEVER touched).
 # Opt out for a deliberately locked-down project with --keep-permissions.
@@ -352,20 +354,34 @@ CANONICAL_SETTINGS='{
       "WebSearch",
       "Task"
     ],
-    "ask": [
-      "Bash(rm *)",
-      "Bash(rmdir *)",
-      "Bash(sudo *)"
-    ],
+    "ask": [],
     "deny": [
-      "Bash(rm -rf /)",
-      "Bash(rm -rf /*)",
-      "Bash(rm -rf ~)",
-      "Bash(rm -rf ~/*)",
-      "Bash(git)",
-      "Bash(git *)",
-      "Bash(gh)",
-      "Bash(gh *)"
+      "Bash(rm -rf /)", "Bash(rm -rf /*)", "Bash(rm -rf ~)", "Bash(rm -rf ~/*)",
+      "Bash(git commit*)", "Bash(git push*)", "Bash(git add*)", "Bash(git rm*)",
+      "Bash(git mv*)", "Bash(git reset*)", "Bash(git checkout*)", "Bash(git switch*)",
+      "Bash(git restore*)", "Bash(git merge*)", "Bash(git rebase*)", "Bash(git cherry-pick*)",
+      "Bash(git revert*)", "Bash(git clean*)", "Bash(git am*)", "Bash(git apply*)",
+      "Bash(git init*)", "Bash(git clone*)", "Bash(git pull*)", "Bash(git fetch*)",
+      "Bash(git filter-branch*)", "Bash(git filter-repo*)", "Bash(git gc*)", "Bash(git prune*)",
+      "Bash(git update-ref*)", "Bash(git symbolic-ref*)", "Bash(git replace*)", "Bash(git update-index*)",
+      "Bash(git commit-tree*)", "Bash(git write-tree*)", "Bash(git read-tree*)", "Bash(git fast-import*)",
+      "Bash(git send-email*)", "Bash(git request-pull*)", "Bash(git svn*)",
+      "Bash(gh pr create*)", "Bash(gh pr merge*)", "Bash(gh pr close*)", "Bash(gh pr edit*)",
+      "Bash(gh pr comment*)", "Bash(gh pr review*)", "Bash(gh pr ready*)", "Bash(gh pr reopen*)",
+      "Bash(gh pr lock*)", "Bash(gh pr unlock*)", "Bash(gh pr update-branch*)", "Bash(gh pr checkout*)",
+      "Bash(gh issue create*)", "Bash(gh issue close*)", "Bash(gh issue edit*)", "Bash(gh issue comment*)",
+      "Bash(gh issue delete*)", "Bash(gh issue reopen*)", "Bash(gh issue pin*)", "Bash(gh issue unpin*)",
+      "Bash(gh issue lock*)", "Bash(gh issue unlock*)", "Bash(gh issue transfer*)", "Bash(gh issue develop*)",
+      "Bash(gh repo create*)", "Bash(gh repo delete*)", "Bash(gh repo fork*)", "Bash(gh repo clone*)",
+      "Bash(gh repo edit*)", "Bash(gh repo sync*)", "Bash(gh repo archive*)", "Bash(gh repo unarchive*)",
+      "Bash(gh repo rename*)", "Bash(gh repo set-default*)", "Bash(gh repo deploy-key add*)", "Bash(gh repo deploy-key delete*)",
+      "Bash(gh release create*)", "Bash(gh release delete*)", "Bash(gh release upload*)", "Bash(gh release edit*)",
+      "Bash(gh workflow run*)", "Bash(gh workflow enable*)", "Bash(gh workflow disable*)", "Bash(gh run cancel*)",
+      "Bash(gh run rerun*)", "Bash(gh run delete*)", "Bash(gh secret set*)", "Bash(gh secret delete*)",
+      "Bash(gh variable set*)", "Bash(gh variable delete*)", "Bash(gh label create*)", "Bash(gh label delete*)",
+      "Bash(gh label edit*)", "Bash(gh auth login*)", "Bash(gh auth logout*)", "Bash(gh auth refresh*)",
+      "Bash(gh auth setup-git*)", "Bash(gh gist create*)", "Bash(gh gist delete*)", "Bash(gh gist edit*)",
+      "Bash(gh ssh-key add*)", "Bash(gh gpg-key add*)", "Bash(gh cache delete*)"
     ]
   },
   "hooks": {
@@ -430,9 +446,9 @@ if [[ $KEEP_PERMS -eq 1 ]]; then
     echo "  .claude/settings.json — preserved (--keep-permissions)"
   fi
 elif [[ -f .claude/settings.json ]] && [[ "$(cat .claude/settings.json)" == "$CANONICAL_SETTINGS" ]]; then
-  echo "  .claude/settings.json — already current (yolo-except-git)"
+  echo "  .claude/settings.json — already current (yolo-except-git-writes)"
 elif [[ $DRY_RUN -eq 1 ]]; then
-  echo "  .claude/settings.json — WOULD refresh to yolo-except-git (use --keep-permissions to opt out)"
+  echo "  .claude/settings.json — WOULD refresh to yolo-except-git-writes (use --keep-permissions to opt out)"
 else
   mkdir -p .claude
   if [[ -f .claude/settings.json ]]; then
@@ -440,7 +456,7 @@ else
     echo "  .claude/settings.json — old version backed up to settings.json.bak"
   fi
   printf '%s\n' "$CANONICAL_SETTINGS" > .claude/settings.json
-  echo "  .claude/settings.json — refreshed to yolo-except-git"
+  echo "  .claude/settings.json — refreshed to yolo-except-git-writes"
 fi
 
 # Library agents at .claude/ root are NuGet-deployed and never touched

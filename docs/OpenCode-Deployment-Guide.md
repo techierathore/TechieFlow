@@ -122,7 +122,15 @@ opencode run --format json --command techieflow:tasks:refresh-status "<App>"    
 opencode stats --project "" --days 7 --models                                   # tokens + real cost, this project
 opencode export <sessionID> > /tmp/session.json                                 # per-session JSON
 ```
-(`packages/opencode/src/cli/cmd/run.ts:127-262`; `stats.ts:52-68`; `export.ts:223-232`.) These are owner-run; agents never run them (and never run git).
+(`packages/opencode/src/cli/cmd/run.ts:127-262`; `stats.ts:52-68`; `export.ts:223-232`.) These are owner-run; agents never run them (and never write git).
+
+**Unattended goal runs (YOLO, 2026-08-21 — `.tfcore/tasks/_yolo-mode.md`):** use the supervisor rather than a bare `opencode run` — it waits out the subscription 5-hour/weekly limit (reset time + 15 min) and resumes the same session:
+
+```bash
+bash .tfcore/utils/tf-goal.sh --harness opencode --model opencode-go/kimi-k3 /path/to/App "Take <App> to Handoff: build every open REQ, verify all, fix until Verified."
+bash .tfcore/utils/tf-goal.sh --resume /path/to/App      # after a reboot
+```
+It launches `opencode run --auto` (approve everything not denied — git writes stay denied by the permission map), exports `TF_YOLO=1`, and the plugin's `permission.ask` hook auto-approves the `rm */sudo *` asks while the flag is on. Log: `.tfcore/.session/goal.log`. Override the launch flags with `TF_GOAL_OPENCODE_FLAGS` if a future OpenCode renames `--auto`.
 
 ## 9. What to retire, what to keep
 

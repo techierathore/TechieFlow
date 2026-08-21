@@ -9,7 +9,7 @@
 #   /path/to/TechieFlow/scaffold-greenfield.sh    (defaults to $PWD)
 #
 # Copies the TechieFlow v4 setup (your customizations, not the npm-latest v6) plus a
-# pre-built .claude/settings.json that auto-allows everything except deletes/sudo
+# pre-built .claude/settings.json that auto-allows everything except git WRITES (deletes/sudo ask via the hook, silent in YOLO)
 # (ask) and git/gh (DENIED — git is manual; a PreToolUse hook backs the deny).
 # Creates empty src/, tests/playwright/, tests/unit/ ready for use.
 #
@@ -112,7 +112,7 @@ done
 # ./.tfcore/ to ../.tfcore/ for the copy living inside .opencode/.
 sed 's|{file:\./\.tfcore/|{file:../.tfcore/|g' "$TEMPLATE/opencode.jsonc" > .opencode/opencode.jsonc
 
-# 5. .claude/settings.json — yolo-except-git. ONLY write if missing,
+# 5. .claude/settings.json — yolo-except-git-writes. ONLY write if missing,
 #    so per-project tweaks survive scaffold re-runs.
 if [[ ! -f .claude/settings.json ]]; then
   cat > .claude/settings.json <<'JSON'
@@ -133,20 +133,34 @@ if [[ ! -f .claude/settings.json ]]; then
       "WebSearch",
       "Task"
     ],
-    "ask": [
-      "Bash(rm *)",
-      "Bash(rmdir *)",
-      "Bash(sudo *)"
-    ],
+    "ask": [],
     "deny": [
-      "Bash(rm -rf /)",
-      "Bash(rm -rf /*)",
-      "Bash(rm -rf ~)",
-      "Bash(rm -rf ~/*)",
-      "Bash(git)",
-      "Bash(git *)",
-      "Bash(gh)",
-      "Bash(gh *)"
+      "Bash(rm -rf /)", "Bash(rm -rf /*)", "Bash(rm -rf ~)", "Bash(rm -rf ~/*)",
+      "Bash(git commit*)", "Bash(git push*)", "Bash(git add*)", "Bash(git rm*)",
+      "Bash(git mv*)", "Bash(git reset*)", "Bash(git checkout*)", "Bash(git switch*)",
+      "Bash(git restore*)", "Bash(git merge*)", "Bash(git rebase*)", "Bash(git cherry-pick*)",
+      "Bash(git revert*)", "Bash(git clean*)", "Bash(git am*)", "Bash(git apply*)",
+      "Bash(git init*)", "Bash(git clone*)", "Bash(git pull*)", "Bash(git fetch*)",
+      "Bash(git filter-branch*)", "Bash(git filter-repo*)", "Bash(git gc*)", "Bash(git prune*)",
+      "Bash(git update-ref*)", "Bash(git symbolic-ref*)", "Bash(git replace*)", "Bash(git update-index*)",
+      "Bash(git commit-tree*)", "Bash(git write-tree*)", "Bash(git read-tree*)", "Bash(git fast-import*)",
+      "Bash(git send-email*)", "Bash(git request-pull*)", "Bash(git svn*)",
+      "Bash(gh pr create*)", "Bash(gh pr merge*)", "Bash(gh pr close*)", "Bash(gh pr edit*)",
+      "Bash(gh pr comment*)", "Bash(gh pr review*)", "Bash(gh pr ready*)", "Bash(gh pr reopen*)",
+      "Bash(gh pr lock*)", "Bash(gh pr unlock*)", "Bash(gh pr update-branch*)", "Bash(gh pr checkout*)",
+      "Bash(gh issue create*)", "Bash(gh issue close*)", "Bash(gh issue edit*)", "Bash(gh issue comment*)",
+      "Bash(gh issue delete*)", "Bash(gh issue reopen*)", "Bash(gh issue pin*)", "Bash(gh issue unpin*)",
+      "Bash(gh issue lock*)", "Bash(gh issue unlock*)", "Bash(gh issue transfer*)", "Bash(gh issue develop*)",
+      "Bash(gh repo create*)", "Bash(gh repo delete*)", "Bash(gh repo fork*)", "Bash(gh repo clone*)",
+      "Bash(gh repo edit*)", "Bash(gh repo sync*)", "Bash(gh repo archive*)", "Bash(gh repo unarchive*)",
+      "Bash(gh repo rename*)", "Bash(gh repo set-default*)", "Bash(gh repo deploy-key add*)", "Bash(gh repo deploy-key delete*)",
+      "Bash(gh release create*)", "Bash(gh release delete*)", "Bash(gh release upload*)", "Bash(gh release edit*)",
+      "Bash(gh workflow run*)", "Bash(gh workflow enable*)", "Bash(gh workflow disable*)", "Bash(gh run cancel*)",
+      "Bash(gh run rerun*)", "Bash(gh run delete*)", "Bash(gh secret set*)", "Bash(gh secret delete*)",
+      "Bash(gh variable set*)", "Bash(gh variable delete*)", "Bash(gh label create*)", "Bash(gh label delete*)",
+      "Bash(gh label edit*)", "Bash(gh auth login*)", "Bash(gh auth logout*)", "Bash(gh auth refresh*)",
+      "Bash(gh auth setup-git*)", "Bash(gh gist create*)", "Bash(gh gist delete*)", "Bash(gh gist edit*)",
+      "Bash(gh ssh-key add*)", "Bash(gh gpg-key add*)", "Bash(gh cache delete*)"
     ]
   },
   "hooks": {
@@ -225,7 +239,7 @@ This is a NEW (greenfield) project — empty src/ and tests/ folders are ready.
 Folders/files created (only missing files filled — re-runs are safe):
   .tfcore/                  ← TechieFlow v4 customized (agents, tasks, templates)
   .claude/commands/            ← Claude Code slash commands (TechieFlow agents)
-  .claude/settings.json        ← yolo-except-git permissions
+  .claude/settings.json        ← yolo-except-git-writes permissions
   WORKFLOW.html                ← the human workflow guide (open in a browser; §17 = macOS / Windows / Linux)
   opencode.jsonc               ← OpenCode config (loads agents/tasks from .tfcore/ via {file:...} refs)
   .gitignore                   ← framework entries appended (deployed copies stay uncommitted)

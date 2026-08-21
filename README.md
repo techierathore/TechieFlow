@@ -320,9 +320,9 @@ Every project has `docs/<APP>-Coding-Standards.md`. Every implementation agent p
 
 #### → `scaffold-brownfield.sh` / `scaffold-greenfield.sh` copy your v4 setup (§3)
 
-#### 6. Claude Code prompts every Bash; `*yolo` doesn't help
+#### 6. Claude Code prompts every Bash; `*yolo` doesn't help; a VM goal run waits days on delete prompts, git-read blocks and usage limits
 
-#### → Pre-built `.claude/settings.json` (§12)
+#### → Pre-built `.claude/settings.json` (§12) + real YOLO / goal mode: hook-level permission gate, `tf-goal.sh` supervisor that waits out limit windows and resumes, whole-checklist build passes (§12a)
 
 #### 7. Generated code uses inconsistent style across projects
 
@@ -469,7 +469,7 @@ your-app/                              ← e.g. AppManager/
 ├── .tfcore/                        ← from scaffold (your customized v4)
 ├── .claude/
 │   ├── commands/TechieFlow/...              ← from scaffold
-│   ├── settings.json                  ← from scaffold (yolo-except-git)
+│   ├── settings.json                  ← from scaffold (yolo-except-git-writes)
 │   ├── trblazeui.md                   ← from `dotnet build` (TrBlazeUI NuGet)
 │   └── techierag.md                   ← from `dotnet build` (TechieRag NuGet)
 ├── .opencode/command/
@@ -773,11 +773,30 @@ Selectors target each control's `AutomationId` (a coding standard, §10). A head
 
 **Window binding & input discipline (all native heads, especially MAUI Windows):** the driver session is bound to the app under test *by identity* — the PID the agent launched → that process's top-level window handle (Appium Windows `appium:appTopLevelWindow` / FlaUI `Application.Attach(pid)`), or the app package/bundle id on mobile — and every interaction is **element-scoped via `AutomationId` inside that bound window**, with focus verified before input and handles re-resolved after dialogs. Global keyboard/mouse injection (FlaUI `Keyboard.Type`, coordinate clicks, `SendKeys`) is **banned**: it types into whatever window happens to hold focus — historically, a completely different window than the app. Full rules: `verify-phase.md §3b`.
 
-## 12. Permissions (yolo-except-git)
+## 12. Permissions (yolo-except-git-writes)
 
-The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **all Bash** (bare `"Bash"`) — so create/update/**move** run with zero prompts. **Asks** for **deletes** (`Bash(rm *)`, `Bash(rmdir *)`) and `Bash(sudo *)`. **Denies** catastrophic `rm -rf` root/home paths **and `git`/`gh` outright** — git is manual in TechieFlow; agents never run it, so it is a hard deny, not an ask. Permission precedence is `deny → ask → allow`. *(Cross-project tip: to let a session work in another app's folder without per-path prompts, add that root to `permissions.additionalDirectories` in this project's settings.json — keep those machine-specific paths out of any shared template.)*
+The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **all Bash** (bare `"Bash"`) — so create/update/**move** run with zero prompts. **Deletes and `sudo`** (`rm`, `rmdir`, `find -delete`, `sudo`) **ask — via the hook, not via a settings `ask` rule** (see the YOLO box below for why). **Denies** catastrophic `rm -rf` root/home paths **and every git/gh WRITE subcommand** (`git commit|push|add|reset|checkout|switch|restore|merge|rebase|stash|clean|pull|fetch|…`, `gh pr|issue|repo|release create|merge|close|…`) — git is manual in TechieFlow; agents never write it, so it is a hard deny, in **every** permission mode including bypass. Permission precedence is `deny → ask → hook → allow`. *(Cross-project tip: to let a session work in another app's folder without per-path prompts, add that root to `permissions.additionalDirectories` in this project's settings.json — keep those machine-specific paths out of any shared template.)*
 
-**The git deny is TWO layers, because prefix rules alone leak.** `Bash(git *)` is a literal prefix match — it never sees `cd src && git log` or `echo done; git add -A`, which the bare `"Bash"` allow would wave straight through. That is exactly how agents kept "accidentally" running git during status updates. So the config also wires a **PreToolUse hook** — `.tfcore/hooks/block-git.sh` — that inspects every Bash call and blocks `git`/`gh` used as a command word anywhere in the command line, replying with the local-evidence recipe (checklist tables + working-tree files + fresh build) so the agent continues correctly instead of flailing. You still run git yourself: in a separate terminal, or by typing `!git …` in the session (user-typed bang commands bypass agent tool permissions).
+**The git ban is TWO layers, because prefix rules alone leak.** `Bash(git commit*)` is a literal prefix match — it never sees `cd src && git commit` or `echo done; git add -A`, which the bare `"Bash"` allow would wave straight through. That is exactly how agents kept "accidentally" running git during status updates. So the config also wires a **PreToolUse hook** — `.tfcore/hooks/block-git.sh` — that parses every Bash call (compound forms, `bash -c "…"`, `eval`, `$(…)`, wrappers like `sudo`/`env`/`xargs`) and classifies each `git`/`gh` node as **read** (`status`/`log`/`diff`/`show`/`blame`/`grep`/`branch`/`tag -l`/`stash list`/`remote -v`/`config --get`, `gh pr list|view`…) or **write** (everything else). Writes are blocked always; reads are blocked outside YOLO and allowed in YOLO. The block message carries the local-evidence recipe (checklist tables + working-tree files + fresh build) so the agent continues correctly instead of flailing. You still run git yourself: in a separate terminal, or by typing `!git …` in the session (user-typed bang commands bypass agent tool permissions).
+
+### 12a. YOLO / goal mode — "I've given you all the permissions; run until it's done" (2026-08-21)
+
+`*yolo` used to be agent-side only (skip elicitation) and the owner still got prompted for every delete and blocked on every git read — which is how a VM goal run took **3 days**, mostly waiting for a human. Now `*yolo`, the word **YOLO** anywhere in a command, an active Claude Code **`/goal`**, or a `tf-goal.sh` run all mean the same thing, defined in **`.tfcore/tasks/_yolo-mode.md`**:
+
+| | Normal | YOLO |
+|---|---|---|
+| `rm` / `rmdir` / `sudo` | hook asks | **allowed, no prompt** (catastrophic `rm -rf /`/`~` still denied) |
+| git/gh **reads** (`status`/`log`/`diff`/`blame`, `gh pr view`) | blocked | **allowed** |
+| git/gh **writes** (`commit`/`push`/`add`/`reset`/`checkout`/`stash`/`tag`, `gh pr create|merge`) | blocked | **blocked — always** |
+| Elicitation, phase-boundary pauses, "confirm the BRD-N list", "ask once" questions | pause | **decide the default, record it, continue** |
+| Build pass scope | whole checklist (§2b) | whole checklist **+ automatic FIX loop** on verifier FAIL rows (build-phase §6c, ≤5 cycles) |
+| Turn ending | may hand back | **only** when the goal is complete (`tf-yolo.sh done complete`) or every remaining REQ is owner-gated (`done blocked`) |
+
+**Mechanics.** The flag is `.tfcore/.session/yolo.json` (`bash .tfcore/utils/tf-yolo.sh on|off|status`; never committed). `block-git.sh` reads it (plus `TF_YOLO=1` and the hook payload's `permission_mode` — Claude Code's `bypassPermissions`/`auto` count as YOLO); the OpenCode plugin reads the same flag and auto-approves its `rm */sudo *` asks via `permission.ask`. **Why the delete prompt moved out of `settings.json`:** Claude Code honours a settings `ask` rule *even in `bypassPermissions` mode and even when a hook says allow* — so as long as `Bash(rm *)` sat in `ask`, no mode could stop the prompt. A hook-issued `ask` can be withheld; a settings `ask` cannot.
+
+**Usage limits (5-hour / weekly).** Nothing inside a session can wait a limit out, so the wait lives in a supervisor: `bash .tfcore/utils/tf-goal.sh <app-dir> "<goal>"` runs the goal headless (`claude -p --permission-mode bypassPermissions`, or `--harness opencode` → `opencode run --auto`), parses the reset time from the limit message (`resets 7pm (Asia/Kolkata)`, `resets in 2h 14m`, `usage limit reached|<epoch>`, weekly `resets Tue 3pm`), **sleeps until reset + 15 min** (`--buffer-min`), logs `RETRY AT …` to `.tfcore/.session/goal.log`, and **resumes the same session** (`--resume <id>`). Crashes back off 2 → 30 min; an agent that stops without finishing is re-prompted; it exits only on the agent's sentinel (`0` complete, `3` owner-blocked, `4` max cycles). `--resume <app-dir>` picks up after a reboot. The agent's part of the bargain is the status gate: every phase ends with PROJECT-STATUS + checklist written, so a resume is lossless.
+
+**Build passes are whole-checklist, YOLO or not.** The other 3-day culprit: build-phase runs that implemented a few REQs, wrote "next command: `*build-phase` for the remaining REQs" and stopped. `build-phase.md §2b` now bans that ending — a pass is done when **every** working-list REQ is ≥ `Implemented` (or a logged `Blocked`/owner-gated blocker), the verifier has been chained, and (in YOLO) its FAIL rows have been looped. Long list ⇒ more sub-agent clusters, never a shorter pass. `_status-update-gate.md` item 5 carries the matching rule for the next-command line.
 
 **Q: Config (canonical version in scaffold-brownfield.sh / scaffold-greenfield.sh)**
 
@@ -790,10 +809,13 @@ The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **a
       "Edit", "Write", "MultiEdit", "NotebookEdit",
       "Read", "Glob", "Grep", "TodoWrite", "WebFetch", "WebSearch", "Task"
     ],
-    "ask": [ "Bash(rm *)", "Bash(rmdir *)", "Bash(sudo *)" ],
+    "ask": [],
     "deny": [
       "Bash(rm -rf /)", "Bash(rm -rf /*)", "Bash(rm -rf ~)", "Bash(rm -rf ~/*)",
-      "Bash(git)", "Bash(git *)", "Bash(gh)", "Bash(gh *)"
+      "Bash(git commit*)", "Bash(git push*)", "Bash(git add*)", "Bash(git reset*)",
+      "Bash(git checkout*)", "Bash(git switch*)", "Bash(git restore*)", "Bash(git merge*)",
+      "… every other git WRITE subcommand (rebase, cherry-pick, revert, clean, pull, fetch, init, clone, …) …",
+      "Bash(gh pr create*)", "Bash(gh pr merge*)", "Bash(gh issue create*)", "… every gh WRITE verb …"
     ]
   },
   "hooks": {
@@ -905,7 +927,15 @@ No for your work product — framework files copy with `rsync --ignore-existing`
 
 **Q: `*yolo` doesn't stop Bash prompts.**
 
-Right — `*yolo` is agent-side (elicitation skipping). Tool permissions are `.claude/settings.json` (already in place from scaffold).
+It does now (2026-08-21, §12a). `*yolo` writes `.tfcore/.session/yolo.json`; the PreToolUse hook reads it and stops asking for `rm`/`rmdir`/`sudo` and allows read-only git. If you still see a delete prompt: (1) the app's `.claude/settings.json` predates the change and still has `Bash(rm *)` under `ask` — run `update-framework.sh <app>`; a settings `ask` rule prompts in every mode, even bypass; (2) the agent forgot to run `tf-yolo.sh on` — type `*yolo` again or run it yourself. Git **writes** prompt for nobody — they are denied outright in every mode.
+
+**Q: My unattended goal run stopped on "You've hit your limit · resets …".**
+
+Use the supervisor, not a bare session: `bash .tfcore/utils/tf-goal.sh <app-dir> "<goal>"` (§12a). It parses the reset time, sleeps until reset + 15 min, and resumes the same session; `--resume <app-dir>` continues after a reboot. Watch `.tfcore/.session/goal.log`.
+
+**Q: `*build-phase` implemented a few REQs and told me to run it again for the rest.**
+
+That ending is banned (build-phase §2b). Re-run it — FRESH/FIX detection picks up the open rows — and, if it happens again, quote §2b back: a pass is done when every working-list REQ is ≥ `Implemented`; context pressure means more sub-agent clusters, not a shorter pass.
 
 **Q: Mermaid not rendering in BRD.html / Architecture.html.**
 
@@ -1030,6 +1060,8 @@ bash .tfcore/utils/tf-routing.sh set-tier  verify-phase economy
 bash .tfcore/utils/tf-routing.sh set-model economy opencode opencode-go/deepseek-v4-flash
 ```
 
+**Escalation (advisory).** `routing.yaml` also carries an `escalation:` block — shipped as `fix-issues: after_attempts: 2, tier: frontier`, meaning "if the same REQs have been through `fix-issues` twice without reaching `Verified`, launch the third run on frontier". It is applied **by you at launch**, never at runtime: `bash .tfcore/utils/tf-emit.sh --next-run-attempt fix-issues <REQ-IDs>` reads the attempt history (the new `attempt` field on `runs.jsonl` records), `status` prints the policy, and `set-escalation <phase> <attempts> <tier>` tunes it. Nothing ever switches a running phase's model — neither harness can, and the framework doesn't pretend to (DECISIONS.md 2026-08-21; full walkthrough: Routing Guide §6.4).
+
 **The one thing everyone asks:** opening the TUI after enabling looks *unchanged* — deliberately. Your normal chat (default agent) is never routed; routing shows when you run a `/techieflow:tasks:*` command (footer shows the tier model), Tab to a persona, or read `runs.jsonl`. And (verified): in the OpenCode TUI a routed command's model **sticks** for the session afterwards — re-pick your model if you keep chatting; on Claude a `/tf:<phase>` wrapper's model lasts exactly one turn.
 
 ## 18. Team edition — the AI-First Playbook
@@ -1062,4 +1094,4 @@ here depends on the Playbook, and nothing there depends on this.
 ---
 
 
-Last revised 2026-08-11. Edit freely. When the workflow changes, update the session memory `MEMORY.md` under `~/.claude/projects/<this-repo's-slug>/memory/` and `WorkFlow-Context.md` (the AI-agent context doc) too.
+Last revised 2026-08-21. Edit freely. When the workflow changes, update the session memory `MEMORY.md` under `~/.claude/projects/<this-repo's-slug>/memory/` and `WorkFlow-Context.md` (the AI-agent context doc) too.

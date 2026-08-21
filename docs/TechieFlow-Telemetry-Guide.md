@@ -50,6 +50,7 @@ Reading it line by line:
 - `subagents` — which helpers were spawned (`trblazeui`, `techierag`, `tf-builder`, `general`/`general-purpose`, …).
 - `harness` — `claude-code` or `opencode`, **detected** by the tooling, never self-declared by an agent (agents copy template text too faithfully to be trusted with it).
 - The second half — `tier` through `tokens_scope` — is injected automatically by `tf-emit.sh` (§4). Absent fields mean "not captured", never zero.
+- `attempt` (added 2026-08-21, also injected) — how many times this `cmd` has run against any of these REQs, counting this one: `1 +` prior non-backfilled runs of the same `cmd` whose `reqs_touched` overlaps. Present only on runs that touch REQs. This is the counter the advisory `escalation:` policy in `routing.yaml` reads **at launch** (`tf-emit.sh --next-run-attempt <cmd> <REQ>...`; Routing Guide §6.4). Not the same field as the per-REQ `attempt` on `gates.jsonl` (§3.2).
 
 ### 3.2 `gates.jsonl` — the primary stream: every verdict, and what caught the failure
 
@@ -103,7 +104,7 @@ No agent ever reports its own token usage (it can't know it, and self-reports dr
 
 Any record carrying `started` + `ended` gets the numbers for exactly that window. If anything is missing — no pointer, unreadable store, empty window — the record says `tokens_scope:"none"` and carries **no numbers at all**. Missing beats invented, every time.
 
-When routing is enabled (`docs/TechieFlow-Routing-Guide.md`), the same enrichment adds `tier` (declared), `tier_model` (what the tier should resolve to here) and `routed` (`model == tier_model`) — which is how routing decisions get made from data.
+When routing is enabled (`docs/TechieFlow-Routing-Guide.md`), the same enrichment adds `tier` (declared), `tier_model` (what the tier should resolve to here) and `routed` (`model == tier_model`) — which is how routing decisions get made from data. Independently of the routing flag, every run that touches REQs also gets `attempt` (§3.1) — the per-run retry count that the advisory escalation policy (Routing Guide §6.4) is tuned against.
 
 ## 5. Reading the results — `*metrics` and the derived numbers
 

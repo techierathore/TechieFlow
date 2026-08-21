@@ -106,6 +106,8 @@ So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit 
 | `cost_usd` | number \| null | Σ real per-message cost from `opencode.db` on OpenCode; **always `null` on Claude Code** (the transcript has no cost and a rate-card estimate would be an estimate presented as a measurement). |
 | `tokens_scope` | string | `tree` = the full session tree — OpenCode: pointer session + descendant sessions; Claude: pointer transcript + the subagent transcripts beside it (`<transcript-dir>/<session-id>/subagents/agent-*.jsonl`, a deterministic path verified 2026-08-20 via a `SubagentStop` payload's `agent_transcript_path`). `main` = Claude main thread only (no subagents dir existed). `none` = window could not be computed (no pointer / unreadable store / empty window) — **tokens are never estimated**. |
 
+| `attempt` | int | **`runs` only, added 2026-08-21.** `1 +` the number of prior non-backfilled `run` records with the same `cmd` whose `reqs_touched` intersects this record's. Stamped only when the record carries a non-empty `reqs_touched`; absent on backfilled records and on REQ-less runs (`metrics-report`, renders). Distinct from the gate-level `attempt` in §3.1 (per REQ per verify). This is the counter `routing.yaml` `escalation:` reads **at launch** — `bash .tfcore/utils/tf-emit.sh --next-run-attempt <cmd> <REQ-ID>...` prints the value the next record would get. Advisory: telemetry records, it never switches a model (DECISIONS.md 2026-08-21). |
+
 Provenance rule applied once more: **never pool `cost_usd` across harness** — Claude records are `null`, and a sum over mixed records silently under-reports. Tokens may be compared across harness; dollars may not.
 
 ## 3. `docs/metrics/gates.jsonl` — one record per REQ verdict per verify run

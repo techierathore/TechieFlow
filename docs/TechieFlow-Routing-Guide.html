@@ -100,7 +100,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <body>
 <button id="themeToggle" class="theme-toggle" title="Toggle light / dark">☾ Dark</button>
 <div class="layout">
-<nav class="side"><h1>TechieFlow Model Routing Guide</h1><div class="sub">Last rendered: 2026-08-20</div><div class="group">Contents</div><ol><li><a href="#the-problem-routing-solves">1. The problem routing solves</a></li>
+<nav class="side"><h1>TechieFlow Model Routing Guide</h1><div class="sub">Last rendered: 2026-08-21</div><div class="group">Contents</div><ol><li><a href="#the-problem-routing-solves">1. The problem routing solves</a></li>
 <li><a href="#the-three-tiers">2. The three tiers</a></li>
 <li><a href="#the-complete-map-what-runs-on-what">3. The complete map — what runs on what</a></li>
 <li class="h3"><a href="#phases-the-commands-you-type">3.1 Phases (the commands you type)</a></li>
@@ -111,7 +111,8 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <li class="h3"><a href="#moving-a-phase-between-tiers">6.1 Moving a phase between tiers</a></li>
 <li class="h3"><a href="#moving-a-subagent-between-tiers">6.2 Moving a subagent between tiers</a></li>
 <li class="h3"><a href="#changing-which-model-a-tier-means-per-tier-per-harness">6.3 Changing which model a tier means — per tier, per harness</a></li>
-<li class="h3"><a href="#editing-routing-yaml-by-hand">6.4 Editing routing.yaml by hand</a></li>
+<li class="h3"><a href="#escalation-when-the-base-tier-isn-t-cutting-it">6.4 Escalation — when the base tier isn't cutting it</a></li>
+<li class="h3"><a href="#editing-routing-yaml-by-hand">6.5 Editing routing.yaml by hand</a></li>
 <li><a href="#under-the-hood-what-actually-gets-generated">7. Under the hood — what actually gets generated</a></li>
 <li><a href="#reading-the-results-the-tuning-loop">8. Reading the results — the tuning loop</a></li>
 <li><a href="#troubleshooting">9. Troubleshooting</a></li></ol></nav><main>
@@ -184,7 +185,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 bash .tfcore/utils/tf-routing.sh status     # read-only: what routing is/would be doing
 bash .tfcore/utils/tf-routing.sh on         # enable  → generates ~23 binding files
 bash .tfcore/utils/tf-routing.sh off        # disable → removes exactly those files</code></pre>
-<p><code>status</code> prints the live tier/model/phase table for THIS app, whether the bindings on disk agree with the flag, and where routing shows up in the TUI.</p>
+<p><code>status</code> prints the live tier/model/phase table for THIS app, whether the bindings on disk agree with the flag, the advisory escalation policy (§6.4), and where routing shows up in the TUI.</p>
 <p>After <code>on</code>, <strong>you keep using the same commands you always used</strong>:</p>
 <table>
 <tr><th>Harness</th><th>You type</th><th>What changed</th></tr>
@@ -233,7 +234,33 @@ bash .tfcore/utils/tf-routing.sh set-model standard claude sonnet
 bash .tfcore/utils/tf-routing.sh set-model economy opencode opencode-go/mimo-v2.5
 bash .tfcore/utils/tf-routing.sh set-model economy claude haiku</code></pre>
 <p>Find OpenCode ids with <code>opencode models</code>. On the Claude side you can also repoint what the aliases mean machine-wide with environment variables: <code>ANTHROPIC_DEFAULT_OPUS_MODEL</code>, <code>ANTHROPIC_DEFAULT_SONNET_MODEL</code>, <code>ANTHROPIC_DEFAULT_HAIKU_MODEL</code>.</p>
-<h3 id="editing-routing-yaml-by-hand">6.4 Editing routing.yaml by hand<a class="anchor-link" href="#editing-routing-yaml-by-hand">#</a></h3>
+<h3 id="escalation-when-the-base-tier-isn-t-cutting-it">6.4 Escalation — when the base tier isn't cutting it<a class="anchor-link" href="#escalation-when-the-base-tier-isn-t-cutting-it">#</a></h3>
+<p><code>routing.yaml</code> carries an <strong>advisory</strong> escalation policy, ported from the AI-First Playbook's <code>model-tiers.yml</code>:</p>
+<pre><code>escalation:
+  fix-issues:
+    after_attempts: 2
+    tier: frontier</code></pre>
+<p>Meaning: if the same REQs have already been through <code>fix-issues</code> twice without reaching <code>Verified</code>, launch the <strong>third</strong> run on the frontier tier. Three things it is <em>not</em>:</p>
+<ul>
+<li><strong>Not runtime.</strong> Nothing switches a running phase's model — neither harness can, and the one place it could be faked (OpenCode's undocumented <code>chat.message</code> mutation) has no Claude Code equivalent (DECISIONS.md 2026-08-21).</li>
+<li><strong>Not enforced.</strong> It is applied by whoever launches the command — you, or a wrapper script — by reading the attempt history <em>before</em> the run starts.</li>
+<li><strong>Not a binding.</strong> <code>set-escalation</code> edits <code>routing.yaml</code> only; it generates no files, so it needs no <code>bind</code>.</li>
+</ul>
+<p>How to apply it at launch:</p>
+<pre><code># 1. What attempt would the next fix-issues run on these REQs be?
+bash .tfcore/utils/tf-emit.sh --next-run-attempt fix-issues REQ-UI-009 REQ-FN-011   # → 3
+# 2. status prints the policy next to the base tier:
+bash .tfcore/utils/tf-routing.sh status
+#    Escalation (ADVISORY ...):
+#      fix-issues   after 2 attempt(s) on the same REQs -&gt; launch the next on frontier (base tier: frontier)
+# 3. If the answer exceeds after_attempts, launch on the escalation tier:
+#    Claude Code:  /model opus  then  /tf:fix-issues ...   (or run the old command form on opus)
+#    OpenCode:     pick the tier model from the model list, then /techieflow:tasks:fix-issues ...</code></pre>
+<p>The attempt history is the checklist's own record: <code>attempt</code> on each <code>runs.jsonl</code> record (§2.5 of <code>SCHEMA.md</code> — <code>1 +</code> prior non-backfilled runs of the same <code>cmd</code> touching any of the same REQs), with the per-REQ verdict history in <code>gates.jsonl</code> and the Verification Log in <code>PROJECT-STATUS.md</code> as the human-readable view. Tune the threshold from the data — if third attempts on the base tier usually succeed anyway, raise it; if second attempts mostly fail, lower it:</p>
+<pre><code>bash .tfcore/utils/tf-routing.sh set-escalation fix-issues 3 frontier   # raise the threshold
+bash .tfcore/utils/tf-routing.sh set-escalation build-phase 2 frontier  # add a policy for another phase</code></pre>
+<p>With the shipped map <code>fix-issues</code> is already <code>frontier</code>, so the default row only bites after you demote it (<code>set-tier fix-issues standard</code>) — which is exactly the experiment it exists to make safe.</p>
+<h3 id="editing-routing-yaml-by-hand">6.5 Editing routing.yaml by hand<a class="anchor-link" href="#editing-routing-yaml-by-hand">#</a></h3>
 <p>The file is deliberately human-editable (flat, two-space indent, commented). After any manual edit:</p>
 <pre><code>bash .tfcore/utils/tf-routing.sh bind      # re-apply → regenerates all bindings</code></pre>
 <h2 id="under-the-hood-what-actually-gets-generated">7. Under the hood — what actually gets generated<a class="anchor-link" href="#under-the-hood-what-actually-gets-generated">#</a></h2>
@@ -263,6 +290,7 @@ bash .tfcore/utils/tf-routing.sh set-model economy claude haiku</code></pre>
 <tr><td>"I turned it on and the TUI looks the same"</td><td>Expected — the default chat agent is never routed (§5)</td><td>Run a phase command or Tab to a persona</td></tr>
 <tr><td><code>status</code> says flag and bindings disagree</td><td>An update or manual edit got out of sync</td><td><code>bash .tfcore/utils/tf-routing.sh bind</code></td></tr>
 <tr><td>A phase ran on the wrong model</td><td>Invoked unrouted (old Claude command form, or model picked manually)</td><td>Check <code>runs.jsonl</code> → <code>routed:false</code> confirms; use <code>/tf:&lt;phase&gt;</code> (Claude) or the <code>/techieflow:tasks:*</code> command (OpenCode)</td></tr>
+<tr><td><code>fix-issues</code> keeps failing on the same REQs</td><td>That's what escalation is for (§6.4) — it is advisory, so nothing happens until you act on it</td><td><code>tf-emit.sh --next-run-attempt fix-issues &lt;REQs&gt;</code>; if it exceeds <code>after_attempts</code>, launch the next run on the escalation tier</td></tr>
 <tr><td>Follow-up chat is on the phase's model (OpenCode)</td><td>Verified behavior — the session keeps the command's model</td><td>Pick your model from the model list, or start a new session</td></tr>
 <tr><td>"I want my normal chat cheaper too"</td><td>That's not routing's job</td><td>TUI model list, or <code>"model"</code> in <code>~/.config/opencode/opencode.jsonc</code></td></tr>
 <tr><td>Config error mentioning <code>.opencode/opencode.json</code></td><td>Hand-edited generated file</td><td>Never edit generated files — <code>bind</code> regenerates them</td></tr>

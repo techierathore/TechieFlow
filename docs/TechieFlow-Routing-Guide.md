@@ -79,7 +79,7 @@ bash .tfcore/utils/tf-routing.sh on         # enable  → generates ~23 binding 
 bash .tfcore/utils/tf-routing.sh off        # disable → removes exactly those files
 ```
 
-`status` prints the live tier/model/phase table for THIS app, whether the bindings on disk agree with the flag, and where routing shows up in the TUI.
+`status` prints the live tier/model/phase table for THIS app, whether the bindings on disk agree with the flag, the advisory escalation policy (§6.4), and where routing shows up in the TUI.
 
 After `on`, **you keep using the same commands you always used**:
 
@@ -153,7 +153,47 @@ bash .tfcore/utils/tf-routing.sh set-model economy claude haiku
 
 Find OpenCode ids with `opencode models`. On the Claude side you can also repoint what the aliases mean machine-wide with environment variables: `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL`.
 
-### 6.4 Editing routing.yaml by hand
+### 6.4 Escalation — when the base tier isn't cutting it
+
+`routing.yaml` carries an **advisory** escalation policy, ported from the AI-First Playbook's `model-tiers.yml`:
+
+```yaml
+escalation:
+  fix-issues:
+    after_attempts: 2
+    tier: frontier
+```
+
+Meaning: if the same REQs have already been through `fix-issues` twice without reaching `Verified`, launch the **third** run on the frontier tier. Three things it is *not*:
+
+- **Not runtime.** Nothing switches a running phase's model — neither harness can, and the one place it could be faked (OpenCode's undocumented `chat.message` mutation) has no Claude Code equivalent (DECISIONS.md 2026-08-21).
+- **Not enforced.** It is applied by whoever launches the command — you, or a wrapper script — by reading the attempt history *before* the run starts.
+- **Not a binding.** `set-escalation` edits `routing.yaml` only; it generates no files, so it needs no `bind`.
+
+How to apply it at launch:
+
+```bash
+# 1. What attempt would the next fix-issues run on these REQs be?
+bash .tfcore/utils/tf-emit.sh --next-run-attempt fix-issues REQ-UI-009 REQ-FN-011   # → 3
+# 2. status prints the policy next to the base tier:
+bash .tfcore/utils/tf-routing.sh status
+#    Escalation (ADVISORY ...):
+#      fix-issues   after 2 attempt(s) on the same REQs -> launch the next on frontier (base tier: frontier)
+# 3. If the answer exceeds after_attempts, launch on the escalation tier:
+#    Claude Code:  /model opus  then  /tf:fix-issues ...   (or run the old command form on opus)
+#    OpenCode:     pick the tier model from the model list, then /techieflow:tasks:fix-issues ...
+```
+
+The attempt history is the checklist's own record: `attempt` on each `runs.jsonl` record (§2.5 of `SCHEMA.md` — `1 +` prior non-backfilled runs of the same `cmd` touching any of the same REQs), with the per-REQ verdict history in `gates.jsonl` and the Verification Log in `PROJECT-STATUS.md` as the human-readable view. Tune the threshold from the data — if third attempts on the base tier usually succeed anyway, raise it; if second attempts mostly fail, lower it:
+
+```bash
+bash .tfcore/utils/tf-routing.sh set-escalation fix-issues 3 frontier   # raise the threshold
+bash .tfcore/utils/tf-routing.sh set-escalation build-phase 2 frontier  # add a policy for another phase
+```
+
+With the shipped map `fix-issues` is already `frontier`, so the default row only bites after you demote it (`set-tier fix-issues standard`) — which is exactly the experiment it exists to make safe.
+
+### 6.5 Editing routing.yaml by hand
 
 The file is deliberately human-editable (flat, two-space indent, commented). After any manual edit:
 
@@ -202,6 +242,7 @@ Every phase run appends a record to `docs/metrics/runs.jsonl` (full field refere
 | "I turned it on and the TUI looks the same" | Expected — the default chat agent is never routed (§5) | Run a phase command or Tab to a persona |
 | `status` says flag and bindings disagree | An update or manual edit got out of sync | `bash .tfcore/utils/tf-routing.sh bind` |
 | A phase ran on the wrong model | Invoked unrouted (old Claude command form, or model picked manually) | Check `runs.jsonl` → `routed:false` confirms; use `/tf:<phase>` (Claude) or the `/techieflow:tasks:*` command (OpenCode) |
+| `fix-issues` keeps failing on the same REQs | That's what escalation is for (§6.4) — it is advisory, so nothing happens until you act on it | `tf-emit.sh --next-run-attempt fix-issues <REQs>`; if it exceeds `after_attempts`, launch the next run on the escalation tier |
 | Follow-up chat is on the phase's model (OpenCode) | Verified behavior — the session keeps the command's model | Pick your model from the model list, or start a new session |
 | "I want my normal chat cheaper too" | That's not routing's job | TUI model list, or `"model"` in `~/.config/opencode/opencode.jsonc` |
 | Config error mentioning `.opencode/opencode.json` | Hand-edited generated file | Never edit generated files — `bind` regenerates them |

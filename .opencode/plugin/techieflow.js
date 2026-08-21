@@ -12,7 +12,12 @@
 //
 // RULE: THIS FILE CONTAINS NO POLICY. It is a payload translator + process
 // runner. The guards live in .tfcore/hooks/*.sh, unchanged, reading the same
-// Claude-shaped stdin JSON they get from Claude Code's PreToolUse hooks:
+// Claude-shaped stdin JSON they get from Claude Code's PreToolUse hooks. The
+// one flag it reads itself is the YOLO switch (.tfcore/.session/yolo.json /
+// TF_YOLO=1, rule .tfcore/tasks/_yolo-mode.md): while on, `permission.ask`
+// auto-approves the permission map's rm/rmdir/sudo asks and TF_YOLO=1 is
+// exported to tool shells so block-git.sh allows read-only git. Writes to
+// git never reach this hook — they are `deny` in the map.
 //   bash  {command}                        -> Bash  {command}            -> block-git.sh
 //   edit  {filePath,oldString,newString}   -> Edit  {file_path,old_string,new_string}
 //   write {filePath,content}               -> Write {file_path,content}  -> guard-status.sh + guard-verify.sh
@@ -52,6 +57,16 @@ export const TechieFlowPlugin = async ({ directory }) => {
     CLAUDE_PROJECT_DIR: root,
     TF_PROJECT_DIR: root,
     TF_HARNESS: "opencode",
+  }
+
+  // YOLO flag: env TF_YOLO=1 (tf-goal.sh) or .tfcore/.session/yolo.json (tf-yolo.sh on).
+  function yoloOn() {
+    try {
+      if (process.env.TF_YOLO === "1") return true
+      return fs.existsSync(path.join(root, ".tfcore", ".session", "yolo.json"))
+    } catch {
+      return false
+    }
   }
 
   // Returns the guard's stderr when the guard BLOCKS (exit 2), else null.
@@ -189,12 +204,28 @@ export const TechieFlowPlugin = async ({ directory }) => {
       }
     },
 
+    // YOLO / goal mode (.tfcore/tasks/_yolo-mode.md): when the flag is on, the
+    // `rm * / rmdir * / sudo *` asks from the permission map are auto-approved so
+    // an unattended run never stalls on a delete. Git WRITES never reach this
+    // hook — they are `deny` in the map and exit-2 in block-git.sh. Fail-open:
+    // if the harness never calls permission.ask, nothing changes.
+    "permission.ask": async (input, output) => {
+      try {
+        if (!active || !output) return
+        if (!yoloOn()) return
+        const type = String((input && input.type) || "")
+        if (type && type !== "bash") return
+        output.status = "allow"
+      } catch {}
+    },
+
     "shell.env": async (input, output) => {
       try {
         if (!output || !output.env) return
         output.env.TF_HARNESS = "opencode"
         output.env.TF_PROJECT_DIR = root
         if (input && input.sessionID) output.env.TF_SESSION_ID = input.sessionID
+        if (yoloOn()) output.env.TF_YOLO = "1"
       } catch {}
     },
 

@@ -129,7 +129,7 @@
     <li><a href="#libraries">Custom library agents</a></li>
     <li><a href="#standards-enforcement">Coding standards enforcement</a></li>
     <li><a href="#wsl-runtime">MAUI from WSL / macOS</a></li>
-    <li><a href="#permissions">Permissions (yolo-except-git)</a></li>
+    <li><a href="#permissions">Permissions (yolo-except-git-writes)</a></li>
   </ol>
   <div class="group">Reference</div>
   <ol>
@@ -479,7 +479,7 @@ appium --address 0.0.0.0 --port 4723   # start the remote control (leave this ru
   <div class="s"><h4>→ <code>scaffold-brownfield.sh</code> / <code>scaffold-greenfield.sh</code> copy your v4 setup (§3)</h4></div>
 </div>
 <div class="pain">
-  <div class="p"><h4>6. Claude Code prompts every Bash; <code>*yolo</code> doesn't help</h4></div>
+  <div class="p"><h4>6. Claude Code prompts every Bash; <code>*yolo</code> doesn't help; a VM goal run waits days on delete prompts, git-read blocks and usage limits</h4></div>
   <div class="s"><h4>→ Pre-built <code>.claude/settings.json</code> (§12)</h4></div>
 </div>
 <div class="pain">
@@ -634,7 +634,7 @@ cd /path/to/your-app
 ├── .tfcore/                        ← from scaffold (your customized v4)
 ├── .claude/
 │   ├── commands/TechieFlow/...              ← from scaffold
-│   ├── settings.json                  ← from scaffold (yolo-except-git)
+│   ├── settings.json                  ← from scaffold (yolo-except-git-writes)
 │   ├── trblazeui.md                   ← from `dotnet build` (TrBlazeUI NuGet)
 │   └── techierag.md                   ← from `dotnet build` (TechieRag NuGet)
 ├── .opencode/command/
@@ -1178,16 +1178,16 @@ dotnet build -t:Run -f net9.0-android          # Android head (emulator via Andr
 </div>
 
 <!-- ============================================================ -->
-<h2 id="permissions">12. Permissions (yolo-except-git)<span class="anchor-link"><a href="#permissions">#</a></span></h2>
+<h2 id="permissions">12. Permissions (yolo-except-git-writes)<span class="anchor-link"><a href="#permissions">#</a></span></h2>
 
 <div class="panel warn">
-  <strong>TechieFlow's <code>*yolo</code> vs Claude Code permissions:</strong> <code>*yolo</code> is an AGENT mode (don't ask elicitation questions). Claude Code's tool-permission layer is separate. The fix is <code>.claude/settings.json</code>, dropped by the scaffold scripts.
+  <strong>TechieFlow's <code>*yolo</code> IS the permission switch now (2026-08-21):</strong> <code>*yolo</code> — or the word YOLO in any command, an active Claude Code <code>/goal</code>, or a <code>tf-goal.sh</code> run — writes the flag <code>.tfcore/.session/yolo.json</code>; the PreToolUse hook reads it and stops asking for deletes/<code>sudo</code>, allows read-only git, and the agent runs to completion with no pauses. Git <strong>writes</strong> stay denied in every mode. Rule: <code>.tfcore/tasks/_yolo-mode.md</code>; details in §12a below.
 </div>
 
-<p>The pre-built config <strong>auto-allows</strong> Read/Glob/Grep/Edit/Write/MultiEdit and <strong>all Bash</strong> (bare <code>"Bash"</code>) — so create/update/<strong>move</strong> run with zero prompts. <strong>Asks</strong> for <strong>deletes</strong> (<code>Bash(rm *)</code>, <code>Bash(rmdir *)</code>) and <code>Bash(sudo *)</code>. <strong>Denies</strong> catastrophic <code>rm -rf</code> root/home paths <strong>and <code>git</code>/<code>gh</code> outright</strong> — git is manual in TechieFlow; agents never run it, so it is a hard deny, not an ask. Permission precedence is <code>deny → ask → allow</code>. <em>(Cross-project tip: to let a session work in another app's folder without per-path prompts, add that root to <code>permissions.additionalDirectories</code> in this project's settings.json — keep those machine-specific paths out of any shared template.)</em></p>
+<p>The pre-built config <strong>auto-allows</strong> Read/Glob/Grep/Edit/Write/MultiEdit and <strong>all Bash</strong> (bare <code>"Bash"</code>) — so create/update/<strong>move</strong> run with zero prompts. <strong>Deletes and <code>sudo</code> ask via the hook</strong> (<em>not</em> a settings <code>ask</code> rule — Claude Code honours a settings <code>ask</code> even in bypass mode and even when a hook says allow, so it could never be switched off). <strong>Denies</strong> catastrophic <code>rm -rf</code> root/home paths <strong>and every <code>git</code>/<code>gh</code> WRITE subcommand</strong> (<code>commit|push|add|reset|checkout|switch|restore|merge|rebase|stash|clean|pull|fetch|…</code>, <code>gh pr|issue|repo|release create|merge|close|…</code>) — git is manual in TechieFlow; agents never write it, so it is a hard deny in every permission mode. Precedence is <code>deny → ask → hook → allow</code>. <em>(Cross-project tip: to let a session work in another app's folder without per-path prompts, add that root to <code>permissions.additionalDirectories</code> in this project's settings.json — keep those machine-specific paths out of any shared template.)</em></p>
 
 <div class="panel warn">
-  <strong>The git deny is TWO layers, because prefix rules alone leak.</strong> <code>Bash(git *)</code> is a literal prefix match — it never sees <code>cd src &amp;&amp; git log</code> or <code>echo done; git add -A</code>, which the bare <code>"Bash"</code> allow would wave straight through. That is exactly how agents kept "accidentally" running git during status updates. So the config also wires a <strong>PreToolUse hook</strong> — <code>.tfcore/hooks/block-git.sh</code> — that inspects every Bash call and blocks <code>git</code>/<code>gh</code> used as a command word anywhere in the command line, replying with the local-evidence recipe (checklist tables + working-tree files + fresh build) so the agent continues correctly instead of flailing. You still run git yourself: in a separate terminal, or by typing <code>!git …</code> in the session (user-typed bang commands bypass agent tool permissions).
+  <strong>The git ban is TWO layers, because prefix rules alone leak.</strong> <code>Bash(git commit*)</code> is a literal prefix match — it never sees <code>cd src &amp;&amp; git commit</code> or <code>echo done; git add -A</code>, which the bare <code>"Bash"</code> allow would wave straight through. That is exactly how agents kept "accidentally" running git during status updates. So the config also wires a <strong>PreToolUse hook</strong> — <code>.tfcore/hooks/block-git.sh</code> — that parses every Bash call (compound forms, <code>bash -c</code>, <code>eval</code>, <code>$(…)</code>, wrappers like <code>sudo</code>/<code>env</code>/<code>xargs</code>) and classifies each <code>git</code>/<code>gh</code> node as <strong>read</strong> (<code>status</code>/<code>log</code>/<code>diff</code>/<code>show</code>/<code>blame</code>/<code>grep</code>/<code>branch</code>/<code>tag -l</code>/<code>stash list</code>/<code>remote -v</code>/<code>config --get</code>, <code>gh pr list|view</code>) or <strong>write</strong> (everything else). Writes are blocked always; reads are blocked outside YOLO and allowed in YOLO. The block message carries the local-evidence recipe (checklist tables + working-tree files + fresh build) so the agent continues correctly instead of flailing. You still run git yourself: in a separate terminal, or by typing <code>!git …</code> in the session (user-typed bang commands bypass agent tool permissions).
 </div>
 
 <div class="panel warn">
@@ -1204,10 +1204,13 @@ dotnet build -t:Run -f net9.0-android          # Android head (emulator via Andr
       "Edit", "Write", "MultiEdit", "NotebookEdit",
       "Read", "Glob", "Grep", "TodoWrite", "WebFetch", "WebSearch", "Task"
     ],
-    "ask": [ "Bash(rm *)", "Bash(rmdir *)", "Bash(sudo *)" ],
+    "ask": [],
     "deny": [
       "Bash(rm -rf /)", "Bash(rm -rf /*)", "Bash(rm -rf ~)", "Bash(rm -rf ~/*)",
-      "Bash(git)", "Bash(git *)", "Bash(gh)", "Bash(gh *)"
+      "Bash(git commit*)", "Bash(git push*)", "Bash(git add*)", "Bash(git reset*)",
+      "Bash(git checkout*)", "Bash(git switch*)", "Bash(git restore*)", "Bash(git merge*)",
+      "… every other git WRITE subcommand (rebase, cherry-pick, revert, clean, pull, fetch, init, clone, …) …",
+      "Bash(gh pr create*)", "Bash(gh pr merge*)", "Bash(gh issue create*)", "… every gh WRITE verb …"
     ]
   },
   "hooks": {
@@ -1243,6 +1246,38 @@ dotnet build -t:Run -f net9.0-android          # Android head (emulator via Andr
 </div>
 
 <!-- ============================================================ -->
+<h3 id="yolo">12a. YOLO / goal mode — "I've given you all the permissions; run until it's done" (2026-08-21)<span class="anchor-link"><a href="#yolo">#</a></span></h3>
+
+<p><code>*yolo</code> used to be agent-side only (skip elicitation) and the owner still got prompted for every delete and blocked on every git read — which is how a VM goal run took <strong>3 days</strong>, mostly waiting for a human. Now <code>*yolo</code>, the word <strong>YOLO</strong> anywhere in a command, an active Claude Code <strong><code>/goal</code></strong>, or a <code>tf-goal.sh</code> run all mean the same thing, defined in <code>.tfcore/tasks/_yolo-mode.md</code>:</p>
+
+<table>
+  <thead><tr><th></th><th>Normal</th><th>YOLO</th></tr></thead>
+  <tbody>
+    <tr><td><code>rm</code> / <code>rmdir</code> / <code>sudo</code></td><td>hook asks</td><td><strong>allowed, no prompt</strong> (catastrophic <code>rm -rf /</code>/<code>~</code> still denied)</td></tr>
+    <tr><td>git/gh <strong>reads</strong> (<code>status</code>/<code>log</code>/<code>diff</code>/<code>blame</code>, <code>gh pr view</code>)</td><td>blocked</td><td><strong>allowed</strong></td></tr>
+    <tr><td>git/gh <strong>writes</strong> (<code>commit</code>/<code>push</code>/<code>add</code>/<code>reset</code>/<code>checkout</code>/<code>stash</code>/<code>tag</code>, <code>gh pr create|merge</code>)</td><td>blocked</td><td><strong>blocked — always</strong></td></tr>
+    <tr><td>Elicitation, phase-boundary pauses, "confirm the BRD-N list", "ask once" questions</td><td>pause</td><td><strong>decide the default, record it, continue</strong></td></tr>
+    <tr><td>Build pass scope</td><td>whole checklist (§2b)</td><td>whole checklist <strong>+ automatic FIX loop</strong> on verifier FAIL rows (build-phase §6c, ≤5 cycles)</td></tr>
+    <tr><td>Turn ending</td><td>may hand back</td><td><strong>only</strong> when the goal is complete (<code>tf-yolo.sh done complete</code>) or every remaining REQ is owner-gated (<code>done blocked</code>)</td></tr>
+  </tbody>
+</table>
+
+<div class="panel">
+  <strong>Mechanics.</strong> The flag is <code>.tfcore/.session/yolo.json</code> (<code>bash .tfcore/utils/tf-yolo.sh on|off|status</code>; never committed). <code>block-git.sh</code> reads it (plus <code>TF_YOLO=1</code> and the hook payload's <code>permission_mode</code> — Claude Code's <code>bypassPermissions</code>/<code>auto</code> count as YOLO); the OpenCode plugin reads the same flag and auto-approves its <code>rm */sudo *</code> asks via <code>permission.ask</code>. <strong>Why the delete prompt moved out of <code>settings.json</code>:</strong> Claude Code honours a settings <code>ask</code> rule <em>even in bypass mode and even when a hook says allow</em> — so as long as <code>Bash(rm *)</code> sat in <code>ask</code>, no mode could stop the prompt. A hook-issued <code>ask</code> can be withheld; a settings <code>ask</code> cannot.
+</div>
+
+<div class="panel warn">
+  <strong>Usage limits (5-hour / weekly).</strong> Nothing inside a session can wait a limit out, so the wait lives in a supervisor:
+  <pre><code class="lang-bash">bash .tfcore/utils/tf-goal.sh /path/to/App "Take MyApp to Handoff: build every open REQ, verify all, fix until every row is Verified."
+bash .tfcore/utils/tf-goal.sh --harness opencode --model opencode-go/kimi-k3 /path/to/App @goal.md
+bash .tfcore/utils/tf-goal.sh --resume /path/to/App      # after a reboot</code></pre>
+  It runs the goal headless (<code>claude -p --permission-mode bypassPermissions</code> / <code>opencode run --auto</code>), parses the reset time from the limit message (<code>resets 7pm (Asia/Kolkata)</code>, <code>resets in 2h 14m</code>, <code>usage limit reached|&lt;epoch&gt;</code>, weekly <code>resets Tue 3pm</code>), <strong>sleeps until reset + 15 min</strong> (<code>--buffer-min</code>), logs <code>RETRY AT …</code> to <code>.tfcore/.session/goal.log</code>, and <strong>resumes the same session</strong>. Crashes back off 2 → 30 min; an agent that stops without finishing is re-prompted; it exits only on the agent's sentinel (<code>0</code> complete, <code>3</code> owner-blocked, <code>4</code> max cycles). The agent's side of the bargain is the status gate — every phase ends with PROJECT-STATUS + checklist written, so a resume is lossless.
+</div>
+
+<div class="panel">
+  <strong>Build passes are whole-checklist, YOLO or not.</strong> The other 3-day culprit: build-phase runs that implemented a few REQs, wrote "next command: <code>*build-phase</code> for the remaining REQs" and stopped. <code>build-phase.md §2b</code> bans that ending — a pass is done when <strong>every</strong> working-list REQ is ≥ <code>Implemented</code> (or a logged <code>Blocked</code>/owner-gated blocker), the verifier has been chained, and (in YOLO) its FAIL rows have been looped. Long list ⇒ more sub-agent clusters, never a shorter pass. <code>_status-update-gate.md</code> item 5 carries the matching rule for the next-command line.
+</div>
+
 <h2 id="agents">13. Agent cheat sheet<span class="anchor-link"><a href="#agents">#</a></span></h2>
 
 <div class="panel">
@@ -1418,7 +1453,17 @@ docs/metrics/*.jsonl text eol=lf merge=union</code></pre>
 
 <details>
   <summary><code>*yolo</code> doesn't stop Bash prompts.</summary>
-  <p>Right — <code>*yolo</code> is agent-side (elicitation skipping). Tool permissions are <code>.claude/settings.json</code> (already in place from scaffold).</p>
+  <p>It does now (2026-08-21, §12a). <code>*yolo</code> writes <code>.tfcore/.session/yolo.json</code>; the PreToolUse hook reads it and stops asking for <code>rm</code>/<code>rmdir</code>/<code>sudo</code> and allows read-only git. Still prompted? (1) The app's <code>.claude/settings.json</code> predates the change and still has <code>Bash(rm *)</code> under <code>ask</code> — run <code>update-framework.sh &lt;app&gt;</code>; a settings <code>ask</code> prompts in every mode, even bypass. (2) The agent forgot <code>tf-yolo.sh on</code> — type <code>*yolo</code> again or run it yourself. Git <strong>writes</strong> prompt for nobody — denied outright in every mode.</p>
+</details>
+
+<details>
+  <summary>My unattended goal run stopped on "You've hit your limit · resets …".</summary>
+  <p>Use the supervisor, not a bare session: <code>bash .tfcore/utils/tf-goal.sh &lt;app-dir&gt; "&lt;goal&gt;"</code> (§12a). It parses the reset time, sleeps until reset + 15 min, and resumes the same session; <code>--resume &lt;app-dir&gt;</code> continues after a reboot. Watch <code>.tfcore/.session/goal.log</code>.</p>
+</details>
+
+<details>
+  <summary><code>*build-phase</code> implemented a few REQs and told me to run it again for the rest.</summary>
+  <p>That ending is banned (build-phase §2b). Re-run it — FRESH/FIX detection picks up the open rows — and if it happens again, quote §2b back: a pass is done when every working-list REQ is ≥ <code>Implemented</code>; context pressure means more sub-agent clusters, not a shorter pass.</p>
 </details>
 
 <details>
@@ -1720,6 +1765,9 @@ bash .tfcore/utils/tf-routing.sh set-model standard opencode opencode-go/qwen3.7
 bash .tfcore/utils/tf-routing.sh set-model economy  claude   haiku
 bash .tfcore/utils/tf-routing.sh bind      # re-apply after hand-editing routing.yaml</code></pre>
 <p>Claude takes <code>opus</code>/<code>sonnet</code>/<code>haiku</code> (or a full id); OpenCode takes <code>provider/model</code> — list yours with <code>opencode models</code>.</p>
+
+<h3>Escalation — advisory, applied by you at launch</h3>
+<p><code>routing.yaml</code> also carries an <code>escalation:</code> block, shipped as <code>fix-issues: after_attempts: 2, tier: frontier</code> — "if the same REQs have been through <code>fix-issues</code> twice without reaching <code>Verified</code>, launch the third run on frontier". It is <strong>advisory</strong>: <code>bash .tfcore/utils/tf-emit.sh --next-run-attempt fix-issues &lt;REQ-IDs&gt;</code> reads the attempt history (the <code>attempt</code> field now stamped on every <code>runs.jsonl</code> record that touches REQs), <code>tf-routing.sh status</code> prints the policy, and <code>tf-routing.sh set-escalation &lt;phase&gt; &lt;attempts&gt; &lt;tier&gt;</code> tunes it. If the number exceeds the threshold, <em>you</em> launch the next run on the escalation tier (Claude: <code>/model opus</code> then the command; OpenCode: pick the model, then the command). Nothing ever switches a running phase's model — neither harness can (DECISIONS.md 2026-08-21; Routing Guide §6.4).</p>
 
 <h3>Reading the results</h3>
 <p>Each run's record shows declared vs observed: <code>"tier":"standard", "model":"opencode-go/kimi-k2.7-code", "routed":true, "tokens_out":42310, "cost_usd":0.41</code>. The deciding question after a couple of weeks: <strong>does the rework ratio rise on cheaper tiers?</strong> If standard builders hold the first-pass rate, demote more; if <code>mode:"fix"</code> re-entries climb, promote. Data corrects the map, not opinion.</p>

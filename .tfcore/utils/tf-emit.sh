@@ -6,7 +6,11 @@
 #
 # USAGE
 #   echo '{"kind":"run","app":"TrSetup","cmd":"build-phase"}' | tf-emit.sh runs
-#   tf-emit.sh --next-attempt REQ-UI-004        # prints an integer on stdout
+#   tf-emit.sh --next-attempt REQ-UI-004        # prints an integer on stdout (gate attempt per REQ)
+#   tf-emit.sh --next-run-attempt fix-issues REQ-UI-004 [REQ-...]
+#                                               # prints an integer: the `attempt` the NEXT run record for
+#                                               # this cmd + these REQs would get — the launch-time read
+#                                               # behind routing.yaml `escalation:` (advisory)
 #   tf-emit.sh --where                          # prints the resolved docs/metrics dir
 #
 # STREAMS: runs | gates | sessions | commits   (anything else is dropped)
@@ -99,6 +103,39 @@ try:
             except Exception:
                 continue
             if r.get("kind") == "gate" and r.get("req_id") == req and not r.get("backfilled"):
+                n += 1
+except FileNotFoundError:
+    pass
+print(n + 1)
+PY
+  exit 0
+fi
+
+# --- read helper: next RUN attempt number for a cmd + REQ set ------------
+# run attempt = 1 + count of prior NON-BACKFILLED `run` records with the same
+# cmd whose reqs_touched intersects the given REQ IDs. Same counting rule that
+# enrich_run() below stamps into `attempt` at append time, exposed so the
+# escalation policy in routing.yaml can be applied BEFORE a run is launched
+# (advisory; DECISIONS.md 2026-08-21). Prints 1 on any failure (never blocks).
+if [[ "$1" == "--next-run-attempt" ]]; then
+  CMD="$2"; shift 2 2>/dev/null
+  [[ -n "$CMD" && $# -gt 0 ]] || { echo 1; exit 0; }
+  python3 - "$MET_DIR/runs.jsonl" "$CMD" "$@" 2>"$TF_ERR" <<'PY' || echo 1
+import json, sys
+path, cmd, reqs = sys.argv[1], sys.argv[2], set(sys.argv[3:])
+n = 0
+try:
+    with open(path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            if (r.get("kind") == "run" and r.get("cmd") == cmd and not r.get("backfilled")
+                    and reqs & set(r.get("reqs_touched") or [])):
                 n += 1
 except FileNotFoundError:
     pass
@@ -433,6 +470,49 @@ def _window_opencode(t0, t1):
         return None
     return {"tot": tot, "models": models, "cost": round(cost, 6), "scope": "tree"}
 
+# --- per-run `attempt` (runs only; added 2026-08-21, SCHEMA.md §2.5) ------
+# attempt = 1 + prior NON-BACKFILLED `run` records with the same cmd whose
+# reqs_touched intersects this record's. Stamped only on live records that
+# carry a non-empty reqs_touched; backfilled records are left as the
+# reconciler wrote them. This is the counter routing.yaml `escalation:` reads
+# at launch (advisory — tf-emit never changes a model, it only records).
+_PRIOR_RUNS = None
+
+def _prior_runs():
+    global _PRIOR_RUNS
+    if _PRIOR_RUNS is None:
+        _PRIOR_RUNS = []
+        try:
+            with open(os.path.join(met_dir, "runs.jsonl"), encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        r = json.loads(line)
+                    except Exception:
+                        continue
+                    if r.get("kind") == "run" and not r.get("backfilled"):
+                        _PRIOR_RUNS.append((r.get("cmd"), set(r.get("reqs_touched") or [])))
+        except Exception:
+            pass
+    return _PRIOR_RUNS
+
+def stamp_attempt(rec):
+    if stream != "runs" or "attempt" in rec or rec.get("backfilled"):
+        return rec
+    try:
+        reqs = set(rec.get("reqs_touched") or [])
+        cmd = rec.get("cmd")
+        if not reqs or not cmd or rec.get("kind", "run") != "run":
+            return rec
+        prior = _prior_runs()
+        rec["attempt"] = 1 + sum(1 for c, rs in prior if c == cmd and (rs & reqs))
+        prior.append((cmd, reqs))  # later records in the same batch count this one
+    except Exception as e:
+        warn("attempt stamp failed (%s) — record kept without it" % e)
+    return rec
+
 def enrich_run(rec):
     if stream not in ("runs", "gates"):
         return rec
@@ -482,7 +562,7 @@ def enrich_run(rec):
 # .gitattributes block pins to LF. These files are LF on every platform.
 lines = []
 for rec in records:
-    line = json.dumps(enrich_run(enrich(rec)), separators=(",", ":"), ensure_ascii=False)
+    line = json.dumps(enrich_run(stamp_attempt(enrich(rec))), separators=(",", ":"), ensure_ascii=False)
     if "\n" in line or "\r" in line:
         warn("record serialised with a newline — record dropped")
         continue

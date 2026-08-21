@@ -9,6 +9,11 @@
 #                                                               e.g. set-model economy opencode opencode-go/deepseek-v4-flash
 #                                                               e.g. set-model frontier claude opus
 #   bash .tfcore/utils/tf-routing.sh bind                       re-generate bindings after editing routing.yaml by hand
+#   bash .tfcore/utils/tf-routing.sh set-escalation <phase> <attempts> <tier>
+#                                                               e.g. set-escalation fix-issues 2 frontier
+#                                                               ADVISORY: "after <attempts> runs of <phase> on the same
+#                                                               REQs, launch the next one on <tier>" — you apply it at
+#                                                               launch; nothing switches a running phase's model.
 #
 # Everything edits .tfcore/routing.yaml in place (comments preserved) and then
 # regenerates the harness bindings automatically via tf-routing-bind.sh — you
@@ -110,11 +115,57 @@ print(("set tiers.%s.%s -> %s" % (tier, harness, model)) if done else "FAILED: t
 PY
     _bind
     ;;
+  set-escalation)
+    PHASE="${2:-}"; ATTEMPTS="${3:-}"; TIER="${4:-}"
+    [[ -n "$PHASE" ]] || { echo "usage: tf-routing.sh set-escalation <phase> <attempts> <frontier|standard|economy>" >&2; exit 2; }
+    [[ "$ATTEMPTS" =~ ^[1-9][0-9]*$ ]] || { echo "attempts must be a positive integer (e.g. 2)" >&2; exit 2; }
+    case "$TIER" in frontier|standard|economy) ;; *)
+      echo "usage: tf-routing.sh set-escalation <phase> <attempts> <frontier|standard|economy>" >&2; exit 2 ;;
+    esac
+    python3 - "$RY" "$PHASE" "$ATTEMPTS" "$TIER" <<'PY'
+import sys
+p, phase, attempts, tier = sys.argv[1:5]
+lines = open(p, encoding="utf-8").read().splitlines(True)
+block = ["  %s:\n" % phase, "    after_attempts: %s\n" % attempts, "    tier: %s\n" % tier]
+sect = None; start = end = None; esc_at = None
+for i, line in enumerate(lines):
+    if line.strip() and not line.startswith(" ") and not line.lstrip().startswith("#"):
+        if sect == "escalation" and start is not None and end is None:
+            end = i
+        sect = line.split(":")[0].strip()
+        if sect == "escalation":
+            esc_at = i
+    elif sect == "escalation":
+        if line.startswith("  ") and not line.startswith("    ") and line.strip().rstrip(":") == phase:
+            start = i
+        elif start is not None and end is None and line.startswith("  ") and not line.startswith("    "):
+            end = i
+if start is not None:
+    # replace the existing <phase> block (its 2-space header + 4-space children)
+    if end is None:
+        end = len(lines)
+        while end > start + 1 and not lines[end - 1].strip():
+            end -= 1
+    lines[start:end] = block
+    what = "updated"
+elif esc_at is not None:
+    lines[esc_at + 1:esc_at + 1] = block
+    what = "added"
+else:
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+    lines += ["\n", "# Advisory escalation — see DECISIONS.md 2026-08-21.\n", "escalation:\n"] + block
+    what = "added (new escalation: section)"
+open(p, "w", encoding="utf-8", newline="\n").write("".join(lines))
+print("escalation.%s %s -> after_attempts: %s, tier: %s (advisory — applied at launch, never mid-run)" % (phase, what, attempts, tier))
+PY
+    # No _bind: escalation is advisory and generates no harness binding.
+    ;;
   status)
     python3 - "$RY" "$ROOT" <<'PY'
 import sys, os, re
 p, root = sys.argv[1], sys.argv[2]
-cfg = {"enabled": False, "phases": {}, "subagents": {}, "tiers": {}, "effort": {}}
+cfg = {"enabled": False, "phases": {}, "subagents": {}, "tiers": {}, "effort": {}, "escalation": {}}
 sect = tier = None
 for line in open(p, encoding="utf-8"):
     line = line.rstrip("\n")
@@ -125,12 +176,12 @@ for line in open(p, encoding="utf-8"):
         sect, tier = key.strip(), None
         if sect == "enabled":
             cfg["enabled"] = val.strip() == "true"
-    elif sect == "tiers":
-        if re.match(r"^  [a-z-]+:\s*$", line):
-            tier = line.strip()[:-1]; cfg["tiers"][tier] = {}
+    elif sect in ("tiers", "escalation"):
+        if re.match(r"^  [a-z0-9-]+:\s*$", line):
+            tier = line.strip()[:-1]; cfg[sect][tier] = {}
         elif tier and line.startswith("    "):
             k, _, v = line.strip().partition(":")
-            cfg["tiers"][tier][k.strip()] = v.strip()
+            cfg[sect][tier][k.strip()] = v.strip()
     elif sect in ("phases", "subagents", "effort"):
         k, _, v = line.strip().partition(":")
         cfg[sect][k.strip()] = v.strip()
@@ -158,6 +209,18 @@ sub = ["%s=%s" % (k, v) for k, v in sorted(cfg["subagents"].items())]
 if sub:
     print("Subagents:  " + ", ".join(sub))
 print()
+print("Escalation (ADVISORY — you apply it when you launch; nothing switches a model mid-run):")
+if cfg["escalation"]:
+    for ph in sorted(cfg["escalation"]):
+        e = cfg["escalation"][ph]
+        n, t = e.get("after_attempts", "?"), e.get("tier", "?")
+        base = cfg["phases"].get(ph, "inherit")
+        print("  %-18s after %s attempt(s) on the same REQs -> launch the next on %s (base tier: %s)" % (ph, n, t, base))
+    print("  next attempt number: bash .tfcore/utils/tf-emit.sh --next-run-attempt <phase> <REQ-ID>...")
+    print("  change:              bash .tfcore/utils/tf-routing.sh set-escalation <phase> <attempts> <tier>")
+else:
+    print("  none declared — add one: bash .tfcore/utils/tf-routing.sh set-escalation fix-issues 2 frontier")
+print()
 if cfg["enabled"]:
     print("Invoke routed phases as:")
     print("  OpenCode:    /techieflow:tasks:<phase>        (same commands as always — model now pinned)")
@@ -175,7 +238,7 @@ else:
 PY
     ;;
   *)
-    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
     exit 2
     ;;
 esac

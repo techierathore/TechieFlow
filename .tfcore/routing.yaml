@@ -81,3 +81,21 @@ effort:
   frontier: high
   standard: medium
   economy: low
+
+# ---------------------------------------------------------------------------
+# Escalation — ADVISORY ONLY (ported from AI-First-Playbook model-tiers.yml;
+# decision: DECISIONS.md 2026-08-21). Meaning of the row below: when the SAME
+# REQs have already been through `fix-issues` after_attempts times without
+# reaching Verified, launch the NEXT run on `tier`. It is applied by whoever
+# launches the phase (you, or a wrapper script) by reading the attempt history —
+# `attempt` on runs.jsonl records / the checklist verdict history — BEFORE the
+# run starts. Nothing switches a running phase's model; neither harness can.
+# Read the next attempt number with:
+#   bash .tfcore/utils/tf-emit.sh --next-run-attempt fix-issues REQ-UI-009 ...
+# Format: <phase>: (one line)  then  "    after_attempts: <int>"  "    tier: <tier>".
+# Ignored entirely while enabled: false, like everything else in this file.
+# ---------------------------------------------------------------------------
+escalation:
+  fix-issues:
+    after_attempts: 2
+    tier: frontier

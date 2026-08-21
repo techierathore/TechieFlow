@@ -42,6 +42,16 @@ Read the **Requirements Status** table in `docs/{AppName}-Checklist.md` (the sin
 
 Echo one line: `Mode: FIX — N items: REQ-UI-3, REQ-FN-2` or `Mode: FRESH — N items`.
 
+### 2b. ONE PASS = THE WHOLE WORKING LIST (owner rule 2026-08-21 — non-negotiable)
+
+**A build pass is finished when every REQ on the working list from §2a has reached at least `Implemented` (or a genuine `Blocked`), the verifier has been chained (§6b), and its FAIL rows have been looped (§6c). Not before.** The owner's observed anti-pattern — implement some REQs, update PROJECT-STATUS with "run `*build-phase` again for the remaining REQs", end the turn — is **banned**. The point of the build phase is that *all* checklist items reach the verify stage in one go, so the owner can then call the verifier once over everything.
+
+- **Do not shrink the working list** to "the first cluster", "the UI ones", "what fits this turn". §3 already fans the list out across parallel sub-agents; a long list means **more clusters and more sub-agents**, never a shorter pass. If your own context is filling up, delegate the remaining clusters to fresh sub-agents (each gets its REQ IDs + acceptance + the two standing rules) and keep only the cluster table + returns in your context. **Context pressure is a reason to delegate, not to stop.**
+- **Wait for every cluster.** §3 says "wait for ALL sub-agents to return" — that includes clusters you spawned late to replace a failed or partial return. A cluster that comes back `PARTIAL` is re-spawned with the missing REQs before you move to §5.
+- **Legitimate reasons for an open REQ to remain below `Implemented` at the end of a pass — and there are only these:** `Blocked` by a logged library gap (TR-NNN entry exists, workaround impossible); a REQ whose acceptance cannot be met without an owner-only asset (credentials, a paid account, a physical device, a product decision) — record it in PROJECT-STATUS "Known blockers" with the exact ask. "Ran out of time/turns", "large scope", "will do in the next pass" are **not** reasons.
+- **The next command after a complete pass is the verifier's or the owner's, never "build again for the rest".** `*build-phase` may appear as the next command only for FIX mode (verifier `FAIL` / `Needs re-verify` rows, §6b/§7) or once a `Blocked` library gap is resolved.
+- Under YOLO / goal mode (`.tfcore/tasks/_yolo-mode.md`) this section is doubly binding: there is nobody to "run it again".
+
 ### 3. Dependency analysis + parallel fan-out (MANDATORY — do not skip)
 
 **Single-agent sequential implementation is a banned anti-pattern.** Group the working list into dependency clusters by feature, then fan out clusters in parallel — **routing each cluster to the right builder by its REQ prefix**.
@@ -116,7 +126,12 @@ Run the build using the **invocation ladder** at `.tfcore/templates/v4custom/bui
 - The verifier ALSO runs the standards-compliance grep checks from `docs/{AppName}-Coding-Standards.md` §"Enforcement". Violations get noted in the offending REQ's Remarks (or a standards row) and reflected in PROJECT-STATUS standards-compliance.
 - The verifier reads the current Status table as its baseline — REQs already `Verified` re-confirm fast; it prioritizes the rest.
 
-If the verifier reports any `FAIL` / `Needs re-verify` items: return to the user with the matrix + message: "Fix the flagged REQ-* items by re-running `*build-phase {AppName}` — it detects FIX mode and fans out repair subagents (layout fixes route to trblazeui). `Blocked` (library-gap) items pass through."
+### 6c. FIX loop after the verifier
+
+If the verifier reports `FAIL` / `Needs re-verify` rows:
+
+- **YOLO / goal mode ON** (`bash .tfcore/utils/tf-yolo.sh is-on` exits 0, or `TF_YOLO=1`, or the session is a `/goal` / `tf-goal.sh` run): **do not hand back.** Re-enter §2a — it detects FIX mode on exactly those rows — fan the repairs out (§3; layout/overlap → `[trblazeui]`), rebuild (§5), re-smoke (§6), re-chain the verifier (§6b) on the same scope. Repeat until every row is terminal or `Blocked`, **up to 5 FIX cycles per pass**; each cycle emits its own `runs.jsonl` record with `"mode":"fix"` (§7a). A row that is still failing after 5 cycles is marked `FAIL` with a Remark naming the cycle count and the last observed defect, and goes into PROJECT-STATUS "Known blockers" — that is the only way a FAIL row survives a YOLO pass.
+- **YOLO OFF:** return to the user with the matrix + message: "Fix the flagged REQ-* items by re-running `*build-phase {AppName}` — it detects FIX mode and fans out repair subagents (layout fixes route to trblazeui). `Blocked` (library-gap) items pass through." (This — FIX mode on verifier failures — is the **only** situation where "run build-phase again" is a legitimate next step; see §2b.)
 
 ### 7. FINAL GATE — update PROJECT-STATUS.md (MANDATORY, non-skippable)
 
@@ -125,7 +140,7 @@ If the verifier reports any `FAIL` / `Needs re-verify` items: return to the user
 - **Build status (always update):** `last_verified_build: PASS` and `last_verified_date: {today YYYY-MM-DD}`. If the build failed and you somehow advanced anyway, set `FAIL` and add to "Known blockers".
 - **Open requirements:** sync the checkbox list to the checklist Status table — anything not `Verified` stays open.
 - **Next command — the Build → Verify → Handoff ladder, gated on the weakest open REQ** (per `_status-update-gate.md` item 5; do NOT freelance to `*verify all` just because you built something this pass):
-  - **Any REQ still unbuilt** (`Planned`/`In Progress`/`PARTIAL`/`NOT-IMPLEMENTED`, or open + not implemented) → keep phase `Build`, next command = `/TechieFlow:agents:flow-master *build-phase {AppName}` (OpenCode: `/flow-master *build-phase {AppName}`) naming the open REQ IDs. Building isn't finished, so **build is next — not verify**, even if other REQs you just wired now want verification. This includes REQs that are built but **`NOT-OBSERVABLE` for lack of a test/harness** — writing that test is build work (`*build-phase` adds unit tests), so build still leads until the verifier has something to assert.
+  - **Any REQ still unbuilt** (`Planned`/`In Progress`/`PARTIAL`/`NOT-IMPLEMENTED`, or open + not implemented) → keep phase `Build`, next command = `/TechieFlow:agents:flow-master *build-phase {AppName}` (OpenCode: `/flow-master *build-phase {AppName}`) naming the open REQ IDs. Building isn't finished, so **build is next — not verify**, even if other REQs you just wired now want verification. This includes REQs that are built but **`NOT-OBSERVABLE` for lack of a test/harness** — writing that test is build work (`*build-phase` adds unit tests), so build still leads until the verifier has something to assert. **But read §2b before you write this line:** if the unbuilt REQs are unbuilt because *this pass stopped early*, you are not at the gate yet — go back to §3 and build them. This bullet describes a state the owner finds after a `Blocked`/owner-gated remainder or a crashed session, not an ending you choose.
   - **All REQs built AND observable (≥ `Implemented`, with a test/route the verifier can exercise) but some not `Verified`** → phase `Verify`, next command = `/TechieFlow:agents:verifier *verify all {AppName}` (OpenCode: `/flow-verifier *verify all {AppName}`) (or narrowest scope).
   - **All agent-verifiable REQs terminal, but open rows remain that are documented OWNER-RUN UAT** (external/host-bound/destructive — the verifier cannot exercise them from this machine) → phase `UAT`, next command = the owner-run pointer at `docs/{AppName}-UsageGuide.md §"UAT plan"` naming the open REQ IDs. **Do NOT suggest `*handoff-phase` — not even as "optional" —** if a READY-FOR-UAT handoff already ran this cycle (check the Verification log); it only leads (once) when it has never run for this cycle, because it produces the UAT bundle. Never say "nothing left" / "done" / propose `Released` while non-terminal rows remain — `Released` is the OWNER's call after UAT (_status-update-gate.md item 5).
   - **All REQs terminal** (`Verified`/`Done (pre-existing)`/`N/A`; `Blocked`-by-library counts as pass-through) → phase `Handoff`, next command = `/TechieFlow:agents:flow-master *handoff-phase {AppName}` (OpenCode: `/flow-master *handoff-phase {AppName}`) — or, if handoff already ran, the project waits on the owner to set `Released`.
@@ -157,8 +172,9 @@ The verify pass chained in §6b emits its own `gates.jsonl` records (verify-phas
 
 ## Output Checklist
 
-- [ ] All open `REQ-UI/FN/RAG/NFR-*` from the checklist implemented (terminal rows untouched)
-- [ ] Commits tagged with REQ IDs; unit tests added
+- [ ] **ALL open `REQ-UI/FN/RAG/NFR-*` from the checklist implemented in THIS pass (§2b) — no "run build-phase again for the remaining REQs" ending; every working-list row ≥ `Implemented` or a logged `Blocked`/owner-gated blocker** (terminal rows untouched)
+- [ ] Work tagged `[REQ-*]` in the checklist Remarks (never a commit — git is manual); unit tests added
+- [ ] **YOLO / goal mode: FIX loop ran automatically on verifier FAIL rows (§6c, ≤5 cycles); sentinel `tf-yolo.sh done` written only if this was the goal's last phase**
 - [ ] `dotnet build` passes
 - [ ] **Cluster table emitted naming the builder per cluster; sub-agents (trblazeui / techierag / flow-master) fanned out in parallel** (or single-cluster note)
 - [ ] UI clusters built to match the approved mockups
