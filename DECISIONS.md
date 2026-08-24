@@ -1,5 +1,18 @@
 # TechieFlow — Decisions
 
+## 2026-08-24 — Codex is the third additive harness
+
+Canonical tasks/personas remain in `.tfcore/`. Codex consumes thin repository
+skills under `.agents/skills/`, native custom agents under `.codex/agents/`, and
+trust-gated project hooks/rules/config under `.codex/`. Skills replace deprecated
+user-local custom prompts. Model routing occurs at `codex exec` or custom-agent
+boundaries; a skill does not claim to switch the active main thread. All git/gh
+commands remain forbidden under Codex, including YOLO. Headless telemetry uses
+authoritative `codex exec --json` usage; interactive token/cost fields remain
+null when no stable source exists. Updates preserve project-owned
+`.codex/config.toml` and refresh framework hooks/rules plus generated agents and
+skills. See `CodexChanges.md` for limitations and acceptance criteria.
+
 Durable decisions taken while building the framework, with the reasoning that would otherwise be lost. Newest first.
 
 ---

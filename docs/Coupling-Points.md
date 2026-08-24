@@ -1,4 +1,9 @@
-# Coupling Points — where TechieFlow depends on Claude Code behaviour
+# Coupling Points — where TechieFlow depends on harness behaviour
+
+> **Codex addendum (2026-08-24):** `.codex/`, `.agents/skills/`,
+> `codex-adapter.py`, and `tf-codex-bind.py` form the third adapter. Exact-parity
+> gaps are maintained in `CodexChanges.md` §5; the historical register below is
+> intentionally preserved.
 
 **Date:** 2026-08-19 · **Scope:** Task 2 · **Companion:** `Capability-Matrix.md` (the facts), `Adapter-Design.md` (what to do about the *breaks* items).
 

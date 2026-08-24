@@ -1,5 +1,11 @@
 # TechieFlow Development Telemetry Guide
 
+> **Codex:** headless/goal runs parse authoritative `codex exec --json`
+> `turn.completed.usage` through `tf-codex-telemetry.py`. Interactive
+> `SessionEnd` records identify the session/model but leave token and cost fields
+> null when no stable source exists. ChatGPT credits are never fabricated as
+> `cost_usd`.
+
 **Audience:** the framework owner. **TL;DR:** the framework measures its own development process — first-pass quality, where gates catch problems, what escapes to you, and (since 2026-08-20) which model did the work and what it cost. **Reference docs:** `.tfcore/telemetry/SCHEMA.md` (the field-by-field contract) · `docs/TechieFlow-Telemetry-Runbook.md` (the original implementation record) · `docs/TechieFlow-Routing-Guide.md` (how the model/cost fields feed routing decisions).
 
 ## 1. Why this exists — the three questions

@@ -5,6 +5,20 @@ TrBlazeUI and TechieRag NuGet packages. Do not fix only the copies in this
 TechieFlow repository: the next consumer build can overwrite them from the
 NuGet package.
 
+## Codex packaging contract (added 2026-08-24)
+
+Codex specialist personas are project custom agents under `.codex/agents/`.
+They are TOML definitions with `name`, `description`, and plain
+`developer_instructions`; they must not copy Claude activation/help rituals or
+pretend that OpenCode slash commands exist. Each library-owned agent should read
+its packaged AI reference and obey the consuming repository's `AGENTS.md`.
+
+TechieFlow currently generates compatibility wrappers for `trblazeui` and
+`techierag`, so scaffolded applications work before the libraries are
+republished. A clean NuGet-only consumer should also receive the native Codex
+agent. Package targets must preserve unrelated consumer-owned Codex files and
+must never overwrite `.codex/config.toml`, hooks, rules, or other agents.
+
 ## OpenCode and Debian
 
 OpenCode's official installation documentation supports Docker with
@@ -42,6 +56,7 @@ new `TrBlazeUI.Components` package:
 |---|---|
 | Claude Code persona | `docs/skills/claude-code-trblazeui.md` |
 | OpenCode persona | `docs/skills/opencode-trblazeui.md` |
+| Codex custom agent (to add) | `docs/skills/codex-trblazeui.toml` |
 | Deployment mapping | `src/TrBlazeUI.Components/build/TrBlazeUI.Components.targets` |
 
 The target file already maps the package content to these consumer paths:
@@ -50,6 +65,7 @@ The target file already maps the package content to these consumer paths:
 |---|---|
 | `skills/claude-code-trblazeui.md` | `.claude/commands/trblazeui.md` |
 | `skills/opencode-trblazeui.md` | `.opencode/command/trblazeui.md` |
+| `skills/codex-trblazeui.toml` (to add) | `.codex/agents/trblazeui.toml` |
 | `docs/TrBlazeUI-AI-Reference.md` | `.trblazeui/TrBlazeUI-AI-Reference.md` |
 
 The framework snapshots are `.claude/trblazeui.md`,
@@ -66,6 +82,7 @@ new `TechieRag` package:
 |---|---|
 | Claude Code persona | `src/TechieRag/build/content/techierag-claude-command.md` |
 | OpenCode persona | `src/TechieRag/build/content/techierag-opencode-command.md` |
+| Codex custom agent (to add) | `src/TechieRag/build/content/techierag-codex-agent.toml` |
 | AI reference | `src/TechieRag/build/content/TechieRag-AI-Reference.md` |
 | Deployment mapping | `src/TechieRag/build/TechieRag.targets` |
 
@@ -75,6 +92,7 @@ The target file already maps the package content to these consumer paths:
 |---|---|
 | `techierag-claude-command.md` | `.claude/commands/techierag.md` |
 | `techierag-opencode-command.md` | `.opencode/command/techierag.md` |
+| `techierag-codex-agent.toml` (to add) | `.codex/agents/techierag.toml` |
 | `TechieRag-AI-Reference.md` | `.techierag/TechieRag-AI-Reference.md` |
 
 ## NuGet Credential Rule
@@ -87,7 +105,8 @@ user-level NuGet config, not in a repository file:
 - OpenCode Docker: mount the host directory read-only at
   `/root/.nuget/NuGet`
 
-After publishing a package, validate a clean consumer with `dotnet build`,
-then check that the OpenCode file exists at the exact `.opencode/command/*.md`
-path. Restart OpenCode after the package deployment so the updated command is
-loaded.
+After publishing a package, validate a clean consumer with `dotnet build`, then
+check the Claude, OpenCode, AI-reference, and Codex files at their exact target
+paths. For Codex, trust the repository, confirm the custom agent is discoverable,
+and run a delegated task proving it loaded the packaged AI reference. Restart
+any open Claude Code, OpenCode, or Codex session after package deployment.

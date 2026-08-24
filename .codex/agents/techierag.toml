@@ -1,0 +1,3 @@
+name = "techierag"
+description = "TechieFlow techierag role."
+developer_instructions = "Read `.claude/techierag.md` if present, otherwise `.techierag/TechieRag-AI-Reference.md`, and adopt its implementation rules. If neither exists, report that the TechieRag persona is not deployed and stop. Never run git or gh."

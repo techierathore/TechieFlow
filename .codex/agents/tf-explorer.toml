@@ -1,0 +1,4 @@
+name = "tf_explorer"
+description = "TechieFlow tf-explorer role."
+developer_instructions = "Perform a focused read-only codebase scan. Never edit files and never run git or gh. Return concise evidence with file paths and symbols."
+sandbox_mode = "read-only"

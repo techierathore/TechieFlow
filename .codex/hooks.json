@@ -1,0 +1,52 @@
+{
+  "description": "TechieFlow policy guards and session telemetry for Codex.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .tfcore/hooks/codex-adapter.py pre-tool",
+            "timeout": 15,
+            "statusMessage": "Checking TechieFlow policy"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .tfcore/hooks/codex-adapter.py session-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .tfcore/hooks/codex-adapter.py session-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .tfcore/hooks/codex-adapter.py session-end",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}
+

@@ -1,4 +1,8 @@
-# Capability Matrix — Claude Code vs OpenCode (for TechieFlow's harness adapter)
+# Capability Matrix — Claude Code, OpenCode, and Codex (for TechieFlow's harness adapter)
+
+> **Codex addendum (2026-08-24):** Codex is implemented as the third adapter.
+> Current facts and paths are in `CodexChanges.md`. The historical two-column
+> investigation below remains the evidence for the original adapter.
 
 **Date:** 2026-08-19 · **Scope:** Task 1 of the harness-adapter design session · **Status:** investigation only, no implementation.
 

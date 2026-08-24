@@ -334,6 +334,16 @@ Every project has `docs/<APP>-Coding-Standards.md`. Every implementation agent p
 
 ## 3. Scaffolding a new project — copy, don't npm-install
 
+### Codex adapter
+
+Both scaffolders and `update-framework.sh` deploy an additive Codex profile:
+`.codex/` for config, custom agents, hooks and rules, and `.agents/skills/` for
+workflows. Trust the repository and review `/hooks` after installation. Invoke
+skills such as `$techieflow-build`, `$techieflow-verify`, and
+`$techieflow-refresh-status`. For unattended work use
+`bash .tfcore/utils/tf-goal.sh --harness codex <app> "<goal>"`. Full
+MAUI/Appium/winrun verification requires local Codex.
+
 You have a customized v4 setup. `npx techieflow install` would fetch v6 and lose your customizations. Use the scaffold script:
 
 Three scripts: two scaffolders (one per flow) plus an updater for projects scaffolded earlier. All are idempotent (scaffolders use rsync `--ignore-existing` — existing files preserved on re-run; the updater force-refreshes framework files including `.claude/settings.json`, see below).
@@ -354,7 +364,7 @@ cd /path/to/existing-app
 /Volumes/MacD/MyCode/TechieFlow/scaffold-brownfield.sh .
 ```
 
-Adds `.tfcore/`, `.claude/commands/`, `WORKFLOW.html`, `opencode.jsonc`, and `.claude/settings.json`. **Does NOT touch** existing `src/`, `tests/`, or other `docs/` contents. Warns (non-blocking) if no `.csproj`/`.sln` found within 4 levels. Refuses if the target directory doesn't exist (use greenfield script for that). (No `.opencode/command/TechieFlow/` mirror is deployed — OpenCode loads agents/tasks from `opencode.jsonc` `{file:./.tfcore/...}` references instead.)
+Adds `.tfcore/`, `.claude/commands/`, `.opencode/`, `.codex/`, `.agents/skills/`, `WORKFLOW.html`, `opencode.jsonc`, and `.claude/settings.json`. **Does NOT touch** existing `src/`, `tests/`, or other `docs/` contents. Warns (non-blocking) if no `.csproj`/`.sln` found within 4 levels. Refuses if the target directory doesn't exist (use greenfield script for that). OpenCode loads tasks from `opencode.jsonc`; Codex loads generated `$techieflow-*` skills from `.agents/skills/`.
 
 ### Greenfield (new app) — `scaffold-greenfield.sh`
 
@@ -423,9 +433,9 @@ Note: the script is NOT on your PATH — always invoke it with the full path sho
 
 | Force-overwritten (framework — reference repo wins) | Preserved (your work product — never touched) |
 | --- | --- |
-| `.tfcore/{tasks,templates,agents,checklists,data,utils,workflows,agent-teams}/` `.claude/commands/TechieFlow/` subtree            `.claude/commands/*.md` top-level commands (generate-html etc.)            `.opencode/command/*.md` top-level commands (generate-html etc.)            `.opencode/plugin/*.js` (guard bridge + telemetry)            `.opencode/opencode.jsonc` (framework config copy — wins over the root `opencode.jsonc` on conflicting keys)            `WORKFLOW.html` `.claude/settings.json` (refreshed to canonical config by default; old file → `settings.json.bak`; `--keep-permissions` to skip; `settings.local.json` never touched) | `docs/`, `src/`, `tests/` `PROJECT-STATUS.md`, `CLAUDE.md`, `.editorconfig` `.tfcore/core-config.yaml` `.tfcore/routing.yaml` (deployed once with `enabled: false`, then owner-tuned) `opencode.jsonc` (root — project-specific additions) `.claude/{trblazeui,techierag}.md` + `.opencode/command/{trblazeui,techierag}.md` (NuGet-deployed) |
+| `.tfcore/{tasks,templates,agents,checklists,data,utils,workflows,agent-teams}/` `.claude/commands/TechieFlow/` subtree            `.claude/commands/*.md` top-level commands            `.opencode/command/*.md`, `.opencode/plugin/*.js`, `.opencode/opencode.jsonc`            `.codex/hooks.json`, `.codex/rules/`, generated `.codex/agents/` and `.agents/skills/`            `WORKFLOW.html` `.claude/settings.json` | `docs/`, `src/`, `tests/` `PROJECT-STATUS.md`, `CLAUDE.md`, `.editorconfig` `.tfcore/core-config.yaml` `.tfcore/routing.yaml` (deployed once, then owner-tuned) `opencode.jsonc` (root additions) `.codex/config.toml` (deployed once, then owner-tuned) `.claude/{trblazeui,techierag}.md` + `.opencode/command/{trblazeui,techierag}.md` (NuGet-deployed) |
 
-The scaffolders and the updater also **ensure the project's `.gitignore` ignores the deployed framework copies** (`.tfcore/`, `.claude/`, `.opencode/`, `/CLAUDE.md`, `/WORKFLOW.html`, `/opencode.jsonc`, `/.tf-scaffold-note.txt`). Everything the framework drops into an app is a *copy* — the source of truth is this reference repo (or the NuGet package, for the library personas) — so it must never be committed in the app repo. The step is append-only and idempotent: existing entries in any anchored/slash variant are respected, and your own `.gitignore` content is never rewritten. Note git never *un*tracks a file just because it became ignored — if a framework file was committed before the entry existed, run `git rm -r --cached <path>` once yourself (git is manual in TechieFlow; agents never run it).
+The scaffolders and the updater also **ensure the project's `.gitignore` ignores the deployed framework copies** (`.tfcore/`, `.claude/`, `.opencode/`, `.codex/`, `.agents/skills/`, `/CLAUDE.md`, `/WORKFLOW.html`, `/opencode.jsonc`, `/.tf-scaffold-note.txt`). Everything the framework drops into an app is a *copy* — the source of truth is this reference repo (or the NuGet package, for the library personas) — so it must never be committed in the app repo. The step is append-only and idempotent: existing entries in any anchored/slash variant are respected, and your own `.gitignore` content is never rewritten. Note git never *un*tracks a file just because it became ignored — if a framework file was committed before the entry existed, run `git rm -r --cached <path>` once yourself (git is manual in TechieFlow; agents never run it).
 
 They also manage a second block — **agent test-harness & log artifacts** (`node_modules/`, `/package.json`, `/package-lock.json`, `tests/.artifacts/`, `test-results/`, `test-results-*/`, `/scripts-*/`, `playwright-report/`, `.verify/`, `logs/`, `/docs/.last-verify.json`, `.DS_Store`). These are machine-generated by the verifier's npm/Playwright self-provisioning (verify-phase §1) and the standing Serilog default, and are fully regenerable — **you should never have to triage them at commit time**. verify-phase §1 also self-heals the block whenever it provisions, so even a project scaffolded before this block existed gets it on its next verify. `playwright.config.ts` deliberately stays *tracked* — committed test suites depend on it. Same caveat as above: already-tracked artifacts need a one-time `git rm -r --cached <path>` from you.
 
@@ -798,6 +808,8 @@ The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **a
 
 **Build passes are whole-checklist, YOLO or not.** The other 3-day culprit: build-phase runs that implemented a few REQs, wrote "next command: `*build-phase` for the remaining REQs" and stopped. `build-phase.md §2b` now bans that ending — a pass is done when **every** working-list REQ is ≥ `Implemented` (or a logged `Blocked`/owner-gated blocker), the verifier has been chained, and (in YOLO) its FAIL rows have been looped. Long list ⇒ more sub-agent clusters, never a shorter pass. `_status-update-gate.md` item 5 carries the matching rule for the next-command line.
 
+**Codex permission difference.** `.codex/hooks.json` routes shell and file changes through `.tfcore/hooks/codex-adapter.py`, while `.codex/rules/techieflow.rules` provides the command policy. Codex keeps every agent-issued `git` and `gh` command blocked in normal and YOLO modes (including reads); this is intentionally stricter than the Claude/OpenCode YOLO table above. Trust the repository and inspect `/hooks` after scaffold/update. `$techieflow-yolo` changes TechieFlow pause/delete behavior, but never relaxes Codex's version-control boundary.
+
 **Q: Config (canonical version in scaffold-brownfield.sh / scaffold-greenfield.sh)**
 
 ```json
@@ -900,6 +912,25 @@ Each row gives the exact command for both tools. Replace placeholders such as `{
 | Resume project | Check the working tree and perform a fresh build before continuing. | `git status && dotnet build` | `git status && dotnet build` |
 | Development telemetry report | Generate the aggregated development metrics report. | `/TechieFlow:agents:flow-master *metrics {AppName}` | `/flow-master *metrics {AppName}` |
 | Telemetry quick look | Print the read-only telemetry report directly in the terminal. | `.tfcore/telemetry/tf-metrics.sh --report .` | `.tfcore/telemetry/tf-metrics.sh --report .` |
+
+### Codex command equivalents
+
+Codex workflows are project skills, not literal Claude/OpenCode slash commands. Type the `$techieflow-*` name in Codex (arguments follow it), or describe the same task in natural language. Scaffold/update generates them from the canonical `.tfcore/tasks/` definitions.
+
+| Workflow | Codex command |
+| --- | --- |
+| Brownfield / greenfield day 1 | `$techieflow-day1-brownfield {AppName}` / `$techieflow-day1-greenfield {AppName}` |
+| Author / amend requirements | `$techieflow-author-brd {AppName}` / `$techieflow-amend-docs {AppName} "<change>"` |
+| Mockups / split BRD | `$techieflow-mockups {AppName}` / `$techieflow-split-brd {AppName}` |
+| Build / verify | `$techieflow-build {AppName}` / `$techieflow-verify all {AppName}` |
+| Fix / triage issues | `$techieflow-fix-issues {AppName} {evidence}` / `$techieflow-triage-issues {AppName} {evidence}` |
+| Developer / product guide | `$techieflow-devguide {AppName}` / `$techieflow-productguide {AppName}` |
+| Handoff / recover status | `$techieflow-handoff {AppName}` / `$techieflow-refresh-status {AppName}` |
+| Render workflow docs / Markdown | `$techieflow-render-workflow-docs {AppName}` / `$techieflow-generate-html @docs/File.md` |
+| Metrics / YOLO state | `$techieflow-metrics-report {AppName}` / `$techieflow-yolo on|off|status` |
+| Unattended resumable goal | `bash .tfcore/utils/tf-goal.sh --harness codex <app-dir> "<goal>"` |
+
+The supervisor uses `codex exec --json --sandbox workspace-write --ask-for-approval never` and resumes the recorded Codex session after limits or restarts. Trust the app repository and review `/hooks` before the first run. In Codex, **all** agent-issued `git` and `gh` commands remain forbidden even in YOLO; use checklist/files/build evidence for recovery and run version-control commands yourself.
 
 The trblazeui and techierag personas are NuGet-deployed to `.claude/<name>.md` and `.opencode/command/<name>.md`. Claude Code only scans `.claude/commands/`, so the scaffold/update scripts copy them to `.claude/commands/<name>.md` (the short `/trblazeui` `/techierag` forms then work). If the short form is missing: `dotnet build`, then re-run `update-framework.sh`.
 
@@ -1094,4 +1125,4 @@ here depends on the Playbook, and nothing there depends on this.
 ---
 
 
-Last revised 2026-08-21. Edit freely. When the workflow changes, update the session memory `MEMORY.md` under `~/.claude/projects/<this-repo's-slug>/memory/` and `WorkFlow-Context.md` (the AI-agent context doc) too.
+Last revised 2026-08-24. Edit freely. When the workflow changes, update `WORKFLOW.html` and `WorkFlow-Context.md` (the durable cross-harness context document) too.

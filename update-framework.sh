@@ -473,11 +473,15 @@ done
 # only registered phantom slash commands. NuGet-deployed library personas are
 # skipped — never overwrite them.
 # --------------------------------------------------------------------------
+[[ $DRY_RUN -eq 1 ]] || mkdir -p .opencode/command
 for src in "$TEMPLATE"/.opencode/command/*.md; do
   [[ -f "$src" ]] || continue
   f="$(basename "$src")"
   case "$f" in trblazeui.md|techierag.md) continue ;; esac
   echo "  .opencode/command/$f"
+  if [[ $DRY_RUN -eq 1 && ! -d .opencode/command ]]; then
+    continue
+  fi
   rsync $RSYNC_FLAGS "$src" ".opencode/command/$f"
 done
 
@@ -523,6 +527,20 @@ if [[ -f opencode.jsonc ]]; then
   fi
 fi
 
+# 4b. Codex adapter. Preserve project-owned config.toml; refresh the framework
+# policy files and regenerate agents/skills from canonical .tfcore content.
+echo "  .codex/ + .agents/skills/ — Codex adapter"
+if [[ $DRY_RUN -eq 0 ]]; then
+  mkdir -p .codex/agents .codex/rules .agents/skills
+  [[ -f .codex/config.toml ]] || cp "$TEMPLATE/.codex/config.toml" .codex/config.toml
+  cp "$TEMPLATE/.codex/hooks.json" .codex/hooks.json
+  cp "$TEMPLATE/.codex/rules/techieflow.rules" .codex/rules/techieflow.rules
+  python3 .tfcore/utils/tf-codex-bind.py "$TARGET" || echo "  ⚠ Codex bindings could not be generated (python3 required)"
+  echo "  Codex hooks changed or installed — trust this repository and review /hooks"
+else
+  echo "  WOULD preserve/create .codex/config.toml; refresh hooks/rules; regenerate agents/skills"
+fi
+
 # Library agents under .opencode/command/ root preserved
 for f in trblazeui.md techierag.md; do
   if [[ -f ".opencode/command/$f" ]]; then
@@ -543,19 +561,40 @@ if [[ -f "$TEMPLATE/WORKFLOW.html" ]]; then
 fi
 
 # --------------------------------------------------------------------------
-# 5. NuGet persona shims — Claude Code only scans .claude/commands/ for slash
-#    commands, but NuGet auto-deploy drops library personas at .claude/<lib>.md.
-#    Mirror them into .claude/commands/ so /trblazeui and /techierag resolve.
-#    The NuGet-deployed file is authoritative — always overwrite the shim.
+# 5. NuGet persona shims — LEGACY RESCUE ONLY, never an overwrite.
+#    Written when both libraries deployed their Claude persona to .claude/<lib>.md,
+#    a path Claude Code never scans (TR-001/TR-RAG-001), so this mirrored it into
+#    .claude/commands/ to make /trblazeui and /techierag resolve. Both libraries
+#    took the suggested fix on 2026-07-04 and now deploy to .claude/commands/<lib>.md
+#    DIRECTLY, so that premise — and the "the root file is authoritative" comment
+#    this block used to carry — are both false today.
+#
+#    It used to `cp` unconditionally. In a repo still holding a pre-2026-07-04
+#    .claude/<lib>.md, that copied the STALE legacy file over the FRESH one
+#    `dotnet build` had just written — silently, every run. No repo currently has
+#    a legacy file (surveyed 2026-08-24: 0 of 16 WSL repos, so this never fired),
+#    but a restored old clone or an un-rebuilt machine would re-arm it, and the
+#    Mac clones were not surveyable from here.
+#
+#    Now it only fills a GAP: shim when .claude/commands/<lib>.md is absent, which
+#    is exactly the case the shim existed for. A present file is left alone — it
+#    came from the current NuGet target and outranks anything at the legacy path.
 # --------------------------------------------------------------------------
 for lib in trblazeui techierag; do
-  if [[ -f ".claude/$lib.md" ]]; then
-    if [[ $DRY_RUN -eq 1 ]]; then
-      echo "  WOULD shim .claude/$lib.md → .claude/commands/$lib.md"
-    else
-      cp ".claude/$lib.md" ".claude/commands/$lib.md"
-      echo "  shimmed .claude/$lib.md → .claude/commands/$lib.md"
+  [[ -f ".claude/$lib.md" ]] || continue
+  if [[ -f ".claude/commands/$lib.md" ]]; then
+    if ! cmp -s ".claude/$lib.md" ".claude/commands/$lib.md"; then
+      echo "  ⚠ .claude/$lib.md (legacy path) differs from .claude/commands/$lib.md (current"
+      echo "    NuGet target). Keeping the commands/ copy — it is the one dotnet build writes."
+      echo "    The legacy file is dead weight; delete it when convenient."
     fi
+    continue
+  fi
+  if [[ $DRY_RUN -eq 1 ]]; then
+    echo "  WOULD shim legacy .claude/$lib.md → .claude/commands/$lib.md (no current copy present)"
+  else
+    cp ".claude/$lib.md" ".claude/commands/$lib.md"
+    echo "  shimmed legacy .claude/$lib.md → .claude/commands/$lib.md (no current copy present)"
   fi
 done
 
@@ -572,20 +611,29 @@ if [[ -f opencode.jsonc ]] && grep -qE 'agents/(dev|pm|po|qa|sm|ux-expert)\.md' 
   echo "    opencode.jsonc ($TEMPLATE/opencode.jsonc) or delete those agent entries."
 fi
 
-if [[ -f opencode.jsonc ]] && ! grep -qF '.tfcore/templates/v4custom/build-invocation-ladder.md' opencode.jsonc; then
-  echo ""
-  echo "  ⚠ opencode.jsonc is missing the mandatory build-invocation ladder instruction."
-  echo "    OpenCode Docker may choose direct dotnet/cmd.exe and report false blockers."
-  echo "    Copy the current template's instructions entry from:"
-  echo "    $TEMPLATE/opencode.jsonc"
-fi
-
-if [[ -f opencode.jsonc ]] && ! grep -qF '.tfcore/templates/v4custom/opencode-operating-contract.md' opencode.jsonc; then
-  echo ""
-  echo "  ⚠ opencode.jsonc is missing the OpenCode operating contract instruction."
-  echo "    OpenCode may stop after a green build instead of running smoke + verify + status gates."
-  echo "    Add the current template instruction from:"
-  echo "    $TEMPLATE/opencode.jsonc"
+# The mandatory framework instructions (build ladder, operating contract) ship
+# in the FRAMEWORK-OWNED .opencode/opencode.jsonc, which this script refreshes
+# every run and which WINS over the root file on conflicting keys (DECISIONS.md
+# 2026-08-20 §5, runtime-verified 2026-08-19 §7f). Before that two-file split
+# the root file was the only framework config, and these two checks audited it
+# — which, after the split, fired on every correctly-maintained app (the root
+# file legitimately holds project-only keys) and told the owner to hand-copy
+# framework config into a file this script PRESERVES and never refreshes, where
+# it would silently rot. Audit the file that must actually carry them instead:
+# the deployed copy in a real run, the template in --dry-run (what would land).
+if [[ $DRY_RUN -eq 1 ]]; then OC_FW="$TEMPLATE/opencode.jsonc"; else OC_FW=".opencode/opencode.jsonc"; fi
+if [[ -f "$OC_FW" ]]; then
+  for _oc_req in "build-invocation-ladder.md:the mandatory build-invocation ladder instruction (OpenCode Docker may choose direct dotnet/cmd.exe and report false blockers)" \
+                 "opencode-operating-contract.md:the OpenCode operating contract instruction (OpenCode may stop after a green build instead of running smoke + verify + status gates)"; do
+    _oc_file="${_oc_req%%:*}"; _oc_desc="${_oc_req#*:}"
+    if ! grep -qF ".tfcore/templates/v4custom/$_oc_file" "$OC_FW"; then
+      echo ""
+      echo "  ⚠ $OC_FW is missing $_oc_desc."
+      echo "    This is a FRAMEWORK defect, not a per-project one — the framework-owned"
+      echo "    OpenCode config is generated from $TEMPLATE/opencode.jsonc."
+      echo "    Report it; do NOT hand-edit the app's root opencode.jsonc to compensate."
+    fi
+  done
 fi
 
 # --------------------------------------------------------------------------
@@ -627,8 +675,8 @@ fi
 #    if any of these are already tracked, the owner must run
 #    `git rm -r --cached <path>` once (git is manual, owner-only).
 # --------------------------------------------------------------------------
-GI_LINES=(".tfcore/" ".claude/" ".opencode/" "/CLAUDE.md" "/WORKFLOW.html" "/opencode.jsonc" "/.tf-scaffold-note.txt")
-GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?CLAUDE\.md$' '^/?WORKFLOW\.html$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$')
+GI_LINES=(".tfcore/" ".claude/" ".opencode/" ".codex/" ".agents/skills/" "/CLAUDE.md" "/WORKFLOW.html" "/opencode.jsonc" "/.tf-scaffold-note.txt")
+GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?\.codex/?$' '^/?\.agents/skills/?$' '^/?CLAUDE\.md$' '^/?WORKFLOW\.html$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$')
 GI_MISSING=()
 for i in "${!GI_LINES[@]}"; do
   # tr strips CR so CRLF .gitignore files (Windows-authored) still match the $-anchor

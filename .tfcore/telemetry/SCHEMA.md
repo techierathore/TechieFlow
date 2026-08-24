@@ -35,7 +35,7 @@ Everything on this page is in service of those three. `gates.jsonl` is the prima
 | `project_type_inferred` | bool | Present **only when `true`** — `metrics.project_type` was absent from `core-config.yaml` and `app` was assumed. Reports must label these records **unclassified**, never silently pool them. |
 | `backfilled` | bool | Present **only when `true`** — the record was reconstructed after the fact, not written at the moment of the event. Written exclusively by `tf-metrics.sh --backfill-*`. |
 | `inferred` | string[] | Present only on backfilled records. Names the fields that were **guessed rather than read**. |
-| `harness` | string \| null | `claude-code` \| `opencode` \| `null`. **Detected by `tf-emit.sh`, never declared by a task** — see below. |
+| `harness` | string \| null | `claude-code` \| `opencode` \| `codex` \| `null`. **Detected by `tf-emit.sh`, never declared by a task** — see below. |
 
 ### `project_type` — what it is and why it exists
 
@@ -54,11 +54,11 @@ If `metrics.project_type` is absent: default to `app` **and** set `project_type_
 
 ### `harness` — detected, never declared
 
-The framework runs under **two harnesses**: Claude Code (`.claude/commands/TechieFlow/`) and OpenCode (agents/tasks loaded from `opencode.jsonc` via `{file:./.tfcore/...}` references). The task content is identical across harnesses. A task template therefore **cannot know which one is executing it** — an agent copying a literal from the markdown would stamp whichever harness the example happened to name, and every per-harness comparison would be quietly wrong.
+The framework runs under **three harnesses**: Claude Code (`.claude/commands/TechieFlow/`), OpenCode (agents/tasks loaded from `opencode.jsonc`), and Codex (`.agents/skills/` plus `.codex/agents/`). The task content is identical across harnesses. A task template therefore **cannot know which one is executing it** — an agent copying a literal from the markdown would stamp whichever harness the example happened to name, and every per-harness comparison would be quietly wrong.
 
 So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit template.** Detection order:
 
-1. harness environment variables (`CLAUDECODE`, `CLAUDE_CODE_*` → `claude-code`; any `OPENCODE*` → `opencode`);
+1. the adapter-owned `TF_HARNESS`, then harness environment variables (`CLAUDECODE`, `CLAUDE_CODE_*` → `claude-code`; any `OPENCODE*` → `opencode`; Codex thread/session markers → `codex`);
 2. the parent process chain, bounded to 12 levels (OpenCode sets no `OPENCODE_*` variables, so the process name is the only honest signal);
 3. **`null`** if neither resolves.
 

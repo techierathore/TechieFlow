@@ -10,8 +10,8 @@
 #   bash .tfcore/utils/tf-goal.sh [options] <app-dir> @goal.md
 #
 # Options
-#   --harness claude|opencode   default: claude
-#   --model <id>                claude: --model <id>; opencode: -m <provider/model>
+#   --harness claude|opencode|codex   default: claude
+#   --model <id>                claude: --model; opencode: -m; codex: -m
 #   --buffer-min <n>            minutes added after a stated limit-reset time (default 15)
 #   --probe-min <n>             limit hit but NO reset time parseable → fire a one-turn probe every n
 #                               minutes until the API answers again, then resume (default 15)
@@ -42,7 +42,10 @@
 #   claude   -p "<prompt>" --permission-mode bypassPermissions --output-format stream-json --verbose
 #            resume: claude -p --resume <session_id> "<continue>"   (fallback: --continue)
 #   opencode run --auto "<prompt>"      resume: opencode run --auto -c "<continue>"
-#   Override either command line with TF_GOAL_CLAUDE_FLAGS / TF_GOAL_OPENCODE_FLAGS.
+#   codex exec --json --sandbox workspace-write --ask-for-approval never "<prompt>"
+#            resume: codex exec resume <thread-id> "<continue>" --json
+#   Override command lines with TF_GOAL_CLAUDE_FLAGS / TF_GOAL_OPENCODE_FLAGS /
+#   TF_GOAL_CODEX_FLAGS.
 
 set -u
 
@@ -73,7 +76,7 @@ if [[ -z "$APP_DIR" || ( -z "$GOAL_ARG" && $RESUME -eq 0 ) ]]; then
 fi
 APP_DIR="$(cd "$APP_DIR" 2>/dev/null && pwd)" || { echo "no such dir: $1" >&2; exit 2; }
 [[ -d "$APP_DIR/.tfcore" ]] || { echo "$APP_DIR has no .tfcore/ — scaffold it first" >&2; exit 2; }
-case "$HARNESS" in claude|opencode) ;; *) echo "--harness must be claude|opencode" >&2; exit 2 ;; esac
+case "$HARNESS" in claude|opencode|codex) ;; *) echo "--harness must be claude|opencode|codex" >&2; exit 2 ;; esac
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required" >&2; exit 2; }
 
 STATE_DIR="$APP_DIR/.tfcore/.session"; mkdir -p "$STATE_DIR"
@@ -139,6 +142,11 @@ FIRST_PROMPT="$PREAMBLE
 
 THE GOAL:
 $GOAL"
+if [[ "$HARNESS" == codex ]]; then
+  FIRST_PROMPT="$FIRST_PROMPT
+
+CODEX POLICY NOTE: `.codex/rules/techieflow.rules` forbids every git/gh command even in YOLO mode. Use working-tree files and framework artifacts; do not attempt read-only git."
+fi
 
 # ---------------------------------------------------------------- harness command
 harness_cmd() { # $1 = first|resume ; prints the argv via NUL-separated echo
@@ -153,7 +161,7 @@ harness_cmd() { # $1 = first|resume ; prints the argv via NUL-separated echo
       if [[ -n "$SESSION_ID" ]]; then CMD+=(--resume "$SESSION_ID"); else CMD+=(--continue); fi
     fi
     CMD+=("$prompt")
-  else
+  elif [[ "$HARNESS" == opencode ]]; then
     CMD=(opencode run --auto)
     [[ -n "$MODEL" ]] && CMD+=(-m "$MODEL")
     # shellcheck disable=SC2206
@@ -162,6 +170,20 @@ harness_cmd() { # $1 = first|resume ; prints the argv via NUL-separated echo
       if [[ -n "$SESSION_ID" ]]; then CMD+=(-s "$SESSION_ID"); else CMD+=(-c); fi
     fi
     CMD+=("$prompt")
+  else
+    if [[ "$kind" == resume && -n "$SESSION_ID" ]]; then
+      CMD=(codex exec resume "$SESSION_ID" "$prompt" --json)
+    else
+      CMD=(codex exec --json --sandbox workspace-write --ask-for-approval never)
+      [[ -n "$MODEL" ]] && CMD+=(-m "$MODEL")
+      local tier effort
+      tier="$(bash "$APP_DIR/.tfcore/utils/tf-harness.sh" tier build-phase)"
+      effort="$(bash "$APP_DIR/.tfcore/utils/tf-harness.sh" effort "$tier")"
+      [[ -n "$effort" ]] && CMD+=(-c "model_reasoning_effort=\"$effort\"")
+      # shellcheck disable=SC2206
+      [[ -n "${TF_GOAL_CODEX_FLAGS:-}" ]] && CMD+=($TF_GOAL_CODEX_FLAGS)
+      CMD+=("$prompt")
+    fi
   fi
 }
 
@@ -258,7 +280,7 @@ out("IDLE", "no sentinel")
 PY
 }
 
-extract_session_id() { # from a cycle's output file (claude stream-json / json)
+extract_session_id() { # from a cycle's output file (Claude/OpenCode/Codex JSONL)
   python3 - "$1" <<'PY' 2>/dev/null
 import sys, json, re
 sid = ""
@@ -268,8 +290,9 @@ for line in open(sys.argv[1], errors="replace"):
     try: d = json.loads(line)
     except Exception: continue
     if isinstance(d, dict) and d.get("session_id"): sid = d["session_id"]
+    if isinstance(d, dict) and d.get("type") == "thread.started" and d.get("thread_id"): sid = d["thread_id"]
 if not sid:
-    m = re.findall(r'"session_id"\s*:\s*"([0-9a-f-]{8,})"', open(sys.argv[1], errors="replace").read())
+    m = re.findall(r'"(?:session_id|thread_id)"\s*:\s*"([0-9A-Za-z_-]{8,})"', open(sys.argv[1], errors="replace").read())
     sid = m[-1] if m else ""
 print(sid)
 PY
@@ -285,8 +308,10 @@ probe_until_clear() {
     n=$(( n + 1 ))
     if [[ "$HARNESS" == claude ]]; then
       ( cd "$APP_DIR" && claude -p --max-turns 1 --output-format text "Reply with the single word OK." ) > "$pout" 2>&1; prc=$?
-    else
+    elif [[ "$HARNESS" == opencode ]]; then
       ( cd "$APP_DIR" && opencode run --auto "Reply with the single word OK." ) > "$pout" 2>&1; prc=$?
+    else
+      ( cd "$APP_DIR" && codex exec --json --sandbox read-only --ask-for-approval never "Reply with the single word OK." ) > "$pout" 2>&1; prc=$?
     fi
     if [[ $prc -eq 0 ]] && ! grep -qiE 'usage limit|hit your limit|rate[ _-]?limit|limit (has been )?(reached|exceeded)|too many requests|\b429\b|overloaded|weekly limit|resets? (at|in)\b' "$pout"; then
       log "probe #$n OK"; return 0
@@ -336,6 +361,9 @@ while :; do
   RC=$?
   sleep 1  # let tee flush
   SID="$(extract_session_id "$OUT")"; [[ -n "$SID" ]] && { SESSION_ID="$SID"; state_set session_id "$SID"; }
+  if [[ "$HARNESS" == codex ]]; then
+    python3 "$APP_DIR/.tfcore/utils/tf-codex-telemetry.py" "$APP_DIR" "$OUT" || true
+  fi
   KIND=resume
 
   if [[ -f "$DONE" ]]; then continue; fi

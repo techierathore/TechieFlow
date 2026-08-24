@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TechieFlow: Solo-Dev Delivery Workflow — Claude Code + OpenCode</title>
+<title>TechieFlow: Solo-Dev Delivery Workflow — Claude Code + OpenCode + Codex</title>
 <style>
   :root{
     --bg:#0f1115; --panel:#161a22; --panel2:#1c2230; --line:#2a3142;
@@ -150,7 +150,7 @@
 
 <div class="toc-mini">
   <span class="pill">Root</span> <code>/Volumes/MacD/MyCode/TechieFlow</code> (macOS) · <code>/mnt/c/3AIGenCode/TechieFlow</code> (WSL) &nbsp;·&nbsp;
-  <span class="pill">Harness</span> Claude Code (macOS / WSL) + OpenCode &nbsp;·&nbsp;
+  <span class="pill">Harness</span> Claude Code + OpenCode + Codex &nbsp;·&nbsp;
   <span class="pill">Stack</span> .NET / Blazor / MAUI / TrBlazeUI / TechieRag
 </div>
 
@@ -501,6 +501,7 @@ appium --address 0.0.0.0 --port 4723   # start the remote control (leave this ru
 
 <!-- ============================================================ -->
 <h2 id="scaffolding">3. Scaffolding a new project — copy, don't npm-install<span class="anchor-link"><a href="#scaffolding">#</a></span></h2>
+<div class="callout info"><strong>Codex adapter.</strong> Both scaffolders and the updater deploy <code>.codex/</code> (config, custom agents, hooks and rules) and <code>.agents/skills/</code> (TechieFlow workflows). Trust the repository and review <code>/hooks</code> after installation. Invoke <code>$techieflow-build</code>, <code>$techieflow-verify</code>, or another generated skill. Use <code>tf-goal.sh --harness codex</code> for unattended local work; full winrun/Appium verification requires a local Codex environment.</div>
 
 <p>You have a customized v4 setup. <code>npx techieflow install</code> would fetch v6 and lose your customizations. Use the scaffold script:</p>
 
@@ -514,7 +515,7 @@ appium --address 0.0.0.0 --port 4723   # start the remote control (leave this ru
 <pre><code class="lang-bash">cd /path/to/existing-app
 /Volumes/MacD/MyCode/TechieFlow/scaffold-brownfield.sh .</code></pre>
 
-<p>Adds <code>.tfcore/</code>, <code>.claude/commands/</code>, <code>WORKFLOW.html</code>, <code>opencode.jsonc</code>, and <code>.claude/settings.json</code>. <strong>Does NOT touch</strong> existing <code>src/</code>, <code>tests/</code>, or other <code>docs/</code> contents. Warns (non-blocking) if no <code>.csproj</code>/<code>.sln</code> found within 4 levels. Refuses if the target directory doesn't exist (use greenfield script for that). (No <code>.opencode/command/TechieFlow/</code> mirror is deployed — OpenCode loads agents/tasks from <code>opencode.jsonc</code> <code>{file:./.tfcore/...}</code> references instead.)</p>
+<p>Adds <code>.tfcore/</code>, <code>.claude/commands/</code>, <code>.opencode/</code>, <code>.codex/</code>, <code>.agents/skills/</code>, <code>WORKFLOW.html</code>, <code>opencode.jsonc</code>, and <code>.claude/settings.json</code>. <strong>Does NOT touch</strong> existing <code>src/</code>, <code>tests/</code>, or other <code>docs/</code> contents. Warns (non-blocking) if no <code>.csproj</code>/<code>.sln</code> found within 4 levels. Refuses if the target directory doesn't exist (use greenfield script for that). (No <code>.opencode/command/TechieFlow/</code> mirror is deployed — OpenCode loads agents/tasks from <code>opencode.jsonc</code> <code>{file:./.tfcore/...}</code> references instead.)</p>
 
 <h3>Greenfield (new app) — <code>scaffold-greenfield.sh</code></h3>
 <p class="small"><strong>WSL (Windows):</strong></p>
@@ -583,7 +584,7 @@ cd /path/to/your-app
   </tr>
 </table>
 
-<p>The scaffolders and the updater also <strong>ensure the project's <code>.gitignore</code> ignores the deployed framework copies</strong> (<code>.tfcore/</code>, <code>.claude/</code>, <code>.opencode/</code>, <code>/CLAUDE.md</code>, <code>/WORKFLOW.html</code>, <code>/opencode.jsonc</code>, <code>/.tf-scaffold-note.txt</code>) — everything the framework drops into an app is a <em>copy</em> (source of truth: the reference repo, or the NuGet package for the library personas) and must never be committed in the app repo. The step is append-only and idempotent: your own <code>.gitignore</code> entries are respected, nothing is removed. Note git never <em>un</em>tracks a file just because it became ignored — if a framework file was committed before the entry existed, run <code>git rm -r --cached &lt;path&gt;</code> once yourself (git is manual in TechieFlow; agents never run it).</p>
+<p>The scaffolders and the updater also <strong>ensure the project's <code>.gitignore</code> ignores the deployed framework copies</strong> (<code>.tfcore/</code>, <code>.claude/</code>, <code>.opencode/</code>, <code>.codex/</code>, <code>.agents/skills/</code>, <code>/CLAUDE.md</code>, <code>/WORKFLOW.html</code>, <code>/opencode.jsonc</code>, <code>/.tf-scaffold-note.txt</code>) — everything the framework drops into an app is a <em>copy</em> (source of truth: the reference repo, or the NuGet package for the library personas) and must never be committed in the app repo. The step is append-only and idempotent: your own <code>.gitignore</code> entries are respected, nothing is removed. Note git never <em>un</em>tracks a file just because it became ignored — if a framework file was committed before the entry existed, run <code>git rm -r --cached &lt;path&gt;</code> once yourself (git is manual in TechieFlow; agents never run it).</p>
 
 <p>They also manage a second block — <strong>agent test-harness &amp; log artifacts</strong> (<code>node_modules/</code>, <code>/package.json</code>, <code>/package-lock.json</code>, <code>tests/.artifacts/</code>, <code>test-results/</code>, <code>test-results-*/</code>, <code>/scripts-*/</code>, <code>playwright-report/</code>, <code>.verify/</code>, <code>logs/</code>, <code>/docs/.last-verify.json</code>, <code>.DS_Store</code>). These are machine-generated by the verifier's npm/Playwright self-provisioning (verify-phase §1) and the standing Serilog default, and are fully regenerable — <strong>you should never have to triage them at commit time</strong>. verify-phase §1 also self-heals the block whenever it provisions, so even a project scaffolded before this block existed gets it on its next verify. <code>playwright.config.ts</code> deliberately stays <em>tracked</em> — committed test suites depend on it. Same caveat as above: already-tracked artifacts need a one-time <code>git rm -r --cached &lt;path&gt;</code> from you.</p>
 
@@ -1267,6 +1268,8 @@ dotnet build -t:Run -f net9.0-android          # Android head (emulator via Andr
 </div>
 
 <div class="panel warn">
+  <div class="panel warn"><strong>Codex permission difference.</strong> <code>.codex/hooks.json</code> routes shell and file changes through <code>.tfcore/hooks/codex-adapter.py</code>, and <code>.codex/rules/techieflow.rules</code> supplies command policy. Codex blocks every agent-issued <code>git</code> and <code>gh</code> command in normal and YOLO modes, including reads. <code>$techieflow-yolo</code> changes TechieFlow pause/delete behavior but never relaxes this boundary. Trust the repository and inspect <code>/hooks</code> after scaffold/update.</div>
+
   <strong>Usage limits (5-hour / weekly).</strong> Nothing inside a session can wait a limit out, so the wait lives in a supervisor:
   <pre><code class="lang-bash">bash .tfcore/utils/tf-goal.sh /path/to/App "Take MyApp to Handoff: build every open REQ, verify all, fix until every row is Verified."
 bash .tfcore/utils/tf-goal.sh --harness opencode --model opencode-go/kimi-k3 /path/to/App @goal.md
@@ -1370,6 +1373,23 @@ bash .tfcore/utils/tf-goal.sh --resume /path/to/App      # after a reboot</code>
   <tr><td>Development telemetry report (<a href="#telemetry">§17</a>)</td><td><code>/TechieFlow:agents:flow-master *metrics {AppName}</code> &mdash; writes <code>docs/metrics/METRICS.md</code> + <code>.html</code></td></tr>
   <tr><td>Telemetry, quick look in the terminal (<a href="#telemetry">§17</a>)</td><td><code>cd /path/to/app &amp;&amp; .tfcore/telemetry/tf-metrics.sh --report .</code> &mdash; read-only, no agent</td></tr>
 </table>
+
+<h3>Codex command equivalents</h3>
+<p>Codex exposes workflows as project skills rather than literal Claude/OpenCode slash commands. Type the <code>$techieflow-*</code> name with its arguments; scaffold/update generates these skills from <code>.tfcore/tasks/</code>.</p>
+<table>
+<tr><th>Workflow</th><th>Codex command</th></tr>
+<tr><td>Day 1</td><td><code>$techieflow-day1-brownfield {AppName}</code> / <code>$techieflow-day1-greenfield {AppName}</code></td></tr>
+<tr><td>Requirements</td><td><code>$techieflow-author-brd {AppName}</code> / <code>$techieflow-amend-docs {AppName} "&lt;change&gt;"</code></td></tr>
+<tr><td>Design / checklist</td><td><code>$techieflow-mockups {AppName}</code> / <code>$techieflow-split-brd {AppName}</code></td></tr>
+<tr><td>Build / verify</td><td><code>$techieflow-build {AppName}</code> / <code>$techieflow-verify all {AppName}</code></td></tr>
+<tr><td>Fix / triage</td><td><code>$techieflow-fix-issues {AppName} {evidence}</code> / <code>$techieflow-triage-issues {AppName} {evidence}</code></td></tr>
+<tr><td>Guides</td><td><code>$techieflow-devguide {AppName}</code> / <code>$techieflow-productguide {AppName}</code></td></tr>
+<tr><td>Handoff / recovery</td><td><code>$techieflow-handoff {AppName}</code> / <code>$techieflow-refresh-status {AppName}</code></td></tr>
+<tr><td>Rendering</td><td><code>$techieflow-render-workflow-docs {AppName}</code> / <code>$techieflow-generate-html @docs/File.md</code></td></tr>
+<tr><td>Metrics / YOLO</td><td><code>$techieflow-metrics-report {AppName}</code> / <code>$techieflow-yolo on|off|status</code></td></tr>
+<tr><td>Unattended goal</td><td><code>bash .tfcore/utils/tf-goal.sh --harness codex &lt;app-dir&gt; "&lt;goal&gt;"</code></td></tr>
+</table>
+<div class="panel warn"><strong>Codex boundary:</strong> trust the repository and review <code>/hooks</code>. Every agent-issued <code>git</code> and <code>gh</code> command stays forbidden even in YOLO. The supervisor uses <code>codex exec --json --sandbox workspace-write --ask-for-approval never</code> and resumes its recorded session after limits or restarts.</div>
 
 <p><small>The trblazeui and techierag personas are NuGet-deployed to <code>.claude/&lt;name&gt;.md</code> and <code>.opencode/command/&lt;name&gt;.md</code>. Claude Code only scans <code>.claude/commands/</code>, so the scaffold/update scripts copy them to <code>.claude/commands/&lt;name&gt;.md</code> (the short <code>/trblazeui</code> <code>/techierag</code> forms then work). If the short form is missing: <code>dotnet build</code>, then re-run <code>update-framework.sh</code>. Library maintainers must update the package source files listed in <code>docs/TechieFlow-Library-Persona-Propagation.md</code>; consumer copies are not the source of truth.</small></p>
 
@@ -1732,10 +1752,10 @@ The <code>winrun</code> bridge and <code>cmd.exe</code> rungs simply don't apply
 <p><strong>What it is, in one example.</strong> Without routing, day-1 architecture and re-rendering HTML cost the same per token. With routing ON, each phase gets a <strong>tier</strong>, each tier maps to a real model:</p>
 
 <table>
-<tr><th>Tier</th><th>Meant for</th><th>Claude</th><th>OpenCode (defaults — yours to change)</th></tr>
-<tr><td><code>frontier</code></td><td>expensive thinking: day-1, author-brd, amend-docs, fix-issues</td><td><code>opus</code></td><td><code>opencode-go/kimi-k3</code></td></tr>
-<tr><td><code>standard</code></td><td>everyday building: build, verify, mockups, split-brd, triage, devguide + builder subagents</td><td><code>sonnet</code></td><td><code>opencode-go/kimi-k2.7-code</code></td></tr>
-<tr><td><code>economy</code></td><td>mechanical: metrics, renders, refresh-status, productguide, handoff</td><td><code>haiku</code></td><td><code>opencode-go/deepseek-v4-flash</code></td></tr>
+<tr><th>Tier</th><th>Meant for</th><th>Claude</th><th>OpenCode (defaults — yours to change)</th><th>Codex</th></tr>
+<tr><td><code>frontier</code></td><td>expensive thinking: day-1, author-brd, amend-docs, fix-issues</td><td><code>opus</code></td><td><code>opencode-go/kimi-k3</code></td><td><code>gpt-5.6</code></td></tr>
+<tr><td><code>standard</code></td><td>everyday building: build, verify, mockups, split-brd, triage, devguide + builder subagents</td><td><code>sonnet</code></td><td><code>opencode-go/kimi-k2.7-code</code></td><td><code>gpt-5.6-terra</code></td></tr>
+<tr><td><code>economy</code></td><td>mechanical: metrics, renders, refresh-status, productguide, handoff</td><td><code>haiku</code></td><td><code>opencode-go/deepseek-v4-flash</code></td><td><code>gpt-5.6-luna</code></td></tr>
 </table>
 
 <p>Measured example (TechieBlog pilot): a complete <code>metrics-report</code> phase on economy — 14k output tokens, full report — cost <strong>$0.036</strong>. Builders stay on <code>standard</code> deliberately: a cheap builder that ships a blank table costs an entire verify-and-fix cycle.</p>
@@ -1763,8 +1783,9 @@ bash .tfcore/utils/tf-routing.sh off        # disable — removes exactly those 
 bash .tfcore/utils/tf-routing.sh set-tier  verify-phase economy    # demote a phase
 bash .tfcore/utils/tf-routing.sh set-model standard opencode opencode-go/qwen3.7-max
 bash .tfcore/utils/tf-routing.sh set-model economy  claude   haiku
+bash .tfcore/utils/tf-routing.sh set-model standard codex    gpt-5.6-terra
 bash .tfcore/utils/tf-routing.sh bind      # re-apply after hand-editing routing.yaml</code></pre>
-<p>Claude takes <code>opus</code>/<code>sonnet</code>/<code>haiku</code> (or a full id); OpenCode takes <code>provider/model</code> — list yours with <code>opencode models</code>.</p>
+<p>Claude takes aliases or full ids; OpenCode takes <code>provider/model</code> ids; Codex takes model slugs available to the installed Codex CLI. A skill in the main Codex conversation inherits the active model; generated custom agents and <code>tf-goal.sh --harness codex</code> are the pinned-model path.</p>
 
 <h3>Escalation — advisory, applied by you at launch</h3>
 <p><code>routing.yaml</code> also carries an <code>escalation:</code> block, shipped as <code>fix-issues: after_attempts: 2, tier: frontier</code> — "if the same REQs have been through <code>fix-issues</code> twice without reaching <code>Verified</code>, launch the third run on frontier". It is <strong>advisory</strong>: <code>bash .tfcore/utils/tf-emit.sh --next-run-attempt fix-issues &lt;REQ-IDs&gt;</code> reads the attempt history (the <code>attempt</code> field now stamped on every <code>runs.jsonl</code> record that touches REQs), <code>tf-routing.sh status</code> prints the policy, and <code>tf-routing.sh set-escalation &lt;phase&gt; &lt;attempts&gt; &lt;tier&gt;</code> tunes it. If the number exceeds the threshold, <em>you</em> launch the next run on the escalation tier (Claude: <code>/model opus</code> then the command; OpenCode: pick the model, then the command). Nothing ever switches a running phase's model — neither harness can (DECISIONS.md 2026-08-21; Routing Guide §6.4).</p>
@@ -1778,7 +1799,7 @@ bash .tfcore/utils/tf-routing.sh bind      # re-apply after hand-editing routing
   <li><strong>"How do I make my normal chat cheaper too?"</strong> Not routing's job — pick a cheaper model in the TUI model list, or set <code>"model"</code> in <code>~/.config/opencode/opencode.jsonc</code>.</li>
   <li><strong>"status says flag and bindings disagree."</strong> <code>bash .tfcore/utils/tf-routing.sh bind</code>.</li>
   <li><strong>"Does update-framework.sh wipe my routing?"</strong> No — <code>routing.yaml</code> is preserved forever; refreshes re-generate your bindings from YOUR map (verified in the pilot).</li>
-  <li><strong>"What gets generated?"</strong> OpenCode: <code>.opencode/opencode.json</code>. Claude: <code>.claude/commands/tf/*.md</code> + <code>.claude/agents/tf-*.md</code>. All gitignored, manifest-tracked, fully removed by <code>off</code>.</li>
+  <li><strong>"What gets generated?"</strong> OpenCode: <code>.opencode/opencode.json</code>. Claude: <code>.claude/commands/tf/*.md</code> + <code>.claude/agents/tf-*.md</code>. Codex: <code>.codex/agents/*.toml</code> + <code>.agents/skills/techieflow-*/</code>. All are gitignored and regenerated from the preserved routing map.</li>
 </ul>
 
 <h2 id="team-edition">18. Team edition — the AI-First Playbook<span class="anchor-link"><a href="#team-edition">#</a></span></h2>
@@ -1808,7 +1829,7 @@ single-source-of-truth checklists, and <strong>"verify by executing, not by read
 <div class="panel"><strong>Which one do you want?</strong> If you are one person driving agents across several apps, stay here. If you are rolling a process out to a team — where the hard parts are onboarding, review gates and shared standards rather than raw throughput — start with the Playbook; it ships enablement and onboarding material this framework deliberately does not carry. The two are independent repos: nothing here depends on the Playbook, and nothing there depends on this.</div>
 
 <hr>
-<p class="small">Last revised 2026-08-11. Edit freely. When the workflow changes, update the session memory <code>MEMORY.md</code> under <code>~/.claude/projects/&lt;this-repo's-slug&gt;/memory/</code> and <code>WorkFlow-Context.md</code> (the AI-agent context doc) too.</p>
+<p class="small">Last revised 2026-08-24. Edit freely. When the workflow changes, update <code>README.md</code> and <code>WorkFlow-Context.md</code> (the durable cross-harness context document) too.</p>
 
 </main>
 </div>

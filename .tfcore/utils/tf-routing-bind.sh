@@ -16,6 +16,10 @@
 #                                         model-only agent entries merge, command
 #                                         entries must be complete → they carry
 #                                         template+description+model)
+#   Codex:
+#     .codex/agents/*.toml + .agents/skills/techieflow-*/SKILL.md, generated
+#     by tf-codex-bind.py. Subagent model/effort is pinned when routing is on;
+#     skills remain thin loaders and do not claim to switch the main thread.
 #
 # When `enabled: false` (the default) every generated artifact is REMOVED, using
 # the manifest .tfcore/.session/routing-bind.manifest (gitignored) — the script
@@ -138,10 +142,16 @@ SUB_BODY = {
         "Return { testsAdded[], testsRefreshed[], unobservable[] }."),
     "tf-explorer": ("Read-only codebase scan (devguide OBSERVE, index-docs). Never edits, "
         "never runs git/gh. Returns findings as structured text."),
-    "trblazeui": ("Read `.claude/trblazeui.md` (the NuGet-deployed persona) and fully adopt it. "
-        "If it does not exist, report that TrBlazeUI is not deployed (run dotnet build) and stop."),
-    "techierag": ("Read `.claude/techierag.md` (the NuGet-deployed persona) and fully adopt it. "
-        "If it does not exist, report that TechieRag is not deployed (run dotnet build) and stop."),
+    "trblazeui": ("Read the NuGet-deployed TrBlazeUI persona and fully adopt it. Resolve it in this "
+        "order and use the FIRST that exists: `.claude/commands/trblazeui.md` (current deploy target), "
+        "`.claude/trblazeui.md` (legacy deploy target), `.trblazeui/TrBlazeUI-AI-Reference.md` "
+        "(packaged component reference). Only if NONE exists, report that TrBlazeUI is not deployed "
+        "(`dotnet build` the app to unpack the package) and stop."),
+    "techierag": ("Read the NuGet-deployed TechieRag persona and fully adopt it. Resolve it in this "
+        "order and use the FIRST that exists: `.claude/commands/techierag.md` (current deploy target), "
+        "`.claude/techierag.md` (legacy deploy target), `.techierag/TechieRag-AI-Reference.md` "
+        "(packaged service reference). Only if NONE exists, report that TechieRag is not deployed "
+        "(`dotnet build` the app to unpack the package) and stop."),
 }
 DESC = {
     "tf-builder": "TechieFlow FN/NFR cluster builder (routed tier)",
@@ -202,4 +212,5 @@ with open(manifest_path, "w", encoding="utf-8", newline="\n") as fh:
 print("tf-routing-bind: routing enabled — %d artifact(s) generated (%d stale removed)"
       % (len(generated), removed))
 PY
+python3 "$SELF_DIR/tf-codex-bind.py" "$ROOT" || echo "tf-routing-bind: warning: Codex bindings were not refreshed" >&2
 exit 0

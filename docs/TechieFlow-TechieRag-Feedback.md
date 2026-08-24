@@ -5,10 +5,21 @@
 > per library so it can be handed to (or picked up by) the owning team directly.
 
 ## Summary
-- 1 major (resolved), 1 minor (resolved at source, pending package republish)
-- Last consolidated: 2026-07-04
+- 1 major resolved, 1 minor resolved at source pending package republish, 1 Codex integration issue open
+- Last consolidated: 2026-08-24
 
 ## Issues
+
+### TR-RAG-003 — NuGet package does not deploy a native Codex persona
+- **Severity:** major
+- **Status:** ⬜ OPEN — framework compatibility wrapper exists; library source/package change required
+- **Repro:** install `TechieRag` into a clean Codex consumer and run `dotnet build` without first scaffolding TechieFlow. The package deploys Claude and OpenCode persona files plus `.techierag/TechieRag-AI-Reference.md`, but no Codex custom-agent definition. Codex therefore cannot discover a native `techierag` specialist from the package alone.
+- **Expected:** the TechieRag source of truth includes a Codex persona and the NuGet target deploys it to `.codex/agents/techierag.toml`. The agent uses plain `developer_instructions`, reads `.techierag/TechieRag-AI-Reference.md`, follows the consumer's applicable `AGENTS.md`, and contains no Claude activation/help ritual or OpenCode slash-command syntax.
+- **Actual:** TechieFlow currently generates a compatibility wrapper at `.codex/agents/techierag.toml`; it prefers an existing Claude persona and falls back to the AI reference. Scaffolded TechieFlow apps therefore work, but standalone Codex consumers do not receive a native specialist from the NuGet package.
+- **Encountered in:** TechieFlow Codex adapter implementation and documentation audit, 2026-08-24.
+- **Workaround:** scaffold/update TechieFlow so its generated Codex wrapper is present. Do not hand-edit that consumer copy; it is regenerated.
+- **Suggested fix:** add `src/TechieRag/build/content/techierag-codex-agent.toml`, pack it with the existing AI content, and update `src/TechieRag/build/TechieRag.targets` to copy it to `.codex/agents/techierag.toml`. Preserve an existing consumer-owned file unless it is identified as package-owned, and remove only the package's own obsolete copy during upgrades. Validate in a clean consumer with `dotnet build`, repository trust, and Codex agent discovery. Then refresh TechieFlow's snapshot/wrapper contract from the published package.
+- **Codex invocation:** TechieFlow's `$techieflow-build` delegates REQ-RAG clusters to the `techierag` custom agent; this is not a `/techierag` slash command.
 
 ### TR-RAG-002 — Persona file shipped stale BMAD branding; consumer-side edits are futile
 - **Severity:** minor

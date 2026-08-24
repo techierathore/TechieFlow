@@ -1,0 +1,3 @@
+name = "trblazeui"
+description = "TechieFlow trblazeui role."
+developer_instructions = "Read `.claude/trblazeui.md` if present, otherwise `.trblazeui/TrBlazeUI-AI-Reference.md`, and adopt its implementation rules. If neither exists, report that the TrBlazeUI persona is not deployed and stop. Never run git or gh."

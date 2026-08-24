@@ -135,6 +135,16 @@ done
 # ./.tfcore/ to ../.tfcore/ for the copy living inside .opencode/.
 sed 's|{file:\./\.tfcore/|{file:../.tfcore/|g' "$TEMPLATE/opencode.jsonc" > .opencode/opencode.jsonc
 
+# 4c. Codex adapter — repository skills, custom agents, hooks and exec policy.
+# Config is a project baseline and is preserved when already present; the
+# framework-owned hooks/rules and generated agents/skills are refreshed.
+mkdir -p .codex/agents .codex/rules .agents/skills
+[[ -f .codex/config.toml ]] || cp "$TEMPLATE/.codex/config.toml" .codex/config.toml
+cp "$TEMPLATE/.codex/hooks.json" .codex/hooks.json
+cp "$TEMPLATE/.codex/rules/techieflow.rules" .codex/rules/techieflow.rules
+python3 .tfcore/utils/tf-codex-bind.py "$TARGET" || echo "  ⚠ Codex bindings could not be generated (python3 required)"
+echo "  Codex adapter installed — trust this repository and review /hooks before relying on guards"
+
 # 5. .claude/settings.json — yolo-except-git-writes, only if missing
 if [[ ! -f .claude/settings.json ]]; then
   cat > .claude/settings.json <<'JSON'
@@ -311,8 +321,8 @@ fi
 #    package for library personas) and must never be committed in the app repo.
 #    Append-only + idempotent: existing anchored/slash variants are respected;
 #    user content is never rewritten.
-GI_LINES=(".tfcore/" ".claude/" ".opencode/" "/CLAUDE.md" "/WORKFLOW.html" "/opencode.jsonc" "/.tf-scaffold-note.txt")
-GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?CLAUDE\.md$' '^/?WORKFLOW\.html$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$')
+GI_LINES=(".tfcore/" ".claude/" ".opencode/" ".codex/" ".agents/skills/" "/CLAUDE.md" "/WORKFLOW.html" "/opencode.jsonc" "/.tf-scaffold-note.txt")
+GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?\.codex/?$' '^/?\.agents/skills/?$' '^/?CLAUDE\.md$' '^/?WORKFLOW\.html$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$')
 GI_MISSING=()
 for i in "${!GI_LINES[@]}"; do
   # tr strips CR so CRLF .gitignore files (Windows-authored) still match the $-anchor

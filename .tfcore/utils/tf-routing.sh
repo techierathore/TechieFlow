@@ -8,6 +8,7 @@
 #   bash .tfcore/utils/tf-routing.sh set-model <tier> <harness> <model>
 #                                                               e.g. set-model economy opencode opencode-go/deepseek-v4-flash
 #                                                               e.g. set-model frontier claude opus
+#                                                               e.g. set-model standard codex gpt-5.6-terra
 #   bash .tfcore/utils/tf-routing.sh bind                       re-generate bindings after editing routing.yaml by hand
 #   bash .tfcore/utils/tf-routing.sh set-escalation <phase> <attempts> <tier>
 #                                                               e.g. set-escalation fix-issues 2 frontier
@@ -89,12 +90,12 @@ PY
   set-model)
     TIER="${2:-}"; HARNESS="${3:-}"; MODEL="${4:-}"
     case "$TIER" in frontier|standard|economy) ;; *)
-      echo "usage: tf-routing.sh set-model <frontier|standard|economy> <claude|opencode> <model-id>" >&2; exit 2 ;;
+      echo "usage: tf-routing.sh set-model <frontier|standard|economy> <claude|opencode|codex> <model-id>" >&2; exit 2 ;;
     esac
-    case "$HARNESS" in claude|opencode) ;; *)
-      echo "harness must be 'claude' (values: opus|sonnet|haiku or a model id) or 'opencode' (provider/model — list with: opencode models)" >&2; exit 2 ;;
+    case "$HARNESS" in claude|opencode|codex) ;; *)
+      echo "harness must be claude, opencode, or codex" >&2; exit 2 ;;
     esac
-    [[ -n "$MODEL" ]] || { echo "usage: tf-routing.sh set-model <tier> <claude|opencode> <model-id>" >&2; exit 2; }
+    [[ -n "$MODEL" ]] || { echo "usage: tf-routing.sh set-model <tier> <claude|opencode|codex> <model-id>" >&2; exit 2; }
     python3 - "$RY" "$TIER" "$HARNESS" "$MODEL" <<'PY'
 import sys
 p, tier, harness, model = sys.argv[1:5]
@@ -198,7 +199,7 @@ print()
 print("Tier models:")
 for t in ("frontier", "standard", "economy"):
     m = cfg["tiers"].get(t, {})
-    print("  %-9s claude: %-10s opencode: %s" % (t, m.get("claude", "-"), m.get("opencode", "-")))
+    print("  %-9s claude: %-10s opencode: %-36s codex: %s" % (t, m.get("claude", "-"), m.get("opencode", "-"), m.get("codex", "-")))
 print()
 print("Phases by tier:")
 for t in ("frontier", "standard", "economy", "inherit"):
@@ -225,6 +226,7 @@ if cfg["enabled"]:
     print("Invoke routed phases as:")
     print("  OpenCode:    /techieflow:tasks:<phase>        (same commands as always — model now pinned)")
     print("  Claude Code: /tf:<phase>                      (new wrappers; old commands still work, unrouted)")
+    print("  Codex:        $techieflow-<phase>              (main-thread model inherited; delegated roles are pinned)")
     print()
     print("WHERE YOU SEE IT — opening the TUI looks UNCHANGED on purpose: your normal chat")
     print("(the default 'build' agent) stays on YOUR selected model. Routing becomes visible when:")

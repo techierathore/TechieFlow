@@ -1,0 +1,8 @@
+# TechieFlow's owner performs every version-control operation manually.
+prefix_rule(
+    pattern = [["git", "gh"]],
+    decision = "forbidden",
+    justification = "TechieFlow agents never run git or gh; inspect working-tree files and framework artifacts instead.",
+    match = ["git status", "git add .", "gh pr view 1", "gh issue list"],
+)
+

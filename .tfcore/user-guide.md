@@ -237,29 +237,26 @@ TechieFlow integrates with OpenCode via a project-level `opencode.jsonc`/`openco
 
 ### Codex (CLI & Web)
 
-TechieFlow integrates with OpenAI Codex via `AGENTS.md` and committed core agent files.
+TechieFlow's full build/runtime workflow is supported in local Codex CLI, IDE,
+and desktop sessions. The scaffold/update scripts install `.codex/` project
+config, custom agents, hooks and rules plus reusable workflows under
+`.agents/skills/`. Trust the repository and review `/hooks` after installation
+or a hook update.
 
-- Two installation modes:
-  - Codex (local only): keeps `.tfcore/` ignored for local dev.
-    - # Use ./scaffold-greenfield.sh or ./scaffold-brownfield.sh â see WORKFLOW.html
-  - Codex Web Enabled: ensures `.tfcore/` is tracked so you can commit it for Codex Web.
-    - # Use ./scaffold-greenfield.sh or ./scaffold-brownfield.sh â see WORKFLOW.html
+Codex loads the root `AGENTS.md`. Invoke `$techieflow-build`,
+`$techieflow-verify`, `$techieflow-refresh-status`, or name the skill in plain
+language. Literal Claude/OpenCode `*command` and slash names are vocabulary
+aliases, not Codex command registrations.
 
-- What gets generated:
-  - `AGENTS.md` at the project root with a TechieFlow section containing
-    - How-to-use with Codex (CLI & Web)
-    - Agent Directory (Title, ID, When To Use)
-    - Detailed per‑agent sections with source path, when-to-use, activation phrasing, and YAML
-    - Tasks with quick usage notes
-  - If a `package.json` exists, helpful scripts are added:
-    - `techieflow:refresh`, `techieflow:list`, `techieflow:validate`
+For an unattended local run:
 
-- Using Codex:
-  - CLI: run `codex` in the project root and prompt naturally, e.g., “As dev, implement …”.
-  - Web: commit `.tfcore/` and `AGENTS.md`, then open the repo in Codex and prompt the same way.
+```bash
+bash .tfcore/utils/tf-goal.sh --harness codex . "<goal>"
+```
 
-- Refresh after changes:
-  - Re-run the appropriate install mode (`codex` or `codex-web`) to update the TechieFlow block in `AGENTS.md`.
+Codex cloud cannot automatically reach local `winrun`, Appium hosts, NuGet
+credentials, or already-running services. It is static-only unless equivalent
+infrastructure is explicitly provisioned.
 
 ## Special Agents
 

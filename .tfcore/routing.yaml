@@ -7,7 +7,8 @@
 # A phase declares a TIER, never a model. The tiers map resolves a tier to a
 # per-harness model id (Claude Code aliases: opus|sonnet|haiku|inherit|<id>,
 # pinnable via ANTHROPIC_DEFAULT_*_MODEL; OpenCode ids: provider/model, list
-# with `opencode models`). Routing is declared at the harness boundary and
+# with `opencode models`; Codex model slugs: list with `codex debug models`).
+# Routing is declared at the harness boundary and
 # OBSERVED by telemetry (runs.jsonl model/tier fields) — it is never enforced
 # mid-turn, because neither harness can switch a running turn's model.
 #
@@ -33,12 +34,15 @@ tiers:
   frontier:
     claude: opus
     opencode: opencode-go/kimi-k3
+    codex: gpt-5.6
   standard:
     claude: sonnet
     opencode: opencode-go/kimi-k2.7-code
+    codex: gpt-5.6-terra
   economy:
     claude: haiku
     opencode: opencode-go/deepseek-v4-flash
+    codex: gpt-5.6-luna
 
 # ---------------------------------------------------------------------------
 # Phase → tier. One line each; values: frontier | standard | economy | inherit.
@@ -75,7 +79,7 @@ subagents:
   tf-explorer: economy
 
 # ---------------------------------------------------------------------------
-# Tier → reasoning effort (Claude-only knob; ignored by OpenCode).
+# Tier → reasoning effort (used by Claude Code and Codex; ignored by OpenCode).
 # ---------------------------------------------------------------------------
 effort:
   frontier: high

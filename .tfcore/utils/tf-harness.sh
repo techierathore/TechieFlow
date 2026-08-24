@@ -6,12 +6,12 @@
 # scripts call this instead of hard-coding either harness's dialect.
 #
 # USAGE
-#   tf-harness.sh detect                    -> claude-code | opencode | unknown
+#   tf-harness.sh detect                    -> claude-code | opencode | codex | unknown
 #   tf-harness.sh root                      -> project root path
 #   tf-harness.sh enabled                   -> true | false   (routing.yaml flag)
 #   tf-harness.sh tier <phase|subagent>     -> frontier | standard | economy | inherit
 #   tf-harness.sh model <tier> [harness]    -> model id for the tier on the harness
-#   tf-harness.sh effort <tier>             -> high | medium | low   (Claude-only knob)
+#   tf-harness.sh effort <tier>             -> high | medium | low
 #   tf-harness.sh invoke task <name> "<args>"   -> the harness's slash form
 #   tf-harness.sh invoke agent <name> "<args>"  -> the harness's invocation form
 #   tf-harness.sh session                   -> the session pointer JSON for this harness
@@ -42,7 +42,8 @@ _root() {
 
 # --- detect ----------------------------------------------------------------
 _detect() {
-  case "${TF_HARNESS:-}" in claude-code|opencode) printf '%s' "$TF_HARNESS"; return ;; esac
+  case "${TF_HARNESS:-}" in claude-code|opencode|codex) printf '%s' "$TF_HARNESS"; return ;; esac
+  if [[ -n "${CODEX_THREAD_ID:-}${CODEX_SESSION_ID:-}" ]]; then printf 'codex'; return; fi
   if [[ -n "${CLAUDECODE:-}${CLAUDE_CODE_ENTRYPOINT:-}${CLAUDE_CODE_SESSION_ID:-}${CLAUDE_PROJECT_DIR:-}" ]]; then
     printf 'claude-code'; return
   fi
@@ -57,6 +58,7 @@ _detect() {
     ppid="$(printf '%s' "${stat##*) }" | awk '{print $2}')"
     case "$name" in
       *opencode*) printf 'opencode'; return ;;
+      *codex*)    printf 'codex'; return ;;
       *claude*)   printf 'claude-code'; return ;;
     esac
     pid="$ppid"
@@ -90,6 +92,7 @@ _model() {
   [[ -f "$f" ]] || { printf 'inherit'; return; }
   local key="claude"
   [[ "$harness" == "opencode" ]] && key="opencode"
+  [[ "$harness" == "codex" ]] && key="codex"
   awk -v tier="$tier" -v key="$key" '
     /^tiers:/          { in_tiers=1; next }
     /^[a-z]+:/         { in_tiers=0 }
@@ -132,11 +135,13 @@ case "$CMD" in
     H="$(_detect)"
     case "$KIND" in
       task)
-        if [[ "$H" == "opencode" ]]; then printf '/techieflow:tasks:%s %s\n' "$NAME" "$ARGS"
+        if [[ "$H" == "codex" ]]; then printf 'Use the $techieflow-%s skill with arguments: %s\n' "${NAME%-phase}" "$ARGS"
+        elif [[ "$H" == "opencode" ]]; then printf '/techieflow:tasks:%s %s\n' "$NAME" "$ARGS"
         else printf '/TechieFlow:tasks:%s %s\n' "$NAME" "$ARGS"; fi
         ;;
       agent)
-        if [[ "$H" == "opencode" ]]; then printf 'opencode run --agent %s "%s"   (TUI: Tab to %s, then type: %s)\n' "$NAME" "$ARGS" "$NAME" "$ARGS"
+        if [[ "$H" == "codex" ]]; then printf 'Delegate to the `%s` Codex subagent with: %s\n' "$NAME" "$ARGS"
+        elif [[ "$H" == "opencode" ]]; then printf 'opencode run --agent %s "%s"   (TUI: Tab to %s, then type: %s)\n' "$NAME" "$ARGS" "$NAME" "$ARGS"
         else printf '/TechieFlow:agents:%s %s\n' "$NAME" "$ARGS"; fi
         ;;
       *) echo "usage: tf-harness.sh invoke <task|agent> <name> [args]" >&2; exit 2 ;;

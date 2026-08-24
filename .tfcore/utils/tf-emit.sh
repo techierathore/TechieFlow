@@ -220,7 +220,7 @@ def _project_type():
 
 PTYPE = _project_type()
 
-# harness — DETECTED, never taken on trust. The task markdown is shared by both
+# harness — DETECTED, never taken on trust. The task markdown is shared by all
 # harnesses, so an agent copying a template literal would stamp whichever harness
 # the example happened to name. Detection order: harness env vars, then the parent
 # process chain (OpenCode sets no OPENCODE_* vars, so the process name is the only
@@ -233,8 +233,11 @@ def _detect_harness():
     # the OTHER harness inherits that harness's markers (e.g. OpenCode started
     # from a Claude Code bash still carries CLAUDE_PROJECT_DIR).
     tf = os.environ.get("TF_HARNESS")
-    if tf in ("claude-code", "opencode"):
+    if tf in ("claude-code", "opencode", "codex"):
         return tf
+    for k in ("CODEX_THREAD_ID", "CODEX_SESSION_ID"):
+        if os.environ.get(k):
+            return "codex"
     for k in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ID",
               "CLAUDE_PROJECT_DIR"):
         if os.environ.get(k):
@@ -262,6 +265,8 @@ def _detect_harness():
                     name, ppid = os.path.basename(parts[0]), int(parts[1])
             if name and "opencode" in name.lower():
                 return "opencode"
+            if name and "codex" in name.lower():
+                return "codex"
             if name and "claude" in name.lower():
                 return "claude-code"
             pid = ppid
@@ -522,7 +527,7 @@ def enrich_run(rec):
             tier = ROUTING["phases"].get(cmd)
             if tier and tier != "inherit":
                 rec["tier"] = tier
-                key = {"claude-code": "claude", "opencode": "opencode"}.get(HARNESS)
+                key = {"claude-code": "claude", "opencode": "opencode", "codex": "codex"}.get(HARNESS)
                 tm = ROUTING["tiers"].get(tier, {}).get(key) if key else None
                 if tm:
                     rec["tier_model"] = tm

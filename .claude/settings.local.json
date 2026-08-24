@@ -117,7 +117,8 @@
       "Bash(chmod *)",
       "Bash(~/.opencode/bin/opencode debug *)",
       "Bash(python3 -c ' *)",
-      "Bash(~/.opencode/bin/opencode agent *)"
+      "Bash(~/.opencode/bin/opencode agent *)",
+      "Bash(SP=/tmp/claude-1000/-mnt-c-3AIGenCode-TechieFlow/117a19cc-935b-4bca-b0a6-1333176cbbc0/scratchpad/bindtest; mkdir -p \"$SP/.tfcore/utils\" \"$SP/.claude/commands\"; cp .tfcore/routing.yaml \"$SP/.tfcore/\"; cp .tfcore/utils/tf-routing-bind.sh .tfcore/utils/tf-codex-bind.py .tfcore/utils/tf-harness.sh \"$SP/.tfcore/utils/\"; sed -i 's/^enabled: false/enabled: true/' \"$SP/.tfcore/routing.yaml\"; printf 'TrBlazeUI persona\\\\n' > \"$SP/.claude/commands/trblazeui.md\"; printf 'TechieRag persona\\\\n' > \"$SP/.claude/commands/techierag.md\"; echo setup-done)"
     ]
   }
 }

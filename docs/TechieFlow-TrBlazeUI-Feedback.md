@@ -5,10 +5,21 @@
 > per library so it can be handed to (or picked up by) the owning team directly.
 
 ## Summary
-- 1 major (resolved), 1 minor (resolved at source, pending package republish)
-- Last consolidated: 2026-07-04
+- 1 major resolved, 1 minor resolved at source pending package republish, 1 Codex integration issue open
+- Last consolidated: 2026-08-24
 
 ## Issues
+
+### TR-003 — NuGet package does not deploy a native Codex persona
+- **Severity:** major
+- **Status:** ⬜ OPEN — framework compatibility wrapper exists; library source/package change required
+- **Repro:** install `TrBlazeUI.Components` into a clean Codex consumer and run `dotnet build` without first scaffolding TechieFlow. The package deploys Claude and OpenCode persona files plus `.trblazeui/TrBlazeUI-AI-Reference.md`, but no Codex custom-agent definition. Codex therefore cannot discover a native `trblazeui` specialist from the library package alone.
+- **Expected:** the library source of truth includes a Codex persona and the NuGet target deploys it to `.codex/agents/trblazeui.toml`. The agent uses plain `developer_instructions`, reads `.trblazeui/TrBlazeUI-AI-Reference.md`, follows the consumer's applicable `AGENTS.md`, and does not contain Claude activation/help rituals or OpenCode slash-command syntax.
+- **Actual:** TechieFlow currently generates a compatibility wrapper at `.codex/agents/trblazeui.toml`; it prefers an existing Claude persona and falls back to the AI reference. That makes scaffolded TechieFlow apps work, but it leaves standalone Codex consumers unsupported and makes the framework—not the library package—the owner of the Codex adapter.
+- **Encountered in:** TechieFlow Codex adapter implementation and documentation audit, 2026-08-24.
+- **Workaround:** scaffold/update TechieFlow so its generated Codex wrapper is present. Do not hand-edit that consumer copy; it is regenerated.
+- **Suggested fix:** add a library-owned Codex source such as `docs/skills/codex-trblazeui.toml`, pack it under `skills/`, and update `src/TrBlazeUI.Components/build/TrBlazeUI.Components.targets` to copy it to `.codex/agents/trblazeui.toml`. Preserve an existing consumer-owned file unless it is identified as package-owned, and remove only the package's own obsolete copy during upgrades. Validate in a clean consumer with `dotnet build`, repository trust, and Codex agent discovery. Then refresh TechieFlow's snapshot/wrapper contract from the published package.
+- **Codex invocation:** TechieFlow's `$techieflow-build` delegates REQ-UI clusters to the `trblazeui` custom agent; this is not a `/trblazeui` slash command.
 
 ### TR-002 — Persona file shipped stale branding + wrong core path; consumer-side edits are futile
 - **Severity:** minor

@@ -1,0 +1,46 @@
+# TechieFlow Codex adapter. Project-local config loads only after the repository
+# is trusted. User authentication, providers, profiles, notifications and OTel
+# remain in ~/.codex/config.toml and are never managed by TechieFlow.
+
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 8
+
+[agents.flow_master]
+description = "TechieFlow orchestrator and workflow router."
+config_file = "agents/flow-master.toml"
+
+[agents.analyst]
+description = "Business analysis, discovery, BRDs, and mockups."
+config_file = "agents/analyst.toml"
+
+[agents.architect]
+description = "Architecture and technical design specialist."
+config_file = "agents/architect.toml"
+
+[agents.verifier]
+description = "Independent requirement verifier and evidence grader."
+config_file = "agents/verifier.toml"
+
+[agents.tf_builder]
+description = "Implementation worker for one FN/NFR requirement cluster."
+config_file = "agents/tf-builder.toml"
+
+[agents.tf_test_writer]
+description = "Black-box verification-test writer for one requirement cluster."
+config_file = "agents/tf-test-writer.toml"
+
+[agents.tf_explorer]
+description = "Read-only codebase explorer for focused evidence gathering."
+config_file = "agents/tf-explorer.toml"
+
+[agents.trblazeui]
+description = "TrBlazeUI implementation specialist; available when its persona is deployed."
+config_file = "agents/trblazeui.toml"
+
+[agents.techierag]
+description = "TechieRag implementation specialist; available when its persona is deployed."
+config_file = "agents/techierag.toml"

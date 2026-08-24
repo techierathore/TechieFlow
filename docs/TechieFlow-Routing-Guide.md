@@ -1,5 +1,11 @@
 # TechieFlow Model Routing Guide
 
+> **Codex:** each tier also has a `codex:` model slug and uses the same effort
+> map through `model_reasoning_effort`. `tf-codex-bind.py` pins routed custom
+> subagents. A skill invoked in an existing main thread inherits that thread's
+> model; use a routed subagent or `tf-goal.sh --harness codex` when the phase
+> must run on the declared model.
+
 **Audience:** the framework owner. **TL;DR:** run cheap phases on cheap models, expensive thinking on expensive models — one script controls everything. **Design doc:** `docs/Adapter-Design.md §5` (the reasoning) · **quick summary:** README §17b / WORKFLOW.html §17b.
 
 ## 1. The problem routing solves
@@ -17,13 +23,13 @@ A real measured datapoint (TechieBlog pilot, 2026-08-20): one complete `metrics-
 
 ## 2. The three tiers
 
-| Tier | Mental model | Claude Code model | OpenCode model (shipped defaults) |
-|---|---|---|---|
-| `frontier` | The expensive thinking. Mistakes here are the costliest to discover late. | `opus` | `opencode-go/kimi-k3` |
-| `standard` | The everyday building. Needs real competence, not brilliance. | `sonnet` | `opencode-go/kimi-k2.7-code` |
-| `economy` | The mechanical work. Format, assemble, scan, report. | `haiku` | `opencode-go/deepseek-v4-flash` |
+| Tier | Mental model | Claude Code | OpenCode (shipped default) | Codex |
+|---|---|---|---|---|
+| `frontier` | The expensive thinking. Mistakes here are the costliest to discover late. | `opus` | `opencode-go/kimi-k3` | `gpt-5.6` |
+| `standard` | The everyday building. Needs real competence, not brilliance. | `sonnet` | `opencode-go/kimi-k2.7-code` | `gpt-5.6-terra` |
+| `economy` | The mechanical work. Format, assemble, scan, report. | `haiku` | `opencode-go/deepseek-v4-flash` | `gpt-5.6-luna` |
 
-The models are **starting values, yours to change** (§6). Claude side accepts the aliases `opus` / `sonnet` / `haiku` or a full model id; OpenCode side takes `provider/model` ids — list everything your account offers with `opencode models`.
+The models are **starting values, yours to change** (§6). Claude accepts aliases or a full model id; OpenCode takes `provider/model` ids; Codex takes a model slug available to the installed Codex CLI.
 
 ## 3. The complete map — what runs on what
 
@@ -89,6 +95,10 @@ After `on`, **you keep using the same commands you always used**:
 | OpenCode | Tab to `flow-verifier`, then `*verify all MyApp` — unchanged | The persona carries its tier's model |
 | Claude Code | `/tf:verify-phase all MyApp` — new short wrapper | Runs the phase on the tier model for that turn |
 | Claude Code | `/TechieFlow:agents:verifier *verify all MyApp` — the old way | Still works, **unrouted** (session model) |
+| Codex | `$techieflow-verify all MyApp` | Runs the project skill; the main conversation inherits its active model |
+| Codex | `bash .tfcore/utils/tf-goal.sh --harness codex . "verify all requirements"` | Runs/resumes headless Codex with routed custom-agent bindings |
+
+Codex routing generates `.codex/agents/*.toml` and `.agents/skills/techieflow-*/`. Custom agents carry the mapped model; a skill invoked directly in the main Codex conversation cannot switch that turn's model and therefore inherits the active selection. Use a routed agent or the Codex goal supervisor when exact tier pinning matters.
 
 ## 5. What you will — and won't — see in the TUI
 
