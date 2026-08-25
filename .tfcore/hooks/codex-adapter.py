@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Translate Codex hooks to TechieFlow's existing guard and telemetry contracts."""
+"""Translate Codex hooks to TechieFlow's existing guard and telemetry contracts.
+
+Modes (see .codex/hooks.json):
+  pre-tool       Bash  -> block-git.sh + guard-artifacts.sh
+                 Edit/Write/apply_patch -> guard-status.sh + guard-verify.sh
+  stop           guard-status-html.sh (PROJECT-STATUS.html must not be stale)
+  session-start  session pointer + sweep-artifacts.sh (expired run material)
+  session-start  write the .tfcore/.session/codex.json pointer
+  session-end    pointer + session telemetry
+"""
 
 from __future__ import annotations
 
@@ -78,7 +87,7 @@ def pre_tool(event: dict) -> None:
     scripts: list[str] = []
     if tool == "Bash":
         payload = {"tool_name": "Bash", "tool_input": {"command": str(args.get("command") or "")}}
-        scripts = ["block-git.sh"]
+        scripts = ["block-git.sh", "guard-artifacts.sh"]
     elif tool == "apply_patch":
         patch = str(args.get("command") or args.get("patch") or "")
         # Run the existing guards once per file using actual paths and separated
@@ -121,6 +130,25 @@ def pre_tool(event: dict) -> None:
             return
 
 
+def stop(event: dict) -> None:
+    """Stop hook: refuse to end the turn while PROJECT-STATUS.html is stale.
+
+    Same contract as the Claude Code Stop hook (_status-update-gate.md §8):
+    guard-status-html.sh exits 2 when the .html is older than the .md or
+    missing; `stop_hook_active` is passed through so a turn that genuinely
+    cannot render still terminates instead of looping.
+    """
+    root = project_root(event)
+    payload = {
+        "hook_event_name": "Stop", "cwd": str(root),
+        "session_id": event.get("session_id"),
+        "stop_hook_active": bool(event.get("stop_hook_active")),
+    }
+    reason = run_guard(root, event, "guard-status-html.sh", payload)
+    if reason:
+        print(json.dumps({"decision": "block", "reason": reason}))
+
+
 def write_pointer(root: pathlib.Path, event: dict) -> None:
     session_id = str(event.get("session_id") or "")
     if not session_id:
@@ -134,6 +162,23 @@ def write_pointer(root: pathlib.Path, event: dict) -> None:
             "model": event.get("model"),
             "ts": datetime.now(timezone.utc).isoformat(),
         }) + "\n", encoding="utf-8")
+    except Exception:
+        pass
+
+
+def sweep_artifacts(root: pathlib.Path, event: dict) -> None:
+    """SessionStart analogue of the Claude Code sweep-artifacts.sh hook: delete
+    run material under tests/.artifacts/ and .verify/ older than the retention
+    window and any banned repo-root legacy dir. No veto — never raises."""
+    script = root / ".tfcore" / "hooks" / "sweep-artifacts.sh"
+    if not script.exists():
+        return
+    try:
+        res = subprocess.run(["bash", str(script)], input=json.dumps(event), text=True,
+                             capture_output=True, timeout=30, env=environment(root, event), check=False)
+        summary = (res.stdout or "").strip()
+        if summary:
+            print(summary)  # SessionStart stdout is surfaced into the session
     except Exception:
         pass
 
@@ -170,8 +215,14 @@ def main() -> int:
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
     if mode == "pre-tool":
         pre_tool(event)
+    elif mode == "stop":
+        stop(event)
     elif mode == "session-start":
         write_pointer(root, event)
+        # .codex/hooks.json runs session-start for UserPromptSubmit too; sweep
+        # only on the real session start so every prompt does not walk the tree.
+        if str(event.get("hook_event_name") or "").lower() != "userpromptsubmit":
+            sweep_artifacts(root, event)
     elif mode == "session-end":
         write_pointer(root, event)
         session_end(root, event)

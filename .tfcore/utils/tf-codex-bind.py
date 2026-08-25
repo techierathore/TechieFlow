@@ -43,6 +43,27 @@ WORKERS = {
     "techierag": """Read the NuGet-deployed TechieRag persona and adopt its implementation rules. Resolve it in this order and use the FIRST that exists: `.claude/commands/techierag.md` (current deploy target), `.claude/techierag.md` (legacy deploy target), `.opencode/command/techierag.md`, `.techierag/TechieRag-AI-Reference.md` (packaged service reference). Only if NONE exists, report that the TechieRag persona is not deployed (`dotnet build` the app to unpack the package) and stop. Never run git or gh.""",
 }
 
+# Library-persona workers are COMPATIBILITY wrappers: the library NuGet packages own
+# the native `.codex/agents/<lib>.toml` (TrBlazeUI.Components >= 2.0.3 deploys it on
+# `dotnet build`; TechieRag is expected to follow the same contract). The package's
+# MSBuild target deploys only when the file is absent OR the ownership marker
+# `.<lib>/.codex-agent-package-owned` exists; otherwise it preserves what it finds as
+# consumer-owned. So the framework must (a) never overwrite a file that is not its own
+# wrapper, and (b) write the marker alongside its wrapper so the package is allowed to
+# replace it. The wrapper then self-retires per repo on the first post-2.0.3 build.
+COMPAT = {
+    "trblazeui": ("TrBlazeUI.Components", ".trblazeui"),
+    "techierag": ("TechieRag", ".techierag"),
+}
+MARKER = ".codex-agent-package-owned"
+
+
+def own_wrapper(path: pathlib.Path, name: str) -> bool:
+    """True when `path` is absent or holds the framework's own compat wrapper."""
+    if not path.exists():
+        return True
+    return f'description = "TechieFlow {name} role."' in path.read_text(encoding="utf-8")
+
 
 def routing(path: pathlib.Path) -> dict:
     cfg = {"enabled": False, "tiers": {}, "phases": {}, "subagents": {}, "effort": {}}
@@ -116,11 +137,24 @@ def main() -> int:
             name.replace("-", "_"), f"TechieFlow {name} specialist.",
             persona_instructions(root, source), model, effort))
 
+    kept = []
     for name, instructions in WORKERS.items():
         tier = cfg["subagents"].get(name, "inherit")
         model = cfg["tiers"].get(tier, {}).get("codex") if cfg["enabled"] and tier != "inherit" else None
         effort = cfg["effort"].get(tier) if model else None
-        write(root / ".codex" / "agents" / f"{name}.toml", agent_file(
+        target = root / ".codex" / "agents" / f"{name}.toml"
+        if name in COMPAT:
+            package, lib_dir = COMPAT[name]
+            if not own_wrapper(target, name):
+                kept.append(name)  # package- or consumer-owned agent: never overwrite
+                continue
+            marker = root / lib_dir / MARKER
+            if not marker.exists():
+                write(marker, package)
+            ignore = root / lib_dir / ".gitignore"  # same `*` the package writes on build
+            if not ignore.exists():
+                write(ignore, "*")
+        write(target, agent_file(
             name.replace("-", "_"), f"TechieFlow {name} role.", instructions,
             model, effort, read_only=name == "tf-explorer"))
 
@@ -151,7 +185,9 @@ description: Enable, disable, or inspect TechieFlow YOLO mode for an explicitly 
 Read `.tfcore/tasks/_yolo-mode.md` completely. Run `bash .tfcore/utils/tf-yolo.sh on|off` as requested. YOLO removes elicitation pauses but does not broaden the user's task, allow git/gh, bypass the Codex workspace sandbox, or waive genuine external blockers. For a supervised long-running goal, use `.tfcore/utils/tf-goal.sh --harness codex`.
 """
     write(root / ".agents" / "skills" / "techieflow-yolo" / "SKILL.md", yolo)
-    print(f"tf-codex-bind: generated {len(PERSONAS) + len(WORKERS)} agents and {len(PHASES) + 1} skills")
+    print(f"tf-codex-bind: generated {len(PERSONAS) + len(WORKERS) - len(kept)} agents and {len(PHASES) + 1} skills")
+    for name in kept:
+        print(f"tf-codex-bind: kept library-owned .codex/agents/{name}.toml (compat wrapper retired)")
     return 0
 
 

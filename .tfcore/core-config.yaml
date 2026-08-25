@@ -25,6 +25,8 @@ devLoadAlwaysFiles: []
 devDebugLog: .ai/debug-log.md
 devStoryLocation: docs/stories
 slashPrefix: TechieFlow
+# artifactRetentionDays: 7   # sweep-artifacts.sh (SessionStart) deletes run material under
+#                            # tests/.artifacts/ and .verify/ older than this; 0 disables the age sweep
 # runtimeVerification: per-app, OPT-IN. Only set the heads this app actually ships.
 # The verifier/devguide/smoke gates drive Blazor with headless Playwright and the MAUI
 # Windows head with FlaUI/Appium-Win (unchanged). For MAUI Android / iOS / Mac Catalyst

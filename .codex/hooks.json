@@ -36,6 +36,18 @@
         ]
       }
     ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .tfcore/hooks/codex-adapter.py stop",
+            "timeout": 10,
+            "statusMessage": "Checking PROJECT-STATUS.html is current"
+          }
+        ]
+      }
+    ],
     "SessionEnd": [
       {
         "hooks": [

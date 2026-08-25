@@ -42,7 +42,10 @@
 #   .opencode/opencode.jsonc            (framework config copy; wins over the
 #                                        root opencode.jsonc on conflicting keys;
 #                                        {file:} refs rewritten to ../.tfcore/)
-#   .claude/settings.json               (yolo-except-git-writes; --keep-permissions to skip)
+#   .claude/settings.json               (yolo-except-git-writes; --keep-permissions to skip;
+#                                        PreToolUse block-git + guard-artifacts + guard-status +
+#                                        guard-verify, Stop guard-status-html — 2026-08-25;
+#                                        SessionStart sweep-artifacts — 2026-08-26)
 #   WORKFLOW.html
 #
 # OpenCode agents/tasks are NOT mirrored to .opencode/command/TechieFlow/ (that
@@ -64,8 +67,12 @@
 #   PROJECT-STATUS.md, CLAUDE.md        (per-project state)
 #   .editorconfig                       (per-project)
 #   .claude/settings.local.json         (per-machine one-off approvals — never touched)
-#   .claude/{trblazeui,techierag}.md    (NuGet-deployed library agents)
+#   .claude/commands/{trblazeui,techierag}.md  (NuGet-deployed library agents)
 #   .opencode/command/{trblazeui,techierag}.md
+#   .codex/agents/{trblazeui,techierag}.toml   (library-owned once the package
+#                                        ships it — TrBlazeUI >= 2.0.3; the
+#                                        compat wrapper is regenerated only
+#                                        while it is still the framework's own)
 #   opencode.jsonc                      (may have project-specific agents; the
 #                                        framework's keys now arrive via the
 #                                        refreshed .opencode/opencode.jsonc)
@@ -392,6 +399,10 @@ CANONICAL_SETTINGS='{
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/block-git.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-artifacts.sh\""
           }
         ]
       },
@@ -415,6 +426,10 @@ CANONICAL_SETTINGS='{
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/session-pointer.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/sweep-artifacts.sh\""
           }
         ]
       }
@@ -425,6 +440,16 @@ CANONICAL_SETTINGS='{
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/session-pointer.sh\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status-html.sh\""
           }
         ]
       }

@@ -194,9 +194,11 @@ Create `.codex/hooks.json` with these mappings:
 
 | Codex event/matcher | Existing script or new adapter | Purpose |
 |---|---|---|
-| `PreToolUse`, `Bash` | `.tfcore/hooks/block-git.sh` through a payload adapter | Block all git/gh access and destructive forms according to TechieFlow policy |
+| `PreToolUse`, `Bash` | `.tfcore/hooks/block-git.sh` + `guard-artifacts.sh` through a payload adapter | Block all git/gh access and destructive forms; block repo-root `test-results*` / `scripts-*` artifact dirs (2026-08-25) |
 | `PreToolUse`, `Edit|Write|apply_patch` | `guard-status.sh` and `guard-verify.sh` through a payload adapter | Mechanically validate status/checklist writes |
+| `Stop` | `guard-status-html.sh` through the adapter (`codex-adapter.py stop`) | Refuse to end the turn while `PROJECT-STATUS.html` is older than `PROJECT-STATUS.md` or missing (2026-08-25); honours `stop_hook_active` |
 | `SessionStart` and `UserPromptSubmit` | Codex-aware `session-pointer.sh` | Maintain a Codex session pointer |
+| `SessionStart` | `sweep-artifacts.sh` through the adapter (`codex-adapter.py session-start`, skipped on the UserPromptSubmit re-fire; the script itself throttles to once/hour) | Delete run material under `tests/.artifacts/` and `.verify/` older than the retention window (default 7d) and banned repo-root legacy dirs (2026-08-26) |
 | `SessionEnd` | Codex-aware telemetry adapter | Emit session telemetry when reliable usage is available |
 | `SubagentStart`/`SubagentStop` | optional telemetry adapter | Track child sessions without confusing them with the main session |
 

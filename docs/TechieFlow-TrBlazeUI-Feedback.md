@@ -5,27 +5,33 @@
 > per library so it can be handed to (or picked up by) the owning team directly.
 
 ## Summary
-- 1 major resolved, 1 minor resolved at source pending package republish, 1 Codex integration issue open
-- Last consolidated: 2026-08-24
+- All three findings are resolved in TrBlazeUI source.
+- Ships in: **TrBlazeUI.Components 2.0.3** — **PUBLISHED** on the GitHub Packages feed (`nuget.pkg.github.com/techierathore`), verified 2026-08-25 by querying the source from the user-level `NuGet.Config` and inspecting the downloaded nupkg (`buildTransitive/TrBlazeUI.Components.targets` with the Codex ownership-marker block, `skills/codex-trblazeui.toml`, BMAD-free `skills/claude-code-trblazeui.md`). nuget.org still carries only 2.0.0.
+- TechieFlow side done 2026-08-25: `tf-codex-bind.py` now honours the package's ownership marker (never overwrites a package-owned agent; plants `.trblazeui/.codex-agent-package-owned` next to its wrapper so the package may replace it). Without this, every existing TechieFlow app would have blocked 2.0.3's Codex deployment forever — see `docs/TechieFlow-Library-Persona-Propagation.md` § Ownership-marker contract.
+- Remaining per-app action: `update-framework.sh <repo>` → `dotnet build` (2.0.3) → confirm `.codex/agents/trblazeui.toml` is the package copy.
+- Last consolidated: 2026-08-25
 
 ## Issues
 
 ### TR-003 — NuGet package does not deploy a native Codex persona
 - **Severity:** major
-- **Status:** ⬜ OPEN — framework compatibility wrapper exists; library source/package change required
+- **Status:** ✅ RESOLVED — shipped in the published 2.0.3 package (verified on the feed 2026-08-25); framework marker handling landed the same day
 - **Repro:** install `TrBlazeUI.Components` into a clean Codex consumer and run `dotnet build` without first scaffolding TechieFlow. The package deploys Claude and OpenCode persona files plus `.trblazeui/TrBlazeUI-AI-Reference.md`, but no Codex custom-agent definition. Codex therefore cannot discover a native `trblazeui` specialist from the library package alone.
 - **Expected:** the library source of truth includes a Codex persona and the NuGet target deploys it to `.codex/agents/trblazeui.toml`. The agent uses plain `developer_instructions`, reads `.trblazeui/TrBlazeUI-AI-Reference.md`, follows the consumer's applicable `AGENTS.md`, and does not contain Claude activation/help rituals or OpenCode slash-command syntax.
-- **Actual:** TechieFlow currently generates a compatibility wrapper at `.codex/agents/trblazeui.toml`; it prefers an existing Claude persona and falls back to the AI reference. That makes scaffolded TechieFlow apps work, but it leaves standalone Codex consumers unsupported and makes the framework—not the library package—the owner of the Codex adapter.
+- **Historical actual (through 2.0.2):** TechieFlow generated a compatibility wrapper at `.codex/agents/trblazeui.toml`; standalone Codex consumers received no library-owned agent.
 - **Encountered in:** TechieFlow Codex adapter implementation and documentation audit, 2026-08-24.
 - **Workaround:** scaffold/update TechieFlow so its generated Codex wrapper is present. Do not hand-edit that consumer copy; it is regenerated.
-- **Suggested fix:** add a library-owned Codex source such as `docs/skills/codex-trblazeui.toml`, pack it under `skills/`, and update `src/TrBlazeUI.Components/build/TrBlazeUI.Components.targets` to copy it to `.codex/agents/trblazeui.toml`. Preserve an existing consumer-owned file unless it is identified as package-owned, and remove only the package's own obsolete copy during upgrades. Validate in a clean consumer with `dotnet build`, repository trust, and Codex agent discovery. Then refresh TechieFlow's snapshot/wrapper contract from the published package.
+- **Requested fix (completed in 2.0.3 source):** add a library-owned Codex source at `docs/skills/codex-trblazeui.toml`, pack it under `skills/`, and deploy it through `src/TrBlazeUI.Components/build/TrBlazeUI.Components.targets` to `.codex/agents/trblazeui.toml`, preserving consumer-owned files.
 - **Codex invocation:** TechieFlow's `$techieflow-build` delegates REQ-UI clusters to the `trblazeui` custom agent; this is not a `/trblazeui` slash command.
+- **Fix delivered for 2.0.3:** added `docs/skills/codex-trblazeui.toml`; packed it as `skills/codex-trblazeui.toml`; and added a build-transitive deployment to `.codex/agents/trblazeui.toml`. Package-owned copies upgrade safely, while consumer-owned agents, `.codex/config.toml`, hooks, rules, and unrelated agents are preserved. The plain `developer_instructions` loads `.trblazeui/TrBlazeUI-AI-Reference.md`, follows applicable consumer `AGENTS.md`, and contains no Claude/OpenCode activation syntax.
+- **Verification:** `tests/package/codex-agent-deployment.sh` packed the local package graph and built two clean NuGet-only consumers with 0 warnings / 0 errors; exact agent/reference deployment, ownership-based refresh, preservation behavior, and TOML discovery contract passed.
+- **Remaining TechieFlow action:** after 2.0.3 is published, update the framework's package baseline, run a clean scaffold/update build, confirm the package-owned Codex agent is discoverable, and retire or reduce the compatibility wrapper only when that published-package smoke is green.
 
 ### TR-002 — Persona file shipped stale branding + wrong core path; consumer-side edits are futile
 - **Severity:** minor
-- **Status:** ✅ RESOLVED at source 2026-07-04 (pending package republish)
+- **Status:** ✅ RESOLVED — included in the 2.0.3 publication set
 - **Repro:** the packaged `skills/claude-code-trblazeui.md` carried a `<!-- Powered by BMAD™ Core -->` header and `Dependencies map to .bmad-core/{type}/{name}` — both pre-date the TechieFlow rebrand (`.tfcore/`). Because the MSBuild target re-copies the packaged file over `.claude/commands/trblazeui.md` on every consumer build (`SkipUnchangedFiles` only skips when identical), any consumer-side rebrand edit is silently reverted at the next `dotnet build`. The TechieFlow framework repo's own copies had been hand-edited and were exactly this kind of doomed edit.
-- **Fix applied (in the TrBlazeUI repo):** `docs/skills/claude-code-trblazeui.md` — removed the BMAD header, `.bmad-core/` → `.tfcore/`. The OpenCode variant needed no change. **Remaining owner action: repack + republish TrBlazeUI.Components so consumers receive the corrected persona on their next restore/build.** Until then, deployed copies in consumer repos will still show the old branding after each build.
+- **Fix applied (in the TrBlazeUI repo):** `docs/skills/claude-code-trblazeui.md` — removed the BMAD header, `.bmad-core/` → `.tfcore/`. The OpenCode variant needed no change. It will reach consumers in **2.0.3**; deployed copies remain stale until consumers restore/build that version.
 - **Policy reminder:** persona/skill files are LIBRARY-owned. Any customization must be made in the TrBlazeUI repo (`docs/skills/`) and shipped via the package — never edited in a consumer repo.
 
 ### TR-001 — Agent persona deploys to a path Claude Code never scans

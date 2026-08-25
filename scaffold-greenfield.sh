@@ -15,8 +15,12 @@
 #
 # Library-deployed agent files are explicitly excluded — they land via
 # `dotnet build` once the project adds the NuGet packages:
-#   .claude/trblazeui.md, .opencode/command/trblazeui.md, .trblazeui/
-#   .claude/techierag.md, .opencode/command/techierag.md, .techierag/
+#   .claude/commands/trblazeui.md, .opencode/command/trblazeui.md, .trblazeui/
+#   .claude/commands/techierag.md, .opencode/command/techierag.md, .techierag/
+#   .codex/agents/{trblazeui,techierag}.toml — library-owned once the package
+#   ships it (TrBlazeUI.Components >= 2.0.3); until then tf-codex-bind.py writes
+#   a compat wrapper + the `.<lib>/.codex-agent-package-owned` marker so the
+#   package may replace it.
 #
 # Idempotent: re-running won't overwrite existing files — with one exception:
 # the harness agent mirror (.claude/commands/TechieFlow/agents/) is force-synced
@@ -179,6 +183,10 @@ if [[ ! -f .claude/settings.json ]]; then
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/block-git.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-artifacts.sh\""
           }
         ]
       },
@@ -202,6 +210,10 @@ if [[ ! -f .claude/settings.json ]]; then
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/session-pointer.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/sweep-artifacts.sh\""
           }
         ]
       }
@@ -212,6 +224,16 @@ if [[ ! -f .claude/settings.json ]]; then
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/session-pointer.sh\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status-html.sh\""
           }
         ]
       }

@@ -18,9 +18,16 @@
 // auto-approves the permission map's rm/rmdir/sudo asks and TF_YOLO=1 is
 // exported to tool shells so block-git.sh allows read-only git. Writes to
 // git never reach this hook — they are `deny` in the map.
-//   bash  {command}                        -> Bash  {command}            -> block-git.sh
+//   bash  {command}                        -> Bash  {command}            -> block-git.sh + guard-artifacts.sh
 //   edit  {filePath,oldString,newString}   -> Edit  {file_path,old_string,new_string}
 //   write {filePath,content}               -> Write {file_path,content}  -> guard-status.sh + guard-verify.sh
+//   session.idle (root session)            -> Stop  {stop_hook_active}   -> guard-status-html.sh
+//   session.created (first root session)   -> SessionStart              -> sweep-artifacts.sh
+// OpenCode has no blocking Stop hook, so the stale-PROJECT-STATUS.html guard
+// (_status-update-gate.md §8) is bridged as a ONE-SHOT nudge: when the root
+// session idles with the .html older than the .md, the guard's message is sent
+// back into that session as a follow-up prompt. The second idle passes
+// stop_hook_active=true (the Claude loop guard) so it can never ping-pong.
 // Guard exit 2 -> throw (block, message to the model). Anything else — missing
 // script, missing python3, spawn error, timeout — allows (fail-open, the same
 // posture as the Claude side). Telemetry likewise NEVER blocks (tf-emit.sh has
@@ -42,7 +49,7 @@ import { spawnSync } from "node:child_process"
 
 const GUARD_TIMEOUT_MS = 10000
 
-export const TechieFlowPlugin = async ({ directory }) => {
+export const TechieFlowPlugin = async ({ directory, client }) => {
   const root = directory
   const hooksDir = path.join(root, ".tfcore", "hooks")
   const tfEmit = path.join(root, ".tfcore", "utils", "tf-emit.sh")
@@ -91,7 +98,40 @@ export const TechieFlowPlugin = async ({ directory }) => {
   const parents = Object.create(null) // sessionID -> parentID | null
   const msgs = Object.create(null) // messageID -> {sessionID, model, cost, in, out, cacheR, cacheW, t0, t1}
   const emitted = Object.create(null) // rootID -> output_tokens at last emit
+  const htmlNudged = Object.create(null) // rootID -> true once the stale-HTML nudge was sent
   let pointerWritten = false
+
+  // Stop-hook analogue for guard-status-html.sh (see header). Never throws.
+  function nudgeStaleStatusHtml(rootID) {
+    try {
+      if (!client || !client.session || typeof client.session.prompt !== "function") return
+      const msg = guardBlocks("guard-status-html.sh", {
+        hook_event_name: "Stop",
+        cwd: root,
+        session_id: rootID,
+        stop_hook_active: htmlNudged[rootID] === true,
+      })
+      if (!msg) return
+      htmlNudged[rootID] = true
+      client.session
+        .prompt({
+          path: { id: rootID },
+          body: {
+            parts: [
+              {
+                type: "text",
+                text:
+                  "[TechieFlow harness — guard-status-html.sh]\n" +
+                  msg +
+                  "\n\nThis is the policy operating correctly, not an obstacle: re-render " +
+                  "PROJECT-STATUS.html from PROJECT-STATUS.md now, then finish.",
+              },
+            ],
+          },
+        })
+        .catch(() => {})
+    } catch {}
+  }
 
   function rootOf(sessionID) {
     let id = sessionID
@@ -106,6 +146,25 @@ export const TechieFlowPlugin = async ({ directory }) => {
         path.join(pointerDir, "opencode.json"),
         JSON.stringify({ session_id: sessionID, db_path: dbPath, ts: new Date().toISOString() }) + "\n",
       )
+    } catch {}
+  }
+
+  // SessionStart analogue of sweep-artifacts.sh: runs once per OpenCode instance
+  // on the first root session. Deletes run material under tests/.artifacts/ and
+  // .verify/ older than the retention window plus banned repo-root legacy dirs.
+  // No veto: failures are swallowed; the summary line goes to stderr only.
+  function sweepArtifacts(sessionID) {
+    try {
+      const file = path.join(hooksDir, "sweep-artifacts.sh")
+      if (!fs.existsSync(file)) return
+      const res = spawnSync("bash", [file], {
+        input: JSON.stringify({ hook_event_name: "SessionStart", cwd: root, session_id: sessionID }),
+        env,
+        encoding: "utf8",
+        timeout: 30000,
+      })
+      const summary = res && String(res.stdout || "").trim()
+      if (summary) process.stderr.write(summary + "\n")
     } catch {}
   }
 
@@ -166,7 +225,7 @@ export const TechieFlowPlugin = async ({ directory }) => {
       let scripts = []
       if (input.tool === "bash") {
         payload = { tool_name: "Bash", tool_input: { command: String(args.command || "") } }
-        scripts = ["block-git.sh"]
+        scripts = ["block-git.sh", "guard-artifacts.sh"]
       } else if (input.tool === "edit") {
         payload = {
           tool_name: "Edit",
@@ -242,6 +301,7 @@ export const TechieFlowPlugin = async ({ directory }) => {
             if (!info.parentID && !pointerWritten) {
               pointerWritten = true
               writePointer(info.id)
+              sweepArtifacts(info.id)
             }
           }
           return
@@ -269,7 +329,10 @@ export const TechieFlowPlugin = async ({ directory }) => {
         if (event.type === "session.idle") {
           const sid = p.sessionID
           if (!sid) return
-          if (rootOf(sid) === sid) emitSession(sid)
+          if (rootOf(sid) === sid) {
+            emitSession(sid)
+            nudgeStaleStatusHtml(sid)
+          }
           return
         }
       } catch {} // telemetry never blocks anything

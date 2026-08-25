@@ -480,12 +480,15 @@ your-app/                              ← e.g. AppManager/
 ├── .claude/
 │   ├── commands/TechieFlow/...              ← from scaffold
 │   ├── settings.json                  ← from scaffold (yolo-except-git-writes)
-│   ├── trblazeui.md                   ← from `dotnet build` (TrBlazeUI NuGet)
-│   └── techierag.md                   ← from `dotnet build` (TechieRag NuGet)
+│   ├── commands/trblazeui.md          ← from `dotnet build` (TrBlazeUI NuGet)
+│   └── commands/techierag.md          ← from `dotnet build` (TechieRag NuGet)
 ├── .opencode/command/
 │   ├── generate-html.md               ← from update-framework.sh
 │   ├── trblazeui.md                   ← from dotnet build
 │   └── techierag.md                   ← from dotnet build
+├── .codex/agents/
+│   ├── trblazeui.toml                 ← from dotnet build (TrBlazeUI ≥ 2.0.3); framework compat wrapper until then
+│   └── techierag.toml                 ← framework compat wrapper until TechieRag ships its native agent
 ├── .trblazeui/TrBlazeUI-AI-Reference.md   ← from dotnet build
 ├── .techierag/TechieRag-AI-Reference.md   ← from dotnet build
 │
@@ -834,16 +837,30 @@ The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **a
     "PreToolUse": [
       { "matcher": "Bash",
         "hooks": [ { "type": "command",
-                     "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/block-git.sh\"" } ] },
+                     "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/block-git.sh\"" },
+                   { "type": "command",
+                     "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-artifacts.sh\"" } ] },
       { "matcher": "Write|Edit|MultiEdit",
         "hooks": [ { "type": "command",
                      "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status.sh\"" },
                    { "type": "command",
                      "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-verify.sh\"" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command",
+                     "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status-html.sh\"" } ] }
     ]
   }
 }
 ```
+
+**Repo-root artifact directories are blocked mechanically (2026-08-25).** A fourth PreToolUse hook — `.tfcore/hooks/guard-artifacts.sh`, matcher `Bash` — blocks any command that points `--output` / `--output-dir` at a root-level `test-results*` or `scripts-*` directory, or `mkdir`s one. The prose rule in `verify-phase.md` §1 had been strengthened twice and broken three times (fourteen `test-results-*` dirs in one app, four `scripts-cluster-*` in the next fan-out, ten `test-results-*` in TechieBlog) — every time from an agent passing `--output test-results-<slug>` and overriding the config's pinned `outputDir`. The sanctioned isolation form `--output tests/.artifacts/<slug>` passes, as do `tests/`, `docs/screenshots/` and the project's own tracked `scripts/`. A bare `-o` is deliberately *not* matched (Playwright has no `-o`; `grep -o` / `curl -o` are legitimate).
+
+**A stale `PROJECT-STATUS.html` blocks the end of the turn (2026-08-25).** The first **Stop** hook — `.tfcore/hooks/guard-status-html.sh` — refuses to let a turn end while `PROJECT-STATUS.html` is older than `PROJECT-STATUS.md`, or missing. `_status-update-gate.md` §8 ("re-render in the same turn, full stop") had failed twice in a row; the owner spent 4h40m reading a page that still listed retracted owner-actions. Stop, not PostToolUse, because the rule is about the turn — an agent legitimately renders the HTML several tool calls after writing the markdown. It honours `stop_hook_active` so a turn that genuinely cannot render still terminates. mtime only: content parity stays an agent responsibility.
+
+**Expired run material is deleted automatically (2026-08-26).** Pinning artifacts under `tests/.artifacts/` fixed *where* they land but not that they ever leave — Playwright wipes only its own `outputDir`, so per-cluster subfolders, harness scripts and multi-hundred-MB host logs piled up (TechieBlog: 1.1 GB under `tests/.artifacts/` + 101 MB of `.verify/*.log`, mostly two weeks stale). A **SessionStart** hook — `.tfcore/hooks/sweep-artifacts.sh`, no veto, exit 0 always — deletes files under `tests/.artifacts/` and `.verify/` older than the retention window (default **7 days**; `artifactRetentionDays: N` in `.tfcore/core-config.yaml` or `TF_ARTIFACT_RETENTION_DAYS=N`; `0` disables the age sweep), prunes emptied dirs, and removes banned repo-root legacy dirs (`test-results*/`, `scripts-*/`, `playwright-report/`) regardless of age. Files newer than the window are untouched, so a run in flight is never disturbed and a mixed-age `harness/` keeps its recent scripts. Never follows symlinks, never leaves the project root, never touches tracked `tests/verify/` or the project's own `scripts/`. Throttled to once per hour per project (`.tfcore/.session/sweep.stamp`); `TF_SWEEP_DRY_RUN=1` previews. Codex runs it from `codex-adapter.py session-start`; OpenCode from the plugin on the first root `session.created`. The one-line summary of what was removed is surfaced into the session.
+
+Both new guards run in every harness: Codex through `codex-adapter.py` (`pre-tool` and the new `stop` mode wired in `.codex/hooks.json`), OpenCode through `.opencode/plugin/techieflow.js` (the bash guard in `tool.execute.before`; the Stop check as a one-shot follow-up prompt on root `session.idle`, since OpenCode has no blocking Stop hook). Hooks load at session start — neither takes effect in an already-running session.
 
 **PROJECT-STATUS shape is enforced mechanically too (2026-07-09).** A second PreToolUse hook — `.tfcore/hooks/guard-status.sh`, matcher `Write|Edit|MultiEdit` — blocks any write to `PROJECT-STATUS.md` that violates the crisp fixed-shape snapshot rule: an H2 outside the template's section set (per-run dated sections like `## *verify all — coverage matrix (DATE)` are the classic disease), a heading naming a command run, a paragraph stuffed into `current_phase:`, or a full-file write past ~120 lines. The block message tells the agent exactly how to reshape (overwrite the template sections in place, ONE Verification-log row per run, detail into the checklist Remarks). Same philosophy as the git ban: prose rules kept failing, so the harness enforces it. See `.tfcore/tasks/_status-update-gate.md`.
 

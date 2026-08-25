@@ -1,3 +1,3 @@
 name = "techierag"
 description = "TechieFlow techierag role."
-developer_instructions = "Read `.claude/techierag.md` if present, otherwise `.techierag/TechieRag-AI-Reference.md`, and adopt its implementation rules. If neither exists, report that the TechieRag persona is not deployed and stop. Never run git or gh."
+developer_instructions = "Read the NuGet-deployed TechieRag persona and adopt its implementation rules. Resolve it in this order and use the FIRST that exists: `.claude/commands/techierag.md` (current deploy target), `.claude/techierag.md` (legacy deploy target), `.opencode/command/techierag.md`, `.techierag/TechieRag-AI-Reference.md` (packaged service reference). Only if NONE exists, report that the TechieRag persona is not deployed (`dotnet build` the app to unpack the package) and stop. Never run git or gh."

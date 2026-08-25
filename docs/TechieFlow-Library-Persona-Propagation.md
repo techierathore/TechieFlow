@@ -5,7 +5,7 @@ TrBlazeUI and TechieRag NuGet packages. Do not fix only the copies in this
 TechieFlow repository: the next consumer build can overwrite them from the
 NuGet package.
 
-## Codex packaging contract (added 2026-08-24)
+## Codex packaging contract (implemented for TrBlazeUI 2.0.3)
 
 Codex specialist personas are project custom agents under `.codex/agents/`.
 They are TOML definitions with `name`, `description`, and plain
@@ -13,11 +13,41 @@ They are TOML definitions with `name`, `description`, and plain
 pretend that OpenCode slash commands exist. Each library-owned agent should read
 its packaged AI reference and obey the consuming repository's `AGENTS.md`.
 
-TechieFlow currently generates compatibility wrappers for `trblazeui` and
-`techierag`, so scaffolded applications work before the libraries are
-republished. A clean NuGet-only consumer should also receive the native Codex
-agent. Package targets must preserve unrelated consumer-owned Codex files and
-must never overwrite `.codex/config.toml`, hooks, rules, or other agents.
+TrBlazeUI now owns and packages the native `trblazeui` Codex agent. The 2.0.3
+build-transitive target deploys package-owned copies and preserves unrelated or
+consumer-owned Codex files; it never overwrites `.codex/config.toml`, hooks,
+rules, or other agents. **TrBlazeUI.Components 2.0.3 is published** on the
+`https://nuget.pkg.github.com/techierathore/index.json` feed (verified from the
+user-level `NuGet.Config` source on 2026-08-25; nuget.org still carries only
+2.0.0). The package was downloaded and inspected: `buildTransitive/` targets,
+`skills/codex-trblazeui.toml`, and a BMAD-free Claude persona all ship in it.
+
+### Ownership-marker contract (what the framework depends on)
+
+The package's MSBuild target deploys `.codex/agents/<lib>.toml` **only when the
+file is absent OR `.<lib>/.codex-agent-package-owned` exists**; any other
+existing file is treated as consumer-owned and preserved. TechieFlow's
+`tf-codex-bind.py` honours this from both sides:
+
+- it writes its compatibility wrapper only when the target is absent or is
+  still the framework's own wrapper (`description = "TechieFlow <lib> role."`);
+  a package- or consumer-owned file is never overwritten, and the run prints
+  `kept library-owned .codex/agents/<lib>.toml`;
+- when it does write the wrapper it also writes the marker
+  (`.trblazeui/.codex-agent-package-owned` = `TrBlazeUI.Components`,
+  `.techierag/.codex-agent-package-owned` = `TechieRag`) so the package is
+  allowed to replace the wrapper on the next `dotnet build`.
+
+Result: the wrapper self-retires per repo on the first build against a package
+that ships the native agent. No flag day, no manual deletion. Apps scaffolded
+before 2026-08-25 must run `update-framework.sh <repo>` once (to plant the
+marker) **before** their first 2.0.3 build; otherwise the package sees a
+marker-less file and skips deployment.
+
+TechieRag remains a separate library/team action: its native Codex agent must be
+implemented and published from the TechieRag repository, **using the same
+marker path and semantics** (`.techierag/.codex-agent-package-owned`), before
+the framework wrapper can retire there.
 
 ## OpenCode and Debian
 
@@ -56,7 +86,7 @@ new `TrBlazeUI.Components` package:
 |---|---|
 | Claude Code persona | `docs/skills/claude-code-trblazeui.md` |
 | OpenCode persona | `docs/skills/opencode-trblazeui.md` |
-| Codex custom agent (to add) | `docs/skills/codex-trblazeui.toml` |
+| Codex custom agent (implemented for 2.0.3) | `docs/skills/codex-trblazeui.toml` |
 | Deployment mapping | `src/TrBlazeUI.Components/build/TrBlazeUI.Components.targets` |
 
 The target file already maps the package content to these consumer paths:
@@ -65,13 +95,22 @@ The target file already maps the package content to these consumer paths:
 |---|---|
 | `skills/claude-code-trblazeui.md` | `.claude/commands/trblazeui.md` |
 | `skills/opencode-trblazeui.md` | `.opencode/command/trblazeui.md` |
-| `skills/codex-trblazeui.toml` (to add) | `.codex/agents/trblazeui.toml` |
+| `skills/codex-trblazeui.toml` | `.codex/agents/trblazeui.toml` |
 | `docs/TrBlazeUI-AI-Reference.md` | `.trblazeui/TrBlazeUI-AI-Reference.md` |
 
-The framework snapshots are `.claude/trblazeui.md`,
-`.claude/commands/trblazeui.md`, and `.opencode/command/trblazeui.md`. Refresh
-them from the newly published package; do not make the framework snapshot the
-long-term source.
+**TrBlazeUI.Components 2.0.3 is published** (GitHub Packages feed, verified
+2026-08-25). The framework no longer snapshots anything from the package: the
+compat wrapper retires itself per repo under the ownership-marker contract
+above. Remaining per-app step: `update-framework.sh <repo>` then `dotnet build`,
+and confirm `.codex/agents/trblazeui.toml` now reads
+`description = "Expert .NET and Blazor specialist …"` (package copy), not
+`"TechieFlow trblazeui role."` (wrapper).
+
+The 2.0.3 package smoke already proves the source package contract locally:
+three local dependency packages were packed; two clean NuGet-only consumers
+built with 0 warnings / 0 errors; the Claude, OpenCode, AI-reference, and Codex
+targets landed at their exact paths; package-owned Codex copies refreshed; and
+consumer-owned Codex configuration and agents were preserved.
 
 ## TechieRag Repository
 

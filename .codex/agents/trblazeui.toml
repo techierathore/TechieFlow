@@ -1,3 +1,3 @@
 name = "trblazeui"
 description = "TechieFlow trblazeui role."
-developer_instructions = "Read `.claude/trblazeui.md` if present, otherwise `.trblazeui/TrBlazeUI-AI-Reference.md`, and adopt its implementation rules. If neither exists, report that the TrBlazeUI persona is not deployed and stop. Never run git or gh."
+developer_instructions = "Read the NuGet-deployed TrBlazeUI persona and adopt its implementation rules. Resolve it in this order and use the FIRST that exists: `.claude/commands/trblazeui.md` (current deploy target), `.claude/trblazeui.md` (legacy deploy target), `.opencode/command/trblazeui.md`, `.trblazeui/TrBlazeUI-AI-Reference.md` (packaged component reference). Only if NONE exists, report that the TrBlazeUI persona is not deployed (`dotnet build` the app to unpack the package) and stop. Never run git or gh."
