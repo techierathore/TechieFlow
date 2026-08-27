@@ -46,6 +46,77 @@ if ! command -v rsync >/dev/null 2>&1; then
   exit 1
 fi
 
+# --------------------------------------------------------------------------
+# python3 is a HARD prerequisite, not a nice-to-have (added 2026-08-27 after a
+# macOS scaffold failed on a missing python3). It powers the Codex bindings
+# (tf-codex-bind.py), the HTML renderer (tf-render-html.py), the opencode.jsonc
+# audit, tf-metrics.sh and every guard hook. Missing it does not fail loudly at
+# the point of use — the hooks fail OPEN by design — so a scaffold that skipped
+# it would look like it worked and leave the repo silently unguarded.
+#
+# We offer to install it with the platform's own package manager. Set
+# TF_NO_INSTALL=1 to only ever report, never install.
+# --------------------------------------------------------------------------
+tf_ensure_python3() {
+  if command -v python3 >/dev/null 2>&1; then return 0; fi
+
+  echo "  python3 not found — it is required (Codex bindings, HTML renderer, telemetry, guard hooks)."
+
+  if [[ "${TF_NO_INSTALL:-0}" == "1" ]]; then
+    echo "  TF_NO_INSTALL=1 set — not installing. Install python3 and re-run." >&2
+    return 1
+  fi
+
+  local cmd=""
+  case "$(uname -s)" in
+    Darwin)
+      if command -v brew >/dev/null 2>&1; then
+        cmd="brew install python3"
+      else
+        echo "  macOS without Homebrew. Either:" >&2
+        echo "    xcode-select --install                 # ships a python3" >&2
+        echo "    /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\" && brew install python3" >&2
+        echo "    or install from https://www.python.org/downloads/macos/" >&2
+        return 1
+      fi ;;
+    Linux)
+      if   command -v apt-get >/dev/null 2>&1; then cmd="sudo apt-get update && sudo apt-get install -y python3"
+      elif command -v dnf     >/dev/null 2>&1; then cmd="sudo dnf install -y python3"
+      elif command -v yum     >/dev/null 2>&1; then cmd="sudo yum install -y python3"
+      elif command -v pacman  >/dev/null 2>&1; then cmd="sudo pacman -S --noconfirm python"
+      elif command -v zypper  >/dev/null 2>&1; then cmd="sudo zypper install -y python3"
+      elif command -v apk     >/dev/null 2>&1; then cmd="sudo apk add python3"
+      else
+        echo "  No known package manager found. Install python3 manually and re-run." >&2
+        return 1
+      fi ;;
+    *)
+      echo "  Unrecognised platform $(uname -s). Install python3 manually and re-run." >&2
+      return 1 ;;
+  esac
+
+  echo "  Installing with: $cmd"
+  echo "  (set TF_NO_INSTALL=1 to skip this and install it yourself)"
+  if ! bash -c "$cmd"; then
+    echo "  python3 install failed. Install it manually and re-run." >&2
+    return 1
+  fi
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "  python3 still not on PATH after install — open a new shell and re-run." >&2
+    return 1
+  fi
+  echo "  python3 installed: $(python3 --version 2>&1)"
+  return 0
+}
+
+if ! tf_ensure_python3; then
+  echo "" >&2
+  echo "Refusing to continue without python3: the scaffold would appear to succeed" >&2
+  echo "while leaving the repo with no Codex bindings and no working guard hooks." >&2
+  exit 1
+fi
+
 if [[ ! -d "$TARGET" ]]; then
   echo "Target directory does not exist: $TARGET" >&2
   echo "Brownfield means an EXISTING project. For a new one use scaffold-greenfield.sh." >&2

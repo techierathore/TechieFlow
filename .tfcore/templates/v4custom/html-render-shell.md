@@ -6,6 +6,14 @@ Both `render-workflow-docs.md` and `generate-html.md` MUST use the exact CSS, JS
 
 This is a **specification + verbatim snippets to inline**. Do NOT load via `<link>` / `<script src=>`. Every rendered HTML is self-contained.
 
+> **This spec has an implementation — use it, do not hand-author HTML.**
+> ```bash
+> bash .tfcore/utils/tf-render-html.sh <file.md> [more.md ...]
+> ```
+> `tf-render-html.py` **extracts §2 CSS, §3's theme script and §7 JS out of THIS FILE at render time**, so the shell can never drift from its own documentation: edit the snippets below and every future render picks them up. Python 3 standard library only — no pandoc, no node, no pip.
+>
+> Added 2026-08-27 (TfLens TF-003). Before that, every rendered page was hand-authored by the model from this spec, on every phase — ~75–80k output tokens per render cycle, non-reproducible output, and silent-truncation risk on large files. Read this file to understand or change the shell; you do not need to read it to render.
+
 ---
 
 ## 0. Output contract

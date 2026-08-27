@@ -114,9 +114,15 @@ def dedupe_commits(records):
     union merge guarantees nothing is dropped, this guarantees nothing is counted
     twice. `sha` is the natural key; a commit happens once.
 
-    Only commits need this. runs/gates/sessions record events that happen on ONE
-    machine and are never independently reconstructible, so a union merge cannot
-    manufacture a second copy of them."""
+    Scope note (corrected 2026-08-27, TfLens TF-001): this reasoning is about
+    UNION-MERGE duplicates specifically. runs/gates record events that happen on
+    ONE machine and are never independently reconstructible, so union merge
+    cannot manufacture a second copy of them. Sessions are NOT in that set —
+    they have their own, unrelated duplication source (the OpenCode plugin's
+    cumulative snapshots, SCHEMA.md §4) and are handled by dedupe_sessions
+    below. The original wording reasoned about one source of duplication and
+    concluded there were none at all, which silently overstated every session
+    and token figure."""
     seen, out, dupes = set(), [], 0
     for r in records:
         sha = r.get("sha")
@@ -129,6 +135,38 @@ def dedupe_commits(records):
         seen.add(sha)
         out.append(r)
     return out, dupes
+
+
+def dedupe_sessions(records):
+    """Collapse session records that share a session_id, keeping the completest.
+
+    Duplicates are EXPECTED here too, but for a different reason than commits.
+    The OpenCode plugin appends a CUMULATIVE snapshot at every root-session idle
+    (SCHEMA.md §4 — a TUI session idles after each turn), so one session
+    legitimately produces several records and only the largest is complete. The
+    documented consumer rule is to take the record with the highest
+    output_tokens per session_id, ties broken on the latest ts.
+
+    Claude Code records stay one-per-session via SessionEnd, so they are
+    unaffected: a session_id seen once keeps its single record untouched.
+
+    Call this PER REPO, exactly as commits are — two repos may legitimately
+    carry the same session_id and collapsing across them would under-count."""
+    rank = lambda r: ((r.get("output_tokens") or 0), r.get("ts") or "")
+    best, order, dupes = {}, [], 0
+    for r in records:
+        sid = r.get("session_id")
+        if sid is None:          # no natural key: pass through, as commits does
+            order.append(r)
+            continue
+        if sid in best:
+            dupes += 1
+            if rank(r) > rank(best[sid]):
+                best[sid] = r
+        else:
+            best[sid] = r
+            order.append(sid)    # placeholder, resolved on the way out
+    return [x if isinstance(x, dict) else best[x] for x in order], dupes
 
 
 def app_name(repo):
@@ -404,10 +442,14 @@ def analyse(repos):
     gates, runs, sessions, commits = [], [], [], []
     per_repo = []
     commit_dupes = 0
+    session_dupes = 0
     for repo in repos:
         g = read_stream(repo, "gates")
         r = read_stream(repo, "runs")
-        s = read_stream(repo, "sessions")
+        # Per repo, not across them (SCHEMA.md §4): the OpenCode plugin
+        # appends a cumulative snapshot at every root-session idle.
+        s, sd = dedupe_sessions(read_stream(repo, "sessions"))
+        session_dupes += sd
         # Per repo, not across them: two repos may legitimately share a short sha.
         c, d = dedupe_commits(read_stream(repo, "commits"))
         commit_dupes += d
@@ -490,6 +532,7 @@ def analyse(repos):
         "cost_usd": None,  # never estimated — see SCHEMA.md §4
         "commits": len(commits),
         "commit_duplicates_collapsed": commit_dupes,
+        "session_duplicates_collapsed": session_dupes,
         "active_days": len(days),
         "commits_per_active_day": round(float(len(commits)) / len(days), 2) if days else None,
     }
@@ -585,6 +628,10 @@ def print_report(a, repos):
     print("  commit cadence      : %s commits/active day (%d commits over %d days)" %
           (p["commits_per_active_day"] if p["commits_per_active_day"] is not None else "—",
            p["commits"], p["active_days"]))
+    if p.get("session_duplicates_collapsed"):
+        print("                        (%d duplicate session_id(s) collapsed — normal for"
+              % p["session_duplicates_collapsed"])
+        print("                         OpenCode, which snapshots cumulatively; SCHEMA.md §4)")
     if p["commit_duplicates_collapsed"]:
         print("                        (%d duplicate sha(s) collapsed — normal after a union"
               % p["commit_duplicates_collapsed"])

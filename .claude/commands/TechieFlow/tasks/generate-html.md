@@ -47,7 +47,21 @@ Echo a one-line summary: `Rendering N markdown file(s): file1.md, file2.md, ...`
 
 ### 2. For each MD, build the HTML
 
-Read **`.tfcore/templates/v4custom/html-render-shell.md`** for the full rendering specification. Apply every section (§1 slug rule, §2 CSS, §3 skeleton, §4 anchors, §5 mermaid wrapper, §6 code blocks, §6b agent-note strip, §7 JS, §8 inline TOC). Use the Write tool to create the sibling HTML — never bash heredocs.
+**Run the renderer. Do NOT hand-author HTML.**
+
+```bash
+bash .tfcore/utils/tf-render-html.sh docs/{AppName}-BRD.md PROJECT-STATUS.md
+```
+
+It takes one or more `.md` paths, writes a sibling `.html` for each, and implements `html-render-shell.md` in full — §1 slugs (with dedupe), §2 CSS, §3 skeleton + flash-free theme script, §4 heading anchors *and* hand-written `<a id="…"></a>` anchors preserved verbatim, §5 mermaid toolbar wrapper, §5.5 label self-check, §6 escaped code blocks, §6b agent-note strip, §7 JS, §8 inline + sidebar TOC (sidebar only above 6 H2s). It reads the CSS and JS **out of the spec file at render time**, so the output cannot drift from the spec.
+
+Hand-authoring the HTML through the Write tool is no longer the path: it cost 75–80k output tokens per phase for documents whose content barely changed, produced non-reproducible output, and risked silent truncation on large files (TfLens TF-003, 2026-08-27). Reserve it for the case where the renderer genuinely cannot express something — and report that as a framework defect rather than hand-rolling around it.
+
+**Read the output.** The renderer prints one line per file (size, H2 count, sidebar yes/no, diagram count, notes stripped) and warns on `⚠ mermaid §5.5` for an unquoted flowchart label or a reserved `end` node id. Those warnings are about the **source `.md`** — fix the diagram in the markdown and re-render; never edit the generated HTML.
+
+**It refuses to render a checklist** (`*-Checklist.md`, exit 2) — that ban is now mechanical, not just prose.
+
+Read `.tfcore/templates/v4custom/html-render-shell.md` when you need to understand or change the shell; it remains the specification. You do not need to read it just to render.
 
 For each MD file:
 

@@ -42,7 +42,10 @@
 #   claude   -p "<prompt>" --permission-mode bypassPermissions --output-format stream-json --verbose
 #            resume: claude -p --resume <session_id> "<continue>"   (fallback: --continue)
 #   opencode run --auto "<prompt>"      resume: opencode run --auto -c "<continue>"
-#   codex exec --json --sandbox workspace-write --ask-for-approval never "<prompt>"
+#   codex exec --json --sandbox workspace-write -c approval_policy="never" "<prompt>"
+#            NB: `--ask-for-approval` is NOT a `codex exec` flag (verified against
+#            codex-cli 0.149.1: "error: unexpected argument '--ask-for-approval'",
+#            exit 2). The approval policy is set as a config override instead.
 #            resume: codex exec resume <thread-id> "<continue>" --json
 #   Override command lines with TF_GOAL_CLAUDE_FLAGS / TF_GOAL_OPENCODE_FLAGS /
 #   TF_GOAL_CODEX_FLAGS.
@@ -174,7 +177,7 @@ harness_cmd() { # $1 = first|resume ; prints the argv via NUL-separated echo
     if [[ "$kind" == resume && -n "$SESSION_ID" ]]; then
       CMD=(codex exec resume "$SESSION_ID" "$prompt" --json)
     else
-      CMD=(codex exec --json --sandbox workspace-write --ask-for-approval never)
+      CMD=(codex exec --json --sandbox workspace-write -c approval_policy="never")
       [[ -n "$MODEL" ]] && CMD+=(-m "$MODEL")
       local tier effort
       tier="$(bash "$APP_DIR/.tfcore/utils/tf-harness.sh" tier build-phase)"
@@ -311,7 +314,7 @@ probe_until_clear() {
     elif [[ "$HARNESS" == opencode ]]; then
       ( cd "$APP_DIR" && opencode run --auto "Reply with the single word OK." ) > "$pout" 2>&1; prc=$?
     else
-      ( cd "$APP_DIR" && codex exec --json --sandbox read-only --ask-for-approval never "Reply with the single word OK." ) > "$pout" 2>&1; prc=$?
+      ( cd "$APP_DIR" && codex exec --json --sandbox read-only -c approval_policy="never" "Reply with the single word OK." ) > "$pout" 2>&1; prc=$?
     fi
     if [[ $prc -eq 0 ]] && ! grep -qiE 'usage limit|hit your limit|rate[ _-]?limit|limit (has been )?(reached|exceeded)|too many requests|\b429\b|overloaded|weekly limit|resets? (at|in)\b' "$pout"; then
       log "probe #$n OK"; return 0

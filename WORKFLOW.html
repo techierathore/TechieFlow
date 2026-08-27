@@ -878,7 +878,7 @@ cd /path/to/your-app
   <div class="step">
     <div class="num">5</div>
     <div class="body">
-      <h4>Verify loop (until green)</h4>
+      <h4 id="verify">Verify loop (until green)</h4>
       <p><code>*build-phase</code> self-chains <code>/verifier</code>, which writes verdicts into the one checklist's Requirements Status table and applies BOTH gates — the <strong>data-render gate</strong> (§4a: every control renders its data) AND the <strong>visual-truth gate</strong> (§4b: no overlap, every control in-viewport and non-zero-size at desktop + mobile, screenshot inspected, diffed against the mockup when one exists). A REQ is <code>Verified</code> only if acceptance passes AND data renders AND the screen looks right.</p>
 
       <p><strong>The performance gate (§4c, added 2026-08-10) — opt-in by declaring a number.</strong> Render and visual say nothing about <em>speed</em>: a page that shows every control perfectly and takes nine seconds passed every gate the framework had. §4c closes that, and it is deliberately the narrowest of the four. It grades a REQ <strong>only</strong> if that REQ's acceptance criteria carry a machine-read budget line:</p>
@@ -1389,12 +1389,44 @@ bash .tfcore/utils/tf-goal.sh --resume /path/to/App      # after a reboot</code>
 <tr><td>Metrics / YOLO</td><td><code>$techieflow-metrics-report {AppName}</code> / <code>$techieflow-yolo on|off|status</code></td></tr>
 <tr><td>Unattended goal</td><td><code>bash .tfcore/utils/tf-goal.sh --harness codex &lt;app-dir&gt; "&lt;goal&gt;"</code></td></tr>
 </table>
-<div class="panel warn"><strong>Codex boundary:</strong> trust the repository and review <code>/hooks</code>. Every agent-issued <code>git</code> and <code>gh</code> command stays forbidden even in YOLO. The supervisor uses <code>codex exec --json --sandbox workspace-write --ask-for-approval never</code> and resumes its recorded session after limits or restarts.</div>
+<div class="panel warn"><strong>Codex boundary:</strong> trust the repository and review <code>/hooks</code>. Every agent-issued <code>git</code> and <code>gh</code> command stays forbidden even in YOLO. The supervisor uses <code>codex exec --json --sandbox workspace-write -c approval_policy="never"</code> and resumes its recorded session after limits or restarts.</div>
 
 <p><small>The trblazeui and techierag personas are NuGet-deployed to <code>.claude/&lt;name&gt;.md</code> and <code>.opencode/command/&lt;name&gt;.md</code>. Claude Code only scans <code>.claude/commands/</code>, so the scaffold/update scripts copy them to <code>.claude/commands/&lt;name&gt;.md</code> (the short <code>/trblazeui</code> <code>/techierag</code> forms then work). If the short form is missing: <code>dotnet build</code>, then re-run <code>update-framework.sh</code>. Library maintainers must update the package source files listed in <code>docs/TechieFlow-Library-Persona-Propagation.md</code>; consumer copies are not the source of truth.</small></p>
 
 <!-- ============================================================ -->
 <h2 id="faq">15. FAQ &amp; gotchas<span class="anchor-link"><a href="#faq">#</a></span></h2>
+
+<details>
+  <summary>Rendering docs to HTML burns enormous tokens every phase. Is the model really writing all that by hand?</summary>
+  <p><strong>It was, until 2026-08-27. It no longer should be.</strong> There was no renderer in the framework: <code>html-render-shell.md</code> was a 494-line prose specification, and both render tasks told the agent to implement it by hand (<em>&ldquo;Use the Write tool &mdash; never bash heredocs&rdquo;</em>). One phase that re-rendered four documents emitted ~300 KB of HTML, roughly <strong>75&ndash;80k output tokens</strong>, for documents whose content barely changed &mdash; and <code>PROJECT-STATUS.html</code> is mandatory at the end of <em>every</em> phase.</p>
+  <p>There is now one command:</p>
+  <pre><code class="language-bash">bash .tfcore/utils/tf-render-html.sh docs/MyApp-BRD.md PROJECT-STATUS.md</code></pre>
+  <p>It writes a sibling <code>.html</code> for each input and is dependency-free &mdash; Python 3 standard library only, no pandoc, no node, no pip. Crucially it <strong>extracts the §2 CSS, §3 theme script and §7 JS out of <code>html-render-shell.md</code> at render time</strong> rather than duplicating them, so the shell cannot drift from its own documentation: edit the spec and the next render picks it up.</p>
+  <p>Three problems went away with the tokens. <strong>Drift</strong> &mdash; hand-authored output was never reproducible, and the old instruction to &ldquo;verify each HTML mentally&rdquo; was self-review by the model that had just written it. <strong>Truncation</strong> &mdash; a 130 KB file emitted in one generation could silently cut off, and no gate read rendered output. <strong>An unenforceable rule</strong> &mdash; projects quietly wrote their own renderers instead, diverging from the shell.</p>
+  <p>The checklist ban is now <em>mechanical</em>: passing a <code>*-Checklist.md</code> is refused with exit 2 rather than depending on the agent remembering. The renderer also runs the §5.5 Mermaid self-check and warns about unquoted flowchart labels or a reserved <code>end</code> node id &mdash; those are defects in the <strong>source markdown</strong>; fix the diagram and re-render, never edit generated HTML.</p>
+  <p><code>html-render-shell.md</code> remains the specification. Read it to understand or change the shell &mdash; you no longer need to read it to render. Reported by the TfLens team as TF-003; it was a gap, not a regression (no task ever referenced a missing script).</p>
+</details>
+
+<details>
+  <summary>Does <code>update-framework.sh</code> update the root <code>opencode.jsonc</code>? Mine looks very old.</summary>
+  <p><strong>It does now &mdash; it did not until 2026-08-27, and that was a real defect.</strong> The 2026-08-20 two-file split moved framework config into the framework-owned <code>.opencode/opencode.jsonc</code> (refreshed every run, wins on conflicting keys) and demoted the root file to project-only keys: extra agents, MCP, LSP. It was then preserved unconditionally, forever.</p>
+  <p>A survey of all ten apps carrying the file found that <strong>none of them has any project-only content</strong> &mdash; no project agent, no project command, no <code>mcp</code> or <code>lsp</code> block. Nine held a 138&ndash;154 line copy of a template that had grown to 925 lines, and all nine were missing the <code>trblazeui</code>/<code>techierag</code> agent blocks. So the preserve rule protected nothing while guaranteeing the file rotted.</p>
+  <p>Worse, two apps still wired <code>build-ui-phase</code> / <code>build-rag-phase</code> / <code>build-functional-phase</code> &mdash; commands dissolved on 2026-06-26 &mdash; as <code>{file:}</code> references to task files that no longer exist. <strong>A dead <code>{file:}</code> ref hard-fails OpenCode&rsquo;s entire config load</strong>, so those repos were silently loading no framework agents or commands at all.</p>
+  <p>The root file now refreshes the same way <code>.claude/settings.json</code> does: replaced when nothing project-owned would be lost (old file kept as <code>opencode.jsonc.bak</code>), preserved &mdash; with the project-only keys named in the output &mdash; when there is, and every dead <code>{file:}</code> ref reported either way.</p>
+</details>
+
+<details>
+  <summary>An agent says a framework file &mdash; <code>tf-metrics.sh</code>, a task, a template &mdash; is &ldquo;not present anywhere in this tree&rdquo;. It obviously is. Why?</summary>
+  <p><strong>Because the framework is invisible to every default file-search tool, and until 2026-08-27 nothing told the agents that.</strong> Two independent filters stack, and you have to defeat both:</p>
+  <ul>
+    <li><code>.tfcore/</code>, <code>.claude/</code>, <code>.codex/</code>, <code>.opencode/</code> and <code>.agents/skills/</code> are <strong>hidden dot-directories</strong> &mdash; ripgrep (which backs the agents&rsquo; Grep tool) skips hidden paths by default.</li>
+    <li>They are also in the <strong>managed <code>.gitignore</code> block</strong> that the scaffolders write into every app (<a href="#scaffolding">§3</a>) &mdash; and ripgrep honours <code>.gitignore</code> by default too.</li>
+  </ul>
+  <p>So <code>rg --hidden</code> is <em>not</em> enough in an app repo; it takes <code>rg --hidden --no-ignore</code> (<code>rg -uu</code>). And because nothing under <code>.tfcore/</code> is <em>tracked</em> in an app, <code>git grep</code> and <code>git ls-files</code> return zero rows as well. An agent that globs for a filename gets nothing back and reasonably concludes the framework is not installed.</p>
+  <p><strong>This is not a bug to fix by un-ignoring the framework.</strong> The ignore block is deliberate and load-bearing &mdash; the deployed copies are re-synced from the template by <code>update-framework.sh</code> and must never be committed in an app (<a href="#scaffolding">§3</a>). The fix is on the agent side: every framework file has exactly one canonical path, and whatever needs it names that path, so existence is confirmed by <strong>reading the literal path</strong>, never by searching for the name. That rule now lives in <code>.tfcore/tasks/_status-update-gate.md</code> §&ldquo;The framework tree is INVISIBLE to search&rdquo; (a shared include, so it reaches every checklist-executing task), is restated in <a href="#verify">verify-phase</a>&rsquo;s verdict rules, and ships in the <code>AGENTS.md</code> / <code>CLAUDE.md</code> hard rules for new apps.</p>
+  <p><strong>Why it matters more than a wasted search:</strong> the false negative does not stay in the transcript. It gets written into a checklist Remarks cell, a BRD §4 status row, or a blocker &mdash; and the next agent reads it as established fact and inherits the conclusion. A verify pass can close a gate that was never actually blocked.</p>
+  <p><strong>When it really <em>is</em> missing:</strong> a fresh clone genuinely has no <code>.tfcore/</code>, because it was never committed. That repo needs <code>update-framework.sh &lt;repo&gt;</code> run once <em>on that machine</em> (see <a href="#platforms">§16</a>). One command &mdash; never a reason to reimplement what the missing file does.</p>
+</details>
 
 <details>
   <summary>My repo root is full of <code>test-results/</code>, <code>test-results-cluster-a/</code> or <code>scripts-cluster-b/</code> folders. Why?</summary>
@@ -1829,7 +1861,7 @@ single-source-of-truth checklists, and <strong>"verify by executing, not by read
 <div class="panel"><strong>Which one do you want?</strong> If you are one person driving agents across several apps, stay here. If you are rolling a process out to a team — where the hard parts are onboarding, review gates and shared standards rather than raw throughput — start with the Playbook; it ships enablement and onboarding material this framework deliberately does not carry. The two are independent repos: nothing here depends on the Playbook, and nothing there depends on this.</div>
 
 <hr>
-<p class="small">Last revised 2026-08-24. Edit freely. When the workflow changes, update <code>README.md</code> and <code>WorkFlow-Context.md</code> (the durable cross-harness context document) too.</p>
+<p class="small">Last revised 2026-08-27 (rev 2). Edit freely. When the workflow changes, update <code>README.md</code> and <code>WorkFlow-Context.md</code> (the durable cross-harness context document) too.</p>
 
 </main>
 </div>

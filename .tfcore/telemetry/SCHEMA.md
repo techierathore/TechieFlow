@@ -271,7 +271,9 @@ Written by the repo's `pre-commit` hook (`.tfcore/telemetry/pre-commit`, install
 - **Nothing is ever missing.** Whatever a machine failed to push, the next machine rebuilds from `git log`, because the log is what actually replicates.
 - **Nothing is ever double-counted.** `tf-metrics.sh` de-duplicates commit records on `sha` at read time and prints how many it collapsed. `--backfill-commits` skips shas already present.
 
-Only `commits.jsonl` needs this. `runs`/`gates`/`sessions` record events that happen on one machine and cannot be independently reconstructed elsewhere, so a union merge has no way to manufacture a second copy of them.
+Only `commits.jsonl` needs this **for the union-merge reason**. `runs`/`gates` record events that happen on one machine and cannot be independently reconstructed elsewhere, so a union merge has no way to manufacture a second copy of them.
+
+**`sessions.jsonl` is not in that set** (corrected 2026-08-27, TfLens TF-001). It has its own, unrelated duplication source — the OpenCode plugin appends a *cumulative* snapshot at every root-session idle (§4) — so several records legitimately share a `session_id` and only the largest is complete. Consumers de-duplicate it too, by the §4 rule: **highest `output_tokens` per `session_id`, ties broken on the latest `ts`, per repo**. `tf-metrics.sh` does this in `dedupe_sessions()`. Before that existed, this paragraph's scoped claim was read as "sessions never duplicate", and every session count and token total derived from them was silently overstated.
 
 **Practical note:** the record for your latest commit is written by the *next* commit's hook, so between commits the file matches HEAD. Nothing pending, nothing blocking a pull.
 

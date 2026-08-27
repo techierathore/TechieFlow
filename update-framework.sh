@@ -124,6 +124,77 @@ if ! command -v rsync >/dev/null 2>&1; then
   exit 1
 fi
 
+# --------------------------------------------------------------------------
+# python3 is a HARD prerequisite, not a nice-to-have (added 2026-08-27 after a
+# macOS scaffold failed on a missing python3). It powers the Codex bindings
+# (tf-codex-bind.py), the HTML renderer (tf-render-html.py), the opencode.jsonc
+# audit, tf-metrics.sh and every guard hook. Missing it does not fail loudly at
+# the point of use — the hooks fail OPEN by design — so a scaffold that skipped
+# it would look like it worked and leave the repo silently unguarded.
+#
+# We offer to install it with the platform's own package manager. Set
+# TF_NO_INSTALL=1 to only ever report, never install.
+# --------------------------------------------------------------------------
+tf_ensure_python3() {
+  if command -v python3 >/dev/null 2>&1; then return 0; fi
+
+  echo "  python3 not found — it is required (Codex bindings, HTML renderer, telemetry, guard hooks)."
+
+  if [[ "${TF_NO_INSTALL:-0}" == "1" ]]; then
+    echo "  TF_NO_INSTALL=1 set — not installing. Install python3 and re-run." >&2
+    return 1
+  fi
+
+  local cmd=""
+  case "$(uname -s)" in
+    Darwin)
+      if command -v brew >/dev/null 2>&1; then
+        cmd="brew install python3"
+      else
+        echo "  macOS without Homebrew. Either:" >&2
+        echo "    xcode-select --install                 # ships a python3" >&2
+        echo "    /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\" && brew install python3" >&2
+        echo "    or install from https://www.python.org/downloads/macos/" >&2
+        return 1
+      fi ;;
+    Linux)
+      if   command -v apt-get >/dev/null 2>&1; then cmd="sudo apt-get update && sudo apt-get install -y python3"
+      elif command -v dnf     >/dev/null 2>&1; then cmd="sudo dnf install -y python3"
+      elif command -v yum     >/dev/null 2>&1; then cmd="sudo yum install -y python3"
+      elif command -v pacman  >/dev/null 2>&1; then cmd="sudo pacman -S --noconfirm python"
+      elif command -v zypper  >/dev/null 2>&1; then cmd="sudo zypper install -y python3"
+      elif command -v apk     >/dev/null 2>&1; then cmd="sudo apk add python3"
+      else
+        echo "  No known package manager found. Install python3 manually and re-run." >&2
+        return 1
+      fi ;;
+    *)
+      echo "  Unrecognised platform $(uname -s). Install python3 manually and re-run." >&2
+      return 1 ;;
+  esac
+
+  echo "  Installing with: $cmd"
+  echo "  (set TF_NO_INSTALL=1 to skip this and install it yourself)"
+  if ! bash -c "$cmd"; then
+    echo "  python3 install failed. Install it manually and re-run." >&2
+    return 1
+  fi
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "  python3 still not on PATH after install — open a new shell and re-run." >&2
+    return 1
+  fi
+  echo "  python3 installed: $(python3 --version 2>&1)"
+  return 0
+}
+
+if ! tf_ensure_python3; then
+  echo "" >&2
+  echo "Refusing to continue without python3: the scaffold would appear to succeed" >&2
+  echo "while leaving the repo with no Codex bindings and no working guard hooks." >&2
+  exit 1
+fi
+
 if [[ ! -d "$TARGET" ]]; then
   echo "Target directory does not exist: $TARGET" >&2
   exit 1
@@ -537,18 +608,90 @@ echo "  .opencode/opencode.jsonc — framework-owned, refreshed (wins over root 
 # .opencode/ (verified: a bad ref hard-fails the whole config load).
 [[ $DRY_RUN -eq 1 ]] || sed 's|{file:\./\.tfcore/|{file:../.tfcore/|g' "$TEMPLATE/opencode.jsonc" > ".opencode/opencode.jsonc"
 
-# Root opencode.jsonc preserved (project-specific agents/MCP/LSP; every
-# framework key now also arrives via .opencode/opencode.jsonc, which wins).
-# Warn when it still carries the pre-2026-08-20 bare agent-level
-# "bash": "allow" — under OpenCode's last-match-wins permission evaluation
-# that shape voided the root git/gh denies for the agent (DECISIONS.md
-# 2026-08-20 §2). The refreshed .opencode/opencode.jsonc re-arms the denies.
+# Root opencode.jsonc — REFRESHED when it carries no project-only content
+# (2026-08-27). It used to be preserved unconditionally "for project-specific
+# agents/MCP/LSP". Surveying all 10 apps that have the file showed that content
+# does not exist in ANY of them: nine held a 138–154 line copy of a template
+# that is now 925 lines, none defined a project agent or command, all nine were
+# missing the trblazeui/techierag agent blocks, and two (AstroLyfe, TrBlazeUI)
+# still wired the build-ui/rag/functional-phase commands dissolved 2026-06-26 —
+# {file:} refs to task files that no longer exist, which hard-fail OpenCode's
+# WHOLE config load. So the preserve rule protected nothing and rotted
+# everything. It now refreshes exactly like .claude/settings.json: replace when
+# there is nothing project-owned to lose (backing the old file up), preserve and
+# say precisely what is being preserved when there is.
+#
+# The audit runs on the PARSED config (.tfcore/utils/tf-opencode-audit.py), not
+# on raw text. The old bare-"bash":"allow" check grepped the raw file and so
+# matched the template's OWN comment explaining not to write that shape — it
+# fired on every correctly-configured app and never on a real defect. Third
+# false-positive check in this file to be traced to reading the wrong thing
+# (cf. 2026-08-24); parse, then inspect.
 if [[ -f opencode.jsonc ]]; then
-  echo "  opencode.jsonc — preserved (per-project; framework config refreshed at .opencode/opencode.jsonc)"
-  if tr -d ' \t\r\n' < opencode.jsonc | grep -q '"bash":"allow"'; then
-    echo "  ⚠ root opencode.jsonc has a bare agent-level \"bash\": \"allow\" — that shape voided the"
-    echo "    git/gh denies for the agent. The refreshed .opencode/opencode.jsonc re-arms them;"
-    echo "    delete the stale agent block from the root file when convenient."
+  OC_AUDIT=""
+  if command -v python3 >/dev/null 2>&1 && [[ -f "$TEMPLATE/.tfcore/utils/tf-opencode-audit.py" ]]; then
+    OC_AUDIT="$(python3 "$TEMPLATE/.tfcore/utils/tf-opencode-audit.py" \
+                 "$TEMPLATE/opencode.jsonc" opencode.jsonc 2>/dev/null || true)"
+  fi
+  OC_VERDICT="$(printf '%s\n' "$OC_AUDIT" | head -1)"
+  OC_REPLACED=0        # set when the audited file is no longer the one on disk
+  case "$OC_VERDICT" in
+    current)
+      echo "  opencode.jsonc — already current (matches template)" ;;
+    refresh)
+      if [[ $DRY_RUN -eq 1 ]]; then
+        echo "  opencode.jsonc — WOULD refresh from template (no project-only content; old file → .bak)"
+      else
+        cp opencode.jsonc opencode.jsonc.bak
+        cp "$TEMPLATE/opencode.jsonc" opencode.jsonc
+        echo "  opencode.jsonc — refreshed from template (no project-only content; old file → opencode.jsonc.bak)"
+        OC_REPLACED=1
+      fi ;;
+    project\|*)
+      echo "  opencode.jsonc — preserved (project-only keys: ${OC_VERDICT#project|})"
+      echo "    Framework keys still arrive via .opencode/opencode.jsonc, which wins on conflicts."
+      echo "    Fold those keys into a fresh copy of \$TEMPLATE/opencode.jsonc when convenient." ;;
+    *)
+      # unknown / no python3 — fall back to the old preserve-only behaviour.
+      echo "  opencode.jsonc — preserved (could not audit: ${OC_VERDICT#unknown|})" ;;
+  esac
+  # Diagnostics the audit found. IMPORTANT: the audit ran against the file as it
+  # was BEFORE this step, so when we just replaced it these describe the backup,
+  # not the repo's current state. Printing them as live warnings after a
+  # successful refresh reads as "still broken" and is exactly the kind of
+  # misleading output this script has been burned by before — so say which it is.
+  #
+  # A dead {file:} ref is the serious one: OpenCode fails the ENTIRE config load
+  # on it (verified against opencode 1.18.19), so the app silently loses every
+  # framework agent and command until it is fixed.
+  # Collect FIRST, into plain variables. This script runs under `set -euo
+  # pipefail`, where `printf | grep ... | while ...` aborts the WHOLE script the
+  # moment grep matches nothing — silently skipping every step below (the Codex
+  # adapter, WORKFLOW.html, the .gitignore block, metrics). Grep-in-a-pipeline is
+  # not safe here; `|| true` on the assignment is.
+  OC_DEAD_LINES="$(printf '%s\n' "$OC_AUDIT" | grep '^DIAG|dead-ref|' || true)"
+  OC_BASH_LINES="$(printf '%s\n' "$OC_AUDIT" | grep '^DIAG|bare-bash-allow|' || true)"
+  OC_DEAD=0
+  [[ -n "$OC_DEAD_LINES" ]] && OC_DEAD="$(printf '%s\n' "$OC_DEAD_LINES" | wc -l | tr -d ' ')"
+
+  if [[ "$OC_DEAD" -gt 0 && $OC_REPLACED -eq 1 ]]; then
+    echo "  ✔ opencode.jsonc — $OC_DEAD dead {file:} ref(s) RESOLVED by the refresh"
+    echo "    (they were in the old file, kept as opencode.jsonc.bak; OpenCode's whole"
+    echo "     config load was failing on them until now)"
+  elif [[ "$OC_DEAD" -gt 0 ]]; then
+    while IFS='|' read -r _ _ ref; do
+      [[ -n "$ref" ]] || continue
+      echo "  ⚠ opencode.jsonc references a file that does not exist: $ref"
+      echo "    A dead {file:} ref hard-fails OpenCode's ENTIRE config load."
+    done <<< "$(printf '%s\n' "$OC_DEAD_LINES" | head -5)"
+  fi
+
+  if [[ $OC_REPLACED -eq 0 && -n "$OC_BASH_LINES" ]]; then
+    while IFS='|' read -r _ _ where; do
+      [[ -n "$where" ]] || continue
+      echo "  ⚠ opencode.jsonc has a bare \"bash\": \"allow\" at $where — that shape voids the"
+      echo "    git/gh denies (agent rules are appended AFTER the root ruleset)."
+    done <<< "$OC_BASH_LINES"
   fi
 fi
 

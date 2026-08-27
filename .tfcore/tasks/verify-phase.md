@@ -235,7 +235,17 @@ bash .tfcore/utils/tf-perf.sh --base http://localhost:5099 \
      --json-out tests/.artifacts/perf/REQ-NFR-001.json
 ```
 
-Paths come from the DevGuide screens the REQ owns (its routes), not from a guess. Exit `2` means the app was unreachable — that is a `build`-gate problem, not a perf result. The harness prints one JSON object: `levels[].ttfb_ms.{p50,p95,max}`, `load_ms`, a `per_path` breakdown (which page is the slow one), `samples`, `errors`, and a `weak` flag.
+Paths come from the DevGuide screens the REQ owns (its routes), not from a guess. Exit `2` means the app was unreachable — that is a `build`-gate problem, not a perf result. The harness prints one JSON object: `levels[].ttfb_ms.{p50,p95,max}`, `load_ms`, a `per_path` breakdown (which page is the slow one), `samples`, `errors`, `redirects` / `redirect_rate`, and a `weak` flag.
+
+**If the app requires a login, PRESENT A SESSION — do not measure the door.** Pass the authenticated cookie or token through:
+
+```bash
+bash .tfcore/utils/tf-perf.sh --base http://localhost:5099 --paths "/,/export" \
+     --cookie 'AuthCookie=<value from your Playwright login>' --build-config Release
+# or: --header 'Authorization: Bearer <token>'   (--header is repeatable)
+```
+
+Grab the value from the same login your Playwright spec already performs in §3. **Exit `4` = `status:"redirected"`: every request was turned away and NOTHING was measured** — grade `PERF-UNMEASURED (auth wall)` and re-run with a session; never record the redirect latency as a page figure. (Added 2026-08-27, TfLens TF-002: the harness had no auth option, so on a gated app it timed the 302 to `/login` and reported `p95 = 4.1 ms` — the speed of being turned away at the door — with nothing marking the number meaningless.)
 
 **Grading — three bands, and the middle one exists specifically so this gate does not cry wolf:**
 
@@ -249,7 +259,7 @@ Paths come from the DevGuide screens the REQ owns (its routes), not from a guess
 
 - **`error_rate` ≥ 0.10 with timeout/connection error kinds → `PERF-FAIL`, `failure_class: "timeout"`.** The app did not serve the declared concurrency. Requests timing out under load **is** the perf result, not an obstacle to measuring it — a budget of `@ concurrency 100` is precisely a claim that this does not happen. Report the completed/attempted split and the p95 of what *did* complete, and say plainly that the latency figure describes only the survivors.
 - **`0 < error_rate < 0.10` → `PERF-UNMEASURED (errors during run)`.** A handful of failures in an otherwise healthy run tells you the sample is contaminated, not that the app is overloaded. Re-run; if it persists, the failure belongs to the `acceptance` gate.
-- **Any `non_200` → `PERF-UNMEASURED (non-200 responses)`** regardless of rate. A 404 means the path set is wrong (a test-setup bug), and a 5xx is a correctness failure the `acceptance` gate owns. Neither is a latency verdict.
+- **Any `non_200` → `PERF-UNMEASURED (non-200 responses)`** regardless of rate. A 404 means the path set is wrong (a test-setup bug), and a 5xx is a correctness failure the `acceptance` gate owns. Neither is a latency verdict. A non-zero **`redirect_rate`** is the auth case specifically — supply `--cookie` / `--header` and re-measure rather than grading the redirect.
 
 **Three further conditions under which you must NOT record `PERF-FAIL`** — each produces `PERF-UNMEASURED` plus a one-line reason in §8, because a wrong perf failure costs more than a missing one:
 
@@ -280,6 +290,8 @@ Map every requirement ID to exactly one verdict:
 - `FAIL` — a test for this ID ran and failed (include the one-line reason + screenshot path).
 - `NOT-IMPLEMENTED` — feature/element the requirement needs was absent (test could not even find it).
 - `NOT-OBSERVABLE` — backend/nonfunctional requirement with no test project to assert it; needs a human or a test to be written.
+
+**A missing file is NEVER a verdict until you have read its literal path.** Before grading a REQ `NOT-OBSERVABLE` — or writing any remark that a required script, oracle, fixture, or harness "is not present in this tree" — read the exact path the REQ, its BRD section, or this task names. Paths under `.tfcore/` are hidden **and** gitignored, so Grep and Glob return nothing for files that are plainly there (`_status-update-gate.md` §"The framework tree is INVISIBLE to search"; `rg -uu` if you must search). A "the tool does not exist here" verdict sourced from a default search is a false negative that lands in the checklist Remarks, the BRD §4 status row, and every gate downstream of it — and the next agent reads it as established fact.
 
 **STRICT GATE (non-negotiable):** a REQ may be `Verified` **only if** its acceptance test passes AND all its DevGuide-listed controls RENDER their data (§4a) AND every screen it owns passes VISUAL-TRUTH (§4b) AND — *where and only where the REQ declared a `perf-budget:`* — it is not `PERF-FAIL` (§4c). Never mark `Verified` when any owned control is RENDER-EMPTY/RENDER-ERROR or any owned screen is VISUAL-FAIL — those are the exact failure modes these gates exist to stop (data-present-but-blank, and data-present-but-visually-broken). A `Done (pre-existing)` REQ whose screens pass both gates stays `Done (pre-existing)` with a `runtime render+visual-confirmed {date}` remark; one that fails either drops to `Needs re-verify`.
 

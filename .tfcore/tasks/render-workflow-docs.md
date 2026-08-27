@@ -34,15 +34,23 @@ Read each of the three resolved files. If any required source is missing, HALT a
 
 For the "Last rendered" subtitle, use today's date — do not bash-fetch file mtimes.
 
-### 2. Read the shared HTML rendering shell
+### 2. Render with the framework renderer — one command for every document
 
-Read **`.tfcore/templates/v4custom/html-render-shell.md`** in full. Apply every section (§1 slug rule, §2 CSS, §3 skeleton, §4 anchors, §5 mermaid wrapper, §6 code blocks, §6b agent-note strip, §7 JS, §8 inline TOC, §9 checklist) to each HTML you write below.
+```bash
+bash .tfcore/utils/tf-render-html.sh docs/{AppName}-BRD.md docs/{AppName}-Architecture.md PROJECT-STATUS.md
+```
 
-Do NOT hand-roll a different CSS palette or skip the scripts. If the BRD/Architecture/PROJECT-STATUS HTMLs ever drift from the shared shell, the user's mermaid toolbar / copy buttons / TOC links break.
+`tf-render-html.sh` implements `.tfcore/templates/v4custom/html-render-shell.md` in full and reads that spec's §2 CSS / §3 theme script / §7 JS **at render time**, so a rendered page cannot drift from the shell — the drift that used to break the mermaid toolbar, the copy buttons and the TOC links is now structurally impossible.
+
+Pass every document in ONE invocation; it renders each to a sibling `.html` (same directory, same basename). It refuses `*-Checklist.md` with exit 2.
+
+Hand-authoring these files through the Write tool is no longer the path (TfLens TF-003, 2026-08-27): it burned 75–80k output tokens per phase, could not be reproduced run-to-run, and a 130 KB file emitted in one generation could silently truncate with no gate to catch it.
+
+`html-render-shell.md` stays the specification — read it to understand or change the shell, not to render.
 
 ### 3. Render `docs/{AppName}-BRD.html` (or the chosen variant's `.html` sibling)
 
-**Use the Write tool — NOT bash heredocs / `cat <<EOF` / `echo >`.**
+**Rendered by `tf-render-html.sh` in step 2** — do not hand-author it, and do not bash-heredoc it. This step documents what the output must contain so you can check it, not how to build it.
 
 Output path: same directory as the source MD, same basename, `.html` extension (so `docs/{App}-BRD-v2.md` → `docs/{App}-BRD-v2.html`).
 

@@ -947,11 +947,42 @@ Codex workflows are project skills, not literal Claude/OpenCode slash commands. 
 | Metrics / YOLO state | `$techieflow-metrics-report {AppName}` / `$techieflow-yolo on|off|status` |
 | Unattended resumable goal | `bash .tfcore/utils/tf-goal.sh --harness codex <app-dir> "<goal>"` |
 
-The supervisor uses `codex exec --json --sandbox workspace-write --ask-for-approval never` and resumes the recorded Codex session after limits or restarts. Trust the app repository and review `/hooks` before the first run. In Codex, **all** agent-issued `git` and `gh` commands remain forbidden even in YOLO; use checklist/files/build evidence for recovery and run version-control commands yourself.
+The supervisor uses `codex exec --json --sandbox workspace-write -c approval_policy="never"` and resumes the recorded Codex session after limits or restarts. Trust the app repository and review `/hooks` before the first run. In Codex, **all** agent-issued `git` and `gh` commands remain forbidden even in YOLO; use checklist/files/build evidence for recovery and run version-control commands yourself.
 
 The trblazeui and techierag personas are NuGet-deployed to `.claude/<name>.md` and `.opencode/command/<name>.md`. Claude Code only scans `.claude/commands/`, so the scaffold/update scripts copy them to `.claude/commands/<name>.md` (the short `/trblazeui` `/techierag` forms then work). If the short form is missing: `dotnet build`, then re-run `update-framework.sh`.
 
 ## 15. FAQ & gotchas
+
+**Q: Rendering docs to HTML burns enormous tokens every phase. Is the model really writing all that by hand?**
+
+It was, until 2026-08-27. There was no renderer: `html-render-shell.md` was a 494-line prose spec and both render tasks told the agent to implement it by hand. One phase re-rendering four documents emitted ~300 KB of HTML — roughly **75–80k output tokens** — and `PROJECT-STATUS.html` is mandatory at the end of *every* phase.
+
+One command now:
+
+```bash
+bash .tfcore/utils/tf-render-html.sh docs/MyApp-BRD.md PROJECT-STATUS.md
+```
+
+Dependency-free (Python 3 stdlib — no pandoc, no node, no pip). It **extracts the §2 CSS, §3 theme script and §7 JS out of `html-render-shell.md` at render time** instead of duplicating them, so the shell cannot drift from its own spec. Passing a `*-Checklist.md` is refused with exit 2 — that ban is mechanical now, not prose. It also runs the §5.5 Mermaid self-check; those warnings are defects in the **source markdown**, so fix the diagram and re-render, never edit generated HTML. (TfLens TF-003 — a gap, not a regression.)
+
+**Q: Does `update-framework.sh` update the root `opencode.jsonc`? Mine looks very old.**
+
+It does now; it did not until 2026-08-27. The 2026-08-20 split moved framework config to `.opencode/opencode.jsonc` (refreshed every run, wins on conflicts) and demoted the root file to project-only keys — then preserved it forever. A survey of all ten apps carrying the file found **none has any project-only content**; nine held a 138–154 line copy of a 925-line template, all nine missing the `trblazeui`/`techierag` agents. Two still wired the `build-ui/rag/functional-phase` commands dissolved 2026-06-26 as `{file:}` refs to deleted files — and **a dead `{file:}` ref hard-fails OpenCode's entire config load**, so those repos silently loaded no framework agents or commands. The root file now refreshes like `.claude/settings.json`: replaced when nothing project-owned would be lost (old → `opencode.jsonc.bak`), preserved with the project-only keys named when there is, dead refs reported either way.
+
+**Q: An agent says a framework file — `tf-metrics.sh`, a task, a template — is "not present anywhere in this tree". It obviously is. Why?**
+
+Because the framework is invisible to every default file-search tool, and until 2026-08-27 nothing told the agents that. **Two independent filters stack**, and you have to defeat both:
+
+- `.tfcore/`, `.claude/`, `.codex/`, `.opencode/` and `.agents/skills/` are **hidden dot-directories** — ripgrep (which backs the agents' Grep tool) skips hidden paths by default.
+- They are also in the **managed `.gitignore` block** the scaffolders write into every app (§3) — and ripgrep honours `.gitignore` by default too.
+
+So `rg --hidden` is *not* enough in an app repo; it takes `rg --hidden --no-ignore` (`rg -uu`). And since nothing under `.tfcore/` is *tracked* in an app, `git grep` and `git ls-files` return zero rows as well. An agent that globs for a filename gets nothing and reasonably concludes the framework isn't installed.
+
+**This is not fixed by un-ignoring the framework.** That ignore block is deliberate and load-bearing — deployed copies are re-synced from the template by `update-framework.sh` and must never be committed in an app (§3). The fix is on the agent side: every framework file has exactly one canonical path, and whatever needs it names that path, so **existence is confirmed by reading the literal path, never by searching for the name**. The rule now lives in `.tfcore/tasks/_status-update-gate.md` §"The framework tree is INVISIBLE to search" (a shared include, so every checklist-executing task gets it), is restated in verify-phase's verdict rules, and ships in the `AGENTS.md` / `CLAUDE.md` hard rules for new apps.
+
+**Why it matters more than a wasted search:** the false negative doesn't stay in the transcript. It gets written into a checklist Remarks cell, a BRD §4 status row, or a blocker — and the next agent inherits it as fact, closing a gate that was never actually blocked.
+
+**When it really *is* missing:** a fresh clone genuinely has no `.tfcore/`, because it was never committed. That repo needs `update-framework.sh <repo>` run once *on that machine* (§16) — one command, never a reason to reimplement what the missing file does.
 
 **Q: What if the agent ignores the coding standards mid-implementation?**
 

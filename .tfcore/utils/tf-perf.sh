@@ -28,12 +28,14 @@
 #   - machine fingerprint is printed for the HUMAN so two runs are never silently compared
 #     across hosts. It is NOT telemetry and must never be emitted to gates.jsonl.
 #
-# Exit codes: 0 measured · 2 app unreachable (nothing measured) · 3 bad arguments.
+# Exit codes: 0 measured · 2 app unreachable (nothing measured) · 3 bad arguments
+#             · 4 every request redirected (auth wall — nothing measured).
 # Requires python3 only (the framework already depends on it for the guard hooks).
 
 set -uo pipefail
 
 BASE=""; PATHS="/"; LEVELS="1"; REQS=5; WARMUP=3; TIMEOUT=30; BUILD="unknown"; LABEL=""; OUT=""
+HDRS=""   # newline-separated "K: V" pairs (--header, repeatable; --cookie is sugar)
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base)         BASE="${2:-}"; shift 2 ;;
@@ -45,17 +47,21 @@ while [[ $# -gt 0 ]]; do
     --build-config) BUILD="${2:-}"; shift 2 ;;
     --label)        LABEL="${2:-}"; shift 2 ;;
     --json-out)     OUT="${2:-}"; shift 2 ;;
-    -h|--help)      sed -n '2,32p' "$0"; exit 0 ;;
+    --header)       HDRS="${HDRS}${2:-}"$'\n'; shift 2 ;;
+    --cookie)       HDRS="${HDRS}Cookie: ${2:-}"$'\n'; shift 2 ;;
+    -h|--help)      sed -n '2,33p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 3 ;;
   esac
 done
 
-[[ -n "$BASE" ]] || { echo "usage: tf-perf.sh --base URL [--paths /,/a] [--levels 1,50] [--build-config Release]" >&2; exit 3; }
+[[ -n "$BASE" ]] || { printf '%s\n' \
+  "usage: tf-perf.sh --base URL [--paths /,/a] [--levels 1,50] [--build-config Release]" \
+  "                  [--cookie 'k=v; k2=v2'] [--header 'Authorization: Bearer ...']" >&2; exit 3; }
 command -v python3 >/dev/null 2>&1 || { echo '{"status":"no-python3"}'; exit 3; }
 case "$BUILD" in Release|Debug|unknown) ;; *) echo "--build-config must be Release|Debug|unknown" >&2; exit 3 ;; esac
 
 TF_BASE="$BASE" TF_PATHS="$PATHS" TF_LEVELS="$LEVELS" TF_REQS="$REQS" TF_WARMUP="$WARMUP" \
-TF_TIMEOUT="$TIMEOUT" TF_BUILD="$BUILD" TF_LABEL="$LABEL" TF_OUT="$OUT" python3 - <<'PY'
+TF_TIMEOUT="$TIMEOUT" TF_BUILD="$BUILD" TF_LABEL="$LABEL" TF_OUT="$OUT" TF_HEADERS="$HDRS" python3 - <<'PY'
 import http.client, json, os, platform, ssl, statistics, sys, threading, time
 from urllib.parse import urlparse
 
@@ -65,6 +71,15 @@ LEVELS  = [int(x) for x in os.environ["TF_LEVELS"].split(",") if x.strip()]
 REQS    = int(os.environ["TF_REQS"]); WARMUP = int(os.environ["TF_WARMUP"])
 TIMEOUT = float(os.environ["TF_TIMEOUT"]); BUILD = os.environ["TF_BUILD"]
 LABEL   = os.environ["TF_LABEL"] or None; OUT = os.environ["TF_OUT"]
+
+# Extra request headers (--header / --cookie). Without these the harness can only
+# ever measure the anonymous surface: on a login-gated app every route answers 302
+# to /login and the "latency" is the speed of being turned away (TfLens TF-002).
+EXTRA = {}
+for _h in os.environ.get("TF_HEADERS", "").split("\n"):
+    if ":" in _h:
+        _k, _v = _h.split(":", 1)
+        EXTRA[_k.strip()] = _v.strip()
 
 u = urlparse(BASE)
 HOST, PORT, HTTPS = u.hostname, u.port or (443 if u.scheme == "https" else 80), u.scheme == "https"
@@ -78,7 +93,9 @@ def hit(path):
         conn = (http.client.HTTPSConnection(HOST, PORT, timeout=TIMEOUT, context=CTX) if HTTPS
                 else http.client.HTTPConnection(HOST, PORT, timeout=TIMEOUT))
         t0 = time.perf_counter()
-        conn.request("GET", path, headers={"Accept": "text/html,*/*", "Connection": "close"})
+        _hdrs = {"Accept": "text/html,*/*", "Connection": "close"}
+        _hdrs.update(EXTRA)
+        conn.request("GET", path, headers=_hdrs)
         resp = conn.getresponse()
         resp.read(1)                                  # <- first body byte defines TTFB
         ttfb = (time.perf_counter() - t0) * 1000.0
@@ -126,7 +143,7 @@ def summarize(xs):
 results = []
 for conc in LEVELS:
     samples, lock = {p: {"ttfb": [], "load": []} for p in PATHS}, threading.Lock()
-    errors, non200 = [], []
+    errors, non200, redirects = [], [], []
 
     def worker():
         for _ in range(REQS):
@@ -137,6 +154,7 @@ for conc in LEVELS:
                         errors.append(st)
                     else:
                         if st != 200: non200.append((p, st))
+                        if 300 <= st < 400: redirects.append((p, st))
                         samples[p]["ttfb"].append(ttfb); samples[p]["load"].append(load)
 
     threads = [threading.Thread(target=worker, daemon=True) for _ in range(conc)]
@@ -162,6 +180,10 @@ for conc in LEVELS:
                        if (len(all_ttfb) + len(errors)) else None),
         "error_kinds": sorted(set(errors))[:5],
         "non_200": sorted({f"{p}:{s}" for p, s in non200})[:5],
+        # A redirect is not a page. Surfaced as a first-class rate so neither
+        # verify-phase §4c nor a human has to infer it from the non_200 list.
+        "redirects": len(redirects),
+        "redirect_rate": (round(len(redirects) / len(all_ttfb), 3) if all_ttfb else None),
         "wall_s": round(elapsed, 2),
         "ttfb_ms": summarize(all_ttfb),
         "load_ms": summarize(all_load),
@@ -170,6 +192,29 @@ for conc in LEVELS:
                       "ttfb_p95": pct(samples[p]["ttfb"], 0.95),
                       "load_p95": pct(samples[p]["load"], 0.95)} for p in PATHS],
     })
+
+# --- an all-redirect run is a REFUSAL, never a latency figure ----------------
+# On a login-gated app every route answers 302 to /login in a few ms, and the old
+# harness reported that as a page-load p95 — "the speed of being turned away at
+# the door" (TfLens TF-002). The redirects were visible in non_200, but nothing
+# marked the number meaningless, so the figure read as real. Refuse instead:
+# a gate that quietly reports a wrong number is worse than one that declines.
+_sampled = sum(l["samples"] for l in results)
+_redir = sum(l["redirects"] for l in results)
+if _sampled and _redir == _sampled:
+    print(json.dumps({
+        "status": "redirected",
+        "schema": "tf-perf/1",
+        "base": BASE,
+        "paths": PATHS,
+        "redirects": _redir,
+        "codes": sorted({c for l in results for c in l["non_200"]})[:8],
+        "hint": ("every request was redirected — nothing was measured. These paths "
+                 "need a session: re-run with --cookie 'name=value' or "
+                 "--header 'Authorization: Bearer …'. Grade the REQ "
+                 "PERF-UNMEASURED until then (verify-phase §4c)."),
+    }, indent=2))
+    sys.exit(4)
 
 out = {
     "status": "ok",
