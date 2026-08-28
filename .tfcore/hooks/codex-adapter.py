@@ -65,9 +65,14 @@ def run_guard(root: pathlib.Path, event: dict, script: str, payload: dict) -> st
     if not path.exists():
         return None
     try:
+        env = environment(root, event)
+        if script == "block-git.sh":
+            # Codex also has an all-git exec-policy rule. Keep the hook's
+            # compound-command fallback equally strict in YOLO mode.
+            env["TF_STRICT_GIT"] = "1"
         result = subprocess.run(
             ["bash", str(path)], input=json.dumps(payload), text=True,
-            capture_output=True, timeout=10, env=environment(root, event), check=False,
+            capture_output=True, timeout=10, env=env, check=False,
         )
     except Exception as exc:
         # Policy checks fail closed. Telemetry is handled separately and fails open.
@@ -93,10 +98,20 @@ def pre_tool(event: dict) -> None:
         # Run the existing guards once per file using actual paths and separated
         # added/removed lines. This avoids treating context or removed Verified
         # cells as newly introduced content.
-        headers = list(re.finditer(r"(?m)^\*\*\* (?:Update|Add) File: (.+)$", patch))
+        headers = list(re.finditer(r"(?m)^\*\*\* (Update|Add|Delete) File: (.+)$", patch))
         for index, header in enumerate(headers):
             end = headers[index + 1].start() if index + 1 < len(headers) else len(patch)
             section = patch[header.end():end]
+            file_path = header.group(2).strip()
+            base_name = pathlib.PurePosixPath(file_path.replace("\\", "/")).name.lower()
+            if header.group(1) == "Delete" and (
+                base_name == "project-status.md" or base_name.endswith("-checklist.md")
+            ):
+                deny(
+                    "TechieFlow protected documents cannot be deleted: "
+                    f"{file_path}. Update their canonical fixed shape instead."
+                )
+                return
             added = []
             removed = []
             for line in section.splitlines():
@@ -107,7 +122,7 @@ def pre_tool(event: dict) -> None:
             payload = {
                 "hook_event_name": "PreToolUse", "cwd": str(root),
                 "session_id": event.get("session_id"), "tool_name": "Edit",
-                "tool_input": {"file_path": header.group(1).strip(),
+                "tool_input": {"file_path": file_path,
                                "old_string": "\n".join(removed),
                                "new_string": "\n".join(added)},
             }

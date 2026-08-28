@@ -33,6 +33,7 @@
 
 INPUT="$(cat)"
 ROOT="${CLAUDE_PROJECT_DIR:-${TF_PROJECT_DIR:-}}"
+STRICT_GIT="${TF_STRICT_GIT:-0}"
 
 YOLO=0
 [[ "${TF_YOLO:-0}" == "1" ]] && YOLO=1
@@ -50,6 +51,13 @@ Do NOT retry with another git/gh form. Instead:
 MSG
 }
 block_read_msg() {
+  if [[ "$STRICT_GIT" == "1" ]]; then
+    cat >&2 <<'MSG'
+BLOCKED by TechieFlow Codex policy: agents do not run any git or gh command, including read-only status/log/diff/blame, in any mode.
+Use the checklist Requirements Status table, working-tree files, filesystem metadata, and fresh build/test evidence instead. The owner performs version-control operations manually.
+MSG
+    return
+  fi
   cat >&2 <<'MSG'
 BLOCKED by TechieFlow policy: agents do not READ git outside YOLO mode (no status/log/diff/show/blame/grep) — git is manual, owner-only.
 Do NOT retry with another git/gh form. Instead:
@@ -71,6 +79,7 @@ import json, os, re, shlex, sys
 
 raw = os.environ.get("TF_HOOK_INPUT", "")
 yolo = os.environ.get("TF_YOLO_ON") == "1"
+strict_git = os.environ.get("TF_STRICT_GIT") == "1"
 try:
     data = json.loads(raw)
     cmd = str((data.get("tool_input") or {}).get("command") or "")
@@ -256,7 +265,7 @@ except Exception:
 
 if found["write"]:
     print("BLOCK_WRITE")
-elif found["read"] and not yolo:
+elif found["read"] and (strict_git or not yolo):
     print("BLOCK_READ")
 elif (found_rm[0] or found_sudo[0]) and not yolo:
     print("ASK_RM")

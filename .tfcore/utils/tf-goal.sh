@@ -128,7 +128,7 @@ fi
 read -r -d '' PREAMBLE <<'TXT'
 UNATTENDED GOAL RUN — YOLO MODE IS ON (TechieFlow rule .tfcore/tasks/_yolo-mode.md; read it first).
 - Nobody is watching. NEVER ask a question, NEVER pause for confirmation, NEVER end your turn with a plan, options, or "shall I…". Decide the sensible default yourself and record the decision in the checklist Remarks.
-- Permissions: deletes and read-only git (status/log/diff/blame) are allowed; git WRITES (commit/push/add/reset/checkout/stash/tag) are blocked in every mode — never attempt them; the owner commits.
+- Permissions: deletes are allowed when they are necessary and precisely scoped. Every git/gh command, including read-only diagnostics, is blocked in every mode — never attempt one; the owner performs version-control operations manually.
 - Re-entry: start from PROJECT-STATUS.md + docs/*-Checklist.md (Requirements Status table) — continue from the weakest open REQ; do not redo terminal rows.
 - A build pass means the WHOLE checklist: every open REQ reaches at least `Implemented` in this pass, then the verifier is chained inline, then FIX mode loops on FAIL rows until they pass. Never stop with "run build-phase again for the remaining REQs".
 - When the goal is met (every in-scope REQ terminal, PROJECT-STATUS.md + .html updated, run record emitted): run

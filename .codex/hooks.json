@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .tfcore/hooks/codex-adapter.py pre-tool",
+            "command": "python3 -c 'import pathlib,runpy,sys; root=next(p for p in (pathlib.Path.cwd(), *pathlib.Path.cwd().parents) if (p / \".tfcore\").is_dir()); sys.argv=[\"codex-adapter.py\", sys.argv[1]]; runpy.run_path(str(root / \".tfcore/hooks/codex-adapter.py\"), run_name=\"__main__\")' pre-tool",
             "timeout": 15,
             "statusMessage": "Checking TechieFlow policy"
           }
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .tfcore/hooks/codex-adapter.py session-start",
+            "command": "python3 -c 'import pathlib,runpy,sys; root=next(p for p in (pathlib.Path.cwd(), *pathlib.Path.cwd().parents) if (p / \".tfcore\").is_dir()); sys.argv=[\"codex-adapter.py\", sys.argv[1]]; runpy.run_path(str(root / \".tfcore/hooks/codex-adapter.py\"), run_name=\"__main__\")' session-start",
             "timeout": 10
           }
         ]
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .tfcore/hooks/codex-adapter.py session-start",
+            "command": "python3 -c 'import pathlib,runpy,sys; root=next(p for p in (pathlib.Path.cwd(), *pathlib.Path.cwd().parents) if (p / \".tfcore\").is_dir()); sys.argv=[\"codex-adapter.py\", sys.argv[1]]; runpy.run_path(str(root / \".tfcore/hooks/codex-adapter.py\"), run_name=\"__main__\")' session-start",
             "timeout": 10
           }
         ]
@@ -41,7 +41,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .tfcore/hooks/codex-adapter.py stop",
+            "command": "python3 -c 'import pathlib,runpy,sys; root=next(p for p in (pathlib.Path.cwd(), *pathlib.Path.cwd().parents) if (p / \".tfcore\").is_dir()); sys.argv=[\"codex-adapter.py\", sys.argv[1]]; runpy.run_path(str(root / \".tfcore/hooks/codex-adapter.py\"), run_name=\"__main__\")' stop",
             "timeout": 10,
             "statusMessage": "Checking PROJECT-STATUS.html is current"
           }
@@ -53,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .tfcore/hooks/codex-adapter.py session-end",
+            "command": "python3 -c 'import pathlib,runpy,sys; root=next(p for p in (pathlib.Path.cwd(), *pathlib.Path.cwd().parents) if (p / \".tfcore\").is_dir()); sys.argv=[\"codex-adapter.py\", sys.argv[1]]; runpy.run_path(str(root / \".tfcore/hooks/codex-adapter.py\"), run_name=\"__main__\")' session-end",
             "timeout": 3
           }
         ]
@@ -61,4 +61,3 @@
     ]
   }
 }
-

@@ -3,7 +3,7 @@
 **Assessment date:** 2026-08-24  
 **Scope:** the repository's canonical `.tfcore/` framework, its Claude Code and OpenCode adapters, the three scaffold/update scripts, routing, telemetry, unattended goal mode, library personas, and the current official Codex feature set.
 
-**Implementation status (updated 2026-08-24):** the repository changes described here are implemented. The public command and behavior references are synchronized in `README.md`, `WORKFLOW.html`, `.tfcore/user-guide.md`, and `docs/TechieFlow-Routing-Guide.md`; the durable session record is in `WorkFlow-Context.md`. The acceptance checklist below remains a release-validation checklist for exercising the adapter in real applications, not a list of missing source changes.
+**Implementation status (reviewed 2026-08-28):** the repository changes described here are implemented. A follow-up audit against `codex-cli 0.150.1` and the current official Codex manual corrected nested-directory hook launch, protected-file deletion handling, and the unattended approval example below. The public command and behavior references are synchronized in `README.md`, `WORKFLOW.html`, `.tfcore/user-guide.md`, and `docs/TechieFlow-Routing-Guide.md`; the durable session record is in `WorkFlow-Context.md`. The acceptance checklist below remains a release-validation checklist for exercising the adapter in real applications, not a list of missing source changes.
 
 ## 1. Executive conclusion
 
@@ -314,7 +314,7 @@ Initial cycle:
 
 ```bash
 codex exec --json --sandbox workspace-write \
-  --ask-for-approval never \
+  -c 'approval_policy="never"' \
   -m "<routed-model>" \
   -c 'model_reasoning_effort="<effort>"' \
   "<goal prompt>"
