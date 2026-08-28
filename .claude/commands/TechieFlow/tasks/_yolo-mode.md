@@ -15,6 +15,8 @@ YOLO is ON when **any** of these holds — you do not need the owner to say it t
 
 `*yolo` again, or `bash .tfcore/utils/tf-yolo.sh off`, turns it off. `tf-yolo.sh status` tells you which. The flag lives at `.tfcore/.session/yolo.json` (never committed) and is read by `.tfcore/hooks/block-git.sh` (both harnesses) and `.opencode/plugin/techieflow.js`.
 
+**The grant ends with the run — it is not a repo setting (2026-08-28).** Three things now close it, so an unnoticed flag cannot go on suppressing delete prompts for days: `tf-yolo.sh off`, **`tf-yolo.sh done`** (the sentinel below clears the flag as well as writing the outcome), and, for a session that is killed or crashes before either, an **expiry** — a flag older than 24 h (`TF_YOLO_TTL_HOURS`, `0` disables) is ignored by the hook and reported as `OFF (flag EXPIRED …)` by `status`. `tf-goal.sh` additionally clears its own flag on every exit path via an `EXIT`/`INT`/`TERM` trap, and exports `TF_YOLO=1` for the duration of the run, which is checked first and **never** expires — so a multi-day supervised run that sleeps through usage-limit windows is unaffected. If you need YOLO back, say `*yolo` again; that is one line, and it is cheaper than a repo that has been silently permissive since last week.
+
 ## What changes when YOLO is ON
 
 **Permissions (mechanical — the hook/plugin enforce these, you just stop worrying about them):**
@@ -55,7 +57,7 @@ bash .tfcore/utils/tf-yolo.sh done blocked "REQ-FN-7, REQ-NFR-2 need the product
 
 `blocked` is legitimate only when **every** remaining open REQ is owner-gated and you have finished everything else, logged each blocker under PROJECT-STATUS "Known blockers", and pointed the next command at the owner-run step. A `blocked` written because the work was long, the context was full, or you wanted a check-in is the exact failure this rule exists to stop — the supervisor will simply re-prompt you, and the log will show it.
 
-Without a goal/supervisor (plain `*yolo` in an interactive session) the sentinel is harmless; still write it so `tf-yolo.sh status` shows the outcome.
+Without a goal/supervisor (plain `*yolo` in an interactive session) the sentinel is harmless; still write it — it records the outcome for `tf-yolo.sh status` **and it is what turns YOLO back off**. An interactive `*yolo` that ends without it leaves the repo permissive until the 24 h expiry catches it.
 
 ## Starting an unattended run (owner side — the VM recipe)
 

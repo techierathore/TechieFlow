@@ -273,9 +273,44 @@ def analyse_misses(misses):
     linked = [m for m in opened if m.get("origin_confidence") == "linked"]
     excluded = len(opened) - len(linked)
 
-    sole = [f for f in fixes if f.get("cost_attribution") == "sole"]
-    shared = [f for f in fixes if str(f.get("cost_attribution") or "").startswith("shared:")]
-    unattributable = sum(1 for f in fixes if f.get("cost_attribution") == "none")
+    # RECOMPUTE the share per fix run before bucketing (SCHEMA §8: derived metrics
+    # are computed at report time, never trusted from storage). Two reasons this is
+    # not merely defensive. (1) The stored value is written one record at a time, so
+    # a run that closed four misses stamped shared:1, shared:2, shared:3, shared:4 —
+    # only the last is right, and the stream is append-only so none can be edited.
+    # (2) Records written before 2026-08-28 carry cost_attribution:"none" from the
+    # empty-reqs_touched bug: a `framework` or `docs` repo has no REQs, so the old
+    # divisor collapsed and every measured window in those repos was discarded as
+    # unattributable. Counting the miss_ids actually closed against each fix_run_id
+    # recovers both cases from data already on the stream.
+    closed_per_run = {}
+    for f in fixes:
+        if f.get("fix_run_id") and f.get("miss_id"):
+            closed_per_run.setdefault(f["fix_run_id"], set()).add(f["miss_id"])
+
+    def _attribution(f):
+        stored = str(f.get("cost_attribution") or "")
+        # `none` is only honest where there is genuinely nothing to divide: no run
+        # matched, or the window itself could not be computed. Anything else with a
+        # real window is a share, and how many ways it splits is countable.
+        if not f.get("tokens_scope") or f.get("tokens_scope") == "none":
+            return "none"
+        if not f.get("fix_run_id"):
+            return "none"
+        if stored == "sole":
+            return "sole"
+        n = len(closed_per_run.get(f["fix_run_id"], {f.get("miss_id")}) or {1})
+        return "sole" if n == 1 else "shared:%d" % n
+
+    for f in fixes:
+        f["cost_attribution_computed"] = _attribution(f)
+
+    sole = [f for f in fixes if f["cost_attribution_computed"] == "sole"]
+    shared = [f for f in fixes if f["cost_attribution_computed"].startswith("shared:")]
+    unattributable = sum(1 for f in fixes if f["cost_attribution_computed"] == "none")
+    recovered = sum(1 for f in fixes
+                    if f.get("cost_attribution") == "none"
+                    and f["cost_attribution_computed"] != "none")
 
     def tok(fs):
         return sum((f.get("tokens_out") or 0) for f in fs)
@@ -338,10 +373,15 @@ def analyse_misses(misses):
         "cost_sole_n": len(sole),
         "cost_shared_n": len(shared),
         "cost_unattributable_n": unattributable,
+        # Windows the stream had written off as unattributable that the recomputed
+        # divisor recovers. Reported so a jump in the cost figures is explained by
+        # a fixed derivation rather than looking like the work got more expensive.
+        "cost_recovered_n": recovered,
         "tokens_per_miss_measured": round(float(tok(sole)) / len(sole), 1)
                                     if len(sole) >= MIN_N else None,
         "tokens_per_miss_apportioned": round(
-            sum(float(f.get("tokens_out") or 0) / int(str(f["cost_attribution"]).split(":")[1])
+            sum(float(f.get("tokens_out") or 0)
+                / int(f["cost_attribution_computed"].split(":")[1])
                 for f in shared) / len(shared), 1) if len(shared) >= MIN_N else None,
         "cost_usd_per_miss_measured": round(
             sum(f["cost_usd"] for f in paid) / len(paid), 4) if len(paid) >= MIN_N else None,
@@ -955,6 +995,12 @@ def print_misses(m, W):
     if m["cost_unattributable_n"]:
         print("        A miss fixed inline, with no distinct run record, cannot be costed.")
         print("        It counts toward the miss count and contributes nothing to the money.")
+    if m.get("cost_recovered_n"):
+        print("     recovered         : %d fix record(s) stored as 'none' that DO have a"
+              % m["cost_recovered_n"])
+        print("        measured window — the divisor is recomputed here from the misses")
+        print("        each run actually closed (SCHEMA.md §5.5.3). Records written before")
+        print("        2026-08-28 in a repo with no REQs were all written off this way.")
 
 
 # -------------------------------------------------------------------- main

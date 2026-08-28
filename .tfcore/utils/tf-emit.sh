@@ -798,6 +798,32 @@ def enrich_run(rec):
 #               window, this record carries no numbers (SCHEMA.md §5.5.3).
 _RUNS_BY_START = None
 
+def _fixes_on_run(fix_run_id, this_miss_id):
+    """How many DISTINCT misses this fix run has closed, counting the one being
+    written. The divisor for a repo with no REQs (see the miss-fix branch below).
+    Counts miss_ids, not records, so a re-attempt on the same miss never inflates
+    it. Returns 1 on any failure — the run measured a window and closed at least
+    this miss, so 1 is the floor, and a floor understates the share rather than
+    inventing one."""
+    n = {this_miss_id} if this_miss_id else set()
+    try:
+        with open(os.path.join(met_dir, "misses.jsonl"), encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                except Exception:
+                    continue
+                if r.get("kind") == "miss-fix" and r.get("fix_run_id") == fix_run_id \
+                        and r.get("miss_id"):
+                    n.add(r["miss_id"])
+    except Exception:
+        pass
+    return max(len(n), 1)
+
+
 def _runs_by_start():
     global _RUNS_BY_START
     if _RUNS_BY_START is None:
@@ -902,7 +928,23 @@ def enrich_miss(rec):
                     elif len(touched) > 1:
                         rec["cost_attribution"] = "shared:%d" % len(touched)
                     else:
-                        rec["cost_attribution"] = "none"
+                        # reqs_touched is EMPTY but the run resolved and measured a
+                        # real window. Until 2026-08-28 this fell through to "none",
+                        # which §5.5.3 defines as "tokens_scope was none, or the
+                        # fix_run_id matched no run" — neither is true here, so the
+                        # stream was calling a measured window unattributable and
+                        # every cost figure for these repos was structurally zero.
+                        # A `framework` or `docs` project has no REQs to touch AT
+                        # ALL, so keying the divisor on reqs_touched can never work
+                        # there (the same blind spot as project_type:"framework",
+                        # fixed earlier the same day). The divisor is instead the
+                        # number of misses this run closed. That count is only
+                        # complete once the batch is on the stream, so what is
+                        # stored here is the count SO FAR and `tf-metrics.sh`
+                        # recomputes it per fix_run_id at report time (§8: derived
+                        # metrics are computed, never trusted from storage).
+                        _n = _fixes_on_run(rec.get("fix_run_id"), rec.get("miss_id"))
+                        rec["cost_attribution"] = "sole" if _n == 1 else "shared:%d" % _n
             else:
                 rec.setdefault("cost_attribution", "none")
                 rec.setdefault("tokens_scope", "none")

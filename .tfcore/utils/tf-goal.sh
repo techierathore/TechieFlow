@@ -125,10 +125,17 @@ else
 fi
 
 # ---------------------------------------------------------------- prompts
+# PREAMBLE IS HARNESS-NEUTRAL. Every claim in it must hold for claude AND opencode
+# AND codex, because all three are sent this text verbatim. Anything true of only
+# one harness goes in that harness's block below (see the `codex` note after
+# FIRST_PROMPT) — never in here. The 2026-08-28 Codex adapter review put Codex's
+# strict no-git policy into this shared text, which then told Claude and OpenCode
+# goal runs to avoid read-only git that their own hook allows; nothing written down
+# had said the preamble was shared, so this comment is that rule.
 read -r -d '' PREAMBLE <<'TXT'
 UNATTENDED GOAL RUN — YOLO MODE IS ON (TechieFlow rule .tfcore/tasks/_yolo-mode.md; read it first).
 - Nobody is watching. NEVER ask a question, NEVER pause for confirmation, NEVER end your turn with a plan, options, or "shall I…". Decide the sensible default yourself and record the decision in the checklist Remarks.
-- Permissions: deletes are allowed when they are necessary and precisely scoped. Every git/gh command, including read-only diagnostics, is blocked in every mode — never attempt one; the owner performs version-control operations manually.
+- Permissions: deletes are allowed when they are necessary and precisely scoped. Git WRITES (commit/push/add/reset/checkout/stash/tag) are blocked in every mode — never attempt them; the owner commits. Read-only git (status/log/diff/blame) is decided by the harness policy stated below, if any; where nothing further is stated it is available in this mode as supplementary evidence only — the checklist Requirements Status table and the working tree stay primary.
 - Re-entry: start from PROJECT-STATUS.md + docs/*-Checklist.md (Requirements Status table) — continue from the weakest open REQ; do not redo terminal rows.
 - A build pass means the WHOLE checklist: every open REQ reaches at least `Implemented` in this pass, then the verifier is chained inline, then FIX mode loops on FAIL rows until they pass. Never stop with "run build-phase again for the remaining REQs".
 - When the goal is met (every in-scope REQ terminal, PROJECT-STATUS.md + .html updated, run record emitted): run
@@ -148,7 +155,7 @@ $GOAL"
 if [[ "$HARNESS" == codex ]]; then
   FIRST_PROMPT="$FIRST_PROMPT
 
-CODEX POLICY NOTE: `.codex/rules/techieflow.rules` forbids every git/gh command even in YOLO mode. Use working-tree files and framework artifacts; do not attempt read-only git."
+CODEX POLICY NOTE: \`.codex/rules/techieflow.rules\` forbids every git/gh command even in YOLO mode, read-only diagnostics included. Use working-tree files and framework artifacts; do not attempt read-only git."
 fi
 
 # ---------------------------------------------------------------- harness command
@@ -343,6 +350,19 @@ if [[ -n "${TF_GOAL_CLASSIFY:-}" ]]; then classify_output "$TF_GOAL_CLASSIFY" "$
 export TF_YOLO=1
 # Pin the state dir to the APP (not the caller's cwd / a parent repo's CLAUDE_PROJECT_DIR).
 CLAUDE_PROJECT_DIR="$APP_DIR" TF_PROJECT_DIR="$APP_DIR" bash "$YOLO_SH" on --source goal --goal "$GOAL" >/dev/null 2>&1 || true
+
+# The flag we just wrote is OURS — clear it on EVERY exit path (goal done, max
+# cycles, Ctrl-C, kill). Without this it survives the run and silently puts every
+# later interactive session in this repo into YOLO: rm/rmdir/sudo stop prompting
+# and read-only git opens up, with nothing on screen saying so. Only a flag whose
+# source is `goal` is removed — a `*yolo` the owner turned on by hand is left alone.
+clear_goal_yolo() {
+  local f="$STATE_DIR/yolo.json"
+  [[ -f "$f" ]] || return 0
+  grep -q '"source":[[:space:]]*"goal"' "$f" 2>/dev/null || return 0
+  CLAUDE_PROJECT_DIR="$APP_DIR" TF_PROJECT_DIR="$APP_DIR" bash "$YOLO_SH" off >/dev/null 2>&1 || true
+}
+trap clear_goal_yolo EXIT INT TERM
 BACKOFF=120
 KIND=first; [[ $RESUME -eq 1 && $CYCLE -gt 0 ]] && KIND=resume
 

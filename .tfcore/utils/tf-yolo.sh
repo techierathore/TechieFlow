@@ -38,6 +38,22 @@ FLAG="$STATE_DIR/yolo.json"
 DONE="$STATE_DIR/goal-done.json"
 
 now_utc() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+# A flag nobody turned off EXPIRES. `off` and `done` clear it, but a session that
+# is killed, crashes, or simply ends without the sentinel leaves it behind, and an
+# unnoticed flag silently grants unprompted deletes for as long as it sits there
+# (found on five repos, one of them 6 days old, 2026-08-28). Age is taken from the
+# file's mtime via `find -mmin`, which behaves the same on GNU and BSD — parsing
+# the ISO `since` field would need `date -d`, which does not exist on macOS.
+# Override with TF_YOLO_TTL_HOURS; 0 disables expiry. tf-goal.sh is unaffected —
+# it exports TF_YOLO=1, which is checked first and never expires mid-run.
+TTL_HOURS="${TF_YOLO_TTL_HOURS:-24}"
+flag_live() {  # exit 0 = flag present AND not expired
+  [[ -f "$FLAG" ]] || return 1
+  [[ "$TTL_HOURS" == "0" ]] && return 0
+  [[ -n "$(find "$FLAG" -mmin "+$(( TTL_HOURS * 60 ))" 2>/dev/null)" ]] && return 1
+  return 0
+}
 json_escape() { printf '%s' "$1" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null || printf '"%s"' "${1//\"/\\\"}"; }
 
 cmd="${1:-status}"; shift || true
@@ -65,13 +81,15 @@ case "$cmd" in
     echo "YOLO: OFF — back to ask-on-delete, no-git, confirm-at-phase-boundaries."
     ;;
   is-on)
-    if [[ "${TF_YOLO:-0}" == "1" || -f "$FLAG" ]]; then exit 0; else exit 1; fi
+    if [[ "${TF_YOLO:-0}" == "1" ]] || flag_live; then exit 0; else exit 1; fi
     ;;
   status)
     if [[ "${TF_YOLO:-0}" == "1" ]]; then
       echo "YOLO: ON (env TF_YOLO=1)"
-    elif [[ -f "$FLAG" ]]; then
+    elif flag_live; then
       echo "YOLO: ON ($(cat "$FLAG" 2>/dev/null))"
+    elif [[ -f "$FLAG" ]]; then
+      echo "YOLO: OFF (flag EXPIRED after ${TTL_HOURS}h and is ignored — $(cat "$FLAG" 2>/dev/null)). Run 'tf-yolo.sh off' to delete it, or 'on' to start a fresh window."
     else
       echo "YOLO: OFF"
     fi
@@ -83,7 +101,13 @@ case "$cmd" in
     mkdir -p "$STATE_DIR" 2>/dev/null || true
     printf '{"outcome":%s,"summary":%s,"ts":"%s"}\n' \
       "$(json_escape "$OUTCOME")" "$(json_escape "$SUMMARY")" "$(now_utc)" > "$DONE" 2>/dev/null || true
-    echo "GOAL-DONE ($OUTCOME) recorded at $DONE — the supervisor (tf-goal.sh) will stop."
+    # The grant ENDS WITH THE GOAL. Until 2026-08-28 `done` left the flag in place,
+    # so even the well-behaved path — the one _yolo-mode.md §Completion prescribes as
+    # the last action of every run — left the repo permanently in YOLO, with deletes
+    # unprompted and read-only git open and nothing on screen saying so. The
+    # supervisor reads $DONE, never $FLAG, so clearing it here stops nothing.
+    rm -f "$FLAG" 2>/dev/null || true
+    echo "GOAL-DONE ($OUTCOME) recorded at $DONE — the supervisor (tf-goal.sh) will stop. YOLO flag cleared."
     ;;
   clear-done)
     rm -f "$DONE" 2>/dev/null || true

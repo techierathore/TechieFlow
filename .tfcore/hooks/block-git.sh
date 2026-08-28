@@ -37,7 +37,18 @@ STRICT_GIT="${TF_STRICT_GIT:-0}"
 
 YOLO=0
 [[ "${TF_YOLO:-0}" == "1" ]] && YOLO=1
-[[ -n "$ROOT" && -f "$ROOT/.tfcore/.session/yolo.json" ]] && YOLO=1
+# The on-disk flag EXPIRES (tf-yolo.sh flag_live, same 24h default and the same
+# portable `find -mmin` test). `off`/`done` clear it, but a killed or crashed run
+# leaves it behind and an unnoticed flag silently suppresses delete prompts for as
+# long as it sits there — five repos were found in that state on 2026-08-28, one of
+# them 6 days old. TF_YOLO=1 is checked above and never expires, so a long
+# tf-goal.sh run (which exports it) is unaffected.
+if [[ $YOLO -eq 0 && -n "$ROOT" && -f "$ROOT/.tfcore/.session/yolo.json" ]]; then
+  TTL_HOURS="${TF_YOLO_TTL_HOURS:-24}"
+  if [[ "$TTL_HOURS" == "0" ]] || [[ -z "$(find "$ROOT/.tfcore/.session/yolo.json" -mmin "+$(( TTL_HOURS * 60 ))" 2>/dev/null)" ]]; then
+    YOLO=1
+  fi
+fi
 if [[ $YOLO -eq 0 ]] && printf '%s' "$INPUT" | grep -qE '"permission_mode"[[:space:]]*:[[:space:]]*"(bypassPermissions|auto)"'; then YOLO=1; fi
 
 block_git_msg() {

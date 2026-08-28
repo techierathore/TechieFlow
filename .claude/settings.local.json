@@ -37,7 +37,7 @@
       "Bash(/mnt/c/3AIGenCode/TechieFlow/update-framework.sh --dry-run /tmp)",
       "Bash(/mnt/c/3AIGenCode/TechieFlow/update-framework.sh /mnt/c/3AIGenCode/AppManager --dry-run)",
       "Bash(/mnt/c/3AIGenCode/TechieFlow/update-framework.sh *)",
-      "Bash(ls *.md *.slnx global.json)",
+      "Bash(ls:*)",
       "Bash(wc -l docs/AstroLyfe-BRD.md docs/AstroLyfe-Development-Plan.md docs/AstroLyfe-Code-Structure.md docs/AstroLyfe-DbStructure.md)",
       "Bash(bc)",
       "Bash(grep -nE \"^#{2,3} \" docs/AstroLyfe-DbStructure.md)",

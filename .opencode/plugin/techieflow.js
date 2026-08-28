@@ -67,10 +67,19 @@ export const TechieFlowPlugin = async ({ directory, client }) => {
   }
 
   // YOLO flag: env TF_YOLO=1 (tf-goal.sh) or .tfcore/.session/yolo.json (tf-yolo.sh on).
+  // The on-disk flag EXPIRES after TF_YOLO_TTL_HOURS (default 24, 0 disables) —
+  // same rule and default as tf-yolo.sh `flag_live` and block-git.sh, so the two
+  // harnesses never disagree about whether YOLO is on. `off` and `done` clear the
+  // flag; the expiry only catches a run that was killed before either ran. TF_YOLO=1
+  // is checked first and never expires, so a long supervised run is unaffected.
   function yoloOn() {
     try {
       if (process.env.TF_YOLO === "1") return true
-      return fs.existsSync(path.join(root, ".tfcore", ".session", "yolo.json"))
+      const flag = path.join(root, ".tfcore", ".session", "yolo.json")
+      if (!fs.existsSync(flag)) return false
+      const ttlHours = Number(process.env.TF_YOLO_TTL_HOURS ?? 24)
+      if (!Number.isFinite(ttlHours) || ttlHours <= 0) return true
+      return Date.now() - fs.statSync(flag).mtimeMs < ttlHours * 3600 * 1000
     } catch {
       return false
     }
