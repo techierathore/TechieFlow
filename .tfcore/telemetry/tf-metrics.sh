@@ -35,7 +35,7 @@ import subprocess
 import sys
 from collections import Counter, defaultdict, OrderedDict
 
-STREAMS = ("runs", "gates", "sessions", "commits")
+STREAMS = ("runs", "gates", "sessions", "commits", "misses")
 VERDICTS = ("Verified", "Needs re-verify", "FAIL", "Blocked", "Implemented", "Done (pre-existing)")
 GATE_ORDER = ("build", "acceptance", "render", "visual", "perf", "standards", "escaped")
 
@@ -169,6 +169,130 @@ def dedupe_sessions(records):
     return [x if isinstance(x, dict) else best[x] for x in order], dupes
 
 
+def analyse_misses(misses):
+    """The §5.5 stream, with the THIRD provenance separation enforced here in code.
+
+    Two exclusions, both APPLIED AND DISPLAYED (SCHEMA.md §6):
+
+      origin_confidence != "linked"  -> excluded from every per-phase / per-model /
+          per-agent miss rate. A routing decision made on guessed attributions is a
+          decision made on invented evidence, and nothing in the output would show it.
+
+      cost_attribution != "sole"     -> excluded from the headline cost figures. A run
+          that fixed three misses has ONE token window; dividing it three ways is
+          arithmetic, not measurement. The apportioned total is carried separately so
+          it can be shown in a labelled column, never summed into the headline.
+
+    Raw counts and the miss-class distribution ARE poolable: a miss counts as a miss
+    whoever missed it; only its attribution is confidence-bounded."""
+    opened = [m for m in misses if m.get("kind") == "miss" and not m.get("backfilled")]
+    fixes = [m for m in misses if m.get("kind") == "miss-fix" and not m.get("backfilled")]
+
+    # Latest fix per miss decides open/closed; a fix naming no known miss is an orphan.
+    known = {m.get("miss_id") for m in opened}
+    latest = {}
+    orphans = 0
+    for f in fixes:
+        mid = f.get("miss_id")
+        if mid not in known:
+            orphans += 1
+            continue
+        prev = latest.get(mid)
+        if prev is None or (f.get("ts") or "") >= (prev.get("ts") or ""):
+            latest[mid] = f
+    # TWO DIFFERENT QUESTIONS, DELIBERATELY NOT THE SAME PREDICATE.
+    #
+    #   "is this defect still live?"      -> the COLLAPSE check in tf-emit.sh --open-miss.
+    #                                        A wont-fix defect is still live: the next verify
+    #                                        failure on that REQ is the SAME defect and must not
+    #                                        open a second record. So --open-miss keeps its
+    #                                        `verdict_after != "Verified"` predicate. Do not
+    #                                        "fix" the two to agree — they are asking different
+    #                                        things and agreeing would break one of them.
+    #
+    #   "how much work is outstanding?"   -> THIS count, which the owner reads as a backlog.
+    #                                        `wont-fix` is a decision, not a backlog item, so it
+    #                                        gets its own bucket. `deferred` IS outstanding —
+    #                                        postponed work is still work — so it stays open.
+    def _verdict(m):
+        return (latest.get(m.get("miss_id")) or {}).get("verdict_after")
+
+    open_misses = [m for m in opened if _verdict(m) not in ("Verified", "wont-fix")]
+    wont_fix = [m for m in opened if _verdict(m) == "wont-fix"]
+    resolved = [m for m in opened if _verdict(m) == "Verified"]
+
+    linked = [m for m in opened if m.get("origin_confidence") == "linked"]
+    excluded = len(opened) - len(linked)
+
+    sole = [f for f in fixes if f.get("cost_attribution") == "sole"]
+    shared = [f for f in fixes if str(f.get("cost_attribution") or "").startswith("shared:")]
+    unattributable = sum(1 for f in fixes if f.get("cost_attribution") == "none")
+
+    def tok(fs):
+        return sum((f.get("tokens_out") or 0) for f in fs)
+
+    # Dollars exist ONLY where a harness measured them. Claude Code and Codex carry
+    # cost_usd:null permanently (SCHEMA.md §4) and are never priced from a rate card
+    # here — a pooled sum over mixed harnesses would silently under-report.
+    paid = [f for f in sole if f.get("cost_usd") is not None]
+    escaped = [m for m in opened if m.get("found_by") in ("owner", "production")]
+    design = [m for m in opened if m.get("miss_class") == "unspecified-gap"]
+
+    return {
+        "misses_total": len(opened),
+        "miss_fixes_total": len(fixes),
+        "orphan_fixes": orphans,
+        "open_misses": len(open_misses),
+        "wont_fix": len(wont_fix),
+        "resolved_misses": len(resolved),
+        # Denominator is records that CARRY the field — why_missed is optional (§5.5.6)
+        # and a missing value means "not assessed", never a zero for some category.
+        "why_missed_n": sum(1 for m in opened if m.get("why_missed")),
+        "why_missed": OrderedDict(
+            sorted(Counter(m["why_missed"] for m in opened if m.get("why_missed")).items(),
+                   key=lambda kv: (-kv[1], kv[0]))),
+        # An escape with no why_missed wastes the most valuable record in the stream:
+        # something got past every gate and nobody recorded why nothing caught it.
+        "escapes_missing_why": sum(1 for m in opened
+                                   if m.get("found_by") in ("owner", "production")
+                                   and not m.get("why_missed")),
+        "class_distribution": OrderedDict(
+            sorted(Counter(m.get("miss_class") or "?" for m in opened).items(),
+                   key=lambda kv: (-kv[1], kv[0]))),
+        "found_by": OrderedDict(
+            sorted(Counter(m.get("found_by") or "?" for m in opened).items(),
+                   key=lambda kv: (-kv[1], kv[0]))),
+        "design_miss_share": pct(len(design), len(opened)) if len(opened) >= MIN_N
+                             else "insufficient data (n=%d)" % len(opened),
+        "escape_share": pct(len(escaped), len(opened)) if len(opened) >= MIN_N
+                        else "insufficient data (n=%d)" % len(opened),
+        # Attribution-bounded. The denominator is `linked` records ONLY.
+        "attributed_n": len(linked),
+        "attribution_excluded": excluded,
+        "by_origin_phase": OrderedDict(
+            sorted(Counter(m.get("origin_phase") or "?" for m in linked).items(),
+                   key=lambda kv: (-kv[1], kv[0]))),
+        "by_origin_model": OrderedDict(
+            sorted(Counter(m.get("origin_model") or "?" for m in linked).items(),
+                   key=lambda kv: (-kv[1], kv[0]))),
+        "by_origin_agent": OrderedDict(
+            sorted(Counter(m.get("origin_agent") or "?" for m in linked).items(),
+                   key=lambda kv: (-kv[1], kv[0]))),
+        # Cost-attribution-bounded. Measured and apportioned NEVER combine.
+        "cost_sole_n": len(sole),
+        "cost_shared_n": len(shared),
+        "cost_unattributable_n": unattributable,
+        "tokens_per_miss_measured": round(float(tok(sole)) / len(sole), 1)
+                                    if len(sole) >= MIN_N else None,
+        "tokens_per_miss_apportioned": round(
+            sum(float(f.get("tokens_out") or 0) / int(str(f["cost_attribution"]).split(":")[1])
+                for f in shared) / len(shared), 1) if len(shared) >= MIN_N else None,
+        "cost_usd_per_miss_measured": round(
+            sum(f["cost_usd"] for f in paid) / len(paid), 4) if len(paid) >= MIN_N else None,
+        "cost_usd_records": len(paid),
+    }
+
+
 def app_name(repo):
     hits = glob.glob(os.path.join(repo, "docs", "*-Checklist.md"))
     if len(hits) == 1:
@@ -177,6 +301,14 @@ def app_name(repo):
 
 
 def project_type(repo):
+    # Structural signal first and authoritative — see tf-emit.sh _project_type()
+    # for why the framework repo is detected from its tree shape rather than from
+    # core-config.yaml (that file is rsynced into every new app, so a value written
+    # there would misclassify all of them). Not inferred: this is a fact about the
+    # tree, so it never carries project_type_inferred.
+    if (os.path.isfile(os.path.join(repo, "scaffold-brownfield.sh"))
+            and os.path.isdir(os.path.join(repo, ".tfcore", "tasks"))):
+        return "framework", False
     cfg = os.path.join(repo, ".tfcore", "core-config.yaml")
     try:
         text = open(cfg, encoding="utf-8").read()
@@ -439,13 +571,14 @@ def analyse(repos):
     """Returns a dict of segmented figures. Segmentation is structural: the
     live-only metrics are computed PER (project_type) over LIVE records only,
     and there is no code path that produces a combined figure."""
-    gates, runs, sessions, commits = [], [], [], []
+    gates, runs, sessions, commits, misses = [], [], [], [], []
     per_repo = []
     commit_dupes = 0
     session_dupes = 0
     for repo in repos:
         g = read_stream(repo, "gates")
         r = read_stream(repo, "runs")
+        misses += read_stream(repo, "misses")
         # Per repo, not across them (SCHEMA.md §4): the OpenCode plugin
         # appends a cumulative snapshot at every root-session idle.
         s, sd = dedupe_sessions(read_stream(repo, "sessions"))
@@ -458,6 +591,18 @@ def analyse(repos):
                          "project_type": project_type(repo)[0],
                          "gates": len(g), "gates_backfilled": sum(1 for x in g if x.get("backfilled")),
                          "runs": len(r), "sessions": len(s), "commits": len(c),
+                         "misses": sum(1 for x in read_stream(repo, "misses")
+                                       if x.get("kind") == "miss"),
+                         # A repo reclassified after records were written (most often a
+                         # greenfield project born `docs` and upgraded once it grew a head)
+                         # keeps the OLD value on every existing record — append-only means
+                         # corrections happen at read time, never by rewriting history. Say
+                         # so: otherwise one project silently occupies two segments that,
+                         # by §6, are never allowed to pool, and neither is the whole story.
+                         "stale_types": sorted(
+                             {x.get("project_type") for x in (g + r)
+                              if x.get("project_type")
+                              and x.get("project_type") != project_type(repo)[0]}),
                          "commit_hook": has_commit_hook(repo)})
 
     def seg(records):
@@ -475,7 +620,8 @@ def analyse(repos):
     tainted = {g.get("req_id") for g in back}
 
     out = {"per_repo": per_repo, "tainted_reqs": sorted(x for x in tainted if x),
-           "live": {}, "backfilled": {}, "pooled": {}}
+           "live": {}, "backfilled": {}, "pooled": {},
+           "misses": analyse_misses(misses)}
 
     for label, bucket in (("live", live), ("backfilled", back)):
         for ptype, recs in sorted(seg(bucket).items()):
@@ -545,12 +691,25 @@ def print_report(a, repos):
     print("TechieFlow development telemetry")
     print("=" * W)
     for r in a["per_repo"]:
-        print("  %-16s %-10s gates %4d (%d backfilled)  runs %3d  sessions %3d  commits %4d"
+        print("  %-16s %-10s gates %4d (%d backfilled)  runs %3d  sessions %3d  commits %4d  misses %3d"
               % (r["app"], r["project_type"], r["gates"], r["gates_backfilled"],
-                 r["runs"], r["sessions"], r["commits"]))
+                 r["runs"], r["sessions"], r["commits"], r.get("misses", 0)))
     # The hook is per-CLONE (.git/ is not part of the repository), so a machine
     # that has never been refreshed silently records no commits at all. Say so —
     # this is the one telemetry gap the owner cannot see by reading the files.
+    stale = [r for r in a["per_repo"] if r.get("stale_types")]
+    if stale:
+        print("")
+        for r in stale:
+            print("  ⚠ %s is classified '%s' now, but %s record(s) already written carry %s."
+                  % (r["app"], r["project_type"], "some",
+                     " / ".join("'%s'" % t for t in r["stale_types"])))
+        print("    Those records keep the old value — the streams are append-only and a")
+        print("    correction is applied at READ time, never by rewriting history. So this")
+        print("    project appears under BOTH project_type segments below, and §6 forbids")
+        print("    pooling them: read each as a period of the project, not as the whole of it.")
+        print("    New records carry the corrected value from here on.")
+
     missing = [r["app"] for r in a["per_repo"] if r["commit_hook"] is False]
     if missing:
         print("")
@@ -636,7 +795,97 @@ def print_report(a, repos):
         print("                        (%d duplicate sha(s) collapsed — normal after a union"
               % p["commit_duplicates_collapsed"])
         print("                         merge; the same commit was recorded on two machines)")
+
+    print_misses(a["misses"], W)
     print("=" * W)
+
+
+def print_misses(m, W):
+    """The §5.5 block. Two exclusions are printed with the figures they bound —
+    an exclusion the reader cannot see is indistinguishable from a bug."""
+    if not m["misses_total"] and not m["miss_fixes_total"]:
+        return
+    print("")
+    print("-" * W)
+    print("MISSES — what was missed, who missed it, what the fix cost (SCHEMA.md §5.5)")
+    print("-" * W)
+    print("  misses logged       : %d   (%d open, %d resolved, %d wont-fix; %d fix records)"
+          % (m["misses_total"], m["open_misses"], m["resolved_misses"],
+             m["wont_fix"], m["miss_fixes_total"]))
+    if m["wont_fix"]:
+        print("                        (wont-fix is a DECISION, not a backlog item, so it is not")
+        print("                         counted as open. The collapse check still treats it as a")
+        print("                         live defect, so a repeat failure will not open a duplicate.)")
+    if m["orphan_fixes"]:
+        print("     ⚠ %d miss-fix record(s) name a miss_id with no opening record" % m["orphan_fixes"])
+    print("  design-miss share   : %s   (miss_class=unspecified-gap — the spec, not the build)"
+          % m["design_miss_share"])
+    print("  found by a human    : %s   (found_by owner/production — reported BESIDE the"
+          % m["escape_share"])
+    print("                        gates.jsonl escape rate above, never merged with it)")
+    if m["class_distribution"]:
+        print("  miss classes        :")
+        for k, n in m["class_distribution"].items():
+            print("      %-24s %4d  %s" % (k, n, pct(n, m["misses_total"])))
+    if m["found_by"]:
+        print("  found by            : " +
+              "  ".join("%s=%d" % kv for kv in m["found_by"].items()))
+    # which PRACTICE failed — the field that says whether specification or verification
+    # is the weak one. Optional, so it is reported against its own denominator.
+    if m["why_missed"]:
+        print("  why it was missed   : (%d of %d misses assessed)"
+              % (m["why_missed_n"], m["misses_total"]))
+        for k, n in m["why_missed"].items():
+            print("      %-26s %4d  %s" % (k, n, pct(n, m["why_missed_n"])))
+    if m["escapes_missing_why"]:
+        print("     ⚠ %d escape(s) carry no why_missed — something got past every gate and"
+              % m["escapes_missing_why"])
+        print("       nothing recorded why. That is the most valuable record in the stream.")
+
+    # ---- attribution-bounded figures
+    print("")
+    print("  ATTRIBUTION — linked records only (%d of %d; %d excluded as inferred/unknown)"
+          % (m["attributed_n"], m["misses_total"], m["attribution_excluded"]))
+    if m["attribution_excluded"]:
+        print("     Excluded records named a phase no runs.jsonl record backs, so their model")
+        print("     is unknown. A per-model rate computed from guesses is a routing decision")
+        print("     made on invented evidence — SCHEMA.md §6, third separation.")
+    if m["attributed_n"] < MIN_N:
+        print("     insufficient data (n=%d)" % m["attributed_n"])
+    else:
+        for label, key in (("by origin phase", "by_origin_phase"),
+                           ("by origin agent", "by_origin_agent"),
+                           ("by origin model", "by_origin_model")):
+            if m[key]:
+                print("     %-16s: " % label +
+                      "  ".join("%s=%d" % kv for kv in m[key].items()))
+
+    # ---- cost, measured and apportioned, NEVER combined
+    print("")
+    print("  REWORK COST — measured and apportioned are separate columns, never one number")
+    print("     sole (measured)   : %d fix records" % m["cost_sole_n"])
+    print("        tokens out per miss : %s" %
+          (m["tokens_per_miss_measured"] if m["tokens_per_miss_measured"] is not None
+           else "insufficient data (n=%d)" % m["cost_sole_n"]))
+    if m["cost_usd_per_miss_measured"] is not None:
+        print("        USD per miss        : $%s  (MEASURED — %d OpenCode records)"
+              % (m["cost_usd_per_miss_measured"], m["cost_usd_records"]))
+    else:
+        print("        USD per miss        : no measured dollars (%d priced records)"
+              % m["cost_usd_records"])
+        print("           Claude Code and Codex carry cost_usd:null permanently and are NEVER")
+        print("           priced from a rate card here (SCHEMA.md §4). Real dollars come from")
+        print("           OpenCode runs; token counts are the honest figure everywhere else.")
+    print("     shared (apportioned): %d fix records — equal division, NOT a measurement"
+          % m["cost_shared_n"])
+    print("        tokens out per miss : %s" %
+          (m["tokens_per_miss_apportioned"] if m["tokens_per_miss_apportioned"] is not None
+           else "insufficient data (n=%d)" % m["cost_shared_n"]))
+    print("     unattributable    : %d fix records with no usable token window"
+          % m["cost_unattributable_n"])
+    if m["cost_unattributable_n"]:
+        print("        A miss fixed inline, with no distinct run record, cannot be costed.")
+        print("        It counts toward the miss count and contributes nothing to the money.")
 
 
 # -------------------------------------------------------------------- main

@@ -382,7 +382,7 @@ A brownfield project already has built code, so the screen-by-screen **Developer
 
 ### 7a. Emit the run record (telemetry)
 
-Same turn as the status/PROJECT-STATUS write. Doctrine + the nine constraints: `.tfcore/tasks/_metrics-emit-gate.md`. Schema: `.tfcore/telemetry/SCHEMA.md` §2. Stamp `started` with `date -u +%Y-%m-%dT%H:%M:%SZ` as your FIRST action of this task — it cannot be reconstructed at the end.
+Same turn as the status/PROJECT-STATUS write. Doctrine + the ten constraints: `.tfcore/tasks/_metrics-emit-gate.md`. Schema: `.tfcore/telemetry/SCHEMA.md` §2. Stamp `started` with `date -u +%Y-%m-%dT%H:%M:%SZ` as your FIRST action of this task — it cannot be reconstructed at the end.
 
 ```bash
 cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs

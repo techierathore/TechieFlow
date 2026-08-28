@@ -62,9 +62,11 @@ In ONE turn, route each issue to its builder as a sub-agent, in parallel where t
 - **PROJECT-STATUS (FINAL GATE, per `_status-update-gate.md`):** update `PROJECT-STATUS.md` AND re-render `PROJECT-STATUS.html` — open requirements, a verification-log row, next command. A markdown-only update is incomplete.
 - **Never run git.** Investigate by reading working-tree files at `file:line`, never a diff.
 
-### 6a. Emit the run record
+### 6a. Emit the run record — and CLOSE the misses you fixed
 
-Same turn as the status gate. Doctrine: `.tfcore/tasks/_metrics-emit-gate.md`; schema `.tfcore/telemetry/SCHEMA.md` §2. Stamp `started` with `date -u +%Y-%m-%dT%H:%M:%SZ` at §1, before you ingest anything.
+Same turn as the status gate. Doctrine: `.tfcore/tasks/_metrics-emit-gate.md`; schema `.tfcore/telemetry/SCHEMA.md` §2 + §5.5. Stamp `started` with `date -u +%Y-%m-%dT%H:%M:%SZ` at §1, before you ingest anything.
+
+**Emit the run record FIRST.** The `miss-fix` records below carry no numbers of their own — they name this run, and `tf-emit.sh` copies its token window. A `miss-fix` emitted before its run record finds nothing and is costed `none`.
 
 ```bash
 cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
@@ -75,7 +77,28 @@ cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
 JSON
 ```
 
-`mode` is always `"fix"` here — that is the whole point of this command. The verifier chained in §5 emits its own `gates.jsonl` records; do not emit those yourself. **Telemetry has no veto:** a failed emit never changes the outcome and is not worth reporting.
+`mode` is always `"fix"` here — that is the whole point of this command. The verifier chained in §5 emits its own `gates.jsonl` and `misses.jsonl` records; do not emit those yourself.
+
+**Then one `miss-fix` per REQ you repaired.** This is what makes "what did that miss cost to fix" answerable at all:
+
+```bash
+for REQ in REQ-UI-009 REQ-FN-014; do
+  MID=$(bash .tfcore/utils/tf-emit.sh --open-miss "$REQ" | cut -d' ' -f1)
+  [ -z "$MID" ] && continue          # no open miss for this REQ — nothing to close
+  FA=$(bash .tfcore/utils/tf-emit.sh --next-fix-attempt "$MID")
+  cat <<JSON | bash .tfcore/utils/tf-emit.sh misses
+{"kind":"miss-fix","miss_id":"$MID","req_id":"$REQ",
+ "fix_run_id":"<the §1 start timestamp>","fix_cmd":"fix-issues",
+ "fix_attempt":$FA,"verdict_after":"<the verifier's verdict>","reopened":false}
+JSON
+done
+```
+
+- **`verdict_after` is the verifier's verdict from §5, not your assessment of your own fix.** `Verified` only where the verifier actually wrote it. A miss closed on the fixer's word is the same failure as a self-attested `Verified`.
+- **A REQ with no open miss is normal** — the owner reported something the gates never recorded as a miss. Open one first (`--next-miss-id`, `found_by:"owner"`, per `triage-issues` §6a) and then close it in the same run, so the defect has both a cause and a cost.
+- **Write no token, dollar, or `cost_attribution` field.** `tf-emit.sh` copies the window from `fix_run_id` and derives the attribution from that run's `reqs_touched` — `sole` when this fix touched one REQ, `shared:<n>` when it touched several. That distinction is the whole reason the cost figure can be defended, and it is not yours to assert (constraint 10).
+
+**Telemetry has no veto:** a failed emit never changes the outcome and is not worth reporting.
 
 ### 7. HALT — report
 
@@ -106,5 +129,6 @@ Next: {if open issues → re-run *fix-issues with the still-broken shots / *veri
 - [ ] Fixes fanned out to the right builder (trblazeui / flow-master subagent / techierag) — owner did NOT invoke any agent
 - [ ] Re-smoked (data + visual) and verifier re-run on the affected REQs (verdicts in the checklist)
 - [ ] DevGuide affected screens refreshed; PROJECT-STATUS.md + .html updated (status gate)
-- [ ] `runs.jsonl` record emitted with `cmd:"fix-issues"`, `mode:"fix"` (§6a)
+- [ ] `runs.jsonl` record emitted with `cmd:"fix-issues"`, `mode:"fix"` (§6a) — **before** the miss-fix records, so the token window exists to copy
+- [ ] One `misses.jsonl` `miss-fix` per repaired REQ that had an open miss, carrying the verifier's verdict — no token/cost/attribution field written by hand
 - [ ] Report printed with fixed vs still-open counts

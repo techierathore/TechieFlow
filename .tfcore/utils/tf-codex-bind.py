@@ -19,6 +19,7 @@ PHASES = {
     "verify-phase": ("verifier", "Independently verify requirements against runtime evidence."),
     "fix-issues": ("flow_master", "Fix reported or verifier-discovered application defects."),
     "triage-issues": ("flow_master", "Analyze and document human-found bugs without fixing source."),
+    "log-miss": ("flow_master", "Record one missed requirement as telemetry and a checklist line."),
     "devguide": ("flow_master", "Create the developer-facing screen and component guide."),
     "productguide": ("flow_master", "Create the user-facing guide from the running application."),
     "handoff-phase": ("flow_master", "Complete handoff documents, status, and rendered artifacts."),

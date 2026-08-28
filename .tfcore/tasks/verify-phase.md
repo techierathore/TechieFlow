@@ -356,6 +356,38 @@ Map the §6 verdict table to the record: PASS → `verdict:"Verified"`, `gate:nu
 
 **`PERF-MARGINAL` and `PERF-UNMEASURED` are NOT failures and must not be emitted as one.** A marginal REQ that otherwise passed emits an ordinary pass (`gate:null`) with `perf` present in `gates_run` — the warning lives in the checklist Remark, where a human reads it, and not in a stream whose whole purpose is counting what each gate caught. `PERF-UNMEASURED` emits a pass with `perf` **absent** from `gates_run`. Inventing a failure record for a warning would corrupt the one number this gate exists to produce.
 
+**Then, for every REQ that did NOT pass, also emit a `misses.jsonl` record** (SCHEMA.md §5.5). The gate record says *that* it failed; the miss record says *what* was missed and *which phase let it through* — which is the only way a build-phase mistake ever becomes visible as a build-phase mistake instead of a verify statistic.
+
+**Collapse first — a REQ that fails three passes is ONE miss, not three:**
+
+```bash
+OPEN=$(bash .tfcore/utils/tf-emit.sh --open-miss REQ-UI-009)   # "<miss_id> <miss_class>", or empty
+```
+
+- Output is empty → emit a new `miss`.
+- Output's `miss_class` **equals** the one you would record → **emit nothing.** Same defect, still open.
+- Output's `miss_class` **differs** → emit a new `miss`. The REQ is failing for a different reason now, and that is new information.
+
+```bash
+MID=$(bash .tfcore/utils/tf-emit.sh --next-miss-id)
+cat <<JSON | bash .tfcore/utils/tf-emit.sh misses
+{"kind":"miss","miss_id":"$MID","req_id":"REQ-UI-009","req_class":"UI",
+ "miss_class":"partial-implementation","artifact":"src","severity":"major",
+ "why_missed":"insufficient-verify-method",
+ "origin_phase":"build-phase","origin_agent":"trblazeui",
+ "origin_run_id":"<started of the build-phase run that last touched this REQ>",
+ "found_by":"gate","found_phase":"verify-phase","found_gate":"visual",
+ "found_run_id":"<this run's start>","failure_class":"overlap"}
+JSON
+```
+
+- **`origin_run_id`** — find it by reading `docs/metrics/runs.jsonl` for the most recent non-backfilled `build-phase` (or `fix-issues`) record whose `reqs_touched` contains this REQ, and pass its `started`. If there is no such record, pass nothing: `tf-emit.sh` will mark the record `origin_confidence:"inferred"` and force the model to `null`, which is the honest outcome. **Never type a model name** — the emitter looks it up (constraint 10).
+- **`miss_class`** — from the closed enum. `partial-implementation` when the REQ was built but an acceptance bullet is unmet · `missed-requirement` when nothing was built at all · `regression` when `prior_verdict` was `Verified` · `wrong-behaviour` when it works but not as specified · `standards-violation` for a `standards` gate failure · `unspecified-gap` when the REQ's own acceptance never covered the behaviour that broke (that is a *spec* miss surfacing late, and recording it as a build miss blames the wrong phase).
+- **`why_missed`** (optional, SCHEMA §5.5.6) — which *practice* let it through. From a verify run the honest answers are usually `insufficient-verify-method` (the acceptance existed and the gate that ran could not catch this class of defect) or `missing-checklist-item` (nothing covered the behaviour at all). Use `code-audit-limitation` where the head was `⚠ STATIC-ONLY`. **Omit it rather than guess** — `null` means "not assessed" and is honest.
+- **`found_gate`** = the same first-failing gate you put in the `gates` record. **`severity`** is owner-visible impact — `blocker` / `major` / `minor` — never an estimate of effort.
+- **A `Blocked`-by-library verdict is still a miss**, with `artifact:"src"` and `miss_class:"other"` only if nothing better fits; the library gap itself is logged where it always was, in the per-library feedback file.
+- **NOT-OBSERVABLE emits nothing here either** — no gate ran, so nothing was missed that this run can attest to.
+
 Then emit ONE `runs.jsonl` record for the verify pass itself:
 
 ```bash
@@ -367,7 +399,7 @@ cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
 JSON
 ```
 
-**Hard rules for this step.** Telemetry has **no veto** — if an emit fails, the verify run still succeeded; do not retry, do not diagnose, do not mention it, and never let it change a verdict. Do not touch `docs/.last-verify.json`. Do not write metrics into the checklist or PROJECT-STATUS. Never emit `"backfilled":true` — only the owner-run `tf-metrics.sh` writes those.
+**Hard rules for this step.** Telemetry has **no veto** — if an emit fails, the verify run still succeeded; do not retry, do not diagnose, do not mention it, and never let it change a verdict. Do not touch `docs/.last-verify.json`. Do not write metrics into the checklist or PROJECT-STATUS. Never emit `"backfilled":true` — only the owner-run `tf-metrics.sh` writes those. **Never write `origin_model`, `origin_harness`, `origin_confidence`, or any token/cost field on a miss** — the emitter resolves them from the run you name, and a value you supply is overwritten or discarded.
 
 ### 6b. Refresh the DevGuide render-status (close the loop)
 

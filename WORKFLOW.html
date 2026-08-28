@@ -137,7 +137,7 @@
     <li><a href="#quickref">Command reference</a></li>
     <li><a href="#faq">FAQ &amp; gotchas</a></li>
     <li><a href="#platforms">Running on macOS / Windows / Linux</a></li>
-    <li><a href="#telemetry">Development telemetry</a></li>
+    <li><a href="#telemetry">Development telemetry</a> &middot; <a href="#misses">misses &amp; rework cost</a> &middot; <a href="#telemetry-gotchas">gotchas</a></li>
     <li><a href="#model-routing">Model routing (per-phase tiers)</a></li>
     <li><a href="#team-edition">Team edition — the AI-First Playbook</a></li>
   </ol>
@@ -1342,6 +1342,7 @@ bash .tfcore/utils/tf-goal.sh --resume /path/to/App      # after a reboot</code>
   <tr><td>Recover broken session</td><td>Rebuild PROJECT-STATUS from ground truth after an interrupted phase.</td><td><pre><code>/TechieFlow:agents:flow-master *refresh-status {AppName}</code></pre></td><td><pre><code>/flow-master *refresh-status {AppName}</code></pre></td></tr>
   <tr><td>MAUI build + test</td><td>Build and test the MAUI project through the Windows bridge or natively on macOS.</td><td><pre><code>winrun "dotnet build &amp;&amp; dotnet test"</code></pre></td><td><pre><code>winrun "dotnet build &amp;&amp; dotnet test"</code></pre></td></tr>
   <tr><td>Resume project</td><td>Check the working tree and perform a fresh build before continuing.</td><td><pre><code>git status &amp;&amp; dotnet build</code></pre></td><td><pre><code>git status &amp;&amp; dotnet build</code></pre></td></tr>
+  <tr><td>Log a miss (<a href="#misses">§17</a>)</td><td>Record one missed requirement as telemetry + a checklist line. No boot, no repro, no code.</td><td><pre><code>/TechieFlow:agents:flow-master *log-miss {AppName} "{what was missed}"</code></pre></td><td><pre><code>/flow-master *log-miss {AppName} "{what was missed}"</code></pre></td></tr>
   <tr><td>Development telemetry report</td><td>Generate the aggregated development metrics report.</td><td><pre><code>/TechieFlow:agents:flow-master *metrics {AppName}</code></pre></td><td><pre><code>/flow-master *metrics {AppName}</code></pre></td></tr>
   <tr><td>Telemetry quick look</td><td>Print the read-only telemetry report directly in the terminal.</td><td><pre><code>.tfcore/telemetry/tf-metrics.sh --report .</code></pre></td><td><pre><code>.tfcore/telemetry/tf-metrics.sh --report .</code></pre></td></tr>
 </table>
@@ -1370,6 +1371,7 @@ bash .tfcore/utils/tf-goal.sh --resume /path/to/App      # after a reboot</code>
   <tr><td><strong>Recover broken session</strong> (status stale/wrong)</td><td><code>/TechieFlow:agents:flow-master *refresh-status {AppName}</code> — rebuilds PROJECT-STATUS from ground truth (checklist tables + working-tree files &amp; mtimes + fresh build; no git — git is manual) when a phase died before its status gate ran. Add <code>verify</code> to re-verify ambiguous REQs. Never edits source. See §8a.</td></tr>
   <tr><td>MAUI build+test</td><td>WSL: <code>winrun "dotnet build &amp;&amp; dotnet test"</code> · macOS: <code>dotnet build &amp;&amp; dotnet test</code> (native, no bridge — <a href="#wsl-runtime">§11</a>)</td></tr>
   <tr><td>Resume cold project (status trustworthy)</td><td>Open <code>PROJECT-STATUS.html</code> + <code>&lt;APP&gt;-BRD.html</code> + <code>&lt;APP&gt;-Architecture.html</code> → <code>git status &amp;&amp; dotnet build</code> → <code>/TechieFlow:agents:verifier</code> re-verify → execute "Next command". If the last session was cut off mid-phase, run <code>*refresh-status</code> first (row above).</td></tr>
+  <tr><td>An agent missed something (<a href="#misses">§17</a>)</td><td><code>/TechieFlow:agents:flow-master *log-miss {AppName} "{what was missed}"</code> &mdash; a record + the checklist line, in seconds</td></tr>
   <tr><td>Development telemetry report (<a href="#telemetry">§17</a>)</td><td><code>/TechieFlow:agents:flow-master *metrics {AppName}</code> &mdash; writes <code>docs/metrics/METRICS.md</code> + <code>.html</code></td></tr>
   <tr><td>Telemetry, quick look in the terminal (<a href="#telemetry">§17</a>)</td><td><code>cd /path/to/app &amp;&amp; .tfcore/telemetry/tf-metrics.sh --report .</code> &mdash; read-only, no agent</td></tr>
 </table>
@@ -1438,7 +1440,7 @@ bash .tfcore/utils/tf-goal.sh --resume /path/to/App      # after a reboot</code>
 
 <details>
   <summary><code>docs/metrics/commits.jsonl</code> appeared in every repo and it's empty. Bug?</summary>
-  <p>By design. <code>install-metrics.sh</code> seeds all four streams so every repo has the same shape and no writer has to check whether its file exists. Each then fills only when its event happens: <code>gates.jsonl</code> on the first <code>*verify</code>, <code>runs.jsonl</code> on the first framework command, <code>sessions.jsonl</code> when a session ends, and <code>commits.jsonl</code> on <strong>your first commit after telemetry was installed</strong>. Commit the empty files with everything else: a tracked empty stream makes the first record a one-line diff instead of a file appearing from nowhere. See <a href="#telemetry">§17</a>.</p>
+  <p>By design. <code>install-metrics.sh</code> seeds all five streams so every repo has the same shape and no writer has to check whether its file exists. Each then fills only when its event happens: <code>gates.jsonl</code> on the first <code>*verify</code>, <code>runs.jsonl</code> on the first framework command, <code>sessions.jsonl</code> when a session ends, and <code>commits.jsonl</code> on <strong>your first commit after telemetry was installed</strong>. Commit the empty files with everything else: a tracked empty stream makes the first record a one-line diff instead of a file appearing from nowhere. See <a href="#telemetry">§17</a>.</p>
 </details>
 
 <details>
@@ -1643,18 +1645,19 @@ The <code>winrun</code> bridge and <code>cmd.exe</code> rungs simply don't apply
 
 <p>TechieFlow already produced this evidence and used to throw it away. Every <code>*verify</code> run applies four separately-named gates to individually-identified requirements and writes verdicts into the Requirements Status table; <code>docs/.last-verify.json</code> recorded the run. Then the next run overwrote it, the table was mutated in place, and the history was gone. Telemetry keeps it.</p>
 
-<p><strong>Three questions, and nothing else:</strong></p>
+<p><strong>Four questions, and nothing else:</strong></p>
 <ol>
   <li><strong>First-pass rate</strong> — what fraction of REQs reach <code>Verified</code> on attempt 1?</li>
   <li><strong>Gate catch distribution</strong> — of all failures, which gate caught them?</li>
   <li><strong>Escape rate</strong> — what fraction of defects reached UAT/production (logged by <code>*triage-issues</code>) instead of being caught by a gate?</li>
+  <li><strong>Miss attribution and rework cost</strong> (added 2026-08-28) — <em>what</em> was missed, <em>which phase / agent / model</em> let it through, and <em>what did fixing it cost</em>?</li>
 </ol>
 
 <p>There is deliberately <strong>no cycle-time-per-feature</strong>. The unit of work here is <em>the run</em>, not the ticket.</p>
 
 <h3>Where it lands</h3>
 
-<p>Four append-only JSONL streams in <code>docs/metrics/</code>, <strong>tracked by version control on purpose</strong> — this is the project's own development history, and the one thing the framework cannot reconstruct afterwards.</p>
+<p>Five append-only JSONL streams in <code>docs/metrics/</code>, <strong>tracked by version control on purpose</strong> — this is the project's own development history, and the one thing the framework cannot reconstruct afterwards.</p>
 
 <table>
 <thead><tr><th>File</th><th>One record per</th><th>Written by</th></tr></thead>
@@ -1663,6 +1666,7 @@ The <code>winrun</code> bridge and <code>cmd.exe</code> rungs simply don't apply
 <tr><td><code>gates.jsonl</code></td><td>REQ verdict per verify run — <strong>the primary stream</strong></td><td><code>verify-phase</code> §6a, and <code>triage-issues</code> for escapes</td></tr>
 <tr><td><code>sessions.jsonl</code></td><td>agent session</td><td>the <code>SessionEnd</code> hook (<code>.tfcore/hooks/metrics-session.sh</code>)</td></tr>
 <tr><td><code>commits.jsonl</code></td><td>commit</td><td>your own <code>pre-commit</code> hook — never an agent</td></tr>
+<tr><td><code>misses.jsonl</code></td><td>a requirement or behaviour an agent <strong>missed</strong> (<code>miss</code>), and what repairing it cost (<code>miss-fix</code>)</td><td><code>verify-phase</code>, <code>build-phase</code>, <code>triage-issues</code>, <code>fix-issues</code>, <code>amend-docs</code>, <code>*log-miss</code></td></tr>
 </tbody>
 </table>
 
@@ -1680,7 +1684,7 @@ The <code>winrun</code> bridge and <code>cmd.exe</code> rungs simply don't apply
 <pre><code>/Volumes/MacD/MyCode/TechieFlow/update-framework.sh /path/to/YourApp
 </code></pre>
 
-<p>That one command creates <code>docs/metrics/</code>, seeds the four streams, installs the <code>pre-commit</code> hook, and warns if an ignore rule would swallow the data. The scaffolds do the same on a fresh project. It is idempotent, so every later refresh keeps it current.</p>
+<p>That one command creates <code>docs/metrics/</code>, seeds the five streams, installs the <code>pre-commit</code> hook, and warns if an ignore rule would swallow the data. The scaffolds do the same on a fresh project. It is idempotent, so every later refresh keeps it current.</p>
 
 <p><strong>project_type is auto-detected once</strong> (a packable <code>.csproj</code> → <code>library</code>; <code>.razor</code>/<code>.xaml</code> present → <code>app</code>; no source → <code>docs</code>; this repo → <code>framework</code>), printed loudly, written to <code>core-config.yaml</code>, and then never guessed again — <code>core-config.yaml</code> is a preserved file, so your classification survives every refresh. Correct a wrong guess with:</p>
 
@@ -1706,7 +1710,7 @@ The <code>winrun</code> bridge and <code>cmd.exe</code> rungs simply don't apply
 .tfcore/telemetry/tf-metrics.sh --report .
 </code></pre>
 
-<p>Prints first-pass rate, gate catch distribution, escape rate, rework ratio, batch size, throughput and commit cadence — already segmented, with <code>insufficient data</code> wherever there are fewer than three supporting records.</p>
+<p>Prints first-pass rate, gate catch distribution, escape rate, rework ratio, batch size, throughput, commit cadence and the miss report — already segmented, with <code>insufficient data</code> wherever there are fewer than three supporting records.</p>
 
 <p><strong>2. The full report, as a document.</strong> Ask flow-master; it writes <code>docs/metrics/METRICS.md</code> and renders <code>docs/metrics/METRICS.html</code> (open that in a browser — it uses the same themed shell as your other docs):</p>
 
@@ -1764,6 +1768,70 @@ The <code>winrun</code> bridge and <code>cmd.exe</code> rungs simply don't apply
 <tr><td>Fix a wrong classification</td><td><code>install-metrics.sh . --type library</code></td></tr>
 </tbody>
 </table>
+
+<h3 id="misses">Misses — the fourth question</h3>
+
+<p>A <code>gates.jsonl</code> record says a REQ <em>failed</em>. A <strong>miss</strong> record says <em>what was missed</em>, <em>which phase let it through</em>, and — through its <code>miss-fix</code> sibling — <em>what the repair cost</em>. It is the only stream that can hold a <strong>design-phase miss</strong> (&ldquo;the BRD never specified the export screen&rdquo;), because it is the only one not written by the verifier: by the time verification runs, a specification gap has either been papered over or built wrongly.</p>
+
+<div class="panel ok"><strong>The 20-second front door.</strong><br>
+<pre><code>/TechieFlow:agents:flow-master *log-miss {AppName} "the export button ignores the active date filter"
+/flow-master *log-miss {AppName} "..."          (OpenCode)          # add --fixed if it is already repaired</code></pre>
+It classifies what you said, attributes it, writes the <code>misses.jsonl</code> record <em>and</em> the checklist line (a demotion with a dated <code>⚠ miss</code> remark, or a new <code>Planned</code> row with acceptance when nothing owns it). <strong>It never boots the app, never reproduces, never edits code</strong> — <code>*triage-issues</code> does all three, which is right for UAT triage and far too heavy for one sentence. That friction is exactly why these misses used to be recorded nowhere at all.</div>
+
+<p>Everything else emits automatically: <code>verify-phase</code> on every failing gate, <code>build-phase</code> when a REQ turns out to be unbuildable as written, <code>triage-issues</code> on a UAT or production bug, <code>fix-issues</code> when it closes one.</p>
+
+<p><strong>One defect is one miss.</strong> A REQ that fails three verify passes collapses onto the record already open for it, so the miss count measures quality rather than retry patience. A new record is written only when the <em>kind</em> of failure changes — which is genuinely new information.</p>
+
+<p><strong>&ldquo;Open&rdquo; and &ldquo;live&rdquo; are deliberately different.</strong> A miss closed as <code>wont-fix</code> is a <em>decision</em>, not a backlog item, so the report does not count it as open — but the collapse check still treats it as a live defect, so a repeat failure on that REQ will not open a duplicate. Two questions, two predicates; making them agree would break one of them. <code>deferred</code> stays open, because postponed work is still work.</p>
+
+<h3>Which <em>practice</em> failed — <code>why_missed</code></h3>
+
+<p><code>miss_class</code> names the defect. <strong><code>why_missed</code> names the practice that let it through</strong>, and it is the more decision-changing of the two: it says whether your <em>specification</em> or your <em>verification</em> is the weak one. Ported from the AI-First-Playbook on 2026-08-28, whose <code>/analyze-fix</code> phase has always produced exactly this judgement in prose and then thrown it away.</p>
+
+<table>
+<thead><tr><th>Value</th><th>The practice that failed</th></tr></thead>
+<tbody>
+<tr><td><code>missing-checklist-item</code></td><td>No REQ or acceptance bullet covered the behaviour. The spec had a hole.</td></tr>
+<tr><td><code>insufficient-verify-method</code></td><td>Acceptance existed; the gate that ran could not catch this class of defect. The spec was fine, the test was too weak.</td></tr>
+<tr><td><code>code-audit-limitation</code></td><td><code>⚠ STATIC-ONLY</code> — no runtime bridge, so it was never observable.</td></tr>
+<tr><td><code>ambiguous-acceptance</code></td><td>Two honest readings; build and verifier took different ones.</td></tr>
+<tr><td><code>dependency-not-declared</code></td><td>The REQ depended on something no document stated.</td></tr>
+<tr><td><code>instruction-ignored</code></td><td><strong>A written framework rule existed and was not followed.</strong> TechieFlow's own addition — not a spec gap, not a weak gate, and no gate change fixes it.</td></tr>
+<tr><td><code>other</code></td><td>Nothing above fits. Do not stretch a label to avoid this.</td></tr>
+</tbody>
+</table>
+
+<div class="panel"><strong>Optional, and <code>null</code> is honest</strong> — many misses have no clear answer and a forced one is noise. <strong>But an escape without one wastes the most valuable record in the stream:</strong> something got past every gate, and <em>why nothing caught it</em> is the entire question. <code>--report</code> warns when an <code>owner</code> or <code>production</code> miss arrives with the field empty, and reports the distribution against <em>records that carry it</em>, never against all misses.</div>
+
+<h3>What a miss costs — the honest version</h3>
+
+<table>
+<thead><tr><th>Harness</th><th>Tokens</th><th>Dollars</th></tr></thead>
+<tbody>
+<tr><td>OpenCode</td><td>yes</td><td><strong>real, measured</strong> — the provider's own per-message cost</td></tr>
+<tr><td>Claude Code</td><td>yes</td><td><strong>none — <code>cost_usd</code> is <code>null</code>, permanently</strong>: transcripts carry no cost</td></tr>
+<tr><td>Codex</td><td>yes</td><td>none — ChatGPT credits are never fabricated as <code>cost_usd</code></td></tr>
+</tbody>
+</table>
+
+<p>So &ldquo;how much money did that miss cost&rdquo; has a real answer only on OpenCode; elsewhere the answer is a token count. <strong>No rate card is ever applied to make a dollar figure appear.</strong> An estimate presented as a measurement poisons every comparison built on it.</p>
+
+<div class="panel warn"><strong>Two exclusions, both applied AND displayed.</strong><br>
+<strong>(1) Attribution.</strong> A miss's <code>origin_model</code> is <em>looked up</em> from <code>runs.jsonl</code>, never typed by an agent — and when the lookup fails, the model is forced to <code>null</code> and the record marked <code>inferred</code>. Only <code>linked</code> records feed a per-phase / per-agent / per-model figure. A per-model miss rate computed partly from guesses is a routing decision made on invented evidence, and nothing in the output would reveal it.<br><br>
+<strong>(2) Cost.</strong> A fix run that repaired three misses has <em>one</em> token window; dividing it three ways is arithmetic, not measurement. <code>cost_attribution</code> marks each record <code>sole</code>, <code>shared:n</code> or <code>none</code>, and the report shows measured and apportioned as separate columns — never one blended number. A miss fixed inline with no distinct run cannot be costed at all, and is printed as such rather than dropped.<br><br>
+Both exclusions are reported <em>with</em> the figures they bound: an exclusion you cannot see is indistinguishable from a bug.</div>
+
+<p>Escape rate keeps its existing definition and its existing source (<code>gates.jsonl</code> <code>gate:"escaped"</code>). The miss stream's own &ldquo;found by a human&rdquo; share sits <em>beside</em> it, never merged into it — one word cannot mean two things on one page.</p>
+
+<h3 id="telemetry-gotchas">Two things that trip people up</h3>
+
+<div class="panel ok"><strong>You do not need the commit hook to get metrics.</strong> Four of the five streams need <em>no</em> version-control hook at all: <code>runs</code>, <code>gates</code> and <code>misses</code> come from <code>tf-emit.sh</code> inside the phase tasks, and <code>sessions</code> from the Claude Code <code>SessionEnd</code> hook (or the OpenCode plugin) — neither of which is a version-control hook. Only <code>commits.jsonl</code> uses <code>.git/hooks/pre-commit</code>, and only for commit volume and cadence: nothing about <em>what was missed, who missed it, or what the fix cost</em> depends on it.<br><br>
+And even that hook is optional. <code>.tfcore/telemetry/tf-metrics.sh --backfill-commits .</code> reconstructs the identical records <em>perfectly</em> from the commit log at any time — that log is itself append-only, which is why commit records are the one backfill exempt from the live-vs-backfilled separation. The hook only makes it automatic.</div>
+
+<div class="panel warn"><strong>A greenfield project is born labelled <code>docs</code>, and that used to stick.</strong> The greenfield scaffold classifies the repo at scaffold time, when it genuinely <em>is</em> docs-only — the day-1 documents exist and <code>src/</code> does not — and the old &ldquo;auto-detected once, then never re-guessed&rdquo; rule froze it there. TfLens accumulated <strong>225 gate records, visual gates included, under a <code>project_type</code> whose own definition says gates cannot fire</strong>, and whose figures never pool with the apps it belongs beside.<br><br>
+Since <strong>2026-08-28</strong> a later <code>update-framework.sh</code> re-examines <code>docs</code> <em>alone</em> and <strong>only upgrades</strong>: once real heads or a published package appear, the tree has answered a question that was unanswerable at scaffold time. <code>app</code> / <code>library</code> / <code>framework</code> are never re-guessed, an owner's <code>--type</code> always wins, and a genuine docs repo never grows a head so it is never touched. Correct one by hand at any time:
+<pre><code>.tfcore/telemetry/install-metrics.sh . --type app</code></pre>
+<strong>Records written before a correction keep the old value.</strong> The streams are append-only and corrections happen at <em>read</em> time, never by rewriting history — so a reclassified project appears under <strong>both</strong> segments, which the provenance rule forbids pooling. <code>--report</code> states the split explicitly rather than letting one project look like two; read each segment as a <em>period</em> of the project, not the whole of it.</div>
 
 <div class="panel"><strong>Why some figures are never combined.</strong> The report will not print a single first-pass rate, gate catch distribution, or escape rate that pools <em>live</em> with <em>backfilled</em> records, or pools <code>app</code> with <code>library</code>/<code>docs</code> — not as a total row, not as an "overall" line. A backfilled attempt count is inferred from a status table that never recorded attempts, so a merged first-pass rate cannot be defended when someone asks how attempts were counted. A pooled gate distribution understates the visual gate, because library and docs projects never had screens to fail on. One indefensible figure contaminates every other number on the page. Commit-derived metrics are exempt — the commit log is a real append-only log, and commit volume is comparable across project types.</div>
 
@@ -1861,7 +1929,7 @@ single-source-of-truth checklists, and <strong>"verify by executing, not by read
 <div class="panel"><strong>Which one do you want?</strong> If you are one person driving agents across several apps, stay here. If you are rolling a process out to a team — where the hard parts are onboarding, review gates and shared standards rather than raw throughput — start with the Playbook; it ships enablement and onboarding material this framework deliberately does not carry. The two are independent repos: nothing here depends on the Playbook, and nothing there depends on this.</div>
 
 <hr>
-<p class="small">Last revised 2026-08-27 (rev 2). Edit freely. When the workflow changes, update <code>README.md</code> and <code>WorkFlow-Context.md</code> (the durable cross-harness context document) too.</p>
+<p class="small">Last revised 2026-08-28 (rev 1). Edit freely. When the workflow changes, update <code>README.md</code> and <code>WorkFlow-Context.md</code> (the durable cross-harness context document) too.</p>
 
 </main>
 </div>

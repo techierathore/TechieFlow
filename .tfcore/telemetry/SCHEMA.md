@@ -7,17 +7,21 @@
 
 **Schema version:** `v = 1`
 **Location:** `docs/metrics/` inside each app repo — **tracked by git, never gitignored.**
+**Streams:** `runs` · `gates` · `sessions` · `commits` · `misses` (§5.5, added 2026-08-28)
 **Format:** JSONL — one JSON object per line, append-only. Never rewritten, never compacted, never sorted in place.
 
 ---
 
-## 0. The three questions this exists to answer
+## 0. The questions this exists to answer
 
 1. **First-pass rate** — what fraction of REQs reach `Verified` on attempt 1?
 2. **Gate catch distribution** — of all failures, which gate caught them?
 3. **Escape rate** — what fraction of defects reached UAT/production (`*triage-issues`) instead of being caught by a gate?
+4. **Miss attribution and rework cost** (added 2026-08-28, §5.5) — *what* was missed, *which phase / agent / model* let it through, and *what did fixing it cost*?
 
-Everything on this page is in service of those three. `gates.jsonl` is the primary stream; the rest is context.
+Questions 1–3 are answered by `gates.jsonl`, which remains **the primary stream**; the rest is context. Question 4 is answered by `misses.jsonl` and is deliberately a *separate* stream on a *separate* unit: a gate record is a verdict at an instant, a miss is an object with a lifecycle that can span several runs — and can exist with no verify run at all, which is how design-phase misses become visible for the first time.
+
+**Question 4 never redefines questions 1–3.** Escape rate keeps its existing definition and its existing source (`gates.jsonl` `gate:"escaped"`). The miss stream's own escape share is reported *beside* it, never merged into it. Two definitions of one word in one report is how a report loses its reader.
 
 **Non-goal:** cycle-time-per-feature. The unit of work in this framework is **the run**, not the ticket. There is no per-feature timing field and there will not be one.
 
@@ -29,9 +33,9 @@ Everything on this page is in service of those three. `gates.jsonl` is the prima
 |---|---|---|
 | `v` | int | Schema version. Always `1` today. Injected by `tf-emit.sh` if absent. |
 | `ts` | string | ISO-8601 UTC, second precision, `Z` suffix — e.g. `2026-08-08T04:12:33Z`. Injected by `tf-emit.sh` if absent. |
-| `kind` | string | `run` \| `gate` \| `session` \| `commit`. Must match the stream file. |
+| `kind` | string | `run` \| `gate` \| `session` \| `commit` \| `miss` \| `miss-fix`. Must be one of the kinds the stream file declares. Every stream but `misses.jsonl` declares exactly one, so for those "matches the file" and "is declared by the file" are the same rule; `misses.jsonl` declares two (§5.5). |
 | `app` | string | The `{AppName}` the record belongs to. Injected by `tf-emit.sh` if absent — inferred from the one `docs/<App>-Checklist.md`, falling back to the repo directory name. Emitters should still pass it explicitly. |
-| `project_type` | string | `app` \| `library` \| `docs` \| `framework`. Injected by `tf-emit.sh` from `core-config.yaml`. |
+| `project_type` | string | `app` \| `library` \| `docs` \| `framework`. Injected by `tf-emit.sh` — from the tree shape for `framework`, otherwise from `core-config.yaml`. |
 | `project_type_inferred` | bool | Present **only when `true`** — `metrics.project_type` was absent from `core-config.yaml` and `app` was assumed. Reports must label these records **unclassified**, never silently pool them. |
 | `backfilled` | bool | Present **only when `true`** — the record was reconstructed after the fact, not written at the moment of the event. Written exclusively by `tf-metrics.sh --backfill-*`. |
 | `inferred` | string[] | Present only on backfilled records. Names the fields that were **guessed rather than read**. |
@@ -40,6 +44,10 @@ Everything on this page is in service of those three. `gates.jsonl` is the prima
 ### `project_type` — what it is and why it exists
 
 Read from `core-config.yaml → metrics.project_type` (a **preserved** per-project file, so the classification survives every `update-framework.sh`). It is auto-detected once by the framework scripts and then never re-guessed; correct a wrong guess with `.tfcore/telemetry/install-metrics.sh . --type <type>`.
+
+**One exception, and it is structural rather than configured (added 2026-08-28).** A repo containing `scaffold-brownfield.sh` beside `.tfcore/tasks/` **is** the TechieFlow template — nothing else can be, and a scaffolded app never has those at its root. `tf-emit.sh` and `tf-metrics.sh` therefore check that shape **first and authoritatively**, ahead of `core-config.yaml`, and `install-metrics.sh` writes nothing in that case.
+
+The reason is worth recording, because the obvious implementation is a live defect: the scaffolds copy `.tfcore/` with `rsync -a --ignore-existing`, so the framework's own `core-config.yaml` lands verbatim in every new app — and an existing classification always beats the heuristic. Writing `project_type: framework` into that file would silently stamp `framework` on **every app scaffolded afterwards**, pooling them wrongly in every segmented figure with nothing in the output to reveal it. Detecting the framework from its tree shape means it can classify itself with nothing to leak.
 
 | Value | Meaning | Gate availability |
 |---|---|---|
@@ -51,6 +59,14 @@ Read from `core-config.yaml → metrics.project_type` (a **preserved** per-proje
 Gate-catch distribution is only meaningful across projects where the same gates *could* fire. A `library` run cannot fail the visual gate, so pooling it understates that gate's catch rate. See §5.
 
 If `metrics.project_type` is absent: default to `app` **and** set `project_type_inferred: true`. Flag it in the report as unclassified. Never silently assume.
+
+#### `docs` at scaffold time is not a classification — it is the absence of one (fixed 2026-08-28)
+
+`scaffold-greenfield.sh` runs `install-metrics.sh` **at scaffold time**, when a greenfield repo is by definition docs-only: the day-1 documents exist and `src/` does not. `detect_type()` correctly answers `docs`, writes it, and "auto-detected once, then never re-guessed" freezes it there. **Every greenfield project was therefore born labelled `docs`** and stayed that way until somebody noticed. TfLens accumulated **225 gate records, visual gates included, under a `project_type` whose own definition says gates cannot fire** — and whose figures, per §6, never pool with the apps it belongs beside.
+
+So `install-metrics.sh` now re-examines **`docs` alone**, on a later refresh, and **only upgrades**: once real heads or a published package appear, the tree has answered a question that was unanswerable at scaffold time. `app` / `library` / `framework` are never re-guessed, an owner's `--type` always wins, and a genuine docs repo never grows a head so it is never touched.
+
+**Records already written keep the old value.** The streams are append-only; a correction is applied at **read time**, never by rewriting history (§6). A reclassified project therefore appears under **both** segments, which §6 forbids pooling — so `tf-metrics.sh --report` states the split explicitly rather than letting one project look like two. Read each segment as a period of the project, not as the whole of it.
 
 ### `harness` — detected, never declared
 
@@ -77,7 +93,7 @@ So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit 
 
 | Field | Type | Values / notes |
 |---|---|---|
-| `cmd` | string | `day1-brownfield` \| `day1-greenfield` \| `split-brd` \| `mockups` \| `build-phase` \| `verify-phase` \| `fix-issues` \| `triage-issues` \| `devguide` \| `productguide` \| `handoff-phase` \| `refresh-status` \| `amend-docs` |
+| `cmd` | string | `day1-brownfield` \| `day1-greenfield` \| `split-brd` \| `mockups` \| `build-phase` \| `verify-phase` \| `fix-issues` \| `triage-issues` \| `log-miss` \| `devguide` \| `productguide` \| `handoff-phase` \| `refresh-status` \| `amend-docs` |
 | `mode` | string \| null | `build` \| `fix`. `build-phase` already distinguishes these (FIX mode) — capture it; the ratio is the rework metric. `null` for commands with no mode. |
 | `started` | string | ISO-8601 UTC. When the task began — the timestamp you noted at step 0, not "now minus a guess". |
 | `ended` | string | ISO-8601 UTC. Normally equal to `ts`. |
@@ -292,22 +308,149 @@ Only `commits.jsonl` needs this **for the union-merge reason**. `runs`/`gates` r
 
 ---
 
-## 6. Provenance — two separations, one rule applied twice
+## 5.5 `docs/metrics/misses.jsonl` — what was missed, who missed it, what the fix cost
+
+**Added 2026-08-28.** Design record: `docs/Miss-Telemetry-TechieFlow.md` (in the framework repo).
+
+This is the only stream that carries **two record kinds**: `miss` opens, `miss-fix` closes. A miss has a lifecycle across runs, and appending lifecycle state to a verdict stream would mean editing records — which §6 and `_metrics-emit-gate.md` constraint 5 forbid outright. So the lifecycle is expressed as two append-only records linked by `miss_id`, and nothing is ever rewritten.
+
+### 5.5.1 `kind: "miss"`
+
+```json
+{"v":1,"ts":"2026-08-28T11:04:19Z","kind":"miss","app":"AstroLyfe",
+ "project_type":"app","harness":"claude-code",
+ "miss_id":"MISS-AstroLyfe-20260828-03","req_id":"REQ-UI-014","req_class":"UI",
+ "miss_class":"partial-implementation","artifact":"src","severity":"major",
+ "origin_phase":"build-phase","origin_agent":"trblazeui",
+ "origin_run_id":"2026-08-26T09:12:40Z","origin_confidence":"linked",
+ "origin_model":"claude-opus-5","origin_harness":"claude-code",
+ "found_by":"gate","found_phase":"verify-phase","found_gate":"render",
+ "found_run_id":"2026-08-28T10:41:02Z","failure_class":"blank-data"}
+```
+
+| Field | Type | Values / notes |
+|---|---|---|
+| `miss_id` | string | `MISS-<app>-<YYYYMMDD>-<NN>`. **Never invented** — `bash .tfcore/utils/tf-emit.sh --next-miss-id` prints it. The link key for `miss-fix`. |
+| `req_id` | string \| null | The owning REQ. **`null` is meaningful**, not missing data: it means no REQ existed to miss, which is itself the finding. |
+| `req_class` | string \| null | `UI` \| `FN` \| `RAG` \| `NFR` — the prefix segment of `req_id`. |
+| `miss_class` | string | `missed-requirement` (in scope, never built) · `partial-implementation` (built, an acceptance bullet unmet) · `wrong-behaviour` (built, behaves other than specified) · `regression` (was `Verified`, now broken) · `unspecified-gap` (**the spec itself omitted it — the design-phase miss**) · `spec-contradiction` · `scope-creep` (built what nobody asked for) · `hallucinated-api` (used a library member that does not exist) · `standards-violation` · `other` |
+| `artifact` | string | Which artifact was deficient: `brd` · `architecture` · `uidesign` · `checklist` · `devguide` · `src` · `tests` · `config` · `other` |
+| `severity` | string | `blocker` · `major` · `minor` — **owner-visible impact, never an estimate of effort.** |
+| `origin_phase` | string \| null | The `cmd` that should have produced it correctly — same enum as `runs.jsonl` `cmd` (§2). |
+| `origin_agent` | string \| null | `analyst` \| `architect` \| `flow-master` \| `verifier` \| `trblazeui` \| `techierag` \| `tf-builder` \| `tf-test-writer` \| `general-purpose` \| `general` |
+| `origin_run_id` | string \| null | The `started` timestamp of that run, **found in `runs.jsonl`**. Never guessed. |
+| `origin_model` | string \| null | **Injected by `tf-emit.sh`** — looked up from the `runs.jsonl` record whose `started` equals `origin_run_id`. |
+| `origin_harness` | string \| null | Same lookup, same rule. |
+| `origin_confidence` | string | **Derived by `tf-emit.sh`, never written by an agent.** `linked` = `origin_run_id` resolved to a real `runs.jsonl` record · `inferred` = an `origin_phase` was named but no run record backs it · `unknown` = no origin named at all. **A provenance boundary — see §6.** |
+| `why_missed` | string \| null | **Which practice failed** — see §5.5.6. Optional; `null` means "not assessed", never "nothing to say". |
+| `found_by` | string | `gate` · `self-smoke` · `owner` (UAT / manual) · `production` · `agent-review` · `library-feedback` |
+| `found_phase` | string \| null | The `cmd` that was running when it surfaced. |
+| `found_gate` | string \| null | When `found_by == "gate"`, which gate — same vocabulary as §3.2. `null` otherwise. |
+| `found_run_id` | string \| null | `started` of the finding run. |
+| `failure_class` | string \| null | The §3.3 closed vocabulary, reused verbatim. `null` where none applies. |
+
+**`origin_model`, `origin_harness` and `origin_confidence` are never written by an agent** — the same rule as `harness` (§1) and for the same reason: task markdown is shared byte-identically across three harnesses, so a copied literal would stamp the wrong model on every record and quietly corrupt every per-model comparison built on it. `tf-emit.sh` resolves all three from `origin_run_id`, and **forces `origin_model` / `origin_harness` to `null` whenever the lookup fails, overwriting anything the caller supplied.** A guess is worse than a gap here, because nothing downstream can see that it was one.
+
+The agent's job on a `miss` record is therefore small and honest: name what was missed (`miss_class`, `artifact`, `severity`), name the phase it believes is responsible (`origin_phase`, `origin_agent`), and pass the `origin_run_id` if it found one in `runs.jsonl`. The emitter decides what that attribution is worth.
+
+### 5.5.2 `kind: "miss-fix"`
+
+```json
+{"v":1,"ts":"2026-08-28T14:52:07Z","kind":"miss-fix","app":"AstroLyfe",
+ "project_type":"app","harness":"claude-code",
+ "miss_id":"MISS-AstroLyfe-20260828-03","req_id":"REQ-UI-014",
+ "fix_run_id":"2026-08-28T13:58:11Z","fix_cmd":"fix-issues","fix_attempt":1,
+ "verdict_after":"Verified","reopened":false,"cost_attribution":"shared:3",
+ "tokens_in":812,"tokens_out":38104,"tokens_cache_read":286110,
+ "tokens_cache_write":0,"cost_usd":null,"tokens_scope":"tree","model":"claude-opus-5"}
+```
+
+| Field | Type | Values / notes |
+|---|---|---|
+| `miss_id` | string | The link. A `miss-fix` matching no `miss` is reported as an **orphan** and counted, never silently dropped. |
+| `req_id` | string \| null | Copied from the miss, for readability. |
+| `fix_run_id` | string | `started` of the repair run. **This is where the cost comes from.** |
+| `fix_cmd` | string | `fix-issues` \| `build-phase` \| `triage-issues` \| `amend-docs` \| `log-miss` |
+| `fix_attempt` | int | `1 +` the count of prior `miss-fix` records for this `miss_id`. `tf-emit.sh --next-fix-attempt <miss_id>`. |
+| `verdict_after` | string | `Verified` \| `Needs re-verify` \| `FAIL` \| `deferred` \| `wont-fix` |
+| `reopened` | bool | `true` when this miss had already closed `Verified` and a later escape re-opened it. |
+| `cost_attribution` | string | **Derived by `tf-emit.sh`** from the fix run's `reqs_touched`: `sole` \| `shared:<n>` \| `none` — §5.5.3. |
+| `tokens_in`, `tokens_out`, `tokens_cache_read`, `tokens_cache_write`, `cost_usd`, `tokens_scope`, `model` | — | **Injected by `tf-emit.sh`** from the `fix_run_id` window, by exactly the §2.5 mechanism. Never written by an agent. `cost_usd` stays `null` on Claude Code and Codex, per §4. |
+
+### 5.5.3 `cost_attribution` — the field the money number stands on
+
+A fix run that repaired three misses has **one** token window. Dividing it three ways is arithmetic, not measurement, and this field is what keeps the difference visible.
+
+| Value | Derived when |
+|---|---|
+| `sole` | The fix run's `reqs_touched` is exactly `[req_id]`. The whole window is this miss's cost. **This is a measurement.** |
+| `shared:<n>` | The run touched *n > 1* REQs. The window covers all of them and cannot be split by anything the framework can observe. A report divides equally **and says so.** |
+| `none` | The run's `tokens_scope` was `none`, or `fix_run_id` matched no run record at all (the fix happened inline, with no distinct run). **No numbers at all.** |
+
+**Reporting rule, enforced in `tf-metrics.sh` code and not merely stated here:** a headline cost-per-miss figure is computed **only over `cost_attribution:"sole"` records.** Apportioned figures appear in a separate, labelled column and are never summed into the headline.
+
+The limitation is stated rather than hidden: **a miss fixed inline during a long build session, with no distinct fix run, is unattributable.** It gets `none`, counts toward the miss count, and contributes nothing to the money. Missing beats invented.
+
+### 5.5.4 Collapse — one defect is one miss, however many times it fails
+
+A REQ that fails three verify passes must produce **one** miss, not three; otherwise the miss count measures retry patience rather than quality, and every distribution built on it is inflated.
+
+> Before emitting a `miss`, look for an **open** miss on the same `req_id` in the same `app` — one with no `miss-fix` record, or whose latest `miss-fix` carries a `verdict_after` other than `Verified`. If one exists **and** its `miss_class` equals the one you would record, **emit nothing**: it is the same miss, still open. If the `miss_class` differs, emit a new `miss` — the REQ is now failing for a genuinely different reason, and that is new information.
+
+```bash
+bash .tfcore/utils/tf-emit.sh --open-miss REQ-UI-014
+# prints "<miss_id> <miss_class>" if one is open, nothing otherwise
+```
+
+The check belongs to the emitter, never to an agent's judgement.
+
+### 5.5.5 Relationship to `gates.jsonl` — additive, never substitutive
+
+`gates.jsonl` is untouched by this stream: not one field, not one writer, not one definition. In particular `gate:"escaped"` keeps its exact meaning and its exact source in `triage-issues.md`, and **escape rate is still computed from it alone.** The miss stream's `found_by ∈ {owner, production}` share is a second, adjacent figure with its own name. A new stream that silently altered the meaning of an existing headline number would cost more trust than it bought.
+
+### 5.5.6 `why_missed` — which *practice* failed (ported from the Playbook 2026-08-28)
+
+`miss_class` says **what** was missed. `why_missed` says **which practice let it through** — and it is the more decision-changing of the two, because it tells you whether your *specification* or your *verification* is the weak one. That is a question no other field on any stream answers.
+
+Ported from the AI-First-Playbook team edition, whose Phase 9 (`/analyze-fix`) has always produced exactly this judgement in prose — *"why did the Verifier miss it: missing checklist item? insufficient Verify method? code-audit limitation?"* — and thrown it away with the transient issues file.
+
+| Value | The practice that failed |
+|---|---|
+| `missing-checklist-item` | No REQ, or no acceptance bullet, covered the behaviour at all. The spec had a hole. |
+| `insufficient-verify-method` | A REQ and its acceptance existed, and the gate that ran **could not catch this class of defect**. The spec was fine; the test was too weak. |
+| `code-audit-limitation` | The run was `⚠ STATIC-ONLY` — no runtime bridge — so the defect was never observable, whatever the gate said. |
+| `ambiguous-acceptance` | The acceptance was open to more than one honest reading, and the build took a different one from the verifier. |
+| `dependency-not-declared` | The REQ depended on something no document stated, so nobody built or checked it. |
+| `instruction-ignored` | **A written framework rule existed and was not followed.** Not a spec gap and not a weak gate — the instruction was there, in a file the agent had loaded, and it was not honoured. |
+| `other` | None of the above fits. Do not stretch a label to avoid this. |
+
+**`instruction-ignored` is TechieFlow's own addition, not in the Playbook's list**, and it exists because this framework's dominant failure mode is an agent skipping a step in a long markdown task — the thing the whole miss stream was commissioned to measure. Offer it back to the Playbook once it has earned its keep here; do not assume it transfers.
+
+**Optional, and `null` is honest.** Many misses have no clear answer and a forced one is noise. But an **escape** (`found_by` ∈ `owner` / `production`) without a `why_missed` wastes the most valuable record in the stream: something got past every gate, and "why did nothing catch it" is the entire question. Fill it there.
+
+**It never substitutes for `miss_class`.** Different axes — one names the defect, the other names the practice — and per the §11 rule about `gate`/`phase_gate`, axes that answer different questions never share a field.
+
+---
+
+## 6. Provenance — three separations, one rule applied three times
 
 **Data from different provenances never merges.**
 
 1. **Live vs backfilled.** Records not written at the moment of the event carry `backfilled: true` and never pool with live records.
 2. **Across `project_type`.** Records never pool across types where the available gates differ.
+3. **Across attribution confidence and cost attribution** (added 2026-08-28, §5.5). A `miss` whose `origin_confidence` is not `linked` never pools into a per-model, per-agent or per-phase figure. A `miss-fix` whose `cost_attribution` is not `sole` never pools into a headline cost figure.
 
-No report may produce a single **first-pass rate**, **gate catch distribution**, or **escape rate** that crosses either boundary — not as a merged figure, not as a "total" row, not as an "overall" summary line. Backfilled data may appear in an adjacent **labelled column**, never summed with live.
+No report may produce a single **first-pass rate**, **gate catch distribution**, **escape rate**, **per-model / per-agent / per-phase miss rate**, or **cost per miss** that crosses any of these boundaries — not as a merged figure, not as a "total" row, not as an "overall" summary line. Data on the wrong side of a boundary may appear in an adjacent **labelled column**, never summed with the figure it sits beside.
 
 Additionally, per §3.1: **any `req_id` with even one backfilled record is excluded entirely from the live first-pass rate**, because its live `attempt` numbering restarts at 1.
 
-Run counts, commit volume, cadence, and token totals **may** be pooled freely — those are comparable across types and provenances.
+Run counts, commit volume, cadence, token totals, **raw miss counts, and miss-class distribution** may be pooled freely — those are comparable across types and provenances. (A miss counts as a miss whoever missed it; only the *attribution* of that miss is confidence-bounded.)
 
 ### Why (this is not cosmetic)
 
 A merged first-pass rate cannot be defended when someone asks how attempts were counted, because backfilled attempts are inferred from a mutable status table that never recorded them. A pooled gate distribution understates the visual gate, because `library` and `docs` projects never had screens to fail on. One indefensible figure contaminates every other number in the report.
+
+The third separation has the sharpest version of the same problem, because its figures are the ones that change decisions. **A per-model miss rate computed partly from guessed attributions is a routing decision made on invented evidence** — and unlike a merged first-pass rate, nothing about the output reveals that it happened. Same for cost: an equal division across a run that spent 90% of its tokens on one hard REQ and 10% on four easy ones is an *inference*, and inferences do not get to sit in the same column as measurements. Both exclusions must be **applied and displayed** — a report states how many records it excluded and why, because an exclusion the reader cannot see is indistinguishable from a bug.
 
 ---
 
@@ -345,6 +488,17 @@ Treat backfilled gate data as **context and volume**, never as evidence for a pu
 | Cost per verified REQ | Σ tokens ÷ count of `verdict=Verified` transitions (§4: tokens, not dollars) | poolable |
 | Batch size | median `reqs_count` per `build-phase` run | poolable |
 | Commit cadence | commits per active day, from `commits.jsonl` | poolable, exempt |
+| Miss class distribution | count of `miss_class` over `miss` records | live-only, poolable |
+| Design-miss share | `miss_class="unspecified-gap"` ÷ all misses | live-only, poolable |
+| Failed-practice distribution | count of `why_missed` | live-only, poolable — **denominator is records that carry the field, never all misses** (§5.5.6 is optional; a missing value is "not assessed", not a zero) |
+| Miss rate per origin phase | misses grouped by `origin_phase` ÷ `runs` of that `cmd` | live-only, per `project_type`, **`origin_confidence="linked"` only** |
+| Miss rate per origin model | misses grouped by `origin_model` | as above — this is the routing-decision number |
+| Miss rate per origin agent | misses grouped by `origin_agent` | as above |
+| Miss escape share | misses with `found_by ∈ {owner, production}` ÷ all misses | live-only; reported **beside** the `gates.jsonl` escape rate, never merged |
+| Open misses | `miss` with no `miss-fix`, or whose latest `miss-fix.verdict_after ≠ Verified` | poolable |
+| Tokens per miss fixed | Σ `tokens_out` ÷ count over `miss-fix` | **`cost_attribution="sole"` only**; apportioned in a labelled column |
+| Measured cost per miss fixed | Σ `cost_usd` ÷ count | **OpenCode records only** (§4); never pooled across harness |
+| Median time-to-close a miss | `miss-fix.ts − miss.ts` | poolable |
 
 Any metric with **fewer than 3 supporting records** is printed as `insufficient data (n=…)`, never as a number.
 
@@ -376,8 +530,14 @@ Set `TF_METRICS_DEBUG=1` to make `tf-emit.sh` explain a drop on stderr. It still
 
 ## 11. Cross-edition note — the AI-First-Playbook team edition
 
-When the Playbook grows agents, it emits **this same schema** — same four streams, same field names, same `project_type` and `backfilled` discipline. Team-edition records add one field, `actor` (who ran it), which the solo edition has no use for.
+When the Playbook grows agents, it emits **this same schema** — same streams, same field names, same `project_type` and `backfilled` discipline. Team-edition records add one field, `actor` (who ran it), which the solo edition has no use for — and which, per the design record, must stay **aggregate-only**: a per-person miss count is a performance metric, and a performance metric stops people logging misses at all.
 
-**`gate` must not be reused across editions without disambiguation.** TechieFlow's `gate` names an *assertion* that failed (`build` / `acceptance` / `render` / `visual` / `standards`). The Playbook's four gates are *process* gates (plan review, verify, gap report, post-verification bugs). Different axes; they must not share a field name. **`gate` is reserved for assertions; `phase_gate` is reserved for the process gate.**
+**`gate` must not be reused across editions without disambiguation.** TechieFlow's `gate` names an *assertion* that failed (`build` / `acceptance` / `render` / `visual` / `standards`). The Playbook's four gates are *process* gates (plan review, verify, gap report, post-verification bugs). Different axes; they must not share a field name. **`gate` is reserved for assertions; `phase_gate` is reserved for the process gate.** The same rule governs the miss stream: TechieFlow writes `found_gate`, the Playbook writes `found_phase_gate`.
+
+**Miss records differ across editions by design** (`docs/Miss-Telemetry-AI-First-Playbook.md` §7). The Playbook keys on `item_id` rather than `req_id`, writes to `verification/telemetry/misses.ndjson` rather than `docs/metrics/misses.jsonl`, carries real dollars everywhere (it is OpenCode-only), and adds `actor` — which is **aggregate-only and must never be reported per person**. It also carries one field this schema does not yet have:
+
+> **`why_missed`** — **ported into this schema on 2026-08-28; see §5.5.6.** It says *which practice failed*, where `miss_class` says *what was missed*. The port is **not verbatim**: TechieFlow adds **`instruction-ignored`** — a written framework rule existed and was not followed — because an agent skipping a step in a long markdown task is this framework's dominant failure mode, and the Playbook's list has no slot for it. **Offer that value back to the Playbook once it has earned its keep here**; do not assume it transfers. The other six values are identical in both editions, so the field remains comparable across them.
+
+Shared and non-negotiable in both editions: append-only · closed vocabularies, never free text · numbers never self-reported · attribution looked up or `null` · apportioned cost never blended with measured cost · telemetry never blocks a run.
 
 Verdict vocabulary mapping is recorded in `DECISIONS.md` §Playbook.

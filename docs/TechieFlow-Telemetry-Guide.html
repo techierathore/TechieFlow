@@ -3,8 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TechieFlow Development Telemetry Guide — TechieFlow</title>
+<title>TechieFlow Development Telemetry Guide</title>
 <script>
+/* Resolve the theme BEFORE first paint (no flash). Saved choice wins; otherwise
+   pick by time of day — light 07:00–19:00 local, softened dark at night. */
 (function(){
   try{
     var t = localStorage.getItem('tf-theme');
@@ -13,7 +15,8 @@
   }catch(e){ document.documentElement.setAttribute('data-theme','light'); }
 })();
 </script>
-<style>/* LIGHT is the default theme — a warm off-white, easy on the eyes (never bright white). */
+<style>
+/* LIGHT is the default theme — a warm off-white, easy on the eyes (never bright white). */
 :root{
   --bg:#f4f1e9; --panel:#efe9db; --panel2:#e7e0cd; --line:#d8cfb6;
   --ink:#2e2a22; --muted:#6f6857; --accent:#2f6f9f; --accent2:#3f7d54;
@@ -95,89 +98,197 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 .diagram.fs{position:fixed;inset:0;z-index:9999;border-radius:0;border:none}
 .diagram.fs .mermaid{height:calc(100vh - 40px);display:flex;align-items:center;justify-content:center}
 
-@media(max-width:900px){.layout{grid-template-columns:1fr}nav.side{position:static;height:auto}}</style>
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.side{position:static;height:auto}}
+</style>
 </head>
 <body>
-<button id="themeToggle" class="theme-toggle" title="Toggle light / dark">☾ Dark</button>
+<button id="themeToggle" class="theme-toggle" title="Toggle light / dark">&#9790; Dark</button>
 <div class="layout">
-<nav class="side"><h1>TechieFlow Development Telemetry Guide</h1><div class="sub">Last rendered: 2026-08-21</div><div class="group">Contents</div><ol><li><a href="#why-this-exists-the-three-questions">1. Why this exists — the three questions</a></li>
-<li><a href="#the-four-streams-at-a-glance">2. The four streams at a glance</a></li>
-<li><a href="#each-stream-with-a-real-shaped-example">3. Each stream, with a real-shaped example</a></li>
-<li class="h3"><a href="#runs-jsonl-what-happened-on-which-model-for-how-much">3.1 <code>runs.jsonl</code> — what happened, on which model, for how much</a></li>
-<li class="h3"><a href="#gates-jsonl-the-primary-stream-every-verdict-and-what-caught-the-failure">3.2 <code>gates.jsonl</code> — the primary stream: every verdict, and what caught the failure</a></li>
-<li class="h3"><a href="#sessions-jsonl-token-totals-per-agent-session">3.3 <code>sessions.jsonl</code> — token totals per agent session</a></li>
-<li class="h3"><a href="#commits-jsonl-your-commits-never-the-agents">3.4 <code>commits.jsonl</code> — your commits, never the agents'</a></li>
-<li><a href="#how-model-tokens-and-cost-get-onto-run-records-the-2026-08-20-upgrade">4. How model, tokens and cost get onto run records (the 2026-08-20 upgrade)</a></li>
-<li><a href="#reading-the-results-metrics-and-the-derived-numbers">5. Reading the results — <code>*metrics</code> and the derived numbers</a></li>
-<li><a href="#the-rules-that-keep-the-data-trustworthy">6. The rules that keep the data trustworthy</a></li>
-<li><a href="#where-everything-is-wired-so-nothing-is-a-black-box">7. Where everything is wired (so nothing is a black box)</a></li>
-<li><a href="#faq">8. FAQ</a></li></ol></nav><main>
-<h1>TechieFlow Development Telemetry Guide</h1>
-<div class="subtitle">How the framework measures its own development — streams, records, reports, and the rules that keep them honest</div>
-<div class="toc-inline"><div>Contents</div><ol><li><a href="#why-this-exists-the-three-questions">1. Why this exists — the three questions</a></li>
-<li><a href="#the-four-streams-at-a-glance">2. The four streams at a glance</a></li>
-<li><a href="#each-stream-with-a-real-shaped-example">3. Each stream, with a real-shaped example</a></li>
-<li><a href="#how-model-tokens-and-cost-get-onto-run-records-the-2026-08-20-upgrade">4. How model, tokens and cost get onto run records (the 2026-08-20 upgrade)</a></li>
-<li><a href="#reading-the-results-metrics-and-the-derived-numbers">5. Reading the results — <code>*metrics</code> and the derived numbers</a></li>
-<li><a href="#the-rules-that-keep-the-data-trustworthy">6. The rules that keep the data trustworthy</a></li>
-<li><a href="#where-everything-is-wired-so-nothing-is-a-black-box">7. Where everything is wired (so nothing is a black box)</a></li>
-<li><a href="#faq">8. FAQ</a></li></ol></div>
+  <nav class="side">
+    <h1>TechieFlow Development Telemetry Guide</h1>
+    <div class="sub">Last rendered: 2026-08-28</div>
+    <div class="group">Contents</div>
+    <ol>
+        <li><a href="#why-this-exists-the-four-questions">1. Why this exists — the four questions</a></li>
+        <li><a href="#the-five-streams-at-a-glance">2. The five streams at a glance</a></li>
+        <li><a href="#each-stream-with-a-real-shaped-example">3. Each stream, with a real-shaped example</a></li>
+        <li class="h3"><a href="#runs-jsonl-what-happened-on-which-model-for-how-much">3.1 runs.jsonl — what happened, on which model, for how much</a></li>
+        <li class="h3"><a href="#gates-jsonl-the-primary-stream-every-verdict-and-what-caught-the-failure">3.2 gates.jsonl — the primary stream: every verdict, and what caught the failure</a></li>
+        <li class="h3"><a href="#sessions-jsonl-token-totals-per-agent-session">3.3 sessions.jsonl — token totals per agent session</a></li>
+        <li class="h3"><a href="#commits-jsonl-your-commits-never-the-agents">3.4 commits.jsonl — your commits, never the agents&#x27;</a></li>
+        <li class="h3"><a href="#misses-jsonl-the-fourth-question-and-the-only-stream-that-sees-a-design-miss">3.5 misses.jsonl — the fourth question, and the only stream that sees a DESIGN miss</a></li>
+        <li><a href="#how-model-tokens-and-cost-get-onto-run-records-the-2026-08-20-upgrade">4. How model, tokens and cost get onto run records (the 2026-08-20 upgrade)</a></li>
+        <li><a href="#reading-the-results-metrics-and-the-derived-numbers">5. Reading the results — *metrics and the derived numbers</a></li>
+        <li><a href="#the-rules-that-keep-the-data-trustworthy">6. The rules that keep the data trustworthy</a></li>
+        <li><a href="#where-everything-is-wired-so-nothing-is-a-black-box">7. Where everything is wired (so nothing is a black box)</a></li>
+        <li><a href="#faq">8. FAQ</a></li>
+    </ol>
+  </nav>
+  <main>
+    <h1>TechieFlow Development Telemetry Guide</h1>
+    <div class="subtitle">Rendered 2026-08-28 &middot; source <code>TechieFlow-Telemetry-Guide.md</code></div>
+
+    <div class="toc-inline">
+      <div>Contents</div>
+      <ol>
+        <li><a href="#why-this-exists-the-four-questions">1. Why this exists — the four questions</a></li>
+        <li><a href="#the-five-streams-at-a-glance">2. The five streams at a glance</a></li>
+        <li><a href="#each-stream-with-a-real-shaped-example">3. Each stream, with a real-shaped example</a></li>
+        <li class="h3"><a href="#runs-jsonl-what-happened-on-which-model-for-how-much">3.1 runs.jsonl — what happened, on which model, for how much</a></li>
+        <li class="h3"><a href="#gates-jsonl-the-primary-stream-every-verdict-and-what-caught-the-failure">3.2 gates.jsonl — the primary stream: every verdict, and what caught the failure</a></li>
+        <li class="h3"><a href="#sessions-jsonl-token-totals-per-agent-session">3.3 sessions.jsonl — token totals per agent session</a></li>
+        <li class="h3"><a href="#commits-jsonl-your-commits-never-the-agents">3.4 commits.jsonl — your commits, never the agents&#x27;</a></li>
+        <li class="h3"><a href="#misses-jsonl-the-fourth-question-and-the-only-stream-that-sees-a-design-miss">3.5 misses.jsonl — the fourth question, and the only stream that sees a DESIGN miss</a></li>
+        <li><a href="#how-model-tokens-and-cost-get-onto-run-records-the-2026-08-20-upgrade">4. How model, tokens and cost get onto run records (the 2026-08-20 upgrade)</a></li>
+        <li><a href="#reading-the-results-metrics-and-the-derived-numbers">5. Reading the results — *metrics and the derived numbers</a></li>
+        <li><a href="#the-rules-that-keep-the-data-trustworthy">6. The rules that keep the data trustworthy</a></li>
+        <li><a href="#where-everything-is-wired-so-nothing-is-a-black-box">7. Where everything is wired (so nothing is a black box)</a></li>
+        <li><a href="#faq">8. FAQ</a></li>
+      </ol>
+    </div>
+<blockquote>
+<p><strong>Codex:</strong> headless/goal runs parse authoritative <code>codex exec --json</code>
+<code>turn.completed.usage</code> through <code>tf-codex-telemetry.py</code>. Interactive
+<code>SessionEnd</code> records identify the session/model but leave token and cost fields
+null when no stable source exists. ChatGPT credits are never fabricated as
+<code>cost_usd</code>.</p>
+</blockquote>
 <p><strong>Audience:</strong> the framework owner. <strong>TL;DR:</strong> the framework measures its own development process — first-pass quality, where gates catch problems, what escapes to you, and (since 2026-08-20) which model did the work and what it cost. <strong>Reference docs:</strong> <code>.tfcore/telemetry/SCHEMA.md</code> (the field-by-field contract) · <code>docs/TechieFlow-Telemetry-Runbook.md</code> (the original implementation record) · <code>docs/TechieFlow-Routing-Guide.md</code> (how the model/cost fields feed routing decisions).</p>
-<h2 id="why-this-exists-the-three-questions">1. Why this exists — the three questions<a class="anchor-link" href="#why-this-exists-the-three-questions">#</a></h2>
+<h2 id="why-this-exists-the-four-questions">1. Why this exists — the four questions<a class="anchor-link" href="#why-this-exists-the-four-questions">#</a></h2>
 <p>TechieFlow used to produce all this evidence and throw it away: every <code>*verify</code> applied named gates to identified REQs, wrote its ledger — and the next run overwrote everything. The status table mutates in place, so history evaporated.</p>
-<p>Telemetry keeps that evidence in <strong>append-only JSONL streams</strong> under <code>docs/metrics/</code> (tracked in git, one JSON object per line, never rewritten). It exists to answer exactly three questions:</p>
-<ol><li><strong>First-pass rate</strong> — how often does a REQ pass verification on its first attempt?</li><li><strong>Gate catch distribution</strong> — <em>which</em> gate catches the problems (build? acceptance? data-render? visual? perf? standards?)</li><li><strong>Escape rate</strong> — how much gets past all gates and is found by a human (UAT/production)?</li></ol>
+<p>Telemetry keeps that evidence in <strong>append-only JSONL streams</strong> under <code>docs/metrics/</code> (tracked in git, one JSON object per line, never rewritten). It exists to answer exactly four questions:</p>
+<ol>
+<li><strong>First-pass rate</strong> — how often does a REQ pass verification on its first attempt?
+</li>
+<li><strong>Gate catch distribution</strong> — <em>which</em> gate catches the problems (build? acceptance? data-render? visual? perf? standards?)
+</li>
+<li><strong>Escape rate</strong> — how much gets past all gates and is found by a human (UAT/production)?
+</li>
+<li><strong>Miss attribution and rework cost</strong> (added 2026-08-28) — <em>what</em> was missed, <em>which phase / agent / model</em> let it through, and <em>what did fixing it cost</em>?
+</li>
+</ol>
 <p>Everything else (throughput, rework ratio, cost per phase) is derived from the same records.</p>
-<h2 id="the-four-streams-at-a-glance">2. The four streams at a glance<a class="anchor-link" href="#the-four-streams-at-a-glance">#</a></h2>
+<h2 id="the-five-streams-at-a-glance">2. The five streams at a glance<a class="anchor-link" href="#the-five-streams-at-a-glance">#</a></h2>
 <table>
-<tr><th>File</th><th>One record per…</th><th>Written by</th><th>When</th></tr>
+<thead><tr><th>File</th><th>One record per…</th><th>Written by</th><th>When</th></tr></thead>
+<tbody>
 <tr><td><code>docs/metrics/runs.jsonl</code></td><td>framework command run (a <code>*build-phase</code>, a <code>*verify</code>, …)</td><td>the phase task, at its status gate</td><td>end of every run</td></tr>
 <tr><td><code>docs/metrics/gates.jsonl</code></td><td>REQ verdict per verify run — <strong>the primary stream</strong></td><td><code>verify-phase</code> §6a (and <code>triage-issues</code> for escapes)</td><td>every time a REQ is graded</td></tr>
 <tr><td><code>docs/metrics/sessions.jsonl</code></td><td>agent session (token totals)</td><td>Claude: <code>SessionEnd</code> hook · OpenCode: the <code>.opencode/plugin/techieflow.js</code> plugin</td><td>session end / session idle</td></tr>
 <tr><td><code>docs/metrics/commits.jsonl</code></td><td>git commit</td><td>YOUR own <code>pre-commit</code> hook (agents never run git)</td><td>your commits</td></tr>
+<tr><td><code>docs/metrics/misses.jsonl</code></td><td>something an agent <strong>missed</strong> (<code>miss</code>) + what repairing it cost (<code>miss-fix</code>)</td><td><code>verify-phase</code>, <code>build-phase</code>, <code>triage-issues</code>, <code>fix-issues</code>, <code>amend-docs</code>, <code>*log-miss</code></td><td>when a miss is found / fixed</td></tr>
+</tbody>
 </table>
 <p>Every record is appended through one primitive — <code>.tfcore/utils/tf-emit.sh</code> — which stamps the shared fields (<code>v</code>, <code>ts</code>, <code>app</code>, <code>project_type</code>, <code>harness</code>) and <strong>never blocks anything</strong>: telemetry has no veto, a failed write is a silently dropped record, never a broken session.</p>
 <h2 id="each-stream-with-a-real-shaped-example">3. Each stream, with a real-shaped example<a class="anchor-link" href="#each-stream-with-a-real-shaped-example">#</a></h2>
 <h3 id="runs-jsonl-what-happened-on-which-model-for-how-much">3.1 <code>runs.jsonl</code> — what happened, on which model, for how much<a class="anchor-link" href="#runs-jsonl-what-happened-on-which-model-for-how-much">#</a></h3>
-<pre><code>{&quot;v&quot;:1, &quot;ts&quot;:&quot;2026-08-20T09:41:02Z&quot;, &quot;kind&quot;:&quot;run&quot;,
- &quot;app&quot;:&quot;TechieBlog&quot;, &quot;project_type&quot;:&quot;app&quot;, &quot;harness&quot;:&quot;opencode&quot;,
- &quot;cmd&quot;:&quot;verify-phase&quot;, &quot;mode&quot;:null,
- &quot;started&quot;:&quot;2026-08-20T09:12:40Z&quot;, &quot;ended&quot;:&quot;2026-08-20T09:41:02Z&quot;, &quot;duration_s&quot;:1702,
- &quot;reqs_touched&quot;:[&quot;REQ-UI-004&quot;,&quot;REQ-FN-011&quot;], &quot;reqs_count&quot;:2,
- &quot;subagents&quot;:[&quot;tf-test-writer&quot;], &quot;build_result&quot;:&quot;pass&quot;,
- &quot;tier&quot;:&quot;standard&quot;, &quot;tier_model&quot;:&quot;opencode-go/kimi-k2.7-code&quot;,
- &quot;model&quot;:&quot;opencode-go/kimi-k2.7-code&quot;, &quot;routed&quot;:true,
- &quot;tokens_in&quot;:784, &quot;tokens_out&quot;:42310, &quot;tokens_cache_read&quot;:310221, &quot;tokens_cache_write&quot;:0,
- &quot;cost_usd&quot;:0.41, &quot;tokens_scope&quot;:&quot;tree&quot;}</code></pre>
+<pre><code class="language-json">{"v":1, "ts":"2026-08-20T09:41:02Z", "kind":"run",
+ "app":"TechieBlog", "project_type":"app", "harness":"opencode",
+ "cmd":"verify-phase", "mode":null,
+ "started":"2026-08-20T09:12:40Z", "ended":"2026-08-20T09:41:02Z", "duration_s":1702,
+ "reqs_touched":["REQ-UI-004","REQ-FN-011"], "reqs_count":2,
+ "subagents":["tf-test-writer"], "build_result":"pass",
+ "tier":"standard", "tier_model":"opencode-go/kimi-k2.7-code",
+ "model":"opencode-go/kimi-k2.7-code", "routed":true,
+ "tokens_in":784, "tokens_out":42310, "tokens_cache_read":310221, "tokens_cache_write":0,
+ "cost_usd":0.41, "tokens_scope":"tree"}</code></pre>
 <p>Reading it line by line:</p>
-<ul><li><code>cmd</code> + <code>mode</code> — which phase ran; <code>mode:"fix"</code> marks a rework pass (this is what the rework ratio counts).</li><li><code>started</code> / <code>ended</code> / <code>duration_s</code> — the run window. These two timestamps are also what the token attribution keys on (§4).</li><li><code>reqs_touched</code> — REQ <strong>ids only</strong>, never requirement text (privacy rule, §6).</li><li><code>subagents</code> — which helpers were spawned (<code>trblazeui</code>, <code>techierag</code>, <code>tf-builder</code>, <code>general</code>/<code>general-purpose</code>, …).</li><li><code>harness</code> — <code>claude-code</code> or <code>opencode</code>, <strong>detected</strong> by the tooling, never self-declared by an agent (agents copy template text too faithfully to be trusted with it).</li><li>The second half — <code>tier</code> through <code>tokens_scope</code> — is injected automatically by <code>tf-emit.sh</code> (§4). Absent fields mean "not captured", never zero.</li><li><code>attempt</code> (added 2026-08-21, also injected) — how many times this <code>cmd</code> has run against any of these REQs, counting this one: <code>1 +</code> prior non-backfilled runs of the same <code>cmd</code> whose <code>reqs_touched</code> overlaps. Present only on runs that touch REQs. This is the counter the advisory <code>escalation:</code> policy in <code>routing.yaml</code> reads <strong>at launch</strong> (<code>tf-emit.sh --next-run-attempt &lt;cmd&gt; &lt;REQ&gt;...</code>; Routing Guide §6.4). Not the same field as the per-REQ <code>attempt</code> on <code>gates.jsonl</code> (§3.2).</li></ul>
+<ul>
+<li><code>cmd</code> + <code>mode</code> — which phase ran; <code>mode:"fix"</code> marks a rework pass (this is what the rework ratio counts).
+</li>
+<li><code>started</code> / <code>ended</code> / <code>duration_s</code> — the run window. These two timestamps are also what the token attribution keys on (§4).
+</li>
+<li><code>reqs_touched</code> — REQ <strong>ids only</strong>, never requirement text (privacy rule, §6).
+</li>
+<li><code>subagents</code> — which helpers were spawned (<code>trblazeui</code>, <code>techierag</code>, <code>tf-builder</code>, <code>general</code>/<code>general-purpose</code>, …).
+</li>
+<li><code>harness</code> — <code>claude-code</code> or <code>opencode</code>, <strong>detected</strong> by the tooling, never self-declared by an agent (agents copy template text too faithfully to be trusted with it).
+</li>
+<li>The second half — <code>tier</code> through <code>tokens_scope</code> — is injected automatically by <code>tf-emit.sh</code> (§4). Absent fields mean "not captured", never zero.
+</li>
+<li><code>attempt</code> (added 2026-08-21, also injected) — how many times this <code>cmd</code> has run against any of these REQs, counting this one: <code>1 +</code> prior non-backfilled runs of the same <code>cmd</code> whose <code>reqs_touched</code> overlaps. Present only on runs that touch REQs. This is the counter the advisory <code>escalation:</code> policy in <code>routing.yaml</code> reads <strong>at launch</strong> (<code>tf-emit.sh --next-run-attempt &lt;cmd&gt; &lt;REQ&gt;...</code>; Routing Guide §6.4). Not the same field as the per-REQ <code>attempt</code> on <code>gates.jsonl</code> (§3.2).
+</li>
+</ul>
 <h3 id="gates-jsonl-the-primary-stream-every-verdict-and-what-caught-the-failure">3.2 <code>gates.jsonl</code> — the primary stream: every verdict, and what caught the failure<a class="anchor-link" href="#gates-jsonl-the-primary-stream-every-verdict-and-what-caught-the-failure">#</a></h3>
-<pre><code>{&quot;v&quot;:1, &quot;ts&quot;:&quot;2026-08-19T14:02:11Z&quot;, &quot;kind&quot;:&quot;gate&quot;,
- &quot;app&quot;:&quot;TechieBlog&quot;, &quot;project_type&quot;:&quot;app&quot;, &quot;harness&quot;:&quot;opencode&quot;,
- &quot;req_id&quot;:&quot;REQ-UI-007&quot;, &quot;verdict&quot;:&quot;fail&quot;, &quot;attempt&quot;:2,
- &quot;gate&quot;:&quot;render&quot;, &quot;failure_class&quot;:&quot;empty-control&quot;,
- &quot;gates_run&quot;:[&quot;build&quot;,&quot;acceptance&quot;,&quot;render&quot;], &quot;scope&quot;:&quot;ui&quot;}</code></pre>
-<ul><li><code>gate</code> — the <strong>first failing</strong> gate for that REQ on that attempt: <code>build</code> → <code>acceptance</code> → <code>render</code> → <code>visual</code> → <code>perf</code> → <code>standards</code>. Distribution over this field = "which gate earns its keep".</li><li><code>attempt</code> — 1 on the REQ's first grading, incremented per re-verify. First-pass rate = share of REQs whose <code>attempt:1</code> record is a pass. Derived with <code>tf-emit.sh --next-attempt REQ-X</code>, never guessed by an agent.</li><li><code>gate:"escaped"</code> — written by <code>*triage-issues</code> when a HUMAN found the bug (UAT/production). Escape rate = escaped / everything graded.</li><li><code>gates_run</code> — which gates executed that time; a gate added later in the project's life is measured against runs that included it, never against the whole history (otherwise new gates look uselessly weak).</li></ul>
+<pre><code class="language-json">{"v":1, "ts":"2026-08-19T14:02:11Z", "kind":"gate",
+ "app":"TechieBlog", "project_type":"app", "harness":"opencode",
+ "req_id":"REQ-UI-007", "verdict":"fail", "attempt":2,
+ "gate":"render", "failure_class":"empty-control",
+ "gates_run":["build","acceptance","render"], "scope":"ui"}</code></pre>
+<ul>
+<li><code>gate</code> — the <strong>first failing</strong> gate for that REQ on that attempt: <code>build</code> → <code>acceptance</code> → <code>render</code> → <code>visual</code> → <code>perf</code> → <code>standards</code>. Distribution over this field = "which gate earns its keep".
+</li>
+<li><code>attempt</code> — 1 on the REQ's first grading, incremented per re-verify. First-pass rate = share of REQs whose <code>attempt:1</code> record is a pass. Derived with <code>tf-emit.sh --next-attempt REQ-X</code>, never guessed by an agent.
+</li>
+<li><code>gate:"escaped"</code> — written by <code>*triage-issues</code> when a HUMAN found the bug (UAT/production). Escape rate = escaped / everything graded.
+</li>
+<li><code>gates_run</code> — which gates executed that time; a gate added later in the project's life is measured against runs that included it, never against the whole history (otherwise new gates look uselessly weak).
+</li>
+</ul>
 <h3 id="sessions-jsonl-token-totals-per-agent-session">3.3 <code>sessions.jsonl</code> — token totals per agent session<a class="anchor-link" href="#sessions-jsonl-token-totals-per-agent-session">#</a></h3>
-<pre><code>{&quot;v&quot;:1, &quot;ts&quot;:&quot;2026-08-20T07:12:44Z&quot;, &quot;kind&quot;:&quot;session&quot;,
- &quot;app&quot;:&quot;TechieBlog&quot;, &quot;harness&quot;:&quot;opencode&quot;, &quot;project_type&quot;:&quot;app&quot;,
- &quot;session_id&quot;:&quot;ses_fdfe727dbffeSm3xDX3h0Dw712&quot;,
- &quot;model&quot;:&quot;opencode-go/deepseek-v4-flash&quot;, &quot;duration_s&quot;:151,
- &quot;input_tokens&quot;:1893, &quot;output_tokens&quot;:13984,
- &quot;cache_read_tokens&quot;:401220, &quot;cache_creation_tokens&quot;:0,
- &quot;cost_usd&quot;:0.03601, &quot;children_sessions&quot;:0}</code></pre>
-<ul><li><strong>Claude Code:</strong> written by the <code>SessionEnd</code> hook, one record per session, <code>cost_usd</code> always <code>null</code> (Claude transcripts carry tokens but no dollars, and the framework never estimates — a rate-card guess presented as a measurement would poison every comparison).</li><li><strong>OpenCode:</strong> written by the guard-bridge plugin with <strong>real cost</strong> from the provider, child-session tokens rolled into the root. The plugin appends a <em>cumulative snapshot</em> each time the session goes idle (a TUI session idles after every turn), so several records can share a <code>session_id</code> — readers take the one with the highest <code>output_tokens</code>.</li><li>A session is NOT a run: one session may span several commands and vice versa. Session records answer "what does a working session cost"; run records answer "what did this phase cost".</li></ul>
+<pre><code class="language-json">{"v":1, "ts":"2026-08-20T07:12:44Z", "kind":"session",
+ "app":"TechieBlog", "harness":"opencode", "project_type":"app",
+ "session_id":"ses_fdfe727dbffeSm3xDX3h0Dw712",
+ "model":"opencode-go/deepseek-v4-flash", "duration_s":151,
+ "input_tokens":1893, "output_tokens":13984,
+ "cache_read_tokens":401220, "cache_creation_tokens":0,
+ "cost_usd":0.03601, "children_sessions":0}</code></pre>
+<ul>
+<li><strong>Claude Code:</strong> written by the <code>SessionEnd</code> hook, one record per session, <code>cost_usd</code> always <code>null</code> (Claude transcripts carry tokens but no dollars, and the framework never estimates — a rate-card guess presented as a measurement would poison every comparison).
+</li>
+<li><strong>OpenCode:</strong> written by the guard-bridge plugin with <strong>real cost</strong> from the provider, child-session tokens rolled into the root. The plugin appends a <em>cumulative snapshot</em> each time the session goes idle (a TUI session idles after every turn), so several records can share a <code>session_id</code> — readers take the one with the highest <code>output_tokens</code>.
+</li>
+<li>A session is NOT a run: one session may span several commands and vice versa. Session records answer "what does a working session cost"; run records answer "what did this phase cost".
+</li>
+</ul>
 <h3 id="commits-jsonl-your-commits-never-the-agents">3.4 <code>commits.jsonl</code> — your commits, never the agents'<a class="anchor-link" href="#commits-jsonl-your-commits-never-the-agents">#</a></h3>
-<pre><code>{&quot;v&quot;:1, &quot;ts&quot;:&quot;2026-08-19T09:30:11Z&quot;, &quot;kind&quot;:&quot;commit&quot;, &quot;app&quot;:&quot;TechieBlog&quot;,
- &quot;sha&quot;:&quot;a1b2c3d&quot;, &quot;files&quot;:9, &quot;insertions&quot;:412, &quot;deletions&quot;:57,
- &quot;subject_prefix&quot;:&quot;feat&quot;, &quot;branch&quot;:&quot;main&quot;}</code></pre>
+<pre><code class="language-json">{"v":1, "ts":"2026-08-19T09:30:11Z", "kind":"commit", "app":"TechieBlog",
+ "sha":"a1b2c3d", "files":9, "insertions":412, "deletions":57,
+ "subject_prefix":"feat", "branch":"main"}</code></pre>
 <p>Written by the <code>pre-commit</code> hook inside YOUR own <code>git commit</code> (git is manual in TechieFlow — no agent path ever runs it). The hook reconciles: every commit, it backfills any commits the stream is missing, so multi-machine work and fresh clones converge. Only the conventional-commit prefix is kept; the subject line is discarded on the spot (§6). <strong>An empty <code>commits.jsonl</code> means "no commits made from this clone since install" — not a bug.</strong></p>
+<h3 id="misses-jsonl-the-fourth-question-and-the-only-stream-that-sees-a-design-miss">3.5 <code>misses.jsonl</code> — the fourth question, and the only stream that sees a DESIGN miss<a class="anchor-link" href="#misses-jsonl-the-fourth-question-and-the-only-stream-that-sees-a-design-miss">#</a></h3>
+<p>Two record kinds, linked by <code>miss_id</code>. The <code>miss</code> opens; the <code>miss-fix</code> closes.</p>
+<pre><code class="language-json">{"v":1, "ts":"2026-08-28T11:04:19Z", "kind":"miss",
+ "app":"AstroLyfe", "project_type":"app", "harness":"claude-code",
+ "miss_id":"MISS-AstroLyfe-20260828-03", "req_id":"REQ-UI-014", "req_class":"UI",
+ "miss_class":"partial-implementation", "artifact":"src", "severity":"major",
+ "origin_phase":"build-phase", "origin_agent":"trblazeui",
+ "origin_run_id":"2026-08-26T09:12:40Z", "origin_confidence":"linked",
+ "origin_model":"claude-opus-5", "origin_harness":"claude-code",
+ "found_by":"gate", "found_phase":"verify-phase", "found_gate":"render",
+ "found_run_id":"2026-08-28T10:41:02Z", "failure_class":"blank-data"}</code></pre>
+<pre><code class="language-json">{"v":1, "ts":"2026-08-28T14:52:07Z", "kind":"miss-fix",
+ "miss_id":"MISS-AstroLyfe-20260828-03", "req_id":"REQ-UI-014",
+ "fix_run_id":"2026-08-28T13:58:11Z", "fix_cmd":"fix-issues", "fix_attempt":1,
+ "verdict_after":"Verified", "reopened":false, "cost_attribution":"shared:3",
+ "tokens_in":812, "tokens_out":38104, "cost_usd":null, "tokens_scope":"tree"}</code></pre>
+<ul>
+<li><strong><code>miss_class:"unspecified-gap"</code> with <code>artifact:"brd"</code> is the design-phase miss</strong> — the case nothing in the framework could see before. <code>gates.jsonl</code> is written by the verifier, and by the time verification runs a specification gap has already been papered over or built wrongly. <code>build-phase</code> §4a records it at the moment a builder hits it.
+</li>
+<li><strong><code>origin_model</code> / <code>origin_harness</code> / <code>origin_confidence</code> are looked up, never typed.</strong> <code>tf-emit.sh</code> resolves them from the <code>runs.jsonl</code> record whose <code>started</code> equals <code>origin_run_id</code>, and <strong>forces the model to <code>null</code> when it can't</strong> — overwriting whatever the agent supplied. Same rule as <code>harness</code> (§4), sharper consequence: a per-model miss rate built from guesses is a routing decision made on invented evidence.
+</li>
+<li><strong><code>cost_attribution</code> is derived from the fix run's <code>reqs_touched</code></strong> — <code>sole</code> (the run fixed only this REQ: a real measurement), <code>shared:n</code> (equal division, <em>not</em> a measurement), <code>none</code> (no window at all). Reports keep measured and apportioned in separate columns, always.
+</li>
+<li><strong>One defect is one miss.</strong> <code>tf-emit.sh --open-miss REQ-X</code> is the collapse check: a REQ that fails three verify passes produces one record, not three, unless the <em>kind</em> of failure changes.
+</li>
+<li><strong><code>why_missed</code> says which <em>practice</em> failed</strong> (§5.5.6, ported from the Playbook 2026-08-28): <code>missing-checklist-item</code> · <code>insufficient-verify-method</code> · <code>code-audit-limitation</code> · <code>ambiguous-acceptance</code> · <code>dependency-not-declared</code> · <code>instruction-ignored</code> · <code>other</code>. <code>miss_class</code> names the defect; this names the practice, and it is the one that tells you whether your <strong>specification</strong> or your <strong>verification</strong> is weak. Optional — but an escape without it wastes the record, and the report says so.
+</li>
+<li><strong><code>wont-fix</code> is not "open".</strong> The report counts open / resolved / wont-fix separately: a wont-fix is a decision, not a backlog item. The collapse check still treats it as a live defect so a repeat failure cannot open a duplicate — two questions, two predicates, deliberately not the same.
+</li>
+</ul>
+<p><strong>How to record one yourself:</strong></p>
+<pre><code>/TechieFlow:agents:flow-master *log-miss MyApp "the export button ignores the active date filter"
+/flow-master *log-miss MyApp "..."           (OpenCode)        # --fixed if it is already repaired</code></pre>
+<p>Seconds, no app boot, no repro, no code touched. That last part is the point — <code>*triage-issues</code> does all three, which is right for UAT triage and is exactly the friction that stopped one-line misses from ever being recorded.</p>
+<p><strong>What a miss costs, by harness:</strong> OpenCode gives <strong>real dollars</strong>; Claude Code and Codex give <strong>tokens</strong> and <code>cost_usd: null</code>, permanently. No rate card is applied anywhere in this framework to make a dollar figure appear.</p>
 <h2 id="how-model-tokens-and-cost-get-onto-run-records-the-2026-08-20-upgrade">4. How model, tokens and cost get onto run records (the 2026-08-20 upgrade)<a class="anchor-link" href="#how-model-tokens-and-cost-get-onto-run-records-the-2026-08-20-upgrade">#</a></h2>
 <p>No agent ever reports its own token usage (it can't know it, and self-reports drift). Instead <code>tf-emit.sh</code> reads the <strong>harness's own store</strong> at append time:</p>
 <table>
-<tr><th>Harness</th><th>Where the numbers come from</th><th>Scope</th></tr>
+<thead><tr><th>Harness</th><th>Where the numbers come from</th><th>Scope</th></tr></thead>
+<tbody>
 <tr><td>Claude Code</td><td>The session transcript (JSONL on disk), located via a pointer file that a <code>SessionStart</code>/<code>UserPromptSubmit</code> hook maintains at <code>.tfcore/.session/claude-code.json</code>. Subagent transcripts sit at a deterministic path next to it and are included automatically.</td><td><code>tokens_scope:"tree"</code> (or <code>"main"</code> if the run spawned no subagents)</td></tr>
 <tr><td>OpenCode</td><td>The <code>opencode.db</code> SQLite database, located via the pointer the plugin writes; the query covers the session <strong>and all its child sessions</strong>, and includes the provider's real per-message cost.</td><td><code>tokens_scope:"tree"</code>, <code>cost_usd</code> real</td></tr>
+</tbody>
 </table>
 <p>Any record carrying <code>started</code> + <code>ended</code> gets the numbers for exactly that window. If anything is missing — no pointer, unreadable store, empty window — the record says <code>tokens_scope:"none"</code> and carries <strong>no numbers at all</strong>. Missing beats invented, every time.</p>
 <p>When routing is enabled (<code>docs/TechieFlow-Routing-Guide.md</code>), the same enrichment adds <code>tier</code> (declared), <code>tier_model</code> (what the tier should resolve to here) and <code>routed</code> (<code>model == tier_model</code>) — which is how routing decisions get made from data. Independently of the routing flag, every run that touches REQs also gets <code>attempt</code> (§3.1) — the per-run retry count that the advisory escalation policy (Routing Guide §6.4) is tuned against.</p>
@@ -189,13 +300,34 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 First-pass rate: 80% (live, app — 121/151 REQs)
 Gate catch: acceptance 53% (19/36) | Escape rate: 0% (0/34)</code></pre>
 <p>How to read the headline numbers:</p>
-<ul><li><strong>First-pass rate 80%</strong> — 121 of 151 REQs passed verification on attempt 1. The single best proxy for "is the pipeline producing right-first-time work". Falling? Look at the gate distribution to see <em>where</em> it fails.</li><li><strong>Gate catch: acceptance 53%</strong> — of all first-failures, the acceptance gate caught half. A healthy pattern: failures caught early (build/acceptance) are cheap; failures caught late (visual) or never (escaped) are expensive.</li><li><strong>Escape rate 0%</strong> — nothing graded <code>Verified</code> was later demoted by a human-found bug. This is the number the whole gate system exists to keep at zero.</li><li><strong>Rework ratio</strong> (in the full report) — the share of runs with <code>mode:"fix"</code>. This is the number that judges the routing tier map: cheaper builders are only cheaper if this doesn't climb.</li></ul>
+<ul>
+<li><strong>First-pass rate 80%</strong> — 121 of 151 REQs passed verification on attempt 1. The single best proxy for "is the pipeline producing right-first-time work". Falling? Look at the gate distribution to see <em>where</em> it fails.
+</li>
+<li><strong>Gate catch: acceptance 53%</strong> — of all first-failures, the acceptance gate caught half. A healthy pattern: failures caught early (build/acceptance) are cheap; failures caught late (visual) or never (escaped) are expensive.
+</li>
+<li><strong>Escape rate 0%</strong> — nothing graded <code>Verified</code> was later demoted by a human-found bug. This is the number the whole gate system exists to keep at zero.
+</li>
+<li><strong>Rework ratio</strong> (in the full report) — the share of runs with <code>mode:"fix"</code>. This is the number that judges the routing tier map: cheaper builders are only cheaper if this doesn't climb.
+</li>
+</ul>
 <p>Derived numbers are <strong>computed at report time and never stored</strong> — so a definition fix corrects all of history, and stored records never contain a stale formula.</p>
 <h2 id="the-rules-that-keep-the-data-trustworthy">6. The rules that keep the data trustworthy<a class="anchor-link" href="#the-rules-that-keep-the-data-trustworthy">#</a></h2>
-<ul><li><strong>Provenance never merges.</strong> No report pools live records with backfilled ones, <code>app</code> projects with <code>library</code> ones, or dollar figures across harnesses (Claude cost is <code>null</code>; a pooled sum would silently understate). <code>tf-metrics.sh</code> enforces this in code.</li><li><strong>Privacy — assume every record could leak.</strong> Records carry ids, counts, durations, verdicts and file paths at most. Never requirement text, never prompt text, never file contents, never commit subjects. <code>failure_class</code> is a closed vocabulary for exactly this reason.</li><li><strong>Telemetry has no veto.</strong> Every writer exits 0 unconditionally. A telemetry bug can cost a record, never a working session.</li><li><strong>Append-only.</strong> Records are never edited or deleted; corrections happen at read time.</li><li><strong>Agents never write what they can't know.</strong> <code>harness</code> is detected, <code>attempt</code> is computed, tokens come from the harness store, commits come from your own hook.</li></ul>
+<ul>
+<li><strong>Provenance never merges.</strong> No report pools live records with backfilled ones, <code>app</code> projects with <code>library</code> ones, or dollar figures across harnesses (Claude cost is <code>null</code>; a pooled sum would silently understate). <code>tf-metrics.sh</code> enforces this in code.
+</li>
+<li><strong>Privacy — assume every record could leak.</strong> Records carry ids, counts, durations, verdicts and file paths at most. Never requirement text, never prompt text, never file contents, never commit subjects. <code>failure_class</code> is a closed vocabulary for exactly this reason.
+</li>
+<li><strong>Telemetry has no veto.</strong> Every writer exits 0 unconditionally. A telemetry bug can cost a record, never a working session.
+</li>
+<li><strong>Append-only.</strong> Records are never edited or deleted; corrections happen at read time.
+</li>
+<li><strong>Agents never write what they can't know.</strong> <code>harness</code> is detected, <code>attempt</code> is computed, tokens come from the harness store, commits come from your own hook.
+</li>
+</ul>
 <h2 id="where-everything-is-wired-so-nothing-is-a-black-box">7. Where everything is wired (so nothing is a black box)<a class="anchor-link" href="#where-everything-is-wired-so-nothing-is-a-black-box">#</a></h2>
 <table>
-<tr><th>Piece</th><th>File</th><th>Trigger</th></tr>
+<thead><tr><th>Piece</th><th>File</th><th>Trigger</th></tr></thead>
+<tbody>
 <tr><td>The append primitive</td><td><code>.tfcore/utils/tf-emit.sh</code></td><td>called by every writer below</td></tr>
 <tr><td>Run/gate records</td><td>emit steps inside each task (<code>build-phase</code> §7a, <code>verify-phase</code> §6a, …)</td><td>the status gate at the end of a run</td></tr>
 <tr><td>Claude session totals</td><td><code>.tfcore/hooks/metrics-session.sh</code></td><td><code>SessionEnd</code> hook</td></tr>
@@ -203,14 +335,34 @@ Gate catch: acceptance 53% (19/36) | Escape rate: 0% (0/34)</code></pre>
 <tr><td>OpenCode sessions + pointer + cost</td><td><code>.opencode/plugin/techieflow.js</code></td><td>plugin <code>event</code> hook (message updates, session idle)</td></tr>
 <tr><td>Commit records</td><td><code>.tfcore/telemetry/pre-commit</code></td><td>your own <code>git commit</code></td></tr>
 <tr><td>The report</td><td><code>.tfcore/telemetry/tf-metrics.sh</code> via the <code>metrics-report</code> task</td><td><code>*metrics {App}</code></td></tr>
+</tbody>
 </table>
 <h2 id="faq">8. FAQ<a class="anchor-link" href="#faq">#</a></h2>
-<ul><li><strong>"sessions.jsonl is empty on this machine."</strong> Claude side writes on <code>SessionEnd</code>; OpenCode side needs the plugin (deployed by <code>update-framework.sh</code> since 2026-08-20). An empty stream means "not collected here", never "no work happened".</li><li><strong>"cost_usd is null everywhere."</strong> On Claude Code that is permanent and deliberate — no real cost source exists and the framework never estimates. Real dollars come from OpenCode runs.</li><li><strong>"commits.jsonl is empty / behind."</strong> It fills only from YOUR commits on THIS clone; the reconcile catches up on your next commit.</li><li><strong>"Two sessions records with the same session_id?"</strong> OpenCode snapshot semantics (§3.3) — take the record with the highest <code>output_tokens</code>.</li><li><strong>"Can I trust a <code>Verified</code> in the checklist?"</strong> That's what <code>gates.jsonl</code> + the <code>guard-verify.sh</code> hook exist for: a <code>Verified</code> can only be written after an executed verify run left its ledger — self-attestation is blocked mechanically on both harnesses.</li><li><strong>"What does this cost me?"</strong> Nothing at run time (one process spawn per record) and nothing when it breaks (no veto). The streams are a few KB per week of heavy use.</li></ul>
-</main>
+<ul>
+<li><strong>"sessions.jsonl is empty on this machine."</strong> Claude side writes on <code>SessionEnd</code>; OpenCode side needs the plugin (deployed by <code>update-framework.sh</code> since 2026-08-20). An empty stream means "not collected here", never "no work happened".
+</li>
+<li><strong>"cost_usd is null everywhere."</strong> On Claude Code that is permanent and deliberate — no real cost source exists and the framework never estimates. Real dollars come from OpenCode runs.
+</li>
+<li><strong>"commits.jsonl is empty / behind."</strong> It fills only from YOUR commits on THIS clone; the reconcile catches up on your next commit. <strong>No hook is required either way</strong> — <code>.tfcore/telemetry/tf-metrics.sh --backfill-commits .</code> reconstructs the identical data from the commit log at any time, and reconstructs it <em>perfectly</em> (that log is itself append-only, which is why commit records are the one backfill exempt from the live-vs-backfilled separation). The hook only makes it automatic.
+</li>
+<li><strong>"Do I need the commit hook to get metrics at all?"</strong> No. <strong>Four of the five streams need no version-control hook whatsoever</strong>: <code>runs</code>, <code>gates</code> and <code>misses</code> are written by <code>tf-emit.sh</code> from the phase tasks, and <code>sessions</code> by the Claude Code <code>SessionEnd</code> hook (or the OpenCode plugin) — neither of those is a version-control hook. Only <code>commits.jsonl</code> uses <code>.git/hooks/pre-commit</code>, and only for commit volume and cadence. Nothing about <em>what was missed, who missed it, or what the fix cost</em> depends on it.
+</li>
+<li><strong>"My project reports as <code>docs</code> but it is clearly an app."</strong> A greenfield repo is classified at scaffold time, when it genuinely is docs-only — no <code>src/</code>, no <code>.csproj</code>. Since 2026-08-28 a later <code>update-framework.sh</code> <strong>upgrades</strong> a <code>docs</code> classification once real heads appear, and only ever upwards (<code>app</code>/<code>library</code>/<code>framework</code> are never re-guessed, and <code>--type</code> always wins). Correct it by hand at any time with <code>.tfcore/telemetry/install-metrics.sh . --type app</code>. <strong>Records already written keep the old value</strong> — the streams are append-only and corrections happen at read time — so the project shows under both segments until the old records age out, and <code>--report</code> states the split rather than letting one project look like two.
+</li>
+<li><strong>"Two sessions records with the same session_id?"</strong> OpenCode snapshot semantics (§3.3) — take the record with the highest <code>output_tokens</code>.
+</li>
+<li><strong>"Can I trust a <code>Verified</code> in the checklist?"</strong> That's what <code>gates.jsonl</code> + the <code>guard-verify.sh</code> hook exist for: a <code>Verified</code> can only be written after an executed verify run left its ledger — self-attestation is blocked mechanically on both harnesses.
+</li>
+<li><strong>"What does this cost me?"</strong> Nothing at run time (one process spawn per record) and nothing when it breaks (no veto). The streams are a few KB per week of heavy use.
+</li>
+</ul>
+  </main>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
-<script>// Light/dark toggle. The initial theme was already applied flash-free by the
+<script>
+// Light/dark toggle. The initial theme was already applied flash-free by the
 // <head> script (saved choice, else time-of-day). Clicking flips it, saves the
 // choice, and reloads so Mermaid re-renders in the matching theme.
 (function(){
@@ -366,6 +518,7 @@ function openInNewTab(svg) {
 if (window.mermaid) {
   setTimeout(wireMermaidToolbars, 400);
   setTimeout(wireMermaidToolbars, 1200);  // safety re-run for slow renders
-}</script>
+}
+</script>
 </body>
 </html>

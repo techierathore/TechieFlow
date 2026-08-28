@@ -5,10 +5,11 @@
      .tfcore/telemetry/SCHEMA.md.
 
      THE ONE RULE FOR THIS DOCUMENT: no combined first-pass rate, gate catch
-     distribution, or escape rate across live/backfilled or across project_type.
+     distribution, escape rate, miss rate, or cost-per-miss across live/backfilled,
+     across project_type, across attribution confidence, or across cost attribution.
      No "total" row, no "overall" line, no averaged intro sentence. If you are
      tempted to add one, re-read metrics-report.md §2 — the reason is not
-     cosmetic. Commit-derived metrics are exempt from both separations. -->
+     cosmetic. Commit-derived metrics are exempt from the first two separations. -->
 
 **Snapshot as of {date}** · project_type `{app|library|docs|framework}` · schema v1
 
@@ -18,6 +19,7 @@
 | `gates.jsonl` | {n} ({b} backfilled) | {first} → {last} |
 | `sessions.jsonl` | {n} | {first} → {last} |
 | `commits.jsonl` | {n} | {first} → {last} |
+| `misses.jsonl` | {n} miss + {n} miss-fix | {first} → {last} |
 
 ---
 
@@ -97,24 +99,101 @@ pooled deliberately.*
 | Tokens per `Verified` REQ | {n} |
 | Commit cadence | {n} commits/active day over {n} days |
 
-**Cost in USD is not reported.** Claude Code transcripts carry token counts but no
-per-message dollar cost, and this framework runs on a subscription where marginal
-per-token cost is not the real unit. Multiplying tokens by a rate card would be an
-estimate presented as a measurement, so the row says tokens and stops.
+**Cost in USD is not reported here.** Claude Code transcripts and Codex usage
+payloads carry token counts but no per-message dollar cost, and this framework runs
+on subscriptions where marginal per-token cost is not the real unit. Multiplying
+tokens by a rate card would be an estimate presented as a measurement, so the row
+says tokens and stops. OpenCode runs *do* carry real provider cost — where they
+exist, §5b reports them and names the harness.
 
 `commits.jsonl` lags reality by one commit — at `pre-commit` time HEAD is still the
 previous commit, so the newest record ships in the next one. Unavoidable in either
 direction: a record of commit N cannot predate N. The hook reconciles against the
 log rather than appending a single line, so the lag never becomes a loss, and
 commits made on another machine appear after a pull + commit. If this repo's clone
-has no hook installed, `tf-metrics.sh --report` says so — note it in §5 rather than
-treating a thin commit count as a finding. The report also de-duplicates commits on
+has no hook installed, `tf-metrics.sh --report` says so — note it in §6 rather than
+treating a thin commit count as a finding (§6). The report also de-duplicates commits on
 `sha`; if it says duplicates were collapsed, that is a normal union merge, not data
 corruption, and needs no comment.
 
 ---
 
-## 5. What is missing
+## 5. Misses — what was missed, who missed it, what the fix cost
+
+<!-- SCHEMA.md §5.5. Delete this whole section if misses.jsonl is empty; do not
+     print a table of zeroes. Counts and the class distribution ARE poolable; the
+     attribution and cost figures below are NOT — each carries its own exclusion. -->
+
+| Metric | Value |
+|---|---|
+| Misses logged | {n} ({o} open, {r} resolved, {w} wont-fix) |
+| Design-miss share (`unspecified-gap`) | {x%} |
+| Found by a human (`owner` / `production`) | {x%} |
+
+*Reported **beside** the escape rate in §3, never merged with it: that figure is
+computed from `gates.jsonl` `gate:"escaped"` records by a different definition, and
+one word cannot mean two things on one page.*
+
+*`wont-fix` is a decision, not a backlog item, so it is not counted as open. The
+collapse check still treats it as a live defect, so a repeat failure on the same
+REQ will not open a duplicate record — the two predicates differ deliberately.*
+
+**Miss classes** — *what* was missed
+
+| Class | n | Share |
+|---|---|---|
+| {miss_class} | {n} | {x%} |
+
+**Why it was missed** — *which practice failed* ({a} of {m} misses assessed)
+
+<!-- Optional field (SCHEMA §5.5.6): the denominator is records that CARRY it, never
+     all misses. A missing value means "not assessed", never a zero for a category. -->
+
+| Practice | n | Share |
+|---|---|---|
+| {why_missed} | {n} | {x%} |
+
+This is the table that says whether your **specification** or your **verification** is
+the weak one — `missing-checklist-item` climbing means the spec has holes;
+`insufficient-verify-method` climbing means the gates are too weak for the defects
+that actually occur; `instruction-ignored` climbing means agents are skipping written
+steps, which no gate change will fix.
+
+### 5a. Attribution — `linked` records only
+
+**{a} of {m} misses are attributed; {e} are excluded** because they name a phase no
+`runs.jsonl` record backs, so the model that produced them is unknown.
+
+| By | Counts |
+|---|---|
+| Origin phase | {phase}={n}, … |
+| Origin agent | {agent}={n}, … |
+| Origin model | {model}={n}, … |
+
+**These are observational, not causal.** Which model gets the hard work is not
+random, so a model at the top of this list may be doing the hardest building rather
+than the worst. Read it as a question to investigate, never as a ranking to route on.
+
+### 5b. Rework cost — measured and apportioned never combine
+
+| | Fix records | Tokens out per miss |
+|---|---|---|
+| **Measured** (`sole` — the run fixed only this REQ) | {n} | {n} |
+| Apportioned (`shared:n` — divided equally, **not a measurement**) | {n} | {n} |
+| Unattributable (`none` — no usable token window) | {n} | — |
+
+**Dollars.** {Either: "$X per miss — MEASURED, from {n} OpenCode records." Or:
+"No measured dollars. Claude Code and Codex carry `cost_usd: null` permanently —
+no cost source exists on either, and pricing tokens from a rate card here would be
+an estimate presented as a measurement. Tokens are the honest figure."}
+
+A miss fixed inline, inside a longer run with no distinct fix record, cannot be
+costed at all. It counts toward the miss count and contributes nothing to the
+money — which is why the "unattributable" row is printed rather than dropped.
+
+---
+
+## 6. What is missing
 
 <!-- Name every metric that had no data or too little. A missing number reported as
      missing is worth more than a number nobody can defend. -->

@@ -90,6 +90,34 @@ Wait for ALL sub-agents to return, then aggregate. The orchestrator owns the bui
 
 Gaps in TrBlazeUI → `docs/{AppName}-TrBlazeUI-Feedback.md` (TR-NNN); gaps in TechieRag → `docs/{AppName}-TechieRag-Feedback.md` (TR-RAG-NNN). Create from `.tfcore/templates/v4custom/app-library-feedback-tmpl.md` on first issue. One file PER library (separate teams — never combine). Schema: Severity / Repro / Expected / Actual / Encountered in / Workaround / Suggested fix. Workaround + log + continue — never stop the build for a library gap, never silently swallow it.
 
+### 4a. Specification-gap logging — the DESIGN miss (do not skip, do not stop)
+
+Library gaps go in the feedback files (§4). **Specification gaps go in `misses.jsonl`.** When a REQ you are building turns out to be unbuildable as written — no acceptance criteria, a screen with no mockup, two REQs that contradict each other, a behaviour the BRD plainly needed and never named — that is a **miss made in the design phase**, and this is the only place in the framework that can see it. The verifier cannot: by the time it runs, the gap has either been papered over or built wrongly.
+
+Do what you already do — pick the sensible reading, note it in the checklist Remark, and keep building. Then record it:
+
+```bash
+MID=$(bash .tfcore/utils/tf-emit.sh --next-miss-id)
+cat <<JSON | bash .tfcore/utils/tf-emit.sh misses
+{"kind":"miss","miss_id":"$MID","req_id":"REQ-FN-014","req_class":"FN",
+ "miss_class":"unspecified-gap","artifact":"brd","severity":"minor",
+ "why_missed":"missing-checklist-item",
+ "origin_phase":"split-brd","origin_agent":"analyst",
+ "origin_run_id":"<started of the split-brd/day1 run, from runs.jsonl>",
+ "found_by":"agent-review","found_phase":"build-phase",
+ "found_gate":null,"found_run_id":"<the §0 timestamp>","failure_class":null}
+JSON
+```
+
+- **`artifact`** names the deficient document: `brd` · `architecture` · `uidesign` (a screen with no mockup) · `checklist` (a REQ with no acceptance bullet).
+- **`miss_class`** is `unspecified-gap` for something never specified, `spec-contradiction` for two requirements that cannot both hold. If the spec was fine and the *previous build* got it wrong, that is `missed-requirement` / `partial-implementation` with `origin_phase:"build-phase"` instead.
+- **`req_id:null` is correct** when the gap is behaviour no REQ ever covered. Do not attach it to the nearest REQ to make the record look tidier — an unowned gap is a different and more interesting finding than a thin REQ.
+- **`why_missed`** (SCHEMA §5.5.6) — from this phase it is nearly always `missing-checklist-item` (nothing covered the behaviour) or `ambiguous-acceptance` (the criteria admitted two honest readings and you had to pick one). `dependency-not-declared` where the REQ needed something no document stated.
+- **`severity`** here is about the *product*, not about how much it slowed you down.
+- Run the `--open-miss` check first when the gap attaches to a REQ; skip it when `req_id` is `null`.
+
+This does not change what you do next: **log and continue.** A spec gap never stops a build, never becomes a question to the owner mid-pass, and never blocks the working list (§2b). It is a record, not a gate.
+
 ### 5. Build (must PASS before self-smoke)
 
 Run the build using the **invocation ladder** at `.tfcore/templates/v4custom/build-invocation-ladder.md`. MANDATORY:
@@ -149,7 +177,7 @@ If the verifier reports `FAIL` / `Needs re-verify` rows:
 
 ### 7a. Emit the run record
 
-Same turn as the status gate, right after it. Doctrine + the nine constraints: `.tfcore/tasks/_metrics-emit-gate.md`. Schema: `.tfcore/telemetry/SCHEMA.md` §2.
+Same turn as the status gate, right after it. Doctrine + the ten constraints: `.tfcore/tasks/_metrics-emit-gate.md`. Schema: `.tfcore/telemetry/SCHEMA.md` §2.
 
 ```bash
 cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
@@ -166,7 +194,21 @@ JSON
 - `build_result` = `pass` / `fail` / `not-run` — honestly, including when the phase ended badly.
 - `reqs_touched` carries **REQ IDs only**. Never requirement text (constraint 7).
 
-The verify pass chained in §6b emits its own `gates.jsonl` records (verify-phase §6a) — do not emit those yourself; the verifier owns that stream, exactly as it owns the `Verified` verdict.
+The verify pass chained in §6b emits its own `gates.jsonl` records **and its own `misses.jsonl` records** (verify-phase §6a) — do not emit those yourself; the verifier owns both, exactly as it owns the `Verified` verdict. The only misses this task writes are the §4a **specification gaps**, which the verifier structurally cannot see.
+
+**In FIX mode (§2a), also close the misses you repaired.** For each REQ you re-entered that had an open miss, emit a `miss-fix` after this run record exists — it is the run record's `started` that carries the token window the fix cost is read from:
+
+```bash
+MID=$(bash .tfcore/utils/tf-emit.sh --open-miss REQ-UI-009 | cut -d' ' -f1)
+[ -n "$MID" ] && FA=$(bash .tfcore/utils/tf-emit.sh --next-fix-attempt "$MID") && \
+cat <<JSON | bash .tfcore/utils/tf-emit.sh misses
+{"kind":"miss-fix","miss_id":"$MID","req_id":"REQ-UI-009",
+ "fix_run_id":"<the §0 timestamp — this run's started>","fix_cmd":"build-phase",
+ "fix_attempt":$FA,"verdict_after":"<the verifier's verdict for this REQ>","reopened":false}
+JSON
+```
+
+`verdict_after` is **the verifier's verdict, not your opinion of the fix** — `Verified` only if §6b actually produced it. A miss closed on a builder's self-assessment is the same failure as a self-attested `Verified`, one stream over. Write no token or cost fields: the emitter copies them from the run you just named (constraint 10).
 
 **Telemetry has no veto.** If the emit fails, the phase still succeeded: do not retry, do not diagnose, do not mention it.
 
@@ -185,3 +227,5 @@ The verify pass chained in §6b emits its own `gates.jsonl` records (verify-phas
 - [ ] Standards-compliance greps clean (or violations noted)
 - [ ] **PROJECT-STATUS.md updated — FINAL GATE (phase, next command, open reqs, log row) + re-rendered HTML**
 - [ ] **`runs.jsonl` record emitted (§7a) with the correct `mode` (build vs fix)**
+- [ ] Specification gaps hit during the pass logged as `misses.jsonl` `unspecified-gap` records (§4a) — logged and continued, never a stop
+- [ ] FIX mode only: a `miss-fix` emitted per re-entered REQ that had an open miss, carrying the **verifier's** verdict (§7a)

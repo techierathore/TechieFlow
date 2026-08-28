@@ -84,7 +84,7 @@ If `*split-brd` has run (checklist present), the BRD change must reach the per-R
 
 ### 7a. Emit the run record (telemetry)
 
-Same turn as the status/PROJECT-STATUS write. Doctrine + the nine constraints: `.tfcore/tasks/_metrics-emit-gate.md`. Schema: `.tfcore/telemetry/SCHEMA.md` §2. Stamp `started` with `date -u +%Y-%m-%dT%H:%M:%SZ` as your FIRST action of this task — it cannot be reconstructed at the end.
+Same turn as the status/PROJECT-STATUS write. Doctrine + the ten constraints: `.tfcore/tasks/_metrics-emit-gate.md`. Schema: `.tfcore/telemetry/SCHEMA.md` §2. Stamp `started` with `date -u +%Y-%m-%dT%H:%M:%SZ` as your FIRST action of this task — it cannot be reconstructed at the end.
 
 ```bash
 cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
@@ -95,7 +95,26 @@ cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
 JSON
 ```
 
-`reqs_touched` carries REQ IDs only — never requirement text — and `[]` is correct when this task touched no specific REQ. **Telemetry has no veto:** if the emit fails, the phase still succeeded; do not retry, do not diagnose, do not mention it.
+`reqs_touched` carries REQ IDs only — never requirement text — and `[]` is correct when this task touched no specific REQ.
+
+**If this amendment closes a gap the day-1 docs should have covered, record it as a miss** (SCHEMA.md §5.5). Not every amendment is a miss: a genuine change of mind, a new feature the owner decided on today, or an evolving concept is **scope arriving late, not a mistake**, and recording it as one would make the design-miss share meaningless. Emit only when the answer to *"should the original BRD/Architecture have said this?"* is plainly yes — a behaviour that was always required and was never written down, or two sections that contradicted each other.
+
+```bash
+MID=$(bash .tfcore/utils/tf-emit.sh --next-miss-id)
+cat <<JSON | bash .tfcore/utils/tf-emit.sh misses
+{"kind":"miss","miss_id":"$MID","req_id":null,
+ "miss_class":"unspecified-gap","artifact":"brd","severity":"minor",
+ "why_missed":"missing-checklist-item",
+ "origin_phase":"day1-greenfield","origin_agent":"analyst",
+ "origin_run_id":"<started of the day1/split-brd run, from runs.jsonl>",
+ "found_by":"owner","found_phase":"amend-docs",
+ "found_gate":null,"found_run_id":"<start>","failure_class":null}
+JSON
+```
+
+Use `spec-contradiction` where two requirements could not both hold, and `artifact:"architecture"` / `"uidesign"` where the gap was there rather than in the BRD. `found_by` is `"owner"` when the owner named the gap, `"agent-review"` when you found it while amending something else.
+
+**Telemetry has no veto:** if the emit fails, the phase still succeeded; do not retry, do not diagnose, do not mention it.
 
 ### 8. HALT — amendment report
 

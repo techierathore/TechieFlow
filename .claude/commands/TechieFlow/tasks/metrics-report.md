@@ -4,13 +4,14 @@
 
 Turn `docs/metrics/*.jsonl` into a report the owner can read and, more importantly, **defend**. Produces `docs/metrics/METRICS.md` + `docs/metrics/METRICS.html`.
 
-This task answers three questions and nothing else:
+This task answers four questions and nothing else:
 
 1. **First-pass rate** — what fraction of REQs reach `Verified` on attempt 1?
 2. **Gate catch distribution** — of all failures, which gate caught them?
 3. **Escape rate** — what fraction of defects reached UAT/production instead of being caught by a gate?
+4. **Miss attribution and rework cost** — *what* was missed, *which phase / agent / model* let it through, and *what did fixing it cost*? (SCHEMA.md §5.5)
 
-Everything else in the report is context for those three.
+Everything else in the report is context for those four.
 
 Read `.tfcore/telemetry/SCHEMA.md` before you start. Read `.tfcore/tasks/_metrics-emit-gate.md` if you are unsure what may be written where.
 
@@ -42,9 +43,12 @@ If the streams are empty or the script reports nothing: say so plainly, write no
 `METRICS.md` must **never** print a combined **first-pass rate**, **gate catch distribution**, or **escape rate** that crosses either provenance boundary:
 
 - **live vs backfilled** — records reconstructed after the fact never pool with records written at the moment of the event;
-- **`project_type`** — `app`, `library`, and `docs` never pool with each other.
+- **`project_type`** — `app`, `library`, and `docs` never pool with each other;
+- **attribution and cost confidence** (§5.5) — a miss whose `origin_confidence` is not `linked` never enters a per-phase / per-agent / per-model figure, and a `miss-fix` whose `cost_attribution` is not `sole` never enters a headline cost figure.
 
-Not as a merged figure. Not as a "total" row. Not as an "overall" summary line. Not as a helpfully-labelled average in the intro paragraph. Backfilled data may appear in an **adjacent, labelled column** — never summed with live.
+Not as a merged figure. Not as a "total" row. Not as an "overall" summary line. Not as a helpfully-labelled average in the intro paragraph. Data on the wrong side of a boundary may appear in an **adjacent, labelled column** — never summed with the figure beside it.
+
+**Every exclusion is printed with the figure it bounds.** The JSON carries `misses.attribution_excluded` and the three `cost_*_n` counts for exactly this: an exclusion the reader cannot see is indistinguishable from a bug, and the reader is entitled to know that a per-model miss rate was computed over 7 of 19 records.
 
 **Any table containing backfilled data carries a footnote** naming what was reconstructed and what was inferred (`inferred[]` on the records tells you exactly which fields).
 
@@ -57,10 +61,13 @@ If you find yourself wanting to write "overall, across all projects, …" — **
 ### 3. Honesty rules for every number on the page
 
 - **Fewer than 3 supporting records → print `insufficient data (n=…)`, never a number.** A 100% first-pass rate from one REQ is noise wearing a suit.
-- **Never estimate, interpolate, or infer a metric that was not measured.** A missing number is reported as missing. `cost_usd` is `null` in every session record (the transcript carries no cost) — report **tokens per verified REQ**, and say why dollars are absent. Do not multiply tokens by a rate card.
+- **Never estimate, interpolate, or infer a metric that was not measured.** A missing number is reported as missing. `cost_usd` is `null` on every Claude Code and Codex record (no cost source exists, and inventing one would be an estimate presented as a measurement) — report **tokens**, name the harness, and say why dollars are absent. **Do not multiply tokens by a rate card.** Real dollars appear only on OpenCode records and are never pooled with the others.
+- **Measured cost and apportioned cost are two columns, never one number.** A fix run that repaired three misses has one token window; dividing it three ways is arithmetic. Print `cost_attribution:"sole"` figures as the headline and `shared:<n>` figures beside them, labelled as apportioned. `none` records are counted and costed at nothing.
 - **Never invent a metric that has no stream behind it.** No cycle-time-per-feature: the unit of work in this framework is the run, not the ticket, and that is deliberate.
 - Records with `project_type_inferred: true` are **unclassified** — give them their own row labelled as such. Do not silently fold them into `app`.
 - Name the REQs excluded from the live first-pass rate because they carry backfilled history (the tool lists them). A hidden exclusion is a lie of omission.
+- **Miss counts are poolable; miss *attribution* is not.** A miss counts as a miss whoever missed it, so raw counts and the class distribution may pool freely. The per-phase / per-agent / per-model rates run over `origin_confidence:"linked"` records only, and the excluded count is printed with them.
+- **A per-model miss rate is observational, not causal, and the page must say so once.** Which model gets the hard work is not random, and a reader who takes the ranking at face value will make a routing decision on a confounded number.
 
 ### 4. Write `docs/metrics/METRICS.md`
 
@@ -78,9 +85,11 @@ Per `.tfcore/tasks/generate-html.md` using the shared shell (`.tfcore/templates/
 
 ```
 # Metrics — {AppName}
-Streams: runs {r} · gates {g} ({b} backfilled) · sessions {s} · commits {c}
+Streams: runs {r} · gates {g} ({b} backfilled) · sessions {s} · commits {c} · misses {m}
 First-pass rate: {live, per project_type — or "insufficient data"}
 Gate catch: {top gate} {n}%  |  Escape rate: {x}%
+Misses: {m} logged ({o} open) · design-miss share {d}% · attributed {a}/{m}
+Rework cost: {tokens} tokens per miss (measured, n={s}) {| $X measured, OpenCode only}
 Written: docs/metrics/METRICS.md + .html
 {if backfilled records present: "Backfilled data is reported in a separate column and cannot support a published first-pass rate."}
 ```
@@ -89,7 +98,8 @@ Then stop. Do not run the status gate — this task reports on history, it does 
 
 ## Hard rules
 
-- **No combined figure across live/backfilled or across `project_type`** for first-pass rate, gate catch distribution, or escape rate. This is the rule the whole task exists for.
+- **No combined figure across live/backfilled, across `project_type`, across attribution confidence, or across cost attribution** — for first-pass rate, gate catch distribution, escape rate, miss rates, or cost per miss. This is the rule the whole task exists for.
+- **The miss stream's escape share is reported BESIDE the `gates.jsonl` escape rate, never merged into it.** They are computed from different records by different definitions; presenting one number for both would make the word meaningless.
 - **Never run git**, and never run `tf-metrics.sh --backfill-*` — owner-only.
 - **Never write into `PROJECT-STATUS.md`, any `*-Checklist.md`, or any `.jsonl` stream.**
 - **`insufficient data` is a legitimate result.** Print it without apology and without a workaround.
@@ -100,6 +110,11 @@ Then stop. Do not run the status gate — this task reports on history, it does 
 
 - [ ] `tf-metrics.sh --report --json` run; figures taken from it, not recomputed by hand
 - [ ] Live and backfilled reported separately; `app`/`library`/`docs` reported separately
+- [ ] Miss attribution figures computed over `linked` records only, with the excluded count printed beside them
+- [ ] `why_missed` distribution reported against **records that carry the field**, never against all misses; escapes lacking it are flagged
+- [ ] Open-miss count excludes `wont-fix` (a decision, not a backlog item) and reports it in its own bucket
+- [ ] Measured (`sole`) and apportioned (`shared:n`) rework cost in separate labelled columns — never one blended number
+- [ ] Dollars quoted only where a harness measured them; no rate-card estimate anywhere on the page
 - [ ] No "overall" / "total" / "combined" figure for first-pass rate, gate distribution, or escape rate
 - [ ] Every table containing backfilled data carries the inferred-fields footnote
 - [ ] Metrics with n < 3 printed as `insufficient data (n=…)`

@@ -253,7 +253,7 @@
           "sudo *": "ask"
         }
       },
-      "description": "Madhav — the single super-agent. Orchestrates the full pipeline (*run-workflow, *phase) with parallel subagents, runs the unified build (*build-phase — calls /trblazeui + /techierag as sub-agents), fixes bugs from screenshots (*fix-issues), analyzes + logs human-found bugs without fixing (*triage-issues), reports development telemetry (*metrics), and handles doc/status utilities (*render-workflow-docs, *generate-html, *handoff-phase, *refresh-status, *devguide) plus any one-off task."
+      "description": "Madhav — the single super-agent. Orchestrates the full pipeline (*run-workflow, *phase) with parallel subagents, runs the unified build (*build-phase — calls /trblazeui + /techierag as sub-agents), fixes bugs from screenshots (*fix-issues), analyzes + logs human-found bugs without fixing (*triage-issues), records a single missed requirement in seconds (*log-miss), reports development telemetry (*metrics), and handles doc/status utilities (*render-workflow-docs, *generate-html, *handoff-phase, *refresh-status, *devguide) plus any one-off task."
     },
     "flow-architect": {
       "prompt": "{file:./.tfcore/agents/architect.md}",
@@ -841,6 +841,10 @@
       "template": "{file:./.tfcore/tasks/fix-issues.md}",
       "description": "Bug-fix front door: given a folder of screenshots (+ optional description), reproduce with Playwright, triage (layout/data/logic/RAG), fan fixes to the right builder, re-smoke (data+visual) + re-verify, update docs. Driven by /flow-master."
     },
+    "techieflow:tasks:log-miss": {
+      "template": "{file:./.tfcore/tasks/log-miss.md}",
+      "description": "The 20-second front door for 'you missed this': turns one sentence about something an agent got wrong into a misses.jsonl record (what was missed, which phase/agent/model let it through, who found it) plus the checklist line — demotion with a dated miss Remark, or a new Planned row when nothing owns it. Never boots the app, never reproduces, never edits code. Driven by /flow-master."
+    },
     "techieflow:tasks:triage-issues": {
       "template": "{file:./.tfcore/tasks/triage-issues.md}",
       "description": "ANALYZE-ONLY bug front door for human-found (UAT/production) bugs: reproduce with Playwright, triage to the owning REQ, log in the checklist (demote to Needs re-verify / new Planned rows), optional scoped regression re-verify, update PROJECT-STATUS with the *fix-issues pointer. NEVER edits code. Driven by /flow-master."
@@ -859,7 +863,7 @@
     },
     "techieflow:tasks:metrics-report": {
       "template": "{file:./.tfcore/tasks/metrics-report.md}",
-      "description": "Development telemetry report (*metrics): reads the append-only docs/metrics/ streams (runs / gates / sessions / commits) and writes docs/metrics/METRICS.md + .html — first-pass rate, gate catch distribution, escape rate, rework ratio, throughput, commit cadence. NEVER prints a figure that pools live with backfilled records, or app with library/docs. Never runs git."
+      "description": "Development telemetry report (*metrics): reads the append-only docs/metrics/ streams (runs / gates / sessions / commits / misses) and writes docs/metrics/METRICS.md + .html — first-pass rate, gate catch distribution, escape rate, rework ratio, throughput, commit cadence, plus the miss report (what was missed, which phase/agent/model let it through, what the fixes cost). NEVER prints a figure that pools live with backfilled records, or app with library/docs. Never runs git."
     },
     "techieflow:tasks:render-workflow-docs": {
       "template": "{file:./.tfcore/tasks/render-workflow-docs.md}",

@@ -653,6 +653,16 @@ Bugs found at UAT or in production usually need a **plan and a paper trail befor
 
 Hand it a folder of screenshots *and/or a written bug list* (UAT reports often arrive as prose). Flow-master reproduces each issue live with Playwright and delivers **documentation only**: regressed REQs are demoted to `Needs re-verify` with a dated `⚠ UAT bug` remark, unspecified defects become new `Planned` REQ rows with acceptance criteria, the DevGuide's known-issues lines are refreshed, and PROJECT-STATUS's "Next command" points at `*fix-issues {App} {folder}` naming the REQ IDs. With the optional `verify` argument it also EXECUTES a scoped verify-phase over the affected screens' sibling REQs ("check the rest still works"). **It never edits `src/` or `tests/` and never spawns a builder sub-agent** — fixing is a separate decision you make afterwards by running `*fix-issues`. Task: `.tfcore/tasks/triage-issues.md`.
 
+### 7.13 Recording a miss in 20 seconds (`*log-miss`)
+
+```
+/flow-master *log-miss MyApp "the export button ignores the active date filter"     # add --fixed if it's already repaired
+```
+
+For the most common thing that happens and the one thing the framework never recorded: **an agent missed a requirement and you noticed.** `*triage-issues` boots the app and reproduces before it writes a word — right for UAT triage, far too heavy for one sentence — so these misses became a chat message, then a Remark if you were patient, then nothing.
+
+`*log-miss` classifies what you said (missed requirement · partial implementation · wrong behaviour · regression · **unspecified gap** — the spec's fault, not the build's · scope creep · hallucinated API · standards violation), attributes it to the phase and agent responsible, **looks the model up from `runs.jsonl`** rather than guessing it, and writes both a `misses.jsonl` record and the checklist line (a demotion with a dated `⚠ miss` remark, or a new `Planned` row with acceptance when nothing owns it). It never boots the app, never reproduces, never touches code. Task: `.tfcore/tasks/log-miss.md`; the numbers land in §17a.
+
 ## 8. Resuming a cold project
 
 Two flavours of resume. Pick by asking one question: **do you trust `PROJECT-STATUS.md`?**
@@ -885,6 +895,7 @@ Both new guards run in every harness: Codex through `codex-adapter.py` (`pre-too
 - Proving it works → `/verifier` (`*verify ui|functional|all` — filters the one checklist; data + visual gates).
 - The verifier passed but the running UI is broken → `/flow-master *fix-issues` (drop screenshots; it triages + routes the fix).
 - UAT / production bugs you want analyzed + logged in the checklist, NOT fixed yet → `/flow-master *triage-issues` (docs-only deliverable; fixing stays your call).
+- One thing an agent plainly missed, and you just want it on the record → `/flow-master *log-miss` (seconds, no repro; feeds the miss + rework-cost report in §17a).
 - Developer code-map (screen → control → service → proc) → `/flow-master *devguide`.
 - End-user how-to manual (what each screen is for + how to do things) → `/flow-master *productguide`.
 - Docs/HTML/status/handoff chores → `/flow-master`.
@@ -918,6 +929,7 @@ Each row gives the exact command for both tools. Replace placeholders such as `{
 | Build — unified phase | Build all open REQs, route UI/RAG work to library agents, self-smoke, and chain verification. | `/TechieFlow:agents:flow-master *build-phase {AppName}` | `/flow-master *build-phase {AppName}` |
 | Fix issues | Reproduce screenshot-reported issues, route fixes, then re-smoke and re-verify. | `/TechieFlow:agents:flow-master *fix-issues {AppName} {folder}` | `/flow-master *fix-issues {AppName} {folder}` |
 | Triage UAT/production bugs | Analyze and log bugs without editing code; optionally regression-verify sibling features. | `/TechieFlow:agents:flow-master *triage-issues {AppName} {evidence} [verify]` | `/flow-master *triage-issues {AppName} {evidence} [verify]` |
+| Log a miss | Record one missed requirement as telemetry + a checklist line. No boot, no repro, no code. | `/TechieFlow:agents:flow-master *log-miss {AppName} "{what was missed}"` | `/flow-master *log-miss {AppName} "{what was missed}"` |
 | Verify gates and standards | Run acceptance tests, standards greps, data-render, visual-truth, and applicable performance gates. | `/TechieFlow:agents:verifier *verify <scope>` | `/flow-verifier *verify <scope>` |
 | End of session | Update project status and regenerate its HTML representation. | `/TechieFlow:agents:flow-master Update PROJECT-STATUS.md (phase, next, log); regenerate PROJECT-STATUS.html.` | `/flow-master Update PROJECT-STATUS.md (phase, next, log); regenerate PROJECT-STATUS.html.` |
 | Final handoff | Generate the final UsageGuide, DevGuide, status, and library-feedback consolidation. | `/TechieFlow:agents:flow-master *handoff-phase {AppName}` | `/flow-master *handoff-phase {AppName}` |
@@ -941,6 +953,7 @@ Codex workflows are project skills, not literal Claude/OpenCode slash commands. 
 | Mockups / split BRD | `$techieflow-mockups {AppName}` / `$techieflow-split-brd {AppName}` |
 | Build / verify | `$techieflow-build {AppName}` / `$techieflow-verify all {AppName}` |
 | Fix / triage issues | `$techieflow-fix-issues {AppName} {evidence}` / `$techieflow-triage-issues {AppName} {evidence}` |
+| Log a miss | `$techieflow-log-miss {AppName} "{what was missed}"` |
 | Developer / product guide | `$techieflow-devguide {AppName}` / `$techieflow-productguide {AppName}` |
 | Handoff / recover status | `$techieflow-handoff {AppName}` / `$techieflow-refresh-status {AppName}` |
 | Render workflow docs / Markdown | `$techieflow-render-workflow-docs {AppName}` / `$techieflow-generate-html @docs/File.md` |
@@ -1111,7 +1124,7 @@ The framework never *requires* MAUI — many apps are Blazor-only and build with
 > **[docs/TechieFlow-Telemetry-Guide.md](docs/TechieFlow-Telemetry-Guide.md)** (open `docs/TechieFlow-Telemetry-Guide.html` in a browser for the rendered version).
 > Field-by-field contract: `.tfcore/telemetry/SCHEMA.md`.
 
-The framework keeps append-only JSONL streams under `docs/metrics/` (tracked in git) to answer three questions: **first-pass rate** (how often a REQ passes verification on attempt 1), **gate catch distribution** (which gate catches the failures), and **escape rate** (what gets past every gate to a human). Four streams:
+The framework keeps append-only JSONL streams under `docs/metrics/` (tracked in git) to answer four questions: **first-pass rate** (how often a REQ passes verification on attempt 1), **gate catch distribution** (which gate catches the failures), **escape rate** (what gets past every gate to a human), and — since 2026-08-28 — **miss attribution and rework cost** (*what* was missed, *which phase / agent / model* let it through, and *what fixing it cost*). Five streams:
 
 | Stream | One record per… | Written by |
 |---|---|---|
@@ -1119,8 +1132,30 @@ The framework keeps append-only JSONL streams under `docs/metrics/` (tracked in 
 | `gates.jsonl` | REQ verdict per verify run (the primary stream) | `verify-phase` / `triage-issues` |
 | `sessions.jsonl` | agent session token totals | Claude `SessionEnd` hook · OpenCode guard-bridge plugin (real cost) |
 | `commits.jsonl` | git commit | YOUR own `pre-commit` hook — agents never run git |
+| `misses.jsonl` | something an agent **missed** (`miss`) and what repairing it cost (`miss-fix`) | `verify-phase`, `build-phase`, `triage-issues`, `fix-issues`, `amend-docs`, `*log-miss` |
 
-Read the results with `*metrics {App}` → `docs/metrics/METRICS.md` + `.html`. The standing rules: **provenance never merges** (live vs backfilled, app vs library, dollars across harnesses), **privacy** (ids/counts/paths at most — never requirement text, prompt text, or commit subjects), **telemetry has no veto** (every writer exits 0 unconditionally; a bug drops a record, never breaks a session), **agents never write what they can't know** (harness detected, attempts computed, tokens read from the harness's own store).
+Read the results with `*metrics {App}` → `docs/metrics/METRICS.md` + `.html`. The standing rules: **provenance never merges** (live vs backfilled, app vs library, dollars across harnesses, and now guessed vs looked-up attribution), **privacy** (ids/counts/paths at most — never requirement text, prompt text, or commit subjects), **telemetry has no veto** (every writer exits 0 unconditionally; a bug drops a record, never breaks a session), **agents never write what they can't know** (harness detected, attempts computed, tokens read from the harness's own store, **miss attribution looked up from `runs.jsonl` or written as `null`**).
+
+### 17a. Misses — the fourth question
+
+A gate record says a REQ failed. A **miss** record says what was missed, which phase let it through, and what the fix cost. It is the only stream that can hold a **design-phase miss** — "the BRD never specified the export screen" — because it is the only one not written by the verifier.
+
+- **`*log-miss {App} "<what was missed>"`** is the 20-second front door. It never boots the app, never reproduces, never edits code — that friction is exactly what stopped misses from being recorded at all. Use `--fixed` when it is already repaired.
+- Everything else emits automatically: `verify-phase` on a failing gate, `build-phase` when the spec turns out to be incomplete, `triage-issues` on a UAT/production bug, `fix-issues` when it closes one.
+- **One defect is one miss.** A REQ that fails three verify passes collapses onto the open record, so the count measures quality rather than retry patience.
+- **`why_missed` says which *practice* failed** (ported from the Playbook, 2026-08-28): `missing-checklist-item` · `insufficient-verify-method` · `code-audit-limitation` · `ambiguous-acceptance` · `dependency-not-declared` · `instruction-ignored` · `other`. Where `miss_class` names the defect, this names the practice — and it is the more decision-changing of the two, because it tells you whether your **specification** or your **verification** is the weak one. `instruction-ignored` is TechieFlow's own addition: an agent skipping a written step is this framework's dominant failure mode and no gate change fixes it.
+- **The money answer, honestly:** OpenCode reports **real dollars**; Claude Code and Codex carry `cost_usd: null` permanently and report **tokens**. No rate card is ever applied to make a dollar figure appear — an estimate presented as a measurement poisons every comparison built on it.
+- **Cost is never silently apportioned.** A fix run that repaired three misses has one token window; `cost_attribution` marks it `shared:3` and the report shows measured and apportioned as separate columns, never one number.
+
+Design record: [docs/Miss-Telemetry-TechieFlow.md](docs/Miss-Telemetry-TechieFlow.md). Schema: `.tfcore/telemetry/SCHEMA.md` §5.5.
+
+### 17c. Two things that trip people up
+
+**You do not need the commit hook to get metrics.** Four of the five streams need no version-control hook at all: `runs`, `gates` and `misses` come from `tf-emit.sh` inside the phase tasks, and `sessions` from the Claude Code `SessionEnd` hook (or the OpenCode plugin) — neither of those is a version-control hook. Only `commits.jsonl` uses `.git/hooks/pre-commit`, and only for commit volume and cadence; nothing about *what was missed, who missed it, or what the fix cost* depends on it. And even that hook is optional — `.tfcore/telemetry/tf-metrics.sh --backfill-commits .` reconstructs the identical records perfectly from the commit log at any time (that log is itself append-only, which is why commit records are the one backfill exempt from the live-vs-backfilled rule).
+
+**A greenfield project is born labelled `docs`, and that used to stick.** `scaffold-greenfield.sh` classifies the repo at scaffold time, when it genuinely is docs-only — the day-1 documents exist and `src/` does not — and the old "detected once, never re-guessed" rule then froze it. TfLens accumulated **225 gate records, visual gates included, under a `project_type` whose definition says gates cannot fire**. Since 2026-08-28 a later `update-framework.sh` **upgrades** a `docs` label once real heads appear, and only ever upwards: `app`/`library`/`framework` are never re-guessed, `--type` always wins, and a genuine docs repo never grows a head. Correct one by hand any time with `.tfcore/telemetry/install-metrics.sh . --type app`.
+
+Records written *before* a correction keep the old value — the streams are append-only and corrections happen at read time, never by rewriting history — so a reclassified project shows under **both** segments, which the provenance rule forbids pooling. `--report` states the split explicitly rather than letting one project look like two.
 
 ## 17b. Model routing — run cheap phases on cheap models
 

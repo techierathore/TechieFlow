@@ -90,6 +90,28 @@ JSON
 - **Could-not-reproduce → emit nothing.** No defect was established; a record would inflate the escape rate with a non-event.
 - New `Planned` rows for never-specified behaviour: emit with `verdict:"FAIL"`, `prior_verdict:null` — the gap escaped just as surely, it simply had no REQ to escape from.
 
+**Then one `misses.jsonl` record per reproduced issue** (SCHEMA.md §5.5). The `escaped` gate record above says *no gate caught it*; the miss record says *what was missed and which phase let it through* — the two answer different questions and both are wanted.
+
+```bash
+MID=$(bash .tfcore/utils/tf-emit.sh --next-miss-id)
+cat <<JSON | bash .tfcore/utils/tf-emit.sh misses
+{"kind":"miss","miss_id":"$MID","req_id":"REQ-UI-009","req_class":"UI",
+ "miss_class":"regression","artifact":"src","severity":"blocker",
+ "why_missed":"insufficient-verify-method",
+ "origin_phase":"build-phase","origin_agent":"trblazeui",
+ "origin_run_id":"<started of the run that last touched this REQ, from runs.jsonl>",
+ "found_by":"owner","found_phase":"triage-issues","found_gate":null,
+ "found_run_id":"<this run's start>","failure_class":"overlap"}
+JSON
+```
+
+- **`found_by`** is `"owner"` for a UAT / owner test session and `"production"` for a live report. Nothing else — this field is what separates an in-cycle failure from a true escape, and it is the whole reason the record is worth writing.
+- **`found_gate` is `null`.** No gate fired; that is the finding.
+- **`why_missed` is NOT optional here.** Every record this task writes is an escape — it got past every gate and a human found it — so *why nothing caught it* is the entire value of the record, and the report warns when it is absent. Answer it from what you observed reproducing the bug: `missing-checklist-item` (no acceptance covered this behaviour), `insufficient-verify-method` (acceptance existed but no gate could have caught this), `code-audit-limitation` (the screen was never runtime-observable), `ambiguous-acceptance`, `dependency-not-declared`. This is the field that tightens the gates for next time.
+- **Run the `--open-miss` collapse check first**, exactly as verify-phase does: if this REQ already has an open miss of the same `miss_class`, the owner has found the same defect the gates already know about — emit nothing.
+- **A defect with no owning REQ** (a new `Planned` row in §4) is `req_id:null`, `miss_class:"unspecified-gap"`, `artifact:"brd"`. That combination is the single most valuable record in this stream: **it is a design miss, caught by a human, months after the phase that made it.**
+- **Could-not-reproduce → emit nothing**, for the same reason no `gates` record is written: no defect was established.
+
 Then one `runs.jsonl` record:
 
 ```bash
@@ -132,4 +154,4 @@ Next: /TechieFlow:agents:flow-master *fix-issues {AppName} {Folder}   (OpenCode:
 - [ ] `verify` arg honoured (scoped verify-phase EXECUTED, ledger written) — or verifier untouched
 - [ ] DevGuide known-issues refreshed; PROJECT-STATUS `.md` + `.html` updated; next command = `*fix-issues` pointer with REQ IDs
 - [ ] ZERO source/test files modified; no builder sub-agent spawned
-- [ ] `gates.jsonl` record with `gate:"escaped"` emitted per demoted/new REQ, + one `runs.jsonl` record (§6a)
+- [ ] `gates.jsonl` record with `gate:"escaped"` emitted per demoted/new REQ, + one `misses.jsonl` `miss` per reproduced issue (`found_by:"owner"`/`"production"`, collapse-checked), + one `runs.jsonl` record (§6a)

@@ -11,9 +11,17 @@
 #                                               # prints an integer: the `attempt` the NEXT run record for
 #                                               # this cmd + these REQs would get — the launch-time read
 #                                               # behind routing.yaml `escalation:` (advisory)
+#   tf-emit.sh --next-miss-id                   # prints MISS-<app>-<YYYYMMDD>-<NN> (SCHEMA.md §5.5.1)
+#   tf-emit.sh --next-fix-attempt MISS-App-20260828-03   # prints an integer
+#   tf-emit.sh --open-miss REQ-UI-014           # prints "<miss_id> <miss_class>" if a miss on that REQ
+#                                               # is still open, nothing otherwise (the §5.5.4 collapse
+#                                               # check — one defect is one miss, however often it fails)
 #   tf-emit.sh --where                          # prints the resolved docs/metrics dir
 #
-# STREAMS: runs | gates | sessions | commits   (anything else is dropped)
+# STREAMS: runs | gates | sessions | commits | misses   (anything else is dropped)
+#
+# misses.jsonl is the one stream carrying TWO record kinds — `miss` (opened) and
+# `miss-fix` (closed, linked by miss_id). SCHEMA.md §5.5.
 #
 # ONE RECORD OR MANY. stdin is normally a single JSON object. It may also be a
 # JSONL *stream* — one object per line — and every line is appended in ONE
@@ -32,6 +40,13 @@
 #                              (a task template cannot know which harness is running it,
 #                              so it must never hard-code this; null when undeterminable,
 #                              because a wrong harness label is worse than a missing one)
+#   origin_model            -> on `miss` records: LOOKED UP from the runs.jsonl record whose
+#   origin_harness             `started` == origin_run_id. Never written by an agent, for the
+#                              same reason as `harness`: shared task markdown cannot know it,
+#                              and a wrong model label corrupts every per-model comparison.
+#   tokens_* / cost_usd     -> on `miss-fix` records: COPIED from the runs.jsonl record whose
+#   tokens_scope / model       `started` == fix_run_id (that run's own window, already
+#                              enriched at its append). Never recomputed, never estimated.
 # Nothing else is ever added, reordered, or rewritten.
 #
 # HARD RULE — TELEMETRY HAS NO VETO. This script exits 0 UNCONDITIONALLY:
@@ -144,10 +159,116 @@ PY
   exit 0
 fi
 
+# --- read helper: the next miss id ---------------------------------------
+# MISS-<app>-<YYYYMMDD>-<NN>, NN = 1 + today's existing miss records for this app.
+# An agent must never invent one: miss_id is the join key between a `miss` and its
+# `miss-fix`, and a collision would silently merge two defects into one lifecycle.
+if [[ "$1" == "--next-miss-id" ]]; then
+  python3 - "$MET_DIR/misses.jsonl" "$ROOT" 2>"$TF_ERR" <<'PY' || true
+import datetime, glob, json, os, sys
+path, root = sys.argv[1], sys.argv[2]
+hits = glob.glob(os.path.join(root, "docs", "*-Checklist.md"))
+app = (os.path.basename(hits[0])[: -len("-Checklist.md")] if len(hits) == 1
+       else os.path.basename(os.path.abspath(root)))
+day = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d")
+stem = "MISS-%s-%s-" % (app, day)
+n = 0
+try:
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            mid = r.get("miss_id") or ""
+            if r.get("kind") == "miss" and mid.startswith(stem):
+                try:
+                    n = max(n, int(mid[len(stem):]))
+                except ValueError:
+                    pass
+except FileNotFoundError:
+    pass
+print("%s%02d" % (stem, n + 1))
+PY
+  exit 0
+fi
+
+# --- read helper: next fix attempt for a miss ----------------------------
+if [[ "$1" == "--next-fix-attempt" ]]; then
+  MID="$2"
+  [[ -n "$MID" ]] || { echo 1; exit 0; }
+  python3 - "$MET_DIR/misses.jsonl" "$MID" 2>"$TF_ERR" <<'PY' || echo 1
+import json, sys
+path, mid = sys.argv[1], sys.argv[2]
+n = 0
+try:
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            if r.get("kind") == "miss-fix" and r.get("miss_id") == mid:
+                n += 1
+except FileNotFoundError:
+    pass
+print(n + 1)
+PY
+  exit 0
+fi
+
+# --- read helper: is a miss on this REQ still open? -----------------------
+# SCHEMA.md §5.5.4 — the collapse check. A REQ that fails three verify passes
+# must produce ONE miss, not three; otherwise the miss count measures retry
+# patience rather than quality. Open = no miss-fix, or the latest miss-fix
+# closed with a verdict_after other than "Verified". Prints "<miss_id>
+# <miss_class>" for the most recent open miss, or nothing at all.
+if [[ "$1" == "--open-miss" ]]; then
+  REQ="$2"
+  [[ -n "$REQ" ]] || exit 0
+  python3 - "$MET_DIR/misses.jsonl" "$REQ" 2>"$TF_ERR" <<'PY' || true
+import json, sys
+path, req = sys.argv[1], sys.argv[2]
+opened, fixes = [], {}
+try:
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            if r.get("kind") == "miss" and r.get("req_id") == req:
+                opened.append(r)
+            elif r.get("kind") == "miss-fix":
+                mid = r.get("miss_id")
+                if mid:
+                    prev = fixes.get(mid)
+                    if prev is None or (r.get("ts") or "") >= (prev.get("ts") or ""):
+                        fixes[mid] = r
+except FileNotFoundError:
+    pass
+for r in reversed(opened):                     # most recent first
+    fix = fixes.get(r.get("miss_id"))
+    if fix is None or fix.get("verdict_after") != "Verified":
+        print("%s %s" % (r.get("miss_id"), r.get("miss_class") or "other"))
+        break
+PY
+  exit 0
+fi
+
 # --- append path ----------------------------------------------------------
 STREAM="$1"
 case "$STREAM" in
-  runs|gates|sessions|commits) ;;
+  runs|gates|sessions|commits|misses) ;;
   *) _warn "unknown stream '${STREAM:-<none>}' — event dropped"; exit 0 ;;
 esac
 
@@ -202,6 +323,23 @@ if not records:
 #   metrics:
 #     project_type: app
 def _project_type():
+    # STRUCTURAL SIGNAL FIRST, and it is authoritative. A repo carrying the
+    # scaffold scripts beside .tfcore/tasks/ IS the framework template — nothing
+    # else can be, and a scaffolded app never has them at its root.
+    #
+    # This is checked ahead of core-config.yaml, and deliberately: the framework's
+    # own core-config.yaml is the file the scaffolds rsync into a new app with
+    # --ignore-existing, so recording `project_type: framework` in it would stamp
+    # `framework` on every app created afterwards, and install-metrics.sh would
+    # then never re-guess (an existing classification always wins). Detecting it
+    # from the tree shape instead means the framework can classify itself without
+    # anything to leak. install-metrics.sh knows the same rule and writes nothing.
+    try:
+        if (os.path.isfile(os.path.join(root, "scaffold-brownfield.sh"))
+                and os.path.isdir(os.path.join(root, ".tfcore", "tasks"))):
+            return "framework"
+    except Exception:
+        pass
     cfg = os.path.join(root, ".tfcore", "core-config.yaml")
     try:
         with open(cfg, "r", encoding="utf-8") as fh:
@@ -559,6 +697,88 @@ def enrich_run(rec):
         warn("run enrichment failed (%s) — record kept unenriched" % e)
     return rec
 
+# --- miss enrichment (misses only; SCHEMA.md §5.5) ------------------------
+# Two lookups, both against runs.jsonl, both replacing an agent judgement with a
+# fact the emitter can check:
+#
+#   `miss`      origin_run_id -> origin_model / origin_harness, and
+#               origin_confidence DERIVED (linked | inferred | unknown).
+#               An agent cannot know which model ran a phase two days ago, and a
+#               copied literal would corrupt every per-model comparison — the same
+#               reasoning that makes `harness` detected rather than declared.
+#
+#   `miss-fix`  fix_run_id -> that run's already-enriched token window, copied
+#               verbatim, plus cost_attribution DERIVED from its reqs_touched.
+#               Never recomputed and never estimated: if the run carried no
+#               window, this record carries no numbers (SCHEMA.md §5.5.3).
+_RUNS_BY_START = None
+
+def _runs_by_start():
+    global _RUNS_BY_START
+    if _RUNS_BY_START is None:
+        _RUNS_BY_START = {}
+        try:
+            with open(os.path.join(met_dir, "runs.jsonl"), encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        r = json.loads(line)
+                    except Exception:
+                        continue
+                    if r.get("kind") == "run" and r.get("started"):
+                        _RUNS_BY_START[r["started"]] = r
+        except Exception:
+            pass
+    return _RUNS_BY_START
+
+_COST_FIELDS = ("tokens_in", "tokens_out", "tokens_cache_read", "tokens_cache_write",
+                "cost_usd", "tokens_scope", "model")
+
+def enrich_miss(rec):
+    if stream != "misses":
+        return rec
+    try:
+        kind = rec.get("kind")
+        runs = _runs_by_start()
+        if kind == "miss":
+            src = runs.get(rec.get("origin_run_id")) if rec.get("origin_run_id") else None
+            if src:
+                rec["origin_confidence"] = "linked"
+                rec["origin_model"] = src.get("model")
+                rec["origin_harness"] = src.get("harness")
+            else:
+                # Named a phase but no run record backs it -> inferred. Named
+                # nothing -> unknown. Either way the model is FORCED to null,
+                # overwriting anything the caller put there: a guess here is worse
+                # than a gap, because nothing downstream can see that it was one.
+                rec["origin_confidence"] = "inferred" if rec.get("origin_phase") else "unknown"
+                rec["origin_model"] = None
+                rec["origin_harness"] = None
+        elif kind == "miss-fix":
+            src = runs.get(rec.get("fix_run_id")) if rec.get("fix_run_id") else None
+            if src:
+                for f in _COST_FIELDS:
+                    if f in src and f not in rec:
+                        rec[f] = src[f]
+                if "cost_attribution" not in rec:
+                    touched = src.get("reqs_touched") or []
+                    if rec.get("tokens_scope") == "none" or not rec.get("tokens_scope"):
+                        rec["cost_attribution"] = "none"
+                    elif len(touched) == 1 and touched[0] == rec.get("req_id"):
+                        rec["cost_attribution"] = "sole"
+                    elif len(touched) > 1:
+                        rec["cost_attribution"] = "shared:%d" % len(touched)
+                    else:
+                        rec["cost_attribution"] = "none"
+            else:
+                rec.setdefault("cost_attribution", "none")
+                rec.setdefault("tokens_scope", "none")
+    except Exception as e:
+        warn("miss enrichment failed (%s) — record kept unenriched" % e)
+    return rec
+
 # --- append --------------------------------------------------------------
 # newline="\n" is NOT optional. Python's text mode translates "\n" to the
 # platform separator, so on native Windows every append would land as CRLF —
@@ -567,7 +787,8 @@ def enrich_run(rec):
 # .gitattributes block pins to LF. These files are LF on every platform.
 lines = []
 for rec in records:
-    line = json.dumps(enrich_run(stamp_attempt(enrich(rec))), separators=(",", ":"), ensure_ascii=False)
+    line = json.dumps(enrich_miss(enrich_run(stamp_attempt(enrich(rec)))),
+                      separators=(",", ":"), ensure_ascii=False)
     if "\n" in line or "\r" in line:
         warn("record serialised with a newline — record dropped")
         continue

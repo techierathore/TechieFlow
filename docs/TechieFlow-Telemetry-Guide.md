@@ -8,19 +8,20 @@
 
 **Audience:** the framework owner. **TL;DR:** the framework measures its own development process — first-pass quality, where gates catch problems, what escapes to you, and (since 2026-08-20) which model did the work and what it cost. **Reference docs:** `.tfcore/telemetry/SCHEMA.md` (the field-by-field contract) · `docs/TechieFlow-Telemetry-Runbook.md` (the original implementation record) · `docs/TechieFlow-Routing-Guide.md` (how the model/cost fields feed routing decisions).
 
-## 1. Why this exists — the three questions
+## 1. Why this exists — the four questions
 
 TechieFlow used to produce all this evidence and throw it away: every `*verify` applied named gates to identified REQs, wrote its ledger — and the next run overwrote everything. The status table mutates in place, so history evaporated.
 
-Telemetry keeps that evidence in **append-only JSONL streams** under `docs/metrics/` (tracked in git, one JSON object per line, never rewritten). It exists to answer exactly three questions:
+Telemetry keeps that evidence in **append-only JSONL streams** under `docs/metrics/` (tracked in git, one JSON object per line, never rewritten). It exists to answer exactly four questions:
 
 1. **First-pass rate** — how often does a REQ pass verification on its first attempt?
 2. **Gate catch distribution** — *which* gate catches the problems (build? acceptance? data-render? visual? perf? standards?)
 3. **Escape rate** — how much gets past all gates and is found by a human (UAT/production)?
+4. **Miss attribution and rework cost** (added 2026-08-28) — *what* was missed, *which phase / agent / model* let it through, and *what did fixing it cost*?
 
 Everything else (throughput, rework ratio, cost per phase) is derived from the same records.
 
-## 2. The four streams at a glance
+## 2. The five streams at a glance
 
 | File | One record per… | Written by | When |
 |---|---|---|---|
@@ -28,6 +29,7 @@ Everything else (throughput, rework ratio, cost per phase) is derived from the s
 | `docs/metrics/gates.jsonl` | REQ verdict per verify run — **the primary stream** | `verify-phase` §6a (and `triage-issues` for escapes) | every time a REQ is graded |
 | `docs/metrics/sessions.jsonl` | agent session (token totals) | Claude: `SessionEnd` hook · OpenCode: the `.opencode/plugin/techieflow.js` plugin | session end / session idle |
 | `docs/metrics/commits.jsonl` | git commit | YOUR own `pre-commit` hook (agents never run git) | your commits |
+| `docs/metrics/misses.jsonl` | something an agent **missed** (`miss`) + what repairing it cost (`miss-fix`) | `verify-phase`, `build-phase`, `triage-issues`, `fix-issues`, `amend-docs`, `*log-miss` | when a miss is found / fixed |
 
 Every record is appended through one primitive — `.tfcore/utils/tf-emit.sh` — which stamps the shared fields (`v`, `ts`, `app`, `project_type`, `harness`) and **never blocks anything**: telemetry has no veto, a failed write is a silently dropped record, never a broken session.
 
@@ -99,6 +101,48 @@ Reading it line by line:
 
 Written by the `pre-commit` hook inside YOUR own `git commit` (git is manual in TechieFlow — no agent path ever runs it). The hook reconciles: every commit, it backfills any commits the stream is missing, so multi-machine work and fresh clones converge. Only the conventional-commit prefix is kept; the subject line is discarded on the spot (§6). **An empty `commits.jsonl` means "no commits made from this clone since install" — not a bug.**
 
+### 3.5 `misses.jsonl` — the fourth question, and the only stream that sees a DESIGN miss
+
+Two record kinds, linked by `miss_id`. The `miss` opens; the `miss-fix` closes.
+
+```json
+{"v":1, "ts":"2026-08-28T11:04:19Z", "kind":"miss",
+ "app":"AstroLyfe", "project_type":"app", "harness":"claude-code",
+ "miss_id":"MISS-AstroLyfe-20260828-03", "req_id":"REQ-UI-014", "req_class":"UI",
+ "miss_class":"partial-implementation", "artifact":"src", "severity":"major",
+ "origin_phase":"build-phase", "origin_agent":"trblazeui",
+ "origin_run_id":"2026-08-26T09:12:40Z", "origin_confidence":"linked",
+ "origin_model":"claude-opus-5", "origin_harness":"claude-code",
+ "found_by":"gate", "found_phase":"verify-phase", "found_gate":"render",
+ "found_run_id":"2026-08-28T10:41:02Z", "failure_class":"blank-data"}
+```
+
+```json
+{"v":1, "ts":"2026-08-28T14:52:07Z", "kind":"miss-fix",
+ "miss_id":"MISS-AstroLyfe-20260828-03", "req_id":"REQ-UI-014",
+ "fix_run_id":"2026-08-28T13:58:11Z", "fix_cmd":"fix-issues", "fix_attempt":1,
+ "verdict_after":"Verified", "reopened":false, "cost_attribution":"shared:3",
+ "tokens_in":812, "tokens_out":38104, "cost_usd":null, "tokens_scope":"tree"}
+```
+
+- **`miss_class:"unspecified-gap"` with `artifact:"brd"` is the design-phase miss** — the case nothing in the framework could see before. `gates.jsonl` is written by the verifier, and by the time verification runs a specification gap has already been papered over or built wrongly. `build-phase` §4a records it at the moment a builder hits it.
+- **`origin_model` / `origin_harness` / `origin_confidence` are looked up, never typed.** `tf-emit.sh` resolves them from the `runs.jsonl` record whose `started` equals `origin_run_id`, and **forces the model to `null` when it can't** — overwriting whatever the agent supplied. Same rule as `harness` (§4), sharper consequence: a per-model miss rate built from guesses is a routing decision made on invented evidence.
+- **`cost_attribution` is derived from the fix run's `reqs_touched`** — `sole` (the run fixed only this REQ: a real measurement), `shared:n` (equal division, *not* a measurement), `none` (no window at all). Reports keep measured and apportioned in separate columns, always.
+- **One defect is one miss.** `tf-emit.sh --open-miss REQ-X` is the collapse check: a REQ that fails three verify passes produces one record, not three, unless the *kind* of failure changes.
+- **`why_missed` says which *practice* failed** (§5.5.6, ported from the Playbook 2026-08-28): `missing-checklist-item` · `insufficient-verify-method` · `code-audit-limitation` · `ambiguous-acceptance` · `dependency-not-declared` · `instruction-ignored` · `other`. `miss_class` names the defect; this names the practice, and it is the one that tells you whether your **specification** or your **verification** is weak. Optional — but an escape without it wastes the record, and the report says so.
+- **`wont-fix` is not "open".** The report counts open / resolved / wont-fix separately: a wont-fix is a decision, not a backlog item. The collapse check still treats it as a live defect so a repeat failure cannot open a duplicate — two questions, two predicates, deliberately not the same.
+
+**How to record one yourself:**
+
+```
+/TechieFlow:agents:flow-master *log-miss MyApp "the export button ignores the active date filter"
+/flow-master *log-miss MyApp "..."           (OpenCode)        # --fixed if it is already repaired
+```
+
+Seconds, no app boot, no repro, no code touched. That last part is the point — `*triage-issues` does all three, which is right for UAT triage and is exactly the friction that stopped one-line misses from ever being recorded.
+
+**What a miss costs, by harness:** OpenCode gives **real dollars**; Claude Code and Codex give **tokens** and `cost_usd: null`, permanently. No rate card is applied anywhere in this framework to make a dollar figure appear.
+
 ## 4. How model, tokens and cost get onto run records (the 2026-08-20 upgrade)
 
 No agent ever reports its own token usage (it can't know it, and self-reports drift). Instead `tf-emit.sh` reads the **harness's own store** at append time:
@@ -160,7 +204,9 @@ Derived numbers are **computed at report time and never stored** — so a defini
 
 - **"sessions.jsonl is empty on this machine."** Claude side writes on `SessionEnd`; OpenCode side needs the plugin (deployed by `update-framework.sh` since 2026-08-20). An empty stream means "not collected here", never "no work happened".
 - **"cost_usd is null everywhere."** On Claude Code that is permanent and deliberate — no real cost source exists and the framework never estimates. Real dollars come from OpenCode runs.
-- **"commits.jsonl is empty / behind."** It fills only from YOUR commits on THIS clone; the reconcile catches up on your next commit.
+- **"commits.jsonl is empty / behind."** It fills only from YOUR commits on THIS clone; the reconcile catches up on your next commit. **No hook is required either way** — `.tfcore/telemetry/tf-metrics.sh --backfill-commits .` reconstructs the identical data from the commit log at any time, and reconstructs it *perfectly* (that log is itself append-only, which is why commit records are the one backfill exempt from the live-vs-backfilled separation). The hook only makes it automatic.
+- **"Do I need the commit hook to get metrics at all?"** No. **Four of the five streams need no version-control hook whatsoever**: `runs`, `gates` and `misses` are written by `tf-emit.sh` from the phase tasks, and `sessions` by the Claude Code `SessionEnd` hook (or the OpenCode plugin) — neither of those is a version-control hook. Only `commits.jsonl` uses `.git/hooks/pre-commit`, and only for commit volume and cadence. Nothing about *what was missed, who missed it, or what the fix cost* depends on it.
+- **"My project reports as `docs` but it is clearly an app."** A greenfield repo is classified at scaffold time, when it genuinely is docs-only — no `src/`, no `.csproj`. Since 2026-08-28 a later `update-framework.sh` **upgrades** a `docs` classification once real heads appear, and only ever upwards (`app`/`library`/`framework` are never re-guessed, and `--type` always wins). Correct it by hand at any time with `.tfcore/telemetry/install-metrics.sh . --type app`. **Records already written keep the old value** — the streams are append-only and corrections happen at read time — so the project shows under both segments until the old records age out, and `--report` states the split rather than letting one project look like two.
 - **"Two sessions records with the same session_id?"** OpenCode snapshot semantics (§3.3) — take the record with the highest `output_tokens`.
 - **"Can I trust a `Verified` in the checklist?"** That's what `gates.jsonl` + the `guard-verify.sh` hook exist for: a `Verified` can only be written after an executed verify run left its ledger — self-attestation is blocked mechanically on both harnesses.
 - **"What does this cost me?"** Nothing at run time (one process spawn per record) and nothing when it breaks (no veto). The streams are a few KB per week of heavy use.
