@@ -459,14 +459,35 @@ def frontmatter(lines):
     return {}, lines
 
 
+def is_requirements_checklist(base, raw):
+    """Is this THE agent working document, or just a file with 'Checklist' in its name?
+
+    The §0 ban is about `docs/{AppName}-Checklist.md` — the per-REQ Requirements
+    Status table agents read in markdown. A deployment runbook, a release checklist
+    or a QA checklist is an ordinary human document that happens to share the word,
+    and refusing it pushes an agent back toward hand-authoring the HTML, which is
+    the exact path tf-render-html exists to remove (TfLens feedback TF-004).
+
+    So identify the document, do not guess from the suffix: the name must match AND
+    the content must carry the checklist's own structure — the `## Requirements
+    Status` heading, or the template's SINGLE SOURCE OF TRUTH marker comment. Both
+    ship in `app-checklist-tmpl.md`; a runbook has neither."""
+    if not re.search(r"-Checklist\.md$", base, re.I):
+        return False
+    head = raw[:8000]
+    return bool(re.search(r"^##\s+Requirements Status\s*$", head, re.M)
+                or "SINGLE SOURCE OF TRUTH" in head)
+
+
 def render(md_path, css, head_js, body_js, out_dir=None):
     base = os.path.basename(md_path)
-    if re.search(r"-Checklist\.md$", base, re.I):
-        raise Refused("%s is a checklist — checklists are AI-agent working "
-                      "documents and are NEVER rendered to HTML "
+    raw_probe = open(md_path, encoding="utf-8").read().replace("\r\n", "\n")
+    if is_requirements_checklist(base, raw_probe):
+        raise Refused("%s is the requirements checklist — checklists are AI-agent "
+                      "working documents and are NEVER rendered to HTML "
                       "(html-render-shell §0)." % base)
 
-    raw = open(md_path, encoding="utf-8").read().replace("\r\n", "\n")
+    raw = raw_probe
     lines = raw.split("\n")
     fm, lines = frontmatter(lines)
 

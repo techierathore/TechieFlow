@@ -1,6 +1,6 @@
 # Miss telemetry — TechieFlow (the framework itself)
 
-**Status: IMPLEMENTED — shipped 2026-08-28.** Everything in §4–§8 below is built, deployed and verified end to end in this repo. **`.tfcore/telemetry/SCHEMA.md` §5.5 is now the authoritative field reference**; this document is the design record and the *why*, kept because the reasoning behind the three provenance rules is the part that will be re-litigated, not the field list.
+**Status: IMPLEMENTED — shipped 2026-08-28**, plus the `miss-amend` follow-up the same day (§0.35). Everything in §4–§8 below is built, deployed and verified end to end in this repo. **`.tfcore/telemetry/SCHEMA.md` §5.5 is now the authoritative field reference**; this document is the design record and the *why*, kept because the reasoning behind the three provenance rules is the part that will be re-litigated, not the field list.
 **Audience:** the framework owner + whichever agent extends it.
 **Siblings:** `docs/Miss-Telemetry-TfLens.md` (how the numbers get displayed — **not implemented**) · `docs/Miss-Telemetry-AI-First-Playbook.md` (the team edition's version of the same idea — **not implemented**).
 **Reference:** `.tfcore/telemetry/SCHEMA.md` §5.5 · `.tfcore/tasks/_metrics-emit-gate.md` constraint 10 · `docs/TechieFlow-Telemetry-Guide.md` §3.5 · `WORKFLOW.html` §17 · `WorkFlow-Context.md` §5 (2026-08-28 entries).
@@ -13,7 +13,7 @@
 
 | Piece | State | Where |
 |---|---|---|
-| Fifth stream `docs/metrics/misses.jsonl`, two record kinds | **Shipped** | SCHEMA §5.5, seeded by `install-metrics.sh` |
+| Fifth stream `docs/metrics/misses.jsonl`, three record kinds | **Shipped** | SCHEMA §5.5 (`miss-amend` added the same day — §0.35), seeded by `install-metrics.sh` |
 | `kind` rule amended — "one of the kinds the stream file declares" | **Shipped** | SCHEMA §1 |
 | Emitter: `misses` stream, `--next-miss-id`, `--next-fix-attempt`, `--open-miss`, `enrich_miss()` | **Shipped** | `.tfcore/utils/tf-emit.sh` |
 | Attribution looked up and **forced to `null` on a failed lookup**, overwriting whatever the agent supplied | **Shipped** | `tf-emit.sh enrich_miss()` |
@@ -34,7 +34,7 @@
 
 ### 0.2 What is NOT implemented
 
-- **TfLens** — the sixth report page, the two-kinds parser, the two provenance guards. See `docs/Miss-Telemetry-TfLens.md`. No coordination window exists: TfLens ignores stream files it does not know, so `misses.jsonl` is simply unread until it ships.
+- **TfLens** — the sixth report page, the three-kinds parser (`miss` / `miss-fix` / `miss-amend`), the two provenance guards. See `docs/Miss-Telemetry-TfLens.md`. No coordination window exists: TfLens ignores stream files it does not know, so `misses.jsonl` is simply unread until it ships.
 - **AI-First Playbook** — `misses.ndjson`, `playbook-miss.mjs`, the Phase 6/9/10 emits. See `docs/Miss-Telemetry-AI-First-Playbook.md`.
 - **App-repo rollout** — `update-framework.sh <repo>` per app **per machine**. TfLens was the first refreshed (and its refresh exposed the `docs`-classification defect below).
 
@@ -46,9 +46,21 @@ The design shipped substantially as written. Seven differences are worth knowing
 2. **`origin_confidence` is derived by the emitter, not written by an agent.** §4.3's table lists it as an agent field; it is not. `tf-emit.sh` sets `linked` / `inferred` / `unknown` from whether `origin_run_id` resolved, alongside `origin_model` and `origin_harness`. An agent naming its own confidence was the same hazard as an agent naming its own model.
 3. **`fix_cmd` gained `log-miss`** — the `--fixed` mode, for a miss reported after it was already repaired. Where the repairing run cannot be identified, `fix_run_id` is **omitted** and the record is costed `none`; pointing at a plausible-looking run to make a number appear is a fabricated measurement.
 4. **The report separates three lifecycle buckets, not two:** open · resolved · `wont-fix`. And **the backlog predicate deliberately differs from the collapse predicate** — `wont-fix` leaves the backlog (it is a decision, not outstanding work) but stays *live* for `--open-miss` (the next failure on that REQ is the same defect and must not open a second record). `deferred` is outstanding work and stays open in both. The two are commented in `tf-metrics.sh` as intentionally divergent; do not "fix" them to agree.
-5. **The report emits more keys than §5.2 listed:** `why_missed_n`, `escapes_missing_why`, `orphan_fixes`, `by_origin_agent`, `attributed_n` / `attribution_excluded`, `cost_sole_n` / `cost_shared_n` / `cost_unattributable_n`, `cost_usd_records`. These are the parity surface TfLens must match (`--rollup --json` → `misses`).
+5. **The report emits more keys than §5.2 listed:** `why_missed_n`, `escapes_missing_why`, `orphan_fixes`, `by_origin_agent`, `attributed_n` / `attribution_excluded`, `cost_sole_n` / `cost_shared_n` / `cost_unattributable_n`, `cost_usd_records`, and — from §0.35 — `amendments_applied`, `orphan_amends`, `why_missed_eligible`, `why_missed_predates_field`. These are the parity surface TfLens must match (`--rollup --json` → `misses`).
 6. **`*log-miss` works in a repo with no checklist.** A `framework` or `docs` project, or an app before `*split-brd`, has no row to demote — the record is still emitted and the report says `Docs: no checklist in this repo — record only`. A framework's own misses count exactly as much as an app's.
 7. **`project_type: framework` is detected structurally, never written.** Found on the way in: writing it into `.tfcore/core-config.yaml` would have been rsynced verbatim into every app scaffolded afterwards, silently misclassifying all of them. Related, found during rollout: `install-metrics.sh` now **re-examines `docs` alone** on a later refresh and only upgrades, because a greenfield repo is docs-only at scaffold time and was being frozen there. Already-written records keep their old `project_type` — corrections happen at read time — so `tf-metrics.sh --report` **states the split** when a repo's current classification disagrees with its own records.
+
+### 0.35 Follow-up shipped the same day — `miss-amend` (TfLens TF-005)
+
+The first outside use of the stream found a gap this design left, and it is worth recording because the gap was in a *rule*, not in a field: `_metrics-emit-gate.md` constraint 5 says **"if a record is wrong, the correction is a new record, never an edit"** — and `misses.jsonl` had no record kind that could carry a correction. `miss` opens, `miss-fix` closes, and re-emitting a `miss` is barred by the §5.5.4 collapse rule. So a field left `null` was **unreachable**: leave it empty forever, or break constraint 5. TfLens hit it when `why_missed` shipped four minutes after a `*log-miss` run, presented the conflict rather than deciding alone, and the owner authorised a one-off in-place edit as a workaround.
+
+**Fixed with a third record kind, `miss-amend` (SCHEMA §5.5.7)** — not with a licence to edit:
+
+- It may set a field that is `null`; it may **never** overwrite one that is not, including a value set by an earlier amend. It completes a record rather than altering a fact, so the append-only guarantee is intact: every earlier state of the stream stays true, and a reader that ignores amendments sees nothing false, only less.
+- **Only closed-vocabulary judgements are amendable** (`why_missed` today). The boundary is the interesting part: *a judgement may be completed, an observation may not.* `why_missed` is a classification an analyst can still make honestly next week; `found_gate` is a fact about a run that is over — which is §3.5's "never backfill the old records with a verdict they never had", seen from the other side. Everything the emitter derives (attribution, tokens, cost) is excluded outright.
+- `bash .tfcore/utils/tf-emit.sh --amend <miss_id> <field> <value>` is the only door an agent uses. It **prints its refusal** instead of failing quietly, and still exits 0. A hand-written `miss-amend` piped onto the stream is validated identically and dropped if invalid — two doors, one enforcement.
+- **A record predating a field is not "unassessed".** `tf-metrics.sh` now carries `FIELD_SINCE` beside `LATE_GATES` and drops such records from that field's denominator, printing how many. Same rule as a gate added mid-stream, one stream over.
+- Constraint 5 itself was amended to *name which* new record fits each case, and to say plainly: **if none fits, report it as a framework defect rather than editing the file.** That is what TfLens did, and it is the behaviour worth having next time.
 
 ### 0.4 Open questions carried forward
 
@@ -112,6 +124,8 @@ That is not a dead end, and TfLens already solved it: it carries an operator-edi
 - Append-only is preserved: the miss is opened by one record and closed by a second. **Nothing is ever edited.**
 
 ### 4.2 Two record kinds on one stream
+
+> **As built: three.** `miss-amend` was added the same day (§0.35, SCHEMA §5.5.7). The reasoning below is unchanged and is what made the third kind cheap to add — the stream had already accepted that `kind` is declared by the file rather than fixed by it.
 
 This is the one existing rule the design changes, and it should be changed deliberately rather than drifted into. SCHEMA.md §1 currently says `kind` "must match the stream file". Amend to: **`kind` must be one of the kinds the stream file declares.** `misses.jsonl` declares two:
 
@@ -270,6 +284,7 @@ Any figure with fewer than 3 supporting records prints as `insufficient data (n=
 - **It does not let an agent name a model.** Attribution is looked up or it is `null`.
 - **It does not add per-feature cycle time.** SCHEMA.md §0 rules that out permanently and this design does not reopen it. Time-to-close a *miss* is a different unit and is fine.
 - **It does not gain a veto.** Every writer still exits 0. A miss that fails to record is a lost record, never a blocked phase.
+- **It does not permit an edit.** `miss-amend` (§0.35) completes a `null` field and can never overwrite a value — the one thing it must never become is a supported way to revise history, which is why the invariant lives in the emitter rather than in this document.
 
 ## 7. Rollout order
 

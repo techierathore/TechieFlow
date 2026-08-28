@@ -29,7 +29,7 @@ Everything else (throughput, rework ratio, cost per phase) is derived from the s
 | `docs/metrics/gates.jsonl` | REQ verdict per verify run — **the primary stream** | `verify-phase` §6a (and `triage-issues` for escapes) | every time a REQ is graded |
 | `docs/metrics/sessions.jsonl` | agent session (token totals) | Claude: `SessionEnd` hook · OpenCode: the `.opencode/plugin/techieflow.js` plugin | session end / session idle |
 | `docs/metrics/commits.jsonl` | git commit | YOUR own `pre-commit` hook (agents never run git) | your commits |
-| `docs/metrics/misses.jsonl` | something an agent **missed** (`miss`) + what repairing it cost (`miss-fix`) | `verify-phase`, `build-phase`, `triage-issues`, `fix-issues`, `amend-docs`, `*log-miss` | when a miss is found / fixed |
+| `docs/metrics/misses.jsonl` | something an agent **missed** (`miss`) + what repairing it cost (`miss-fix`) + a field completed later (`miss-amend`) | `verify-phase`, `build-phase`, `triage-issues`, `fix-issues`, `amend-docs`, `*log-miss` | when a miss is found / fixed |
 
 Every record is appended through one primitive — `.tfcore/utils/tf-emit.sh` — which stamps the shared fields (`v`, `ts`, `app`, `project_type`, `harness`) and **never blocks anything**: telemetry has no veto, a failed write is a silently dropped record, never a broken session.
 
@@ -103,7 +103,7 @@ Written by the `pre-commit` hook inside YOUR own `git commit` (git is manual in 
 
 ### 3.5 `misses.jsonl` — the fourth question, and the only stream that sees a DESIGN miss
 
-Two record kinds, linked by `miss_id`. The `miss` opens; the `miss-fix` closes.
+Three record kinds, linked by `miss_id`. The `miss` opens; the `miss-fix` closes; the `miss-amend` completes a field the `miss` left empty.
 
 ```json
 {"v":1, "ts":"2026-08-28T11:04:19Z", "kind":"miss",
@@ -131,6 +131,14 @@ Two record kinds, linked by `miss_id`. The `miss` opens; the `miss-fix` closes.
 - **One defect is one miss.** `tf-emit.sh --open-miss REQ-X` is the collapse check: a REQ that fails three verify passes produces one record, not three, unless the *kind* of failure changes.
 - **`why_missed` says which *practice* failed** (§5.5.6, ported from the Playbook 2026-08-28): `missing-checklist-item` · `insufficient-verify-method` · `code-audit-limitation` · `ambiguous-acceptance` · `dependency-not-declared` · `instruction-ignored` · `other`. `miss_class` names the defect; this names the practice, and it is the one that tells you whether your **specification** or your **verification** is weak. Optional — but an escape without it wastes the record, and the report says so.
 - **`wont-fix` is not "open".** The report counts open / resolved / wont-fix separately: a wont-fix is a decision, not a backlog item. The collapse check still treats it as a live defect so a repeat failure cannot open a duplicate — two questions, two predicates, deliberately not the same.
+- **A field left empty can be completed later, without editing anything** (§5.5.7, added 2026-08-28 from TfLens feedback TF-005):
+
+  ```bash
+  bash .tfcore/utils/tf-emit.sh --amend MISS-App-20260828-01 why_missed missing-checklist-item
+  ```
+
+  That appends a third kind, `miss-amend`. It may fill a field that is `null` and may **never** overwrite one that is not — so it adds to the history rather than revising it, and a reader that ignores amendments entirely still sees nothing false. Only closed-vocabulary *judgements* are amendable (`why_missed` today); nothing the emitter derives — attribution, tokens, cost — ever is, and an observation about a finished run is never backfilled. **Never hand-edit `misses.jsonl`.** If `--amend` refuses, that is the answer.
+- **A record written before a field existed is not "unassessed".** `why_missed` arrived on 2026-08-28; misses older than that had no field to fill, so they leave that field's denominator and the report says how many did. Same rule as a gate added mid-stream (§3.5 of the schema) — never backfill a record with a verdict nobody made at the time.
 
 **How to record one yourself:**
 

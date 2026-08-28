@@ -16,12 +16,17 @@
 #   tf-emit.sh --open-miss REQ-UI-014           # prints "<miss_id> <miss_class>" if a miss on that REQ
 #                                               # is still open, nothing otherwise (the §5.5.4 collapse
 #                                               # check — one defect is one miss, however often it fails)
+#   tf-emit.sh --amend MISS-App-20260828-01 why_missed missing-checklist-item
+#                                               # fills a field that is still null on a miss already on
+#                                               # the stream (SCHEMA.md §5.5.7). Never overwrites.
 #   tf-emit.sh --where                          # prints the resolved docs/metrics dir
 #
 # STREAMS: runs | gates | sessions | commits | misses   (anything else is dropped)
 #
-# misses.jsonl is the one stream carrying TWO record kinds — `miss` (opened) and
-# `miss-fix` (closed, linked by miss_id). SCHEMA.md §5.5.
+# misses.jsonl is the one stream carrying THREE record kinds — `miss` (opened),
+# `miss-fix` (closed, linked by miss_id) and `miss-amend` (completes a field the
+# `miss` left null — never overwrites one, so it can add information to the
+# history without altering it). SCHEMA.md §5.5.
 #
 # ONE RECORD OR MANY. stdin is normally a single JSON object. It may also be a
 # JSONL *stream* — one object per line — and every line is appended in ONE
@@ -262,6 +267,86 @@ for r in reversed(opened):                     # most recent first
         print("%s %s" % (r.get("miss_id"), r.get("miss_class") or "other"))
         break
 PY
+  exit 0
+fi
+
+# --- write helper: complete a field that was left null --------------------
+# SCHEMA.md §5.5.7. The ONLY sanctioned way to fill a field on a record that is
+# already on the stream — and the reason constraint 5's "the correction is a new
+# record, never an edit" now names something that exists for this stream.
+#
+#   tf-emit.sh --amend MISS-App-20260828-01 why_missed missing-checklist-item
+#
+# Refuses, out loud and on stdout, when the field is not amendable, the value is
+# outside its closed vocabulary, no parent miss exists, or the field already has
+# a value. It COMPLETES a record; it never alters a fact. Exits 0 either way —
+# telemetry has no veto (§10), and neither does a refused amend.
+if [[ "$1" == "--amend" ]]; then
+  AMID="$2"; AFLD="$3"; AVAL="$4"
+  if [[ -z "$AMID" || -z "$AFLD" || -z "$AVAL" ]]; then
+    echo "tf-emit: --amend needs <miss_id> <field> <value>"
+    exit 0
+  fi
+  AREC="$(python3 - "$MET_DIR/misses.jsonl" "$AMID" "$AFLD" "$AVAL" 2>"$TF_ERR" <<'PY' || true
+import json, sys
+path, mid, fld, val = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+
+# THE ALLOWLIST, and the rule for extending it (SCHEMA.md §5.5.7).
+# A field is amendable only when it is (a) a closed-vocabulary JUDGEMENT that a
+# reader can still make correctly later, and (b) not derived by this emitter.
+# An OBSERVATION is never amendable — §3.5's rule for a gate added mid-stream
+# ("never backfill the old records with a verdict they never had") is the same
+# rule seen from the other side: `why_missed` is a classification an analyst can
+# still make honestly next week; `found_gate` is a fact about a run that is over.
+# Attribution and cost fields are excluded outright: the emitter derives those,
+# and an amend that could set them would be a hole straight through §5.5.1.
+AMENDABLE = {
+    "why_missed": ("missing-checklist-item", "insufficient-verify-method",
+                   "code-audit-limitation", "ambiguous-acceptance",
+                   "dependency-not-declared", "instruction-ignored", "other"),
+}
+if fld not in AMENDABLE:
+    print("REFUSED %s is not an amendable field (SCHEMA.md §5.5.7)" % fld); raise SystemExit(0)
+if val not in AMENDABLE[fld]:
+    print("REFUSED %r is not in the closed vocabulary for %s" % (val, fld)); raise SystemExit(0)
+
+parent, current = None, None
+try:
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            if r.get("kind") == "miss" and r.get("miss_id") == mid:
+                parent = r
+                current = r.get(fld)
+            elif (r.get("kind") == "miss-amend" and r.get("miss_id") == mid
+                  and r.get("field") == fld):
+                current = r.get("value")          # an earlier amend already set it
+except FileNotFoundError:
+    pass
+
+if parent is None:
+    print("REFUSED no miss record %s on this stream" % mid); raise SystemExit(0)
+if current is not None:
+    print("REFUSED %s is already %r on %s — an amend completes a record, never "
+          "overwrites a value" % (fld, current, mid)); raise SystemExit(0)
+
+print("OK " + json.dumps({"kind": "miss-amend", "miss_id": mid,
+                          "field": fld, "value": val},
+                         separators=(",", ":"), ensure_ascii=False))
+PY
+)"
+  case "$AREC" in
+    "OK "*) printf '%s' "${AREC#OK }" | bash "${BASH_SOURCE[0]}" misses
+            echo "tf-emit: amended $AMID — $AFLD = $AVAL" ;;
+    "REFUSED "*) echo "tf-emit: amend refused — ${AREC#REFUSED }" ;;
+    *) echo "tf-emit: amend could not be evaluated — nothing written" ;;
+  esac
   exit 0
 fi
 
@@ -736,9 +821,55 @@ def _runs_by_start():
 _COST_FIELDS = ("tokens_in", "tokens_out", "tokens_cache_read", "tokens_cache_write",
                 "cost_usd", "tokens_scope", "model")
 
+# Kept identical to the --amend branch above. Two doors, ONE enforcement: an
+# agent that hand-writes a miss-amend record onto the stream faces the same
+# checks as one that calls --amend, because the invariant belongs to the
+# emitter and not to whichever path reached it (SCHEMA.md §5.5.7).
+_AMENDABLE = {
+    "why_missed": ("missing-checklist-item", "insufficient-verify-method",
+                   "code-audit-limitation", "ambiguous-acceptance",
+                   "dependency-not-declared", "instruction-ignored", "other"),
+}
+
+def _amend_ok(rec):
+    """True when this miss-amend may be appended. Returning False DROPS it —
+    an invalid amend writes nothing rather than landing as a record the reader
+    then has to defend itself against."""
+    mid, fld, val = rec.get("miss_id"), rec.get("field"), rec.get("value")
+    if fld not in _AMENDABLE or val not in _AMENDABLE[fld] or not mid:
+        warn("amend refused — %r/%r outside the §5.5.7 allowlist" % (fld, val))
+        return False
+    parent, current = None, None
+    try:
+        with open(os.path.join(met_dir, "misses.jsonl"), encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                except Exception:
+                    continue
+                if r.get("kind") == "miss" and r.get("miss_id") == mid:
+                    parent, current = r, r.get(fld)
+                elif (r.get("kind") == "miss-amend" and r.get("miss_id") == mid
+                      and r.get("field") == fld):
+                    current = r.get("value")
+    except FileNotFoundError:
+        pass
+    if parent is None:
+        warn("amend refused — no miss record %s on this stream" % mid)
+        return False
+    if current is not None:
+        warn("amend refused — %s already set on %s" % (fld, mid))
+        return False
+    return True
+
 def enrich_miss(rec):
     if stream != "misses":
         return rec
+    if rec.get("kind") == "miss-amend":
+        return rec if _amend_ok(rec) else None
     try:
         kind = rec.get("kind")
         runs = _runs_by_start()
@@ -787,8 +918,10 @@ def enrich_miss(rec):
 # .gitattributes block pins to LF. These files are LF on every platform.
 lines = []
 for rec in records:
-    line = json.dumps(enrich_miss(enrich_run(stamp_attempt(enrich(rec)))),
-                      separators=(",", ":"), ensure_ascii=False)
+    out = enrich_miss(enrich_run(stamp_attempt(enrich(rec))))
+    if out is None:                 # a refused miss-amend (§5.5.7) — dropped, never appended
+        continue
+    line = json.dumps(out, separators=(",", ":"), ensure_ascii=False)
     if "\n" in line or "\r" in line:
         warn("record serialised with a newline — record dropped")
         continue

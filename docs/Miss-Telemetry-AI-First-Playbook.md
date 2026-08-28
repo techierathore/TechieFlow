@@ -8,7 +8,7 @@
 
 ## 0. Requirement updates from the shipped solo edition (2026-08-28)
 
-Six things the TechieFlow implementation settled that change what this document asks for. All six are cheap to adopt now and expensive to retrofit.
+Seven things the TechieFlow implementation settled that change what this document asks for. All seven are cheap to adopt now and expensive to retrofit.
 
 **0.1 — `why_missed` shipped, and the port back was not verbatim.** SCHEMA §5.5.6 carries the Playbook's six values **plus a seventh, `instruction-ignored`** — a written rule existed, in a file the agent had loaded, and was not honoured. **The decision this document reserved in §7 is still open and is now the Playbook's to make.** Two things to weigh, both learned since:
 
@@ -29,6 +29,21 @@ Six things the TechieFlow implementation settled that change what this document 
 A deliberately-abandoned defect is not backlog, but the next `FAIL` on that item is still the *same* defect and must not open a second record. `deferred` is outstanding work and stays open in both. Map this onto `templates/checklist-metadata.yml`'s status vocabulary (`pass` · `fail` · `data-gap` · `blocked` · `deferred` · `abandoned`) when implementing §8.2's collapse rule, and comment the divergence in the code — a reviewer will otherwise "fix" the two to agree and break one of them.
 
 **0.5 — Add the Playbook's equivalent of `*log-miss`, and treat it as load-bearing rather than a convenience.** The solo edition shipped a 20-second front door — a command that classifies a one-sentence report, writes the record and the checklist line, and **never boots the app, never reproduces, never touches `src/`**. The reasoning transfers to a team unchanged and gets stronger: §5's front doors all sit inside a phase, so a miss noticed *between* phases — in review, in standup, by someone who is not running the process at that moment — has nowhere to go and becomes a message in a channel. The friction of "first, reproduce it" is precisely what stops a miss being recorded, and **an unrecorded miss is the whole problem.** Suggested shape: `playbook-miss.mjs open` already exists as the primitive; wrap it in a harness command in both `harness/opencode/command/` and `harness/claude-code/commands/`, with the same hard scope rule (records and docs only) and the same `--fixed` mode for a miss reported after it was already repaired.
+
+**0.55 — Adopt a third record kind, `miss-amend`, from day one — the two-kind design has a hole.** TechieFlow shipped with `miss` and `miss-fix` only, and the first outside user hit the gap within a day (TfLens TF-005): the append-only doctrine says *"if a record is wrong, the correction is a new record, never an edit"*, and neither kind can carry a correction. A field left `null` — most sharply a `why_missed` on a record written before the field existed — was **unreachable**: leave it empty forever, or break the rule. `misses.ndjson` inherits that hole exactly, and this document's §3 says nothing about it.
+
+The fix, now shipped in the solo edition as SCHEMA §5.5.7, transfers unchanged:
+
+```json
+{"kind":"miss-amend","ts":"…","schema":1,"miss_id":"MISS-20260828-03","field":"why_missed","value":"insufficient-verify-method"}
+```
+
+- It may set a field that is `null`; it may **never** overwrite one that is not, including a value an earlier amend set. It completes a record rather than altering a fact, so append-only survives intact and a reader that ignores amendments sees nothing false, only less.
+- **Only closed-vocabulary judgements are amendable.** The boundary is the load-bearing part: *a judgement may be completed, an observation may not.* `why_missed` is a classification the Phase 9 analyst can still make honestly next week; a phase verdict is a fact about a run that is over. Everything the joiner derives — `origin_model`, `origin_confidence`, `cost_attribution`, tokens, dollars — is excluded outright, which also keeps §2.2's honesty rule intact.
+- `playbook-miss.mjs amend <miss_id> <field> <value>` is the only door, it validates the invariant itself, and it **prints its refusal** rather than failing quietly. `playbook-validate.mjs` counts orphan amends (no parent) exactly as it counts orphan `miss-fix` records, and the joiner folds amendments into the parent before computing anything — re-checking the null rule while folding, because a team's stream is merged across machines and can carry an amend and a later-written value in either order.
+- **Team-edition extra:** an amend is a second person's judgement landing on someone else's record. Record it as ordinary data — never as an `actor`-attributed correction rate, per §6.1. "Who amended whom" is precisely the metric that stops people logging misses.
+
+**Also worth carrying: a record written before a field existed is not "unassessed".** The solo edition keeps a `FIELD_SINCE` table beside its late-gates table and drops such records from that field's denominator, printing how many. Without it, adding any optional field makes the practice look worse the day it ships.
 
 **0.6 — `fix_run_id` is omitted, never approximated.** In `--fixed` mode the solo edition omits `fix_run_id` when the repairing run cannot be identified, so the record costs `none`. Stated as a rule because the temptation is real: **do not point at a plausible-looking phase window to make a number appear.** One fabricated measurement discredits every honest cost figure beside it — the same position §4.3 already takes, applied to the one path that invites breaking it.
 
@@ -80,7 +95,9 @@ The obvious move is a new `kind` on the existing stream: `events.ndjson` is alre
 
 Because the file is committed, it carries a stronger privacy obligation than `events.ndjson` — see §6.
 
-## 4. The two record kinds
+## 4. The record kinds
+
+*(Two as designed; §0.55 adds a third, `miss-amend`.)*
 
 ### 4.1 `miss` — opened
 
@@ -153,7 +170,7 @@ A `/fix` run that repairs three misses has one cost window.
 | `phases/04-self-review.md` | Optional: self-caught misses with `found_by:"self-review"`. Genuinely useful — a rising self-catch share is the clearest sign the build phase is improving |
 | `templates/checklist-item-template.md` | The metadata comment gains `"misses":[]` beside the existing `"evidence":[]` — an array of `miss_id`s, so an item's history is legible from the checklist alone. Document it in `templates/checklist-metadata.yml` (`required` list and a `misses` block) |
 | `templates/issues-file-template.md` | Note that each issue becomes a `miss` record, and that deletion is now gated on that |
-| `scripts/playbook-miss.mjs` | **New.** `open` / `close` / `next-id` / `list`. Fire-and-forget, error-isolated, exits 0 unconditionally, opt-in under the same `PLAYBOOK_TELEMETRY=1` flag |
+| `scripts/playbook-miss.mjs` | **New.** `open` / `close` / **`amend`** (§0.55) / `next-id` / `list`. Fire-and-forget, error-isolated, exits 0 unconditionally, opt-in under the same `PLAYBOOK_TELEMETRY=1` flag |
 | `scripts/playbook-telemetry.mjs` | Join miss records to phase windows; fill the `miss-fix` cost half; a `--misses` output mode |
 | `scripts/playbook-validate.mjs` | Validate the vocabularies and the `miss_id` ↔ `miss-fix` linkage; report orphans. Also (§0.2): the `why_missed` assessed-count `n of N`, and escapes arriving with no `why_missed` |
 | **A log-a-miss harness command** (§0.5) | **New, recommended.** The between-phases front door — one sentence in, one record + one checklist line out; never boots, never reproduces, never touches `src/`. Wraps `playbook-miss.mjs open`, carries a `--fixed` mode. Both harness trees |
@@ -182,6 +199,7 @@ The two editions emit **related but deliberately non-identical** miss records, a
 | Concern | TechieFlow | Playbook |
 |---|---|---|
 | File | `docs/metrics/misses.jsonl` | `verification/telemetry/misses.ndjson` |
+| Record kinds | `miss` · `miss-fix` · `miss-amend` (§0.55) | same three, if §0.55 is adopted |
 | Work item | `req_id` | `item_id` |
 | Process axis | `found_gate` (assertion gates) | `found_phase_gate` (process gates) — **SCHEMA.md §11** |
 | Phase enum | `runs.jsonl.cmd` values | the ten Playbook phase names |

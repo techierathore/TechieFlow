@@ -111,7 +111,8 @@ Then stop. Do not run the status gate — this task reports on history, it does 
 - [ ] `tf-metrics.sh --report --json` run; figures taken from it, not recomputed by hand
 - [ ] Live and backfilled reported separately; `app`/`library`/`docs` reported separately
 - [ ] Miss attribution figures computed over `linked` records only, with the excluded count printed beside them
-- [ ] `why_missed` distribution reported against **records that carry the field**, never against all misses; escapes lacking it are flagged
+- [ ] `why_missed` distribution reported against **records that carry the field** *and* could have carried it — misses predating the field's introduction (`FIELD_SINCE`, SCHEMA §5.5.6) are outside the denominator and their count is stated; escapes lacking it are flagged, with `--amend` named as the remedy
+- [ ] `miss-amend` records folded into their parents before counting; amendments applied and orphaned amends both reported
 - [ ] Open-miss count excludes `wont-fix` (a decision, not a backlog item) and reports it in its own bucket
 - [ ] Measured (`sole`) and apportioned (`shared:n`) rework cost in separate labelled columns — never one blended number
 - [ ] Dollars quoted only where a harness measured them; no rate-card estimate anywhere on the page

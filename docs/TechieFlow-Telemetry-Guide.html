@@ -176,7 +176,7 @@ null when no stable source exists. ChatGPT credits are never fabricated as
 <tr><td><code>docs/metrics/gates.jsonl</code></td><td>REQ verdict per verify run — <strong>the primary stream</strong></td><td><code>verify-phase</code> §6a (and <code>triage-issues</code> for escapes)</td><td>every time a REQ is graded</td></tr>
 <tr><td><code>docs/metrics/sessions.jsonl</code></td><td>agent session (token totals)</td><td>Claude: <code>SessionEnd</code> hook · OpenCode: the <code>.opencode/plugin/techieflow.js</code> plugin</td><td>session end / session idle</td></tr>
 <tr><td><code>docs/metrics/commits.jsonl</code></td><td>git commit</td><td>YOUR own <code>pre-commit</code> hook (agents never run git)</td><td>your commits</td></tr>
-<tr><td><code>docs/metrics/misses.jsonl</code></td><td>something an agent <strong>missed</strong> (<code>miss</code>) + what repairing it cost (<code>miss-fix</code>)</td><td><code>verify-phase</code>, <code>build-phase</code>, <code>triage-issues</code>, <code>fix-issues</code>, <code>amend-docs</code>, <code>*log-miss</code></td><td>when a miss is found / fixed</td></tr>
+<tr><td><code>docs/metrics/misses.jsonl</code></td><td>something an agent <strong>missed</strong> (<code>miss</code>) + what repairing it cost (<code>miss-fix</code>) + a field completed later (<code>miss-amend</code>)</td><td><code>verify-phase</code>, <code>build-phase</code>, <code>triage-issues</code>, <code>fix-issues</code>, <code>amend-docs</code>, <code>*log-miss</code></td><td>when a miss is found / fixed</td></tr>
 </tbody>
 </table>
 <p>Every record is appended through one primitive — <code>.tfcore/utils/tf-emit.sh</code> — which stamps the shared fields (<code>v</code>, <code>ts</code>, <code>app</code>, <code>project_type</code>, <code>harness</code>) and <strong>never blocks anything</strong>: telemetry has no veto, a failed write is a silently dropped record, never a broken session.</p>
@@ -247,7 +247,7 @@ null when no stable source exists. ChatGPT credits are never fabricated as
  "subject_prefix":"feat", "branch":"main"}</code></pre>
 <p>Written by the <code>pre-commit</code> hook inside YOUR own <code>git commit</code> (git is manual in TechieFlow — no agent path ever runs it). The hook reconciles: every commit, it backfills any commits the stream is missing, so multi-machine work and fresh clones converge. Only the conventional-commit prefix is kept; the subject line is discarded on the spot (§6). <strong>An empty <code>commits.jsonl</code> means "no commits made from this clone since install" — not a bug.</strong></p>
 <h3 id="misses-jsonl-the-fourth-question-and-the-only-stream-that-sees-a-design-miss">3.5 <code>misses.jsonl</code> — the fourth question, and the only stream that sees a DESIGN miss<a class="anchor-link" href="#misses-jsonl-the-fourth-question-and-the-only-stream-that-sees-a-design-miss">#</a></h3>
-<p>Two record kinds, linked by <code>miss_id</code>. The <code>miss</code> opens; the <code>miss-fix</code> closes.</p>
+<p>Three record kinds, linked by <code>miss_id</code>. The <code>miss</code> opens; the <code>miss-fix</code> closes; the <code>miss-amend</code> completes a field the <code>miss</code> left empty.</p>
 <pre><code class="language-json">{"v":1, "ts":"2026-08-28T11:04:19Z", "kind":"miss",
  "app":"AstroLyfe", "project_type":"app", "harness":"claude-code",
  "miss_id":"MISS-AstroLyfe-20260828-03", "req_id":"REQ-UI-014", "req_class":"UI",
@@ -274,6 +274,14 @@ null when no stable source exists. ChatGPT credits are never fabricated as
 <li><strong><code>why_missed</code> says which <em>practice</em> failed</strong> (§5.5.6, ported from the Playbook 2026-08-28): <code>missing-checklist-item</code> · <code>insufficient-verify-method</code> · <code>code-audit-limitation</code> · <code>ambiguous-acceptance</code> · <code>dependency-not-declared</code> · <code>instruction-ignored</code> · <code>other</code>. <code>miss_class</code> names the defect; this names the practice, and it is the one that tells you whether your <strong>specification</strong> or your <strong>verification</strong> is weak. Optional — but an escape without it wastes the record, and the report says so.
 </li>
 <li><strong><code>wont-fix</code> is not "open".</strong> The report counts open / resolved / wont-fix separately: a wont-fix is a decision, not a backlog item. The collapse check still treats it as a live defect so a repeat failure cannot open a duplicate — two questions, two predicates, deliberately not the same.
+</li>
+<li><strong>A field left empty can be completed later, without editing anything</strong> (§5.5.7, added 2026-08-28 from TfLens feedback TF-005):
+</li>
+</ul>
+<pre><code class="language-bash">  bash .tfcore/utils/tf-emit.sh --amend MISS-App-20260828-01 why_missed missing-checklist-item</code></pre>
+<p>That appends a third kind, <code>miss-amend</code>. It may fill a field that is <code>null</code> and may <strong>never</strong> overwrite one that is not — so it adds to the history rather than revising it, and a reader that ignores amendments entirely still sees nothing false. Only closed-vocabulary <em>judgements</em> are amendable (<code>why_missed</code> today); nothing the emitter derives — attribution, tokens, cost — ever is, and an observation about a finished run is never backfilled. <strong>Never hand-edit <code>misses.jsonl</code>.</strong> If <code>--amend</code> refuses, that is the answer.</p>
+<ul>
+<li><strong>A record written before a field existed is not "unassessed".</strong> <code>why_missed</code> arrived on 2026-08-28; misses older than that had no field to fill, so they leave that field's denominator and the report says how many did. Same rule as a gate added mid-stream (§3.5 of the schema) — never backfill a record with a verdict nobody made at the time.
 </li>
 </ul>
 <p><strong>How to record one yourself:</strong></p>

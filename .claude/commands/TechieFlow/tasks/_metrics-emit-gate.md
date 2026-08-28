@@ -18,7 +18,7 @@ Emission happens in the same turn as the status-gate write, immediately after it
 |---|---|---|
 | `runs.jsonl` | the task itself | once, at phase completion, right after the status gate |
 | `gates.jsonl` | `verify-phase.md` §6a · `triage-issues.md` | one record per REQ evaluated / per REQ demoted |
-| `misses.jsonl` | `verify-phase` · `build-phase` · `triage-issues` · `fix-issues` · `amend-docs` · `log-miss` | `miss` when something was missed; `miss-fix` when it is repaired |
+| `misses.jsonl` | `verify-phase` · `build-phase` · `triage-issues` · `fix-issues` · `amend-docs` · `log-miss` | `miss` when something was missed; `miss-fix` when it is repaired; `miss-amend` (via `--amend`) when a `null` field is completed later |
 | `sessions.jsonl` | `.tfcore/hooks/metrics-session.sh` (SessionEnd hook) | automatically — **never by an agent** |
 | `commits.jsonl` | the owner's `pre-commit` hook | automatically — **never by an agent** |
 
@@ -58,6 +58,14 @@ JSON
 `missing-checklist-item` (no REQ or acceptance bullet covered it) · `insufficient-verify-method` (acceptance existed; the gate could not catch this class of defect) · `code-audit-limitation` (`⚠ STATIC-ONLY` — never observable) · `ambiguous-acceptance` (two honest readings) · `dependency-not-declared` · **`instruction-ignored`** (a written framework rule existed and was not honoured) · `other`.
 
 **Optional — omit it rather than guess.** `null` means "not assessed" and is an honest answer. But on an **escape** (`found_by` ∈ `owner` / `production`) fill it: something got past every gate, and *why nothing caught it* is the whole value of that record. The report warns when an escape arrives without one.
+
+**If the record is already on the stream, complete it — do not edit the file:**
+
+```bash
+bash .tfcore/utils/tf-emit.sh --amend MISS-App-20260828-01 why_missed missing-checklist-item
+```
+
+That appends a `miss-amend` (SCHEMA.md §5.5.7). It fills a field that is `null` and **refuses to overwrite one that is not**, so it adds to the history without revising it. Only closed-vocabulary judgement fields are amendable; nothing the emitter derives — attribution, tokens, cost — ever is.
 
 ```bash
 FA=$(bash .tfcore/utils/tf-emit.sh --next-fix-attempt "$MID")
@@ -99,7 +107,7 @@ bash .tfcore/utils/tf-emit.sh --next-attempt REQ-UI-004      # prints an integer
 2. **Metrics data is tracked by git.** `docs/metrics/` must never land in a `.gitignore` block. If you notice a pattern that would catch it, say so in your report — do not add the pattern, and do not "helpfully" ignore the directory.
 3. **Never write metrics into `PROJECT-STATUS.md`** — `guard-status.sh` will block it, correctly. Same for `<APP>-Checklist.md`: `guard-verify.sh` inspects those writes and a stray metrics edit risks a false block. Telemetry lives in `docs/metrics/` and nowhere else.
 4. **Do not change `docs/.last-verify.json`.** It is the same-day gate ledger `guard-verify.sh` depends on to permit a `Verified` cell. It stays ephemeral, stays gitignored, stays exactly the shape `verify-phase §6` writes today. Telemetry *reads alongside* it; it never replaces it.
-5. **Append-only, schema-versioned.** One JSON object per line, `"v"` on every record. Never rewrite, compact, sort, or de-duplicate a history file. If a record is wrong, the correction is a *new* record, never an edit.
+5. **Append-only, schema-versioned.** One JSON object per line, `"v"` on every record. Never rewrite, compact, sort, or de-duplicate a history file. If a record is wrong, the correction is a *new* record, never an edit. **Know which new record**, because "append a correction" is only advice if a kind exists to carry one: a later `gates.jsonl` record supersedes an earlier verdict on the same REQ; a `miss-fix` closes a `miss`; and a field left `null` on a `miss` is completed by a **`miss-amend`** (SCHEMA.md §5.5.7) — `bash .tfcore/utils/tf-emit.sh --amend <miss_id> <field> <value>`, which fills a `null` and refuses to overwrite anything else. **If none of those fits your situation, stop and report it rather than editing the file** — a stream with no legal correction path is a framework defect, and it is worth more as a reported defect than as one silently-edited line. (That is exactly how §5.5.7 came to exist: TfLens hit it, refused to decide alone, and asked.)
 6. **Telemetry fails silently and never blocks.** No emit may fail a build, block a tool call, abort a phase, or print a visible error.
 7. **No secrets, no content, no client data.** IDs, counts, durations, verdicts, and file paths — that is the whole permitted vocabulary. Never requirement text, prompt text, file contents, commit subjects, or anything from a `docs/` document body. This framework runs on employer projects: assume every record could become public. `failure_class` is a closed enum for exactly this reason — **never** write a free-text description of a failure.
 8. **Provenance never merges.** Records you write are live and carry no `backfilled` flag. Only `tf-metrics.sh --backfill-*` writes `backfilled: true`. Never hand-author a backfilled record, and never produce a figure that pools live with backfilled, or `app` with `library`/`docs`, for first-pass rate, gate catch distribution, or escape rate.

@@ -33,7 +33,7 @@ Questions 1–3 are answered by `gates.jsonl`, which remains **the primary strea
 |---|---|---|
 | `v` | int | Schema version. Always `1` today. Injected by `tf-emit.sh` if absent. |
 | `ts` | string | ISO-8601 UTC, second precision, `Z` suffix — e.g. `2026-08-08T04:12:33Z`. Injected by `tf-emit.sh` if absent. |
-| `kind` | string | `run` \| `gate` \| `session` \| `commit` \| `miss` \| `miss-fix`. Must be one of the kinds the stream file declares. Every stream but `misses.jsonl` declares exactly one, so for those "matches the file" and "is declared by the file" are the same rule; `misses.jsonl` declares two (§5.5). |
+| `kind` | string | `run` \| `gate` \| `session` \| `commit` \| `miss` \| `miss-fix` \| `miss-amend`. Must be one of the kinds the stream file declares. Every stream but `misses.jsonl` declares exactly one, so for those "matches the file" and "is declared by the file" are the same rule; `misses.jsonl` declares three (§5.5). |
 | `app` | string | The `{AppName}` the record belongs to. Injected by `tf-emit.sh` if absent — inferred from the one `docs/<App>-Checklist.md`, falling back to the repo directory name. Emitters should still pass it explicitly. |
 | `project_type` | string | `app` \| `library` \| `docs` \| `framework`. Injected by `tf-emit.sh` — from the tree shape for `framework`, otherwise from `core-config.yaml`. |
 | `project_type_inferred` | bool | Present **only when `true`** — `metrics.project_type` was absent from `core-config.yaml` and `app` was assumed. Reports must label these records **unclassified**, never silently pool them. |
@@ -312,7 +312,7 @@ Only `commits.jsonl` needs this **for the union-merge reason**. `runs`/`gates` r
 
 **Added 2026-08-28.** Design record: `docs/Miss-Telemetry-TechieFlow.md` (in the framework repo).
 
-This is the only stream that carries **two record kinds**: `miss` opens, `miss-fix` closes. A miss has a lifecycle across runs, and appending lifecycle state to a verdict stream would mean editing records — which §6 and `_metrics-emit-gate.md` constraint 5 forbid outright. So the lifecycle is expressed as two append-only records linked by `miss_id`, and nothing is ever rewritten.
+This is the only stream that carries **three record kinds**: `miss` opens, `miss-fix` closes, `miss-amend` completes a field the `miss` left `null` (§5.5.7). A miss has a lifecycle across runs, and appending lifecycle state to a verdict stream would mean editing records — which §6 and `_metrics-emit-gate.md` constraint 5 forbid outright. So the lifecycle is expressed as append-only records linked by `miss_id`, and nothing is ever rewritten.
 
 ### 5.5.1 `kind: "miss"`
 
@@ -426,9 +426,55 @@ Ported from the AI-First-Playbook team edition, whose Phase 9 (`/analyze-fix`) h
 
 **`instruction-ignored` is TechieFlow's own addition, not in the Playbook's list**, and it exists because this framework's dominant failure mode is an agent skipping a step in a long markdown task — the thing the whole miss stream was commissioned to measure. Offer it back to the Playbook once it has earned its keep here; do not assume it transfers.
 
-**Optional, and `null` is honest.** Many misses have no clear answer and a forced one is noise. But an **escape** (`found_by` ∈ `owner` / `production`) without a `why_missed` wastes the most valuable record in the stream: something got past every gate, and "why did nothing catch it" is the entire question. Fill it there.
+**Optional, and `null` is honest.** Many misses have no clear answer and a forced one is noise. But an **escape** (`found_by` ∈ `owner` / `production`) without a `why_missed` wastes the most valuable record in the stream: something got past every gate, and "why did nothing catch it" is the entire question. Fill it there — and if the record is already on the stream, `tf-emit.sh --amend` (§5.5.7) is how.
+
+**Records written before 2026-08-28 legitimately carry no `why_missed`, and are not counted as unassessed.** The field did not exist, so those records had no chance to fill it — exactly the §3.5 hazard (`perf`, a gate added mid-stream) arriving on a different stream. They leave that field's denominator and are **reported separately**, never silently dropped and never backfilled with a value nobody assessed at the time. `tf-metrics.sh` holds the introduction date in `FIELD_SINCE` and prints the excluded count; **add a row there whenever an optional field is added to any stream.**
 
 **It never substitutes for `miss_class`.** Different axes — one names the defect, the other names the practice — and per the §11 rule about `gate`/`phase_gate`, axes that answer different questions never share a field.
+
+### 5.5.7 `kind: "miss-amend"` — completing a record without editing it
+
+**Added 2026-08-28**, from TfLens feedback **TF-005**. The gap it closes is precise and was real: constraint 5 says *"if a record is wrong, the correction is a **new record**, never an edit"* — and for this stream there was no record kind that could carry one. `miss` opens, `miss-fix` closes, and a re-emitted `miss` is barred by the §5.5.4 collapse rule. So a field left `null` — most sharply, a `why_missed` on a record written before §5.5.6 shipped — was **unreachable**: leave it empty forever, or break constraint 5. The rule named a remedy the stream did not implement.
+
+```json
+{"v":1,"ts":"2026-08-28T07:44:39Z","kind":"miss-amend","app":"TfLens",
+ "project_type":"app","harness":"claude-code",
+ "miss_id":"MISS-TfLens-20260828-01","field":"why_missed","value":"missing-checklist-item"}
+```
+
+| Field | Type | Values / notes |
+|---|---|---|
+| `miss_id` | string | The `miss` this completes. An amend naming no known `miss` is an **orphan** — reported and counted, never applied, exactly as §5.5.2 treats an orphan `miss-fix`. |
+| `field` | string | Must be on the **allowlist** below. Anything else is refused. |
+| `value` | string | Must be in that field's closed vocabulary. |
+
+**It completes a record; it never alters a fact.** The one invariant, enforced in `tf-emit.sh` and re-checked in `tf-metrics.sh`:
+
+> An amend may set a field that is currently `null`. It may **never** overwrite a non-`null` value — including one set by an earlier amend.
+
+That is what keeps it inside the append-only rule rather than an edit wearing a record's clothes. History is added to, never revised: every earlier state of the stream stays true, and a reader that ignores `miss-amend` records entirely still sees nothing false — only less.
+
+**The allowlist, and the rule for extending it.** A field is amendable only when it is **(a) a closed-vocabulary judgement a reader can still make correctly later, and (b) not derived by the emitter**:
+
+| Field | Vocabulary |
+|---|---|
+| `why_missed` | §5.5.6's seven values |
+
+- **A judgement may be completed; an observation may not.** `why_missed` is a classification an analyst can still make honestly next week. `found_gate` is a fact about a run that is over — §3.5's *"never backfill the old records with a verdict they never had"* is this same rule seen from the other side.
+- **Nothing the emitter derives is ever amendable** — `origin_model`, `origin_harness`, `origin_confidence`, `cost_attribution` and every token/cost field are excluded outright. An amend that could set them would be a hole straight through §5.5.1's central rule.
+- **Closed vocabularies only**, so the kind can never become a free-text back door (§9, constraint 7).
+
+**How to write one — one command, and the emitter decides:**
+
+```bash
+bash .tfcore/utils/tf-emit.sh --amend MISS-App-20260828-01 why_missed missing-checklist-item
+# -> tf-emit: amended MISS-App-20260828-01 — why_missed = missing-checklist-item
+# -> tf-emit: amend refused — why_missed is already 'other' on MISS-App-20260828-01 …
+```
+
+It **prints its refusal on stdout** rather than failing silently — an agent that believes it recorded a correction and did not is worse off than one that is told no. It still exits 0: telemetry has no veto (§10), and neither does a refused amend. A hand-written `miss-amend` piped onto the stream faces the identical checks and is dropped if it fails them — two doors, one enforcement.
+
+**Readers fold amendments into the parent before counting anything**, and re-apply the null-check while doing it: a stream merged from another machine can carry an amend and a later-written value in either order.
 
 ---
 
@@ -490,7 +536,7 @@ Treat backfilled gate data as **context and volume**, never as evidence for a pu
 | Commit cadence | commits per active day, from `commits.jsonl` | poolable, exempt |
 | Miss class distribution | count of `miss_class` over `miss` records | live-only, poolable |
 | Design-miss share | `miss_class="unspecified-gap"` ÷ all misses | live-only, poolable |
-| Failed-practice distribution | count of `why_missed` | live-only, poolable — **denominator is records that carry the field, never all misses** (§5.5.6 is optional; a missing value is "not assessed", not a zero) |
+| Failed-practice distribution | count of `why_missed`, after folding `miss-amend` records | live-only, poolable — **denominator is records that carry the field, never all misses** (§5.5.6 is optional; a missing value is "not assessed", not a zero), and **records predating the field leave the denominator entirely** (`FIELD_SINCE`, §5.5.6) |
 | Miss rate per origin phase | misses grouped by `origin_phase` ÷ `runs` of that `cmd` | live-only, per `project_type`, **`origin_confidence="linked"` only** |
 | Miss rate per origin model | misses grouped by `origin_model` | as above — this is the routing-decision number |
 | Miss rate per origin agent | misses grouped by `origin_agent` | as above |

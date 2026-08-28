@@ -45,6 +45,23 @@ GATE_ORDER = ("build", "acceptance", "render", "visual", "perf", "standards", "e
 # The honest denominator is "records that actually ran it", i.e. gates_run membership.
 # SCHEMA.md §3.5. Keep this table in sync when a gate is added.
 LATE_GATES = {"perf": "2026-08-10"}
+
+# The same hazard as LATE_GATES, one stream over: an OPTIONAL FIELD added after a
+# stream started collecting. A record written before the date had no such field to
+# fill, so counting it as "not assessed" understates the practice being measured.
+# It leaves that field's denominator and is reported separately. SCHEMA.md §5.5.6 /
+# §3.5. Keep this table in sync when an optional field is added to any stream.
+FIELD_SINCE = {"why_missed": "2026-08-28"}
+
+# Fields a `miss-amend` record may complete, and their closed vocabularies.
+# Kept identical to tf-emit.sh's `_AMENDABLE`; the emitter enforces it on write and
+# this enforces it again on read, because a merged stream can carry records this
+# machine's emitter never saw. SCHEMA.md §5.5.7 states the rule for extending it.
+AMENDABLE_FIELDS = {
+    "why_missed": ("missing-checklist-item", "insufficient-verify-method",
+                   "code-audit-limitation", "ambiguous-acceptance",
+                   "dependency-not-declared", "instruction-ignored", "other"),
+}
 MIN_N = 3  # fewer supporting records than this -> "insufficient data", never a number
 
 
@@ -187,6 +204,38 @@ def analyse_misses(misses):
     whoever missed it; only its attribution is confidence-bounded."""
     opened = [m for m in misses if m.get("kind") == "miss" and not m.get("backfilled")]
     fixes = [m for m in misses if m.get("kind") == "miss-fix" and not m.get("backfilled")]
+    amends = [m for m in misses if m.get("kind") == "miss-amend"]
+
+    # ---- fold amendments into their parents BEFORE anything is counted (§5.5.7).
+    # An amend completes a field the miss left null; it can never overwrite one, so
+    # folding cannot change a value that was already recorded. The null-check is
+    # repeated here rather than trusted from the emitter: this reader also sees
+    # streams merged from another machine, where an amend and a later-written value
+    # could arrive in either order.
+    opened_by_id = {}
+    for m in opened:
+        if m.get("miss_id"):
+            opened_by_id.setdefault(m["miss_id"], m)
+    amended, orphan_amends = 0, 0
+    for a in sorted(amends, key=lambda r: r.get("ts") or ""):
+        parent = opened_by_id.get(a.get("miss_id"))
+        fld = a.get("field")
+        if parent is None or fld not in AMENDABLE_FIELDS:
+            orphan_amends += 1
+            continue
+        if parent.get(fld) is None and a.get("value") in AMENDABLE_FIELDS[fld]:
+            parent[fld] = a["value"]
+            amended += 1
+
+    # ---- eligibility floor for optional fields added mid-stream (SCHEMA.md §3.5,
+    # the same rule the `perf` gate established, arriving on a different stream).
+    # A record written before a field existed had ZERO chance of carrying it, so it
+    # is not evidence that the field was skipped. It leaves the denominator and is
+    # reported separately — never silently, and never backfilled with a value
+    # nobody assessed at the time.
+    def _eligible(rec, field):
+        since = FIELD_SINCE.get(field)
+        return not since or (rec.get("ts") or "") >= since
 
     # Latest fix per miss decides open/closed; a fix naming no known miss is an orphan.
     known = {m.get("miss_id") for m in opened}
@@ -245,9 +294,15 @@ def analyse_misses(misses):
         "open_misses": len(open_misses),
         "wont_fix": len(wont_fix),
         "resolved_misses": len(resolved),
+        "amendments_applied": amended,
+        "orphan_amends": orphan_amends,
         # Denominator is records that CARRY the field — why_missed is optional (§5.5.6)
-        # and a missing value means "not assessed", never a zero for some category.
+        # and a missing value means "not assessed", never a zero for some category —
+        # AND records that COULD have carried it: one written before 2026-08-28 had no
+        # such field to fill, so counting it as unassessed understates the practice.
         "why_missed_n": sum(1 for m in opened if m.get("why_missed")),
+        "why_missed_eligible": sum(1 for m in opened if _eligible(m, "why_missed")),
+        "why_missed_predates_field": sum(1 for m in opened if not _eligible(m, "why_missed")),
         "why_missed": OrderedDict(
             sorted(Counter(m["why_missed"] for m in opened if m.get("why_missed")).items(),
                    key=lambda kv: (-kv[1], kv[0]))),
@@ -255,7 +310,8 @@ def analyse_misses(misses):
         # something got past every gate and nobody recorded why nothing caught it.
         "escapes_missing_why": sum(1 for m in opened
                                    if m.get("found_by") in ("owner", "production")
-                                   and not m.get("why_missed")),
+                                   and not m.get("why_missed")
+                                   and _eligible(m, "why_missed")),
         "class_distribution": OrderedDict(
             sorted(Counter(m.get("miss_class") or "?" for m in opened).items(),
                    key=lambda kv: (-kv[1], kv[0]))),
@@ -834,13 +890,26 @@ def print_misses(m, W):
     # is the weak one. Optional, so it is reported against its own denominator.
     if m["why_missed"]:
         print("  why it was missed   : (%d of %d misses assessed)"
-              % (m["why_missed_n"], m["misses_total"]))
+              % (m["why_missed_n"], m["why_missed_eligible"]))
         for k, n in m["why_missed"].items():
             print("      %-26s %4d  %s" % (k, n, pct(n, m["why_missed_n"])))
+    if m["why_missed_predates_field"]:
+        print("     %d miss(es) predate the field (added %s) and are outside that"
+              % (m["why_missed_predates_field"], FIELD_SINCE["why_missed"]))
+        print("     denominator — they had no field to fill, which is not the same as")
+        print("     leaving one empty (SCHEMA.md §3.5, §5.5.6).")
     if m["escapes_missing_why"]:
         print("     ⚠ %d escape(s) carry no why_missed — something got past every gate and"
               % m["escapes_missing_why"])
         print("       nothing recorded why. That is the most valuable record in the stream.")
+        print("       Complete it: tf-emit.sh --amend <miss_id> why_missed <value>  (§5.5.7)")
+    if m["amendments_applied"]:
+        print("  amendments folded   : %d field(s) completed by miss-amend records (§5.5.7)"
+              % m["amendments_applied"])
+    if m["orphan_amends"]:
+        print("     ⚠ %d miss-amend record(s) name no known miss, or a field outside the"
+              % m["orphan_amends"])
+        print("       allowlist — counted, never applied")
 
     # ---- attribution-bounded figures
     print("")

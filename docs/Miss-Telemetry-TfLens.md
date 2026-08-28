@@ -3,12 +3,13 @@
 **Status:** DESIGN — nothing in TfLens is implemented yet. **The producing side is now real:** TechieFlow shipped `misses.jsonl` on 2026-08-28, so the stream this document consumes is no longer hypothetical — it is emitting, and its final field list is `.tfcore/telemetry/SCHEMA.md` §5.5, not the design sketch.
 **Target repo:** `/mnt/c/1MyCode/TfLens` (`TfLens.slnx`, .NET 9 / Blazor Server / PostgreSQL 16).
 **Siblings:** `docs/Miss-Telemetry-TechieFlow.md` (the stream this consumes — **read it first**, especially its §0 implementation status) · `docs/Miss-Telemetry-AI-First-Playbook.md`.
+**Feedback loop:** §0.65 exists because TfLens reported **TF-005** (`docs/TfLens-TechieFlow-Feedback.md`) rather than deciding alone. That is the intended path when a framework rule has no legal move.
 
 ---
 
 ## 0. Requirement updates from the shipped producer (2026-08-28)
 
-Seven changes to what is specified below. They come from the framework implementation and from the first repo refreshed against it — **which was TfLens itself**.
+Eight changes to what is specified below. They come from the framework implementation, from the first repo refreshed against it — **which was TfLens itself** — and from TfLens's own TF-005 report (§0.65).
 
 **0.1 — `why_missed` is a real column, and its denominator is not the miss count.** The stream carries a `why_missed` field (SCHEMA §5.5.6) saying *which practice failed*, where `miss_class` says *what was missed*. Seven values: `missing-checklist-item` · `insufficient-verify-method` · `code-audit-limitation` · `ambiguous-acceptance` · `dependency-not-declared` · `instruction-ignored` · `other`. `MissRecord` gains `WhyMissed`, and the page gains a failed-practice distribution — arguably the most decision-changing band on it, because it answers *"is our specification weak or our verification weak?"*.
 
@@ -39,7 +40,8 @@ Seven changes to what is specified below. They come from the framework implement
 
 ```
 misses_total · miss_fixes_total · orphan_fixes · open_misses · wont_fix · resolved_misses
-why_missed_n · why_missed{} · escapes_missing_why
+why_missed_n · why_missed{} · escapes_missing_why · why_missed_eligible · why_missed_predates_field
+amendments_applied · orphan_amends
 class_distribution{} · found_by{} · design_miss_share · escape_share
 attributed_n · attribution_excluded · by_origin_phase{} · by_origin_model{} · by_origin_agent{}
 cost_sole_n · cost_shared_n · cost_unattributable_n
@@ -49,13 +51,33 @@ cost_usd_per_miss_measured · cost_usd_records
 
 Note `by_origin_agent` — the producer reports per-agent alongside per-model (they answer different questions: which model to route to vs. which persona's instructions to tighten). §3.4's table lists only phase and model; add the agent figure, under the same `linked`-only constraint and inside the same observational-labelling band.
 
+**0.65 — There is a THIRD record kind: `miss-amend`.** Added the same day, from TfLens's own TF-005 report. §3.2's parser change is therefore a three-way dispatch on `kind` within `StreamKind.Misses`, not two:
+
+| `kind` | Handling |
+|---|---|
+| `miss` | `MissRecord` |
+| `miss-fix` | `MissFixRecord` |
+| `miss-amend` | `MissAmendRecord` — `MissId`, `Field`, `Value` + the common set |
+| anything else | `InvalidLines++`, skip (unchanged) |
+
+**What it is:** an append-only way to *complete* a record — it may set a field that is `null` and may **never** overwrite one that is not, including a value an earlier amend set. It exists because constraint 5 ("the correction is a new record, never an edit") named a remedy this stream did not implement, so a `why_missed` left empty was unreachable.
+
+**What TfLens must do with it:**
+
+- **Fold amendments into the parent before computing anything**, oldest first, and **re-apply the null-check while folding** — do not trust that the producer already enforced it. TfLens ingests archived files from many machines, and a merged stream can carry an amend and a later-written value in either order. Only fields on the allowlist (`why_missed` today) and values inside its closed vocabulary may be applied.
+- **An amend naming no known `miss`, or a field off the allowlist, is an orphan** — counted and surfaced on Coverage, never applied, exactly as an orphan `miss-fix` is.
+- **Store the amend rows, do not collapse them at ingest.** Folding is a read-time operation over the stored records, so `RebuildAsync` replays and re-derives them like everything else. Natural key `(UserId, Repo, MissId, Field, Ts)`; a re-parse of the same archived file must not double-insert.
+- The producer's parity keys gain `amendments_applied` and `orphan_amends` (§0.6).
+
+**And the eligibility floor is now enforced upstream, so §0.1's denominator has a second term.** `tf-metrics.sh` carries `FIELD_SINCE = {"why_missed": "2026-08-28"}` beside its existing `LATE_GATES` table: a miss written before the field existed had no field to fill, so it leaves that field's denominator entirely and is reported separately (`why_missed_eligible`, `why_missed_predates_field`). TfLens must mirror both the floor and the two counts, or its `n of N assessed` will disagree with parity on any repo holding pre-2026-08-28 misses. It is the same rule as `LATE_GATES`, which TfLens already implements for `perf` — one table, one code path if you can manage it.
+
 **0.7 — Both `n < 3` and the exclusions are already enforced in the producer's code**, not merely in prose, and both are printed with the counts that bound them. `Figure` and `MissAttributionTaint` therefore have a working reference implementation to diff against when parity disagrees.
 
 ---
 
 ## 1. What TfLens is being asked to do
 
-TechieFlow gains a fifth stream, `docs/metrics/misses.jsonl`, carrying two record kinds: a **`miss`** (what was missed, which phase/agent/model let it through, who found it) and a **`miss-fix`** (the repair run, its outcome, its token/cost window). TfLens must pull it, archive it, parse it, store it, compute over it, and show it — under the same provenance discipline it already applies to the four existing streams.
+TechieFlow gains a fifth stream, `docs/metrics/misses.jsonl`, carrying three record kinds: a **`miss`** (what was missed, which phase/agent/model let it through, who found it), a **`miss-fix`** (the repair run, its outcome, its token/cost window) and a **`miss-amend`** (§0.65 — completes a field the `miss` left `null`, never overwrites one). TfLens must pull it, archive it, parse it, store it, compute over it, and show it — under the same provenance discipline it already applies to the four existing streams.
 
 The product's stated dangerous failure mode is *a plausible wrong number* (BRD §1). Miss data is the most seductive material in the whole system for producing one, because it invites two specific mistakes:
 
@@ -86,6 +108,7 @@ Two new records, `MissRecord` and `MissFixRecord`, following the existing conven
 
 - `kind == "miss"` → `MissRecord`
 - `kind == "miss-fix"` → `MissFixRecord`
+- `kind == "miss-amend"` → `MissAmendRecord` (§0.65)
 - anything else → `InvalidLines++` and skip. **Not** an exception: the existing rule is that a malformed line is counted and skipped, never fatal (REQ-FN-032), and an unknown `kind` in a stream TfLens does know is the same class of event.
 
 The documented-field sets follow the pattern already there — `MissDocumented` / `MissFixDocumented`, `MissMapped` / `MissFixMapped`, `MissKnown` / `MissFixKnown` — and `IsDocumented(StreamKind, string)` needs a case for `Misses`. Note the wrinkle it introduces: `IsDocumented` is keyed on stream, and `misses` has two field vocabularies. Take the **union** for the Coverage page's "fields observed that SCHEMA.md does not document" report, and say so in the XML doc — a `miss-fix`-only field observed on a `miss` record is not worth a separate report and would only produce noise.
@@ -98,25 +121,28 @@ The class-level XML `<remarks>` block is the project's mapping table of record. 
 |---|---|---|
 | `miss` | `(UserId, Repo, MissId)` | Keep the **earliest** `Ts`. A miss is opened once; a duplicate is a re-parse of the same archived file, not new information |
 | `miss-fix` | `(UserId, Repo, MissId, FixRunId)` | Keep the latest `Ts` |
+| `miss-amend` | `(UserId, Repo, MissId, Field, Ts)` | Keep the **earliest** `Ts`. Amendments are additive and each is a distinct fact; a duplicate is a re-parse of the same archived file (§0.65) |
 
 Neither needs `merge=union` handling of the kind `commits` needs — misses are events on one machine and cannot be independently reconstructed elsewhere (SCHEMA.md §5's reasoning, applied unchanged).
 
 ### 3.3 Storage — `database/001-schema.sql` + `PostgresStore.cs`
 
-Two tables, `"Miss"` and `"MissFix"`, in the existing house style: every identifier double-quoted, `"UserId"` a real column and part of every unique index (ADR-013), `CREATE TABLE IF NOT EXISTS` so the file stays idempotent at every startup with no migration framework.
+Three tables, `"Miss"`, `"MissFix"` and `"MissAmend"` (§0.65), in the existing house style: every identifier double-quoted, `"UserId"` a real column and part of every unique index (ADR-013), `CREATE TABLE IF NOT EXISTS` so the file stays idempotent at every startup with no migration framework.
 
 ```sql
 -- unique keys
 CREATE UNIQUE INDEX IF NOT EXISTS "UxMiss"    ON "Miss"    ("UserId","Repo","MissId");
 CREATE UNIQUE INDEX IF NOT EXISTS "UxMissFix" ON "MissFix" ("UserId","Repo","MissId","FixRunId");
+CREATE UNIQUE INDEX IF NOT EXISTS "UxMissAmend" ON "MissAmend" ("UserId","Repo","MissId","Field","Ts");
 -- read paths
 CREATE INDEX IF NOT EXISTS "IxMissUserRepo"     ON "Miss"    ("UserId","Repo");
 CREATE INDEX IF NOT EXISTS "IxMissOriginModel"  ON "Miss"    ("UserId","OriginModel");
 CREATE INDEX IF NOT EXISTS "IxMissFixUserRepo"  ON "MissFix" ("UserId","Repo");
 CREATE INDEX IF NOT EXISTS "IxMissFixMissId"    ON "MissFix" ("UserId","MissId");
+CREATE INDEX IF NOT EXISTS "IxMissAmendMissId"  ON "MissAmend" ("UserId","MissId");
 ```
 
-`ITelemetryStore` gains `ReadMissesAsync` and `ReadMissFixesAsync` mirroring `ReadGatesAsync`'s signature. `UpsertAsync` handles the two new `ParseResult` collections. `DeleteRepoDataAsync` must purge both tables — miss both and removing a repo leaves orphaned rows that reappear in every figure, which is the worst kind of bug in a product whose promise is correct numbers. `RebuildAsync` replays them from the raw archive like everything else.
+`ITelemetryStore` gains `ReadMissesAsync`, `ReadMissFixesAsync` and `ReadMissAmendsAsync` mirroring `ReadGatesAsync`'s signature. `UpsertAsync` handles the three new `ParseResult` collections. `DeleteRepoDataAsync` must purge **all three** tables — miss one and removing a repo leaves orphaned rows that reappear in every figure, which is the worst kind of bug in a product whose promise is correct numbers. `RebuildAsync` replays them from the raw archive like everything else; **amendments are folded at read time, never at ingest**, so a rebuild re-derives the same values (§0.65).
 
 `SyncState` gains a `misses` row per repo; `Coverage`'s per-repo stream table goes from four rows to five.
 
@@ -194,8 +220,10 @@ A per-miss detail table (id, REQ, class, severity, origin, found by, status, tok
 
 ### 3.8 Tests
 
-- `StreamParser` tests: both kinds on one file; an unknown `kind` counted as invalid, not thrown; overflow fidelity; **`null` vs `0` on every nullable** (the existing `StoreNullVsZero` discipline).
-- `Dedupe` tests: earliest-wins for `miss`, latest-wins for `miss-fix`.
+- `StreamParser` tests: all three kinds on one file; an unknown `kind` counted as invalid, not thrown; overflow fidelity; **`null` vs `0` on every nullable** (the existing `StoreNullVsZero` discipline).
+- `Dedupe` tests: earliest-wins for `miss`, latest-wins for `miss-fix`, earliest-wins per `(MissId, Field)` for `miss-amend`.
+- **Amend-folding tests (§0.65), the invariant this stream stands on:** an amend fills a `null` ✓ · an amend **never** overwrites a non-`null` value, whichever order the two records arrive in ✓ · a second amend of the same field is ignored ✓ · a field off the allowlist or a value outside its vocabulary is never applied and counts as an orphan ✓ · an amend naming no known `miss` counts as an orphan ✓ · a `why_missed` supplied only by an amend reaches the failed-practice distribution ✓.
+- **Eligibility-floor test:** a miss with `Ts` before `FIELD_SINCE["why_missed"]` is outside that field's denominator and is counted separately — the same shape as the existing `LATE_GATES` test for `perf`.
 - Metrics tests: a `shared:3` record never reaches the sole column; a non-`linked` record never reaches a per-model figure; `CostUsd` never sums across harness (`Pooled.cs` already has this test shape).
 - Guardrail test: `DeleteRepoDataAsync` leaves zero rows in both new tables.
 - Playwright: `/misses` renders every control with data (render gate) and is clean at 1280 and 390 (visual gate).

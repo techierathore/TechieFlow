@@ -52,6 +52,14 @@ bash .tfcore/utils/tf-emit.sh --open-miss REQ-UI-014     # "<miss_id> <miss_clas
 
 If a miss is already open on that REQ with the same `miss_class`, **stop and say so**: "already logged as `MISS-…`, still open." Do not write a second record. Skip this check when `req_id` is `null`.
 
+**But do not throw away what the owner just told you.** A repeat report often carries information the first record does not — most often *why* it was missed. If the open record's `why_missed` is `null` and the owner's sentence answers it, complete the record instead of duplicating it:
+
+```bash
+bash .tfcore/utils/tf-emit.sh --amend MISS-AstroLyfe-20260828-03 why_missed instruction-ignored
+```
+
+That appends a `miss-amend` (SCHEMA.md §5.5.7) — it fills a `null` field and refuses to overwrite a value that is already there, so it can never rewrite the original classification. **Never edit `misses.jsonl` by hand** (constraint 5); if `--amend` refuses, report the refusal and leave the stream alone. Say in your report which record you completed and with what.
+
 ### 3. Emit the miss
 
 ```bash
@@ -142,7 +150,7 @@ Say plainly when attribution came out `inferred` — the owner should know that 
 ## Output Checklist
 
 - [ ] Owning REQ resolved from the checklist, or `req_id: null` recorded deliberately
-- [ ] `--open-miss` collapse check run (skipped only when `req_id` is null); duplicate reported instead of re-logged
+- [ ] `--open-miss` collapse check run (skipped only when `req_id` is null); duplicate reported instead of re-logged — and if the open record's `why_missed` was null and the owner's words answered it, completed with `--amend` rather than duplicated or hand-edited
 - [ ] `miss_class` / `why_missed` / `artifact` / `severity` chosen from the closed enums — no free text in the record; `why_missed` omitted rather than guessed, but present on any owner/production report
 - [ ] `origin_run_id` resolved from `runs.jsonl`, or deliberately omitted; **no model name written**
 - [ ] `misses.jsonl` record emitted (+ `miss-fix` if `--fixed`)

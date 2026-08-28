@@ -1666,7 +1666,7 @@ The <code>winrun</code> bridge and <code>cmd.exe</code> rungs simply don't apply
 <tr><td><code>gates.jsonl</code></td><td>REQ verdict per verify run — <strong>the primary stream</strong></td><td><code>verify-phase</code> §6a, and <code>triage-issues</code> for escapes</td></tr>
 <tr><td><code>sessions.jsonl</code></td><td>agent session</td><td>the <code>SessionEnd</code> hook (<code>.tfcore/hooks/metrics-session.sh</code>)</td></tr>
 <tr><td><code>commits.jsonl</code></td><td>commit</td><td>your own <code>pre-commit</code> hook — never an agent</td></tr>
-<tr><td><code>misses.jsonl</code></td><td>a requirement or behaviour an agent <strong>missed</strong> (<code>miss</code>), and what repairing it cost (<code>miss-fix</code>)</td><td><code>verify-phase</code>, <code>build-phase</code>, <code>triage-issues</code>, <code>fix-issues</code>, <code>amend-docs</code>, <code>*log-miss</code></td></tr>
+<tr><td><code>misses.jsonl</code></td><td>a requirement or behaviour an agent <strong>missed</strong> (<code>miss</code>), what repairing it cost (<code>miss-fix</code>), and a field completed later (<code>miss-amend</code>)</td><td><code>verify-phase</code>, <code>build-phase</code>, <code>triage-issues</code>, <code>fix-issues</code>, <code>amend-docs</code>, <code>*log-miss</code></td></tr>
 </tbody>
 </table>
 
@@ -1803,6 +1803,21 @@ It classifies what you said, attributes it, writes the <code>misses.jsonl</code>
 
 <div class="panel"><strong>Optional, and <code>null</code> is honest</strong> — many misses have no clear answer and a forced one is noise. <strong>But an escape without one wastes the most valuable record in the stream:</strong> something got past every gate, and <em>why nothing caught it</em> is the entire question. <code>--report</code> warns when an <code>owner</code> or <code>production</code> miss arrives with the field empty, and reports the distribution against <em>records that carry it</em>, never against all misses.</div>
 
+<h3>Completing a record without editing it — <code>miss-amend</code></h3>
+
+<p>A stream is append-only, so &ldquo;the correction is a new record, never an edit&rdquo; is the rule. That rule needs a record kind to name, and until 2026-08-28 this stream had none: a field left empty — most sharply a <code>why_missed</code> on a record written before the field existed — was unreachable. <strong>Reported by the TfLens team as TF-005</strong>, and fixed with a third kind rather than a licence to edit.</p>
+
+<pre><code>bash .tfcore/utils/tf-emit.sh --amend MISS-App-20260828-01 why_missed missing-checklist-item</code></pre>
+
+<ul>
+<li>It may fill a field that is <code>null</code>. It may <strong>never</strong> overwrite one that is not — including a value set by an earlier amend. So it <em>completes</em> a record rather than altering a fact, and a reader that ignores amendments entirely still sees nothing false, only less.</li>
+<li>Only closed-vocabulary <strong>judgements</strong> are amendable (<code>why_missed</code> today). Nothing the emitter derives — <code>origin_model</code>, <code>origin_confidence</code>, <code>cost_attribution</code>, tokens, dollars — ever is, and an <em>observation</em> about a finished run is never backfilled.</li>
+<li>It prints its refusal rather than failing quietly, and still exits 0: telemetry has no veto, and neither does a refused amend. A hand-written amend piped onto the stream faces the identical checks.</li>
+<li><strong>Never hand-edit a <code>.jsonl</code> stream.</strong> If no record kind can carry the correction you need, report it as a framework defect — which is exactly how this one arrived.</li>
+</ul>
+
+<div class="panel"><strong>A record written before a field existed is not &ldquo;unassessed&rdquo;.</strong> <code>why_missed</code> arrived on 2026-08-28; misses older than that had no field to fill, so they leave that field&rsquo;s denominator and <code>--report</code> states how many did. Same rule as a gate added mid-stream (§3.5 of the schema): never backfill a record with a verdict nobody made at the time.</div>
+
 <h3>What a miss costs — the honest version</h3>
 
 <table>
@@ -1929,7 +1944,7 @@ single-source-of-truth checklists, and <strong>"verify by executing, not by read
 <div class="panel"><strong>Which one do you want?</strong> If you are one person driving agents across several apps, stay here. If you are rolling a process out to a team — where the hard parts are onboarding, review gates and shared standards rather than raw throughput — start with the Playbook; it ships enablement and onboarding material this framework deliberately does not carry. The two are independent repos: nothing here depends on the Playbook, and nothing there depends on this.</div>
 
 <hr>
-<p class="small">Last revised 2026-08-28 (rev 1). Edit freely. When the workflow changes, update <code>README.md</code> and <code>WorkFlow-Context.md</code> (the durable cross-harness context document) too.</p>
+<p class="small">Last revised 2026-08-28 (rev 2). Edit freely. When the workflow changes, update <code>README.md</code> and <code>WorkFlow-Context.md</code> (the durable cross-harness context document) too.</p>
 
 </main>
 </div>

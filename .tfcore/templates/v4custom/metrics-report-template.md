@@ -147,11 +147,20 @@ REQ will not open a duplicate record — the two predicates differ deliberately.
 **Why it was missed** — *which practice failed* ({a} of {m} misses assessed)
 
 <!-- Optional field (SCHEMA §5.5.6): the denominator is records that CARRY it, never
-     all misses. A missing value means "not assessed", never a zero for a category. -->
+     all misses. A missing value means "not assessed", never a zero for a category.
+     And records written BEFORE the field existed (FIELD_SINCE, 2026-08-28 for
+     why_missed) leave the denominator entirely — they had no field to fill, which is
+     not the same as leaving one empty. State how many were excluded on that ground;
+     never backfill them with a value nobody assessed at the time. -->
 
 | Practice | n | Share |
 |---|---|---|
 | {why_missed} | {n} | {x%} |
+
+{k} miss(es) predate the field and are outside this denominator.
+{u} escape(s) could have carried it and did not — complete those records with
+`bash .tfcore/utils/tf-emit.sh --amend <miss_id> why_missed <value>` (SCHEMA §5.5.7);
+never by editing `misses.jsonl`.
 
 This is the table that says whether your **specification** or your **verification** is
 the weak one — `missing-checklist-item` climbing means the spec has holes;
