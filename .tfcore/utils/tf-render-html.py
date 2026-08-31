@@ -479,6 +479,61 @@ def is_requirements_checklist(base, raw):
                 or "SINGLE SOURCE OF TRUTH" in head)
 
 
+NEXT_CMD_H2 = re.compile(r"^##\s+Next command to run\s*$", re.I)
+
+
+def next_command_cta(base, lines):
+    """The PROJECT-STATUS call-to-action box (render-workflow-docs §5).
+
+    `render-workflow-docs.md` §5 has always required a "NEXT COMMAND TO RUN" box at
+    the very top of <main>, and its Output Checklist repeats the requirement — but
+    when hand-authoring moved into this script under TF-003, the box did not come
+    with it. The fingerprint was left in plain sight: html-render-shell §2 defines
+    `--cta-bg` in both palettes and nothing consumed it. A spec that says "always add
+    this" beside a renderer that never does is worse than either alone, because it
+    makes the checklist item unfalsifiable by reading the task (TfLens TF-010).
+
+    So it is emitted here, mechanically, from the source the spec already names: the
+    first fenced code block under `## Next command to run`. Same shape as the
+    frontmatter special case above it.
+
+    Returns "" for every other document, and for a PROJECT-STATUS whose Next-command
+    section is missing or empty — an absent box is honest; an invented command is not.
+    """
+    if base.lower() != "project-status.md":
+        return ""
+    cmd = None
+    for i, ln in enumerate(lines):
+        if not NEXT_CMD_H2.match(ln):
+            continue
+        for j in range(i + 1, len(lines)):
+            s = lines[j].strip()
+            if s.startswith("## "):          # next section — nothing to show
+                break
+            if s.startswith("```"):
+                body = []
+                for k in range(j + 1, len(lines)):
+                    if lines[k].strip().startswith("```"):
+                        break
+                    body.append(lines[k].rstrip())
+                body = [b for b in body if b.strip()]
+                if body:
+                    cmd = body[0].strip()
+                break
+        break
+    if not cmd:
+        return ""
+    # Theme variables only — never a hardcoded hex, so the box stays legible in both
+    # palettes (§5's own instruction, and the reason --cta-bg exists).
+    return ('    <div class="cta-next" style="padding:20px; background:var(--cta-bg); '
+            'border:2px solid var(--accent); border-radius:10px; margin:20px 0;">\n'
+            '      <div style="font-size:11px; color:var(--muted); letter-spacing:.5px;">'
+            'NEXT COMMAND TO RUN</div>\n'
+            '      <div style="font-family:var(--mono); font-size:18px; margin-top:6px;">'
+            '%s</div>\n'
+            '    </div>\n' % _html.escape(cmd))
+
+
 def render(md_path, css, head_js, body_js, out_dir=None):
     base = os.path.basename(md_path)
     raw_probe = open(md_path, encoding="utf-8").read().replace("\r\n", "\n")
@@ -500,6 +555,9 @@ def render(md_path, css, head_js, body_js, out_dir=None):
             break
     if not title:
         title = re.sub(r"\.md$", "", base)
+
+    # Read the CTA source BEFORE parse() consumes `lines` (§5, TfLens TF-010).
+    cta = next_command_cta(base, lines)
 
     r = Renderer(Slugger())
     parse(lines, r)
@@ -554,7 +612,7 @@ def render(md_path, css, head_js, body_js, out_dir=None):
 @@SIDE@@  <main>
     <h1>@@TITLEH@@</h1>
     <div class="subtitle">@@SUBTITLE@@</div>
-@@FM@@
+@@CTA@@@@FM@@
 @@INLINETOC@@@@BODY@@
   </main>
 </div>
@@ -576,6 +634,7 @@ def render(md_path, css, head_js, body_js, out_dir=None):
                          ("@@LAYOUT@@", layout_cls),
                          ("@@SIDE@@", side),
                          ("@@SUBTITLE@@", subtitle),
+                         ("@@CTA@@", cta),
                          ("@@FM@@", fm_rows),
                          ("@@INLINETOC@@", inline_toc),
                          ("@@BODY@@", "\n".join(r.out))):

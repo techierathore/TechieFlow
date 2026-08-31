@@ -126,6 +126,26 @@ So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit 
 
 Provenance rule applied once more: **never pool `cost_usd` across harness** — Claude records are `null`, and a sum over mixed records silently under-reports. Tokens may be compared across harness; dollars may not.
 
+### 2.6 Per-phase effort fields (added 2026-08-31; injected by `tf-emit.sh`, never emitted by an agent)
+
+Added so the question *"what did each phase cost — in time, in tokens, on which model, with how much fan-out?"* is answerable from the streams rather than reconstructed by hand. §2 and §2.5 already carried `cmd`, `started`/`ended`/`duration_s`, the four token counters, `model`, `harness`, `tier`/`tier_model`/`routed` and `attempt`. Three things were missing, and each was missing for the same reason: it was either **self-reported** or **not represented at all**.
+
+| Field | Type | Meaning / source |
+|---|---|---|
+| `subagent_runs` | int | **Measured** count of subagent invocations that produced output inside this run's window. Claude: subagent transcripts under `<transcript-dir>/<session-id>/subagents/` with an in-window assistant message; OpenCode: distinct child sessions in `opencode.db` with in-window output. |
+| `tokens_out_subagents` | int | Output tokens attributable to those subagents. `tokens_out − tokens_out_subagents` is the main thread's own share. |
+| `model_tokens_out` | object | `{model_id: output_tokens}` over the window — the per-model **split**, not just the winner. |
+
+**Why `subagents` was not enough, and why it stays.** `subagents` (§2) is a list of *names an agent types into its own emit*. It is a statement of intent, it carries no count when the same agent is spawned four times, and nothing checks it against what actually ran — the same weakness that makes `harness` detected rather than declared (§1) and `origin_model` looked up rather than written (§5.5.1). `subagent_runs` is counted from the harness's own store. Both are kept: `subagents` says *which kinds*, `subagent_runs` says *how many actually ran*. **Where they disagree, the measured one is right** — and a report should say so rather than quietly picking one.
+
+**Why the model split matters more than the model name.** A run whose output was 90% one model and 10% another, and a run that split evenly, are different facts about cost and about routing. `model` (the dominant one) and `models` (the set) cannot tell them apart, so any per-model effort figure built on `model` alone silently attributes the whole window to the winner.
+
+**`tokens_scope` governs how all three may be read, and this is not optional.** A `main`-scope window saw no subagent transcripts at all, so its `subagent_runs: 0` means *"not observed"*, **not** *"none ran"*. Only a `tree`-scope record can support a claim about fan-out.
+
+> **Reporting rule, enforced in `tf-metrics.sh` rather than merely stated:** a per-phase fan-out figure is computed **over `tokens_scope: "tree"` records only**, and the count of excluded `main` / `conversation` / `none` records is printed beside it. This is the §6 provenance rule arriving on a fourth axis — measured and unobserved never pool — and it is the difference between "this phase spawns 3.4 subagents on average" and "this phase spawns 3.4 subagents on average *on the runs where we could see them*".
+
+**These do not create per-feature timing.** The unit stays **the run**; §0's non-goal is unchanged. `cmd` is the phase, and a phase figure is an aggregate over runs of that `cmd` — never a per-ticket cycle time.
+
 ## 3. `docs/metrics/gates.jsonl` — one record per REQ verdict per verify run
 
 **This is the primary stream.** If only one stream survives, it is this one.
@@ -156,7 +176,7 @@ Failure:
 | `attempt` | int | See §3.1. Derive it; never guess it. |
 | `verdict` | string | Mirrors the checklist vocabulary **exactly**: `Verified` \| `Needs re-verify` \| `FAIL` \| `Blocked` \| `Implemented` \| `Done (pre-existing)`. |
 | `gate` | string \| null | **The FIRST gate that failed**, or `null` on a pass. See §3.2. |
-| `gates_run` | string[] | Which gates actually executed this pass — subset of `["build","acceptance","render","visual","perf","standards"]`, in execution order. A gate absent here did **not** run and cannot be credited or blamed. For `perf` this carries real weight: see §3.5. |
+| `gates_run` | string[] | Which gates actually executed this pass — subset of `["build","acceptance","render","assets","visual","mockup-parity","perf","standards"]`, in execution order. A gate absent here did **not** run and cannot be credited or blamed. For `perf`, `assets` and `mockup-parity` this carries real weight: see §3.5. |
 | `failure_class` | string \| null | Controlled vocabulary only, §3.3. `null` on a pass. |
 | `prior_verdict` | string \| null | The Status cell value **before** this run wrote over it. `null` if the row is new. |
 | `proof` | string \| null | Optional, §3.4. |
@@ -188,19 +208,27 @@ Get this right; everything else on the record is secondary.
 | `build` | The code did not compile / the app did not boot. Nothing downstream ran. |
 | `acceptance` | The REQ's acceptance test ran and failed (Playwright spec, `dotnet test`). |
 | `render` | verify-phase §4a data-render gate — a control is `RENDER-EMPTY` / `RENDER-ERROR` (blank table, count-vs-rows mismatch, empty chart). |
-| `visual` | verify-phase §4b visual-truth gate — overlap, clip, off-viewport, unstyled fallback, mockup drift. |
+| `assets` | verify-phase §4a2 asset-integrity gate — a stylesheet or script the page **declares** did not arrive (404, non-200, empty body). **Added 2026-08-31; see §3.5.** |
+| `visual` | verify-phase §4b visual-truth gate — overlap, clip, off-viewport, unstyled fallback. |
+| `mockup-parity` | verify-phase §4b2 mockup-parity gate — a built screen drifts structurally from its approved mockup (badge · icon · color · **stroke** · wrap · clip · token · missing · document-scroll). **Added 2026-08-31; see §3.5.** |
 | `perf` | verify-phase §4c performance gate — measured p95 exceeded the REQ's declared `perf-budget:` by more than 25%. **Added 2026-08-10; see §3.5 before reading its share of the distribution.** |
 | `standards` | The standards grep — naming/prefix/structure violation against `docs/{AppName}-Coding-Standards.md`. |
 | `escaped` | **Not a gate.** A defect that reached UAT/production and was logged by `*triage-issues` — i.e. *every* gate missed it. This value is what makes escape rate computable. Written only by `triage-issues.md`. |
 | `null` | Nothing failed. |
 
-**"First" means first in execution order** (`build` → `acceptance` → `render` → `visual` → `perf` → `standards`). If a REQ fails render *and* visual, `gate` is `render`. Recording the later one inflates the visual gate's apparent catch rate.
+**"First" means first in execution order** (`build` → `acceptance` → `render` → `assets` → `visual` → `mockup-parity` → `perf` → `standards`). If a REQ fails render *and* visual, `gate` is `render`. Recording the later one inflates the visual gate's apparent catch rate.
+
+`assets` sits **before** `visual` because an asset that never arrived explains the visual result rather than being explained by it: a page with no stylesheet is unstyled *because of* the 404, and recording `visual` there would attribute the catch to the gate that merely saw the consequence. `mockup-parity` sits **after** `visual` for the mirror reason — a screen that overlaps or clips is broken on its own terms, before any question of whether it matches a design.
 
 `gate: "escaped"` is deliberately in the same field rather than a separate one: escape rate is "which gate caught it — none of them", and keeping it on one axis means a single `group by gate` answers questions 2 and 3 together. Reports must nonetheless present `escaped` as its own row, never folded into a gate's share.
 
 ### 3.3 `failure_class` — controlled vocabulary, no free text
 
-`blank-data` · `zero-rows` · `overlap` · `clipped` · `offscreen` · `slow-ttfb` · `slow-load` · `timeout` · `exception` · `assert-fail` · `naming` · `build-error` · `other`
+`blank-data` · `zero-rows` · `overlap` · `clipped` · `offscreen` · `slow-ttfb` · `slow-load` · `timeout` · `exception` · `assert-fail` · `naming` · `build-error` · `missing-asset` · `mockup-drift` · `other`
+
+`missing-asset` (added 2026-08-31) names an asset the page **declared** and never received — a 404, a non-200, or a 200 with an empty body on a `<link rel=stylesheet>` or `<script src>`. It says only that; **never** the URL, which is a file path inside the app and is exactly what constraint 7 keeps out of these streams. The path belongs in the checklist Remark a human reads.
+
+`mockup-drift` (added 2026-08-31) names a structural disagreement between a built screen and its approved mockup. Which of the eight classes drifted is **not** recorded here — that is a property of one screen on one day, the same reasoning that keeps a latency figure out of a record. The class and the element live in the §4b2 run JSON under `tests/.artifacts/` and in the Remark.
 
 If none fits, use `other`. **Do not** write a description. Free text here would leak requirement and client detail — the exact thing constraint 8 forbids.
 
@@ -225,6 +253,22 @@ perf catch rate = failures with gate="perf"  ÷  records with "perf" in gates_ru
 This is why `gates_run` must be populated truthfully rather than padded with every gate name. Listing `perf` on a REQ that had no budget would silently inflate the denominator and drive the gate's apparent catch rate toward zero — the same class of error as recording a later failing gate in `gate`, and just as invisible after the fact.
 
 **The rule for any future gate.** A gate added mid-stream carries this hazard permanently; the fix is never to backfill the old records with a verdict they never had. Instead: record its introduction date here, populate `gates_run` honestly, and let a report present its coverage (`n` records that ran it) beside its count. `tf-metrics.sh --report` prints exactly that for `perf` and refuses to print a share without it.
+
+**Two more gates entered the enum on 2026-08-31, and the rule above was applied to both rather than restated.** `assets` (§4a2, TfLens TF-007) and `mockup-parity` (§4b2, TfLens TF-008) are in `LATE_GATES` from the day they shipped, so no reader ever sees their share computed against a total that predates them:
+
+| Gate | Since | Read its share against |
+|---|---|---|
+| `perf` | 2026-08-10 | records with `perf` in `gates_run` |
+| `assets` | 2026-08-31 | records with `assets` in `gates_run` |
+| `mockup-parity` | 2026-08-31 | records with `mockup-parity` in `gates_run` |
+
+`mockup-parity` carries a **second** honesty requirement that `perf` does not, and it is the sharper of the two. The gate compares elements the app and the mockup both anchor, so on a screen whose mockup anchors little, it can grade almost nothing — and a `PASS` from a gate that graded nothing is indistinguishable from a `PASS` from a gate that graded everything. **The failure mode is inverted: the less of a screen the gate can see, the cleaner its verdict looks.** That produced a real false statement upstream — eight UI rows written `Verified` off "10 PASS / 2 FAIL / 0 findings" while a screen was visibly wrong (TF-011).
+
+So the gate emits a per-screen `UNGRADEABLE` verdict, and:
+
+> **An `UNGRADEABLE` screen is `NOT-OBSERVABLE`, never a pass. It emits NO gate record** — no gate ran on it, and a fabricated pass would poison the very distribution the coverage rule exists to protect. It must not license a `Verified`.
+
+Same discipline as `PERF-UNMEASURED`, and the same as `⚠ STATIC-ONLY`: an unmeasured thing is unmeasured, not passed.
 
 The reasoning, recorded because it will be questioned later: a gate distribution is a claim about *what catches what*. A gate that only ran on 6 of 400 records did not fail to catch things — it was not asked. Presenting those as the same number is the same indefensible merge the provenance rule (§5) forbids for backfilled data, arriving by a different route.
 
@@ -480,6 +524,47 @@ It **prints its refusal on stdout** rather than failing silently — an agent th
 
 **Readers fold amendments into the parent before counting anything**, and re-apply the null-check while doing it: a stream merged from another machine can carry an amend and a later-written value in either order.
 
+### 5.5.7b Closed vocabularies are enforced ON WRITE (added 2026-08-31)
+
+`tf-emit.sh` validates `miss_class`, `artifact`, `severity`, `found_by` and `why_missed` on a `miss`, and `verdict_after` and `fix_cmd` on a `miss-fix`, against the vocabularies above. **A record carrying a value outside one is refused and never appended**, with the reason and the allowed values printed on stdout. It still exits 0 — telemetry has no veto (§10), and neither does a refused record.
+
+This closes an asymmetry that was real and was hit: the emitter checked the `miss-amend` allowlist meticulously (§5.5.7) and checked a `miss` record's own enums **not at all**. So a single typo in `miss_class` landed permanently on an append-only stream, invented a category in every distribution built on it, and **could not be corrected** — `miss_class` is not amendable (§5.5.7 admits only closed-vocabulary judgements the emitter does not derive), and constraint 5 forbids editing the file. The only legal move left was to report it.
+
+Dropping the record is the same choice `_amend_ok()` already makes, for the same reason: **a record the reader has to defend itself against is worse than no record.** `tf-metrics.sh` re-checks the amend allowlist on read for streams merged from another machine; these enums are checked at the one door every writer must pass through.
+
+**When you add a value to a vocabulary in this document, add it to `_MISS_ENUMS` / `_FIX_ENUMS` in `tf-emit.sh` in the same edit** — exactly as `LATE_GATES` and `FIELD_SINCE` must be kept in step. A vocabulary that exists here and not there is a value the emitter will silently refuse.
+
+### 5.5.8 An unrecorded number is not a zero — the divisor rule for every mean on this stream
+
+**Added 2026-08-31**, from TfLens feedback **TF-005**. `analyse_misses` computed the token mean as
+`sum(tokens_out or 0) / len(sole)`. `or 0` cannot tell an **absent** field from a **recorded zero**, so a
+repair whose cost was never captured was averaged in as a *free* repair and rework came out understated —
+in the direction that flatters the framework. On a stream where half the `sole` fixes predate token
+capture, rework reads as costing half what it did.
+
+This is the defect class the miss stream exists to expose, appearing in the tool that measures it. §2.5
+already states the rule — *"absent means 'not captured', never `0`"* — and `cost_usd` already honours it
+(never pooled across harnesses, precisely so a `null` cannot masquerade as a measured zero). The token
+mean had the identical hazard and no guard.
+
+> **The rule, now general: every mean over an optional field divides by the records that carry it.** The
+> excluded records are counted and reported; they are never coerced, never backfilled, and never dropped
+> silently.
+
+Both figures therefore publish their own denominator, which is the half that matters to a consumer:
+
+| Key | Meaning |
+|---|---|
+| `tokens_per_miss_measured` / `_n` | the mean, and the number of `sole` records it was computed over |
+| `tokens_per_miss_apportioned` / `_n` | the same pair for the apportioned column |
+| `tokens_unrecorded_sole_n` / `tokens_unrecorded_shared_n` | records excluded because `tokens_out` was absent |
+
+Publishing `_n` is what resolves the position the old behaviour forced on a consumer under a
+zero-tolerance parity gate: reproduce a figure you believe is wrong, or fail your own acceptance. With
+the denominator on the wire, a consumer can agree with this reference **and** be correct. (TfLens's
+`DECISIONS.md` **D-012** records the divergence it took in the meantime; that divergence is now
+resolved in this direction, so the two implementations agree by construction rather than by luck.)
+
 ---
 
 ## 6. Provenance — three separations, one rule applied three times
@@ -546,7 +631,7 @@ Treat backfilled gate data as **context and volume**, never as evidence for a pu
 | Miss rate per origin agent | misses grouped by `origin_agent` | as above |
 | Miss escape share | misses with `found_by ∈ {owner, production}` ÷ all misses | live-only; reported **beside** the `gates.jsonl` escape rate, never merged |
 | Open misses | `miss` with no `miss-fix`, or whose latest `miss-fix.verdict_after ≠ Verified` | poolable |
-| Tokens per miss fixed | Σ `tokens_out` ÷ count over `miss-fix` | **`cost_attribution="sole"` only**; apportioned in a labelled column |
+| Tokens per miss fixed | Σ `tokens_out` ÷ **count of records that carry `tokens_out`** over `miss-fix` | **`cost_attribution="sole"` only**; apportioned in a labelled column; the divisor is published as `tokens_per_miss_measured_n` / `tokens_per_miss_apportioned_n` and the excluded records as `tokens_unrecorded_sole_n` / `tokens_unrecorded_shared_n` (§5.5.8) |
 | Measured cost per miss fixed | Σ `cost_usd` ÷ count | **OpenCode records only** (§4); never pooled across harness |
 | Median time-to-close a miss | `miss-fix.ts − miss.ts` | poolable |
 

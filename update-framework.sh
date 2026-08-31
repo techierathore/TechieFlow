@@ -898,6 +898,30 @@ else
   echo "  .gitignore — added agent-artifact entries: ${GI2_MISSING[*]}"
 fi
 
+# --------------------------------------------------------------------------
+# 8b2. .gitignore — the PROJECT'S OWN build output, and whether it is tracked.
+#     Blocks 8 and 8b manage TechieFlow's artifacts. Neither says a word about the
+#     stack the project is actually written in — so a scaffolded .NET repo shipped
+#     a complete, careful ignore file with no `bin/` and no `obj/` in it, the first
+#     build produced output, and one commit swept 1,041 build-output files into the
+#     index (reaching 1,962 across four more). Those files carry a static-web-assets
+#     manifest whose content roots are MACHINE-ABSOLUTE, so committing them ships
+#     one machine's paths to another — a plausible route to the asset 404 that
+#     TfLens TF-007 is about. Every project this scaffold has ever created is
+#     likely to carry it.
+#     The audit also answers the half that is usually forgotten: **a tracked file is
+#     never ignored, whatever the ignore file says**, so adding the rule later fixes
+#     nothing on its own. It reads .git/index directly and never invokes git
+#     (constraint 1); remediation is PRINTED for the owner, never run.
+# --------------------------------------------------------------------------
+if [[ -f "$TEMPLATE/.tfcore/utils/tf-gitignore-audit.sh" ]]; then
+  if [[ $DRY_RUN -eq 1 ]]; then
+    bash "$TEMPLATE/.tfcore/utils/tf-gitignore-audit.sh" . --dry-run || true
+  else
+    bash "$TEMPLATE/.tfcore/utils/tf-gitignore-audit.sh" . --fix || true
+  fi
+fi
+
 # 8c. Telemetry — docs/metrics/, the project classification, and the pre-commit
 #     hook, refreshed on every update so a repo can never drift out of it. There
 #     is deliberately no separate install command: telemetry rides this script.

@@ -37,14 +37,15 @@ from collections import Counter, defaultdict, OrderedDict
 
 STREAMS = ("runs", "gates", "sessions", "commits", "misses")
 VERDICTS = ("Verified", "Needs re-verify", "FAIL", "Blocked", "Implemented", "Done (pre-existing)")
-GATE_ORDER = ("build", "acceptance", "render", "visual", "perf", "standards", "escaped")
+GATE_ORDER = ("build", "acceptance", "render", "assets", "visual", "mockup-parity",
+              "perf", "standards", "escaped")
 
 # Gates that entered the enum after gates.jsonl started collecting. Their share of a raw
 # distribution is structurally understated — records written before the date never had the
 # chance to record them, and (for `perf`) most records after it still do not run the gate.
 # The honest denominator is "records that actually ran it", i.e. gates_run membership.
 # SCHEMA.md §3.5. Keep this table in sync when a gate is added.
-LATE_GATES = {"perf": "2026-08-10"}
+LATE_GATES = {"perf": "2026-08-10", "assets": "2026-08-31", "mockup-parity": "2026-08-31"}
 
 # The same hazard as LATE_GATES, one stream over: an OPTIONAL FIELD added after a
 # stream started collecting. A record written before the date had no such field to
@@ -289,7 +290,6 @@ def analyse_misses(misses):
             closed_per_run.setdefault(f["fix_run_id"], set()).add(f["miss_id"])
 
     def _attribution(f):
-        stored = str(f.get("cost_attribution") or "")
         # `none` is only honest where there is genuinely nothing to divide: no run
         # matched, or the window itself could not be computed. Anything else with a
         # real window is a share, and how many ways it splits is countable.
@@ -297,10 +297,24 @@ def analyse_misses(misses):
             return "none"
         if not f.get("fix_run_id"):
             return "none"
-        if stored == "sole":
-            return "sole"
-        n = len(closed_per_run.get(f["fix_run_id"], {f.get("miss_id")}) or {1})
-        return "sole" if n == 1 else "shared:%d" % n
+        # THE RECOUNT WINS OVER THE STORED VALUE — INCLUDING OVER A STORED `sole`.
+        #
+        # This was the bug (found 2026-08-31, on this repo's own live data). The
+        # emitter stamps attribution one record at a time, so a run that closed nine
+        # misses wrote sole, shared:2, shared:3 … shared:9 — the FIRST record is
+        # stamped `sole` because at that instant it was the only miss the run had
+        # closed. Short-circuiting on a stored `sole` therefore preserved exactly the
+        # value the recompute exists to correct, and it did so in the worst possible
+        # column: `sole` is the HEADLINE cost figure, the one §5.5.3 reserves for
+        # actual measurements. One whole multi-miss window was being reported as the
+        # measured cost of a single repair, once per multi-miss run, silently and
+        # upward.
+        #
+        # `sole` now means what §5.5.3 says it means — the run closed exactly one
+        # miss — and that is a fact about the finished stream, not about the order
+        # records happened to be written in.
+        n = len(closed_per_run.get(f["fix_run_id"]) or {f.get("miss_id")})
+        return "sole" if n <= 1 else "shared:%d" % n
 
     for f in fixes:
         f["cost_attribution_computed"] = _attribution(f)
@@ -313,7 +327,27 @@ def analyse_misses(misses):
                     and f["cost_attribution_computed"] != "none")
 
     def tok(fs):
-        return sum((f.get("tokens_out") or 0) for f in fs)
+        """Sum tokens_out over the records that ACTUALLY CARRY IT, and say how many.
+
+        `or 0` cannot distinguish an absent field from a recorded zero, so the
+        obvious one-liner averages an unmeasured repair in as a FREE repair and
+        understates rework — in the direction that flatters the framework. That is
+        the same defect class the miss stream exists to expose, appearing in the
+        tool that measures it: SCHEMA.md §2.5 says an absent optional stays null and
+        is never coerced to zero, and cost_usd already honours that (it is not pooled
+        across harnesses for exactly this reason). The token mean had the identical
+        hazard and no guard.
+
+        Fixed 2026-08-31 from TfLens TF-005. cost_sole_n still carries the record
+        count separately, so excluding unpriced records from the divisor loses no
+        information — and returning the denominator alongside the sum is what lets a
+        consumer agree with this reference AND be correct, which is the position the
+        old behaviour made impossible."""
+        priced = [f for f in fs if f.get("tokens_out") is not None]
+        return sum(f["tokens_out"] for f in priced), len(priced)
+
+    sole_tokens, sole_priced_n = tok(sole)
+    shared_priced = [f for f in shared if f.get("tokens_out") is not None]
 
     # Dollars exist ONLY where a harness measured them. Claude Code and Codex carry
     # cost_usd:null permanently (SCHEMA.md §4) and are never priced from a rate card
@@ -377,15 +411,189 @@ def analyse_misses(misses):
         # divisor recovers. Reported so a jump in the cost figures is explained by
         # a fixed derivation rather than looking like the work got more expensive.
         "cost_recovered_n": recovered,
-        "tokens_per_miss_measured": round(float(tok(sole)) / len(sole), 1)
-                                    if len(sole) >= MIN_N else None,
+        # The divisor is the records that CARRY a token count, never all of them —
+        # and it is published beside the figure (`_n`) so a consumer can reproduce
+        # it exactly rather than choosing between agreeing and being right.
+        # TfLens TF-005, fixed 2026-08-31.
+        "tokens_per_miss_measured": round(float(sole_tokens) / sole_priced_n, 1)
+                                    if sole_priced_n >= MIN_N else None,
+        "tokens_per_miss_measured_n": sole_priced_n,
+        "tokens_unrecorded_sole_n": len(sole) - sole_priced_n,
         "tokens_per_miss_apportioned": round(
-            sum(float(f.get("tokens_out") or 0)
+            sum(float(f["tokens_out"])
                 / int(f["cost_attribution_computed"].split(":")[1])
-                for f in shared) / len(shared), 1) if len(shared) >= MIN_N else None,
+                for f in shared_priced) / len(shared_priced), 1)
+            if len(shared_priced) >= MIN_N else None,
+        "tokens_per_miss_apportioned_n": len(shared_priced),
+        "tokens_unrecorded_shared_n": len(shared) - len(shared_priced),
         "cost_usd_per_miss_measured": round(
             sum(f["cost_usd"] for f in paid) / len(paid), 4) if len(paid) >= MIN_N else None,
         "cost_usd_records": len(paid),
+    }
+
+
+def analyse_phases(runs):
+    """PER-PHASE EFFORT — what each `cmd` actually cost: time, tokens, which model,
+    how much fan-out. SCHEMA.md §2 / §2.5 / §2.6.
+
+    The unit is the RUN, aggregated by `cmd`. It is NOT per-feature cycle time —
+    §0's non-goal is unchanged, and nothing here is keyed on a REQ or a ticket.
+
+    THREE SEPARATIONS ARE ENFORCED HERE, not merely documented, because each one is
+    a way this block could quietly lie:
+
+      1. TOKENS.  A run whose window could not be computed carries
+         tokens_scope:"none" (or no scope at all) and has NO token numbers. It is
+         excluded from every token figure and counted in `tokens_unmeasured_n`.
+         Averaging it in as zero is exactly the TF-005 defect one stream over —
+         `or 0` cannot tell an absent field from a measured zero, and the error
+         always flatters the framework.
+
+      2. FAN-OUT.  `subagent_runs` is only meaningful on a tokens_scope:"tree"
+         record. A "main"-scope window never LOOKED at the subagent transcripts, so
+         its 0 means "not observed", not "none ran". Pooling the two would report
+         confident fan-out figures largely composed of runs that could not have
+         seen a subagent. Tree-scope only, with the exclusion printed.
+
+      3. DOLLARS.  Never pooled across harness (SCHEMA.md §4). Claude and Codex
+         carry cost_usd:null permanently; a sum over mixed records under-reports
+         silently. Reported per harness or not at all.
+
+    Backfilled runs are excluded outright: a reconstructed duration is a guess, and
+    an effort report built on guesses is the kind of number that cannot be defended
+    when someone asks how it was measured."""
+    live = [r for r in runs if r.get("kind", "run") == "run" and not r.get("backfilled")]
+
+    def scope_of(r):
+        return r.get("tokens_scope") or "absent"
+
+    scope_cov = Counter(scope_of(r) for r in live)
+
+    def has_tokens(r):
+        return scope_of(r) not in ("none", "absent") and r.get("tokens_out") is not None
+
+    def sees_subagents(r):
+        # ONLY a tree-scope window observed the subagent transcripts at all — AND
+        # only a record written after the field existed could carry the count. Both
+        # exclusions are real and they are DIFFERENT, so they are reported apart:
+        # "we did not look" and "we could not have looked" are separate facts, and
+        # the §3.5 rule for a late-added field says say which.
+        return scope_of(r) == "tree" and r.get("subagent_runs") is not None
+
+    grand_out = sum(r.get("tokens_out") or 0 for r in live if has_tokens(r))
+    grand_dur = sum(r.get("duration_s") or 0 for r in live if r.get("duration_s"))
+
+    phases = OrderedDict()
+    for cmd in sorted({r.get("cmd") or "?" for r in live}):
+        rs = [r for r in live if (r.get("cmd") or "?") == cmd]
+        priced = [r for r in rs if has_tokens(r)]
+        durs = [r["duration_s"] for r in rs if r.get("duration_s")]
+        fan = [r for r in rs if sees_subagents(r)]
+
+        models = defaultdict(lambda: {"runs": 0, "tokens_out": 0})
+        for r in priced:
+            split = r.get("model_tokens_out")
+            if isinstance(split, dict) and split:
+                # The per-model SPLIT when the record carries it: a run that spent
+                # 90% of its output on one model and 10% on another is a different
+                # fact from an even split, and attributing the whole window to the
+                # dominant model is how a per-model cost figure goes wrong.
+                for m, t in split.items():
+                    models[m]["tokens_out"] += t or 0
+                for m in split:
+                    models[m]["runs"] += 1
+            elif r.get("model"):
+                models[r["model"]]["runs"] += 1
+                models[r["model"]]["tokens_out"] += r.get("tokens_out") or 0
+
+        # Declared fan-out (what an agent typed) is kept BESIDE measured fan-out,
+        # never merged with it — SCHEMA.md §2.6.
+        declared = Counter()
+        for r in rs:
+            for a in (r.get("subagents") or []):
+                declared[a] += 1
+
+        spawns = [r.get("subagent_runs") or 0 for r in fan]
+        sub_out = sum(r.get("tokens_out_subagents") or 0 for r in fan)
+        fan_out_total = sum(r.get("tokens_out") or 0 for r in fan if has_tokens(r))
+
+        cost_by_harness = defaultdict(float)
+        cost_n = Counter()
+        for r in priced:
+            if r.get("cost_usd") is not None:
+                cost_by_harness[r.get("harness") or "?"] += r["cost_usd"]
+                cost_n[r.get("harness") or "?"] += 1
+
+        tok = lambda k: sum(r.get(k) or 0 for r in priced)
+        phases[cmd] = {
+            "runs": len(rs),
+            "duration_s": {
+                "total": sum(durs),
+                "median": median(durs),
+                "max": max(durs) if durs else None,
+                "n": len(durs),
+            },
+            "share_of_duration": pct(sum(durs), grand_dur),
+            "tokens_measured_n": len(priced),
+            "tokens_unmeasured_n": len(rs) - len(priced),
+            "tokens": {
+                "in": tok("tokens_in"), "out": tok("tokens_out"),
+                "cache_read": tok("tokens_cache_read"), "cache_write": tok("tokens_cache_write"),
+            },
+            "tokens_out_median": median([r.get("tokens_out") or 0 for r in priced]),
+            "share_of_tokens_out": pct(tok("tokens_out"), grand_out),
+            "tokens_out_per_run": (round(float(tok("tokens_out")) / len(priced), 1)
+                                   if len(priced) >= MIN_N else None),
+            "models": OrderedDict(sorted(
+                ((m, dict(v)) for m, v in models.items()),
+                key=lambda kv: (-kv[1]["tokens_out"], kv[0]))),
+            "harnesses": OrderedDict(sorted(Counter(r.get("harness") or "?" for r in rs).items())),
+            "modes": OrderedDict(sorted(Counter(r.get("mode") or "—" for r in rs).items())),
+            "build_result": OrderedDict(sorted(Counter(r.get("build_result") or "—" for r in rs).items())),
+            "reqs_touched_total": sum(r.get("reqs_count") or 0 for r in rs),
+            "files_written_total": sum(r.get("files_written") or 0 for r in rs),
+            "subagents_declared": OrderedDict(sorted(declared.items(), key=lambda kv: (-kv[1], kv[0]))),
+            # Tree-scope ONLY. `observed_n` is the denominator for every figure in
+            # this block and is printed with it — an exclusion the reader cannot see
+            # is indistinguishable from a bug (SCHEMA.md §6).
+            "fanout": {
+                "observed_n": len(fan),
+                "unobserved_n": len(rs) - len(fan),
+                # Two different reasons, never merged into one number.
+                "unobserved_not_tree": sum(1 for r in rs if scope_of(r) != "tree"),
+                "unobserved_predates_field": sum(
+                    1 for r in rs
+                    if scope_of(r) == "tree" and r.get("subagent_runs") is None),
+                "spawns_total": sum(spawns),
+                "spawns_median": median(spawns),
+                "spawns_max": max(spawns) if spawns else None,
+                "runs_with_fanout": sum(1 for s in spawns if s > 0),
+                "tokens_out_subagents": sub_out,
+                "subagent_share_of_tokens_out": pct(sub_out, fan_out_total),
+            },
+            "routing": {
+                "routed": sum(1 for r in rs if r.get("routed") is True),
+                "drifted": sum(1 for r in rs if r.get("routed") is False),
+                "unknown": sum(1 for r in rs if r.get("routed") is None),
+            },
+            # Dollars per harness, never pooled (SCHEMA.md §4).
+            "cost_usd_by_harness": OrderedDict(
+                (h, {"usd": round(v, 6), "records": cost_n[h]})
+                for h, v in sorted(cost_by_harness.items())),
+        }
+
+    return {
+        "runs_live": len(live),
+        "scope_coverage": OrderedDict(sorted(scope_cov.items())),
+        "tokens_out_total": grand_out,
+        "duration_s_total": grand_dur,
+        "phases": phases,
+        "note": ("Per-phase effort over LIVE run records, aggregated by `cmd`. Token "
+                 "figures exclude runs whose window could not be computed; fan-out "
+                 "figures use tokens_scope='tree' records ONLY, because a 'main' "
+                 "window never looked at the subagent transcripts and its 0 means "
+                 "'not observed', not 'none ran'. The unit is the RUN, never the "
+                 "feature — SCHEMA.md §0 non-goal, §2.6."),
     }
 
 
@@ -717,7 +925,8 @@ def analyse(repos):
 
     out = {"per_repo": per_repo, "tainted_reqs": sorted(x for x in tainted if x),
            "live": {}, "backfilled": {}, "pooled": {},
-           "misses": analyse_misses(misses)}
+           "misses": analyse_misses(misses),
+           "phases": analyse_phases(runs)}
 
     for label, bucket in (("live", live), ("backfilled", back)):
         for ptype, recs in sorted(seg(bucket).items()):
@@ -892,8 +1101,125 @@ def print_report(a, repos):
               % p["commit_duplicates_collapsed"])
         print("                         merge; the same commit was recorded on two machines)")
 
+    print_phases(a["phases"], W)
     print_misses(a["misses"], W)
     print("=" * W)
+
+
+def _hms(s):
+    if not s:
+        return "—"
+    s = int(s)
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    return ("%dh%02dm" % (h, m)) if h else ("%dm%02ds" % (m, sec))
+
+
+def _k(n):
+    if n is None:
+        return "—"
+    n = float(n)
+    for unit, div in (("M", 1e6), ("k", 1e3)):
+        if abs(n) >= div:
+            return "%.1f%s" % (n / div, unit)
+    return "%d" % n
+
+
+def print_phases(p, W):
+    """PER-PHASE EFFORT (SCHEMA.md §2.6). Every denominator this block uses is
+    printed with the figure it bounds — the same discipline the misses block
+    applies, for the same reason."""
+    if not p or not p["phases"]:
+        return
+    print("")
+    print("-" * W)
+    print("EFFORT PER PHASE — time, tokens, model, fan-out (SCHEMA.md §2 / §2.5 / §2.6)")
+    print("-" * W)
+    print("  %d live run record(s). Token-window coverage: %s"
+          % (p["runs_live"], "  ".join("%s=%d" % kv for kv in p["scope_coverage"].items())))
+    print("  A window is only as good as its scope: 'tree' saw the subagents, 'main'")
+    print("  did not look, 'none'/absent measured nothing at all and is excluded from")
+    print("  every token figure below rather than averaged in as a zero.")
+    print("")
+    hdr = "  %-16s %5s %8s %8s %9s %7s %7s" % (
+        "phase", "runs", "time", "tok-out", "tok-in", "%out", "%time")
+    print(hdr)
+    print("  " + "-" * (len(hdr) - 2))
+    for cmd, m in p["phases"].items():
+        print("  %-16s %5d %8s %8s %9s %7s %7s" % (
+            cmd[:16], m["runs"], _hms(m["duration_s"]["total"]),
+            _k(m["tokens"]["out"]), _k(m["tokens"]["in"]),
+            m["share_of_tokens_out"], m["share_of_duration"]))
+    print("")
+    for cmd, m in p["phases"].items():
+        print("  [%s]  %d run(s)" % (cmd, m["runs"]))
+        d = m["duration_s"]
+        print("     wall clock       : total %s · median %s · max %s   (n=%d timed)"
+              % (_hms(d["total"]), _hms(d["median"]), _hms(d["max"]), d["n"]))
+        t = m["tokens"]
+        print("     tokens           : out %s · in %s · cache-read %s · cache-write %s"
+              % (_k(t["out"]), _k(t["in"]), _k(t["cache_read"]), _k(t["cache_write"])))
+        print("                        measured on %d of %d run(s)%s"
+              % (m["tokens_measured_n"], m["runs"],
+                 ("; %d unmeasured and EXCLUDED, never counted as zero"
+                  % m["tokens_unmeasured_n"]) if m["tokens_unmeasured_n"] else ""))
+        if m["tokens_out_per_run"] is not None:
+            print("     tokens out / run : %s   (median %s)"
+                  % (_k(m["tokens_out_per_run"]), _k(m["tokens_out_median"])))
+        else:
+            print("     tokens out / run : insufficient data (n=%d)" % m["tokens_measured_n"])
+        if m["models"]:
+            print("     by model         :")
+            for mod, v in m["models"].items():
+                print("         %-28s %8s out over %d run(s)  %s"
+                      % (mod[:28], _k(v["tokens_out"]), v["runs"],
+                         pct(v["tokens_out"], t["out"])))
+        if m["harnesses"]:
+            print("     harness          : " + "  ".join("%s=%d" % kv for kv in m["harnesses"].items()))
+        # --- fan-out, on its own denominator and nobody else's.
+        f = m["fanout"]
+        if f["observed_n"]:
+            print("     subagents        : %d spawn(s) over %d observed run(s) "
+                  "(median %s, max %s; %d run(s) fanned out)"
+                  % (f["spawns_total"], f["observed_n"],
+                     f["spawns_median"] if f["spawns_median"] is not None else "—",
+                     f["spawns_max"] if f["spawns_max"] is not None else "—",
+                     f["runs_with_fanout"]))
+            print("                        %s output tokens in subagents = %s of this "
+                  "phase's observed output"
+                  % (_k(f["tokens_out_subagents"]), f["subagent_share_of_tokens_out"]))
+        if f["unobserved_n"]:
+            print("     ⚠ fan-out NOT observed on %d of %d run(s), and they are outside"
+                  % (f["unobserved_n"], m["runs"]))
+            print("       every fan-out figure above — 0 there means NOT LOOKED, not none:")
+            if f["unobserved_not_tree"]:
+                print("         %d — window was not 'tree' scope, so no subagent transcript"
+                      % f["unobserved_not_tree"])
+                print("             was ever read (SCHEMA.md §2.5)")
+            if f["unobserved_predates_field"]:
+                print("         %d — written before subagent_runs existed (2026-08-31); the"
+                      % f["unobserved_predates_field"])
+                print("             field had no chance to be filled, which is not the same")
+                print("             as being left empty (SCHEMA.md §3.5)")
+        if m["subagents_declared"]:
+            print("     declared by agent: " +
+                  "  ".join("%s=%d" % kv for kv in m["subagents_declared"].items()))
+            if f["observed_n"] and sum(m["subagents_declared"].values()) != f["spawns_total"]:
+                print("       (declared %d vs measured %d — `subagents` is typed by the agent,"
+                      % (sum(m["subagents_declared"].values()), f["spawns_total"]))
+                print("        `subagent_runs` is counted from the harness store; SCHEMA §2.6.")
+                print("        Where they disagree the MEASURED one is right.)")
+        r = m["routing"]
+        if r["routed"] or r["drifted"]:
+            print("     routing          : on-tier %d · drifted %d · unknown %d "
+                  "(observed, never enforced)" % (r["routed"], r["drifted"], r["unknown"]))
+        for h, c in m["cost_usd_by_harness"].items():
+            print("     cost (%s)  : $%s over %d record(s) — MEASURED, never pooled "
+                  "across harness" % (h, c["usd"], c["records"]))
+        if m["reqs_touched_total"] or m["files_written_total"]:
+            print("     work             : %d REQ touch(es) · %d file(s) written"
+                  % (m["reqs_touched_total"], m["files_written_total"]))
+        print("")
 
 
 def print_misses(m, W):
@@ -973,9 +1299,16 @@ def print_misses(m, W):
     print("")
     print("  REWORK COST — measured and apportioned are separate columns, never one number")
     print("     sole (measured)   : %d fix records" % m["cost_sole_n"])
-    print("        tokens out per miss : %s" %
-          (m["tokens_per_miss_measured"] if m["tokens_per_miss_measured"] is not None
-           else "insufficient data (n=%d)" % m["cost_sole_n"]))
+    print("        tokens out per miss : %s   (n=%d priced)" %
+          ((m["tokens_per_miss_measured"] if m["tokens_per_miss_measured"] is not None
+            else "insufficient data (n=%d)" % m["tokens_per_miss_measured_n"]),
+           m["tokens_per_miss_measured_n"]))
+    # An unrecorded token count is NOT a zero. Excluding it from the divisor is the
+    # whole fix; saying how many were excluded is what makes the figure defensible.
+    if m.get("tokens_unrecorded_sole_n"):
+        print("        %d sole fix record(s) carry NO tokens_out and are outside that"
+              % m["tokens_unrecorded_sole_n"])
+        print("        divisor — an unmeasured repair is unmeasured, never a free one.")
     if m["cost_usd_per_miss_measured"] is not None:
         print("        USD per miss        : $%s  (MEASURED — %d OpenCode records)"
               % (m["cost_usd_per_miss_measured"], m["cost_usd_records"]))
@@ -987,9 +1320,13 @@ def print_misses(m, W):
         print("           OpenCode runs; token counts are the honest figure everywhere else.")
     print("     shared (apportioned): %d fix records — equal division, NOT a measurement"
           % m["cost_shared_n"])
-    print("        tokens out per miss : %s" %
-          (m["tokens_per_miss_apportioned"] if m["tokens_per_miss_apportioned"] is not None
-           else "insufficient data (n=%d)" % m["cost_shared_n"]))
+    print("        tokens out per miss : %s   (n=%d priced)" %
+          ((m["tokens_per_miss_apportioned"] if m["tokens_per_miss_apportioned"] is not None
+            else "insufficient data (n=%d)" % m["tokens_per_miss_apportioned_n"]),
+           m["tokens_per_miss_apportioned_n"]))
+    if m.get("tokens_unrecorded_shared_n"):
+        print("        %d apportioned fix record(s) carry no tokens_out — same exclusion"
+              % m["tokens_unrecorded_shared_n"])
     print("     unattributable    : %d fix records with no usable token window"
           % m["cost_unattributable_n"])
     if m["cost_unattributable_n"]:
@@ -1011,6 +1348,9 @@ def main(argv):
         print("")
         print("  --report           [<repo>] [--json]   roll up one repo to stdout")
         print("  --rollup <repo>...          [--json]   cross-project view, still segmented")
+        print("  --phases  [<repo>...]       [--json]   effort per phase: time, tokens,")
+        print("                     model split, subagent fan-out (SCHEMA.md §2.6).")
+        print("                     Read-only and agent-safe, exactly like --report.")
         print("  --backfill-commits [<repo>] [--limit N] [--quiet] [--dry-run]")
         print("                     reconcile commits.jsonl against git log — idempotent,")
         print("                     gap-filling, and safe to run on any machine at any time.")
@@ -1053,6 +1393,19 @@ def main(argv):
             print(json.dumps(a, indent=2))
         else:
             print_report(a, repos)
+    elif mode == "--phases":
+        # The §2.6 effort view on its own. Read-only, no git, agent-safe — the same
+        # standing as --report, which is what the parity gate and the *metrics task
+        # already invoke.
+        a = analyse(repos)
+        if as_json:
+            print(json.dumps(a["phases"], indent=2))
+        else:
+            print("=" * 78)
+            print("TechieFlow effort per phase")
+            print("=" * 78)
+            print_phases(a["phases"], 78)
+            print("=" * 78)
     else:
         die("unknown mode '%s' — see --help" % mode)
     return 0

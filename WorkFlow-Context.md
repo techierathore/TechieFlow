@@ -53,8 +53,11 @@ The canonical reference for humans is **`WORKFLOW.html`** (open in a browser). T
 | `.tfcore/templates/v4custom/` | The custom doc templates (BRD, architecture, **checklist** (single), **uidesign**, **devguide**, **productguide**, project-status, claude-md, html shell, build ladder, …). |
 | `.tfcore/TOKEN-GUIDE.md` | Token-efficiency guide (owner + team) — where tokens go and the levers to cut them; ships with every app via the `.tfcore/` rsync. |
 | `.tfcore/core-config.yaml` | Project config (which docs the agents load). |
-| `.tfcore/telemetry/` | Telemetry: `SCHEMA.md` (canonical schema — read before emitting), `install-metrics.sh` (per-repo setup — **auto-invoked by all three scripts**, not a command you run), `pre-commit` (hook template — reconciles + stages `commits.jsonl`; replaced `post-commit` on 2026-08-11), `tf-metrics.sh` (owner-run report/backfill — **the only file allowed to contain version-control commands**). |
+| `.tfcore/telemetry/` | Telemetry: `SCHEMA.md` (canonical schema — read before emitting), `install-metrics.sh` (per-repo setup — **auto-invoked by all three scripts**, not a command you run), `pre-commit` (hook template — reconciles + stages `commits.jsonl`; replaced `post-commit` on 2026-08-11), `tf-metrics.sh` (report / backfill — **the only file allowed to contain version-control commands**; `--report` / `--rollup` / `--phases` are read-only and **agent-safe**, `--backfill-*` are owner-only — narrowed 2026-08-31). |
 | `.tfcore/utils/tf-emit.sh` | The single append primitive for every telemetry stream. Exits 0 no matter what. |
+| `.tfcore/utils/tf-assets.sh` | **Asset-integrity gate** (verify-phase §4a2, added 2026-08-31, TfLens TF-007). Parses what a page *declares* and asserts each arrived with a non-empty body. python3 stdlib only; ~100 ms per page; same-origin by default. Exit 5 = a declared asset did not arrive. |
+| `.tfcore/utils/tf-mockup-parity.sh` (+ `.mjs`) | **Mockup-parity gate** (verify-phase §4b2, added 2026-08-31, TfLens TF-008/009/011/012). Compares a built screen to `docs/mockups/<screen>.html` **structurally**, at 1280 and 390, over eight classes. Publishes per-screen coverage and returns `UNGRADEABLE` rather than a false `PASS`. Playwright (which verify-phase §1 already provisions). |
+| `.tfcore/utils/tf-gitignore-audit.sh` | **Build-output ignore audit** (added 2026-08-31, TfLens TF-007 companion). Detects the stack from the tree, adds its build-output rules, and reports build output that is **already tracked** — a tracked file is never ignored. Contains **no** version-control commands: it parses `.git/index` and prints the remediation for the owner. |
 | `docs/metrics/` (in each app repo) | The four append-only JSONL streams + `METRICS.md`/`.html`. **Tracked, never ignored.** |
 | `.claude/commands/TechieFlow/` | **Claude Code harness mirror** of agents+tasks — must stay byte-identical to `.tfcore/` (see §7). OpenCode has **no** mirror — it loads agents/tasks from `opencode.jsonc` `{file:./.tfcore/...}` refs; `.opencode/command/` holds only top-level loose commands (`generate-html.md` + the NuGet personas). |
 | `.claude/commands/{trblazeui,techierag}.md` | NuGet-deployed library agent personas (owned by their libraries). **`.claude/commands/<lib>.md` is the current deploy target** — both libraries' MSBuild targets write it directly since 2026-07-04. `.claude/<lib>.md` is the LEGACY target, still present in older app repos and still shim-copied forward by the three scripts, but **created by nothing in a modern app** — never hardcode it as the only path (that was the 2026-08-24 routed-wrapper defect). Anything reading a persona resolves `.claude/commands/<lib>.md` → `.claude/<lib>.md` → `.<lib>/<Lib>-AI-Reference.md`. |
@@ -80,6 +83,165 @@ If a build/verify run dies mid-phase — lost internet, **revoked/changed model 
 It rebuilds PROJECT-STATUS from **ground-truth evidence** (the checklist Requirements Status tables + what's actually in the working tree, including source-file modification times + a fresh `dotnet build`), **refreshes the BRD §4 Development status snapshot** from those same checklists (and inserts that section into a legacy BRD that predates it — the one BRD edit it's allowed; see §5's 2026-06-14 follow-up), writes a dated `## Recovery note`, and prints the exact command to resume with. **It never runs git** — git is manual in this framework (agents never commit; since 2026-07-02 the harness **denies** `git`/`gh` outright — settings.json deny + the `.tfcore/hooks/block-git.sh` PreToolUse hook), so recovery reconstructs from the tables + files-on-disk + build, never commit history. It never edits source. Task: `.tfcore/tasks/refresh-status.md`; documented in `WORKFLOW.html` §8a. This exists because of the AstroLyfe incident (2026-06-13): an experimental model lost access mid-development and left no usable status.
 
 ## 5. Maintenance log (what has been done, newest first)
+
+### 2026-08-31 (3) — propagated to all 19 repos, and the propagation found a 4,635-file instance of the defect it was carrying the fix for
+
+`update-framework.sh` run against every repo carrying `.tfcore/` — **19 targets, all exit 0.** Verified
+afterwards that each one carries the four new scripts (`tf-assets.sh`, `tf-mockup-parity.sh` + `.mjs`,
+`tf-gitignore-audit.sh`) *and* the updated `tf-metrics.sh`, `tf-emit.sh`, `tf-render-html.py`,
+`verify-phase.md` and `SCHEMA.md` — checked by content, not by mtime. Every metrics stream in all 20
+repos still parses. The only warnings in the 850-line log are the two pre-existing owner-owned
+stale-layout files already tracked in §6.
+
+**The dry run earned its keep, before anything was written.** On TfLens the gitignore audit reported the
+stack as `dotnet, node` and proposed `dist/`, `build/`, `.next/`, `.nuxt/`, `.turbo/`. That was **wrong,
+and it would have been wrong in nearly every repo**: `verify-phase` §1 runs `npm init -y` in every
+project to provision Playwright, so a bare `package.json` sits in essentially every .NET repo the
+framework has touched. Detecting Node from that file alone would have appended bundler rules to 19 repos
+that build none of them — noise in a file the owner reads, and `build/` is a plausible real directory to
+shadow by accident. `_is_real_node()` now requires actual evidence of a build: a `build`/`dist`/`bundle`/
+`compile` script, or a bundler config on disk. `npm init -y`'s output — one `test` stub that echoes and
+exits 1 — is correctly not a Node stack.
+
+**15 of 19 repos were missing build-output rules entirely**, which settles the question TF-007 companion 1
+left open (*"every project the scaffold has ever created is likely to carry this"*). They have them now.
+Two repos already had them; two are docs-only with no stack to detect.
+
+**`TrSetup` carries 4,635 TRACKED build-output files** — 2,957 under `bin/`, 1,678 under `obj/`, across
+four projects. This is the same defect TfLens reported at 1,962 files, in a repo nobody had looked at,
+and it is **the whole reason the audit checks tracking and not just rules**: TrSetup now has correct
+ignore rules and they are **completely inert**, because a tracked file is never ignored. The audit
+printed the exact per-directory un-tracking commands. **Owner action — this framework does not run
+version control, so the last step is not ours to take.**
+
+### 2026-08-31 (2) — effort per phase: the metrics answer "what did each phase cost", and two of the three fields were already there
+
+Owner question: *can the metrics we already capture tell us effort, time and tokens per phase — with
+which model, how long, and how many subagents?* **Mostly yes, and it is worth being precise about which
+parts were already true**, because two of three were.
+
+- **Already there since 2026-08-20:** `cmd` (the phase), `started`/`ended`/`duration_s`, the four token
+  counters, `model`/`models`, `tier`/`tier_model`/`routed`, `harness`, `mode`, `attempt`,
+  `files_written`, `reqs_touched`, `cost_usd` (OpenCode only). **What was missing was an aggregation** —
+  nothing grouped by `cmd`.
+- **Genuinely missing, now added (SCHEMA §2.6):** `subagent_runs`, `tokens_out_subagents`,
+  `model_tokens_out`. All three are **measured by `tf-emit.sh` from the harness's own store** — the
+  subagent transcripts beside the parent's on Claude, the child sessions in `opencode.db` on OpenCode —
+  never self-reported. `subagents` (a list an agent types) stays and says *which kinds*;
+  `subagent_runs` says *how many actually ran*, and **where they disagree the measured one is right**.
+  A transcript with no output inside the run's window is excluded, so a later phase cannot inherit an
+  earlier one's fan-out.
+- **`tf-metrics.sh --phases`** (and a `phases` block in `--report --json`) is the aggregation:
+  per-`cmd` wall clock, tokens, per-model output **split**, fan-out, routing drift, dollars per harness.
+
+**The provenance rule arrives on a fourth axis, and it is the whole design.** Fan-out is only visible on
+a `tokens_scope:"tree"` record — a `main` window never read the subagent transcripts, so its `0` means
+*not observed*, not *none ran*. Every fan-out figure is tree-only with the exclusion printed, split two
+ways because they are two different facts: **"we did not look"** vs **"we could not have looked"** (the
+field postdates the record). Token figures likewise exclude runs with no window rather than averaging
+them in as zero — the TF-005 defect one stream over.
+
+**Deliberately still unavailable:** per-feature / per-REQ cycle time (a standing §0 non-goal — the unit
+is the run, and splitting one window across the REQs it touched is arithmetic, not measurement),
+per-subagent detail, and dollars on Claude/Codex.
+
+Consumer design record: **`docs/Phase-Effort-Telemetry-TfLens.md`** — the oracle contract, the parity
+keys, the three denominators, and a `/effort` page design whose first rule is that it must look correct
+at `observed_n = 1 of 13`, because that is what it will show first.
+
+
+### 2026-08-31 (1) — TfLens's seven open entries closed: two new gates, a divisor rule, and two defects found in the fixing
+
+**All seven open TfLens entries fixed** (`TF-005`, `TF-007`, `TF-008`, `TF-009`, `TF-010`, `TF-011`,
+`TF-012`), plus the two owner questions that block had been carrying since 2026-08-27. Consumer-side
+record and per-entry verification recipes: `docs/TfLens-TechieFlow-Feedback.md`, the 2026-08-31
+resolution block.
+
+**Two new gates, because three defect classes in three days passed every gate and were caught by a
+human.** That is the finding, not the individual bugs: *every gate asserted something true about the
+screen, and none of them asserted the thing that was wrong.* The gate set measured whether a screen was
+**alive**, never whether it was **right**.
+
+- **`assets` (§4a2, `tf-assets.sh`)** — parses what a page *declares* (`<link rel=stylesheet>`,
+  `<script src>`, preload/modulepreload/icon, honouring `<base href>`) and asserts a 200 with a
+  non-empty body for each. TF-007's escape was a build at 140/143 `Verified` shipping an unstyled
+  `/login`: the Blazor scoped-CSS bundle 404ed and **no gate could have caught it** — acceptance passes
+  because an unstyled page behaves correctly, and visual-truth passes because *partial breakage
+  overlaps, complete breakage stacks neatly.* Dependency-free (python3 stdlib), ~100 ms on a healthy
+  page, same-origin by default so a flaky CDN cannot cry wolf.
+- **`mockup-parity` (§4b2, `tf-mockup-parity.sh`)** — eight structural classes at 1280 and 390, never
+  pixel-wise, plus `document.scrollHeight <= clientHeight + 2`. TF-008's escape was a checklist reading
+  145 `Verified` over an app with structural drift on 13 of 14 screens. **§4b's prose "mockup diff"
+  bullet was deleted, not amended**: it had shipped for months and caught none of it, which is why this
+  is logged as a `wrong-behaviour` miss rather than only a gap.
+
+**The mockup gate is built around the three ways the consumer's own implementation failed**, which is
+the more useful half of the feedback:
+
+- **`stroke` (TF-009)** — a dashed grey border and a solid grey border are the same semantic *colour*
+  bucket, so an estimate tile shipped styled exactly like the measured one beside it. `border-*-style`
+  quantised to `none`/`solid`/`dashed`, plus `border-width: 0` vs a visible rule.
+- **Coverage and `UNGRADEABLE` (TF-011)** — the gate's depth is bounded by what both sides anchor, so
+  **the less of a screen it could see, the cleaner its verdict looked.** That produced a real false
+  statement upstream: "10 PASS / 2 FAIL / 0 findings" with eight UI rows written `Verified` while a
+  screen was visibly wrong. Every screen now publishes `{compared, content_graded, app_controls,
+  mockup_anchors}` and returns **`UNGRADEABLE`**, never `PASS`, when no clause reaching *inside* a
+  container fired. The floor counts comparisons that could have produced a finding, **not anchors** —
+  the consumer was explicit that an anchor ratio is the wrong measure and was right. The walker now
+  descends any anchored subtree (card, column, grid, `<dl>`, list) rather than tables only, which alone
+  found both defects a human had found by eye.
+- **sr-only (TF-012)** — the `clip` clause counted screen-reader-only text as overflow and failed 8 of
+  10 screens identically. **A finding that appears on every screen always is the most expensive failure
+  a gate can have**, because it trains a reader to skim the whole report — and shipping the deeper
+  walker without this fix would have made it worse, not better. Visually-hidden elements are skipped
+  and excluded from an ancestor's overflow measurement, in `clip`, `wrap` and `token`.
+
+**`TF-005` became a schema rule rather than a one-line fix.** `analyse_misses` averaged an unrecorded
+`tokens_out` as zero, so an unmeasured repair counted as a free one — wrong in the direction that
+flatters the framework. The divisor now excludes them and **publishes itself** (`_n` keys, SCHEMA
+**§5.5.8**): *every mean over an optional field divides by the records that carry it, and the excluded
+records are counted and reported.* Publishing the denominator is what dissolved the consumer's
+unwinnable choice between matching the reference and being correct; their `DECISIONS.md` D-012
+divergence can now be retired.
+
+**`TF-010`** — `render-workflow-docs` §5 mandated a "NEXT COMMAND TO RUN" box that `tf-render-html.sh`
+never emitted, and the only workaround was overwritten by the next render. The tell was `--cta-bg`: a
+shell variable defined in both palettes and consumed by nothing — the fingerprint of a feature dropped
+when hand-authoring moved into the script under TF-003. The renderer emits it now, and the Output
+Checklist item is finally falsifiable by a grep.
+
+**`TF-007`'s two companions also shipped.** `tf-gitignore-audit.sh` (wired into both scaffolds,
+`update-framework.sh` block 8b2, and a new **day-1 §5b** in both variants) detects the stack **from the
+tree**, adds the build-output rules, and reports build output that is **already tracked** — the half
+that matters, because a tracked file is never ignored whatever the ignore file says. It contains **no
+git**: it parses `.git/index` directly and prints the un-tracking commands for the owner. And
+`_smoke-test-policy.md` gained *"if the harness cannot reproduce a construct's failure, the harness
+cannot sign it off either"*.
+
+**Two defects found while fixing the above — both ours, neither reported by the consumer.**
+
+1. **`tf-emit.sh` validated the `miss-amend` allowlist meticulously and a `miss` record's own enums not
+   at all.** Found by making exactly that typo while logging these entries: an invalid `miss_class`
+   landed permanently on an append-only stream, invented a category in every distribution built on it,
+   and **could not be corrected** — `miss_class` is not amendable and constraint 5 forbids editing the
+   file. The emitter now refuses any value outside the closed vocabularies and prints why (SCHEMA
+   **§5.5.7b**). *Two lines written during this session — that malformed record and a test record that
+   leaked onto the live stream — were removed rather than left, because neither was ever a fact and a
+   fabricated measurement on a stream whose purpose is honest measurement is worse than the deletion.
+   Flagged for the owner rather than done silently.*
+2. **`analyse_misses` honoured a stored `cost_attribution:"sole"` and skipped the report-time recount —
+   in the headline column.** The emitter stamps attribution one record at a time, so a run closing nine
+   misses writes `sole`, `shared:2` … `shared:9`; the **first** is `sole` because at that instant it was
+   the only miss closed. The recount §5.5.3 exists to perform then short-circuited on it, so **one whole
+   multi-miss window was reported as the measured cost of a single repair, once per multi-miss run,
+   silently and upward.** On this repo it inflated `cost_sole_n` 2→3 and produced a
+   `tokens_per_miss_measured` of 99,974 where the honest answer is *insufficient data (n=2)*.
+
+**Constraint 1 narrowed — the consumer was right, twice.** `_metrics-emit-gate.md` said `tf-metrics.sh`
+was flatly "owner-run" while the script's own header, `has_commit_hook()`'s docstring and
+`metrics-report.md` §1 all said `--report` is agent-safe. It now reads: **owner-run in `--backfill-*`
+modes only**; `--report` / `--rollup` / `--phases` are agent-safe. A consuming agent had twice declined
+to run a procedure it was entitled to run.
 
 ### 2026-08-28 (6) — Claude-side review after the Codex + OpenCode passes: a stale YOLO flag had left this repo unattended-permissive for four days
 
@@ -888,9 +1050,14 @@ Full per-issue detail is preserved in [§8 Audit appendix](#8-audit-appendix-202
 | **Greenfield-born `docs` classifications elsewhere** — the 2026-08-28 upgrade path corrects a `docs` label on the next `update-framework.sh`, but only for repos that actually get refreshed. A survey on 2026-08-28 found TfLens the only casualty of 20; re-run the survey after the rollout rather than assuming. Records written before a correction keep the old value by design — `--report` names the split. | Open (owner action) |
 | **Stale YOLO flags** — the 2026-08-28 (6) scan found live `.tfcore/.session/yolo.json` flags in five repos (this one, `AppManager`, `TechieBlog`, `TrBlazeUI`, `TfLens`). All five cleared that session, and **no repo carries one now**. `TfLens` was held back initially in case a run was live, then cleared at the owner's instruction once its `goal-done.json` showed the handoff had completed at 14:51 with no activity since 15:08. All 19 repos now carry the 24 h expiry, so a forgotten flag stops granting on its own. | Resolved |
 | **Two owner-owned docs still name the pre-2026 framework layout** — `update-framework.sh` reports them and deliberately never edits them: `AI-First-Development-Playbook.html` + `AI-First-Development-Team-Guide.html` in `AI-First-Playbook-Source-PRIVATE`, and `docs/TechieFlow-TrBlazeUI-Feedback.md` in `TrBlazeUI`. All still reference `.bmad-core` / `/BMad:` / `bmad-master`. Fix the pointers or regenerate (`*render-workflow-docs`). Pre-existing, surfaced by the 2026-08-28 (6) propagation. | Open (owner action) |
+| **The two new gates were propagated to all 19 repos on 2026-08-31** — `assets` (§4a2) and `mockup-parity` (§4b2), with their scripts, schema enum values and task sections. Presence verified by content in every repo, not by mtime. **Still once per machine**, though: a second clone of any of these repos has the framework files (they are gitignored, so they travel by refresh, not by pull) — run `update-framework.sh <repo>` there too. | Resolved (re-run per machine) |
+| **`TrSetup` has 4,635 tracked build-output files** — 2,957 `bin/`, 1,678 `obj/`, across four projects; found by the 2026-08-31 propagation. Its ignore rules are now correct **and completely inert until the index entries go**, because a tracked file is never ignored. These files carry the static-web-assets manifest with machine-absolute content roots, which is a plausible route to the asset 404 of TF-007. `bash .tfcore/utils/tf-gitignore-audit.sh /mnt/c/3AIGenCode/TrSetup` prints the exact per-directory un-tracking commands. **Owner action — agents never run version control.** | Open (owner action) |
+| **`mockup-parity` needs mockups to grade against, and needs them anchored.** It compares elements both sides carry a `data-testid` for. A repo with no `docs/mockups/` gets `NO-MOCKUP` on every screen — reported, never a silent pass. A repo whose mockups are thinly anchored gets `UNGRADEABLE`, which is also correct and also not a pass. Each screen prints `anchor_deficit.add_data_testid_to_mockup`, so closing the gap is a mechanical edit to the mockup rather than a research task — but it is per-project work nobody has done yet. | Open (per project) |
+| **Fan-out telemetry starts empty and will look thin for weeks.** `subagent_runs` / `tokens_out_subagents` / `model_tokens_out` (SCHEMA §2.6) exist only on records written after 2026-08-31, under a harness whose window resolves to `tree` scope. `--phases` reports the exclusion split honestly (*not `tree` scope* vs *predates the field*) rather than showing zeros, so this needs patience, not action. | Open (time only) |
+| **TfLens has fixes to pick up, not just entries to close.** Beyond re-verifying the seven, three items are live work there: retire `DECISIONS.md` **D-012** (the TF-005 divergence has no reason left to exist now the reference publishes `_n`), drop the TF-010 post-render patch, and check `MissFigures` for the two defects the framework found in itself — an unvalidated miss enum, and a `cost_attribution` recount short-circuiting on a stored `sole` in the **headline** column. All three are spelled out in `docs/TfLens-TechieFlow-Feedback.md`'s 2026-08-31 block. | Open (separate repo) |
 | Everything from the 2026-06-12 audit | Resolved |
 
-No other known framework defects are open as of 2026-06-13.
+No other known framework defects are open as of 2026-08-31.
 
 ## 7. Maintenance contract
 

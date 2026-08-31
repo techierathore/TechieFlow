@@ -202,7 +202,62 @@ money — which is why the "unattributable" row is printed rather than dropped.
 
 ---
 
-## 6. What is missing
+## 6. Effort per phase — time, tokens, model, fan-out
+
+<!-- Source: tf-metrics.sh --phases (or the `phases` block of --report --json).
+     SCHEMA.md §2 / §2.5 / §2.6. The unit is the RUN, aggregated by `cmd`.
+     This is NOT cycle-time-per-feature — that is a standing non-goal (§0) and no
+     stream can produce it honestly. Delete this section if runs.jsonl is empty. -->
+
+Aggregated over **{n} live run records**. Token-window coverage:
+`tree {n}` · `main {n}` · `conversation {n}` · `none/absent {n}`.
+
+| Phase (`cmd`) | Runs | Wall clock (total / median) | Tokens out | % of all output | Tokens measured on |
+|---|---|---|---|---|---|
+| `{cmd}` | {n} | {total} / {median} | {n} | {n}% | {n} of {n} runs |
+
+<!-- Runs whose token window could not be computed are EXCLUDED from the token
+     columns, never averaged in as zero. State the excluded count — an unmeasured
+     run counted as a free one is the same defect as SCHEMA §5.5.8's, one stream over. -->
+
+### 6a. Which model did the work
+
+<!-- The per-model OUTPUT SPLIT, from `model_tokens_out` — not just the dominant
+     model's name. A run that spent 90% of its output on one model and 10% on
+     another is a different fact from an even split, and `model` alone cannot tell
+     them apart. -->
+
+| Phase | Model | Output tokens | Share of the phase | Runs |
+|---|---|---|---|---|
+| `{cmd}` | `{model}` | {n} | {n}% | {n} |
+
+**This ranking is observational, not causal** — the same warning §5a carries. Which
+model gets the hard phases is not random, so a cost difference between models here
+is at least as much a fact about *what they were asked to do* as about the models.
+
+### 6b. Subagent fan-out — measured, on its own denominator
+
+| Phase | Runs observed | Spawns (total / median / max) | Runs that fanned out | Output tokens in subagents | Subagent share |
+|---|---|---|---|---|---|
+| `{cmd}` | {n} of {N} | {n} / {n} / {n} | {n} | {n} | {n}% |
+
+**Read the `observed` column before anything else in this table.** Fan-out is only
+visible on a `tokens_scope: "tree"` record — a `main`-scope window never read the
+subagent transcripts at all, so **`0` on such a run means *not looked*, not *none
+ran***. Those runs are outside every figure in this table, and the report states how
+many were excluded and why (not `tree` scope · written before `subagent_runs` existed
+on 2026-08-31 — two different reasons, never merged into one count).
+
+**Declared vs measured.** `subagents` is a list of agent *kinds* the task typed into
+its own emit; `subagent_runs` is counted from the harness's own store. Where they
+disagree, **the measured one is right** — and the gap is itself a finding about how
+accurately tasks self-report.
+
+{Where a phase declared {n} subagents and {n} were measured, say so on its row.}
+
+---
+
+## 7. What is missing
 
 <!-- Name every metric that had no data or too little. A missing number reported as
      missing is worth more than a number nobody can defend. -->

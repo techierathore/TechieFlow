@@ -457,6 +457,24 @@ else
   echo "  .gitignore — agent-artifact entries already present"
 fi
 
+# --------------------------------------------------------------------------
+# 9b2. .gitignore — the PROJECT'S OWN build output, and whether it is tracked.
+#     9 and 9b manage TechieFlow's artifacts and say nothing about the stack the
+#     project is written in. That gap shipped a .NET repo with no `bin/` and no
+#     `obj/` in a careful, complete ignore file; the first build produced output and
+#     one commit swept 1,041 build-output files into the index (TfLens TF-007).
+#     On GREENFIELD this is usually a no-op — day-1 has not chosen the stack yet, so
+#     `*day1-greenfield` re-runs it right after generating the solution, which is the
+#     step that actually knows the answer. On BROWNFIELD the stack is already on disk
+#     and this closes it immediately.
+#     Also reports build output that is ALREADY TRACKED — a tracked file is never
+#     ignored, so adding a rule later fixes nothing on its own. No git: it reads
+#     .git/index and prints the remediation for the owner to run.
+# --------------------------------------------------------------------------
+if [[ -f "$TEMPLATE/.tfcore/utils/tf-gitignore-audit.sh" ]]; then
+  bash "$TEMPLATE/.tfcore/utils/tf-gitignore-audit.sh" . --fix || true
+fi
+
 # 8c. Telemetry — docs/metrics/, the project classification, and the pre-commit
 #     hook. Set up HERE, as part of the scaffold, so there is no second command
 #     for the owner to remember. The setup script never invokes git: it finds

@@ -90,6 +90,43 @@ Use the exact template content embedded in `day1-brownfield.md` §4 (the canonic
 
 Copy `.tfcore/templates/v4custom/app-editorconfig-tmpl.editorconfig` verbatim. No substitution.
 
+### 5b. Close the `.gitignore` on the stack you just chose (MANDATORY)
+
+```bash
+bash .tfcore/utils/tf-gitignore-audit.sh . --fix
+```
+
+**Run it here, in this step, and read the output.** The scaffold wrote a `.gitignore`
+covering **TechieFlow's** artifacts — `.tfcore/`, `.claude/`, `node_modules/`,
+`tests/.artifacts/`, `playwright-report/`, `logs/` — every section framework-managed
+and labelled as such. It says **nothing** about the stack, because at scaffold time
+nobody had chosen one. **You just did.** You picked the stack, wrote it into
+`core-config.yaml` and generated the solution; you are the only step that knows the
+answer, and the file the scaffold left is complete-looking enough to be read as
+finished.
+
+That is exactly how it went wrong once (TfLens TF-007, 2026-08-29): a repository whose
+`core-config.yaml` and four `.csproj` files said .NET throughout carried an ignore file
+with **no `bin/`, no `obj/`, and no rule of any kind for .NET**. The first build produced
+output and one commit — named, with some irony, *"Updated git ignore"* — swept **1,041**
+build-output files into the index; four later commits reached **1,962**. Those files carry
+the static-web-assets manifest, whose content roots are **machine-absolute** (`/mnt/c/…`
+after a WSL build, `C:\…` after a Windows one), so committing them ships one machine's
+paths to another — a plausible route to precisely the asset 404 that TF-007 is about.
+
+**The agent that ran day-1 generated that file and did not read it. That agent was
+responsible**, and the audit exists to make the mistake harder rather than to move the
+blame — a generator's omission is not a defence for the agent operating the generator.
+
+Two outputs, and the second one is the one people miss:
+
+- **Missing rules** — `--fix` appends them under their own labelled header. Existing
+  owner content is never rewritten.
+- **Build output that is ALREADY TRACKED** — reported, never fixed here. **A tracked file
+  is never ignored, whatever the ignore file says**, so adding the rule does nothing on
+  its own. The audit prints the exact `git rm -r --cached <path>` lines; **put them in
+  your §8 summary for the owner to run.** Agents never run git, in any mode.
+
 ### 6. Create `PROJECT-STATUS.md`
 
 Load `.tfcore/templates/v4custom/app-project-status-tmpl.md` and substitute:

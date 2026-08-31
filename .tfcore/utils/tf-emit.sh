@@ -590,6 +590,10 @@ def _pointer(name):
         return None
 
 def _sum_claude_transcript(path, t0, t1, tot, models):
+    """Sum one transcript's in-window assistant messages. Returns the OUTPUT tokens
+    this transcript alone contributed, so the caller can split main from subagents
+    (SCHEMA.md §2.5 `tokens_out_subagents`) without walking the file twice."""
+    before = tot["out"]
     with open(path, encoding="utf-8", errors="replace") as fh:
         for line in fh:
             if '"assistant"' not in line:
@@ -613,6 +617,7 @@ def _sum_claude_transcript(path, t0, t1, tot, models):
             m = msg.get("model")
             if m:
                 models[m] = models.get(m, 0) + o
+    return tot["out"] - before
 
 def _window_claude(t0, t1):
     ptr = _pointer("claude-code")
@@ -624,6 +629,7 @@ def _window_claude(t0, t1):
     tot = {"in": 0, "out": 0, "cr": 0, "cw": 0}
     models = {}
     scope = "main"
+    sub_runs, sub_out = 0, 0
     try:
         _sum_claude_transcript(path, t0, t1, tot, models)
         # Subagent transcripts live at a deterministic path beside the parent's:
@@ -637,14 +643,23 @@ def _window_claude(t0, t1):
                 scope = "tree"
                 for sub in glob.glob(os.path.join(subdir, "*.jsonl")):
                     try:
-                        _sum_claude_transcript(sub, t0, t1, tot, models)
+                        # A transcript that produced NOTHING inside this run's
+                        # window belongs to a different run in the same session —
+                        # counting it would make every later phase look like it
+                        # fanned out as widely as the busiest one before it. Only
+                        # a transcript with in-window output is this run's.
+                        got = _sum_claude_transcript(sub, t0, t1, tot, models)
+                        if got > 0:
+                            sub_runs += 1
+                            sub_out += got
                     except Exception:
                         pass
     except Exception:
         return None
     if tot["in"] + tot["out"] == 0:
         return None
-    return {"tot": tot, "models": models, "cost": None, "scope": scope}
+    return {"tot": tot, "models": models, "cost": None, "scope": scope,
+            "sub_runs": sub_runs, "sub_out": sub_out}
 
 def _window_opencode(t0, t1):
     ptr = _pointer("opencode")
@@ -670,6 +685,9 @@ def _window_opencode(t0, t1):
         tot = {"in": 0, "out": 0, "cr": 0, "cw": 0}
         models = {}
         cost = 0.0
+        # Same rule as the Claude branch: a CHILD session counts as a subagent run
+        # for THIS window only if it produced output inside it.
+        child_out = {}
         q = "SELECT session_id, data FROM message WHERE time_created BETWEEN ? AND ?"
         for msid, data in db.execute(q, (t0, t1)):
             if msid not in tree:
@@ -688,6 +706,8 @@ def _window_opencode(t0, t1):
             tot["cr"] += cache.get("read") or 0
             tot["cw"] += cache.get("write") or 0
             cost += d.get("cost") or 0
+            if msid != sid and o:
+                child_out[msid] = child_out.get(msid, 0) + o
             m = (d.get("providerID", "") + "/" if d.get("providerID") else "") + (d.get("modelID") or "")
             if m:
                 models[m] = models.get(m, 0) + o
@@ -696,7 +716,8 @@ def _window_opencode(t0, t1):
         return None
     if tot["in"] + tot["out"] == 0:
         return None
-    return {"tot": tot, "models": models, "cost": round(cost, 6), "scope": "tree"}
+    return {"tot": tot, "models": models, "cost": round(cost, 6), "scope": "tree",
+            "sub_runs": len(child_out), "sub_out": sum(child_out.values())}
 
 # --- per-run `attempt` (runs only; added 2026-08-21, SCHEMA.md §2.5) ------
 # attempt = 1 + prior NON-BACKFILLED `run` records with the same cmd whose
@@ -768,12 +789,27 @@ def enrich_run(rec):
                     rec["model"] = models[0]
                     if len(models) > 1:
                         rec["models"] = models
+                    # The per-model OUTPUT split, not just the winner's name. A run
+                    # that spent 90% of its output on one model and 10% on another
+                    # is a different fact from one that split evenly, and `model` +
+                    # `models` cannot tell them apart. Effort-per-phase-per-model is
+                    # unanswerable without it (SCHEMA.md §2.6).
+                    rec["model_tokens_out"] = {m: win["models"][m] for m in models}
                 rec["tokens_in"] = win["tot"]["in"]
                 rec["tokens_out"] = win["tot"]["out"]
                 rec["tokens_cache_read"] = win["tot"]["cr"]
                 rec["tokens_cache_write"] = win["tot"]["cw"]
                 rec["cost_usd"] = win["cost"]
                 rec["tokens_scope"] = win["scope"]
+                # MEASURED fan-out, never self-reported (SCHEMA.md §2.6). `subagents`
+                # is a list of names an agent types and cannot be trusted to keep in
+                # step with what it actually spawned; these two are counted from the
+                # harness's own store — the subagent transcripts beside the parent's
+                # on Claude, the child sessions in opencode.db on OpenCode. Absent
+                # whenever the window could not be computed: absent means "not
+                # captured", never 0.
+                rec["subagent_runs"] = win.get("sub_runs", 0)
+                rec["tokens_out_subagents"] = win.get("sub_out", 0)
                 if rec.get("tier_model") and rec.get("model"):
                     rec["routed"] = rec["model"] == rec["tier_model"]
             else:
@@ -891,11 +927,63 @@ def _amend_ok(rec):
         return False
     return True
 
+# The closed vocabularies of SCHEMA.md §5.5.1 / §5.5.2 / §3.3, enforced ON WRITE.
+#
+# Until 2026-08-31 the emitter validated the miss-amend allowlist meticulously and
+# validated a `miss` record's own enums NOT AT ALL — so a typo in miss_class landed
+# permanently on an append-only stream, invented a bucket in every distribution built
+# on it, and could not be corrected: `miss_class` is not amendable (§5.5.7 allows only
+# closed-vocabulary JUDGEMENTS the emitter does not derive), and constraint 5 forbids
+# editing the file. The only remaining move was to report it.
+#
+# That is the asymmetry this closes. Dropping an invalid record is the SAME choice
+# _amend_ok() already makes and for the same reason: a record the reader has to
+# defend itself against is worse than no record. The refusal is printed on stdout —
+# an agent that believes it logged a miss and did not is worse off than one told no.
+_MISS_ENUMS = {
+    "miss_class": ("missed-requirement", "partial-implementation", "wrong-behaviour",
+                   "regression", "unspecified-gap", "spec-contradiction", "scope-creep",
+                   "hallucinated-api", "standards-violation", "other"),
+    "artifact": ("brd", "architecture", "uidesign", "checklist", "devguide", "src",
+                 "tests", "config", "other"),
+    "severity": ("blocker", "major", "minor"),
+    "found_by": ("gate", "self-smoke", "owner", "production", "agent-review",
+                 "library-feedback"),
+    "why_missed": ("missing-checklist-item", "insufficient-verify-method",
+                   "code-audit-limitation", "ambiguous-acceptance",
+                   "dependency-not-declared", "instruction-ignored", "other"),
+}
+_FIX_ENUMS = {
+    "verdict_after": ("Verified", "Needs re-verify", "FAIL", "deferred", "wont-fix"),
+    "fix_cmd": ("fix-issues", "build-phase", "triage-issues", "amend-docs", "log-miss"),
+}
+
+
+def _enums_ok(rec, table):
+    """False -> DROP. Prints the refusal on stdout as --amend does; still exits 0,
+    because telemetry has no veto (§10) and neither does a refused record."""
+    for field, vocab in table.items():
+        val = rec.get(field)
+        if val is None:                     # optional and absent is always fine
+            continue
+        if val not in vocab:
+            sys.stdout.write(
+                "tf-emit: REFUSED — %r is not in the closed vocabulary for %s "
+                "(SCHEMA.md §5.5). Nothing was appended. Allowed: %s\n"
+                % (val, field, ", ".join(vocab)))
+            return False
+    return True
+
+
 def enrich_miss(rec):
     if stream != "misses":
         return rec
     if rec.get("kind") == "miss-amend":
         return rec if _amend_ok(rec) else None
+    if rec.get("kind") == "miss" and not _enums_ok(rec, _MISS_ENUMS):
+        return None
+    if rec.get("kind") == "miss-fix" and not _enums_ok(rec, _FIX_ENUMS):
+        return None
     try:
         kind = rec.get("kind")
         runs = _runs_by_start()
