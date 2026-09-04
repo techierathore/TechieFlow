@@ -8,7 +8,8 @@
 # this hook makes the shape MECHANICAL, the same way block-git.sh made the git
 # ban mechanical.
 #
-# Wired in .claude/settings.json → hooks.PreToolUse (matcher "Write|Edit|MultiEdit").
+# Wired in .claude/settings.json → hooks.PreToolUse (matcher "Write|Edit|MultiEdit"
+# AND matcher "Bash"); OpenCode via .opencode/plugin/techieflow.js.
 # Exit 2 + stderr = block the call and feed the message back to the agent.
 #
 # What it blocks (only for files named PROJECT-STATUS.md):
@@ -17,6 +18,11 @@
 #   - Headings that name a command run (*verify / *build-phase / *fix-issues).
 #   - A paragraph stuffed into `current_phase:` (must be ONE short line).
 #   - A full-file Write longer than 120 lines (template shape is ~60).
+#   - (Bash) any shell command that WRITES the file — redirection, tee, cp, mv,
+#     sed -i, a Python/Node one-liner — because a shell write is invisible to the
+#     Write/Edit checks above (reset Session 3, 2026-09-04). Reading it is fine.
+# Content rules (section word limits, the two command blocks, the five-row log)
+# are checked by .tfcore/utils/tf-doc-check.sh at the status gate.
 # Fails OPEN (exit 0) if python3 or parseable JSON is unavailable.
 
 INPUT="$(cat)"
@@ -32,6 +38,31 @@ except Exception:
     sys.exit(0)
 
 ti = data.get("tool_input") or {}
+
+# --- Bash branch: refuse shell writes to PROJECT-STATUS.md -------------------
+cmd = ti.get("command")
+if isinstance(cmd, str):
+    if re.search(r"PROJECT-STATUS\.md", cmd, re.I) and re.search(
+        r"(>>?\s*[\"']?[^\s|;&]*PROJECT-STATUS\.md)"      # > / >> redirection
+        r"|(\btee\b[^|;&]*PROJECT-STATUS\.md)"            # tee
+        r"|(\b(cp|mv|install)\b[^|;&]*PROJECT-STATUS\.md)"  # copy / move onto it
+        r"|(\b(sed|perl)\b[^|;&]*\s-[a-zA-Z]*i[a-zA-Z]*\b[^|;&]*PROJECT-STATUS\.md)"  # in-place edit
+        r"|(\b(python3?|node)\b[^|;&]*PROJECT-STATUS\.md)"  # a one-liner that opens it
+        r"|(\b(truncate|dd)\b[^|;&]*PROJECT-STATUS\.md)",
+        cmd, re.I,
+    ):
+        print(
+            "BLOCKED by TechieFlow policy: PROJECT-STATUS.md is written ONLY through "
+            "the harness Write/Edit tool, never through the shell (redirection, tee, "
+            "cp, mv, sed -i, a script). The shell path bypasses the shape guard, which "
+            "is how status files got spoiled. Write the file with the Write tool in the "
+            "template shape (.tfcore/templates/v4custom/app-project-status-tmpl.md), "
+            "then run: bash .tfcore/utils/tf-doc-check.sh PROJECT-STATUS.md",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    sys.exit(0)
+
 path = (ti.get("file_path") or "").replace("\\", "/")
 if path.rsplit("/", 1)[-1].lower() != "project-status.md":
     sys.exit(0)

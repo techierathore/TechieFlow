@@ -307,6 +307,7 @@ FRAMEWORK_SUBDIRS=(
   data
   utils
   hooks
+  standards
   workflows
   agent-teams
 )
@@ -474,6 +475,10 @@ CANONICAL_SETTINGS='{
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-artifacts.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status.sh\""
           }
         ]
       },

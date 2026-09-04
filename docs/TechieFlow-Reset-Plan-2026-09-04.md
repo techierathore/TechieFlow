@@ -93,11 +93,11 @@ The ten questions:
 
 **Owner brings:** a git branch created. For each document, which sections a small app truly needs and a rough maximum size. Claude proposes defaults from the existing documents across projects (TfLens, TechieBlog, Lekhak, AstroLyfe, TrBlazeUI have full sets); the owner adjusts.
 
-**The documents, in the order a project produces them:** BRD, Architecture, UIDesign, Checklist (row rules only; it stays an agent document), Coding Standards, PROJECT-STATUS, UsageGuide, DevGuide, ProductGuide.
+**The documents, in the order a project produces them:** BRD, Architecture, UIDesign, Checklist (row rules only; it stays an agent document), Coding Standards, PROJECT-STATUS, UsageGuide, DevGuide, ProductGuide. **Added by the owner during Session 3 (2026-09-04):** a tenth document, the Deployment Checklist, produced after UAT from the owner's pipeline guidance document; its schema is agreed in `TechieFlow-Document-Schemas.md` §3.10 and its template and command are built in Sitting 4b.
 
 **We do:** for each template, write a schema block at the top: required sections in order, word or row budgets by app size, per-row rules such as "acceptance line contains when … then". Write one script, `tf-doc-check.sh`, that reads the schema and fails the phase if a generated document breaks it. Wire it into the status gate. Add an app size (S, M, L) question to day-1 that sets the budgets. Test the checker against existing documents from at least three projects and report which would fail today and why.
 
-**Output:** nine schema-backed templates, one checker script, size caps at day-1. Both harnesses can run the checker.
+**Output:** nine schema-backed templates, one checker script, size caps at day-1. Both harnesses can run the checker. **Done 2026-09-04:** nine templates with schema blocks, `tf-doc-check.sh` plus its self-test, status-gate step 7b, the day-1 size and kind question, the standards moved into `.tfcore/standards/`, and a shell-write guard on PROJECT-STATUS. Fourteen projects checked in report mode; the results and the owner's decisions are in `TechieFlow-Document-Schemas.md`. Three misses logged (24 to 26).
 
 ### Session 4 — Shrink every task, in life-cycle order
 
@@ -113,6 +113,7 @@ The ten questions:
 
 **Sitting 4b — the build phase and the guides.**
 - `build-phase` (4,400 words), `devguide` (5,300), `productguide`, `handoff-phase`, `refresh-status`.
+- **Added 2026-09-04:** the Deployment Checklist template (schema in `TechieFlow-Document-Schemas.md` §3.10) and a small new command, `*deploy-checklist {App} {pipeline-document}`, that fills it from the owner's pipeline guidance and the Stack Q9 and Q10 answers after UAT. It sits beside handoff because handoff runs before UAT and deployment after.
 - **Test on:** the same design-stage project once it has a checklist, or a small project the owner chooses. A real build runs in both harnesses.
 - **Output:** the build and handoff tasks shrunk and proven.
 

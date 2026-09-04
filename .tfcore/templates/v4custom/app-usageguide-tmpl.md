@@ -1,67 +1,81 @@
-# {AppName} — Usage Guide (Test Users · Test Plan · Setup)
+<!-- tf-schema
+doc: usageguide
+file: docs/{App}-UsageGuide.md
+header: App, Kind, Size, Date
+section: Test users | required
+section: Execution guide | required
+section: How to test, screen by screen | required
+section: Automated tests | required
+section: Known limitations | required
+section: Platform notes | optional
+section: Component map | library
+entries: How to test, screen by screen |
+per-entry: 90 120
+budget: S 2500 3500 | M 4000 6000 | L 4000 6000
+rule: test-users-table
+rule: execution-code
+rule: entry-steps
+rule: entry-expected
+-->
+<!-- Authoring notes (agent only; never visible text).
+     The owner's test plan. Every agent (smoke, verify) and the owner's UAT use the SAME test users and
+     the SAME walkthrough; nobody invents accounts. One `###` per screen in navigation order, at most
+     120 words: who to sign in as, numbered steps, the expected result, the REQ ids covered.
+     The Execution guide is copy-pasteable commands, one per line, no narrative. Hosting and production
+     deployment are not here; they are in the Deployment Checklist after UAT.
+     For a service library the Component map section lists every service and how a consumer calls it. -->
 
-> The single source for **how to test and run** this app. Every agent (flow-master self-smoke, the verifier) **and** the human UAT use the SAME test users and the SAME walkthrough listed here — no one invents throwaway accounts (enforced by `.tfcore/tasks/_smoke-test-policy.md`). Keep the Test-users table current: when an account is actually created, flip its `Created?` to ✅.
+# {App} — Usage Guide
 
-## Test users (canonical — use THESE for all smoke / verify / UAT)
+| | |
+|---|---|
+| App | {App} |
+| Kind | app or library |
+| Size | Small, Medium or Large |
+| Date | {YYYY-MM-DD} |
 
-One row per account needed to exercise the app. Cover every distinct role/permission level. These are the ONLY accounts smoke/verify/UAT may use.
+## Test users
 
-| # | Username / Email | Password | Role / Permission | Created? | Notes |
-|---|------------------|----------|-------------------|----------|-------|
-| 1 | {admin@app.test} | {Pass!23} | Admin | ⬜ | {seeded by …  / create on first build} |
-| 2 | {user1@app.test} | {Pass!23} | Standard user | ⬜ | {…} |
-| 3 | {…}              | {…}       | {role}           | ⬜ | {…} |
+| # | User | Password source | Role | Exists |
+|---|---|---|---|---|
+| 1 | {admin@app.test} | {user secrets key, seed script} | {Admin} | {yes, no} |
 
-- **Created?** — ✅ = the account exists in the database now (verified). ⬜ = planned; create it on first build, but **only after confirming with the owner** (see `_smoke-test-policy.md`). Never auto-create silently.
-- **To add or confirm an account:** edit this table — it is the registry the whole pipeline reads from.
-- **Seeding:** if the project seeds users via a migration / `database/*-seed-*.sql` / a DbUp step, reference it here so the accounts above are reproducible from a clean DB.
+## Execution guide
 
-## How to test — screen by screen / menu by menu
+Prerequisites: {runtime and version, database, anything else, one line}.
 
-One subsection per screen or top-level menu, in navigation order, so a tester (human or agent) can walk the whole app and exercise **every feature**. Each subsection names which test user to log in as.
-
-**Flowchart any complex flow.** When a flow is multi-step, multi-actor, or branches (approval queues, learning/feedback loops, ingestion→processing→review pipelines, auth/token handshakes, payment/consent gates), add a Mermaid `flowchart` (or `sequenceDiagram`) right above that flow's steps so the tester sees the path at a glance. Simple linear CRUD screens don't need one. **Every diagram MUST follow the authoring rules in `.tfcore/templates/v4custom/html-render-shell.md §5.5`** — quote every node/edge/subgraph label, never use `end` as a node id — or it will throw "Syntax error" in the rendered HTML. Example:
-
-```mermaid
-flowchart LR
-  A["User submits form"] --> B{"Valid?"}
-  B -->|"yes"| C["Save + confirm"]
-  B -->|"no"| D["Show error"]
+```
+{restore command}
+{database setup or migration command}
+{build command}
+{run command, with the URL it serves}
 ```
 
-### {Screen / Menu name}
-- **Log in as:** {user # from the table above}
-- **Steps:** 1) {action} → 2) {action} → 3) {action}
-- **Expected:** {observable result — what proves the feature works}
-- **Covers:** {BRD-N / REQ-* IDs this walkthrough exercises}
+Open {http://localhost:port} and sign in as user 1.
 
-_(Repeat one block per screen/menu until every feature in the BRD feature catalog is covered. This is the human UAT script AND the map the verifier/smoke use to decide what to exercise.)_
+## How to test, screen by screen
 
-## Prerequisites
-- .NET {N} SDK
-- {OtherRuntime — e.g. Node 20 for Playwright, PostgreSQL 16, etc. — one line each, only if actually required}
+### {Screen name}
+- **Sign in as:** {user # from the table}
+- **Steps:** 1) {action} 2) {action} 3) {action}
+- **Expected:** {what proves it works}
+- **Covers:** {REQ ids}
 
-## Setup / Deployment steps (runbook — one command per line, in order)
+## Automated tests
 
-Numbered, terse, copy-pasteable. No narrative. Omit any step that doesn't apply (no "N/A" placeholders).
-
-1. `git clone <repo> && cd <repo>`
-2. `dotnet restore`
-3. {database setup — one line per SQL file in lexicographic order, or a single DbUp `dotnet run --project src/{AppName}.Db` step. Include the test-user seed step if one exists.}
-4. `dotnet build`
-5. {run the backend — one command, e.g. `dotnet run --project src/{AppName}.Api --urls http://localhost:5100`}
-6. {run the frontend — one command, e.g. `dotnet run --project src/{AppName}.Web --urls http://localhost:5099`}
-7. Open `http://localhost:5099` in a browser; log in as a Test user from the table above.
-
-## Test (automated)
-```bash
-dotnet test
 ```
-{Add `npx playwright test` ONLY if the repo has Playwright tests checked in.}
-
-## Smoke checklist (quick capability pass)
-- [ ] {one tight line per top-level BRD capability — 5-10 boxes max; each a user action using a Test user above, e.g. "Log in as Admin (user 1), open the dashboard"}
+{test command}
+```
+{One line: what the suite covers.}
 
 ## Known limitations
-- {TR-NNN — short title — see docs/{AppName}-TrBlazeUI-Feedback.md (or TR-RAG-NNN → docs/{AppName}-TechieRag-Feedback.md)}
-- {`Blocked` (library-gap) REQ-* items from the checklist Status tables, one line each}
+
+- {one line each, with the REQ or feedback id}
+
+## Platform notes
+
+{Only when the app runs on more than one platform.}
+
+## Component map
+
+{Service libraries only. One entry per service: what it does, how it is called, a short snippet.}

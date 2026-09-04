@@ -18,6 +18,11 @@ architecture:
   architectureSharded: false
   architectureShardedLocation: docs/architecture
 customTechnicalDocuments: null
+# appSize / appKind: set by the day-1 tasks (reset Session 3, 2026-09-04). Size is Small (up to 10
+# screens, one role, 50 requirements), Medium (up to 20 screens, 100 requirements) or Large (split
+# into phases). Kind is app or library. tf-doc-check.sh reads them when a document header lacks them.
+appSize: null
+appKind: null
 # devLoadAlwaysFiles: the day-1 tasks rewrite this list with the project's concrete paths
 # (docs/{AppName}-Coding-Standards.md + docs/{AppName}-Architecture.md). Empty until then —
 # the stock paths (docs/architecture/coding-standards.md etc.) never exist in this flow.

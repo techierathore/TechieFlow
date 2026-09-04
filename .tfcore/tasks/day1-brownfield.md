@@ -8,7 +8,7 @@ Replace the multi-step paste-and-substitute prompt with a single command: `*day1
 
 ## elicit
 
-elicit=false — this task runs autonomously end-to-end. It asks AT MOST TWO questions (app name if missing, then optional source-doc hints), then drafts every artifact (including the full BRD) in bulk and presents them for ONE-shot review at the end. NO per-section confirmation. NO per-requirement confirmation. The user reviews the written docs and edits the files directly, or replies with bulk changes.
+elicit=false — this task runs autonomously end-to-end. It asks AT MOST THREE questions (app name if missing, optional source-doc hints, then the size confirmation in §1), then drafts every artifact (including the full BRD) in bulk and presents them for ONE-shot review at the end. NO per-section confirmation. NO per-requirement confirmation. The user reviews the written docs and edits the files directly, or replies with bulk changes.
 
 This is a deliberate departure from TechieFlow's standard `author-brd` per-item elicitation — the user has explicitly opted into a low-friction flow for a one-person team.
 
@@ -43,6 +43,7 @@ This is a deliberate departure from TechieFlow's standard `author-brd` per-item 
     - docs/{AppName}-Coding-Standards.md
     - docs/{AppName}-Architecture.md
   ```
+- **Size and kind (reset Session 3, 2026-09-04):** count the routed pages in the code (every `@page` route or equivalent counts, sign-in included; dialogs and tabs are regions of a page) and the roles, then confirm once: "Size: Small (up to 10 screens, one role, 50 requirements), Medium (up to 20 screens, 100 requirements) or Large (split into phases)? I count {N} screens and {N} roles, so I propose {X}." Kind is `app`, or `library` for a component or service library. Write `appSize:` and `appKind:` into `.tfcore/core-config.yaml` in the same write and carry both into every document header. The size sets the document budgets and the requirement cap that `bash .tfcore/utils/tf-doc-check.sh` enforces at the status gate.
 
 ### 1.5. Discovery hints — harvest existing docs before inferring anything
 
@@ -84,21 +85,20 @@ Net effect: `docs/` always contains exactly one current version of each doc unde
 - Status field: "Current" (this is brownfield).
 - **Source-doc harvesting (do this FIRST, before any inference):**
   - If `SourceDocs[]` from §1.5 contains anything that reads as architecture / design / system / data-flow material, harvest from it directly: copy structural prose verbatim (with attribution), pull diagram intent, map their components to your §4 module table. Do not re-invent what the user already wrote.
-  - At the end of the doc, add a `## Sources harvested` section listing each source file that contributed content.
+  - Attribute harvested content inline; there is no "Sources harvested" section (the run record carries the list).
 - **Apply `CustomInstructions`** from §1.5 throughout — if the user said "stack is .NET 8", use .NET 8 in §1; if they said "ignore `legacy/`", skip that folder in the scan.
-- Populate remaining sections by SCANNING the codebase (only for what the source docs didn't cover):
-  - **§1 Tech stack:** read `.csproj`/`.sln` files, package references, target frameworks. Note TrBlazeUI / TechieRag presence (look in package references AND in `.claude/` for deployed agent files).
-  - **§2 Component map:** scan `src/` (or `source/`) for projects; build a Mermaid `flowchart TB` showing project-level dependencies inferred from `<ProjectReference>` and `using` directives.
-  - **§3 Data flow:** if you can identify a primary request path (e.g. controller → service → repo), diagram it as a `sequenceDiagram`. Otherwise leave the template placeholder and add a note "data flow unknown from static analysis — populate after first feature pass."
-  - **§4 Module responsibilities:** one row per project under `src/`. Responsibility = one-line summary derived from top-of-namespace XML doc or README mentions.
-  - **§5 Cross-cutting:** detect logging library (Serilog/ILogger), auth scheme (JWT/cookies/Identity), telemetry (OTel/AppInsights) by package references.
-  - **§6 Deployment:** if `.github/workflows/`, `Dockerfile`, `azure-pipelines.yml` exist, derive the path. Otherwise mark "no CI/CD detected; manual deploy."
-  - **§7 ADRs:** seed with `ADR-001 — current stack as-is (reverse-doc baseline).` and any obvious decisions visible in README.
-  - **§8 Target architecture:** leave blank unless the BRD (§3 below) calls out a structural change.
-  - **§9 Open questions:** include "field-prefix drift" detection (see below) and any TODOs / FIXMEs that look architectural.
-- **Depth mandate (Architecture is a HUMAN document too):** apply the same information-preservation rule as the BRD (§3) — source-doc architecture content carries forward, never gets summarized into a stub. Each module in §4 with non-trivial behavior gets a short prose paragraph (not just a table row), and any significant runtime flow beyond the primary path (background jobs, ingestion pipelines, auth handshakes, external-API round-trips) gets its own `sequenceDiagram` or `flowchart` in the relevant section. A reader skimming only the diagrams should grasp how the system hangs together.
-- **Field-prefix drift detection:** scan `src/`, `source/`, or any `.cs` files for instance-field declarations and note the dominant style (`obj`-prefixed vs bare PascalCase vs `_underscore`/mixed) — §4 uses this to pick the project's field convention. If no style reaches ~80% dominance, add to §9 Open questions: "Standards drift detected — mixed instance-field naming (N obj / M bare / K underscore). §4 picked {chosen}; remediation happens incrementally during implementation."
-- **Table of Contents:** the template at `.tfcore/templates/v4custom/app-architecture-tmpl.md` includes a `## Table of Contents` section. After populating the rest of the doc, regenerate that section to match the actual H2 headings you wrote (drop entries for sections that ended up empty, add entries for any new sections). Use the slug rule from `.tfcore/templates/v4custom/html-render-shell.md §1` — same slug for the link in the TOC and the `id` the renderer will assign. Broken TOC links are a known recurring bug; don't be the next instance.
+- Populate the template's sections, in its order, by SCANNING the codebase (only for what the source docs didn't cover; reset Session 3, 2026-09-04 — `tf-doc-check.sh` refuses any other shape):
+  - **Stack decisions:** one row per stack question, answered from the project files (`.csproj`/`.sln`, package references, target frameworks, configuration files) and the Stack answer set where the code agrees with it; cite the source per row.
+  - **Solution structure:** one row per project with its kind (web app, class library, test project, migrations project) and purpose.
+  - **Component map:** a `flowchart TB` of project-level dependencies from `<ProjectReference>` and `using` directives, then the "How a request travels" numbered list in words for the primary path (controller → service → data access). No sequence diagram; per-screen detail goes to the DevGuide (§7.6).
+  - **Data model:** a mermaid `erDiagram` and an entity table from the migrations project, entity classes or schema scripts.
+  - **Cross-cutting:** logging library, auth scheme, configuration mechanism, error handling — from package references and startup code.
+  - **Decisions log:** a first row `current stack as-is (reverse-doc baseline)`, Status `decided`; any structural change the BRD (§3) calls out is a row with Status `planned` naming its BRD item. There is no Target architecture section.
+  - **Module responsibilities** (required for Medium and Large): one row per project, from top-of-namespace docs or README.
+  - **Open questions:** the field-prefix drift finding (below) and any TODOs / FIXMEs that look architectural. No Deployment section: hosting is decided after UAT.
+- Source-doc architecture content carries forward into these sections, attributed, never summarised away.
+- **Field-prefix drift detection:** scan `src/`, `source/`, or any `.cs` files for instance-field declarations and note the dominant style (`obj`-prefixed vs bare PascalCase vs `_underscore`/mixed) — §4 uses this to pick the project's field convention. If no style reaches ~80% dominance, add to Open questions: "Standards drift detected — mixed instance-field naming (N obj / M bare / K underscore). §4 picked {chosen}; remediation happens incrementally during implementation."
+- Mermaid: quote every label; never use `end` as a node id. No Table of Contents (the renderer builds it).
 - Write the populated doc to `docs/{AppName}-Architecture.md`.
 
 ### 3. Draft the FULL BRD in one pass → `docs/{AppName}-BRD.md`
@@ -115,22 +115,10 @@ This is the friction-removal step. **Do NOT run `author-brd`. Do NOT prompt the 
 - **INFORMATION-PRESERVATION RULE (hard requirement when SourceDocs exist):** the new BRD must be a SUPERSET of the requirements content in the harvested source docs — never a summary of it. Concretely:
   - Every table, matrix, screen inventory, route list, license/feature matrix, navigation-menu tree, persona-detail block, and per-feature workflow in a source BRD/spec **carries forward** into the new doc (updated where stale, attributed where copied) — it does NOT get compressed into a one-liner.
   - **Length sanity check before writing:** if the source docs' requirements content totals X lines and your draft (excluding boilerplate) is under ~60% of X, you compressed — go back and restore the detail. A 1,000-line source BRD should never produce a 250-line replacement.
-  - One-line statements are allowed ONLY in the §10 BRD ledger. Everything else is full prose, tables, and diagrams — this is a HUMAN document read as rendered HTML; the coding agents get their compact view later from `*split-brd` / the Checklist.
-- **§4 Development status (brownfield: the reader's first question — "what's built, what's pending?"):** fill the §4 table with ONE row per §9 feature-catalog F-code. Derive each row's Status / % / Phase / Notes from the **strongest evidence available**, in priority order: (1) a migrated dev/phase plan (§3.5) — carry its phase + completion verbatim; (2) the code scan from §2 — a feature whose screens/handlers actually compile and exist is `Done`, partially-present is `Partial`, absent is `Planned`; (3) source-doc status notes. Set the "Snapshot as of" date to today. This is a feature-level SUMMARY only — do NOT restate per-REQ status (that's PROJECT-STATUS + the checklists). Keep it consistent with §3.5's migrated statuses and with PROJECT-STATUS.
-- **§9 Feature catalog (the heart of the doc):** one `### F-{CODE}: {Name}` subsection per feature/capability area found in the source docs and the codebase. Per feature: personas + phase, 1-2 paragraphs of what/why, a screens & routes table, a numbered workflow (inputs → outputs), and the owning BRD-N IDs. If a source doc already has a feature catalog, preserve its feature codes and per-feature detail. Depth scales with the app (8–25 features is normal) — there is NO cap. Every F-code MUST also appear as a row in the §4 Development status table.
-- For §10 Functional requirements ledger: walk the feature catalog and emit `BRD-1`, `BRD-2`, … as one-line `<actor> can <action>` or `system shall <behavior>` statements, each tagged with its catalog feature `(F-CODE)`. Number monotonically. **One BRD per discrete capability — the count scales with the app (20–60 is normal for a real product); NEVER merge capabilities to keep the count low.** If a BRD came directly from a source doc, suffix the line with `<!-- from: <source-file> -->`.
-- For §11 Non-functional: cover performance, security, accessibility, scalability, reliability based on visible NFR signals (auth scheme, target framework, any `aria-` attrs in Razor). Where concrete targets exist (latency, uptime, concurrency), present them as a target table, not buried in prose. **ALWAYS include the standing Observability NFR: Serilog file-based logging in every executable head** — if the §5 cross-cutting scan found Serilog (or an equivalent structured file-logging stack) already wired, record it as met/`Done (pre-existing)`; if the app logs only to console or not at all, add the NFR as `Planned` so it becomes a `REQ-NFR-*` row and gets built (recipe: coding-standards §Logging).
-- **Mermaid mandate:** §6, §7, §8 (context, journey, component) are the MINIMUM — build them from §2's component map (copy verbatim if identical). Additionally, every feature-catalog entry with a multi-step or multi-actor flow gets its own diagram (`flowchart` or `sequenceDiagram`). Target: a reader skimming only the diagrams should grasp how the app works. Simple CRUD features may skip the diagram. **Every diagram MUST follow the authoring rules in `.tfcore/templates/v4custom/html-render-shell.md §5.5` — quote every node/edge/subgraph label and never use `end` as a node id; unquoted special characters in flowchart labels are the #1 cause of broken diagrams in the rendered HTML.**
-- Append a footer:
-  ```
-  ---
-  Last updated: {YYYY-MM-DD}
-  Highest BRD ID: BRD-{N}
-  Sources harvested: {comma-separated list of SourceDocs paths, or "none — drafted from reverse-doc"}
-  Custom instructions applied: {one-line summary of CustomInstructions, or "none"}
-  Drafted from reverse-doc — review and edit. New BRDs may be added (append-only); do not renumber.
-  ```
-- **Table of Contents:** the template includes a `## Table of Contents` section. Regenerate it after populating the doc so it matches the actual H2 headings, and list each `### F-…` feature-catalog entry as an H3 sub-entry under "Feature catalog". Use the slug rule from `.tfcore/templates/v4custom/html-render-shell.md §1`.
+  - Source requirements become BRD items; the Requirements ledger is where one-line statements live, and each item still carries its screen, mockup link and acceptance line.
+- **Fill the template's sections in its order** (reset Session 3, 2026-09-04; `tf-doc-check.sh` refuses any other shape). Header: App, Kind, Size, Stack answer set, Status, Date. **Summary** at most 200 words. **Scope**. **Users and roles**. **Screens and flow** — one table row per routed page found in the code (screen, route, role, mockup link where a mockup exists, fields); a dialog is a row under its parent screen with `on /route` in the Route column; then the primary journey as a numbered list. **Requirements** — one `**BRD-N**` item per thing the verifier will test, each naming its screen, linking its mockup, and carrying one acceptance line "When <actor> <does what> on <screen>, then <observable result>"; ids append-only, never renumbered; a source-doc item is attributed inline. **Non-functional requirements** table: the `perf-budget:` measure only where the owner stated a number; the logging requirement from the Stack answer set always, recorded as met when the §2 scan found it wired. **Development status** — one row per screen with Verified / Open counts from the strongest evidence (a migrated plan first, then the code scan); the status gate maintains it afterwards. Context diagram, Constraints and assumptions and Risks are required for Medium and Large only. No Feature catalog, no Table of Contents, no footer.
+- **The requirement count stays within the size cap** (Small 50, Medium 100). If the code holds more, propose a phase split — each phase its own BRD, checklist and build — rather than merging requirements or growing the document.
+- Mermaid: quote every label; never use `end` as a node id.
 - Write the populated doc to `docs/{AppName}-BRD.md`.
 
 ### 3.5. Migrate an existing development/phase plan → split requirement docs (CONDITIONAL)
@@ -149,163 +137,19 @@ This is the friction-removal step. **Do NOT run `author-brd`. Do NOT prompt the 
   - Partial items (e.g. "50% Scaffolded") → Status `In Progress` or `PARTIAL`, carry the plan's `%` and remark verbatim.
   - Not-yet-started items → Status `Not Started`, `0%`.
   - Add a header note to both docs: `> Migrated from {plan-file} on {YYYY-MM-DD}. Phase structure, completion %, and status remarks carried over verbatim — verify before building.`
-- **Keep the BRD §4 Development status table consistent with this migration:** the feature-level rows in BRD §4 must agree with the per-REQ statuses you just wrote (a feature whose REQs are all `Done (pre-existing)` → `Done` in §4; mixed → `Partial`; none started → `Planned`). The checklist is the live per-REQ truth; BRD §4 is the human feature-level snapshot of the same reality.
+- **Keep the BRD Development status table consistent with this migration:** its per-screen rows must agree with the per-REQ statuses you just wrote (all `Done (pre-existing)` → `Done`; mixed → `Partial`; none started → `Planned`). The checklist is the live per-REQ truth; the BRD table is the human snapshot of the same reality.
 - Do NOT modify the dev-plan file's content. After migration it is superseded — move it to `docs/OldDocs/` per §1.6 and say so in the §8 summary.
 - If the `*split-brd` artifact (`docs/{AppName}-Checklist.md`) already exists (re-run scenario), apply §1.6: archive the old one to `docs/OldDocs/`, write fresh at the canonical name. No questions.
 
 ### 4. Create the Coding Standards → `docs/{AppName}-Coding-Standards.md`
 
-Write the file with the exact content below, substituting `{AppName}` in the title only.
+Load `.tfcore/templates/v4custom/app-coding-standards-tmpl.md` (reset Session 3, 2026-09-04: the standards themselves now live in the framework and are not copied per project).
 
-**ONE per-project decision first — the instance-field prefix.** The shared rules (no underscores, `a` params, `v` locals, PascalCase everywhere) are fixed; the instance-field convention is decided per project (existing samples: AppManager = `obj` prefix, AstroLyfe = bare PascalCase no-prefix):
-- If the existing code has a clear dominant style (≥80% of instance fields `obj`-prefixed OR ≥80% bare PascalCase), adopt that style.
-- If `{Hints}` / CustomInstructions specify one, that wins.
-- Otherwise default to `obj`.
-Record the decision in the table below (swap the Instance-fields row to `PascalCase, no prefix — e.g. private readonly ILogger<X> Logger;` if no-prefix won), in the §"Enforcement" greps (the missing-obj-prefix grep only applies to obj-style projects), and in CLAUDE.md (§7).
-
-```markdown
-# {AppName} Coding Standards
-
-**Last Updated:** {today YYYY-MM-DD}
-**Status:** Authoritative for all code under `src/`/`source/` and `tests/`. Conformance enforced via repo-root `.editorconfig` + verifier grep checks in §"Enforcement".
-
-## Database Naming Conventions
-
-### Tables and Columns
-- PascalCase: `CustomerOrder` NOT `customer_order`
-- Singular: `CustomerOrder` NOT `CustomerOrders`
-- **NEVER use underscores** in any DB object name
-- FK columns: `{TableName}Id` (e.g., `CustomerId`)
-- PK: `{TableName}Id` (e.g., `UserId`)
-
-### Stored Procedures & Functions
-- PascalCase verb prefix: `GetCustomerOrders`, `InsertOrder`, `CalculateTotal`
-- Action prefixes: Get / Insert / Update / Delete / Calculate
-
-### Indexes & Constraints
-- Index: `IX{Table}{Column}` · PK: `Pk{Table}` · FK: `Fk{Table}{Ref}` · Unique: `Uc{Table}{Column}`
-
-## C# Conventions
-
-### Classes & Interfaces
-- PascalCase for classes; `I` prefix for interfaces; descriptive names.
-- Async methods end with `Async`.
-
-### Fields, Parameters, Locals
-
-**NEVER use underscores** anywhere in any identifier.
-
-| Kind | Convention | Example |
-|------|-----------|---------|
-| **Instance fields** | `obj` prefix + PascalCase tail (no underscores) | `private readonly ILogger<X> objLogger;`<br>`private readonly HttpClient objHttpClient;`<br>`private string objCachedPublicKey;` |
-| **Static / `const` fields** | PascalCase, no prefix | `private const string CachePrefix = "…";` |
-| **Method parameters** | `a` prefix + PascalCase | `LoginAsync(string aEmail, string aPassword)` |
-| **Local variables** | `v` prefix + PascalCase | `var vResponse = await …` |
-| **Booleans** | same prefix + `Is`/`Has`/`Can` | `IsAuthenticated`, `vIsValid`, `aHasAccess` |
-| **Properties** | PascalCase, no prefix | `public string ConnectionString { get; set; }` |
-| **Constants** | PascalCase, no underscores | `MaxRetryCount` NOT `MAX_RETRY_COUNT` |
-| **Test methods** | Short PascalCase, no underscores — full scenario in XML `<summary>` | `LoginRejectsBadPassword` not `Login_BadPassword_ReturnsUnauthorized` |
-
-**Rejected forms:** `_underscore` field prefixes, snake_case anywhere, Hungarian prefixes (`strName`), underscores in test method names.
-
-### Controller-action parameters
-The `a`-prefix applies uniformly to `[FromRoute]`/`[FromQuery]`/`[FromBody]`. Parameter name flows through to OpenAPI. Body DTO **property** names stay PascalCase no prefix; only the parameter symbol holding the deserialized DTO gets the `a` prefix.
-
-### Environment Variables
-**PascalCase, no separators.** `{AppName}BaseUrl` NOT `APPNAME_BASE_URL` and NOT `AppName__BaseUrl`. Use a custom configuration provider mapping PascalCase env vars → `:`-nested config paths. Read via `IConfiguration["Section:Key"]` only — never `Environment.GetEnvironmentVariable(...)`.
-
-### Project & solution naming — the primary head carries the PRODUCT name
-- The product's **primary executable head** project is named exactly `{AppName}` — `src/{AppName}/{AppName}.csproj`. A single-head product's one head IS `{AppName}`.
-- **`{AppName}.App` is BANNED** (owner rule 2026-07-10): "App" says nothing — the product name already names the app. Never scaffold it; if the codebase has one, log a rename REQ (dir + `.csproj` + sln entry + namespaces) in the checklist instead of propagating the name.
-- Secondary heads of a multi-head product take a **descriptive** dotted suffix: `{AppName}.Api`, `{AppName}.Desktop`, `{AppName}.Cli`. Satellites keep their conventional names: `{AppName}.Core` (engine), `{AppName}UI` (RCL), `{AppName}.Core.Tests` / `{AppName}.Tests`.
-
-### File Structure
-```csharp
-using System;
-
-namespace {AppName}.Services.Example;
-
-public class DatabaseService
-{
-    private readonly ILogger<DatabaseService> objLogger;
-    private readonly IConfiguration objConfiguration;
-
-    public DatabaseService(ILogger<DatabaseService> aLogger, IConfiguration aConfiguration)
-    {
-        objLogger = aLogger;
-        objConfiguration = aConfiguration;
-    }
-
-    public string ConnectionString { get; set; }
-
-    public async Task<DataTable> GetDataAsync(string aQueryName)
-    {
-        var vConnString = objConfiguration.GetConnectionString("Default");
-        var vResult = await ExecuteQueryAsync(vConnString, aQueryName);
-        return vResult;
-    }
-}
-```
-
-### Best Practices
-- One class per file. File name matches class.
-- File-scoped namespaces. Nullable reference types enabled.
-- Methods small (<20 lines). Single responsibility.
-- Max 3 nesting levels. Early returns for validation.
-- ConfigureAwait(false) in libraries.
-- StringBuilder for loop concatenation. Dispose IDisposable. Cache expensive ops.
-
-### XML Documentation (MANDATORY on public members)
-`<summary>`, `<remarks>`, `<param>`, `<returns>`, `<exception>` — all required.
-
-### Testing
-- Short PascalCase test name, no underscores. Full scenario in XML `<summary>`.
-- Arrange-Act-Assert. One assertion per test where practical.
-
-### Security
-- Never hardcode credentials. Parameterized queries. Validate inputs. Log security events.
-
-### Logging — Serilog file sink (MANDATORY, every .NET app type)
-- **Every executable head gets Serilog with a rolling FILE sink — web (Blazor Server/WASM host), API, MAUI, WinForms/WPF desktop, console/CLI, background service. No exceptions, and never wait for the owner to ask.**
-- Wire at startup, before anything else can fail: `Log.Logger = new LoggerConfiguration().MinimumLevel.Information().WriteTo.Console().WriteTo.File("logs/{appname}-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14).CreateLogger();` then plug into DI (`builder.Services.AddSerilog()` / `builder.Host.UseSerilog()` for hosts; `builder.Logging.AddSerilog()` in `MauiProgram.CreateMauiApp`). Read overrides from `appsettings.json` (`Serilog` section) where the host has one. For MAUI/desktop, root the path in a writable per-app location (`FileSystem.AppDataDirectory` / `Environment.SpecialFolder.LocalApplicationData`), not the install dir.
-- Log unhandled exceptions at the head boundary: `try/catch` + `Log.Fatal` around startup, `AppDomain.CurrentDomain.UnhandledException` / `TaskScheduler.UnobservedTaskException` handlers, and `Log.CloseAndFlush()` on exit.
-- **Class libraries never reference Serilog** — they log through `ILogger<T>` / `Microsoft.Extensions.Logging.Abstractions` only; the head's Serilog config picks those up automatically.
-- App code logs through injected `ILogger<T>` (structured message templates, e.g. `logger.LogInformation("Imported {Count} rows", n)`), not static `Log.*`, outside the startup boundary.
-- The `logs/` output folder is gitignored (the owner adds it — agents never run git).
-- Brownfield: an app already on a working structured file-logging stack (e.g. NLog-to-file) is compliant — record the stack in this section; new heads added to it still use Serilog.
-
-### MAUI UI testability — stable AutomationId (MAUI apps only)
-- Every interactive or data-bound control the verifier must reach (buttons, entries, pickers, list/collection views, key labels/values) carries a stable, unique **`AutomationId`** — the native analogue of a stable DOM id for Playwright. Without it Appium selectors drift and the runtime gates (`verify-phase §4a/§4b`) can't reliably find controls on the Android/iOS/Mac Catalyst heads.
-- Name them by intent, not layout: `AutomationId="LoginSubmitButton"`, `AutomationId="ClientsGrid"`, `AutomationId="TotalBalanceValue"` — never positional (`Button2`).
-- Set it on the control whose data the gate asserts (the grid/list itself, the value label), so "rows present AND non-empty" / "value not blank" maps to one addressable element.
-- (Blazor screens use the equivalent `data-testid`/stable element ids for Playwright — same principle.)
-
-## Enforcement
-
-### .editorconfig (machine-checkable)
-- File-scoped namespaces (`warning`)
-- Async-method `Async` suffix (`warning`)
-- `var` for locals (`warning`)
-- Nullable reference types enabled
-- No `_` prefix on private fields (`warning` via custom naming rule)
-
-### Verifier grep checks
-```bash
-# Forbidden underscore-prefix fields
-grep -rE "private(\s+readonly)?\s+\w+\s+_[a-z]" src/ source/ 2>/dev/null
-
-# Forbidden test-method underscores
-grep -rE "public\s+(async\s+)?Task\s+\w+_\w+\s*\(" tests/
-
-# Field missing obj prefix
-grep -rE "private(\s+readonly)?\s+\w+\s+(?!obj)[A-Z]\w+\s*[;=]" src/ source/ 2>/dev/null | grep -v "static\|const"
-```
-
-### Severity
-- **Error**: file-scoped namespace, underscore field prefix
-- **Warning**: nullable, async suffix
-- **Info**: consider fixing
-```
+- The standards are `.tfcore/standards/coding-standards-core.md` (every project) plus `.tfcore/standards/coding-standards-<stack>.md` for the Stack answer set named in the Architecture (`dotnet` for the .NET set). List both under "Standards applied".
+- **One per-project choice for .NET — the instance-field prefix.** Use the drift scan from §2: if ≥80% of instance fields are `obj`-prefixed or ≥80% bare PascalCase, adopt that style; `{Hints}` / CustomInstructions override; otherwise default to `obj`. Record it in the "Standards applied" choices table and in CLAUDE.md (§7).
+- "Project rules" holds only rules that are true of this project alone (a mixed MAUI build invocation is the kind of thing that belongs here). Empty is a valid answer.
+- "Enforcement" names the `.editorconfig` (§5), the analyzers in use, and any project-specific grep beyond the stack file's.
+- Run `bash .tfcore/utils/tf-doc-check.sh docs/{AppName}-Coding-Standards.md`; fix any FAIL.
 
 ### 5. Create `.editorconfig` at the repo root
 

@@ -8,7 +8,7 @@ Replace the multi-step paste-and-substitute prompt with a single command: `*day1
 
 ## elicit
 
-elicit=false (after at most a 3-question kickoff). The task asks ONLY for `{AppName}` (if missing), the concept (any length), and optional custom instructions / source-doc hints — then drafts every artifact (including the full BRD) in one pass and presents them for one-shot review. NO per-section confirmation. NO per-requirement confirmation.
+elicit=false (after at most a 4-question kickoff). The task asks ONLY for `{AppName}` (if missing), the concept (any length), optional custom instructions / source-doc hints, and the app size (§1) — then drafts every artifact (including the full BRD) in one pass and presents them for one-shot review. NO per-section confirmation. NO per-requirement confirmation.
 
 ## Inputs
 
@@ -28,6 +28,7 @@ elicit=false (after at most a 3-question kickoff). The task asks ONLY for `{AppN
 - Parse `{Hints}` the same way day1-brownfield §1.5 does: paths/globs → `SourceDocs[]` (Read each), instructions → `CustomInstructions` text blob, `none`/empty → both empty.
 - **Collision policy:** apply day1-brownfield §1.6 verbatim — every deliverable written fresh at its canonical name; any pre-existing version moves to `docs/OldDocs/` (created if missing, date-suffixed on collision); superseded source docs move there after harvesting; NEVER ask merge-vs-new; NEVER write `-v2`-style variants.
 - Update `.tfcore/core-config.yaml` with the `customTechnicalDocuments` paths AND the `devLoadAlwaysFiles` list exactly as in day1-brownfield §1.
+- **Size and kind (reset Session 3, 2026-09-04):** from the concept, count the routed pages (every page with its own route counts, sign-in included; dialogs and tabs are regions of a page) and the roles, then ask once: "Size: Small (up to 10 screens, one role, 50 requirements), Medium (up to 20 screens, 100 requirements) or Large (split into phases)? I count {N} screens and {N} roles, so I propose {X}." Kind is `app` unless the concept is a library. Write `appSize:` and `appKind:` into `.tfcore/core-config.yaml` and carry both into every document header. The size sets the document budgets and the requirement cap that `bash .tfcore/utils/tf-doc-check.sh` enforces at the status gate.
 
 ### 2. Propose target architecture → `docs/{AppName}-Architecture.md`
 
@@ -44,10 +45,9 @@ elicit=false (after at most a 3-question kickoff). The task asks ONLY for `{AppN
   - DB: SQLite for dev, configurable per env
   - Vector store: SqliteVec for dev (only if RAG/AI is implied by the concept)
   - Auth: cookie auth for MVP, JWT for API tier if API is in scope
-- Populate Mermaid diagrams (component map, primary user journey, deployment) from the concept and any source docs. The richer the concept, the richer the diagrams — a 5-bullet feature list should produce a 5-component diagram, not a 2-box generic placeholder.
-- **Depth mandate (Architecture is a HUMAN document):** if `SourceDocs[]` exist, apply the information-preservation rule — their architecture content carries forward, never gets summarized into a stub. Each non-trivial module in §4 gets a short prose paragraph (not just a table row), and any significant runtime flow beyond the primary path (background jobs, ingestion pipelines, auth handshakes, external-API round-trips) gets its own `sequenceDiagram` or `flowchart`. A reader skimming only the diagrams should grasp how the system hangs together.
-- Seed §7 ADRs with: `ADR-001 — {chosen UI host}`, `ADR-002 — {chosen DB}`, `ADR-003 — {chosen vector store, if RAG}` — each with a one-line reason that cites the concept/CustomInstructions when relevant.
-- **Table of Contents:** the template at `.tfcore/templates/v4custom/app-architecture-tmpl.md` ships with a `## Table of Contents` section. After drafting, regenerate that section to match the actual H2 headings you wrote. Use the slug rule from `.tfcore/templates/v4custom/html-render-shell.md §1` so the links work in both MD and the rendered HTML.
+- **Fill the template's sections in its order** (reset Session 3, 2026-09-04; `tf-doc-check.sh` refuses any other shape): **Stack decisions** — one row per stack question, answered from the Stack answer set (`.tfcore/templates/stack-defaults/<set>.md`) or the owner, citing the source; **Solution structure** — one row per project with its kind; **Component map** — one diagram plus the "How a request travels" numbered list in words (no sequence diagram; per-screen detail belongs to the DevGuide later); **Data model** — a mermaid `erDiagram` and an entity table; **Cross-cutting** — identity, configuration, logging, errors, one short paragraph each; **Decisions log** — a row each for the UI host, the database, and every package, with Why and Status. Module responsibilities is required for Medium and Large. No Deployment section (decided after UAT) and no Table of Contents (the renderer builds it).
+- If `SourceDocs[]` exist, their architecture content carries forward into these sections, attributed, never summarised away.
+- Mermaid: quote every label; never use `end` as a node id.
 - Write to `docs/{AppName}-Architecture.md`. Do NOT prompt the user mid-draft.
 
 ### 3. Draft the FULL BRD in one pass → `docs/{AppName}-BRD.md`
@@ -62,13 +62,10 @@ elicit=false (after at most a 3-question kickoff). The task asks ONLY for `{AppN
   4. **`CustomInstructions`** — apply throughout (scope limits, stack overrides, NFR additions).
   5. Reasonable inference for sections still empty. Mark inferred items with `<!-- inferred — please verify -->` HTML comments so the user can scan and confirm.
 - **INFORMATION-PRESERVATION RULE (when SourceDocs exist):** the BRD must be a SUPERSET of the requirements content in the harvested docs — never a summary. Tables, matrices, screen lists, persona detail, and per-feature workflows carry forward (updated, attributed), not compressed into one-liners. Length sanity check: a draft under ~60% of the source docs' requirements content means you compressed — go back and restore the detail. One-line statements are allowed ONLY in the §10 ledger; this is a HUMAN document read as rendered HTML (the coding agents get their compact view later from `*split-brd` / the Checklist).
-- **§4 Development status (greenfield: this is the build ROADMAP):** fill the §4 table with one row per §9 feature-catalog F-code. Nothing is built yet, so every row is `Planned`, `0%`, with its target Phase (and a one-line Notes scope). Set the "Snapshot as of" date to today. As build phases complete later, the live status lives in PROJECT-STATUS + the checklists; this table stays the human roadmap view.
-- **§9 Feature catalog (the heart of the doc):** one `### F-{CODE}: {Name}` subsection per feature/capability area implied by the concept and source docs. Per feature: personas + phase, 1-2 paragraphs of what/why, a screens & routes table (proposed, for greenfield), a numbered workflow (inputs → outputs), and the owning BRD-N IDs. Depth scales with the concept — a rich concept should yield 8–25 features; there is NO cap. Every F-code MUST also appear as a row in the §4 Development status table.
-- For §10 Functional requirements ledger: walk the feature catalog and emit `BRD-1`, `BRD-2`, … as one-line `<actor> can <action>` statements, each tagged `(F-CODE)`. **One BRD per discrete capability — the count scales with the concept; NEVER merge capabilities to keep the count low.** Suffix BRDs pulled directly from a source doc with `<!-- from: <source-file> -->`.
-- For §11 Non-functional: cover performance, security, accessibility, auth model — derived from the stack you chose in §2 and from any NFR signals in the concept or CustomInstructions. Present concrete targets (latency, uptime, concurrency) as a target table. **ALWAYS include the standing Observability NFR: Serilog file-based logging (rolling file sink under `logs/`) in EVERY executable head — web, API, MAUI, desktop, console, background service — no exceptions and no owner prompt needed** (the wiring recipe lives in the coding-standards §Logging block; `*split-brd` turns this BRD into a `REQ-NFR-*` row so the build phase implements it like any other requirement).
-- **Mermaid mandate:** the three canonical diagrams (context, user journey, component sketch — copied from the architecture, adapted to BRD framing) are the MINIMUM. Every feature-catalog entry with a multi-step or multi-actor flow gets its own diagram. Simple CRUD features may skip it. **Every diagram MUST follow the authoring rules in `.tfcore/templates/v4custom/html-render-shell.md §5.5` — quote every node/edge/subgraph label and never use `end` as a node id; unquoted special characters in flowchart labels are the #1 cause of broken diagrams in the rendered HTML.**
-- Append footer with `Highest BRD ID: BRD-{N}`, a `Sources harvested:` line, a `Custom instructions applied:` line, and the note: "First-pass draft from concept — review and edit. New BRDs may be added (append-only); do not renumber existing IDs."
-- **Table of Contents:** the BRD template includes a `## Table of Contents` section. Regenerate it to match the actual H2 headings, and list each `### F-…` feature-catalog entry as an H3 sub-entry under "Feature catalog". Use the slug rule from `.tfcore/templates/v4custom/html-render-shell.md §1`.
+- **Fill the template's sections in its order** (reset Session 3, 2026-09-04; `tf-doc-check.sh` refuses any other shape). Header: App, Kind, Size, Stack answer set, Status, Date. **Summary** at most 200 words. **Scope** in and out. **Users and roles** table. **Screens and flow** — one table row per routed page (screen, route, role, mockup link, fields); a dialog is a row under its parent screen with `on /route` in the Route column; then the primary journey as a numbered list. **Requirements** — one `**BRD-N**` item per thing the verifier will test, each naming its screen, linking its mockup, and carrying one acceptance line in the form "When <actor> <does what> on <screen>, then <a result a browser robot can observe>"; ids append-only, never renumbered. **Non-functional requirements** table: the `perf-budget:` measure only where the owner gave a number; the logging requirement from the Stack answer set always. **Development status** — one row per screen, all `Planned` for greenfield; the status gate maintains it afterwards. Context diagram, Constraints and assumptions and Risks are required for Medium and Large only. No Feature catalog, no Table of Contents, no footer.
+- **The requirement count stays within the size cap** (Small 50, Medium 100). If the concept needs more, propose a phase split — each phase its own BRD, checklist and build — rather than merging requirements or growing the document. Never merge capabilities to fit.
+- If `SourceDocs[]` exist, their requirements carry forward as BRD items (attributed inline), never summarised away.
+- Mermaid: quote every label; never use `end` as a node id.
 
 ### 3.5. Migrate an existing development/phase plan → split requirement docs (CONDITIONAL)
 
@@ -84,11 +81,48 @@ The mockups are part of the day-1 review (§8) — the owner approves them along
 
 ### 4. Create the Coding Standards → `docs/{AppName}-Coding-Standards.md`
 
-Use the exact template content embedded in `day1-brownfield.md` §4 (the canonical block), including its one per-project decision: the instance-field prefix. Greenfield has no existing code to detect from, so default to `obj` unless `CustomInstructions` pick no-prefix. Record the decision in the standards file and CLAUDE.md per §4's instructions.
+Load `.tfcore/templates/v4custom/app-coding-standards-tmpl.md` (reset Session 3, 2026-09-04: the standards live in the framework, `.tfcore/standards/coding-standards-core.md` plus `.tfcore/standards/coding-standards-<stack>.md` for the Stack answer set, and are not copied per project). Fill "Standards applied" with those two files and the per-project choices the stack file leaves open (for .NET: the instance-field prefix, default `obj` unless `CustomInstructions` pick no-prefix; record it in CLAUDE.md as before). Leave "Project rules" empty unless the concept demands a rule true of this project alone. Fill "Enforcement" from §5. Run `bash .tfcore/utils/tf-doc-check.sh docs/{AppName}-Coding-Standards.md`; fix any FAIL.
 
 ### 5. Create `.editorconfig` at repo root
 
 Copy `.tfcore/templates/v4custom/app-editorconfig-tmpl.editorconfig` verbatim. No substitution.
+
+### 5b. Close the `.gitignore` on the stack you just chose (MANDATORY)
+
+```bash
+bash .tfcore/utils/tf-gitignore-audit.sh . --fix
+```
+
+**Run it here, in this step, and read the output.** The scaffold wrote a `.gitignore`
+covering **TechieFlow's** artifacts — `.tfcore/`, `.claude/`, `node_modules/`,
+`tests/.artifacts/`, `playwright-report/`, `logs/` — every section framework-managed
+and labelled as such. It says **nothing** about the stack, because at scaffold time
+nobody had chosen one. **You just did.** You picked the stack, wrote it into
+`core-config.yaml` and generated the solution; you are the only step that knows the
+answer, and the file the scaffold left is complete-looking enough to be read as
+finished.
+
+That is exactly how it went wrong once (TfLens TF-007, 2026-08-29): a repository whose
+`core-config.yaml` and four `.csproj` files said .NET throughout carried an ignore file
+with **no `bin/`, no `obj/`, and no rule of any kind for .NET**. The first build produced
+output and one commit — named, with some irony, *"Updated git ignore"* — swept **1,041**
+build-output files into the index; four later commits reached **1,962**. Those files carry
+the static-web-assets manifest, whose content roots are **machine-absolute** (`/mnt/c/…`
+after a WSL build, `C:\…` after a Windows one), so committing them ships one machine's
+paths to another — a plausible route to precisely the asset 404 that TF-007 is about.
+
+**The agent that ran day-1 generated that file and did not read it. That agent was
+responsible**, and the audit exists to make the mistake harder rather than to move the
+blame — a generator's omission is not a defence for the agent operating the generator.
+
+Two outputs, and the second one is the one people miss:
+
+- **Missing rules** — `--fix` appends them under their own labelled header. Existing
+  owner content is never rewritten.
+- **Build output that is ALREADY TRACKED** — reported, never fixed here. **A tracked file
+  is never ignored, whatever the ignore file says**, so adding the rule does nothing on
+  its own. The audit prints the exact `git rm -r --cached <path>` lines; **put them in
+  your §8 summary for the owner to run.** Agents never run git, in any mode.
 
 ### 6. Create `PROJECT-STATUS.md`
 
@@ -171,7 +205,9 @@ Do NOT auto-advance past day-1 (no split/build without the user). Rendering HTML
 
 - [ ] core-config.yaml has customTechnicalDocuments for this app
 - [ ] `docs/{AppName}-Architecture.md` (status: Target) with Mermaid
-- [ ] `docs/{AppName}-BRD.md` with a §4 Development status table (one row per F-code, all `Planned` for greenfield) + a populated §9 Feature catalog (one `### F-…` per feature) + §10 BRD-N ledger + Mermaid diagrams (canonical three + per-feature where non-trivial), every diagram passing the §5.5 authoring self-check (quoted labels, no `end` ids)
+- [ ] `docs/{AppName}-BRD.md` in template shape: header with Size and Kind, Screens and flow table, BRD-N ledger with one "When …, then …" acceptance line per item, Development status table (one row per screen, all `Planned`)
+- [ ] `appSize` and `appKind` written to `.tfcore/core-config.yaml`
+- [ ] `bash .tfcore/utils/tf-doc-check.sh --app {AppName}` prints no FAIL
 - [ ] If SourceDocs were harvested: BRD is a SUPERSET of their requirements content (no tables/detail dropped)
 - [ ] `docs/{AppName}-UIDesign.md` + `docs/mockups/*.html` produced (§3.6, TrBlazeUI-replicable, one per key screen) — or "skipped — no UI" recorded for an API-only app
 - [ ] `docs/{AppName}-Coding-Standards.md`

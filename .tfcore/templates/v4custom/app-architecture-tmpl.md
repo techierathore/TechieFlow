@@ -1,127 +1,117 @@
-# {AppName} — Architecture
-
-**Last updated:** {YYYY-MM-DD}
-**Status:** Current (brownfield) | Target (greenfield) | Current + planned target (brownfield with structural change)
-
-<!-- AGENT-ONLY AUTHORING NOTES. Everything in this comment is an instruction to the DRAFTING
-     AGENT, not content for the document's human reader. Carry it into the generated document
-     ONLY as this HTML comment (or drop it entirely) — NEVER as visible text: the owner reads
-     the rendered HTML and must not see authoring instructions (generate-html.md strips any
-     that leaked from older templates).
-
-  DEPTH MANDATE: this is a HUMAN document, read as rendered HTML. Module rows in §4 with
-  non-trivial behavior get a prose paragraph beneath the table, and every significant runtime
-  flow beyond §3's primary path (background jobs, ingestion pipelines, auth handshakes,
-  external-API round-trips) gets its own sequenceDiagram/flowchart. When harvesting source
-  docs, preserve their architecture content — superset, never summary.
-
-  MERMAID MANDATE: every diagram MUST follow the authoring rules in
-  .tfcore/templates/v4custom/html-render-shell.md §5.5 — quote every node/edge/subgraph label
-  (API["ASP.NET API (v2)"], not API[ASP.NET API (v2)]) and never use `end` as a node id.
-  Unquoted special characters ( ( ) / & : , … ) in flowchart labels are the #1 cause of
-  "Syntax error" diagrams in the rendered HTML.
+<!-- tf-schema
+doc: architecture
+file: docs/{App}-Architecture.md
+header: App, Kind, Size, Stack answer set, Date
+section: Stack decisions | required
+section: Solution structure | required
+section: Component map | required
+section: Data model | required
+section: Cross-cutting | required
+section: Decisions log | required
+section: Module responsibilities | optional-small
+section: Open questions | optional
+budget: S 2500 3500 | M 4000 6000 | L 4000 6000
+rule: stack-table
+rule: solution-table
+rule: request-flow
+rule: er-diagram
+rule: decisions-log
 -->
+<!-- Authoring notes (agent only; never visible text).
+     Sections and order are fixed by the schema above. The Stack decisions table answers the stack
+     questions (.tfcore/templates/stack-questions.md); answers taken from an answer set cite it.
+     No Deployment section: hosting is decided after UAT and lives in the Deployment Checklist; how a
+     developer runs the app lives in the UsageGuide. Detailed per-screen flows live in the DevGuide.
+     A brownfield project describes the code as it is; a planned change is a Decisions log row with
+     Status "planned" naming the BRD item that drives it.
+     Mermaid: quote every label; never use `end` as a node id. -->
 
-## Table of Contents
+# {App} — Architecture
 
-<!-- Auto-maintained by the analyst/day-1 tasks. Use the slug rule from .tfcore/templates/v4custom/html-render-shell.md §1 so links work in both MD and rendered HTML. Update this list whenever you add/rename a section. -->
+| | |
+|---|---|
+| App | {App} |
+| Kind | app or library |
+| Size | Small, Medium or Large |
+| Stack answer set | {name, or "none"} |
+| Date | {YYYY-MM-DD} |
 
-1. [Tech stack](#tech-stack)
-2. [Component map](#component-map)
-3. [Data flow — primary path](#data-flow-primary-path)
-4. [Module responsibilities](#module-responsibilities)
-5. [Cross-cutting concerns](#cross-cutting-concerns)
-6. [Deployment architecture](#deployment-architecture)
-7. [Architectural decisions (ADR-style log)](#architectural-decisions-adr-style-log)
-8. [Target architecture (brownfield only — if enhancement changes structure)](#target-architecture-brownfield-only-if-enhancement-changes-structure)
-9. [Open questions / risks](#open-questions-risks)
+## 1. Stack decisions
 
-## 1. Tech stack
-| Layer | Choice | Version | Notes |
-|-------|--------|---------|-------|
-| Runtime | .NET 9 | … | … |
-| UI | Blazor [Server/WASM/Auto] + TrBlazeUI | … | … |
-| AI/RAG | TechieRag | … | If applicable |
-| DB | SQL Server / SQLite / Postgres | … | … |
-| Vector store | SqliteVec / PgVector / Qdrant | … | If RAG |
-| Auth | … | … | … |
+One row per stack question. "Source" says where the answer came from: the answer set, the owner, or the existing code.
 
-## 2. Component map
+| Q | Topic | Decision | Source |
+|---|---|---|---|
+| Q1 | Configuration | {…} | {answer set / owner / code} |
+| Q2 | Secrets in development | {…} | {…} |
+| Q3 | Database | {…} | {…} |
+| Q4 | Authentication | {…} | {…} |
+| Q5 | Logging | {…} | {…} |
+| Q6 | Tests | {…} | {…} |
+| Q7 | Layout and naming | {…} | {…} |
+| Q8 | User interface | {…} | {…} |
+| Q11 | Standing rules | {…} | {…} |
+
+## 2. Solution structure
+
+| Project | Kind | Purpose |
+|---|---|---|
+| `{App}` | {web app, desktop app, API, …} | {the primary head} |
+| `{App}.Core` | class library | {…} |
+| `{App}Db` | migrations project | {…} |
+| `{App}.Tests` | test project | {…} |
+
+## 3. Component map
+
 ```mermaid
 flowchart TB
-  subgraph UI["Blazor UI"]
-    Dash["Dashboard"]
-    Settings["Settings"]
-  end
-  subgraph BE["Backend"]
-    API["API"]
-    Auth["Auth"]
-    Rag["RAG service"]
-  end
-  subgraph Data["Data"]
-    SQL[("SQL")]
-    Vec[("Vector")]
-  end
-  UI --> API
-  API --> Auth
-  API --> Rag
-  Rag --> Vec
-  API --> SQL
+  UI["UI"] --> Svc["Services"]
+  Svc --> Data["Data access"]
+  Data --> DB[("Database")]
 ```
 
-## 3. Data flow — primary path
+**How a request travels** (one typical request, in words; per-screen detail is in the DevGuide):
+1. {The page calls …}
+2. {The service …}
+3. {The data access …}
+4. {The result is shown …}
+
+## 4. Data model
+
 ```mermaid
-sequenceDiagram
-  actor U
-  participant UI
-  participant API
-  participant Svc as Service
-  participant DB
-  U->>UI: action
-  UI->>API: HTTPS
-  API->>Svc: call
-  Svc->>DB: query
-  DB-->>Svc: rows
-  Svc-->>API: dto
-  API-->>UI: json
-  UI-->>U: render
+erDiagram
+  USER ||--o{ ENTRY : writes
+  ENTRY {
+    int EntryId PK
+    string Title
+  }
 ```
 
-## 4. Module responsibilities
+| Entity | Key fields | Notes |
+|---|---|---|
+| {Entity} | {…} | {…} |
+
+## 5. Cross-cutting
+
+- **Identity:** {AppManager API, or the mechanism chosen at Q4}.
+- **Configuration:** {…}
+- **Logging:** {…}
+- **Errors:** {…}
+
+## 6. Decisions log
+
+One row per decision. Every package added to the project has a row saying why.
+
+| Date | Decision | Why | Status |
+|---|---|---|---|
+| {YYYY-MM-DD} | {…} | {…} | decided, planned, done |
+
+## 7. Module responsibilities
+
 | Module | Responsibility | Depends on |
-|--------|----------------|------------|
-| `src/{AppName}.Web` | UI host | Domain, Infra |
-| `src/{AppName}.Domain` | Entities, business rules | (none) |
-| `src/{AppName}.Infrastructure` | EF, external services | Domain |
-| `src/{AppName}.Rag` | TechieRag wiring (if applicable) | Domain |
+|---|---|---|
+| {…} | {…} | {…} |
 
-## 5. Cross-cutting concerns
-- Logging — Serilog file-based logging (rolling file sink under `logs/`, wired at startup in EVERY executable head — web, API, MAUI, desktop, console; app code logs via `ILogger<T>`). This is a TechieFlow standing requirement, not a per-app choice — see Coding Standards §Logging.
-- Error handling — global middleware; ProblemDetails responses
-- Auth — JWT / cookie / Azure AD
-- Caching — IMemoryCache / Redis
-- Telemetry — OpenTelemetry / Application Insights
+## 8. Open questions
 
-## 6. Deployment architecture
-```mermaid
-flowchart LR
-  Dev["Dev"] --> CI["GitHub Actions"]
-  CI --> Reg["Container Reg"]
-  Reg --> AKS["Azure App Service / AKS"]
-  AKS --> ProdDB[("SQL")]
-```
-
-## 7. Architectural decisions (ADR-style log)
-- **ADR-001 — <decision>.** Reason: …
-- **ADR-002 — <decision>.** Reason: …
-
-## 8. Target architecture (brownfield only — if enhancement changes structure)
-```mermaid
-flowchart TB
-  Existing["existing module"] --> New["new / changed module"]
-  New --> Removed["removed box (struck through in prose)"]
-```
-Describe deltas: what's added, what's removed, what's renamed, migration path.
-
-## 9. Open questions / risks
-- …
+- {…}

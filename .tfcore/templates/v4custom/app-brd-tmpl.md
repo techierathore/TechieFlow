@@ -1,204 +1,121 @@
-# {AppName} — Business Requirements
-
-<!-- AGENT-ONLY AUTHORING NOTES. Everything in this comment is an instruction to the DRAFTING
-     AGENT, not content for the document's human reader. Carry it into the generated document
-     ONLY as this HTML comment (or drop it entirely) — NEVER as visible text: the owner reads
-     the rendered HTML and must not see authoring instructions (generate-html.md strips any
-     that leaked from older templates).
-
-  STABLE IDS: every requirement has a BRD-{N} ID. IDs are append-only across revisions.
-
-  DEPTH MANDATE (read before drafting): this is a HUMAN document, read as rendered HTML by the
-  product owner. It is NOT the coding checklist (that's docs/{AppName}-Checklist.md / split-brd
-  output). One-line entries belong ONLY in §10's requirements ledger. Every other section is
-  full prose, tables, and Mermaid diagrams. §9 Feature catalog is the heart of the document —
-  one detailed subsection per feature, with screens, workflows, and a diagram wherever the flow
-  is non-trivial. When harvesting existing source docs, this document must be an
-  information-preserving SUPERSET of their requirements content: carry their tables, matrices,
-  screen inventories, and menus forward (updated, not summarized away). If a reader of the old
-  doc would miss something in this one, the draft is wrong.
-
-  MERMAID MANDATE: every diagram MUST follow the authoring rules in
-  .tfcore/templates/v4custom/html-render-shell.md §5.5 — quote every node/edge/subgraph label
-  (A["Order Service (v2)"], not A[Order Service (v2)]) and never use `end` as a node id.
-  Unquoted special characters ( ( ) / & : , … ) in flowchart labels are the #1 cause of
-  "Syntax error" diagrams in the rendered HTML.
+<!-- tf-schema
+doc: brd
+file: docs/{App}-BRD.md
+header: App, Kind, Size, Stack answer set, Status, Date
+section: Summary | required | max 200
+section: Scope | required
+section: Users and roles | required
+section: Screens and flow | required
+section: Requirements | required
+section: Non-functional requirements | required
+section: Development status | required
+section: Context diagram | optional-small
+section: Constraints and assumptions | optional-small
+section: Risks | optional-small
+section: Glossary | optional
+budget: S 6000 8000 | M 10000 15000 | L 10000 15000
+rule: brd-ledger
+rule: screens-table
+rule: mockup-links
 -->
+<!-- Authoring notes (agent only; never visible text).
+     Sections and order are fixed by the schema above; tf-doc-check.sh refuses the document otherwise.
+     Word counts exclude code blocks and comments. The budget is met by shorter prose, never by dropping
+     a screen, a field or a requirement. BRD ids are append-only and never renumbered.
+     Size and requirement cap: Small up to 10 screens, one role, 50 requirements; Medium up to 20 screens,
+     100 requirements; Large is split into phases, each phase its own BRD. Every routed page is a screen;
+     dialogs, tabs and panels are regions of their page and are listed under it.
+     Mermaid: quote every label (A["Order (v2)"]); never use `end` as a node id. -->
 
+# {App} — Business Requirements
 
-## Table of Contents
+| | |
+|---|---|
+| App | {App} |
+| Kind | app or library |
+| Size | Small, Medium or Large |
+| Stack answer set | {name of the answer set, or "none"} |
+| Status | Draft, Approved |
+| Date | {YYYY-MM-DD} |
 
-<!-- Auto-maintained by the analyst/day-1 tasks. Use the slug rule from .tfcore/templates/v4custom/html-render-shell.md §1 so links work in both MD and rendered HTML. Update this list whenever you add/rename a section. List each `### F-…` catalog entry as an H3 sub-entry under Feature catalog. -->
+## 1. Summary
 
-1. [Executive summary](#executive-summary)
-2. [Business objectives](#business-objectives)
-3. [Scope](#scope)
-4. [Development status](#development-status)
-5. [Stakeholders / users](#stakeholders-users)
-6. [Context diagram](#context-diagram)
-7. [User journey — primary use case](#user-journey-primary-use-case)
-8. [Component sketch](#component-sketch)
-9. [Feature catalog](#feature-catalog)
-10. [Functional requirements (BRD ledger)](#functional-requirements-brd-ledger)
-11. [Non-functional requirements](#non-functional-requirements)
-12. [Constraints & assumptions](#constraints-assumptions)
-13. [Success metrics](#success-metrics)
-14. [Risks](#risks)
-15. [Glossary](#glossary)
+{What it is, for whom, why it exists. At most 200 words.}
 
-## 1. Executive summary
-<2-3 paragraphs: what we're building/changing and why it matters.>
+## 2. Scope
 
-## 2. Business objectives
-- <measurable objective 1>
-- <measurable objective 2>
+**In:**
+- {…}
 
-## 3. Scope
-**In scope:** …
-**Out of scope (explicit):** …
+**Out:**
+- {…}
 
-## 4. Development status
+## 3. Users and roles
 
-<!-- SNAPSHOT (point-in-time) of what is BUILT vs PENDING, at the feature level — the first thing a
-     reader of an existing app wants to know. This is a HUMAN summary, NOT a competing source of truth:
-     the LIVE per-requirement status lives in PROJECT-STATUS.md + the one checklist's
-     "Requirements Status" table. Do NOT duplicate per-REQ status here — one row per feature only.
-       • Brownfield: fill from the migrated dev-plan and/or the code scan (what actually compiles/runs).
-         Mirror the phase tags used in the checklists.
-       • Greenfield: this is the build ROADMAP — every row is "Planned" with its target phase.
-     One row per §9 Feature-catalog F-code; group/order by phase. Keep the as-of date honest.
-     AUTO-MAINTAINED after day-1: the status gate (every build/verify/handoff phase) and
-     *refresh-status re-derive this table from the checklists and re-render the HTML, so it
-     tracks reality without manual edits — see _status-update-gate.md item 9. -->
+| Role | Who they are | What they need |
+|---|---|---|
+| {Role} | {…} | {…} |
 
-**Snapshot as of {YYYY-MM-DD}.** Live, per-requirement status: see `PROJECT-STATUS.md` and the **Requirements Status** table in `docs/{AppName}-Checklist.md`.
+## 4. Screens and flow
 
-| Feature (F-code) | Phase | Status | % | Notes |
-|------------------|-------|--------|---|-------|
-| F-{CODE}: {name} | {0 / 1 / 2 … or MVP} | Done | 100 | {what works} |
-| F-{CODE}: {name} | {phase} | Partial | {0–100} | {what's done / what's left} |
-| F-{CODE}: {name} | {phase} | Planned | 0 | {not started} |
+One row per routed page. A dialog is a row under its parent screen with `on /route` in the Route column; it is not counted as a screen.
 
-**Legend:** **Done** = shipped & working · **In progress** = actively being built · **Partial** = some sub-features done, others pending · **Planned** = not started. (Maps to the checklist's `Done (pre-existing)` / `In Progress` / `PARTIAL` / `Not Started`.)
+| Screen | Route | Role | Mockup | Fields |
+|---|---|---|---|---|
+| {Screen name} | `/route` | {Role} | [mockup](mockups/{screen-slug}.html) | {field, field, field} |
+| {Dialog name} (dialog) | on `/route` | {Role} | [mockup](mockups/{screen-slug}.html) | {field, field} |
 
-## 5. Stakeholders / users
-<!-- Full persona detail, not just a 2-row table. For each persona: role mapping (if an external auth/licensing system is involved), responsibilities, key screens, registration/onboarding path. If the app has license tiers / feature gating, include the full license & feature matrix here or as its own H2 (and add it to the TOC). -->
-| Role | Needs |
-|------|-------|
-| End user | … |
-| Admin    | … |
+**Primary journey:**
+1. {The user opens … and …}
+2. {…}
 
-## 6. Context diagram
+## 5. Requirements
+
+One item per thing the verifier will test. Each names its screen, links the mockup, and states its acceptance in the form the checklist will carry.
+
+- **BRD-1** — {Title}. *Screen:* {Screen name} · *Mockup:* [mockup](mockups/{screen-slug}.html)
+  - *Acceptance:* When {actor} {does what} on {screen}, then {a result a browser robot can observe}.
+- **BRD-2** — {Title}. *Screen:* {Screen name} · *Mockup:* [mockup](mockups/{screen-slug}.html)
+  - *Acceptance:* When …, then ….
+
+## 6. Non-functional requirements
+
+| Id | Area | Requirement | Measure |
+|---|---|---|---|
+| BRD-{N} | Performance | {…} | perf-budget: p95 load <= 2000ms @ concurrency 1 |
+| BRD-{N} | Security | {…} | {…} |
+| BRD-{N} | Logging | {from the Stack answer set} | {…} |
+
+The `perf-budget:` measure is machine-read by the verifier, in exactly this form: `perf-budget: <p50|p95|max> <ttfb|load> <= <N>ms [@ concurrency <N>]`. Write one only where the owner stated a number.
+
+## 7. Development status
+
+Written by the status gate after every build, verify and handoff; not by hand.
+
+**Snapshot as of {YYYY-MM-DD}.** Live per-requirement status: `PROJECT-STATUS.md` and the Requirements Status table in `docs/{App}-Checklist.md`.
+
+| Screen | Requirements | Verified | Open | Status |
+|---|---|---|---|---|
+| {Screen} | {n} | {n} | {n} | Planned, In progress, Partial, Done |
+
+## 8. Context diagram
+
 ```mermaid
 flowchart LR
-  User(["End User"]) --> App["{AppName}"]
+  User(["User"]) --> App["{App}"]
   App --> DB[("Database")]
-  App --> LLM[/"LLM Provider"/]
 ```
 
-## 7. User journey — primary use case
-```mermaid
-sequenceDiagram
-  actor U as User
-  participant W as Web UI
-  participant A as App API
-  U->>W: action
-  W->>A: request
-  A-->>W: response
-  W-->>U: result
-```
+## 9. Constraints and assumptions
 
-## 8. Component sketch
-```mermaid
-flowchart TB
-  UI["Blazor UI — TrBlazeUI"] --> API["ASP.NET API"]
-  API --> SQL[("SQL")]
-  API --> Rag["RAG — TechieRag"]
-  Rag --> Vec[("Vector store")]
-```
+- {…}
 
-## 9. Feature catalog
+## 10. Risks
 
-<!-- THE HUMAN-READABLE HEART OF THE BRD. One `### F-{CODE}: {Name}` subsection per
-     feature / capability area. A real app typically has 8–25 entries; depth scales with
-     the app, NOT with a template quota. Repeat the skeleton below per feature.
-     Per feature include, where applicable:
-       - personas + phase/priority
-       - 1-2 paragraphs of what/why
-       - screens & routes table
-       - workflow / processing steps (numbered), inputs → outputs
-       - a Mermaid diagram for any multi-step or multi-actor flow (flowchart or
-         sequenceDiagram) — generic features (simple CRUD lists) may skip the diagram
-       - the BRD-N IDs this feature owns (forward links into §10)
-     Every F-code here MUST appear as a row in the §4 Development status table. -->
-
-### F-{CODE}: {Feature name}
-
-**Personas:** <who uses it> · **Phase:** <0/1/2/… or MVP/Later>
-
-<1-2 paragraphs: what this feature does and why it exists.>
-
-| Screen | Route | Description |
-|--------|-------|-------------|
-| … | `/…` | … |
-
-**Workflow:**
-1. <step>
-2. <step>
-
-```mermaid
-flowchart LR
-  A["input"] --> B{"decision"} --> C["output"]
-```
-
-**Requirements:** BRD-x, BRD-y (see §10)
-
-## 10. Functional requirements (BRD ledger)
-
-<!-- The machine-traceable ledger consumed by *split-brd and the coding pipeline.
-     One line per discrete capability, `<actor> can <action>` or `system shall <behavior>`.
-     Each line names its catalog feature: `(F-CODE)`. The count scales with the app —
-     one BRD per capability, NEVER merge capabilities to keep the list short. -->
-
-- **BRD-1** — <one-line requirement> *(F-{CODE})*
-- **BRD-2** — <one-line requirement> *(F-{CODE})*
-
-## 11. Non-functional requirements
-<!-- Keep the BRD-N IDs, but give each NFR its target table when there are concrete numbers
-     (latency, uptime, concurrency, import throughput), as a human reader expects.
-     The Observability/logging NFR below is a TechieFlow STANDING requirement — it appears in
-     EVERY .NET app's BRD (web, API, MAUI, desktop, console, background service), never gets
-     dropped, and split-brd turns it into a REQ-NFR row like any other NFR.
-
-     PERFORMANCE — the `perf-budget:` line is MACHINE-READ. verify-phase §4c grades a REQ on
-     speed if and ONLY if it carries one, in exactly this grammar:
-         perf-budget: <p50|p95|max> <ttfb|load> <= <N>ms [@ concurrency <N>]
-     Omit it and the perf gate simply never fires for that REQ — which is the correct outcome
-     when there is no agreed number. Do NOT invent a budget to make the row look complete: a
-     threshold nobody agreed to produces failures nobody asked for, and the first false failure
-     is the moment gate verdicts stop being believed. Write one only where the owner states it.
-     Prose like "should feel fast" is not a budget and is deliberately not gradeable. -->
-- **BRD-N** — Performance: …
-      <!-- e.g.  Public pages stay responsive under normal load.
-                 perf-budget: p95 load <= 2000ms @ concurrency 1
-                 perf-budget: p95 ttfb <= 500ms @ concurrency 50   -->
-
-- **BRD-N+1** — Security: …
-- **BRD-N+2** — Accessibility: …
-- **BRD-N+3** — Observability: Serilog file-based logging in every executable head — rolling file sink under `logs/`, wired at startup, unhandled exceptions logged (see Coding Standards §Logging).
-
-## 12. Constraints & assumptions
-- …
-
-## 13. Success metrics
-- …
-
-## 14. Risks
 | Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| {…} | {…} | {…} | {…} |
 
-## 15. Glossary
-- TrBlazeUI, TechieRag, REQ-UI-*, REQ-FN-*, REQ-RAG-*, REQ-NFR-*
+## 11. Glossary
 
----
-Last updated: {YYYY-MM-DD}
-Highest BRD ID: BRD-{N}
+- {Term} — {meaning}

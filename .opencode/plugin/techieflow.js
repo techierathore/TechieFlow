@@ -234,7 +234,7 @@ export const TechieFlowPlugin = async ({ directory, client }) => {
       let scripts = []
       if (input.tool === "bash") {
         payload = { tool_name: "Bash", tool_input: { command: String(args.command || "") } }
-        scripts = ["block-git.sh", "guard-artifacts.sh"]
+        scripts = ["block-git.sh", "guard-artifacts.sh", "guard-status.sh"]
       } else if (input.tool === "edit") {
         payload = {
           tool_name: "Edit",
