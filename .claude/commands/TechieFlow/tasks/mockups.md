@@ -44,6 +44,28 @@ Load `.tfcore/templates/v4custom/app-uidesign-tmpl.md`. For each screen (fan out
 
 Keep the visual language consistent across screens (one shell, one theme, one spacing system) so the set reads as one app.
 
+#### 3b. ANCHOR THE MOCKUP — `data-testid` is what makes it gradeable (MANDATORY since 2026-08-31)
+
+A mockup is not only a picture for the owner to approve. Since 2026-08-31 it is **the input to a gate**: `verify-phase` §4b2 compares the built screen against it mechanically, and **it can only compare elements that carry the same `data-testid` on both sides.**
+
+**Put a `data-testid` on every element the build must get right**, using the same name the built component will carry:
+
+- the layout regions — `app-sidebar`, `app-header`, `main` (match the shell's real names; a mockup that says `sidebar` where the app says `app-sidebar` pairs with nothing and grades nothing);
+- every **badge, pill, chip and status indicator** — these are the single most-escaped class, because a pill flattened to plain text still *has text* and passes every other gate;
+- every **icon or icon button**;
+- each **KPI tile / card**, individually — especially two adjacent cards the design distinguishes (a dashed border meaning *estimate* beside a solid one meaning *measured* is a real distinction the gate now reads, and it can only read it on an anchored element);
+- each **table** and each **chart**;
+- any value cell whose **width is part of the design** — a formatted number that must not break mid-digit.
+
+**Why this is worth the keystrokes, stated plainly.** The gate's depth is bounded by what both sides anchor, and the failure mode is **silent and inverted: the less of a screen the gate can see, the cleaner its verdict looks.** A screen the gate cannot reach into does not report "I could not grade this" as a defect — it reports `UNGRADEABLE`, which is honest but buys nothing. Upstream, three columns anchored only at the container level yielded three coarse comparisons and a `PASS`, while a human then found two structural defects on that same screen by eye (TfLens **TF-011**).
+
+Two things make this cheaper than it sounds:
+
+- **The walker descends any anchored subtree** — card, column, grid, `<dl>`, list, table alike — so an anchor on a *container* now buys real depth, not just one comparison. You do not need an id on every leaf.
+- **The gate tells you what is missing.** Each screen's run output carries `anchor_deficit.add_data_testid_to_mockup`, naming the app testids the mockup lacks. Closing the gap later is a mechanical edit — but doing it here is free.
+
+**Do not invent ids the build will not use.** An anchor that pairs with nothing is worse than no anchor: it costs effort and grades nothing. Take the names from the component map you just wrote in step 2, and use the same ones in `*build-phase`.
+
 ### 4. Assemble + render
 
 - Fill the UIDesign header (§"Design system" from §1's catalog — name the layout shell, theme, and the controls inventory the app uses).
@@ -94,6 +116,7 @@ Next: review/approve the mockups (open docs/mockups/*.html); they are the visual
 - [ ] Screen list derived from BRD §9 feature catalog (or "skipped — no UI" recorded)
 - [ ] `docs/{AppName}-UIDesign.md` written: per-screen spec with a `region → TrBlazeUI control` component map + state notes
 - [ ] `docs/mockups/{screen}.html` rendered for every screen, styled to look like TrBlazeUI, consistent across the set
+- [ ] **Every mockup anchored with `data-testid` (§3b)** — layout regions under the shell's real names, plus every badge/pill, icon, KPI tile, table, chart and width-critical value cell. Ids taken from the §2 component map so they pair with what the build will render. Without them `verify-phase` §4b2 returns `UNGRADEABLE`, which is not a pass.
 - [ ] `docs/{AppName}-UIDesign.html` rendered (human doc); mockups left as HTML; the checklist is NOT involved here
 - [ ] PROJECT-STATUS got the one-line mockups note (no full status gate)
 - [ ] Report printed; mockups ready for owner approval

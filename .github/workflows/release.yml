@@ -1,0 +1,122 @@
+# Publishes the npm package when a GitHub release is published.
+#
+# The release tag is the version. Nobody edits the version in package.json: the workflow
+# checks out the tag, writes the tag's number into package.json on the runner only, runs the
+# checks (prepublishOnly: validate + test:install) and publishes.
+#
+# Publishing uses npm Trusted Publishing. GitHub proves to npm which repository and workflow
+# is running, and npm hands back a credential that lives for this run only. There is no
+# token to create, store, rotate or leak. This needs `id-token: write` below, npm 11.5.1 or
+# newer, and a Trusted Publisher entry on the package's npm settings page that names this
+# repository and this file (release.yml). See docs/TechieFlow-Release-Guide.md, section 0.
+#
+# A failed check stops the publish. A version that already exists on npm is refused.
+#
+# Recovery: if a release was published but the publish failed for a reason that is now
+# fixed, run this workflow by hand from the Actions tab and give it the existing tag.
+name: Publish npm package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish again, for recovery only (for example v1.0.1)
+        required: true
+        type: string
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+
+      - name: Set up npm 11.5.1 or newer (needed for trusted publishing)
+        run: npm install --global npm@11
+
+      - name: Set the package version from the release tag and refuse an existing version
+        run: |
+          case "$RELEASE_TAG" in
+            v*) release_version="${RELEASE_TAG#v}" ;;
+            *) echo "Release tag must start with v, for example v1.0.0; received $RELEASE_TAG" >&2; exit 1 ;;
+          esac
+          npm version "$release_version" --no-git-tag-version --allow-same-version
+          package_name="$(node --print "require('./package.json').name")"
+          package_version="$(node --print "require('./package.json').version")"
+          echo "Release version: ${package_name}@${package_version}"
+          if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
+            echo "${package_name}@${package_version} already exists on npm; a published version cannot be replaced. Create the next version." >&2
+            exit 1
+          fi
+
+      - name: Run the checks
+        run: |
+          npm run validate
+          npm run test:install
+          npm pack --dry-run
+
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # lets GitHub issue the short-lived credential npm trusts
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Set up Node with the npm registry
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          registry-url: https://registry.npmjs.org
+
+      - name: Set up npm 11.5.1 or newer (needed for trusted publishing)
+        run: npm install --global npm@11
+
+      - name: Publish through npm trusted publishing
+        # `npm publish` runs prepublishOnly first (validate + test:install), so the checks run
+        # a second time on the machine that publishes. Stable versions go to the npm tag
+        # "latest"; a pre-release such as v1.1.0-beta.1 goes to "next". Provenance links the
+        # published files to this exact commit and workflow run.
+        run: |
+          release_version="${RELEASE_TAG#v}"
+          npm version "$release_version" --no-git-tag-version --allow-same-version
+          npm_tag=latest
+          case "$release_version" in *-*) npm_tag=next ;; esac
+          npm publish --access public --provenance --tag "$npm_tag"
+
+      - name: Confirm the version is on npm
+        run: |
+          release_version="${RELEASE_TAG#v}"
+          package_name="$(node --print "require('./package.json').name")"
+          for attempt in 1 2 3 4 5 6; do
+            if npm view "${package_name}@${release_version}" version >/dev/null 2>&1; then
+              echo "${package_name}@${release_version} is on npm"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "npm does not list ${package_name}@${release_version} yet; check https://www.npmjs.com/package/${package_name}" >&2
+          exit 1

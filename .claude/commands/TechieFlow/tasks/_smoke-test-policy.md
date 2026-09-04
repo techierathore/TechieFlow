@@ -33,6 +33,20 @@ Report a blown budget in your summary so it gets fixed now rather than at verify
 
 This is the difference between "the method exists / the page compiled" and "the feature works". Only the latter — data present AND looking right — counts.
 
+## If the harness cannot reproduce a construct's failure, the harness cannot sign it off either
+
+**A UI construct whose failure mode the harness cannot reproduce is a construct the harness cannot certify.** State it plainly, because the instinct is the opposite one — nine clean reproduction attempts feel like evidence that nothing is wrong, when they are evidence that this harness cannot see whether anything is wrong.
+
+The case that produced this rule (TfLens TF-007 companion 2, 2026-08-28): UAT reported a modal dialog leaving the page dimmed and dead. **Nine reproduction attempts in headless Chromium could not produce it.** The resolution was not to keep hunting and not to declare it unreproducible-therefore-fixed — it was to **delete the construct**: the flows became ordinary routes. That is very probably the right general answer.
+
+So when a defect is real to the owner and invisible to the harness:
+
+1. **Never close it as "could not reproduce."** The owner saw it. `found_by:"owner"` is the most valuable record in the miss stream precisely because a human caught what no gate could.
+2. **Prefer replacing the construct with one the harness can drive.** A modal that becomes a route, an overlay that becomes a page, a portal that becomes inline markup — each trades a little visual ambition for a thing every gate can actually grade. A construct only the human can verify is a construct only the human will ever verify, on every future phase, forever.
+3. **If it must stay, say so where it costs something.** The screen is `⚠ STATIC-ONLY` for that behaviour, the REQ is `NOT-OBSERVABLE` on it, and the miss carries `why_missed:"code-audit-limitation"`. Never a silent `Verified`.
+
+Same rule as `PERF-UNMEASURED`, `ASSETS-UNMEASURED` and `MOCKUP-UNGRADEABLE`, arriving from the other direction: **an unmeasured thing is unmeasured, not passed.**
+
 ## Smoke is NOT verify — a self-smoke's ceiling is `Implemented`
 
 Your smoke (this policy) and the verifier gate (`verify-phase.md`) are **different steps by different actors**, even when the same session performs both. However thorough your smoke felt, it earns a REQ **at most `Implemented`** — never `Verified`. `Verified` is written only by an **executed** verify-phase run (chained inline per `build-phase §6b`, or a standalone `*verify`): boot, scoped tests, §4a data-render + §4b visual-truth gates, and the run ledger `docs/.last-verify.json` (verify-phase §6). "I did my own smoke and wrote the verdicts myself" is **self-attestation** — the 2026-07-09 TrSetup failure — and is now blocked **mechanically**: the PreToolUse hook `.tfcore/hooks/guard-verify.sh` rejects any checklist write that introduces `Verified` without a same-day ledger. Writing the ledger without actually running verify-phase's steps is falsifying the audit record.
