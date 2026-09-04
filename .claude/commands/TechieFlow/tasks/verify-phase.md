@@ -198,6 +198,52 @@ A screen with any RENDER-EMPTY / RENDER-ERROR control **fails the render gate** 
 
 **For MAUI native heads (§3b),** run the identical assertions over the **Appium** session instead of Playwright: locate each control by its `AutomationId`, read the element's text / child count from the page source (grid rows non-empty, value non-blank), and treat a missing/empty element exactly as RENDER-EMPTY. Same verdicts, same screenshots — only the locator API changes.
 
+### 4a2. ASSET-INTEGRITY gate — did the assets the page DECLARES actually arrive
+
+§4a proves the data is in the DOM. It does not prove the page received the files that make it a page. **Nothing else in the gate set asks this question, and nothing else can.**
+
+The failure that produced this gate (TfLens TF-007, 2026-08-28): `*handoff-phase` declared an app READY FOR UAT on **140 of 143 `Verified`** — acceptance, data-render, visual-truth, standards, parity and perf all green. The owner opened `/login` and got an unstyled single column. One stylesheet, the Blazor scoped-CSS bundle carrying 100% of that page's layout, had 404ed.
+
+| Gate | Why it passed |
+|---|---|
+| acceptance | every control was present, every behavioural assertion held — an unstyled page behaves correctly |
+| render (§4a) | "does this control carry non-placeholder text?" — yes; text renders fine with no CSS |
+| visual (§4b) | "do these boxes overlap / clip / leave the viewport?" — no. **A single stacked column overlaps nothing. It is the tidiest possible failure** — partial breakage overlaps, total breakage stacks neatly |
+| standards | file-level; never loads the app |
+| perf | an unstyled page is, if anything, faster |
+
+A 404 on a `<link rel=stylesheet>` or `<script src>` produces no console error the gates read, no server log line, no Blazor error boundary and no failed assertion. The app renders something that looks intentional.
+
+**Run the shipped harness — do not hand-roll it:**
+
+```bash
+bash .tfcore/utils/tf-assets.sh --base http://localhost:5099 \
+     --paths "/,/login,/export" \
+     --json-out tests/.artifacts/assets/run.json
+```
+
+Login-gated app? Present the session, the same way §4c does:
+
+```bash
+bash .tfcore/utils/tf-assets.sh --base http://localhost:5099 --paths "/,/export" \
+     --cookie 'AuthCookie=<value from your Playwright login>'
+```
+
+**Reading the exit code:**
+
+| Exit | Meaning | What to record |
+|---|---|---|
+| `0` | every declared asset arrived | gate passes; `assets` in `gates_run` |
+| `5` | at least one declared asset did not arrive | **`ASSET-FAIL`** — see §6 |
+| `4` | every path answered 3xx (auth wall) | `ASSETS-UNMEASURED (auth wall)` — re-run with `--cookie`. **`assets` is OMITTED from `gates_run`**; never record it as a pass |
+| `2` | the app was unreachable | a `build` gate problem, not an assets result |
+
+**It grades same-origin assets by default, and that is deliberate.** A CDN that is briefly slow or rate-limited would fail the gate on every screen for something that is not the app's defect — and a gate that cries wolf teaches the owner to ignore verdicts, which costs more than the defects it catches (the same rule §4c states for perf). Cross-origin assets are listed and marked `"external": true`. Pass `--include-external` only when a REQ actually depends on a third-party asset.
+
+**`"ungradeable": true` in the output is not a pass.** It means no asset was graded — the pages declared none, or all were cross-origin. Record `ASSETS-UNGRADEABLE` and leave `assets` out of `gates_run`, exactly as with the auth wall.
+
+Cost: ~100 ms on a healthy page. There is no reason to skip it.
+
 ### 4b. VISUAL-TRUTH gate — does the screen actually LOOK right (run for every in-scope screen)
 
 The §4a render gate proves the data is *present in the DOM*; it does NOT prove the screen is *usable*. The exact failure the owner hit: every control renders its data, the verifier passes — but the controls **overlap, sit off-screen, are clipped to zero height, or the layout is broken**, so the running app is unusable. "Has data" ≠ "looks right." This gate closes that hole.
@@ -207,9 +253,65 @@ For **every in-scope screen** (same screens as §4a, same role login), at **at l
 - **In-viewport & sized:** every control the DevGuide lists has a bounding box with width > 0 and height > 0, and lies within the page bounds (not pushed off-canvas, not clipped to 0). A control with a zero-size or off-screen box = `VISUAL-FAIL`.
 - **Not occluded / not collapsed:** key containers are not zero-height and content is not spilling out of its container.
 - **Screenshot + vision:** capture a full-page screenshot at each width and **inspect it** — broken grid, stacked/overlapping text, unstyled fallback (raw HTML with no TrBlazeUI styling), or content overflowing its region is a `VISUAL-FAIL` even if the box-geometry checks passed.
-- **Mockup diff (greenfield, when a mockup exists):** compare the screen against its mockup (`docs/mockups/{screen}.html` named in the REQ's checklist row). The same regions/controls should be present in roughly the same layout. A large structural deviation = `MOCKUP-DRIFT` (a `VISUAL-FAIL` sub-type); a match = `MOCKUP-MATCH`. Brownfield has no mockup — rely on the geometry + vision checks (and, where present, the reviewed DevGuide screenshots from `docs/screenshots/{AppName}/`).
+- **Mockup comparison is NO LONGER done by eye here** — it is its own mechanical gate, **§4b2** below. A prose instruction to "compare against the mockup" is what this section used to carry, and it caught nothing: 13 of 14 screens drifted structurally with this gate green (TfLens TF-008). Brownfield still has no mockup — rely on the geometry + vision checks here (and, where present, the reviewed DevGuide screenshots from `docs/screenshots/{AppName}/`).
 
-Record per screen: **VISUAL-OK** / **VISUAL-FAIL** (with the failing controls + which width + a screenshot path) / **MOCKUP-DRIFT**. A screen with any `VISUAL-FAIL` fails the visual gate for every REQ that owns a control on it (§6). These observations also feed the DevGuide refresh (§6b).
+Record per screen: **VISUAL-OK** / **VISUAL-FAIL** (with the failing controls + which width + a screenshot path). A screen with any `VISUAL-FAIL` fails the visual gate for every REQ that owns a control on it (§6). These observations also feed the DevGuide refresh (§6b).
+
+### 4b2. MOCKUP-PARITY gate — does the built screen carry the structure its mockup draws
+
+§4b proves the screen is not broken. It does not prove the screen is **right**. That is a different question, and until 2026-08-31 no gate asked it.
+
+The failure that produced this gate (TfLens TF-008, 2026-08-29): a checklist reading **145 `Verified`** over a running app with structural drift on **13 of 14 comparable screens** — 20 findings, 15 REQs demoted in one sitting, all found by a human comparing 18 screenshots by hand.
+
+| Symptom | What the app actually did |
+|---|---|
+| Header wrapped to two rows on all six report routes | 105px against the mockup's 64px |
+| Value column starved by a `nowrap` label column | **71px**; `Cache read 2,287,975,139` broke across 3 lines, mid-number |
+| `Days since` column pushed out of its card | present in the DOM, clipped off the right edge |
+| Status pill rendered as plain text | the one value on the page meant to be read at a glance |
+| Measured-vs-estimate tile distinction dropped | the mockup's own note says losing it hands the reader "a plausible wrong number" |
+
+Neither existing gate could catch any of it, and not because of a bug in them: **§4a asks whether the control shows data — a badge rendered as plain text has text. §4b asks whether anything overlaps — a header that wraps to two rows overlaps nothing, and neither does a 71px column splitting a number across three lines.** Adding acceptance criteria does not help either: in every case the acceptance existed and was met. The missing thing was a gate that could fail.
+
+**Run the shipped harness:**
+
+```bash
+bash .tfcore/utils/tf-mockup-parity.sh --base http://localhost:5099 \
+     --screen login=/login --screen harness=/harness --screen export=/export \
+     --cookie 'AuthCookie=<value from your Playwright login>' \
+     --json-out tests/.artifacts/mockup-parity/run.json
+```
+
+One `--screen name=/route` per screen that has a `docs/mockups/{name}.html`. It compares **structurally, never pixel-wise** — pixel diffing on live data is unusable and would be ignored within a week — at 1280 and 390, grading eight classes:
+
+`badge` · `icon` · `color` · **`stroke`** · `wrap` · `clip` · `token` · `missing`, plus a document-height assertion.
+
+Three of those exist because the first version of this gate shipped without them:
+
+- **`stroke`** (TfLens TF-009). A mockup says *provisional / estimated / inactive* with a **border style**, precisely because a dashed rule stays legible on both the light and the dark surface without spending a colour on it. A dashed grey border and a solid grey border are the **same semantic colour bucket**, so the `color` clause is satisfied and the tile ships styled exactly like the measured one beside it — the defect the design existed to prevent. `stroke` reads `border-*-style` quantised to `none` / `solid` / `dashed`.
+- **`missing`** (TF-008's own first two escape rows). Key-pairing cannot see an element that is **not there**, so a badge flattened to plain text and an omitted icon were invisible. Deliberately narrow: only a mockup element that is chrome or carries an icon is reported when absent, and only when its parent paired — an unrestricted "the DOM shapes differ" report would fire on every wrapper div and become the always-present finding that trains a reader to skim.
+- **document-height** (TF-008 §2). `document.scrollHeight <= clientHeight + 2` on every route. Cheap, no false positives in a shell-scrolled app, and it alone would have caught a page that escaped the app shell's scroll container and rendered ~1,700px of blank void with the shell repainted at the bottom.
+
+**READ THE COVERAGE. A `PASS` is only worth what the gate could see (TfLens TF-011).** The gate compares elements that both sides anchor, so on a screen whose mockup anchors little it can grade almost nothing — and **the failure mode is inverted: the less of a screen the gate sees, the cleaner its verdict looks.** That produced a real false statement upstream: a run reported "10 PASS / 2 FAIL / 0 findings" and eight UI rows were written `Verified` on that basis while a screen was visibly wrong.
+
+So every screen publishes `coverage: {compared, content_graded, app_controls, mockup_anchors, ungradeable}`, and the verdicts are:
+
+| Verdict | Meaning | Effect on the REQ |
+|---|---|---|
+| `PASS` | graded, and it matches | may contribute to `Verified` |
+| `FAIL` | at least one finding | **`MOCKUP-FAIL`** (§6) |
+| `UNGRADEABLE` | **no clause that reaches inside a container ever fired** | `NOT-OBSERVABLE`. **Never a pass, and it must not license a `Verified`** |
+| `NO-MOCKUP` | no `docs/mockups/{screen}.html` | reported, never a silent pass — same discipline as `⚠ STATIC-ONLY` |
+
+`content_graded`, not an anchor ratio, is the measure — and the difference matters. One upstream screen graded deeply off 8 body anchors while another graded nothing off 7, because the difference was table-vs-card, not count. **Count comparisons that could have produced a finding, never anchors.**
+
+**A `FAIL` can also be ungradeable.** `coverage.ungradeable` stays `true` independently of the verdict, so a screen with one document-height finding and no structural coverage says both things at once. Read it.
+
+**Closing the gap is mechanical, not a research task.** Each screen reports `anchor_deficit.add_data_testid_to_mockup` — the app `data-testid`s the mockup does not carry. Add them to the mockup and the next run grades deeper. Note the walker already descends any anchored subtree (card, column, grid, `<dl>`, list, table alike), so an anchor on a container is worth something now; it was worth almost nothing when only `<table>` was walked.
+
+**Exit codes:** `0` every screen graded and clean · `5` at least one screen FAILED · `6` nothing failed but at least one screen was `UNGRADEABLE` / `NO-MOCKUP` — **exit 0 must never be read as "everything was graded"** · `4` Playwright missing (run §1) · `3` bad arguments.
+
+**Brownfield and `library` / `docs` projects:** no `docs/mockups/`, so this gate does not run. Omit `mockup-parity` from `gates_run` — do not list a gate that never fired (SCHEMA §3.5).
 
 **For MAUI native heads (§3b),** run the identical overlap / in-viewport / sized / screenshot-inspection checks over the **Appium** session: `element.rect` gives each control's bounding box (overlap + zero-size + off-screen detection), and `driver.get_screenshot_as_base64()` gives the full-screen image to inspect. Drive the device's natural size plus, where the simulator/emulator supports it, a phone vs tablet/desktop variant. Same `VISUAL-OK` / `VISUAL-FAIL` verdicts.
 
@@ -285,7 +387,9 @@ Map every requirement ID to exactly one verdict:
 
 - `PASS` — a real test for this ID passed against the running app / a unit test passed, **AND** every control the DevGuide attributes to this REQ's screens passed the §4a render gate **AND** the §4b visual-truth gate **AND** (only if the REQ declared a `perf-budget:`) the §4c perf gate.
 - `RENDER-FAIL` — the acceptance behavior may work, but at least one of the REQ's controls is **RENDER-EMPTY / RENDER-ERROR** (blank table, count-vs-rows mismatch, empty chart, blank value, Blazor error). Include the control + screenshot. This is a real defect even if an old status said `Done`.
-- `VISUAL-FAIL` — the data renders, but the screen does not LOOK right: controls overlap, sit off-viewport, are clipped to zero size, the layout is broken/unstyled, or it drifts structurally from its mockup (§4b). Include the failing control(s), the width, and a screenshot. A real defect even if §4a passed and an old status said `Done`.
+- `ASSET-FAIL` — a stylesheet or script the page **declares** did not arrive (§4a2, exit 5). Include the asset URL and its status. This is a real defect on a screen where every other gate is green — that is the entire reason the gate exists.
+- `VISUAL-FAIL` — the data renders, but the screen does not LOOK right: controls overlap, sit off-viewport, are clipped to zero size, or the layout is broken/unstyled (§4b). Include the failing control(s), the width, and a screenshot. A real defect even if §4a passed and an old status said `Done`.
+- `MOCKUP-FAIL` — the screen is not broken, but it does not carry the structure its approved mockup draws (§4b2, exit 5). Include the finding class, the element key and the width.
 - `PERF-FAIL` — the REQ declared a `perf-budget:` and the measured p95 exceeded it by more than 25% under the four measurement preconditions of §4c. Include metric, measured value, budget, and concurrency. **Only for REQs that declared a budget** — a REQ with no `perf-budget:` line is never graded here.
 - `FAIL` — a test for this ID ran and failed (include the one-line reason + screenshot path).
 - `NOT-IMPLEMENTED` — feature/element the requirement needs was absent (test could not even find it).
@@ -293,17 +397,19 @@ Map every requirement ID to exactly one verdict:
 
 **A missing file is NEVER a verdict until you have read its literal path.** Before grading a REQ `NOT-OBSERVABLE` — or writing any remark that a required script, oracle, fixture, or harness "is not present in this tree" — read the exact path the REQ, its BRD section, or this task names. Paths under `.tfcore/` are hidden **and** gitignored, so Grep and Glob return nothing for files that are plainly there (`_status-update-gate.md` §"The framework tree is INVISIBLE to search"; `rg -uu` if you must search). A "the tool does not exist here" verdict sourced from a default search is a false negative that lands in the checklist Remarks, the BRD §4 status row, and every gate downstream of it — and the next agent reads it as established fact.
 
-**STRICT GATE (non-negotiable):** a REQ may be `Verified` **only if** its acceptance test passes AND all its DevGuide-listed controls RENDER their data (§4a) AND every screen it owns passes VISUAL-TRUTH (§4b) AND — *where and only where the REQ declared a `perf-budget:`* — it is not `PERF-FAIL` (§4c). Never mark `Verified` when any owned control is RENDER-EMPTY/RENDER-ERROR or any owned screen is VISUAL-FAIL — those are the exact failure modes these gates exist to stop (data-present-but-blank, and data-present-but-visually-broken). A `Done (pre-existing)` REQ whose screens pass both gates stays `Done (pre-existing)` with a `runtime render+visual-confirmed {date}` remark; one that fails either drops to `Needs re-verify`.
+**STRICT GATE (non-negotiable):** a REQ may be `Verified` **only if** its acceptance test passes AND all its DevGuide-listed controls RENDER their data (§4a) AND every asset its screens declare arrived (§4a2) AND every screen it owns passes VISUAL-TRUTH (§4b) AND — *where a mockup exists* — is not `MOCKUP-FAIL` (§4b2) AND — *where and only where the REQ declared a `perf-budget:`* — it is not `PERF-FAIL` (§4c). Never mark `Verified` when any owned control is RENDER-EMPTY/RENDER-ERROR, any owned screen is VISUAL-FAIL, any declared asset 404ed, or any owned screen drifts from its mockup — those are the exact failure modes these gates exist to stop. A `Done (pre-existing)` REQ whose screens pass the gates stays `Done (pre-existing)` with a `runtime render+visual-confirmed {date}` remark; one that fails any drops to `Needs re-verify`.
+
+**An UNGRADEABLE or UNMEASURED result is not a pass, and it is not a failure either — it is an absence of evidence, and it must be visible as one.** `MOCKUP-UNGRADEABLE`, `NO-MOCKUP`, `ASSETS-UNMEASURED`, `PERF-UNMEASURED` and `⚠ STATIC-ONLY` all behave the same way: the gate is omitted from `gates_run`, no gate record claims it fired, and the REQ is never `Verified` **on that gate's grounds**. It may still reach `Verified` on the gates that *did* run — say which, in the Remark. The one thing you may never do is let silence read as success; that is the defect TF-011 filed as a blocker.
 
 **The perf gate never widens the `Verified` bar for a REQ that never declared a budget.** Most REQs are not perf-gated and must not be treated as if they failed something they were never measured against — `PERF-UNMEASURED` and "no budget declared" are both simply *absent* from the verdict, not a demotion.
 
 **Write the run ledger FIRST (mechanical unlock).** Immediately before recording the first verdict, Write `docs/.last-verify.json` (overwrite the previous run's file; it lives next to the checklist):
 
 ```json
-{"date":"<today YYYY-MM-DD>","app":"{AppName}","scope":"{scope}","booted":"<rung/URL or Appium target>","gates":["acceptance","data-render","visual-truth"],"evidence":"<tests/.artifacts/ path or one-line pointer>"}
+{"date":"<today YYYY-MM-DD>","app":"{AppName}","scope":"{scope}","booted":"<rung/URL or Appium target>","gates":["acceptance","data-render","asset-integrity","visual-truth","mockup-parity"],"evidence":"<tests/.artifacts/ path or one-line pointer>"}
 ```
 
-List in `gates` the gates this run actually applied — add `"performance"` when §4c graded at least one REQ. (`guard-verify.sh` reads only `date`; the array is the human-readable record of what the run did, so an accurate list costs nothing and a padded one is a false audit trail.)
+List in `gates` the gates this run actually applied — add `"performance"` when §4c graded at least one REQ, `"asset-integrity"` when §4a2 graded at least one asset, and `"mockup-parity"` when §4b2 returned `PASS` or `FAIL` on at least one screen. (`guard-verify.sh` reads only `date`; the array is the human-readable record of what the run did, so an accurate list costs nothing and a padded one is a false audit trail.)
 
 The PreToolUse hook `.tfcore/hooks/guard-verify.sh` BLOCKS any checklist write that introduces a `Verified` status without a same-day ledger — this is what makes "only the verifier writes `Verified`" mechanical rather than prose. You may write the ledger ONLY after actually executing §3–§5 above (boot + scoped tests + both gates); writing it without having run them is falsifying the audit record.
 
@@ -313,7 +419,11 @@ Then **write each verdict into the Requirements Status table** of the one checkl
 |---------|--------|---|--------|
 | PASS | `Verified` | 100% | date + test path + `render+visual gate: all controls render and look right` |
 | RENDER-FAIL | `Needs re-verify` | lower to reflect reality | date + `⚠ render gate: {control} renders empty/error on {screen}` + screenshot path |
-| VISUAL-FAIL | `Needs re-verify` | lower to reflect reality | date + `⚠ visual: {control(s)} overlap/clip/off-viewport on {screen} @ {width}` (or `⚠ visual: drifts from mockup`) + screenshot path |
+| ASSET-FAIL | `Needs re-verify` | lower to reflect reality | date + `⚠ assets: {n} declared asset(s) did not arrive on {screen} — {url} → {status}` |
+| VISUAL-FAIL | `Needs re-verify` | lower to reflect reality | date + `⚠ visual: {control(s)} overlap/clip/off-viewport on {screen} @ {width}` + screenshot path |
+| MOCKUP-FAIL | `Needs re-verify` | lower to reflect reality | date + `⚠ mockup-parity: {class} on {element key} @ {width} — {one line}` + the §4b2 run JSON path |
+| MOCKUP-UNGRADEABLE | **`N/A`** if that is the REQ's only evidence, else **unchanged** | keep | date + `mockup-parity: UNGRADEABLE on {screen} — graded 0 content-level comparisons off {n} mockup anchors; add data-testid per anchor_deficit`. **It may never license a `Verified` on design grounds.** |
+| ASSETS-UNMEASURED / ASSETS-UNGRADEABLE | **unchanged** | keep | date + `assets: not graded — {auth wall / no same-origin assets declared}` |
 | PERF-FAIL (slow) | `Needs re-verify` | lower to reflect reality | date + `⚠ perf: p95 {metric} {measured}ms vs budget {budget}ms @ concurrency {n}` + the slowest path from `per_path` |
 | PERF-FAIL (load shed) | `Needs re-verify` | lower to reflect reality | date + `⚠ perf: {failed}/{attempted} requests timed out @ concurrency {n} — budget {budget}ms not servable` + the p95 of the completed subset, labelled as survivors only |
 | PERF-MARGINAL | **unchanged** (may still be `Verified`) | keep | date + `⚠ perf: p95 {metric} {measured}ms vs budget {budget}ms (marginal)` — a warning, never a demotion |
@@ -335,11 +445,13 @@ Read `.tfcore/tasks/_metrics-emit-gate.md` once; it carries the constraints. Sch
 
 For each REQ:
 
-1. **`gate` — the FIRST gate that failed, or `null` on a pass.** This one field produces the whole gate-catch distribution; get it right and everything else is secondary. Execution order is `build` → `acceptance` → `render` → `visual` → `perf` → `standards`. A REQ that failed §4a *and* §4b records `render`, not `visual` — recording the later gate inflates the visual gate's apparent catch rate. Same for `perf`: a REQ that was already `VISUAL-FAIL` records `visual`, even if its p95 also blew the budget.
+1. **`gate` — the FIRST gate that failed, or `null` on a pass.** This one field produces the whole gate-catch distribution; get it right and everything else is secondary. Execution order is `build` → `acceptance` → `render` → **`assets`** → `visual` → **`mockup-parity`** → `perf` → `standards`. A REQ that failed §4a *and* §4b records `render`, not `visual` — recording the later gate inflates the visual gate's apparent catch rate. Same for `perf`: a REQ that was already `VISUAL-FAIL` records `visual`, even if its p95 also blew the budget.
+
+   **`assets` sits before `visual` on purpose**: an asset that never arrived *explains* the visual result rather than being explained by it. A page with no stylesheet is unstyled **because of** the 404, and recording `visual` there credits the gate that merely saw the consequence. **`mockup-parity` sits after `visual`** for the mirror reason — a screen that overlaps or clips is broken on its own terms, before any question of whether it matches a design.
 2. **`attempt` — derive it, never guess it:** `bash .tfcore/utils/tf-emit.sh --next-attempt REQ-UI-004` prints the number. Run it per REQ.
-3. **`gates_run`** — only the gates that actually executed this pass. A `⚠ STATIC-ONLY` head did not run `render` or `visual`; leave them out rather than crediting a gate that never fired. **`perf` belongs here only when a `perf-budget:` existed AND the §4c preconditions held** — a REQ with no budget, a native head, a Debug build, or a `PERF-UNMEASURED` outcome did not run the perf gate, and listing it would silently inflate the gate's measured coverage. This field is the only thing that makes the perf gate's catch rate readable at all (SCHEMA §3.5), so it is worth getting exactly right.
+3. **`gates_run`** — only the gates that actually executed this pass. A `⚠ STATIC-ONLY` head did not run `render` or `visual`; leave them out rather than crediting a gate that never fired. **`assets` belongs here only when §4a2 actually graded at least one asset** — an auth wall (exit 4) or an `"ungradeable": true` payload graded nothing, and listing it would inflate the gate's measured coverage exactly as a padded `perf` would. **`mockup-parity` belongs here only when the screen's verdict was `PASS` or `FAIL`** — never on `UNGRADEABLE` and never on `NO-MOCKUP`, which are absences of evidence (SCHEMA §3.5). **`perf` belongs here only when a `perf-budget:` existed AND the §4c preconditions held** — a REQ with no budget, a native head, a Debug build, or a `PERF-UNMEASURED` outcome did not run the perf gate, and listing it would silently inflate the gate's measured coverage. This field is the only thing that makes the perf gate's catch rate readable at all (SCHEMA §3.5), so it is worth getting exactly right.
 4. **`prior_verdict`** — the Status cell value you just overwrote (`null` if the row is new).
-5. **`failure_class`** — from the closed enum only (`blank-data` · `zero-rows` · `overlap` · `clipped` · `offscreen` · `slow-ttfb` · `slow-load` · `timeout` · `exception` · `assert-fail` · `naming` · `build-error` · `other`). **Never free text** — a description here would leak requirement and client detail. A `perf` gate failure is `slow-ttfb` or `slow-load` depending on which metric the budget named, or `timeout` when the run failed by shedding load rather than by being slow; **never emit the measured milliseconds** — a number is a measurement of this machine on this day and does not belong in an append-only stream that is read across hosts.
+5. **`failure_class`** — from the closed enum only (`blank-data` · `zero-rows` · `overlap` · `clipped` · `offscreen` · `slow-ttfb` · `slow-load` · `timeout` · `exception` · `assert-fail` · `naming` · `build-error` · `missing-asset` · `mockup-drift` · `other`). An `assets` failure is `missing-asset`; a `mockup-parity` failure is `mockup-drift`, whichever of the eight classes drifted — **never the URL and never the element key**, which are file paths and app internals that constraint 7 keeps out of these streams. Both belong in the Remark and the run JSON. **Never free text** — a description here would leak requirement and client detail. A `perf` gate failure is `slow-ttfb` or `slow-load` depending on which metric the budget named, or `timeout` when the run failed by shedding load rather than by being slow; **never emit the measured milliseconds** — a number is a measurement of this machine on this day and does not belong in an append-only stream that is read across hosts.
 6. **`run_id`** — the same value for every REQ in this pass: the timestamp you noted when the verify run started.
 
 ```bash
@@ -352,7 +464,9 @@ cat <<JSON | bash .tfcore/utils/tf-emit.sh gates
 JSON
 ```
 
-Map the §6 verdict table to the record: PASS → `verdict:"Verified"`, `gate:null` · RENDER-FAIL → `"Needs re-verify"`, `gate:"render"` · VISUAL-FAIL → `"Needs re-verify"`, `gate:"visual"` · **PERF-FAIL → `"Needs re-verify"`, `gate:"perf"`, `failure_class:"slow-ttfb"|"slow-load"|"timeout"`** · FAIL → `"FAIL"`, `gate:"acceptance"` (or `"build"` if it never compiled/booted) · library-caused FAIL → `"Blocked"`, `gate` = whatever actually failed · NOT-IMPLEMENTED → `"FAIL"`, `gate:"build"`, `failure_class:"other"` · NOT-OBSERVABLE → **emit nothing**; there was no gate and no verdict, and a fabricated record would poison the distribution.
+Map the §6 verdict table to the record: PASS → `verdict:"Verified"`, `gate:null` · RENDER-FAIL → `"Needs re-verify"`, `gate:"render"` · **ASSET-FAIL → `"Needs re-verify"`, `gate:"assets"`, `failure_class:"missing-asset"`** · VISUAL-FAIL → `"Needs re-verify"`, `gate:"visual"` · **MOCKUP-FAIL → `"Needs re-verify"`, `gate:"mockup-parity"`, `failure_class:"mockup-drift"`** · **PERF-FAIL → `"Needs re-verify"`, `gate:"perf"`, `failure_class:"slow-ttfb"|"slow-load"|"timeout"`** · FAIL → `"FAIL"`, `gate:"acceptance"` (or `"build"` if it never compiled/booted) · library-caused FAIL → `"Blocked"`, `gate` = whatever actually failed · NOT-IMPLEMENTED → `"FAIL"`, `gate:"build"`, `failure_class:"other"` · NOT-OBSERVABLE → **emit nothing**; there was no gate and no verdict, and a fabricated record would poison the distribution.
+
+**`MOCKUP-UNGRADEABLE`, `NO-MOCKUP`, `ASSETS-UNMEASURED` and `ASSETS-UNGRADEABLE` emit no failure and no gate credit.** They are NOT-OBSERVABLE for that gate: leave the gate out of `gates_run` and let the REQ's record reflect whatever the gates that *did* run found. Inventing a pass would be worse than inventing a failure here — it is the exact false green (TF-011) that put eight `Verified` rows on a visibly wrong screen.
 
 **`PERF-MARGINAL` and `PERF-UNMEASURED` are NOT failures and must not be emitted as one.** A marginal REQ that otherwise passed emits an ordinary pass (`gate:null`) with `perf` present in `gates_run` — the warning lives in the checklist Remark, where a human reads it, and not in a stream whose whole purpose is counting what each gate caught. `PERF-UNMEASURED` emits a pass with `perf` **absent** from `gates_run`. Inventing a failure record for a warning would corrupt the one number this gate exists to produce.
 
@@ -437,8 +551,12 @@ Source checklist(s): <path(s)>   |   Requirements graded: N
 - BRD-13 NOT-IMPLEMENTED — <one line>
 
 ## Summary: PASS x / FAIL y / BLOCKED b / NOT-IMPLEMENTED z / NOT-OBSERVABLE w
+## Assets (§4a2): graded a assets over p pages — OK / n did not arrive / UNMEASURED u
+## Mockup-parity (§4b2): PASS p / FAIL f / UNGRADEABLE u / NO-MOCKUP m — c content-level comparisons over s screens
 ## Perf (§4c): graded p of q budget-carrying REQs — PERF-OK a / MARGINAL m / FAIL f / UNMEASURED u
 ```
+
+**The mockup-parity line MUST print the comparison count, and `UNGRADEABLE` / `NO-MOCKUP` must never be folded into `PASS`.** A verdict summary that reads "10 PASS / 2 FAIL / 0 findings" while most of those screens were never really graded is a false statement, and it is one this project has already made once (TF-011). If any screen is `UNGRADEABLE`, name it and quote its `anchor_deficit` so the fix is a mechanical edit to the mockup.
 
 Print the Perf line **only when at least one in-scope REQ declared a `perf-budget:`** — on a project where none do, the gate did not run and a line saying so is noise. When you did skip REQs for a missing budget, name them once: *"REQ-NFR-003, REQ-NFR-007 ask for performance but declare no `perf-budget:` — add one to the BRD to make them gradeable."*
 
@@ -451,7 +569,9 @@ Print the Perf line **only when at least one in-scope REQ declared a `perf-budge
 
 - The user typed one command. You did everything else.
 - Grade only against numbered IDs; never inflate coverage.
-- **A feature is not "done" until its UI renders its data AND looks right.** Behaves-correctly AND renders-its-data (§4a) AND looks-right (§4b) are ALL required for `Verified`. HTTP 200 with a blank table is a FAIL; data-present-but-overlapping/clipped/off-screen is also a FAIL. This is the gap that let "verified" screens be visibly broken.
+- **A feature is not "done" until its UI renders its data, receives its assets, looks right, and matches the design it was built from.** Behaves-correctly AND renders-its-data (§4a) AND got-its-assets (§4a2) AND looks-right (§4b) AND matches-its-mockup (§4b2) are ALL required for `Verified`. HTTP 200 with a blank table is a FAIL; data-present-but-overlapping is a FAIL; a page whose stylesheet 404ed is a FAIL even though it stacks tidily; a status pill flattened to plain text is a FAIL even though it has text.
+- **The gate set measures whether a screen is ALIVE; §4a2 and §4b2 exist because it did not measure whether the screen is RIGHT.** Three defect classes in three days passed every gate and were caught by a human (TfLens TF-007, TF-008, TF-009). All three had the same shape, and it is worth naming because the next one will too: *every gate asserted something true about the screen, and none of them asserted the thing that was wrong.*
+- **A gate that graded nothing reports that it graded nothing.** `UNGRADEABLE`, `NO-MOCKUP`, `ASSETS-UNMEASURED`, `PERF-UNMEASURED` and `⚠ STATIC-ONLY` are one rule wearing five names: **silence is not success.** A verdict that looks cleanest exactly where the gate is blindest is worse than no gate, because it is believed.
 - **Speed is graded only against a budget someone declared** (§4c). The perf gate is the narrowest of the four on purpose: it fires only for a REQ carrying a `perf-budget:`, it warns before it fails, and it refuses to grade a Debug build or a thin sample. A gate that produces false failures teaches the owner to ignore verdicts, which costs more than the defects it would have caught.
 - **`Done (pre-existing)` is an unverified claim, not a pass** — it gets the render sweep like everything else. The first runtime pass either confirms it or flags it.
 - **Close the loop:** the DevGuide is your control map (§0/§4a) and you write your runtime observations back into it (§6b). DevGuide ⇄ Checklist ⇄ Verifier stay in sync; a build phase marking a REQ done → this verifier → updated checklist + DevGuide → repeat.

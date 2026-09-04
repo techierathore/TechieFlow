@@ -1,0 +1,33 @@
+# Runs on every push and every pull request.
+# Two commands, the same two that `npm publish` runs before it uploads anything:
+#   npm run validate       mirror parity, OpenCode references, bash -n on every script, npm pack --dry-run
+#   npm run test:install   the installer against the three shell scripts in a temporary folder
+name: Validate
+
+on: [push, pull_request]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Show the tools the checks depend on
+        run: |
+          node --version
+          npm --version
+          bash --version | head -1
+          python3 --version
+          rsync --version | head -1
+
+      - name: Validate the repository
+        run: npm run validate
+
+      - name: Test the installer against the shell scripts
+        run: npm run test:install

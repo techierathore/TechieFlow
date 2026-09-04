@@ -1,0 +1,60 @@
+{
+  "name": "@techierathore/techieflow",
+  "version": "0.0.0-development",
+  "description": "TechieFlow: a spec-driven development framework for AI coding agents, for Claude Code and OpenCode. One command installs it into any project.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/techierathore/TechieFlow"
+  },
+  "homepage": "https://github.com/techierathore/TechieFlow#readme",
+  "bugs": {
+    "url": "https://github.com/techierathore/TechieFlow/issues"
+  },
+  "keywords": [
+    "techieflow",
+    "claude-code",
+    "opencode",
+    "ai-agents",
+    "spec-driven",
+    "dotnet"
+  ],
+  "type": "module",
+  "bin": {
+    "techieflow": "scripts/install.mjs"
+  },
+  "files": [
+    ".tfcore",
+    "!.tfcore/.session",
+    ".claude/commands",
+    "!.claude/commands/trblazeui.md",
+    "!.claude/commands/techierag.md",
+    ".opencode/plugin",
+    ".opencode/command",
+    "!.opencode/command/trblazeui.md",
+    "!.opencode/command/techierag.md",
+    ".codex/config.toml",
+    ".codex/hooks.json",
+    ".codex/rules",
+    "opencode.jsonc",
+    "WORKFLOW.html",
+    "scripts/install.mjs",
+    "scripts/test-install.mjs",
+    "scripts/validate.mjs",
+    "docs/TechieFlow-Installation.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "validate": "node scripts/validate.mjs",
+    "test:install": "node scripts/test-install.mjs",
+    "pack:check": "npm pack --dry-run",
+    "prepublishOnly": "npm run validate && npm run test:install"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
