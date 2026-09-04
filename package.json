@@ -1,6 +1,6 @@
 {
   "name": "@techierathore/techieflow",
-  "version": "0.0.0-development",
+  "version": "1.0.0-development",
   "description": "TechieFlow: a spec-driven development framework for AI coding agents, for Claude Code and OpenCode. One command installs it into any project.",
   "license": "Apache-2.0",
   "repository": {
