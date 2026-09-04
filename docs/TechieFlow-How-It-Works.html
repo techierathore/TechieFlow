@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TechieFlow — How It Works</title>
+<script>
+/* Resolve the theme BEFORE first paint (no flash). Saved choice wins; otherwise
+   pick by time of day — light 07:00–19:00 local, softened dark at night. */
+(function(){
+  try{
+    var t = localStorage.getItem('tf-theme');
+    if(t!=='light' && t!=='dark'){ var h = new Date().getHours(); t = (h>=7 && h<19) ? 'light' : 'dark'; }
+    document.documentElement.setAttribute('data-theme', t);
+  }catch(e){ document.documentElement.setAttribute('data-theme','light'); }
+})();
+</script>
+<style>
+/* LIGHT is the default theme — a warm off-white, easy on the eyes (never bright white). */
+:root{
+  --bg:#f4f1e9; --panel:#efe9db; --panel2:#e7e0cd; --line:#d8cfb6;
+  --ink:#2e2a22; --muted:#6f6857; --accent:#2f6f9f; --accent2:#3f7d54;
+  --warn:#9a6b15; --danger:#b03a52; --ok:#3f7d54;
+  --code-bg:#ece5d3; --code-ink:#332f26; --row-alt:#eae2cf;
+  --h3:#3a352b; --h4:#2f6f9f; --quote:#4a4537; --cta-bg:#e6eef5;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+/* DARK — softened near-black (warmer / less harsh than pure #0f1115). */
+html[data-theme="dark"]{
+  --bg:#11141a; --panel:#171b23; --panel2:#1e2430; --line:#2b3240;
+  --ink:#dfe3ea; --muted:#99a2b1; --accent:#7cc4ff; --accent2:#a6e3a1;
+  --warn:#f9c74f; --danger:#f38ba8; --ok:#a6e3a1;
+  --code-bg:#0c1016; --code-ink:#d8dde8; --row-alt:#141821;
+  --h3:#cfd5e3; --h4:#7cc4ff; --quote:#cfd5e3; --cta-bg:#0d2030;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:13px;background:var(--code-bg);color:var(--code-ink);padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
+pre{font-family:var(--mono);font-size:12.5px;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto;color:var(--code-ink);position:relative}
+pre code{background:none;border:none;padding:0}
+.copy{position:absolute;top:8px;right:8px;background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:11px;font-family:var(--sans);cursor:pointer}
+.copy:hover{color:var(--accent);border-color:var(--accent)}
+/* floating light/dark toggle (top-right) */
+.theme-toggle{position:fixed;top:12px;right:14px;z-index:10000;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:12.5px;font-family:var(--sans);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.theme-toggle:hover{color:var(--accent);border-color:var(--accent)}
+
+.layout{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+.layout.no-toc{grid-template-columns:1fr}
+nav.side{position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--line);background:var(--panel);padding:18px 14px}
+nav.side h1{font-size:14px;margin:0 0 4px;letter-spacing:.5px;color:var(--ink)}
+nav.side .sub{font-size:11.5px;color:var(--muted);margin-bottom:14px}
+nav.side ol,nav.side ul{list-style:none;padding:0;margin:0}
+nav.side li{font-size:13px;margin:2px 0}
+nav.side li a{display:block;padding:5px 8px;color:var(--ink);border-radius:6px}
+nav.side li a:hover{background:var(--panel2);text-decoration:none}
+nav.side li.h3 a{padding-left:22px;font-size:12.5px;color:var(--h3)}
+nav.side .group{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin:14px 8px 4px}
+
+main{padding:28px 40px 80px;max-width:1100px}
+.layout.no-toc main{margin:0 auto}
+
+h1{font-size:28px;margin:0 0 6px}
+h2{font-size:22px;margin:32px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);scroll-margin-top:16px}
+h3{font-size:17px;margin:22px 0 6px;color:var(--h3);scroll-margin-top:16px}
+h4{font-size:14px;margin:14px 0 4px;color:var(--h4);scroll-margin-top:16px}
+.subtitle{color:var(--muted);font-size:14px;margin-top:-4px;margin-bottom:18px}
+p{margin:6px 0 10px}
+blockquote{border-left:3px solid var(--accent);background:var(--panel);margin:8px 0;padding:8px 14px;color:var(--quote)}
+ul,ol{padding-left:22px}
+li{margin:2px 0}
+
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);color:var(--h3);font-weight:600}
+tr:nth-child(even) td{background:var(--row-alt)}
+
+hr{border:none;border-top:1px solid var(--line);margin:24px 0}
+.anchor-link{color:var(--muted);font-weight:400;font-size:0.85em;margin-left:8px;opacity:0;transition:opacity .15s;text-decoration:none}
+h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
+
+/* inline TOC at top of main content */
+.toc-inline{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 16px;margin:14px 0 24px}
+.toc-inline > div{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.toc-inline ol,.toc-inline ul{margin:4px 0;padding-left:18px}
+.toc-inline li{font-size:13px;margin:1px 0}
+.toc-inline a{color:var(--h3)}
+
+/* mermaid diagram wrapper + toolbar */
+.diagram{position:relative;border:1px solid var(--line);border-radius:8px;background:var(--code-bg);margin:14px 0;overflow:hidden}
+.diagram .mermaid{padding:14px;margin:0;background:transparent;border:none;overflow:auto}
+.diagram .dt{display:flex;gap:6px;justify-content:flex-end;padding:6px 8px;background:var(--row-alt);border-bottom:1px solid var(--line)}
+.diagram .dt button{background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 10px;font-size:12px;font-family:var(--sans);cursor:pointer;min-width:30px}
+.diagram .dt button:hover{color:var(--accent);border-color:var(--accent)}
+.diagram .dt .zlabel{padding:3px 6px;font-size:11px;color:var(--muted);font-family:var(--mono);align-self:center}
+.diagram.fs{position:fixed;inset:0;z-index:9999;border-radius:0;border:none}
+.diagram.fs .mermaid{height:calc(100vh - 40px);display:flex;align-items:center;justify-content:center}
+
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.side{position:static;height:auto}}
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" title="Toggle light / dark">&#9790; Dark</button>
+<div class="layout">
+  <nav class="side">
+    <h1>TechieFlow — How It Works</h1>
+    <div class="sub">Last rendered: 2026-09-04</div>
+    <div class="group">Contents</div>
+    <ol>
+        <li><a href="#overview">1. Overview</a></li>
+        <li><a href="#framework-terms">2. Framework terms</a></li>
+        <li><a href="#the-commands">3. The commands</a></li>
+        <li class="h3"><a href="#command-nesting">3.1 Command nesting</a></li>
+        <li class="h3"><a href="#idea-stage-analyst">3.2 Idea stage — analyst</a></li>
+        <li class="h3"><a href="#day-1-analyst">3.3 Day-1 — analyst</a></li>
+        <li class="h3"><a href="#build-flow-master">3.4 Build — flow-master</a></li>
+        <li class="h3"><a href="#verify-verifier">3.5 Verify — verifier</a></li>
+        <li class="h3"><a href="#change-analyst">3.6 Change — analyst</a></li>
+        <li class="h3"><a href="#bugs-flow-master">3.7 Bugs — flow-master</a></li>
+        <li class="h3"><a href="#ship-flow-master">3.8 Ship — flow-master</a></li>
+        <li class="h3"><a href="#maintenance-flow-master">3.9 Maintenance — flow-master</a></li>
+        <li><a href="#what-surrounds-every-command">4. What surrounds every command</a></li>
+        <li class="h3"><a href="#example-a-document-producing-command-day1-greenfield-techiedesk">4.1 Example: a document-producing command, *day1-greenfield TechieDesk</a></li>
+        <li class="h3"><a href="#example-a-code-producing-command-build-phase-techierag">4.2 Example: a code-producing command, *build-phase TechieRag</a></li>
+        <li><a href="#fixed-instruction-cost-per-command">5. Fixed instruction cost per command</a></li>
+        <li><a href="#telemetry">6. Telemetry</a></li>
+        <li class="h3"><a href="#observed-run-cost-from-the-run-stream">6.1 Observed run cost, from the run stream</a></li>
+        <li class="h3"><a href="#the-five-questions-the-report-answers">6.2 The five questions the report answers</a></li>
+        <li><a href="#instruction-size-and-its-effect">7. Instruction size and its effect</a></li>
+        <li><a href="#defects-and-gaps-found-in-the-session-1-review">8. Defects and gaps found in the Session 1 review</a></li>
+    </ol>
+  </nav>
+  <main>
+    <h1>TechieFlow — How It Works</h1>
+    <div class="subtitle">Rendered 2026-09-04 &middot; source <code>TechieFlow-How-It-Works.md</code></div>
+
+    <div class="toc-inline">
+      <div>Contents</div>
+      <ol>
+        <li><a href="#overview">1. Overview</a></li>
+        <li><a href="#framework-terms">2. Framework terms</a></li>
+        <li><a href="#the-commands">3. The commands</a></li>
+        <li class="h3"><a href="#command-nesting">3.1 Command nesting</a></li>
+        <li class="h3"><a href="#idea-stage-analyst">3.2 Idea stage — analyst</a></li>
+        <li class="h3"><a href="#day-1-analyst">3.3 Day-1 — analyst</a></li>
+        <li class="h3"><a href="#build-flow-master">3.4 Build — flow-master</a></li>
+        <li class="h3"><a href="#verify-verifier">3.5 Verify — verifier</a></li>
+        <li class="h3"><a href="#change-analyst">3.6 Change — analyst</a></li>
+        <li class="h3"><a href="#bugs-flow-master">3.7 Bugs — flow-master</a></li>
+        <li class="h3"><a href="#ship-flow-master">3.8 Ship — flow-master</a></li>
+        <li class="h3"><a href="#maintenance-flow-master">3.9 Maintenance — flow-master</a></li>
+        <li><a href="#what-surrounds-every-command">4. What surrounds every command</a></li>
+        <li class="h3"><a href="#example-a-document-producing-command-day1-greenfield-techiedesk">4.1 Example: a document-producing command, *day1-greenfield TechieDesk</a></li>
+        <li class="h3"><a href="#example-a-code-producing-command-build-phase-techierag">4.2 Example: a code-producing command, *build-phase TechieRag</a></li>
+        <li><a href="#fixed-instruction-cost-per-command">5. Fixed instruction cost per command</a></li>
+        <li><a href="#telemetry">6. Telemetry</a></li>
+        <li class="h3"><a href="#observed-run-cost-from-the-run-stream">6.1 Observed run cost, from the run stream</a></li>
+        <li class="h3"><a href="#the-five-questions-the-report-answers">6.2 The five questions the report answers</a></li>
+        <li><a href="#instruction-size-and-its-effect">7. Instruction size and its effect</a></li>
+        <li><a href="#defects-and-gaps-found-in-the-session-1-review">8. Defects and gaps found in the Session 1 review</a></li>
+      </ol>
+    </div>
+<table>
+<thead><tr><th></th><th></th></tr></thead>
+<tbody>
+<tr><td>Purpose</td><td>Describe what the framework is, what each command does, what surrounds every command, what each command costs, what the telemetry measures, and where the current design falls short.</td></tr>
+<tr><td>Audience</td><td>The framework owner, contributors, and anyone evaluating the framework. No prior knowledge of AI coding harnesses is assumed.</td></tr>
+<tr><td>Status</td><td>Reviewed with the owner in Session 1 of the reset (2026-09-04). Section 8 lists the defects found during that review; they feed the framework requirements written in Session 2.</td></tr>
+<tr><td>Companion</td><td><code>TechieFlow-Reset-Plan-2026-09-04.md</code></td></tr>
+</tbody>
+</table>
+<hr>
+<h2 id="overview">1. Overview<a class="anchor-link" href="#overview">#</a></h2>
+<p>TechieFlow is a software development harness companion. It enables one person with domain knowledge of a product to take that product through the complete software development life cycle, with AI agents performing the work and the person acting as manager and reviewer of every output.</p>
+<p>The framework covers every phase. An idea is brainstormed with the analyst persona and condensed into a project brief. From the brief the framework produces the requirements document, the architecture, and the screen designs, and converts the requirements into a checklist of numbered items. The build command implements the checklist. A separate verify command starts the application, drives it with a browser robot, and marks each item passed or failed. Bugs found by a person are logged by one command and fixed by another. Developer and end-user guides are generated from the running application. Every command ends by rewriting a single status file, so the state of a project is always known.</p>
+<p>Alongside the work, the framework measures the work. Every command records the model used, the elapsed time, and the tokens consumed. Every verification records which check caught which failure. Every miss records its kind, the phase that let it through, who found it, and the cost of the fix. Over time this shows which model suits which kind of work, which is the basis for model routing, and it yields figures on AI-assisted development that have not been published elsewhere.</p>
+<p>The framework runs in two harnesses, Claude Code and OpenCode, and must work identically in both.</p>
+<hr>
+<h2 id="framework-terms">2. Framework terms<a class="anchor-link" href="#framework-terms">#</a></h2>
+<table>
+<thead><tr><th>Term</th><th>Meaning in TechieFlow</th><th>Software development equivalent</th></tr></thead>
+<tbody>
+<tr><td><strong>Harness</strong></td><td>The tool that runs the AI agent and gives it access to the files and the shell: Claude Code or OpenCode.</td><td>The IDE or CI runner that executes the work.</td></tr>
+<tr><td><strong>Persona (agent)</strong></td><td>A markdown file defining who the agent is for a job and which commands it accepts. Four exist: analyst, architect, flow-master, verifier.</td><td>A role definition with a fixed set of responsibilities.</td></tr>
+<tr><td><strong>Command</strong></td><td>An instruction typed to a persona, prefixed with <code>*</code>, such as <code>*build-phase TechieRag</code>. Each command maps to one task file.</td><td>A CLI sub-command.</td></tr>
+<tr><td><strong>Task</strong></td><td>A markdown file holding the step-by-step procedure for one command. The agent reads it and follows it.</td><td>A runbook, or a script written in prose.</td></tr>
+<tr><td><strong>Template</strong></td><td>The blueprint for one document: a skeleton with placeholders and guidance for each section. The agent fills it to produce the BRD, the Architecture, and the other documents. Sixteen exist under <code>.tfcore/templates/v4custom/</code>. At present the guidance is loose prose, so a generated document may add, skip, or over-fill sections without anything stopping it. Session 3 of the reset gives each template a strict structure (required sections in order, size limits, row rules) and a script that rejects a document that breaks it.</td><td>A document template plus a validator.</td></tr>
+<tr><td><strong>Hook</strong></td><td>A small script the harness runs automatically before or after an agent action, with power to block it. Eight exist. Example: every <code>git</code> command is blocked.</td><td>A pre-commit hook or a CI policy check. Runs regardless of the agent's intent.</td></tr>
+<tr><td><strong>Utility script</strong></td><td>A shell or Python script the agent runs instead of doing a step by hand, such as the HTML renderer or the telemetry writer. Seventeen exist under <code>.tfcore/utils/</code>.</td><td>A build tool or CLI utility.</td></tr>
+<tr><td><strong><code>.tfcore/</code></strong></td><td>The framework's folder inside each project. Hidden, ignored by git, refreshed by <code>update-framework.sh</code>. Holds personas, tasks, templates, hooks, scripts. Never edited inside a project.</td><td>The installed copy of a library.</td></tr>
+<tr><td><strong>Harness mirror</strong></td><td>Claude Code discovers commands only under <code>.claude/commands/</code>, so every persona and task is copied there byte for byte. OpenCode instead reads file paths from <code>opencode.jsonc</code>. Both must stay in step with <code>.tfcore/</code>.</td><td>Two build configurations pointing at one source tree.</td></tr>
+<tr><td><strong><code>core-config.yaml</code></strong></td><td>Per-project settings: application name, which documents the agents always load.</td><td>The project's configuration file.</td></tr>
+<tr><td><strong>Checklist</strong></td><td><code>docs/&lt;App&gt;-Checklist.md</code>. One table, one row per numbered requirement, with a status column. The single source of truth for what is done. Never rendered to HTML.</td><td>The work-item board.</td></tr>
+<tr><td><strong>Status gate</strong></td><td>The rule that every command ends by rewriting <code>PROJECT-STATUS.md</code> in a fixed shape. A hook rejects a malformed write.</td><td>A mandatory end-of-job report.</td></tr>
+<tr><td><strong>YOLO mode</strong></td><td>Run to completion with no questions and all permissions except git writes. Set by a flag file with a 24-hour expiry. The owner's preferred mode for most commands.</td><td>An unattended batch run.</td></tr>
+<tr><td><strong>Model routing</strong></td><td>A YAML file mapping each command to a cost tier (frontier, standard, economy) and each tier to a model per harness. Currently disabled.</td><td>Selecting machine size per pipeline stage.</td></tr>
+<tr><td><strong>Telemetry streams</strong></td><td>The measurement system. Five files under <code>docs/metrics/</code>, one line appended per event, never edited: command runs (command, model, time, tokens), verification verdicts (first check that failed), misses (kind, phase, finder, fix cost), chat sessions (tokens in and out), and the owner's git commits. A report reads them into five figures; see section 6.</td><td>An append-only event log with a reporting query.</td></tr>
+</tbody>
+</table>
+<hr>
+<h2 id="the-commands">3. The commands<a class="anchor-link" href="#the-commands">#</a></h2>
+<h3 id="command-nesting">3.1 Command nesting<a class="anchor-link" href="#command-nesting">#</a></h3>
+<p>Several commands call others. The diagram shows which command invokes which, in life-cycle order. Solid arrows are automatic calls; dashed arrows are calls the owner makes.</p>
+<div class="diagram">
+  <div class="dt">
+    <button data-zout title="Zoom out">&minus;</button>
+    <span class="zlabel">100%</span>
+    <button data-zin title="Zoom in">+</button>
+    <button data-fit title="Fit to width">Fit</button>
+    <button data-one title="Actual size">1:1</button>
+    <button data-fs title="Fullscreen">&#9166;</button>
+    <button data-pop title="Open in new tab">&#8599;</button>
+  </div>
+  <pre class="mermaid">flowchart LR
+    subgraph Idea
+        BS["*brainstorm"] --&gt; PB["*create-project-brief"]
+    end
+    subgraph Day1["Day-1"]
+        PB -.-&gt; D1G["*day1-greenfield"]
+        PB -.-&gt; D1B["*day1-brownfield"]
+        D1G --&gt; MK["*mockups"]
+        D1G --&gt; SB["*split-brd"]
+        D1B --&gt; DG1["*devguide"]
+        D1B --&gt; SB
+    end
+    subgraph Build
+        SB -.-&gt; BP["*build-phase"]
+        BP --&gt; TB["/trblazeui sub-agent"]
+        BP --&gt; TR["/techierag sub-agent"]
+        BP --&gt; VP["*verify"]
+    end
+    subgraph Change
+        AD["*amend-docs"] --&gt; MK2["*mockups --update"]
+        AD --&gt; SB
+    end
+    subgraph Bugs
+        TI["*triage-issues"] -.-&gt; FI["*fix-issues"]
+        FI --&gt; VP
+        LM["*log-miss"]
+    end
+    subgraph Ship
+        VP -.-&gt; HO["*handoff-phase"]
+        HO --&gt; DG2["*devguide"]
+        HO --&gt; RH["render HTML"]
+    end
+    RS["*refresh-status"] -.-&gt; VP</pre>
+</div>
+<h3 id="idea-stage-analyst">3.2 Idea stage — analyst<a class="anchor-link" href="#idea-stage-analyst">#</a></h3>
+<table>
+<thead><tr><th>Command</th><th>Reads</th><th>Writes</th><th>Template</th><th>Owner usage</th></tr></thead>
+<tbody>
+<tr><td><code>*brainstorm {topic}</code></td><td>The owner's idea, the brainstorming techniques catalogue</td><td><code>docs/brainstorming-session-results.md</code></td><td><code>brainstorming-output-tmpl.yaml</code></td><td>Used regularly, usually followed by the project brief in the same session.</td></tr>
+<tr><td><code>*create-project-brief</code></td><td>The brainstorm results</td><td>A one-page brief: product, users, must-do, out of scope</td><td><code>project-brief-tmpl.yaml</code></td><td>Used regularly. The brief is the input to day-1.</td></tr>
+<tr><td><code>*create-competitor-analysis</code></td><td>Owner input</td><td>Competitor analysis document</td><td><code>competitor-analysis-tmpl.yaml</code></td><td>Never used. Retained.</td></tr>
+<tr><td><code>*perform-market-research</code></td><td>Owner input</td><td>Market research document</td><td><code>market-research-tmpl.yaml</code></td><td>Never used. Retained.</td></tr>
+<tr><td><code>*research-prompt {topic}</code></td><td>Owner input</td><td>A prompt for an external deep-research tool</td><td>none</td><td>Never used; the owner researches on the web directly. Retained for trial.</td></tr>
+<tr><td><code>*create-brd {App} {topic}</code></td><td>Existing BRD</td><td>New numbered <code>BRD-N</code> items, each confirmed one at a time</td><td>none</td><td>Not used. Day-1 and <code>*amend-docs</code> cover the need.</td></tr>
+</tbody>
+</table>
+<h3 id="day-1-analyst">3.3 Day-1 — analyst<a class="anchor-link" href="#day-1-analyst">#</a></h3>
+<p><strong><code>*day1-greenfield {App}</code></strong>: the starting command for a product with no code.</p>
+<ul>
+<li>Reads: the project brief or concept text, any hint documents, the TrBlazeUI component catalogue.
+</li>
+<li>Writes: BRD, Architecture, Coding Standards, <code>.editorconfig</code>, PROJECT-STATUS, CLAUDE.md, AGENTS.md, UsageGuide. Calls <code>*mockups</code>, then <code>*split-brd</code>. Renders every human document to HTML.
+</li>
+<li>Templates: <code>app-brd</code>, <code>app-architecture</code>, <code>app-usageguide</code>, <code>app-project-status</code>, <code>app-claude-md</code>, <code>app-agents-md</code>, <code>app-editorconfig</code>, <code>build-invocation-ladder</code>.
+</li>
+<li>Owner input requested: application name and concept only.
+</li>
+<li><strong>Defects found in review (see §8):</strong> D-1, D-2, D-3, D-4.
+</li>
+</ul>
+<p><strong><code>*day1-brownfield {App}</code></strong>: the starting command for a product that already has code.</p>
+<ul>
+<li>Reads: the whole source tree, any existing plan or specification documents.
+</li>
+<li>Writes: the same set as greenfield, plus the DevGuide (screen-by-screen code map with screenshots) generated from the running application. Migrates an existing development plan into the checklist. Calls <code>*split-brd</code>.
+</li>
+<li>Templates: as greenfield, plus <code>app-devguide</code>.
+</li>
+<li><strong>Defects found in review:</strong> D-5.
+</li>
+</ul>
+<p><strong><code>*mockups {App} [--update]</code></strong></p>
+<ul>
+<li>Reads: BRD, Architecture, the TrBlazeUI component catalogue.
+</li>
+<li>Writes: <code>docs/&lt;App&gt;-UIDesign.md</code> (one section per screen mapping each region to a TrBlazeUI control) and <code>docs/mockups/*.html</code> (one HTML picture per screen). The build implements from these; the verifier compares built screens to them.
+</li>
+<li>Template: <code>app-uidesign</code>.
+</li>
+<li>Currently described as greenfield-only. <strong>Defect:</strong> D-5.
+</li>
+</ul>
+<p><strong><code>*split-brd {App}</code></strong></p>
+<ul>
+<li>Reads: BRD (<code>BRD-N</code> items), Architecture, UIDesign.
+</li>
+<li>Writes: <code>docs/&lt;App&gt;-Checklist.md</code>. Each BRD item becomes one or more rows numbered <code>REQ-UI-</code>, <code>REQ-FN-</code>, <code>REQ-NFR-</code>, <code>REQ-RAG-</code>. The prefix routes the work: UI rows to the TrBlazeUI sub-agent, RAG rows to the TechieRag sub-agent, FN and NFR rows to flow-master. Each row carries an acceptance line, which is what the verifier tests.
+</li>
+<li>Template: <code>app-checklist</code>.
+</li>
+<li>Owner usage: never run by hand; expected to be called automatically after the BRD is approved. <strong>Defect:</strong> D-6.
+</li>
+</ul>
+<h3 id="build-flow-master">3.4 Build — flow-master<a class="anchor-link" href="#build-flow-master">#</a></h3>
+<p><strong><code>*build-phase {App}</code></strong></p>
+<ul>
+<li>Reads: checklist, Architecture, Coding Standards, UIDesign and mockups, build invocation ladder.
+</li>
+<li>Does: clusters all open rows, builds each cluster (<code>/trblazeui</code> for UI rows, <code>/techierag</code> for RAG rows, its own sub-agents for the rest), starts the application, smoke-tests each changed screen (data present, nothing overlapping), then calls the verifier.
+</li>
+<li>Writes: source code; checklist status up to <code>Implemented</code> (a hook blocks <code>Verified</code>); library feedback files when TrBlazeUI or TechieRag lacks something; PROJECT-STATUS; one telemetry line.
+</li>
+<li>Templates: <code>app-library-feedback</code>, <code>build-invocation-ladder</code>.
+</li>
+<li><strong>Defect:</strong> D-7 (DevGuide not produced on completion).
+</li>
+</ul>
+<h3 id="verify-verifier">3.5 Verify — verifier<a class="anchor-link" href="#verify-verifier">#</a></h3>
+<p><strong><code>*verify {ui | functional | all | REQ-list}</code></strong></p>
+<ul>
+<li>Reads: checklist rows in scope, DevGuide (which controls each screen must show), mockups.
+</li>
+<li>Does: starts the application, runs Playwright browser tests and <code>dotnet test</code>, and applies seven checks to each requirement in order: build, acceptance test, data present, visual correctness against the mockup, assets loaded, speed within a declared budget, coding standards. The first failing check is recorded.
+</li>
+<li>Writes: checklist status (<code>Verified</code>, or <code>Needs re-verify</code> with a remark); <code>docs/.last-verify.json</code>, the proof that a real verify ran; one <code>gates.jsonl</code> line per requirement.
+</li>
+<li>Scripts: <code>tf-assets.sh</code>, <code>tf-mockup-parity.sh</code>, <code>tf-perf.sh</code>.
+</li>
+<li><strong>Defect:</strong> D-8 (task size).
+</li>
+</ul>
+<h3 id="change-analyst">3.6 Change — analyst<a class="anchor-link" href="#change-analyst">#</a></h3>
+<p><strong><code>*amend-docs {App} {change}</code></strong></p>
+<ul>
+<li>Reads: BRD, Architecture, checklist, UIDesign.
+</li>
+<li>Does: edits BRD and Architecture in place, appends new <code>BRD-N</code> items, ripples new rows into the checklist, and calls <code>*mockups --update</code> when the change adds or alters a screen. Re-renders HTML.
+</li>
+<li>Owner usage: used for every mid-project change, for example adding the phase-effort report screen to TfLens.
+</li>
+<li><strong>Defect:</strong> D-9 (the mockup step was undocumented in the previous version of this file).
+</li>
+</ul>
+<h3 id="bugs-flow-master">3.7 Bugs — flow-master<a class="anchor-link" href="#bugs-flow-master">#</a></h3>
+<p><strong><code>*triage-issues {App} {evidence} [verify]</code></strong>: analysis only. Takes screenshots and/or a written bug list, reproduces each bug, logs it against its requirement, demotes the row to <code>Needs re-verify</code>, adds rows for unspecified defects, and names the <code>*fix-issues</code> command to run next. Never edits code. Its telemetry line is marked <code>escaped</code>.</p>
+<p><strong><code>*fix-issues {App} {folder}</code></strong>: takes a folder of screenshots and an optional notes file, reproduces each bug, fixes the code (UI via the TrBlazeUI sub-agent), re-smokes, re-verifies the touched rows, updates the documents.</p>
+<p><strong><code>*log-miss {App} "description"</code></strong>: the twenty-second record. Writes one miss line classifying the miss and a remark on the checklist row. No reproduction, no code. <strong>Defect:</strong> D-10 (the record stores categories only, not the description).</p>
+<h3 id="ship-flow-master">3.8 Ship — flow-master<a class="anchor-link" href="#ship-flow-master">#</a></h3>
+<p><strong><code>*handoff-phase {App}</code></strong>: run once when the checklist is green, before owner testing. Finalises the UsageGuide (test users, screen-by-screen test plan), generates or refreshes the DevGuide, consolidates library feedback, re-renders HTML, sets status to Handoff.</p>
+<p><strong><code>*devguide {App} [--update]</code></strong>: the developer's low-level document. Every screen traced from page to control to service to data access, with a screenshot. Re-runnable for changed screens only. Generated automatically at brownfield day-1 and at handoff. <strong>Defect:</strong> D-7.</p>
+<p><strong><code>*productguide {App}</code></strong>: the end-user manual, screenshot-illustrated, task by task. On demand. Owner usage: not yet used.</p>
+<h3 id="maintenance-flow-master">3.9 Maintenance — flow-master<a class="anchor-link" href="#maintenance-flow-master">#</a></h3>
+<p><strong><code>*refresh-status {App}</code></strong>: rebuilds PROJECT-STATUS from evidence (checklist table, file modification times, a fresh build) after an interrupted run. Never reads git. Owner usage: after brownfield onboarding of older projects.</p>
+<p><strong><code>*metrics {App}</code></strong>: reads the five telemetry files and writes <code>docs/metrics/METRICS.md</code> and <code>.html</code>. Owner usage: recent, regular.</p>
+<p><strong><code>*generate-html</code>, <code>*render-workflow-docs</code></strong>: render markdown to styled HTML through <code>tf-render-html.sh</code>. The checklist is never rendered.</p>
+<hr>
+<h2 id="what-surrounds-every-command">4. What surrounds every command<a class="anchor-link" href="#what-surrounds-every-command">#</a></h2>
+<p>Every command is wrapped by the same three mechanisms: shared rules read before the work, hooks watching during the work, and the status gate closing the work.</p>
+<div class="diagram">
+  <div class="dt">
+    <button data-zout title="Zoom out">&minus;</button>
+    <span class="zlabel">100%</span>
+    <button data-zin title="Zoom in">+</button>
+    <button data-fit title="Fit to width">Fit</button>
+    <button data-one title="Actual size">1:1</button>
+    <button data-fs title="Fullscreen">&#9166;</button>
+    <button data-pop title="Open in new tab">&#8599;</button>
+  </div>
+  <pre class="mermaid">flowchart TD
+    A["Command typed"] --&gt; B["Persona file loads"]
+    B --&gt; C["Shared rules load&lt;br/&gt;status gate · smoke-test policy · telemetry rule"]
+    C --&gt; D["Task file loads"]
+    D --&gt; E["The work&lt;br/&gt;read documents · write code or documents · run the application · test"]
+    E --&gt; H{"Hook check&lt;br/&gt;on every file write&lt;br/&gt;and shell command"}
+    H --&gt;|"allowed"| E
+    H --&gt;|"refused, reason printed"| E
+    H --- N["Always refused:&lt;br/&gt;git · writing Verified without a verify run ·&lt;br/&gt;malformed PROJECT-STATUS · test output outside tests/.artifacts"]
+    E --&gt; F["Status gate&lt;br/&gt;PROJECT-STATUS rewritten · HTML re-rendered"]
+    F --&gt; G["Telemetry&lt;br/&gt;one line appended to runs.jsonl"]
+    G --&gt; Z["Next command printed"]</pre>
+</div>
+<h3 id="example-a-document-producing-command-day1-greenfield-techiedesk">4.1 Example: a document-producing command, <code>*day1-greenfield TechieDesk</code><a class="anchor-link" href="#example-a-document-producing-command-day1-greenfield-techiedesk">#</a></h3>
+<ol>
+<li>The owner types the command to the analyst persona inside the TechieDesk project, with the project brief as input.
+</li>
+<li>The analyst persona file loads: its identity, its commands, and its standing rules (BRD items are numbered and never renumbered; git is never run).
+</li>
+<li>The three shared rule files load: how every command ends, how to smoke-test, how to record telemetry.
+</li>
+<li>The day1-greenfield task file loads: the procedure for producing every day-1 document.
+</li>
+<li>The agent reads the brief and the TrBlazeUI component catalogue. It drafts the BRD from the BRD template, section by section, numbering each requirement. It drafts the Architecture from its template. It writes the Coding Standards, <code>.editorconfig</code>, CLAUDE.md, AGENTS.md, and the UsageGuide skeleton.
+</li>
+<li>Every file write passes through the hooks. Writes to <code>docs/</code> are allowed. A write to PROJECT-STATUS that does not match the template shape is refused.
+</li>
+<li>The task calls <code>*mockups</code>. The agent produces the UIDesign document and one HTML mockup per screen.
+</li>
+<li>The task calls <code>*split-brd</code>. The agent produces the checklist, one row per requirement, with an acceptance line each.
+</li>
+<li>The status gate runs: PROJECT-STATUS is written in template shape with the next command set to <code>*build-phase TechieDesk</code>; every human document is rendered to HTML by script.
+</li>
+<li>One telemetry line is appended: day1-greenfield, TechieDesk, model, start, end, tokens.
+</li>
+<li>The next command is printed.
+</li>
+</ol>
+<p>In YOLO mode steps 1 to 11 run without a pause. Outside YOLO mode the task pauses for review after step 5, and the owner reports that in practice the run frequently stops there and the mockups of step 7 are not produced (defect D-1).</p>
+<h3 id="example-a-code-producing-command-build-phase-techierag">4.2 Example: a code-producing command, <code>*build-phase TechieRag</code><a class="anchor-link" href="#example-a-code-producing-command-build-phase-techierag">#</a></h3>
+<ol>
+<li>The owner types the command to the flow-master persona inside the TechieRag repository.
+</li>
+<li>The flow-master persona file loads: identity, commands, standing rules (never run git, never write <code>Verified</code>, start the application yourself).
+</li>
+<li>The three shared rule files load.
+</li>
+<li>The build-phase task file loads: read the checklist, cluster the open rows, build each cluster, smoke-test, call the verifier.
+</li>
+<li>The agent reads the checklist, the Architecture, the Coding Standards, the UIDesign and mockups. It groups the open rows into clusters and starts sub-agents: <code>/trblazeui</code> for UI rows with the mockups as their contract, <code>/techierag</code> for RAG rows, its own builders for the rest.
+</li>
+<li>Every file write and shell command passes through the hooks. A <code>git commit</code> is refused with a printed reason. A <code>Verified</code> written into the checklist is refused. Test output written outside <code>tests/.artifacts/</code> is refused.
+</li>
+<li>When the code is written, the agent builds the solution using the build invocation ladder, starts the application, opens each changed screen in a headless browser, and checks that data is shown and nothing overlaps.
+</li>
+<li>The agent calls <code>*verify</code>. The verifier runs its seven checks and writes verdicts into the checklist and one <code>gates.jsonl</code> line per requirement.
+</li>
+<li>The status gate runs: PROJECT-STATUS rewritten, HTML re-rendered.
+</li>
+<li>One telemetry line is appended: build-phase, TechieRag, model, start, end, tokens, sub-agent count.
+</li>
+<li>The next command is printed.
+</li>
+</ol>
+<p>If the run dies during step 5 to 8, steps 9 to 11 never happen and PROJECT-STATUS is stale. <code>*refresh-status TechieRag</code> rebuilds it from the checklist and the files on disk.</p>
+<p>Steps 2 to 4 are reading only. In the current framework they total more than 20,000 words before step 5 begins. Section 7 describes the effect.</p>
+<hr>
+<h2 id="fixed-instruction-cost-per-command">5. Fixed instruction cost per command<a class="anchor-link" href="#fixed-instruction-cost-per-command">#</a></h2>
+<p>Every command carries a fixed cost before it does any work: the instruction text the agent must read. That text is the same on every run and is independent of the project. It has four parts: the persona file, the shared rule files the task includes, the task file itself, and the templates the task reads. When a task calls another task, the called task's text is read as well.</p>
+<p>The table gives the fixed cost of each command as measured on 2026-09-04. Word counts are exact; token estimates use 1.35 tokens per word, which is typical for English technical prose. "At start" is what is read before the first useful step. "When chaining" adds the tasks the command calls. The review verdict is the framework maintainer's assessment for Session 4, subject to the owner's decision.</p>
+<table>
+<thead><tr><th>Command</th><th>Task (words)</th><th>Persona</th><th>Shared rules</th><th>Templates</th><th>At start (words → tokens)</th><th>Calls</th><th>When chaining (words)</th><th>Review verdict</th></tr></thead>
+<tbody>
+<tr><td><code>*day1-brownfield</code></td><td>7,287</td><td>analyst 1,241</td><td>7,737</td><td>10,980</td><td>27,245 → ~36,800</td><td>devguide, split-brd, generate-html</td><td>35,136</td><td>Trim hard. Duplicates day1-greenfield; share one day-1 core.</td></tr>
+<tr><td><code>*day1-greenfield</code></td><td>3,377</td><td>analyst 1,241</td><td>5,028</td><td>10,980</td><td>20,626 → ~27,800</td><td>mockups, split-brd, day1-brownfield, generate-html</td><td>32,232</td><td>Restructure into two stages (D-1). Template load of 10,980 words is the largest single item; Session 3 schemas cut it.</td></tr>
+<tr><td><code>*build-phase</code></td><td>4,412</td><td>flow-master 3,564</td><td>9,280</td><td>3,052</td><td>20,308 → ~27,400</td><td>verify-phase</td><td>32,158</td><td>Keep. Trim. Loads all four shared files.</td></tr>
+<tr><td><code>*fix-issues</code></td><td>1,789</td><td>flow-master 3,564</td><td>7,737</td><td>0</td><td>13,090 → ~17,700</td><td>triage-issues, build-phase, verify-phase</td><td>31,406</td><td>Keep. Combine with triage into one flow (D-16).</td></tr>
+<tr><td><code>*refresh-status</code></td><td>2,388</td><td>flow-master 3,564</td><td>4,904</td><td>6,539</td><td>17,395 → ~23,500</td><td>verify-phase, generate-html</td><td>30,729</td><td>Keep. Trim; a status rebuild does not need 17,000 words.</td></tr>
+<tr><td><code>*devguide</code></td><td>5,274</td><td>flow-master 3,564</td><td>5,028</td><td>1,853</td><td>15,719 → ~21,200</td><td>verify-phase, generate-html</td><td>29,053</td><td>Keep. Trim.</td></tr>
+<tr><td><code>*triage-issues</code></td><td>2,054</td><td>flow-master 3,564</td><td>7,737</td><td>0</td><td>13,355 → ~18,000</td><td>verify-phase</td><td>25,205</td><td>Keep. Combine with fix (D-16).</td></tr>
+<tr><td><code>*verify</code></td><td>11,850</td><td>verifier 1,220</td><td>7,737</td><td>0</td><td>20,807 → ~28,100</td><td>generate-html</td><td>24,635</td><td>Keep. Shrink to one third plus scripts (D-8). Largest task file.</td></tr>
+<tr><td><code>*productguide</code></td><td>1,448</td><td>flow-master 3,564</td><td>5,028</td><td>364</td><td>10,404 → ~14,000</td><td>verify-phase, generate-html</td><td>23,738</td><td>Keep. Unused so far.</td></tr>
+<tr><td><code>*mockups</code></td><td>1,702</td><td>analyst 1,241</td><td>2,195</td><td>466</td><td>5,604 → ~7,600</td><td>verify-phase, generate-html</td><td>18,938</td><td>Keep. Move inside day-1 stage 1; apply to brownfield (D-2, D-5).</td></tr>
+<tr><td><code>*handoff-phase</code></td><td>1,592</td><td>flow-master 3,564</td><td>4,904</td><td>702</td><td>10,762 → ~14,500</td><td>devguide, generate-html</td><td>17,520</td><td>Keep.</td></tr>
+<tr><td><code>*metrics</code></td><td>2,147</td><td>flow-master 3,564</td><td>2,195</td><td>5,064</td><td>12,970 → ~17,500</td><td>generate-html</td><td>14,454</td><td>Keep. The report template alone is 5,064 words; trim.</td></tr>
+<tr><td><code>*amend-docs</code></td><td>1,790</td><td>analyst 1,241</td><td>4,904</td><td>3,008</td><td>10,943 → ~14,800</td><td>author-brd, generate-html, mockups</td><td>13,052</td><td>Keep.</td></tr>
+<tr><td><code>*render-workflow-docs</code></td><td>1,341</td><td>flow-master 3,564</td><td>2,709</td><td>3,008</td><td>10,622 → ~14,300</td><td>none</td><td>10,622</td><td>Merge with generate-html; both call the same script.</td></tr>
+<tr><td><code>*log-miss</code></td><td>1,830</td><td>flow-master 3,564</td><td>4,904</td><td>0</td><td>10,298 → ~13,900</td><td>none</td><td>10,298</td><td>Keep. Trim; 10,000 words of reading for a twenty-second command. Call automatically (D-15).</td></tr>
+<tr><td><code>*generate-html</code></td><td>1,484</td><td>flow-master 3,564</td><td>0</td><td>3,008</td><td>8,056 → ~10,900</td><td>none</td><td>8,056</td><td>Merge with render-workflow-docs. The 3,008-word HTML shell is a script asset, not reading.</td></tr>
+<tr><td><code>*split-brd</code></td><td>1,133</td><td>analyst 1,241</td><td>4,904</td><td>702</td><td>7,980 → ~10,800</td><td>none</td><td>7,980</td><td>Keep. Run automatically after BRD approval (D-6).</td></tr>
+<tr><td><code>*brainstorm</code></td><td>672</td><td>analyst 1,241</td><td>0</td><td>0</td><td>1,913 → ~2,600</td><td>none</td><td>1,913</td><td>Keep.</td></tr>
+<tr><td><code>*create-brd</code> (author-brd)</td><td>625</td><td>analyst 1,241</td><td>0</td><td>1,361</td><td>3,227 → ~4,400</td><td>none</td><td>3,227</td><td>Unused. <strong>Remove</strong> (owner decision 2026-09-04).</td></tr>
+<tr><td><code>*research-prompt</code></td><td>1,001</td><td>analyst 1,241</td><td>0</td><td>0</td><td>2,242 → ~3,000</td><td>none</td><td>2,242</td><td>Retained for trial.</td></tr>
+<tr><td><code>*elicit</code> (advanced-elicitation)</td><td>616</td><td>analyst 1,241</td><td>0</td><td>0</td><td>1,857 → ~2,500</td><td>none</td><td>1,857</td><td>Inherited from BMAD. <strong>Remove</strong> (owner decision 2026-09-04).</td></tr>
+<tr><td><code>create-doc</code> (used by brief, competitor, market)</td><td>546</td><td>analyst 1,241</td><td>0</td><td>0</td><td>1,787 → ~2,400</td><td>none</td><td>1,787</td><td>Keep; three retained commands depend on it.</td></tr>
+<tr><td><code>document-project</code></td><td>1,883</td><td>architect 817</td><td>0</td><td>0</td><td>2,700 → ~3,600</td><td>none</td><td>2,700</td><td>Inherited from BMAD. Overlaps day1-brownfield. <strong>Remove</strong> (owner decision 2026-09-04).</td></tr>
+<tr><td><code>index-docs</code>, <code>shard-doc</code>, <code>execute-checklist</code>, <code>kb-mode-interaction</code></td><td>415 to 827 each</td><td>flow-master or architect</td><td>0</td><td>0</td><td>1,400 to 4,400 each</td><td>none</td><td></td><td>Inherited from BMAD. Not in the owner's usage. <strong>Remove</strong> (owner decision 2026-09-04).</td></tr>
+</tbody>
+</table>
+<p>The shared rule files, which are the second-largest item in most rows:</p>
+<table>
+<thead><tr><th>Shared file</th><th>Words</th><th>Included by</th></tr></thead>
+<tbody>
+<tr><td><code>_smoke-test-policy</code></td><td>2,833</td><td>every task that builds or runs the application</td></tr>
+<tr><td><code>_status-update-gate</code></td><td>2,709</td><td>every task that updates the checklist or status</td></tr>
+<tr><td><code>_metrics-emit-gate</code></td><td>2,195</td><td>every task that emits telemetry</td></tr>
+<tr><td><code>_yolo-mode</code></td><td>1,543</td><td>build-phase only, and only as a conditional ("if YOLO is on, do not hand back"). <code>verify-phase</code> does not reference YOLO at all. The owner enables YOLO explicitly with <code>*yolo</code>; see D-18 for the expected behaviour.</td></tr>
+</tbody>
+</table>
+<p>Observations:</p>
+<ul>
+<li>Twelve commands read more than 10,000 words before their first useful step. Three read more than 20,000. The reset target is under 7,000 words at start for any command.
+</li>
+<li>The flow-master persona is 3,564 words and is loaded by fourteen commands. Shrinking that one file shrinks fourteen commands.
+</li>
+<li>Templates are the largest item for the two day-1 commands. The Session 3 schema work reduces that load as a side effect.
+</li>
+<li>Seven commands inherited from BMAD are not in the owner's usage: create-brd (author-brd), elicit, document-project, index-docs, shard-doc, execute-checklist, kb-mode-interaction. The owner decided on 2026-09-04 to remove them; the removal is carried out in Session 4c, from both harnesses, with <code>create-doc</code> kept because three retained commands depend on it.
+</li>
+<li>Observed run costs (elapsed time and tokens per run, from telemetry) are in section 6.
+</li>
+</ul>
+<hr>
+<h2 id="telemetry">6. Telemetry<a class="anchor-link" href="#telemetry">#</a></h2>
+<p>Five files under <code>docs/metrics/</code>. Each line is one event. Nothing is edited after it is written.</p>
+<table>
+<thead><tr><th>File</th><th>One line per</th><th>Written by</th></tr></thead>
+<tbody>
+<tr><td><code>runs.jsonl</code></td><td>command run: command, model, harness, start, end, tokens, sub-agents</td><td>every task, at the status gate</td></tr>
+<tr><td><code>gates.jsonl</code></td><td>requirement graded in a verify run, with the first check that failed</td><td>verify-phase, triage-issues</td></tr>
+<tr><td><code>misses.jsonl</code></td><td>thing the agent got wrong, plus a second line when it is fixed</td><td>log-miss, triage-issues, fix-issues</td></tr>
+<tr><td><code>sessions.jsonl</code></td><td>chat session: tokens in and out</td><td>a hook at session end</td></tr>
+<tr><td><code>commits.jsonl</code></td><td>one git commit by the owner</td><td>a git hook the owner installs; agents never run it</td></tr>
+</tbody>
+</table>
+<h3 id="observed-run-cost-from-the-run-stream">6.1 Observed run cost, from the run stream<a class="anchor-link" href="#observed-run-cost-from-the-run-stream">#</a></h3>
+<p>Measured from every <code>runs.jsonl</code> across the seven repositories that carry telemetry, on 2026-09-04. Median values; tokens are output tokens per run. These figures depend on the project and the work; the fixed instruction cost in section 5 does not.</p>
+<table>
+<thead><tr><th>Command</th><th>Runs recorded</th><th>Repos</th><th>Median duration (min)</th><th>Median output tokens</th></tr></thead>
+<tbody>
+<tr><td><code>*fix-issues</code></td><td>42</td><td>6</td><td>26</td><td>123,000</td></tr>
+<tr><td><code>*verify</code></td><td>26</td><td>6</td><td>30</td><td>95,000</td></tr>
+<tr><td><code>*build-phase</code></td><td>22</td><td>4</td><td>158</td><td>397,000</td></tr>
+<tr><td><code>*log-miss</code></td><td>21</td><td>4</td><td>1</td><td>8,000</td></tr>
+<tr><td><code>*amend-docs</code></td><td>8</td><td>3</td><td>20</td><td>58,000</td></tr>
+<tr><td><code>*triage-issues</code></td><td>6</td><td>4</td><td>23</td><td>144,000</td></tr>
+<tr><td><code>*metrics</code></td><td>6</td><td>2</td><td>6</td><td>10,000</td></tr>
+<tr><td><code>*handoff-phase</code></td><td>4</td><td>3</td><td>26</td><td>121,000</td></tr>
+<tr><td><code>*mockups</code></td><td>3</td><td>1</td><td>25</td><td>99,000</td></tr>
+<tr><td><code>*refresh-status</code></td><td>2</td><td>2</td><td>9</td><td>not recorded</td></tr>
+<tr><td><code>*split-brd</code></td><td>1</td><td>1</td><td>10</td><td>161,000</td></tr>
+<tr><td><code>*day1-greenfield</code>, <code>*day1-brownfield</code>, <code>*devguide</code>, <code>*productguide</code></td><td>0</td><td></td><td></td><td>no run recorded in any repository (D-11)</td></tr>
+<tr><td><code>*brainstorm</code>, <code>*create-project-brief</code></td><td>0</td><td></td><td></td><td>not instrumented (D-13)</td></tr>
+</tbody>
+</table>
+<p>Fix, verify and build account for 90 of the 142 recorded runs. The run record does not carry the mode (YOLO or interactive), so cost by mode cannot yet be reported (D-12). Dollar cost is recorded only for OpenCode runs.</p>
+<h3 id="the-five-questions-the-report-answers">6.2 The five questions the report answers<a class="anchor-link" href="#the-five-questions-the-report-answers">#</a></h3>
+<p>The report (<code>*metrics</code>) answers five questions.</p>
+<ol>
+<li><strong>First-pass rate.</strong> Of all requirements, the share marked Verified on their first verification. It measures how often the agent gets a requirement right without rework. Example: 100 requirements, 70 verified first time, first-pass rate 70 percent.
+</li>
+<li><strong>Which check caught it.</strong> The verifier applies seven checks to every requirement in a fixed order, and the first to fail is recorded. The checks: build (does it compile), acceptance (does the requirement's automated test pass), data (does the screen show real data), visual (does the screen look right and match the mockup), assets (did the stylesheet and scripts load), speed (within the declared budget), standards (does the code follow the coding standards). The distribution shows which checks do the work. Failures concentrated in "data" mean screens are wired to nothing. Failures concentrated in "visual" mean working screens that look broken. Few failures caught by any check while people keep finding bugs means the checks are not looking at the right things, which is the TfLens pattern.
+</li>
+<li><strong>Escape rate.</strong> The share of defects found by a person after every automated check passed. It measures how far the automation can be trusted. Across all repositories, 54 of 128 recorded misses were found by the owner rather than by a check.
+</li>
+<li><strong>Misses and rework cost.</strong> For each miss: its kind (wrong behaviour, partial implementation, not in the specification), the phase that caused it, who found it, and the tokens the fix consumed. It shows where the process leaks and what each leak costs. Across all repositories, 63 misses were classified "the verify method was insufficient" and 44 "the checklist item was missing or its acceptance was vague".
+</li>
+<li><strong>Effort per phase.</strong> For each command: elapsed time, tokens, model, sub-agent count. It shows what each stage costs and allows a cheap model to be compared with an expensive one on the same kind of work.
+</li>
+</ol>
+<p>Dollar figures exist only for OpenCode runs. Claude Code reports tokens, never dollars, and the report never converts.</p>
+<hr>
+<h2 id="instruction-size-and-its-effect">7. Instruction size and its effect<a class="anchor-link" href="#instruction-size-and-its-effect">#</a></h2>
+<p>An AI model divides its attention across everything it reads. The more text in front of it, the smaller the share each sentence receives. A rule alone in a short file is followed. The same rule as one of six hundred is followed most of the time, and the remainder is where misses originate. When an agent reports "the gate was missed" or "no such gate exists", both mean the same thing: the sentence was present and did not receive enough attention to be acted on.</p>
+<p>An analogy: a new team member is handed a sixty-page manual to read before every task. They read it, work, and by the afternoon have forgotten page fourteen. A note is added on page sixty-one: "do not forget page fourteen". The manual is now sixty-one pages.</p>
+<table>
+<thead><tr><th>Item</th><th>Size</th><th>Effect on a run</th></tr></thead>
+<tbody>
+<tr><td>Shared rules read on every command</td><td>9,280 words</td><td>About 25 minutes of human reading before any work, on every command, including one-minute commands.</td></tr>
+<tr><td>The verify task</td><td>11,850 words</td><td>The largest task and the source of most "verify method insufficient" misses; the instructions for what to check are interleaved with instructions for how to set up.</td></tr>
+<tr><td>All tasks together</td><td>70,000 words</td><td>Tasks repeat one another, so a change in one leaves the others stale.</td></tr>
+<tr><td>Rules stated as MUST or NEVER in prose</td><td>622</td><td>Each depends on the agent remembering it.</td></tr>
+<tr><td>Rules enforced by hooks</td><td>8</td><td>These always hold. No agent has run git since the hook was installed.</td></tr>
+<tr><td><code>WorkFlow-Context.md</code>, the session briefing</td><td>344 KB</td><td>Mostly a six-month incident log. A session that reads it spends attention on history.</td></tr>
+<tr><td><code>README.md</code></td><td>121 KB</td><td>The same problem for a human reader.</td></tr>
+</tbody>
+</table>
+<p>Markdown is not the cause. Three kinds of text are mixed in the task files: instructions to follow now, explanations of why a rule exists, and the history of the incident that produced it. Only the first belongs in a file read on every run. A more structured format would not separate them; editing does.</p>
+<p>Three moves shrink a task, applied block by block in Session 4 of the reset:</p>
+<ul>
+<li>A mechanical step becomes a script. Twenty lines of shell replace several hundred words and cannot forget.
+</li>
+<li>A rule the agent has ignored more than once becomes a hook, which cannot be ignored, or is deleted.
+</li>
+<li>Explanation and history move to human documents. The task keeps the step, not the story.
+</li>
+</ul>
+<p>The mechanical parts already work: 8 hooks, 17 scripts, 16 templates, 3 scaffold scripts. The prose is what grew, and the prose is what the reset removes.</p>
+<hr>
+<h2 id="defects-and-gaps-found-in-the-session-1-review">8. Defects and gaps found in the Session 1 review<a class="anchor-link" href="#defects-and-gaps-found-in-the-session-1-review">#</a></h2>
+<p>These are inputs to <code>TechieFlow-Requirements.md</code> (Session 2). Each becomes a requirement line with a check, or is closed as not a defect.</p>
+<p>Each defect is also recorded in the framework repository's own miss stream, <code>docs/metrics/misses.jsonl</code>, as <code>MISS-TechieFlow-20260904-NN</code> where NN equals the defect number (D-1 is <code>-01</code>, D-19 is <code>-19</code>; D-20 and D-21 were proposed by the maintainer in Session 2 without asking the owner first, which is itself logged as <code>-22</code>; both accepted by the owner on 2026-09-04). The Session 1 work itself is recorded in <code>docs/metrics/runs.jsonl</code> as a <code>framework-reset</code> run: 2026-09-04 08:18 to 14:43 UTC, model claude-fable-5-1, 569,794 output tokens. The schema gains the <code>framework-reset</code> command value in Session 2 (D-19).</p>
+<table>
+<thead><tr><th>ID</th><th>Where</th><th>Defect</th><th>Owner's expectation</th></tr></thead>
+<tbody>
+<tr><td>D-1</td><td><code>*day1-greenfield</code></td><td>Outside YOLO mode the run pauses for BRD review and in practice stops there; mockups are not produced. In YOLO mode the run also ends without mockups, reporting "review the BRD first".</td><td>Day-1 becomes two stages with one owner review between them. <strong>Stage 1</strong> produces three linked documents and runs to completion in YOLO mode, mockups included: the Architecture (with the standing .NET decisions as a section), the BRD (with mockups per use case, screen-by-screen flow, and the fields on every screen), and the mockups themselves. <strong>Stage 2</strong>, on the owner's go-ahead, produces the checklist via split-brd and the remaining day-1 documents (Coding Standards, PROJECT-STATUS, CLAUDE.md, AGENTS.md, UsageGuide).</td></tr>
+<tr><td>D-2</td><td><code>*day1-greenfield</code>, BRD</td><td>Mockups are produced after the BRD, as a separate step. The BRD is text and diagrams only.</td><td>Mockups are produced while the BRD is written (stage 1 of D-1). The BRD links a mockup per use case beside its acceptance criteria and lists the fields of every screen. The Architecture follows the same pattern.</td></tr>
+<tr><td>D-3</td><td><code>*day1-greenfield</code></td><td>No cap on scope or document size, and no definition anywhere of what a small, medium or large application is. TfLens is a small application by any measure (six or seven screens including login, one role, integration only with AppManager) and still produced 180 requirements and a 30,400-word BRD.</td><td>The framework defines application size by measurable criteria, agreed with the owner on 2026-09-04: <strong>Small</strong> up to 10 screens, one role, up to 40 to 50 requirements. <strong>Medium</strong> up to 20 screens, up to 100 requirements. <strong>Large</strong> anything beyond, and a large application is not written as one BRD: its requirements are split into phases, each phase with its own BRD, checklist and build. Integration with AppManager does not count as an external integration; AppManager is the owner's shared platform for identity, roles, licences and subscriptions and is part of every application. The size is chosen at day-1 stage 1 from the brief and written into the BRD header. The size sets the document budgets (Session 3) and the requirement cap; when a project's requirement count grows past its size during <code>*amend-docs</code>, the framework proposes a phase split rather than growing the single BRD.</td></tr>
+<tr><td>D-4</td><td><code>*day1-greenfield</code></td><td>No standing .NET decisions, so each project invents its own configuration, secret, database and container arrangement. TfLens ended with settings in three places.</td><td>A one-page standing decisions document, read at day-1 and build.</td></tr>
+<tr><td>D-5</td><td><code>*mockups</code>, <code>*day1-brownfield</code></td><td>Mockups are documented as greenfield-only. Brownfield changes also need mockups, and brownfield day-1 does not detect or link existing mockups.</td><td>Mockups apply to any project. Brownfield day-1 finds existing mockups, records where they are, and links them from the documents.</td></tr>
+<tr><td>D-6</td><td><code>*split-brd</code></td><td>Owner has never run it by hand and expects it to follow BRD approval automatically. The nesting is not visible to the owner.</td><td>The checklist is produced automatically once the BRD is approved; the nesting is documented (§3.1).</td></tr>
+<tr><td>D-7</td><td><code>*devguide</code></td><td>The DevGuide is produced at brownfield day-1 and at handoff. Greenfield projects get no DevGuide until handoff, and this was not documented.</td><td>The DevGuide is produced automatically when the build phase completes the checklist, for every project type.</td></tr>
+<tr><td>D-8</td><td><code>*verify</code></td><td>11,850 words; the check definitions are buried in setup instructions. Source of 63 of 128 recorded misses ("verify method insufficient").</td><td>Shrunk to judgement plus scripts in Session 4c.</td></tr>
+<tr><td>D-9</td><td><code>*amend-docs</code></td><td>Its call to <code>*mockups --update</code> was undocumented in the previous version of this file.</td><td>Documented (§3.6). Closed.</td></tr>
+<tr><td>D-10</td><td><code>*log-miss</code></td><td>The miss record stores categories only. The owner's sentence describing the miss is not kept anywhere readable.</td><td>A one-sentence <code>what</code> written to a human-readable file beside the record (Session 5).</td></tr>
+<tr><td>D-11</td><td>Telemetry</td><td>No run record exists for <code>*day1-greenfield</code>, <code>*day1-brownfield</code>, <code>*devguide</code>, <code>*productguide</code> in any repository.</td><td>Confirm whether those tasks emit; if they do not, they must.</td></tr>
+<tr><td>D-12</td><td>Telemetry</td><td>The run record does not carry whether YOLO mode was on, so cost cannot be reported by mode.</td><td>Record the mode on every run so the cost table in §5 can be split by mode.</td></tr>
+<tr><td>D-13</td><td>Personas</td><td>The analyst's idea-stage commands (brainstorm, project brief, competitor analysis, market research, research prompt) were absent from the previous version of this file and emit no telemetry.</td><td>Documented (§3.2). Telemetry for them decided in Session 2.</td></tr>
+<tr><td>D-14</td><td>Harnesses</td><td>The framework still carries a Codex adapter. The owner supports two harnesses only.</td><td>Codex frozen now; removal decided after the reset. TfLens's harness page will list Claude Code and OpenCode only.</td></tr>
+<tr><td>D-15</td><td><code>*log-miss</code>, <code>*triage-issues</code>, <code>*fix-issues</code></td><td><code>*log-miss</code> is never called automatically. The nesting diagram (§3.1) shows it standing alone. Triage finds root causes and fix repairs them, yet neither records the miss or its cost unless the owner types the log command by hand.</td><td>Triage calls log-miss automatically for every root cause it identifies, recording the discovery cost. Fix calls log-miss automatically when a fix is complete, recording the fix cost. The owner never types log-miss for a bug that went through triage or fix.</td></tr>
+<tr><td>D-16</td><td>Bug handling</td><td>The owner's actual way of working is one sequence typed as a long prompt every time: compare every screen to its mockup, triage (analyse only), log-miss for discovery cost, fix, log-miss for fix cost, metrics, all in YOLO mode, with a summary per step. No command does this.</td><td>One command, working name <code>*triage-and-fix {App} {evidence}</code>, runs that exact sequence in YOLO mode and ends with a per-step summary: screens compared, root causes found and logged with cost, fixes made and logged with cost, metrics refreshed. The separate triage and fix commands remain for when only one is wanted.</td></tr>
+<tr><td>D-17</td><td>Telemetry, every phase with an owner review</td><td>When the owner reviews a phase's output (for example the BRD, Architecture and mockups after day-1 stage 1) and gives corrections, nothing is recorded: not how many gaps were found, not what producing the documents cost, not what applying the corrections cost. Only build and verify phases are measured for misses.</td><td>Every phase that ends in an owner review records a review outcome: the number of corrections given, the cost of producing the reviewed output, and the cost of applying the corrections. Whether this is a new record kind ("correction") or a miss with a review origin is decided in Session 2; the requirement is that the cost of deviation is measurable in every phase, not only in build and verify.</td></tr>
+<tr><td>D-18</td><td>YOLO mode</td><td>YOLO is documented as a mode the owner switches on with <code>*yolo</code>. Only <code>build-phase</code> reacts to it, and only as a conditional; <code>verify-phase</code> has no YOLO handling at all; the other tasks either ignore it or mention it in passing. The owner's experience is that YOLO does not carry through consistently (see D-1).</td><td>YOLO is supported by every command: when the flag is on, no command pauses for confirmation, every command takes the documented default and records it. For <code>*build-phase</code> and <code>*verify</code> YOLO is the default, on without being asked, because these two commands are never useful when they stop halfway. The other commands honour the flag when set. The run record carries the mode (D-12).</td></tr>
+<tr><td>D-19</td><td>Telemetry, the framework itself</td><td>The reset of the framework is itself development work: sessions, tokens, defects found, corrections applied. None of it is being recorded. The framework repository has its own <code>docs/metrics/</code>, but the schema's command list has no value for framework maintenance, so a session like this one cannot write a run record without inventing a value.</td><td>The schema gains a command value for framework maintenance work (working name <code>framework-reset</code>). Every reset session ends by writing one run record into the TechieFlow repository's <code>runs.jsonl</code> with the session's token window, and every defect in this table is logged as a miss in its <code>misses.jsonl</code> with the one-sentence <code>what</code> (D-10), so the cost of resetting the framework is visible in TfLens beside the cost of building applications. This is also the content point for the framework blog post.</td></tr>
+<tr><td>D-20 (accepted by the owner 2026-09-04)</td><td>Checklist acceptance lines</td><td>14 recorded misses across repositories are classified "ambiguous acceptance": the acceptance line allowed more than one honest reading, the builder took one and the verifier another. The checklist template does not prescribe a form for the line.</td><td>The framework defines the shape once, in the checklist template; the analyst writes every line in it when the BRD becomes the checklist; the document checker refuses a row without it before the checklist is saved. No person reviews lines. Example, MyDiary: vague and refused, "Users can search their diary entries"; fixed shape and accepted, "When a signed-in user types <code>holiday</code> in the search box on the Entries screen and presses Enter, then the list shows only entries whose title or body contains <code>holiday</code>, and shows 'No entries found' when none match." The accepted line names the actor, the action, the screen and a result a browser robot can observe.</td></tr>
+<tr><td>D-21 (accepted by the owner 2026-09-04)</td><td>File search</td><td>The framework folder inside a project is hidden and git-ignored, so file search tools return nothing for files that are present. On 2026-08-27 a verify run wrote "not present anywhere in this tree" about a script that existed, and closed a gate on it.</td><td>An agent never writes "not present" about a file or tool without trying its literal path, and the remark names the path tried.</td></tr>
+<tr><td>D-22 (raised by the owner 2026-09-04, at the close of Session 2)</td><td>Distribution</td><td>The framework reaches a project only by cloning this repository and running its shell scripts from the clone. README §3 says "copy, don't npm-install". There is no package, no version, no pipeline, and no way for anyone else to install it. The team edition, the AI-First Playbook, is published on npm as <code>@techierathore/ai-first-playbook</code> with a one-shot <code>npx … install</code>, pre-publish checks and GitHub Actions.</td><td>TechieFlow is distributed the same way: an npm package <code>@techierathore/techieflow</code>, a one-shot <code>npx @techierathore/techieflow@latest install</code> (and <code>update</code>) that produces exactly what the shell scripts produce today for both harnesses, versioned through GitHub releases, published by a pipeline after automated checks. The shell scripts remain for use from a local clone. Built on the main branch, in parallel with the reset on the dev branch, from <code>TechieFlow-Distribution-Pipeline-Prompt.md</code>. Logged as <code>MISS-TechieFlow-20260904-23</code>.</td></tr>
+</tbody>
+</table>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+<script>
+// Light/dark toggle. The initial theme was already applied flash-free by the
+// <head> script (saved choice, else time-of-day). Clicking flips it, saves the
+// choice, and reloads so Mermaid re-renders in the matching theme.
+(function(){
+  var btn = document.getElementById('themeToggle');
+  if(!btn) return;
+  var relabel = function(){
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    btn.textContent = dark ? '☀ Light' : '☾ Dark';
+  };
+  relabel();
+  btn.addEventListener('click', function(){
+    var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    try{ localStorage.setItem('tf-theme', next); }catch(e){}
+    location.reload();
+  });
+})();
+
+// Copy buttons on every code <pre> — but NEVER on a `pre.mermaid`:
+// mermaid reads the <pre>'s textContent as the diagram source, so a button
+// appended here glues "copy" onto the last line and breaks the parse
+// (flowcharts → "Syntax error"; sequence diagrams silently absorb it).
+// Mermaid blocks get copy/export from their own .diagram toolbar instead.
+document.querySelectorAll('pre:not(.mermaid)').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy';
+  btn.textContent = 'copy';
+  btn.addEventListener('click', () => {
+    const text = pre.querySelector('code') ? pre.querySelector('code').innerText : pre.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'copied';
+      setTimeout(() => { btn.textContent = 'copy'; }, 1200);
+    });
+  });
+  pre.appendChild(btn);
+});
+
+// Mermaid init — theme follows the resolved light/dark theme
+if (window.mermaid) {
+  var mermaidTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default';
+  mermaid.initialize({ startOnLoad: true, theme: mermaidTheme, securityLevel: 'loose' });
+}
+
+// Mermaid toolbar wiring — run after mermaid renders
+function wireMermaidToolbars() {
+  document.querySelectorAll('.diagram').forEach(dia => {
+    if (dia.dataset.wired) return;
+    const merm = dia.querySelector('.mermaid');
+    const svg = merm && merm.querySelector('svg');
+    if (!svg) return;
+    dia.dataset.wired = '1';
+    let scale = 1;
+    const label = dia.querySelector('.zlabel');
+    const apply = () => {
+      svg.style.transform = `scale(${scale})`;
+      svg.style.transformOrigin = 'top left';
+      if (label) label.textContent = Math.round(scale * 100) + '%';
+    };
+    const setScale = (s) => { scale = Math.max(0.25, Math.min(4, s)); apply(); };
+    dia.querySelector('[data-zin]').onclick = () => setScale(scale * 1.2);
+    dia.querySelector('[data-zout]').onclick = () => setScale(scale / 1.2);
+    dia.querySelector('[data-fit]').onclick = () => {
+      svg.style.transform = '';
+      svg.removeAttribute('width');
+      svg.style.maxWidth = '100%';
+      svg.style.height = 'auto';
+      scale = 1;
+      if (label) label.textContent = 'Fit';
+    };
+    dia.querySelector('[data-one]').onclick = () => {
+      svg.style.transform = '';
+      svg.style.maxWidth = 'none';
+      svg.style.width = '';
+      svg.style.height = '';
+      scale = 1;
+      if (label) label.textContent = '100%';
+    };
+    dia.querySelector('[data-fs]').onclick = () => {
+      dia.classList.toggle('fs');
+      if (dia.classList.contains('fs')) {
+        document.addEventListener('keydown', escFs);
+      } else {
+        document.removeEventListener('keydown', escFs);
+      }
+    };
+    function escFs(e) { if (e.key === 'Escape') { dia.classList.remove('fs'); document.removeEventListener('keydown', escFs); } }
+    dia.querySelector('[data-pop]').onclick = () => openInNewTab(svg);
+    // Ctrl+wheel zoom
+    merm.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setScale(scale * (e.deltaY < 0 ? 1.1 : 1/1.1));
+    }, { passive: false });
+  });
+}
+
+function openInNewTab(svg) {
+  const svgSource = new XMLSerializer().serializeToString(svg);
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Diagram</title>
+<style>
+  html,body{margin:0;height:100%;background:#0f1115;color:#e6e8ee;font-family:system-ui,sans-serif}
+  .bar{position:fixed;top:0;left:0;right:0;padding:8px 12px;background:#161a22;border-bottom:1px solid #2a3142;display:flex;gap:8px;z-index:10}
+  .bar button{background:#1c2230;color:#9aa3b2;border:1px solid #2a3142;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer}
+  .bar button:hover{color:#7cc4ff;border-color:#7cc4ff}
+  .bar .hint{margin-left:auto;color:#9aa3b2;font-size:11.5px;align-self:center}
+  #stage{position:absolute;top:42px;bottom:0;left:0;right:0;overflow:hidden}
+  #stage svg{width:100%;height:100%}
+</style>
+</head><body>
+<div class="bar">
+  <button onclick="zpz.zoomIn()">+</button>
+  <button onclick="zpz.zoomOut()">−</button>
+  <button onclick="zpz.fit();zpz.center()">Fit</button>
+  <button onclick="zpz.resetZoom();zpz.center()">1:1</button>
+  <button onclick="window.print()">Print</button>
+  <button onclick="dlPng()">PNG</button>
+  <button onclick="dlSvg()">SVG</button>
+  <span class="hint">Drag to pan · Ctrl+wheel to zoom · + / − keys</span>
+</div>
+<div id="stage">${svgSource}</div>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"><\/script>
+<script>
+  const el = document.querySelector('#stage svg');
+  const zpz = svgPanZoom(el, { zoomScaleSensitivity: .3, minZoom: .2, maxZoom: 10, controlIconsEnabled: false, fit: true, center: true });
+  document.addEventListener('keydown', e => {
+    if (e.key === '+' || e.key === '=') zpz.zoomIn();
+    if (e.key === '-' || e.key === '_') zpz.zoomOut();
+    if (e.key === '0') { zpz.resetZoom(); zpz.center(); }
+  });
+  function dlSvg() {
+    const blob = new Blob([new XMLSerializer().serializeToString(el)], { type: 'image/svg+xml' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'diagram.svg'; a.click();
+  }
+  function dlPng() {
+    const src = new XMLSerializer().serializeToString(el);
+    const img = new Image();
+    const url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(src)));
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = el.clientWidth * 2; c.height = el.clientHeight * 2;
+      const ctx = c.getContext('2d'); ctx.scale(2,2); ctx.drawImage(img, 0, 0);
+      c.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'diagram.png'; a.click(); });
+    };
+    img.src = url;
+  }
+<\/script>
+</body></html>`;
+  const w = window.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+// Run wiring after mermaid finishes (it renders async)
+if (window.mermaid) {
+  setTimeout(wireMermaidToolbars, 400);
+  setTimeout(wireMermaidToolbars, 1200);  // safety re-run for slow renders
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TechieFlow — Reset Plan (started 2026-09-04)</title>
+<script>
+/* Resolve the theme BEFORE first paint (no flash). Saved choice wins; otherwise
+   pick by time of day — light 07:00–19:00 local, softened dark at night. */
+(function(){
+  try{
+    var t = localStorage.getItem('tf-theme');
+    if(t!=='light' && t!=='dark'){ var h = new Date().getHours(); t = (h>=7 && h<19) ? 'light' : 'dark'; }
+    document.documentElement.setAttribute('data-theme', t);
+  }catch(e){ document.documentElement.setAttribute('data-theme','light'); }
+})();
+</script>
+<style>
+/* LIGHT is the default theme — a warm off-white, easy on the eyes (never bright white). */
+:root{
+  --bg:#f4f1e9; --panel:#efe9db; --panel2:#e7e0cd; --line:#d8cfb6;
+  --ink:#2e2a22; --muted:#6f6857; --accent:#2f6f9f; --accent2:#3f7d54;
+  --warn:#9a6b15; --danger:#b03a52; --ok:#3f7d54;
+  --code-bg:#ece5d3; --code-ink:#332f26; --row-alt:#eae2cf;
+  --h3:#3a352b; --h4:#2f6f9f; --quote:#4a4537; --cta-bg:#e6eef5;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+/* DARK — softened near-black (warmer / less harsh than pure #0f1115). */
+html[data-theme="dark"]{
+  --bg:#11141a; --panel:#171b23; --panel2:#1e2430; --line:#2b3240;
+  --ink:#dfe3ea; --muted:#99a2b1; --accent:#7cc4ff; --accent2:#a6e3a1;
+  --warn:#f9c74f; --danger:#f38ba8; --ok:#a6e3a1;
+  --code-bg:#0c1016; --code-ink:#d8dde8; --row-alt:#141821;
+  --h3:#cfd5e3; --h4:#7cc4ff; --quote:#cfd5e3; --cta-bg:#0d2030;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:13px;background:var(--code-bg);color:var(--code-ink);padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
+pre{font-family:var(--mono);font-size:12.5px;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto;color:var(--code-ink);position:relative}
+pre code{background:none;border:none;padding:0}
+.copy{position:absolute;top:8px;right:8px;background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:11px;font-family:var(--sans);cursor:pointer}
+.copy:hover{color:var(--accent);border-color:var(--accent)}
+/* floating light/dark toggle (top-right) */
+.theme-toggle{position:fixed;top:12px;right:14px;z-index:10000;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:12.5px;font-family:var(--sans);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.theme-toggle:hover{color:var(--accent);border-color:var(--accent)}
+
+.layout{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+.layout.no-toc{grid-template-columns:1fr}
+nav.side{position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--line);background:var(--panel);padding:18px 14px}
+nav.side h1{font-size:14px;margin:0 0 4px;letter-spacing:.5px;color:var(--ink)}
+nav.side .sub{font-size:11.5px;color:var(--muted);margin-bottom:14px}
+nav.side ol,nav.side ul{list-style:none;padding:0;margin:0}
+nav.side li{font-size:13px;margin:2px 0}
+nav.side li a{display:block;padding:5px 8px;color:var(--ink);border-radius:6px}
+nav.side li a:hover{background:var(--panel2);text-decoration:none}
+nav.side li.h3 a{padding-left:22px;font-size:12.5px;color:var(--h3)}
+nav.side .group{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin:14px 8px 4px}
+
+main{padding:28px 40px 80px;max-width:1100px}
+.layout.no-toc main{margin:0 auto}
+
+h1{font-size:28px;margin:0 0 6px}
+h2{font-size:22px;margin:32px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);scroll-margin-top:16px}
+h3{font-size:17px;margin:22px 0 6px;color:var(--h3);scroll-margin-top:16px}
+h4{font-size:14px;margin:14px 0 4px;color:var(--h4);scroll-margin-top:16px}
+.subtitle{color:var(--muted);font-size:14px;margin-top:-4px;margin-bottom:18px}
+p{margin:6px 0 10px}
+blockquote{border-left:3px solid var(--accent);background:var(--panel);margin:8px 0;padding:8px 14px;color:var(--quote)}
+ul,ol{padding-left:22px}
+li{margin:2px 0}
+
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);color:var(--h3);font-weight:600}
+tr:nth-child(even) td{background:var(--row-alt)}
+
+hr{border:none;border-top:1px solid var(--line);margin:24px 0}
+.anchor-link{color:var(--muted);font-weight:400;font-size:0.85em;margin-left:8px;opacity:0;transition:opacity .15s;text-decoration:none}
+h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
+
+/* inline TOC at top of main content */
+.toc-inline{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 16px;margin:14px 0 24px}
+.toc-inline > div{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.toc-inline ol,.toc-inline ul{margin:4px 0;padding-left:18px}
+.toc-inline li{font-size:13px;margin:1px 0}
+.toc-inline a{color:var(--h3)}
+
+/* mermaid diagram wrapper + toolbar */
+.diagram{position:relative;border:1px solid var(--line);border-radius:8px;background:var(--code-bg);margin:14px 0;overflow:hidden}
+.diagram .mermaid{padding:14px;margin:0;background:transparent;border:none;overflow:auto}
+.diagram .dt{display:flex;gap:6px;justify-content:flex-end;padding:6px 8px;background:var(--row-alt);border-bottom:1px solid var(--line)}
+.diagram .dt button{background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 10px;font-size:12px;font-family:var(--sans);cursor:pointer;min-width:30px}
+.diagram .dt button:hover{color:var(--accent);border-color:var(--accent)}
+.diagram .dt .zlabel{padding:3px 6px;font-size:11px;color:var(--muted);font-family:var(--mono);align-self:center}
+.diagram.fs{position:fixed;inset:0;z-index:9999;border-radius:0;border:none}
+.diagram.fs .mermaid{height:calc(100vh - 40px);display:flex;align-items:center;justify-content:center}
+
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.side{position:static;height:auto}}
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" title="Toggle light / dark">&#9790; Dark</button>
+<div class="layout no-toc">
+  <main>
+    <h1>TechieFlow — Reset Plan (started 2026-09-04)</h1>
+    <div class="subtitle">Rendered 2026-09-04 &middot; source <code>TechieFlow-Reset-Plan-2026-09-04.md</code></div>
+
+    <div class="toc-inline">
+      <div>Contents</div>
+      <ol>
+        <li><a href="#decisions-made-now">0. Decisions made now</a></li>
+        <li><a href="#ground-rules-for-every-session">1. Ground rules for every session</a></li>
+        <li><a href="#the-sessions">2. The sessions</a></li>
+        <li class="h3"><a href="#session-1-understand-it">Session 1 — Understand it</a></li>
+        <li class="h3"><a href="#session-2-the-framework-s-own-requirements-and-the-standing-net-decisions">Session 2 — The framework&#x27;s own requirements, and the standing .NET decisions</a></li>
+        <li class="h3"><a href="#session-3-templates-become-schemas">Session 3 — Templates become schemas</a></li>
+        <li class="h3"><a href="#session-4-shrink-every-task-in-life-cycle-order">Session 4 — Shrink every task, in life-cycle order</a></li>
+        <li class="h3"><a href="#session-5-the-miss-protocol-and-the-telemetry-explainer">Session 5 — The miss protocol and the telemetry explainer</a></li>
+        <li class="h3"><a href="#session-6-make-the-repository-readable-again-and-deploy">Session 6 — Make the repository readable again, and deploy</a></li>
+        <li class="h3"><a href="#session-7-write-the-playbook-review-prompt-version-2">Session 7 — Write the Playbook review prompt, version 2</a></li>
+        <li><a href="#what-comes-after-the-frameworks-are-fixed-order-only-no-dates">3. What comes after the frameworks are fixed — order only, no dates</a></li>
+        <li><a href="#what-the-owner-should-expect-claude-to-ask-per-session">4. What the owner should expect Claude to ask, per session</a></li>
+      </ol>
+    </div>
+<p>The owner's decision: fix both frameworks properly before building anything else. No deadline. No "good enough for now". The sessions below run in order until each one's output exists and the owner understands it. Then the Playbook gets the same treatment. Then the blog. Then building resumes.</p>
+<p><strong>The order follows the software life cycle.</strong> Documents come before code, so the document templates are fixed first. Then the tasks are shrunk in the order a project passes through them: day-1 documents, design, build, guides and handoff, and verification last. That matches the owner's portfolio: TechieRag and TrStudio are in design or redevelopment and need the early tasks first; AstroLyfe and most other apps are in user testing and need the late tasks, which come last.</p>
+<p>Companion files written in the same pass:</p>
+<ul>
+<li><code>TechieFlow-How-It-Works.md</code> — read this first, before Session 1.
+</li>
+<li><code>AI-First-Playbook-Review-Prompt.md</code> — version 1 draft; version 2 is written after these sessions.
+</li>
+<li><code>TechieFlow-Stack-Questions.md</code>, <code>TechieFlow-Stack-Defaults-DotNet.md</code>, <code>TechieFlow-Requirements.md</code> — Session 2 outputs; agent and configuration documents, not rendered.
+</li>
+<li><code>TechieFlow-Distribution-Pipeline-Prompt.md</code> — the parallel track on <code>main</code>: npm package and release pipeline.
+</li>
+</ul>
+<p>Blog material is kept out of this repo, in <code>/mnt/c/3AIGenCode/MyBlogSrc/</code>:</p>
+<ul>
+<li><code>MyBlogSrc/Blog-Prompts.md</code> — three blog prompts plus the data-collection steps, for after the frameworks are fixed.
+</li>
+<li><code>MyBlogSrc/collect-data.sh</code> — collects telemetry and feedback from every repo into <code>MyBlogSrc/data/</code>; also used in Sessions 2 and 5.
+</li>
+</ul>
+<hr>
+<h2 id="decisions-made-now">0. Decisions made now<a class="anchor-link" href="#decisions-made-now">#</a></h2>
+<p><strong>Clean slate: no.</strong> The hooks, scripts, templates and scaffold scripts are six months of working parts. A rewrite would lose them and rebuild the same rules from the same incidents. We shrink in place. The owner creates a git branch named <code>dev</code> from <code>main</code> before Session 3, which is the first session that edits framework files. Sessions 3 to 7 work on <code>dev</code>; <code>main</code> stays a working framework until Session 6 has deployed the shrunk framework to a test project and it has run clean. Agents never run git.</p>
+<p><strong>Both harnesses stay.</strong> Every change is checked in the Claude Code mirror and in <code>opencode.jsonc</code>. Nothing OpenCode-related is removed. Codex is frozen: not removed, not touched, not propagated.</p>
+<p><strong>Evidence comes from every project.</strong> Seven repos carry telemetry, eighteen feedback files exist across the portfolio, and the framework's incident log names AstroLyfe, TrSetup, TrStudio, TechieBlog, AppStudio, TechieRag and more. Every session draws on all of them and asks the owner for examples from any project. Nothing is validated on one project only.</p>
+<p><strong>Distribution runs in parallel.</strong> The owner raised at the close of Session 2 that the framework has no package, version or pipeline (D-22, FR-48 to FR-52). That work runs on <code>main</code>, on a separate machine, from <code>TechieFlow-Distribution-Pipeline-Prompt.md</code>, while the reset continues on <code>dev</code>. The installer ships whatever <code>.tfcore/</code> contains, so the two tracks do not conflict.</p>
+<p><strong>Where each change is proven.</strong> TechieFlow changes are made in Claude Code and tested in both Claude Code and OpenCode, on a project that is actually at the matching life-cycle stage. Playbook changes are made in Claude Code and tested only in OpenCode.</p>
+<hr>
+<h2 id="ground-rules-for-every-session">1. Ground rules for every session<a class="anchor-link" href="#ground-rules-for-every-session">#</a></h2>
+<ol>
+<li>Plain words. If the owner cannot repeat a sentence back, the sentence gets rewritten before we move on.
+</li>
+<li>The owner decides. Claude drafts, proposes, and explains. Every keep, cut, or change is the owner's call.
+</li>
+<li>No new prose rules enter any task file during the reset. Misses found during the work go into the three-question sort in Session 5.
+</li>
+<li>Every document goes into <code>docs/</code> in the repo. Never online.
+</li>
+<li>Every change keeps both harnesses working.
+</li>
+<li>Every example, question, and test spans projects. When Claude reaches for TfLens, the owner is entitled to say "give me another project".
+</li>
+<li>Public-facing documents name only the owner's public repositories (TechieRag, TechieDesk, TrBlazeUI, TfLens, TechieBlog, TrStudio, TrSetup, Xpenser). Private projects are discussed in conversation only.
+</li>
+<li><strong>Owner-reviewed documents are changed only with the owner's yes.</strong> <code>TechieFlow-How-It-Works.md</code>, the Stack documents, this plan, and any BRD or mockup are the owner's review surface. Claude proposes a change in plain words, the owner accepts or rejects, and only then is the document edited. The same holds for a frozen checklist or requirements list: a gap found after freezing is first logged as a miss, then proposed, then added. Telling the owner afterwards is the defect that grew the framework unreviewed; it was repeated once in Session 2 and is logged as <code>MISS-TechieFlow-20260904-22</code>.
+</li>
+<li>The reset is measured like any other development work. Every session ends with one run record in this repository's <code>docs/metrics/runs.jsonl</code> (command value <code>framework-reset</code>, added to the schema in Session 2), and every defect found is logged as a miss with its one-sentence description. Until the schema change lands, the session records are written with the new value and the schema is updated to match in Session 2.
+</li>
+</ol>
+<hr>
+<h2 id="the-sessions">2. The sessions<a class="anchor-link" href="#the-sessions">#</a></h2>
+<p>A session ends when its output exists and the owner understands it. Session 4 is long and is split into three sittings.</p>
+<h3 id="session-1-understand-it">Session 1 — Understand it<a class="anchor-link" href="#session-1-understand-it">#</a></h3>
+<p><strong>Goal:</strong> the owner can explain the framework to a colleague, and knows which commands they actually use.</p>
+<p><strong>Owner brings:</strong></p>
+<ul>
+<li><code>TechieFlow-How-It-Works.md</code> read once, with every line marked that is unclear, wrong, or disagreed with.
+</li>
+<li>Three or four real situations, from different projects, where the framework did something the owner did not expect. Examples of the kind of thing: TfLens spreading secrets across three places; TechieBlog's fourteen test-result folders; the AstroLyfe status loss; anything from TrBlazeUI or TechieRag builds.
+</li>
+</ul>
+<p><strong>We do:</strong> go through the marks. Claude answers each in plain words and edits the file until the owner is satisfied. Then each command gets a verdict: use, rarely use, never use.</p>
+<p><strong>Output:</strong> a corrected How-It-Works. A list of commands by usage. The "never use" list is removed in Session 4.</p>
+<h3 id="session-2-the-framework-s-own-requirements-and-the-standing-net-decisions">Session 2 — The framework's own requirements, and the standing .NET decisions<a class="anchor-link" href="#session-2-the-framework-s-own-requirements-and-the-standing-net-decisions">#</a></h3>
+<p><strong>Goal:</strong> the framework gets what every app gets: a checklist with testable lines. And the .NET decisions each app has been inventing on its own get written down once.</p>
+<p><strong>Owner brings:</strong> answers to the ten stack questions below. <strong>Decided 2026-09-04:</strong> the framework stays technology-neutral and asks these questions at day-1; the owner's .NET answers become an answer set offered as an option (<code>TechieFlow-Stack-Defaults-DotNet.md</code>). Fixtures agreed: MyDiary (small greenfield, new), TrStudio and Xpenser (brownfield), TrBlazeUI and TechieRag (libraries).</p>
+<p>The ten questions:</p>
+<ol>
+<li>Where does non-secret configuration live? (Expected: <code>appsettings.json</code> plus <code>appsettings.{Environment}.json</code>.)
+</li>
+<li>Where do secrets live in development? (Expected: <code>dotnet user-secrets</code>.) And in production? (Environment variables, Key Vault, Docker secrets?)
+</li>
+<li>Which database in development, which in production? Is a Docker container for the database ever allowed without a requirement asking for it?
+</li>
+<li>Authentication: the owner has stated that AppManager is the shared platform for identity, roles, licences and subscriptions and is part of every application, not an external integration. Confirm this is the standing default, and state what a project does when AppManager is not wanted.
+</li>
+<li>Logging: Serilog to file is already standing. Anything else?
+</li>
+<li>Test projects: which framework (xUnit, NUnit, MSTest), and is a test project mandatory from day one?
+</li>
+<li>Solution layout: one <code>src/</code> and <code>tests/</code>? Project naming is already standing (<code>&lt;App&gt;</code>, never <code>&lt;App&gt;.App</code>).
+</li>
+<li>UI: TrBlazeUI always for Blazor? Blazor Server, WASM, or Auto by default? What about MAUI apps?
+</li>
+<li>Hosting target by default: Bluehost VPS, Docker, IIS, Azure?
+</li>
+<li>Anything an agent must never do in a .NET repo that is not yet a hook? (Examples: never add a NuGet package without a line in the Architecture doc saying why; never create a second configuration mechanism.)
+</li>
+</ol>
+<p><strong>We do:</strong></p>
+<ul>
+<li>Claude writes <code>docs/TechieFlow-Stack-Questions.md</code> (the generic questionnaire, when each question is asked, where answers are recorded) and <code>docs/TechieFlow-Stack-Defaults-DotNet.md</code> (the owner's answer set). Both are configuration documents read by agents; neither is rendered to HTML.
+</li>
+<li>Claude runs <code>/mnt/c/3AIGenCode/MyBlogSrc/collect-data.sh</code> and drafts <code>docs/TechieFlow-Requirements.md</code>: about 40 lines of "the framework must …", each with a way to check it against one of the fixture projects. The lines come from four sources: the owner's non-negotiable conventions, the 128 recorded misses across all repos, the incidents in the framework's log, and the defects D-1 to D-14 listed in <code>TechieFlow-How-It-Works.md</code> §8. <strong>The owner does not review this list line by line</strong> (decided 2026-09-04: checklists are agent documents). Claude reviews it for traceability to the descriptive documents the owner has reviewed, and brings the owner only plain-language decisions.
+</li>
+</ul>
+<p><strong>Output:</strong> three documents. From now on a framework miss is either a requirement line with no check, or a line that was ignored. <strong>Done 2026-09-04:</strong> 47 requirement lines, 5 owner decisions recorded in the document's §5.</p>
+<h3 id="session-3-templates-become-schemas">Session 3 — Templates become schemas<a class="anchor-link" href="#session-3-templates-become-schemas">#</a></h3>
+<p><strong>Goal:</strong> every human document the framework produces gets a short required-shape list and a check script, so the AI cannot drift from the format. This comes before any task is shrunk, because the tasks exist to produce these documents.</p>
+<p><strong>Owner brings:</strong> a git branch created. For each document, which sections a small app truly needs and a rough maximum size. Claude proposes defaults from the existing documents across projects (TfLens, TechieBlog, Lekhak, AstroLyfe, TrBlazeUI have full sets); the owner adjusts.</p>
+<p><strong>The documents, in the order a project produces them:</strong> BRD, Architecture, UIDesign, Checklist (row rules only; it stays an agent document), Coding Standards, PROJECT-STATUS, UsageGuide, DevGuide, ProductGuide.</p>
+<p><strong>We do:</strong> for each template, write a schema block at the top: required sections in order, word or row budgets by app size, per-row rules such as "acceptance line contains when … then". Write one script, <code>tf-doc-check.sh</code>, that reads the schema and fails the phase if a generated document breaks it. Wire it into the status gate. Add an app size (S, M, L) question to day-1 that sets the budgets. Test the checker against existing documents from at least three projects and report which would fail today and why.</p>
+<p><strong>Output:</strong> nine schema-backed templates, one checker script, size caps at day-1. Both harnesses can run the checker.</p>
+<h3 id="session-4-shrink-every-task-in-life-cycle-order">Session 4 — Shrink every task, in life-cycle order<a class="anchor-link" href="#session-4-shrink-every-task-in-life-cycle-order">#</a></h3>
+<p><strong>Goal:</strong> every task file the owner fully understands, roughly one third its current size overall, with prose that needed judgement kept, mechanical steps turned into scripts, and duplicates deleted.</p>
+<p><strong>The method, same for every file:</strong> Claude prints the task as a table, one row per block, with a one-line plain summary and a proposed verdict: keep as words, turn into a script, or delete as duplicate or obvious. The owner rules on each row and can ask "show me the block" or "why delete" on any row. Claude applies the verdicts, writes the replacement scripts, copies the file to the Claude Code mirror, confirms <code>opencode.jsonc</code> still points at it, and runs the command for real in both harnesses on a project at that life-cycle stage.</p>
+<p><strong>Sitting 4a — the shared rules, then the document phase.</strong></p>
+<ul>
+<li>First the three shared rule files that every command loads (<code>_status-update-gate</code>, <code>_smoke-test-policy</code>, <code>_metrics-emit-gate</code>; 9,300 words together). They go first because every later task inherits whatever they say, so shrinking them first shrinks every task. This is the one step out of life-cycle order, and this is why.
+</li>
+<li>Then <code>day1-greenfield</code> (3,400 words), <code>day1-brownfield</code> (7,300), <code>mockups</code>, <code>split-brd</code>, <code>amend-docs</code>, <code>author-brd</code>.
+</li>
+<li><strong>Test on:</strong> a project in design or redevelopment, TechieRag or TrStudio, the owner picks. Day-1 or amend-docs runs for real in both harnesses, and the Session 3 checker passes on what it produces.
+</li>
+<li><strong>Output:</strong> the document-phase tasks shrunk and proven.
+</li>
+</ul>
+<p><strong>Sitting 4b — the build phase and the guides.</strong></p>
+<ul>
+<li><code>build-phase</code> (4,400 words), <code>devguide</code> (5,300), <code>productguide</code>, <code>handoff-phase</code>, <code>refresh-status</code>.
+</li>
+<li><strong>Test on:</strong> the same design-stage project once it has a checklist, or a small project the owner chooses. A real build runs in both harnesses.
+</li>
+<li><strong>Output:</strong> the build and handoff tasks shrunk and proven.
+</li>
+</ul>
+<p><strong>Sitting 4c — verification and bug handling, last.</strong></p>
+<ul>
+<li><code>verify-phase</code> (11,850 words, the largest), <code>fix-issues</code>, <code>triage-issues</code>, <code>log-miss</code>.
+</li>
+<li><strong>Test on:</strong> a project in user testing, AstroLyfe or another the owner picks. A real verify and a real triage run in both harnesses.
+</li>
+<li>The seven commands the owner decided to remove on 2026-09-04 are removed here, with their registrations, from both harnesses: create-brd (author-brd), elicit (advanced-elicitation), document-project, index-docs, shard-doc, execute-checklist, kb-mode-interaction. <code>create-doc</code> stays because brainstorm's brief, competitor analysis and market research depend on it.
+</li>
+<li>YOLO handling is made uniform across every task (D-18): every command honours the flag; build-phase and verify default to it.
+</li>
+<li><strong>Output:</strong> all tasks shrunk. Total task words near 20,000. Both harnesses tested end to end.
+</li>
+</ul>
+<h3 id="session-5-the-miss-protocol-and-the-telemetry-explainer">Session 5 — The miss protocol and the telemetry explainer<a class="anchor-link" href="#session-5-the-miss-protocol-and-the-telemetry-explainer">#</a></h3>
+<p><strong>Goal:</strong> misses become readable by a human, and the owner can present every telemetry number.</p>
+<p><strong>We do, part one:</strong> <code>*log-miss</code> (already shrunk in 4c) gains a one-sentence <code>what</code> that is written to a human file <code>docs/&lt;App&gt;-Misses.md</code> beside the record. The three-question sort becomes the first step of the task:</p>
+<ol>
+<li>Did the app's spec say it clearly? If not, fix the app's checklist line. Framework untouched.
+</li>
+<li>Did the framework say it anywhere? If not, add one line to <code>TechieFlow-Requirements.md</code> plus a check. No prose in task files.
+</li>
+<li>Was it said and ignored anyway? Make it a hook or script, or delete it. A rule ignored twice never gets a third paragraph.
+</li>
+</ol>
+<p><strong>Decided 2026-09-04 (FR-36):</strong> an owner review is recorded as a new record kind <code>review</code>, named by phase (<code>day1-review</code>, <code>build-review</code>, …), with corrections given, cost to produce, cost to correct. UAT issues stay misses.</p>
+<p><strong>We do, part two:</strong> Claude writes <code>docs/TechieFlow-Telemetry-Explained.md</code>: each of the five report numbers, what it means, how it is calculated, one real figure from the combined data and one from a named project, and the one sentence the owner says about it in a talk. The owner reads it and rewrites any sentence they would not say.</p>
+<p><strong>Output:</strong> a miss log a human can read, and a telemetry page the owner can present from.</p>
+<h3 id="session-6-make-the-repository-readable-again-and-deploy">Session 6 — Make the repository readable again, and deploy<a class="anchor-link" href="#session-6-make-the-repository-readable-again-and-deploy">#</a></h3>
+<p><strong>Goal:</strong> the "read this first" file is short, the six-month log is archived, and every repo has the new framework.</p>
+<p><strong>We do:</strong> split <code>WorkFlow-Context.md</code> into a briefing of at most 3,000 words (what it is, how it is used, conventions, repo map, open items, maintenance contract) and <code>docs/CHANGELOG.md</code> holding the full maintenance log untouched. Trim README to what a new user needs, moving the rest to <code>docs/</code>. Run <code>update-framework.sh</code> against the projects the owner will build next (TechieRag, AstroLyfe, TrStudio), against one library repo, then the rest.</p>
+<p><strong>Output:</strong> a framework a newcomer, or the owner in six months, can pick up in twenty minutes, deployed everywhere.</p>
+<h3 id="session-7-write-the-playbook-review-prompt-version-2">Session 7 — Write the Playbook review prompt, version 2<a class="anchor-link" href="#session-7-write-the-playbook-review-prompt-version-2">#</a></h3>
+<p><strong>Goal:</strong> carry what these sessions taught into the Playbook review.</p>
+<p><strong>We do:</strong> rewrite <code>AI-First-Playbook-Review-Prompt.md</code> with the final keep/script/delete table format, the schema block format, the miss protocol wording, and a list of what went wrong during the TechieFlow sessions so the Playbook review does not repeat it. Built in Claude Code, tested only in OpenCode.</p>
+<p><strong>Output:</strong> the version 2 prompt. The Playbook sessions then follow their own plan.</p>
+<hr>
+<h2 id="what-comes-after-the-frameworks-are-fixed-order-only-no-dates">3. What comes after the frameworks are fixed — order only, no dates<a class="anchor-link" href="#what-comes-after-the-frameworks-are-fixed-order-only-no-dates">#</a></h2>
+<ol>
+<li>Run the distribution pipeline prompt on <code>main</code> (can start now, on another machine). Merge when its validation workflow is green.
+</li>
+<li>Run the Playbook review (version 2 prompt) and its sessions, tested under OpenCode.
+</li>
+<li>In <code>/mnt/c/3AIGenCode/MyBlogSrc/</code>, run <code>collect-data.sh</code>, then blog prompt 1 (the year), then prompt 2 (the framework), then prompt 3 (the measurements). One writing session each, in that order.
+</li>
+<li>Resume building, in the owner's pipeline order: TechieRag update, AstroLyfe update, TrStudio, then the new apps (journal app, TechieDesk, the super-app). Each build logs every miss with the new <code>what</code> sentence.
+</li>
+<li>Framework changes are batched: a miss goes into the three-question sort when it happens; the fix is applied in a batch, not the same hour.
+</li>
+<li>When enough new misses exist across the new builds, re-run the collection script and compare against the 2026-09-04 figures. That comparison is the follow-up blog.
+</li>
+</ol>
+<hr>
+<h2 id="what-the-owner-should-expect-claude-to-ask-per-session">4. What the owner should expect Claude to ask, per session<a class="anchor-link" href="#what-the-owner-should-expect-claude-to-ask-per-session">#</a></h2>
+<p>So nothing is a surprise, and the owner can prepare answers in advance.</p>
+<p><strong>Session 1</strong></p>
+<ul>
+<li>For each marked line in How-It-Works: "What did you read this as?" and then "Does this rewording say it?"
+</li>
+<li>For each of the 15 commands: "Have you run this in the last three months? On which project?"
+</li>
+<li>"Tell me the situations you brought. For each: which project, what you expected, what happened, what you did about it."
+</li>
+<li>"Which of these situations do you think was the framework's fault, which was the spec's, which was the model's?" (This warms up the three-question sort.)
+</li>
+</ul>
+<p><strong>Session 2</strong></p>
+<ul>
+<li>The ten .NET questions, one at a time. For each answer: "Is there any project where you did it differently, and was that deliberate?"
+</li>
+<li>"Which two or three projects should be the fixtures we check the framework against?"
+</li>
+<li>Plain-language decisions only, never "review this line": fixtures, size caps, record kinds, budgets.
+</li>
+<li>"Is there a rule you follow in your head that is not written anywhere?"
+</li>
+</ul>
+<p><strong>Session 3</strong></p>
+<ul>
+<li>For each of nine documents: "Which sections does a small app truly need? Which are only for medium or large?" and "What is too long, in pages or in words?"
+</li>
+<li>"For a requirement row, what must the acceptance line contain for you to trust it?"
+</li>
+<li>"The checker says these existing documents from these projects would fail today. Do you agree they are wrong, or is the schema too strict?"
+</li>
+<li>"Should the checker block the phase, or warn and continue?"
+</li>
+</ul>
+<p><strong>Session 4, every sitting</strong></p>
+<ul>
+<li>"Which project do we test this batch on?"
+</li>
+<li>For each block in each task: "Keep as words, turn into a script, or delete?" Claude gives a one-line summary first; the owner can ask "show me the block" or "why do you think delete".
+</li>
+<li>When a block becomes a script: "What should the script print when it fails, in words you would want to read?"
+</li>
+<li>When two tasks say the same thing: "Which one owns this rule? The other loses it."
+</li>
+<li>At the end of each sitting: "Run the real command now in both harnesses, or first finish the next file?"
+</li>
+<li>In 4c only: "These commands were on the never-use list. Remove them now?"
+</li>
+</ul>
+<p><strong>Session 5</strong></p>
+<ul>
+<li>For each of the five telemetry numbers: "Here is the plain definition and two real figures. Is this the sentence you would say on stage? If not, say it your way and I will write that."
+</li>
+<li>"When you log a miss, what is the one sentence you want to read a month later?"
+</li>
+<li>"Here are five real misses from different projects. Sort each with the three questions. Do we agree?"
+</li>
+</ul>
+<p><strong>Session 6</strong></p>
+<ul>
+<li>"Here is the 3,000-word briefing. Anything from the old context file you want kept in it?"
+</li>
+<li>"Which repos get the update first?"
+</li>
+</ul>
+<p><strong>Session 7</strong></p>
+<ul>
+<li>"What went wrong in our sessions that the Playbook review must avoid?"
+</li>
+<li>"What is different about a corporate team that the Playbook prompt must account for?"
+</li>
+</ul>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+<script>
+// Light/dark toggle. The initial theme was already applied flash-free by the
+// <head> script (saved choice, else time-of-day). Clicking flips it, saves the
+// choice, and reloads so Mermaid re-renders in the matching theme.
+(function(){
+  var btn = document.getElementById('themeToggle');
+  if(!btn) return;
+  var relabel = function(){
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    btn.textContent = dark ? '☀ Light' : '☾ Dark';
+  };
+  relabel();
+  btn.addEventListener('click', function(){
+    var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    try{ localStorage.setItem('tf-theme', next); }catch(e){}
+    location.reload();
+  });
+})();
+
+// Copy buttons on every code <pre> — but NEVER on a `pre.mermaid`:
+// mermaid reads the <pre>'s textContent as the diagram source, so a button
+// appended here glues "copy" onto the last line and breaks the parse
+// (flowcharts → "Syntax error"; sequence diagrams silently absorb it).
+// Mermaid blocks get copy/export from their own .diagram toolbar instead.
+document.querySelectorAll('pre:not(.mermaid)').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy';
+  btn.textContent = 'copy';
+  btn.addEventListener('click', () => {
+    const text = pre.querySelector('code') ? pre.querySelector('code').innerText : pre.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'copied';
+      setTimeout(() => { btn.textContent = 'copy'; }, 1200);
+    });
+  });
+  pre.appendChild(btn);
+});
+
+// Mermaid init — theme follows the resolved light/dark theme
+if (window.mermaid) {
+  var mermaidTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default';
+  mermaid.initialize({ startOnLoad: true, theme: mermaidTheme, securityLevel: 'loose' });
+}
+
+// Mermaid toolbar wiring — run after mermaid renders
+function wireMermaidToolbars() {
+  document.querySelectorAll('.diagram').forEach(dia => {
+    if (dia.dataset.wired) return;
+    const merm = dia.querySelector('.mermaid');
+    const svg = merm && merm.querySelector('svg');
+    if (!svg) return;
+    dia.dataset.wired = '1';
+    let scale = 1;
+    const label = dia.querySelector('.zlabel');
+    const apply = () => {
+      svg.style.transform = `scale(${scale})`;
+      svg.style.transformOrigin = 'top left';
+      if (label) label.textContent = Math.round(scale * 100) + '%';
+    };
+    const setScale = (s) => { scale = Math.max(0.25, Math.min(4, s)); apply(); };
+    dia.querySelector('[data-zin]').onclick = () => setScale(scale * 1.2);
+    dia.querySelector('[data-zout]').onclick = () => setScale(scale / 1.2);
+    dia.querySelector('[data-fit]').onclick = () => {
+      svg.style.transform = '';
+      svg.removeAttribute('width');
+      svg.style.maxWidth = '100%';
+      svg.style.height = 'auto';
+      scale = 1;
+      if (label) label.textContent = 'Fit';
+    };
+    dia.querySelector('[data-one]').onclick = () => {
+      svg.style.transform = '';
+      svg.style.maxWidth = 'none';
+      svg.style.width = '';
+      svg.style.height = '';
+      scale = 1;
+      if (label) label.textContent = '100%';
+    };
+    dia.querySelector('[data-fs]').onclick = () => {
+      dia.classList.toggle('fs');
+      if (dia.classList.contains('fs')) {
+        document.addEventListener('keydown', escFs);
+      } else {
+        document.removeEventListener('keydown', escFs);
+      }
+    };
+    function escFs(e) { if (e.key === 'Escape') { dia.classList.remove('fs'); document.removeEventListener('keydown', escFs); } }
+    dia.querySelector('[data-pop]').onclick = () => openInNewTab(svg);
+    // Ctrl+wheel zoom
+    merm.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setScale(scale * (e.deltaY < 0 ? 1.1 : 1/1.1));
+    }, { passive: false });
+  });
+}
+
+function openInNewTab(svg) {
+  const svgSource = new XMLSerializer().serializeToString(svg);
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Diagram</title>
+<style>
+  html,body{margin:0;height:100%;background:#0f1115;color:#e6e8ee;font-family:system-ui,sans-serif}
+  .bar{position:fixed;top:0;left:0;right:0;padding:8px 12px;background:#161a22;border-bottom:1px solid #2a3142;display:flex;gap:8px;z-index:10}
+  .bar button{background:#1c2230;color:#9aa3b2;border:1px solid #2a3142;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer}
+  .bar button:hover{color:#7cc4ff;border-color:#7cc4ff}
+  .bar .hint{margin-left:auto;color:#9aa3b2;font-size:11.5px;align-self:center}
+  #stage{position:absolute;top:42px;bottom:0;left:0;right:0;overflow:hidden}
+  #stage svg{width:100%;height:100%}
+</style>
+</head><body>
+<div class="bar">
+  <button onclick="zpz.zoomIn()">+</button>
+  <button onclick="zpz.zoomOut()">−</button>
+  <button onclick="zpz.fit();zpz.center()">Fit</button>
+  <button onclick="zpz.resetZoom();zpz.center()">1:1</button>
+  <button onclick="window.print()">Print</button>
+  <button onclick="dlPng()">PNG</button>
+  <button onclick="dlSvg()">SVG</button>
+  <span class="hint">Drag to pan · Ctrl+wheel to zoom · + / − keys</span>
+</div>
+<div id="stage">${svgSource}</div>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"><\/script>
+<script>
+  const el = document.querySelector('#stage svg');
+  const zpz = svgPanZoom(el, { zoomScaleSensitivity: .3, minZoom: .2, maxZoom: 10, controlIconsEnabled: false, fit: true, center: true });
+  document.addEventListener('keydown', e => {
+    if (e.key === '+' || e.key === '=') zpz.zoomIn();
+    if (e.key === '-' || e.key === '_') zpz.zoomOut();
+    if (e.key === '0') { zpz.resetZoom(); zpz.center(); }
+  });
+  function dlSvg() {
+    const blob = new Blob([new XMLSerializer().serializeToString(el)], { type: 'image/svg+xml' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'diagram.svg'; a.click();
+  }
+  function dlPng() {
+    const src = new XMLSerializer().serializeToString(el);
+    const img = new Image();
+    const url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(src)));
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = el.clientWidth * 2; c.height = el.clientHeight * 2;
+      const ctx = c.getContext('2d'); ctx.scale(2,2); ctx.drawImage(img, 0, 0);
+      c.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'diagram.png'; a.click(); });
+    };
+    img.src = url;
+  }
+<\/script>
+</body></html>`;
+  const w = window.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+// Run wiring after mermaid finishes (it renders async)
+if (window.mermaid) {
+  setTimeout(wireMermaidToolbars, 400);
+  setTimeout(wireMermaidToolbars, 1200);  // safety re-run for slow renders
+}
+</script>
+</body>
+</html>
