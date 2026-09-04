@@ -81,14 +81,22 @@ check("every {file:} reference in opencode.jsonc resolves", () => {
 check("bash -n passes on every .sh file", () => {
   const scripts = filesUnder(root).filter((f) => f.endsWith(".sh"));
   assert(scripts.length > 0, "no .sh files found");
+  const version = spawnSync("bash", ["-c", "echo $BASH_VERSION"], { encoding: "utf8" });
+  if (version.error) throw new Error(`bash could not be started: ${version.error.message}`);
+  const bashVersion = version.stdout.trim();
   const broken = [];
   for (const script of scripts) {
     const result = spawnSync("bash", ["-n", script], { encoding: "utf8" });
     if (result.error) throw new Error(`bash could not be started: ${result.error.message}`);
     if (result.status !== 0) broken.push(`${rel(script)}: ${result.stderr.trim()}`);
   }
+  if (broken.length && /^[123]\./.test(bashVersion)) {
+    broken.push(`This terminal's bash is ${bashVersion}, Apple's old copy. The framework needs bash 4 or newer.`,
+      "On a Mac: install it with `brew install bash`, put /opt/homebrew/bin first on the PATH in ~/.zshrc,",
+      "then open a NEW terminal window and run the command again. Check with: which -a bash");
+  }
   assert(broken.length === 0, broken.join("\n"));
-  console.log(`      ${scripts.length} script(s) checked`);
+  console.log(`      ${scripts.length} script(s) checked with bash ${bashVersion}`);
 });
 
 // ---- 4. package contents
