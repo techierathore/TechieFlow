@@ -31,6 +31,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
+import { hasDependencyFootprint, removeDependencyFootprint } from "./npm-cleanup.mjs";
 
 // ---------------------------------------------------------------- arguments
 
@@ -207,6 +208,22 @@ function checkTools() {
       + "    Windows:        https://www.python.org/downloads/ (tick \"Add to PATH\")\n"
       + "  Without it the project would look installed while its guard hooks stay silent.");
   }
+}
+
+// Someone ran `npm install @techierathore/techieflow` instead of the npx command. On npm 10
+// and 11 the package's install hook deploys the framework and removes its own npm files.
+// npm 12 and newer skip install hooks, so the package just sits under node_modules/ and in
+// package.json. Whichever way it happened, once the framework is in place those npm files
+// have no purpose: remove them. Skipped while the install hook itself is running (the
+// package folder is still in use by npm then; the hook's own cleanup handles that case).
+function tidyDependencyInstall() {
+  const packageDir = join(target, "node_modules", "@techierathore", "techieflow");
+  if (sourceRoot === packageDir || sourceRoot.startsWith(`${packageDir}${sep}`)) return;
+  if (!hasDependencyFootprint(target)) return;
+  say("");
+  say("  The package was found under node_modules/ (someone ran `npm install` on it). The framework is not an application dependency.");
+  if (dryRun) { say("  WOULD remove it from node_modules/, package.json and package-lock.json."); return; }
+  for (const item of removeDependencyFootprint(target)) say(`  removed ${item}`);
 }
 
 function ensureSafeTarget() {
@@ -624,6 +641,8 @@ async function install() {
   shimLegacyPersonas({ gapOnly: false });
   // 9. .gitignore, build-output audit, telemetry, .gitattributes
   deployHousekeeping();
+  // 10. leftovers of a plain `npm install` of this package, if any
+  tidyDependencyInstall();
 
   say("");
   if (dryRun) { say("✔ Dry run complete — no files changed."); return; }
@@ -863,6 +882,8 @@ function update() {
   reportStaleReferences();
   // 8. .gitignore, build-output audit, telemetry, .gitattributes
   deployHousekeeping();
+  // 9. leftovers of a plain `npm install` of this package, if any
+  tidyDependencyInstall();
 
   say("");
   if (dryRun) {
