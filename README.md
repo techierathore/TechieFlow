@@ -118,7 +118,7 @@ opencode auth login     # or copy a portable API-key entry into ~/.local/share/o
 
 The PATH line matters: WSL's Windows-interop otherwise resolves `opencode` to the Windows npm shim (`AppData\Roaming\npm\opencode`) — the native-Windows Bun build that breaks on large repos. Verify with `type -a opencode` (the `~/.opencode/bin` entry must come first) and `opencode --version`.
 
-The framework side needs no manual setup: `scaffold-*.sh` / `update-framework.sh` deploy `.opencode/plugin/techieflow.js` (the guard bridge — the same `.tfcore/hooks/` guards Claude Code runs: git ban, PROJECT-STATUS shape, Verified ledger — plus telemetry with real dollar cost into `docs/metrics/sessions.jsonl`) and a framework-owned `.opencode/opencode.jsonc` into every app. Check with `opencode agent list` in the app (the six TechieFlow agents must appear).
+The framework side needs no manual setup: the npm installer and `scaffold-*.sh` / `update-framework.sh` deploy `.opencode/plugin/techieflow.js` (the guard bridge — the same `.tfcore/hooks/` guards Claude Code runs: git ban, PROJECT-STATUS shape, Verified ledger — plus telemetry with real dollar cost into `docs/metrics/sessions.jsonl`) and a framework-owned `.opencode/opencode.jsonc` into every app. Check with `opencode agent list` in the app (the six TechieFlow agents must appear).
 
 **Large repos:** the failure historically blamed on Bun is a `/mnt/c` (9p filesystem) pathology — OpenCode's snapshot walk can take minutes there while the identical repo on WSL-native ext4 (`~/`) boots in seconds. Typical TechieFlow apps on `/mnt/c` are fine; genuinely large repos belong on ext4, or see the watcher/snapshot tuning in `docs/OpenCode-Deployment-Guide.md` §6.
 
@@ -316,9 +316,9 @@ Every project has `docs/<APP>-Coding-Standards.md`. Every implementation agent p
 
 #### → `<APP>-BRD.html` + `<APP>-Architecture.html` + `PROJECT-STATUS.html` with Mermaid (§6 + §11)
 
-#### 5. `npx techieflow install` grabs v6, breaks customizations
+#### 5. Setting up a project needed a clone of this repo on every machine, and the upstream `npx bmad-method install` fetched a version that broke customizations
 
-#### → `scaffold-brownfield.sh` / `scaffold-greenfield.sh` copy your v4 setup (§3)
+#### → This repo is now its own npm package: `npx @techierathore/techieflow@latest install` puts exactly this customized setup into a project, from any machine, with no clone (§3). The scaffold scripts still work from a clone and produce the same files.
 
 #### 6. Claude Code prompts every Bash; `*yolo` doesn't help; a VM goal run waits days on delete prompts, git-read blocks and usage limits
 
@@ -332,7 +332,46 @@ Every project has `docs/<APP>-Coding-Standards.md`. Every implementation agent p
 
 #### → Appium runtime bridge (§0b): the verifier drives MAUI Android (emulator on the Windows host), iOS (Simulator on a LAN Mac), and Mac Catalyst (same Mac) over an HTTP WebDriver endpoint that returns the same screenshot + element tree, so the §4a/§4b gates run unchanged. Endpoints in `core-config.yaml → runtimeVerification.appium`; an unreachable host → `⚠ STATIC-ONLY`, never a faked pass.
 
-## 3. Scaffolding a new project — copy, don't npm-install
+## 3. Installing the framework into a project
+
+There are two routes. Both produce the same files; a test in this repository (`scripts/test-install.mjs`) runs both on the same folders and fails on any difference.
+
+### From npm — one command, no clone (recommended)
+
+The framework is published as [`@techierathore/techieflow`](https://www.npmjs.com/package/@techierathore/techieflow). You need Node.js 20 or newer, bash and Python 3.10 or newer. The full walkthrough, including a ten-minute new-project path, is in [`docs/TechieFlow-Installation.md`](docs/TechieFlow-Installation.md).
+
+Existing app:
+
+```bash
+cd /path/to/existing-app
+npx @techierathore/techieflow@latest install --dry-run   # preview, writes nothing
+npx @techierathore/techieflow@latest install
+```
+
+New app:
+
+```bash
+mkdir /path/to/my-new-app && cd /path/to/my-new-app
+git init
+npx @techierathore/techieflow@latest install --greenfield
+```
+
+Refresh the framework in a project after a new release:
+
+```bash
+npx @techierathore/techieflow@latest update --dry-run
+npx @techierathore/techieflow@latest update
+```
+
+Remove it:
+
+```bash
+npx @techierathore/techieflow@latest uninstall --force
+```
+
+`npx` downloads the package to npm's cache, runs the installer once and keeps nothing: the project gets the hidden framework folders and no `node_modules`, `package.json` or lock file. The package is never a dependency of your application. If you run `npm install @techierathore/techieflow` by mistake, see section 9 of the Installation document: on npm 10 and 11 the package installs itself and cleans up, on npm 12 run the `npx` command and it cleans up.
+
+The rest of this section is the second route: the three shell scripts, run from a clone of this repository.
 
 ### Codex adapter
 
@@ -344,7 +383,9 @@ skills such as `$techieflow-build`, `$techieflow-verify`, and
 `bash .tfcore/utils/tf-goal.sh --harness codex <app> "<goal>"`. Full
 MAUI/Appium/winrun verification requires local Codex.
 
-You have a customized v4 setup. `npx techieflow install` would fetch v6 and lose your customizations. Use the scaffold script:
+### From a clone — the shell scripts
+
+Use this route when you want whatever is on the branch you checked out rather than the released version. It needs rsync as well as bash and Python.
 
 Three scripts: two scaffolders (one per flow) plus an updater for projects scaffolded earlier. All are idempotent (scaffolders use rsync `--ignore-existing` — existing files preserved on re-run; the updater force-refreshes framework files including `.claude/settings.json`, see below).
 
@@ -399,7 +440,7 @@ Same framework drop as brownfield, plus creates empty `src/`, `tests/playwright/
 
 ### Updating an already-scaffolded project — `update-framework.sh`
 
-When the reference framework repo (WSL: `/mnt/c/3AIGenCode/TechieFlow` · macOS: `/Volumes/MacD/MyCode/TechieFlow`) evolves (new tasks, updated templates, agent fixes), pull those changes into an existing project with the updater. Unlike the scaffolders (`--ignore-existing`: never touch a file that's already there), the updater **force-overwrites framework files** and preserves everything that contains your work product. The scripts self-locate — invoke whichever machine's copy you're on and it uses itself as the source.
+When the reference framework repo (WSL: `/mnt/c/3AIGenCode/TechieFlow` · macOS: `/Volumes/MacD/MyCode/TechieFlow`) evolves (new tasks, updated templates, agent fixes), pull those changes into an existing project with the updater. (`npx @techierathore/techieflow@latest update` does the same from the released package.) Unlike the scaffolders (`--ignore-existing`: never touch a file that's already there), the updater **force-overwrites framework files** and preserves everything that contains your work product. The scripts self-locate — invoke whichever machine's copy you're on and it uses itself as the source.
 
 **WSL (Windows):**
 
