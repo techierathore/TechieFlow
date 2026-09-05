@@ -130,12 +130,15 @@ const mustNotShip = [
   ".opencode/node_modules", ".opencode/package.json", ".opencode/package-lock.json", ".opencode/.gitignore",
   ".codex/agents", ".agents", ".techierag", ".trblazeui", ".github",
   "scaffold-brownfield.sh", "scaffold-greenfield.sh", "update-framework.sh",
+  "scripts/test-install.mjs", "scripts/validate.mjs",
   "docs/TechieFlow-Requirements.md", "docs/TechieFlow-How-It-Works.md", "docs/metrics",
   "DECISIONS.md", "WorkFlow-Context.md", "CodexChanges.md",
 ];
+// The package ships the framework plus the installer's own three files under scripts/.
+// Those never reach a project: the installer copies the framework folders only.
 const mustShip = [
   "package.json", "LICENSE", "README.md", "docs/TechieFlow-Installation.md",
-  "scripts/install.mjs", "scripts/test-install.mjs", "scripts/validate.mjs",
+  "scripts/install.mjs", "scripts/npm-postinstall.mjs", "scripts/npm-cleanup.mjs",
 ];
 
 check("npm pack --dry-run succeeds and ships the right files", () => {

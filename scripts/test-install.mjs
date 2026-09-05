@@ -14,7 +14,8 @@
 //   3. It checks the installed Claude mirror against .tfcore/ and every {file:} reference
 //      in both installed opencode.jsonc files.
 //   4. It checks uninstall, --dry-run, --no-gitignore, --keep-permissions, a second run,
-//      and the one-shot `npm exec` form that `npx` uses.
+//      the one-shot `npm exec` form that `npx` uses, and the plain `npm install` form
+//      (install hook plus cleanup, in an empty folder and in a JavaScript project).
 //
 // Every check runs even if an earlier one fails; the summary at the end lists them all.
 // Exit code 0 means every check passed.
@@ -138,6 +139,16 @@ function assertUnchanged(before, directory, what) {
 
 const read = (path) => readFileSync(path, "utf8");
 const lines = (path) => read(path).replace(/\r/g, "").split("\n");
+
+// Polls until the condition holds. Returns false when the time runs out.
+async function waitFor(condition, timeoutMs) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (condition()) return true;
+    await new Promise((done) => setTimeout(done, 200));
+  }
+  return condition();
+}
 
 // Every file under .claude/commands/TechieFlow/<sub>/ must equal .tfcore/<sub>/ byte for byte.
 function mirrorDifferences(project) {
@@ -486,6 +497,57 @@ try {
     npm(["exec", "--yes", `--package=${tarball}`, "--", "techieflow", "install"], { cwd: npxTarget });
     assertSameTree(brownNpm, npxTarget);
     for (const path of ["node_modules", "package.json", "package-lock.json"]) assert(!existsSync(join(npxTarget, path)), `${path} left behind by npm exec`);
+  });
+
+  // ---- the wrong-but-common form: `npm install @techierathore/techieflow`
+  // On npm 10 and 11 the package's install hook deploys the framework and a detached
+  // cleanup removes the npm files once npm has finished. The cleanup runs after npm exits,
+  // so these checks wait for it. npm 12 skips install hooks; `--ignore-scripts` below
+  // stands in for that, and the documented npx command must then finish the job.
+  const npmArtifacts = ["node_modules", "package.json", "package-lock.json"];
+  const settled = (dir, done) => waitFor(() => done(dir), 30_000);
+
+  const plainTarget = join(sandbox, "plain-npm-install");
+  seedProject(plainTarget);
+  npm(["install", tarball], { cwd: plainTarget });
+  const plainSettled = await settled(plainTarget, (dir) => npmArtifacts.every((p) => !existsSync(join(dir, p))));
+  check("plain `npm install` of the tarball installs the framework and removes its own npm files", () => {
+    assert(plainSettled, `after 30 seconds the target still holds ${npmArtifacts.filter((p) => existsSync(join(plainTarget, p))).join(", ")}`);
+    assertSameTree(brownNpm, plainTarget);
+  });
+
+  const jsTarget = join(sandbox, "plain-npm-install-js-project");
+  seedProject(jsTarget);
+  mkdirSync(join(jsTarget, "vendor", "leftpad"), { recursive: true });
+  writeFileSync(join(jsTarget, "vendor", "leftpad", "package.json"), '{ "name": "leftpad", "version": "1.0.0" }\n');
+  const ownManifest = { name: "myapp", version: "0.1.0", scripts: { build: "echo build" }, dependencies: { leftpad: "file:./vendor/leftpad" } };
+  writeFileSync(join(jsTarget, "package.json"), `${JSON.stringify(ownManifest, null, 2)}\n`);
+  npm(["install"], { cwd: jsTarget });
+  npm(["install", tarball], { cwd: jsTarget });
+  const jsSettled = await settled(jsTarget, (dir) => !existsSync(join(dir, "node_modules", "@techierathore")) && !read(join(dir, "package.json")).includes("techieflow"));
+  check("plain `npm install` in a JavaScript project keeps the project's own package.json, lock file and node_modules", () => {
+    assert(jsSettled, "after 30 seconds the package was still in node_modules/ or package.json");
+    const manifest = JSON.parse(read(join(jsTarget, "package.json")));
+    assert(manifest.name === "myapp" && manifest.scripts.build === "echo build" && manifest.dependencies.leftpad === "file:./vendor/leftpad", "the project's package.json was changed beyond removing the framework entry");
+    assert(!("@techierathore/techieflow" in manifest.dependencies), "package.json still lists the framework");
+    assert(!read(join(jsTarget, "package-lock.json")).includes("@techierathore/techieflow"), "package-lock.json still lists the framework");
+    assert(existsSync(join(jsTarget, "node_modules", "leftpad")), "the project's own dependency was removed from node_modules");
+    assert(!existsSync(join(jsTarget, "node_modules", "@techierathore")), "the framework package is still under node_modules");
+    assert(!existsSync(join(jsTarget, "node_modules", ".bin", "techieflow")), "the techieflow shim is still under node_modules/.bin");
+    for (const path of [".tfcore/agents/analyst.md", ".claude/commands/TechieFlow/agents/analyst.md", ".opencode/opencode.jsonc", "WORKFLOW.html"]) {
+      assert(existsSync(join(jsTarget, path)), `${path} was not installed`);
+    }
+  });
+
+  const noHooksTarget = join(sandbox, "npm-install-without-hooks");
+  seedProject(noHooksTarget);
+  npm(["install", "--ignore-scripts", tarball], { cwd: noHooksTarget });
+  check("`npm install` on an npm that skips install hooks (npm 12): the npx command then installs and tidies up", () => {
+    assert(existsSync(join(noHooksTarget, "node_modules", "@techierathore", "techieflow", "package.json")), "test setup: the package did not land under node_modules");
+    assert(!existsSync(join(noHooksTarget, ".tfcore")), "test setup: the install hook ran although scripts were ignored");
+    npm(["exec", "--yes", `--package=${tarball}`, "--", "techieflow", "install"], { cwd: noHooksTarget });
+    for (const path of npmArtifacts) assert(!existsSync(join(noHooksTarget, path)), `${path} was left behind`);
+    assertSameTree(brownNpm, noHooksTarget);
   });
 } catch (error) {
   failures.push(`setup: ${error.message}`);

@@ -39,13 +39,14 @@
     "opencode.jsonc",
     "WORKFLOW.html",
     "scripts/install.mjs",
-    "scripts/test-install.mjs",
-    "scripts/validate.mjs",
+    "scripts/npm-postinstall.mjs",
+    "scripts/npm-cleanup.mjs",
     "docs/TechieFlow-Installation.md",
     "LICENSE",
     "README.md"
   ],
   "scripts": {
+    "postinstall": "node scripts/npm-postinstall.mjs",
     "validate": "node scripts/validate.mjs",
     "test:install": "node scripts/test-install.mjs",
     "pack:check": "npm pack --dry-run",

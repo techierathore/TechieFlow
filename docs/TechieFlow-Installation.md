@@ -30,6 +30,8 @@ You do not need rsync, git on the command line, or a clone of this repository.
 
 The installer copies the framework into hidden folders inside your project. It never adds the framework as a dependency of your application. After it runs there is no `node_modules`, no `package.json` and no lock file that was not there before.
 
+The npm package itself holds the framework folders, this document and a `scripts/` folder with the installer's own three files. Nothing from `scripts/` is ever copied into your project, so it cannot clash with a `scripts/` folder of your own. Claude Code and OpenCode never read the package. They read the copies the installer places in your project, listed below.
+
 | Path | What it is | On update |
 |---|---|---|
 | `.tfcore/` | The framework: personas, tasks, templates, hooks, helper scripts. | Refreshed. Two files inside are yours and are kept: `core-config.yaml` and `routing.yaml`. |
@@ -282,14 +284,36 @@ git clone https://github.com/techierathore/TechieFlow.git
 
 The installer and the scripts produce the same files. A test in the repository, `scripts/test-install.mjs`, runs both on the same folders and fails on any difference. Choose the route you like. The package route needs no clone and always gives you the released version. The clone route gives you whatever is on the branch you checked out.
 
-Do not run `npm install @techierathore/techieflow`. That would add the package to your application. Use `npx`, which runs the installer once and keeps nothing.
+---
+
+## 9. If you ran `npm install` instead of `npx`
+
+The documented command is `npx ... install`. It downloads the package to npm's cache, runs the installer once, and leaves nothing behind.
+
+`npm install @techierathore/techieflow` is the wrong command for a framework. It treats the package as a dependency of your application: it puts the whole package under `node_modules/@techierathore/techieflow/`, and writes it into `package.json` and `package-lock.json`. Claude Code and OpenCode do not look there.
+
+What happens next depends on your npm version. Check with `npm --version`.
+
+| npm version | What happens |
+|---|---|
+| 10 or 11 | The package's install hook runs the installer for you, then removes the package from `node_modules/`, `package.json` and `package-lock.json`. If npm created those files only for this install, they are removed too. A JavaScript project keeps its own `package.json`, lock file and `node_modules/`, minus the framework entry. The end result is the same as the `npx` command. npm hides the installer's output, so read `.tf-scaffold-note.txt` for the next step. |
+| 12 or newer | npm no longer runs install hooks unless the project allows them. Nothing is installed. The package just sits under `node_modules/`. |
+
+Either way, the fix is the same. Run the real command in the project folder:
+
+```bash
+npx @techierathore/techieflow@latest install
+```
+
+It installs the framework if it is not there yet, then removes the leftover package from `node_modules/`, `package.json` and `package-lock.json`. `update` does the same tidy-up.
 
 ---
 
-## 9. If something goes wrong
+## 10. If something goes wrong
 
 | What you see | What to do |
 |---|---|
+| The framework is under `node_modules/@techierathore/techieflow/` and nowhere else | You ran `npm install`. See section 9. Run `npx @techierathore/techieflow@latest install`. |
 | `bash was not found` | On Windows, run the command inside WSL or Git Bash. |
 | `python3 was not found` | Install Python 3 and run the command again. On macOS: `brew install python3`. On Ubuntu or WSL: `sudo apt-get install -y python3`. |
 | `Codex bindings could not be generated` | Your Python is older than 3.10. Everything except the Codex files is installed. Upgrade Python and run `update` to add them. |
