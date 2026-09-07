@@ -3,17 +3,18 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 122 logged: 34 open, 87 fixed, 1 will not fix |
+| Count | 125 logged: 35 open, 89 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
 | Updated | 2026-09-07 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
-## Open (34)
+## Open (35)
 
 | Miss | Found | Whose gap | What went wrong |
 |---|---|---|---|
-| MISS-TechieFlow-20260907-16 | 2026-09-07 by owner | said and ignored | The framework demanded of every application a verification it never ran on itself: 63 requirement lines with stated checks, not one verdict recorded, and its own metrics reported no first-pass rate as though it had no requirements at all. |
+| MISS-TechieFlow-20260907-19 | 2026-09-07 by owner | the check was too weak | The database guard reads the whole command line, so it refused a documentation edit and a read-only grep because a migration tool's name appeared in the text being written. |
+| MISS-TechieFlow-20260907-18 | 2026-09-07 by owner | the check was too weak | FR-03 claims no persona or task names a technology, but the analyst and build-phase hardcode routing to the TrBlazeUI and TechieRag library agents, and nothing ever ran the grep that would have said so. |
 | MISS-TechieFlow-20260907-12 | 2026-09-07 by owner | said and ignored | The D-21 rule that hidden framework folders are invisible to search was written down and still cost 58 percent of a folder's true size when OpenCode measured the Playbook with a shell glob. |
 | MISS-TechieFlow-20260907-04 | 2026-09-07 by gate | the check was too weak | The readable miss file's unchanged check compared only the header above the Updated line, so an amend that changed a row but no count left the file stale; the bugs self-test caught it before release and the check now compares everything but the date. |
 | MISS-TechieFlow-20260907-03 | 2026-09-07 by agent-review | the check was too weak | The cross-project rollup keyed a requirement by its id alone, so REQ-UI-001 of TfLens and REQ-UI-001 of TechieBlog counted as one requirement and the combined first-pass rate printed 72% where the true figure is 48%; found by re-reading the numbers before the explainer, fixed by keying on project and id. |
@@ -48,10 +49,12 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (87)
+## Fixed (89)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260907-17 | 2026-09-07 by owner | 2026-09-07 by fix-issues | the check was too weak | The telemetry schema never gained the command values its own tasks were writing, so 27 run records across the estate carried a cmd the schema does not list and nothing noticed for four days. |
+| MISS-TechieFlow-20260907-16 | 2026-09-07 by owner | 2026-09-07 by fix-issues | said and ignored | The framework demanded of every application a verification it never ran on itself: 63 requirement lines with stated checks, not one verdict recorded, and its own metrics reported no first-pass rate as though it had no requirements at all. |
 | MISS-TechieFlow-20260907-15 | 2026-09-07 by owner | 2026-09-07 by fix-issues | the check was too weak | A run record carrying both timestamps but no duration counted as zero time in the report, so the reset's thirteen runs showed 16h49m of work instead of the 55h57m the same records already proved. |
 | MISS-TechieFlow-20260907-14 | 2026-09-07 by owner | 2026-09-07 by fix-issues | the framework never said it | The npm installer's framework subfolder list left out standards, so a project migrated from the old layout came out with no coding standards file. |
 | MISS-TechieFlow-20260907-13 | 2026-09-07 by owner | 2026-09-07 by fix-issues | the framework never said it | The npm installer wrote a settings.json missing five hook registrations the shell scripts had gained, so a project installed from the package ran without the metrics, database and build guards. |

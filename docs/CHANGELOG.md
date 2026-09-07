@@ -35,6 +35,22 @@ Everything below predates the reset and is preserved as it was written.
 
 ## Maintenance log (newest first)
 
+### 2026-09-07 — the checks built: framework coverage from 12 lines to 29, and three defects it found on the first run
+
+The 28 requirement lines whose Check column described a script nobody had written now have one, or an honest reason they cannot. `tests/requirements/checks.sh` holds a purpose-built check per line, and the grader runs it: **29 of 63 lines graded, 27 passing, 34 ungraded** with the reason stated for each.
+
+Ten lines gained a real check — technology neutrality, the banned document shapes, the `Verified` ledger guard, the root-litter guard, the yolo field, the review-record refusals, the schema's command vocabulary, the release order, the honest `ended`, and the database guard, most of them driving the hook directly and asserting both the refusal and the allowed case. Five more were repointed at the self-test whose planted defect already proved them, and three at the installer test.
+
+**The first run found three defects that had been live for days.**
+
+- **FR-03 fails.** The framework claims no persona or task names a technology, and the analyst and `build-phase` hardcode routing to the TrBlazeUI and TechieRag library agents. Left failing, because the fix is the owner's call: either library routing is a stated exception, or the tasks route by requirement prefix to whatever library agents a project has (`MISS-TechieFlow-20260907-18`).
+- **FR-34 fails.** Four tasks wire no run record: `create-doc`, `generate-html`, `facilitate-brainstorming-session`, `create-deep-research-prompt`. This is the idea-stage gap D-13 named in Session 1; it is now a number instead of a paragraph.
+- **The telemetry schema had never listed five command values its own tasks were writing** — `framework-reset` among them, 27 records across the estate. Added (`MISS-TechieFlow-20260907-17`, fixed).
+
+A fourth, minor, stays open: the database guard reads the whole command line, so it refused a documentation edit and a read-only search because a migration tool's name appeared in the text (`MISS-TechieFlow-20260907-19`).
+
+**Two documents were written for the work that follows.** `docs/AI-First-Playbook-Review-Prompt.md` is now version 3: it replaces version 2's "about 30 requirement lines, each with a way to check it" with "fewer lines, the grader built in the same session, and the ungraded count as the headline" — because version 2's wording is exactly how this framework acquired 28 checks that did not exist. And `docs/TfLens-Metrics-Update-Prompt.md` is a hand-over brief for the TfLens team: the five things now in the streams that its pages cannot show, and the three reader-side rules that change numbers it already publishes.
+
 ### 2026-09-07 — the framework graded against its own checklist for the first time
 
 The owner rejected the reasoning in the metrics report, and was right. It said the framework had no first-pass rate because it had "no checklist of its own to verify". It has had one since Session 2: **`docs/TechieFlow-Requirements.md`, 63 numbered lines, each with a stated check**, named in every session restart prompt. The framework had been demanding of every application a verification it never performed on itself. Logged as `MISS-TechieFlow-20260907-16`, severity blocker, sorted `ignored` — the rule was written down and not followed.

@@ -1,25 +1,25 @@
-# AI-First Playbook — Review Session Prompt (version 2)
+# AI-First Playbook — Review Session Prompt (version 3)
 
 | | |
 |---|---|
 | Purpose | The text the owner pastes into a fresh Claude Code window to review the AI-First Playbook, the team edition, and produce a plan for fixing it. |
 | Audience | The owner, and the review session that reads it. |
-| Status | **Version 2, written 2026-09-07 at the close of the TechieFlow reset (Session 7).** It replaces version 1, which was drafted before those sessions and is kept only in git history. Ready to run. |
-| Companion | `TechieFlow-Reset-Plan-2026-09-04.md`, `TechieFlow-Document-Schemas.md`, `TechieFlow-Requirements.md`, `TechieFlow-How-It-Works.md`, `docs/CHANGELOG.md` |
+| Status | **Version 3, written 2026-09-07 after the TechieFlow reset closed and its own metrics were built.** Version 2 was written earlier the same day, before the framework was graded against its own checklist; that grading changed what this prompt asks for. Versions 1 and 2 are in git history. Ready to run. |
+| Companion | `TechieFlow-Reset-Plan-2026-09-04.md`, `TechieFlow-Requirements.md`, `TechieFlow-Document-Schemas.md`, `docs/CHANGELOG.md`, `docs/metrics/METRICS.md` |
 
 ---
 
-## 1. What changed between version 1 and version 2
+## 1. What version 3 adds
 
-Version 1 assumed the Playbook had TechieFlow's disease and told the review to look for the same pattern. A measurement on 2026-09-07 says the shape is different, and the difference decides where the work goes.
+Version 2 already carried the reset's methods. Then the framework was measured against its own requirements for the first time, and that produced the finding this version is built around.
 
-**The prose the reader sees is lean.** The ten phase files total 3,572 words, an average of 357 each. Shouted rules of the MUST / NEVER / BANNED kind number 61 across the whole repository, against 622 in TechieFlow before its reset, and 46 of those 61 sit in one folder. Fifteen scripts already exist.
+**TechieFlow had 63 requirement lines and had never graded one.** They were written in Session 2, named in every session restart prompt, and each carried a stated check. Nothing ran them. The framework's own metrics reported "no first-pass rate" on the reasoning that it had no checklist to verify — while the checklist sat in `docs/`. When a grader was finally built it took an afternoon and immediately found three real defects, including two that had been live for days.
 
-**The prose the agent reads is not.** The shipped OpenCode harness carries a **verifier agent of 8,630 words** and fifteen command files totalling **29,800**, the largest of them 4,855. TechieFlow's caps after its reset are 1,500 words for a persona and 7,000 for a command, and its own evidence is that its 11,850-word verify task was the origin of 63 of 128 recorded misses. The Playbook's verify path is the same shape as the file that hurt TechieFlow most.
+Worse than the not-running was **what the grading revealed about the checks themselves**: of 63 lines, 42 said "script", and **28 of those described a script in prose that nobody had ever written**. A requirement that names a check it does not have reads exactly like a requirement that is enforced. That is the single most expensive habit the reset found, and it is the thing this review must look for in the Playbook first.
 
-**And there is a third thing neither version predicted.** `verification/` holds **174 files and 196,498 words** of committed run evidence: three dated campaigns, each keeping a complete copy of an installed target. That is 62 percent of the repository's 317,385 markdown words, it is not shipped by the npm package, and it is why the same 8,630-word verifier file exists six times in the tree. TechieFlow bans exactly this: run material lives under `tests/.artifacts/` and is swept after seven days, because a repository that keeps every run's output makes every later search return stale copies.
+So version 3 changes the ask. Version 2 said "write a requirements list for the Playbook, about 30 lines, each with a way to check it". That is not enough, and it is how TechieFlow got 28 phantom checks. Version 3 says: **write fewer lines, build the grader in the same session, and report the ungraded count as the headline.** A checklist nobody can run is documentation pretending to be enforcement.
 
-So version 2 does three things version 1 did not. It hands the review a measured starting point to confirm or refute rather than a borrowed diagnosis. It carries the methods the TechieFlow sessions proved. And it names what went wrong in those sessions, including the two ways these very numbers were nearly reported wrong, so this review does not repeat it.
+Everything version 2 measured about the Playbook still stands and is repeated in Step 1 for confirmation.
 
 **How the work is split, unchanged.** The Playbook is edited in Claude Code, because that is where the owner works fastest. It is proven only in OpenCode, because that is the harness its users have. A change that works in Claude Code and fails in OpenCode is not done.
 
@@ -36,9 +36,9 @@ OpenCode. Corporate teams are the audience; they avoid single-vendor tools, so O
 primary harness and must stay so. Claude Code is secondary here.
 
 The Playbook and its solo sibling TechieFlow were both borrowed from BMAD and then corrected
-incident by incident over six months. TechieFlow has just been through a seven-session reset. What
-that reset learned is written into the method below. Do not assume the two frameworks have the same
-faults: measure this one.
+incident by incident over six months. TechieFlow has just been through a seven-session reset and
+has been graded against its own requirements for the first time. What that cost is written into the
+method below. Do not assume the two frameworks have the same faults: measure this one.
 
 RULES FOR THIS SESSION
 - Plain English in everything you write. Short sentences. Any term of art gets a one-clause
@@ -50,7 +50,10 @@ RULES FOR THIS SESSION
   contradicts something stated in this prompt, the number wins and you say so.
 - Keep OpenCode first-class in every proposal. Never propose removing OpenCode support, the
   operating contract, or the npm packaging.
-- A proposal that cannot be checked by a script is a weak proposal. Say so when you make one.
+- NEVER propose a check you are not also prepared to build. If a line needs a check that cannot be
+  written this session, say "review" and mean it. A requirement that names a script nobody wrote is
+  worse than one that admits it rests on a person: it reads as enforced and is not. TechieFlow
+  carried 28 of those.
 
 STEP 1 — MEASURE THE SURFACE
 Two counting rules, both paid for. Break either and every number below is wrong.
@@ -60,11 +63,10 @@ Two counting rules, both paid for. Break either and every number below is wrong.
   be a number reads as "nothing here" instead of "I did not look". That mistake was made while
   preparing this prompt and hid 174 files and 196,498 words.
 - Count HIDDEN paths. Use `find`, not a shell glob, and not a search tool that honours .gitignore.
-  A harness lives in a dot-directory: `.opencode/`. When this prompt's own Step 1 was run through
-  OpenCode on 2026-09-07 it reported verification/ as 120 files and 82,168 words, against the true
-  174 and 196,498, because `**/*.md` skips dot-directories. It under-reported by 58 percent and
-  looked entirely plausible. This is the same defect TechieFlow recorded as D-21: the framework's
-  own tree is invisible to ordinary search, so an agent concludes a file is not there when it is.
+  A harness lives in a dot-directory: `.opencode/`. When Step 1 was run through OpenCode on
+  2026-09-07 it reported verification/ as 120 files and 82,168 words against the true 174 and
+  196,498, because `**/*.md` skips dot-directories. It under-reported by 58 percent and looked
+  entirely plausible.
 
 Confirm or refute this snapshot, taken 2026-09-07. Print your own figures beside it.
 
@@ -84,50 +86,58 @@ Confirm or refute this snapshot, taken 2026-09-07. Print your own figures beside
 1. Word count of every markdown file, grouped by folder, sorted by size, with file counts.
 2. For each of the ten phases, what an OpenCode agent actually loads when that phase runs. Trace it
    from opencode.json, AGENTS.md and the harness folder: which files, in what order, total words.
-   That total is the instruction surface for the phase, and it is the number that matters, not the
-   phase document's own size. Say plainly which phase reads the most before its first useful step.
+   That total is the instruction surface for the phase, not the phase document's own size. Say
+   plainly which phase reads the most before its first useful step.
 3. Count prose rules and script-enforced rules side by side, and say where each cluster sits.
-4. List every document in docs/ with its audience (team lead, developer, agent, owner) and whether
-   anything in the repo points at it. Flag every document nothing points at. Flag separately any
-   document that belongs to the other framework rather than this one.
-5. Report every file that exists more than once in the tree with the same name and near-identical
-   content. Duplication is why an edit lands in one copy and not the other.
+4. List every document in docs/ with its audience and whether anything in the repo points at it.
+   Flag every document nothing points at, and separately any that belongs to the other framework.
+5. Report every file that exists more than once with the same name and near-identical content.
 
-STEP 2 — THE MISS AND TELEMETRY DATA
+STEP 2 — THE EXISTING CHECKS: WHICH ARE REAL
+For every rule the Playbook states as enforced — in AGENTS.md, the phase files, the scripts, the
+release workflow — answer one question: is there an artefact that fails when the rule is broken,
+and can you run it right now? Print a table:
+
+  | The rule | Where it is stated | The check it claims | Runs today? | Proof |
+
+"Runs today" is yes only if you ran it in this session and saw it pass or fail. Anything else is no.
+Count the yes and the no. That ratio is the Playbook's real enforcement, and it is the number the
+owner should see first — TechieFlow's equivalent was 12 of 63 before this work and 29 of 63 after.
+
+STEP 3 — THE MISS AND TELEMETRY DATA
 1. If a misses stream or docs/metrics exists, summarise misses by cause, by phase, and by who found
    them. If none exists, say so plainly: a framework that cannot show what it got wrong cannot show
    it improved, and that is the single finding most worth fixing first.
-2. Read Ai-First-Playbook-Gap.md and docs/Decisions.md. List the rules that were added in reaction
-   to an incident, and mark each prose or enforced.
+2. Read Ai-First-Playbook-Gap.md and docs/Decisions.md. List the rules added in reaction to an
+   incident, and mark each prose or enforced.
 
-STEP 3 — EVERY PROSE FILE, ONE TABLE
+STEP 4 — EVERY PROSE FILE, ONE TABLE
 Start with what the agent reads, not what the reader reads: harness/opencode/agent/verifier.md
 (8,630 words) and the four largest command files, then the rest of harness/, then phases/ and
 templates/. Shrinking the verifier shrinks every verify run, and the equivalent file was the single
-worst source of misses in TechieFlow. For each file, print one row per block of the file:
+worst source of misses in TechieFlow. For each file, print one row per block:
 
   | # | What the block says, in one line | Verdict | Why |
 
 Verdict is exactly one of: KEEP AS WORDS (it needs judgement), SCRIPT (it is mechanical, and name
-the script), DELETE (it duplicates another file or states the obvious). This is the format the
-TechieFlow reset used on every task file; it worked because the owner could rule on a row without
-reading the block, and could always ask to see the block.
+the script), DELETE (it duplicates another file or states the obvious). The owner can rule on a row
+without reading the block, and can always ask to see the block.
 
-STEP 4 — THE TEMPLATES BECOME SCHEMAS
+STEP 5 — THE TEMPLATES BECOME SCHEMAS
 A template that only advises produces a document that drifts. Propose for each template a schema
-block: the required sections in order, the optional ones, a word budget per project size as a
-TARGET and a MAXIMUM, and the rules every row must follow. A single hard number makes the agent
-truncate, which is why the budget is always a pair.
+block: required sections in order, the optional ones, a word budget per project size as a TARGET
+and a MAXIMUM, and the rules every row must follow. A single hard number makes the agent truncate,
+which is why the budget is always a pair.
 
-Give one worked example in full, for templates/checklist-item-template.md, and include the rule
+Give one worked example in full, for templates/checklist-item-template.md, including the rule
 TechieFlow found mattered most: every acceptance line reads
 
   "When <actor> <does what> on <screen>, then <a result a machine can observe>"
 
-at most 30 words, target 20, holding one behaviour. Fourteen recorded misses across the owner's
-projects were traced to acceptance lines that allowed two honest readings.
+at most 30 words, target 20, holding one behaviour. Fourteen recorded misses were traced to
+acceptance lines that allowed two honest readings.
 
-STEP 5 — THE MISS PROTOCOL
+STEP 6 — THE MISS PROTOCOL
 Propose it as four questions asked in order, each with one fixed response, and a field on the record
 that stores which one it was:
 
@@ -136,68 +146,79 @@ that stores which one it was:
   3. Was there a check, and did it fail to catch it? yes -> fix the check, not the prose.
   4. Was it written and ignored anyway?              yes -> make it a script or a gate, or delete it.
 
-The fourth response is the important one: a rule ignored twice never gets a third paragraph.
-TechieFlow's own numbers say why the third question earns its place — of 61 sorted misses,
-31 (51%) were "the check was too weak", 16 (26%) "nobody said it", 14 (23%) "said and ignored".
-Half of a framework's failures are its checks, not its words.
+TechieFlow's own numbers say why the third question earns its place: of its sorted misses, about
+half were "the check was too weak", a quarter "nobody said it", a quarter "said and ignored". Half
+of a framework's failures are its checks, not its words. The fourth response is the one with teeth:
+a rule ignored twice never gets a third paragraph.
 
-STEP 6 — THE INSTRUCTION BUDGET
+STEP 7 — THE INSTRUCTION BUDGET
 Propose a budget per phase, expressed per model tier rather than as one number, and say how a phase
-document is to be written so a small budget can be met without losing steps: a short core, plus
-reference sections loaded only when a step needs them. State each phase's current figure from
-Step 1.2 against the budget you propose.
+document is written so a small budget can be met without losing steps: a short core, plus reference
+sections loaded only when a step needs them. State each phase's current figure against the budget.
 
-STEP 7 — THE PLAN
+STEP 8 — THE PLAN
 Write docs/Playbook-Reset-Plan.md with these sections, in this order:
  1. What is genuinely right and should be kept. Name files.
  2. What grew without earning its place. Name files, sizes, and why.
  3. The instruction surface per phase today, and a target for each.
- 4. The keep / script / delete table from Step 3, consolidated.
+ 4. The keep / script / delete table from Step 4, consolidated.
  5. Which documents to merge, shrink, or move out of the reader's path. A corporate adopter needs a
     getting-started, the ten phases, the templates, and one operating guide. Everything else must
     justify itself. Say where the rest goes; nothing is deleted without a home.
  5b. What to do about verification/, which is 62 percent of the repository. Say what the campaigns
     prove, whether anything still depends on them, what evidence a future run should keep and for
-    how long, and where it should live so it is not committed. TechieFlow's answer was a single
-    ignored folder swept after seven days, with the durable proof kept as a self-test that anyone
-    can re-run instead of as a stored copy of its output. Recommend, do not assume: these campaigns
-    may be the only record that the OpenCode-only install was ever proven.
- 6. A requirements list for the Playbook itself: about 30 lines of "the Playbook must …", each with
-    a way to check it against a fixture repository under OpenCode. Mark each check script, fixture
-    run, or review. Every review check is a candidate to become a script, and say so.
- 7. The miss protocol from Step 5, as it will be recorded and reported.
- 8. An ordered list of work sessions to carry the plan out, each with a goal, the inputs the owner
-    brings, and the output file. Put the shared files that every phase loads first: shrinking those
-    shrinks every phase at once. Say so in the plan, because it is the one step that is out of
-    life-cycle order.
+    how long, and where it should live so it is not committed. TechieFlow's answer was one ignored
+    folder swept after seven days, with the durable proof kept as a self-test anyone can re-run
+    instead of a stored copy of its output. Recommend, do not assume: these campaigns may be the
+    only record that the OpenCode-only install was ever proven.
+ 6. A requirements list for the Playbook itself — AND ITS GRADER. This section replaces version 2's
+    "about 30 lines, each with a way to check it", which is how TechieFlow ended up with 28 checks
+    that did not exist. The rules:
+      - Fewer lines, each one testable. Twenty that can be graded beat forty that cannot.
+      - Every line is marked script, fixture run, or review, and the three are counted separately.
+      - A line marked "script" names the artefact that runs it, and that artefact is written in the
+        same session as the line. If it cannot be, the line is marked "review" instead.
+      - The grader is part of the deliverable: one command that walks the list, runs what can be
+        run, and reports every other line as ungraded WITH ITS REASON. Never guess a verdict.
+      - The headline number is not how many pass. It is **how many can be graded at all**. Report it
+        as "N of M graded", and treat the ungraded count as the backlog it is.
+      - The grader writes one verdict record per line into the telemetry, so the Playbook's own
+        compliance is visible beside the projects it builds.
+ 7. The miss protocol from Step 6, as it will be recorded and reported.
+ 8. An ordered list of work sessions, each with a goal, the inputs the owner brings, and the output
+    file. Put the shared files that every phase loads first: shrinking those shrinks every phase at
+    once. Say so in the plan, because it is the one step out of life-cycle order.
 
 Also write docs/Playbook-How-It-Works.md: the ten phases in plain words, one paragraph each, saying
 what is read, what is written, which template is used, and what OpenCode does around it. A team lead
 with no AI experience should be able to follow it. This document, not the plan, is what the owner
 reviews first.
 
-STEP 8 — REPORT
-Finish with a short message: the five biggest findings, each one sentence with its number, and the
-first session to run. Nothing else.
+STEP 9 — REPORT
+Finish with a short message: the five biggest findings, each one sentence with its number, the
+enforcement ratio from Step 2, and the first session to run. Nothing else.
 ```
 
 ---
 
 ## 3. What went wrong in the TechieFlow sessions
 
-Give this list to the review session if it asks how the method was earned. Each item cost time.
+Give this list to the review session if it asks how the method was earned. Each item cost time, and the last four were found after version 2 of this prompt was written.
 
-- **A rule named a check that nobody had written.** The requirement said a script proved it; no script existed, and a private project name sat in the public README for months. When a requirement names a check, the check is written in the same session or the requirement says "review" honestly.
-- **A command reported success after its only deliverable was refused.** The miss recorder printed "Miss logged" and an identifier that existed nowhere, because the emitter had rejected a value and appended nothing. A command that reports what it did not do is worse than one that fails loudly.
-- **A checklist was frozen and then quietly grown.** Items were added to an owner-reviewed document and the owner was told afterwards. That is how the framework grew unreviewed in the first place. Propose in plain words, get the yes, then edit.
-- **Rules were restated instead of enforced.** 622 prose MUST and NEVER statements against 8 hooks. The 8 always held. The 622 held most of the time, and the remainder is where the misses came from.
-- **Documents grew until nobody read them.** The briefing reached 344 KB and the README 121 KB, both mostly history. Session 6 cut them to 1,961 and 1,864 words and moved the history to a changelog. Now a script counts them.
-- **A single hard budget made the agent truncate.** Every budget became a target and a maximum, and the content rules stop truncation, not the number.
-- **The largest file was the worst file.** The verify task at 11,850 words was the origin of 63 of 128 recorded misses. Size is not a cosmetic problem.
-- **A self-test check compared the wrong thing** and reported a failure that was not there, wasting time on a fix that already worked. A check is not trusted until it has been made to fail on purpose.
-- **Scripts were called done without being run.** The standing rule now is that every script the maintainer touches is run for real, in both harnesses, and its output shown.
-- **A measurement taken at the top level of each folder reported zero for folders whose content sits one level down.** It hid 174 files and 196,498 words while preparing this very prompt, and the wrong headline was written into a draft before the recount caught it. Count recursively, and always print the file count beside the word count so a zero that means "I did not look" cannot pass for a zero that means "nothing here".
-- **Search tools do not see the framework.** `.tfcore/`, `.claude/` and `.opencode/` are dot-directories and are git-ignored inside a project, so ripgrep, Glob and `git grep` all return nothing for files that are plainly present. TechieFlow recorded it as D-21 after a verify run wrote "not present anywhere in this tree" about a script that existed and closed a gate on it. The rule that followed: confirm a file by reading its literal path, never by searching for its name, and never write "not present" without naming the path tried. It is not a solved problem, only a known one: it recurred on 2026-09-07 while measuring the Playbook, costing 58 percent of one folder's true size.
+- **A framework never graded itself.** 63 requirement lines, each with a stated check, and not one verdict recorded in the four days they existed. Its own metrics reported "no first-pass rate" because the maintainer reasoned it had no checklist — while the checklist sat in `docs/`, named in every restart prompt. Nobody notices this from inside: it took the owner rejecting a sentence.
+- **A rule named a check that nobody had written.** 28 of 63 lines described a script in prose that did not exist. When the grader was built, the first run found technology-specific routing in two tasks that FR-03 forbids, four commands emitting no run record, and five command values the telemetry schema had never listed. All three had been live for days behind a requirement that read as enforced.
+- **A number was reported over the wrong denominator.** A phase's total time summed the runs that carried a duration while its tokens summed every run — so the reset showed 16h49m of work against a true 55h57m. Separately, a set of records that all passed reported a first-pass rate of 0%, because the field the rate keys on was absent and absence read as "no". Both were arithmetic the reader could have done from the records it already had.
+- **Two delivery routes drifted apart.** The shell scripts and the npm installer produced different projects for four sittings, because nothing said that a change to what a project receives goes into both. A project installed from the package ran without three of its guard hooks.
+- **A guard read the whole command line.** The database guard refused a documentation edit and a read-only search because a migration tool's name appeared in the text being written. A rule that blocks the work it was meant to protect gets switched off.
+- **A command reported success after its only deliverable was refused.** The miss recorder printed "Miss logged" and an id that existed nowhere, because the emitter had rejected a value and appended nothing.
+- **A checklist was frozen and then quietly grown.** Items were added to an owner-reviewed document and the owner was told afterwards. Propose in plain words, get the yes, then edit.
+- **Rules were restated instead of enforced.** 622 prose MUST and NEVER statements against 8 hooks. The 8 always held.
+- **Documents grew until nobody read them.** The briefing reached 344 KB and the README 121 KB, both mostly history. They are now 2,003 and 1,863 words, and a script counts them.
+- **A single hard budget made the agent truncate.** Every budget became a target and a maximum.
+- **The largest file was the worst file.** The verify task at 11,850 words was the origin of 63 of 128 recorded misses. It is now 964.
+- **A self-test check compared the wrong thing** and reported a failure that was not there. A check is not trusted until it has been made to fail on purpose.
+- **Search tools do not see the framework.** Dot-directories are skipped by ripgrep, Glob and shell globs, and git-ignored inside a project. Confirm a file by reading its literal path, never by searching for its name. It recurred on 2026-09-07 while measuring the Playbook, costing 58 percent of one folder's size.
+- **Removing a harness is a delivery job, not a deletion job.** When the Codex adapter went, the fix was to make the updater *remove* what it used to deploy. One propagation pass then cleaned 23 projects, repeatably and auditably, instead of anyone deleting folders by hand.
 
 ---
 
@@ -206,11 +227,11 @@ Give this list to the review session if it asks how the method was earned. Each 
 The Playbook is not TechieFlow with more people. Four differences change the design.
 
 - **One harness, and it enforces differently.** OpenCode has no blocking end-of-turn hook, so a rule that must hold at the end of a turn is a plugin follow-up prompt there, not a hook. Anything proposed as a hook needs its OpenCode form stated beside it, or it is not a rule, it is a hope.
-- **A rule that depends on remembering fails faster with more people.** Enforcement belongs in the repository, where a joiner inherits it: scripts, validators, and the pipeline. In a solo framework a habit can substitute for a gate. In a team it cannot.
-- **The review gates have named humans.** Phases 02, 06 and 08 are real handoffs between people, where TechieFlow's equivalent is the owner reviewing their own work. Each gate needs its record: what was reviewed, how many corrections came back, and what producing and correcting it cost. Without that the cost of a bad specification stays invisible.
-- **Onboarding is a deliverable, not documentation.** A new joiner should reach a working feature in a day, and the getting-started document is the thing that has to make that true. That is the test to apply to `docs/`: if a document does not serve a joiner, an agent, or a gate, it is not on the reading path.
+- **A rule that depends on remembering fails faster with more people.** Enforcement belongs in the repository, where a joiner inherits it: scripts, validators, the pipeline. In a solo framework a habit can substitute for a gate. In a team it cannot.
+- **The review gates have named humans.** Phases 02, 06 and 08 are real handoffs between people. Each needs its record: what was reviewed, how many corrections came back, and what producing and correcting it cost. TechieFlow added exactly this record kind and it is the only one that prices a specification defect.
+- **Onboarding is a deliverable, not documentation.** A new joiner should reach a working feature in a day, and the getting-started document has to make that true. That is the test for `docs/`: if a document does not serve a joiner, an agent, or a gate, it is not on the reading path.
 
-Two further constraints: the Playbook is already distributed on npm, so any change ships through its release checks, and its telemetry runs beside customer work, so records carry identifiers and counts only, never requirement text, prompt text, or anything from a customer's repository.
+Two further constraints: the Playbook is already distributed on npm, so any change ships through its release checks — and those checks must run before publish, not after, which is itself a requirement worth grading. Its telemetry runs beside customer work, so records carry identifiers and counts only, never requirement text, prompt text, or anything from a customer's repository.
 
 ---
 
@@ -219,4 +240,5 @@ Two further constraints: the Playbook is already distributed on npm, so any chan
 - The two output documents land in the Playbook's `docs/`. Read the How-It-Works first, mark every line you cannot repeat to a colleague, and have that conversation before any session starts.
 - The plan's sessions are carried out in Claude Code and proven in OpenCode against a fixture repository. Nothing is marked done from Claude Code alone.
 - Keep TechieFlow and the Playbook in step on one thing only: the miss protocol and the telemetry schema. Everything else may diverge, because the audiences differ.
-- The Playbook's `docs/` currently holds two documents that belong to TechieFlow, `Miss-Telemetry-TechieFlow.md` and `Phase-Efficiency-TfLens-Contract.md`, 7,700 words between them. The review will flag them; deciding where they live is yours.
+- The Playbook's `docs/` holds two documents that belong to TechieFlow, `Miss-Telemetry-TechieFlow.md` and `Phase-Efficiency-TfLens-Contract.md`, 7,700 words between them. The review will flag them; deciding where they live is yours.
+- **When the plan's Step 8.6 lands, ask one question of it before approving: "how many of these lines can be graded on the day we write them?"** If the answer is most of them, the list is honest. If it is a handful, the list is a wish and the session that wrote it has handed you TechieFlow's 28 phantom checks in a new folder.

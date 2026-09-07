@@ -111,8 +111,8 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
     <div class="toc-inline">
       <div>Contents</div>
       <ol>
-        <li><a href="#open-34">Open (34)</a></li>
-        <li><a href="#fixed-87">Fixed (87)</a></li>
+        <li><a href="#open-35">Open (35)</a></li>
+        <li><a href="#fixed-89">Fixed (89)</a></li>
         <li><a href="#will-not-fix-1">Will not fix (1)</a></li>
       </ol>
     </div>
@@ -120,17 +120,18 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <thead><tr><th></th><th></th></tr></thead>
 <tbody>
 <tr><td>App</td><td>TechieFlow</td></tr>
-<tr><td>Count</td><td>122 logged: 34 open, 87 fixed, 1 will not fix</td></tr>
+<tr><td>Count</td><td>125 logged: 35 open, 89 fixed, 1 will not fix</td></tr>
 <tr><td>Source</td><td><code>docs/metrics/misses.jsonl</code>, one row per miss record. Rewritten by <code>tf-misses-md.sh</code> on every new record. Never edit it: a wrong row is corrected by a new record.</td></tr>
 <tr><td>Updated</td><td>2026-09-07</td></tr>
 </tbody>
 </table>
 <p><strong>Whose gap</strong> answers the four questions of the miss protocol: <strong>the app's spec</strong> did not say it, so the checklist line is fixed; <strong>the framework never said it</strong>, so one requirement line and a check are added; <strong>the check was too weak</strong> (a review, or a script that did not fire), so the check is fixed; <strong>said and ignored</strong>, so the rule becomes a hook or is deleted. <strong>not sorted</strong> means the record predates the sort or nobody has answered yet; <code>bash .tfcore/utils/tf-emit.sh --amend &lt;miss&gt; sort &lt;spec|unsaid|weak-check|ignored&gt;</code> completes it.</p>
-<h2 id="open-34">Open (34)<a class="anchor-link" href="#open-34">#</a></h2>
+<h2 id="open-35">Open (35)<a class="anchor-link" href="#open-35">#</a></h2>
 <table>
 <thead><tr><th>Miss</th><th>Found</th><th>Whose gap</th><th>What went wrong</th></tr></thead>
 <tbody>
-<tr><td>MISS-TechieFlow-20260907-16</td><td>2026-09-07 by owner</td><td>said and ignored</td><td>The framework demanded of every application a verification it never ran on itself: 63 requirement lines with stated checks, not one verdict recorded, and its own metrics reported no first-pass rate as though it had no requirements at all.</td></tr>
+<tr><td>MISS-TechieFlow-20260907-19</td><td>2026-09-07 by owner</td><td>the check was too weak</td><td>The database guard reads the whole command line, so it refused a documentation edit and a read-only grep because a migration tool's name appeared in the text being written.</td></tr>
+<tr><td>MISS-TechieFlow-20260907-18</td><td>2026-09-07 by owner</td><td>the check was too weak</td><td>FR-03 claims no persona or task names a technology, but the analyst and build-phase hardcode routing to the TrBlazeUI and TechieRag library agents, and nothing ever ran the grep that would have said so.</td></tr>
 <tr><td>MISS-TechieFlow-20260907-12</td><td>2026-09-07 by owner</td><td>said and ignored</td><td>The D-21 rule that hidden framework folders are invisible to search was written down and still cost 58 percent of a folder's true size when OpenCode measured the Playbook with a shell glob.</td></tr>
 <tr><td>MISS-TechieFlow-20260907-04</td><td>2026-09-07 by gate</td><td>the check was too weak</td><td>The readable miss file's unchanged check compared only the header above the Updated line, so an amend that changed a row but no count left the file stale; the bugs self-test caught it before release and the check now compares everything but the date.</td></tr>
 <tr><td>MISS-TechieFlow-20260907-03</td><td>2026-09-07 by agent-review</td><td>the check was too weak</td><td>The cross-project rollup keyed a requirement by its id alone, so REQ-UI-001 of TfLens and REQ-UI-001 of TechieBlog counted as one requirement and the combined first-pass rate printed 72% where the true figure is 48%; found by re-reading the numbers before the explainer, fixed by keying on project and id.</td></tr>
@@ -166,10 +167,12 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <tr><td>(no id, record 55)</td><td>2026-09-05 by owner</td><td>not sorted</td><td>The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule.</td></tr>
 </tbody>
 </table>
-<h2 id="fixed-87">Fixed (87)<a class="anchor-link" href="#fixed-87">#</a></h2>
+<h2 id="fixed-89">Fixed (89)<a class="anchor-link" href="#fixed-89">#</a></h2>
 <table>
 <thead><tr><th>Miss</th><th>Found</th><th>Closed</th><th>Whose gap</th><th>What went wrong</th></tr></thead>
 <tbody>
+<tr><td>MISS-TechieFlow-20260907-17</td><td>2026-09-07 by owner</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The telemetry schema never gained the command values its own tasks were writing, so 27 run records across the estate carried a cmd the schema does not list and nothing noticed for four days.</td></tr>
+<tr><td>MISS-TechieFlow-20260907-16</td><td>2026-09-07 by owner</td><td>2026-09-07 by fix-issues</td><td>said and ignored</td><td>The framework demanded of every application a verification it never ran on itself: 63 requirement lines with stated checks, not one verdict recorded, and its own metrics reported no first-pass rate as though it had no requirements at all.</td></tr>
 <tr><td>MISS-TechieFlow-20260907-15</td><td>2026-09-07 by owner</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>A run record carrying both timestamps but no duration counted as zero time in the report, so the reset's thirteen runs showed 16h49m of work instead of the 55h57m the same records already proved.</td></tr>
 <tr><td>MISS-TechieFlow-20260907-14</td><td>2026-09-07 by owner</td><td>2026-09-07 by fix-issues</td><td>the framework never said it</td><td>The npm installer's framework subfolder list left out standards, so a project migrated from the old layout came out with no coding standards file.</td></tr>
 <tr><td>MISS-TechieFlow-20260907-13</td><td>2026-09-07 by owner</td><td>2026-09-07 by fix-issues</td><td>the framework never said it</td><td>The npm installer wrote a settings.json missing five hook registrations the shell scripts had gained, so a project installed from the package ran without the metrics, database and build guards.</td></tr>

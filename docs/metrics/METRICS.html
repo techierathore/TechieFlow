@@ -150,7 +150,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <thead><tr><th>Stream</th><th>Records</th><th>Span</th></tr></thead>
 <tbody>
 <tr><td><code>runs.jsonl</code></td><td>42</td><td>2026-08-28 → 2026-09-07</td></tr>
-<tr><td><code>gates.jsonl</code></td><td>12</td><td>2026-09-07 (the framework's own requirement lines, graded for the first time)</td></tr>
+<tr><td><code>gates.jsonl</code></td><td>41</td><td>2026-09-07 (two grading passes over the framework's own requirement lines)</td></tr>
 <tr><td><code>sessions.jsonl</code></td><td>29</td><td>2026-08-20 → 2026-09-07</td></tr>
 <tr><td><code>commits.jsonl</code></td><td>52</td><td>2026-06-25 → 2026-09-07</td></tr>
 <tr><td><code>misses.jsonl</code></td><td>121 miss + 88 miss-fix + 53 miss-amend</td><td>2026-08-28 → 2026-09-07</td></tr>
@@ -158,20 +158,27 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </table>
 <hr>
 <h2 id="first-pass-rate-the-framework-s-own-requirements">1. First-pass rate — the framework's own requirements<a class="anchor-link" href="#first-pass-rate-the-framework-s-own-requirements">#</a></h2>
-<p><strong>100% of the 12 lines that can be graded, 12 of 63.</strong> Every one passed on its first recorded verdict.</p>
-<p>That number needs its denominator and its date, or it flatters the framework:</p>
+<p><strong>93%: 27 of the 29 lines that can be graded passed on their first recorded verdict.</strong> Two failed, and both failures are real.</p>
 <table>
 <thead><tr><th></th><th></th></tr></thead>
 <tbody>
 <tr><td>Requirement lines in <code>docs/TechieFlow-Requirements.md</code></td><td>63</td></tr>
-<tr><td>Graded by a check that runs today</td><td>12</td></tr>
-<tr><td>Passed</td><td>12</td></tr>
-<tr><td>Failed</td><td>0</td></tr>
-<tr><td>Ungraded</td><td>51</td></tr>
+<tr><td>Graded by a check that runs today</td><td>29</td></tr>
+<tr><td>Passed</td><td>27</td></tr>
+<tr><td>Failed</td><td>2</td></tr>
+<tr><td>Ungraded</td><td>34</td></tr>
 </tbody>
 </table>
-<p><strong>Why only 12.</strong> A line is graded only when its own Check column names something runnable — a self-test, a script, an npm script — and that artefact is run for the verdict. Of the other 51: <strong>14 name a fixture run</strong> (a real command on a real project, which no automated pass can stand in for), <strong>5 name a review</strong> by a person, <strong>1 needs a normal filesystem</strong> (<code>FR-63</code>, which a Windows mount cannot grade honestly), <strong>3 are script candidates that were never written</strong>, and <strong>28 describe a script in prose that has no runnable artefact behind it</strong>. Those 28 are the finding: the framework wrote down how it would check itself and then did not build the check.</p>
-<p><strong>What this figure is not.</strong> These 12 lines were graded for the first time on 2026-09-07, at the end of the reset, not as each was built. "Passed on the first recorded verdict" is literally true and it is not evidence that the framework got things right first time. The honest measure of that is its miss stream: <strong>121 misses logged during the same period</strong> (§5). Read the two together or neither.</p>
+<p><strong>The two failures</strong>, neither of them new, both invisible until a check existed to say so:</p>
+<ul>
+<li><strong>FR-03, technology neutrality.</strong> The line says no persona or task names a language, database, UI library or host. The analyst and <code>build-phase</code> hardcode routing to the TrBlazeUI and TechieRag library agents, and <code>day1-brownfield</code> names the <code>dotnet</code> answer set. Either library routing is a legitimate exception and the line must say so, or the tasks must route by requirement prefix to whatever library agents a project has. That is the owner's call (<code>MISS-TechieFlow-20260907-18</code>).
+</li>
+<li><strong>FR-34, a run record for every command.</strong> Four tasks wire none: <code>create-doc</code>, <code>generate-html</code>, <code>facilitate-brainstorming-session</code> and <code>create-deep-research-prompt</code>. This is the idea-stage gap D-13 named in Session 1 and FR-60 still carries; the check now states it in a number rather than in prose.
+</li>
+</ul>
+<p><strong>Why 29 and not 63.</strong> A line is graded only when something runnable proves it, and that artefact is run for the verdict. The other 34: <strong>14 need a fixture run</strong> (a real command on a real project, which no automated pass stands in for), <strong>5 need a review</strong> by a person, <strong>3 are script candidates nobody built</strong>, <strong>1 needs a filesystem this machine cannot provide</strong> (<code>FR-63</code>, which a Windows mount cannot grade honestly), and <strong>11 still describe a script in prose with nothing behind it</strong>.</p>
+<p>On 2026-09-07 that last group was 28. Checks were built for 10 of them, five more were repointed at the self-test whose planted defect already proved them, and three at the installer test. <strong>Coverage went from 12 lines to 29 in one pass</strong>, and it immediately found the two failures above plus a third defect: the telemetry schema had never listed <code>framework-reset</code> or four other command values its own tasks were writing (<code>MISS-TechieFlow-20260907-17</code>).</p>
+<p><strong>What this figure is not.</strong> These lines were graded for the first time at the end of the reset, not as each was built. "Passed on the first recorded verdict" is literally true and it is not evidence that the framework got things right first time. The honest measure of that is its miss stream: <strong>126 misses logged</strong> (§5). Read the two together or neither.</p>
 <p>Until 2026-09-07 this section read "no data", on the reasoning that the framework had no checklist to verify. That was wrong: it has had 63 requirement lines since Session 2, named in every session restart prompt. Logged as <code>MISS-TechieFlow-20260907-16</code>.</p>
 <h2 id="gate-catch-distribution">2. Gate catch distribution<a class="anchor-link" href="#gate-catch-distribution">#</a></h2>
 <p><strong>No data</strong>, and here the original reasoning does hold: a gate distribution answers "which of the seven checks caught the failure", and those checks — build, acceptance, data, visual, assets, speed, standards — are applied to a running application's screens. This repository has none. All 12 framework verdicts passed, so there is no failure to attribute in any case.</p>
@@ -279,7 +286,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <p><strong>Not observed on any of the 14 reset runs.</strong> Every one carried a <code>main</code>-scope window, which never reads the subagent transcripts, so a zero here means <em>not looked at</em>, not <em>none ran</em>. Three runs declared an <code>explore</code> subagent in their own emit; the declared figure is kept beside the measured one and never merged with it.</p>
 <h2 id="what-is-missing">7. What is missing<a class="anchor-link" href="#what-is-missing">#</a></h2>
 <ul>
-<li><strong>51 of the framework's 63 requirement lines are ungraded</strong> — 28 describe a script nobody built, 14 need a fixture run, 5 need a review, 3 are unbuilt candidates and 1 needs a filesystem this machine cannot provide. That is the largest gap on this page, and it is a gap in the framework's own verification, not in its telemetry.
+<li><strong>34 of the framework's 63 requirement lines are ungraded</strong> — 14 need a fixture run, 11 still describe a script nobody built, 5 need a review, 3 are unbuilt candidates and 1 needs a filesystem this machine cannot provide. That is the largest gap on this page, and it is a gap in the framework's own verification, not in its telemetry.
 </li>
 <li><strong>No gate catch distribution or escape rate</strong>, because both describe a running application's screens and this repository has none.
 </li>

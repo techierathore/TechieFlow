@@ -57,8 +57,26 @@ graded=0; passed=0; failed=0; ungraded=0
 declare -a EMIT_LINES=()
 RUN_ID="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
+# The purpose-built checks for lines whose Check column described a script nobody had written.
+# shellcheck source=/dev/null
+source "$HERE/checks.sh"
+
 while IFS=$'\t' read -r fid kind artefact; do
   [[ -n "$fid" ]] || continue
+
+  # A purpose-built check wins: it proves the line directly.
+  fn="fr_$(tr -d 'FR-' <<<"$fid")"
+  if declare -F "$fn" >/dev/null; then
+    graded=$((graded+1))
+    if "$fn" 2>/dev/null; then
+      verdict="Verified"; gate="null"; passed=$((passed+1))
+    else
+      verdict="FAIL"; gate='"acceptance"'; failed=$((failed+1))
+    fi
+    printf '%-7s %-11s %-22s %s\n' "$fid" "$verdict" "checks.sh:$fn" "purpose-built check"
+    EMIT_LINES+=("{\"kind\":\"gate\",\"run_id\":\"$RUN_ID\",\"req_id\":\"$fid\",\"req_class\":\"FR\",\"verdict\":\"$verdict\",\"gate\":$gate,\"gates_run\":[\"acceptance\"],\"proof\":\"tests/requirements/checks.sh:$fn\"}")
+    continue
+  fi
   # FR-63's own check says to run it on a normal filesystem: on a Windows mount every file
   # reports mode 777, so the installer marks a file executable where the shell route does not
   # and the comparison shows one false difference. Grading it here would record a failure the

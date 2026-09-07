@@ -12,7 +12,7 @@ This repository is the framework itself, not an application. It **does** have a 
 | Stream | Records | Span |
 |---|---|---|
 | `runs.jsonl` | 42 | 2026-08-28 → 2026-09-07 |
-| `gates.jsonl` | 12 | 2026-09-07 (the framework's own requirement lines, graded for the first time) |
+| `gates.jsonl` | 41 | 2026-09-07 (two grading passes over the framework's own requirement lines) |
 | `sessions.jsonl` | 29 | 2026-08-20 → 2026-09-07 |
 | `commits.jsonl` | 52 | 2026-06-25 → 2026-09-07 |
 | `misses.jsonl` | 121 miss + 88 miss-fix + 53 miss-amend | 2026-08-28 → 2026-09-07 |
@@ -21,21 +21,26 @@ This repository is the framework itself, not an application. It **does** have a 
 
 ## 1. First-pass rate — the framework's own requirements
 
-**100% of the 12 lines that can be graded, 12 of 63.** Every one passed on its first recorded verdict.
-
-That number needs its denominator and its date, or it flatters the framework:
+**93%: 27 of the 29 lines that can be graded passed on their first recorded verdict.** Two failed, and both failures are real.
 
 | | |
 |---|---|
 | Requirement lines in `docs/TechieFlow-Requirements.md` | 63 |
-| Graded by a check that runs today | 12 |
-| Passed | 12 |
-| Failed | 0 |
-| Ungraded | 51 |
+| Graded by a check that runs today | 29 |
+| Passed | 27 |
+| Failed | 2 |
+| Ungraded | 34 |
 
-**Why only 12.** A line is graded only when its own Check column names something runnable — a self-test, a script, an npm script — and that artefact is run for the verdict. Of the other 51: **14 name a fixture run** (a real command on a real project, which no automated pass can stand in for), **5 name a review** by a person, **1 needs a normal filesystem** (`FR-63`, which a Windows mount cannot grade honestly), **3 are script candidates that were never written**, and **28 describe a script in prose that has no runnable artefact behind it**. Those 28 are the finding: the framework wrote down how it would check itself and then did not build the check.
+**The two failures**, neither of them new, both invisible until a check existed to say so:
 
-**What this figure is not.** These 12 lines were graded for the first time on 2026-09-07, at the end of the reset, not as each was built. "Passed on the first recorded verdict" is literally true and it is not evidence that the framework got things right first time. The honest measure of that is its miss stream: **121 misses logged during the same period** (§5). Read the two together or neither.
+- **FR-03, technology neutrality.** The line says no persona or task names a language, database, UI library or host. The analyst and `build-phase` hardcode routing to the TrBlazeUI and TechieRag library agents, and `day1-brownfield` names the `dotnet` answer set. Either library routing is a legitimate exception and the line must say so, or the tasks must route by requirement prefix to whatever library agents a project has. That is the owner's call (`MISS-TechieFlow-20260907-18`).
+- **FR-34, a run record for every command.** Four tasks wire none: `create-doc`, `generate-html`, `facilitate-brainstorming-session` and `create-deep-research-prompt`. This is the idea-stage gap D-13 named in Session 1 and FR-60 still carries; the check now states it in a number rather than in prose.
+
+**Why 29 and not 63.** A line is graded only when something runnable proves it, and that artefact is run for the verdict. The other 34: **14 need a fixture run** (a real command on a real project, which no automated pass stands in for), **5 need a review** by a person, **3 are script candidates nobody built**, **1 needs a filesystem this machine cannot provide** (`FR-63`, which a Windows mount cannot grade honestly), and **11 still describe a script in prose with nothing behind it**.
+
+On 2026-09-07 that last group was 28. Checks were built for 10 of them, five more were repointed at the self-test whose planted defect already proved them, and three at the installer test. **Coverage went from 12 lines to 29 in one pass**, and it immediately found the two failures above plus a third defect: the telemetry schema had never listed `framework-reset` or four other command values its own tasks were writing (`MISS-TechieFlow-20260907-17`).
+
+**What this figure is not.** These lines were graded for the first time at the end of the reset, not as each was built. "Passed on the first recorded verdict" is literally true and it is not evidence that the framework got things right first time. The honest measure of that is its miss stream: **126 misses logged** (§5). Read the two together or neither.
 
 Until 2026-09-07 this section read "no data", on the reasoning that the framework had no checklist to verify. That was wrong: it has had 63 requirement lines since Session 2, named in every session restart prompt. Logged as `MISS-TechieFlow-20260907-16`.
 
@@ -149,7 +154,7 @@ Harness: `claude-code` on all 14 reset runs. Model routing across the whole repo
 
 ## 7. What is missing
 
-- **51 of the framework's 63 requirement lines are ungraded** — 28 describe a script nobody built, 14 need a fixture run, 5 need a review, 3 are unbuilt candidates and 1 needs a filesystem this machine cannot provide. That is the largest gap on this page, and it is a gap in the framework's own verification, not in its telemetry.
+- **34 of the framework's 63 requirement lines are ungraded** — 14 need a fixture run, 11 still describe a script nobody built, 5 need a review, 3 are unbuilt candidates and 1 needs a filesystem this machine cannot provide. That is the largest gap on this page, and it is a gap in the framework's own verification, not in its telemetry.
 - **No gate catch distribution or escape rate**, because both describe a running application's screens and this repository has none.
 - **One run record has no token window** (Session 6), and one miss has no `why_missed`. Both are named above rather than filled in.
 - **55 misses predate the `sort` field** and are outside the "whose gap" percentages. They can be completed one at a time with `tf-emit.sh --amend <miss_id> sort <value>`.

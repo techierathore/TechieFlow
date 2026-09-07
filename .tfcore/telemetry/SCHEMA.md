@@ -93,7 +93,7 @@ So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit 
 
 | Field | Type | Values / notes |
 |---|---|---|
-| `cmd` | string | `day1-brownfield` \| `day1-greenfield` \| `split-brd` \| `mockups` \| `build-phase` \| `verify-phase` \| `fix-issues` \| `triage-issues` \| `log-miss` \| `devguide` \| `productguide` \| `handoff-phase` \| `refresh-status` \| `amend-docs` \| `deploy-checklist` (added 2026-09-06) |
+| `cmd` | string | `day1-brownfield` \| `day1-greenfield` \| `split-brd` \| `mockups` \| `build-phase` \| `verify-phase` \| `fix-issues` \| `triage-issues` \| `log-miss` \| `devguide` \| `productguide` \| `handoff-phase` \| `refresh-status` \| `amend-docs` \| `deploy-checklist` (added 2026-09-06) \| `metrics-report` \| `generate-html` \| `render-workflow-docs` \| `triage-and-fix` \| `framework-reset` (framework maintenance, D-19; all five added 2026-09-07, after FR-37's check was built and found 27 records already carrying a value the schema did not list). A value outside this list is a defect in the emitting task, not in the reader: the reader keeps it. |
 | `mode` | string \| null | `build` \| `fix`. `build-phase` already distinguishes these (FIX mode) — capture it; the ratio is the rework metric. `null` for commands with no mode. |
 | `started` | string | ISO-8601 UTC. When the task began — the timestamp you noted at step 0, not "now minus a guess". |
 | `ended` | string | ISO-8601 UTC. Normally equal to `ts`. |
