@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TechieFlow — Development Metrics</title>
+<script>
+/* Resolve the theme BEFORE first paint (no flash). Saved choice wins; otherwise
+   pick by time of day — light 07:00–19:00 local, softened dark at night. */
+(function(){
+  try{
+    var t = localStorage.getItem('tf-theme');
+    if(t!=='light' && t!=='dark'){ var h = new Date().getHours(); t = (h>=7 && h<19) ? 'light' : 'dark'; }
+    document.documentElement.setAttribute('data-theme', t);
+  }catch(e){ document.documentElement.setAttribute('data-theme','light'); }
+})();
+</script>
+<style>
+/* LIGHT is the default theme — a warm off-white, easy on the eyes (never bright white). */
+:root{
+  --bg:#f4f1e9; --panel:#efe9db; --panel2:#e7e0cd; --line:#d8cfb6;
+  --ink:#2e2a22; --muted:#6f6857; --accent:#2f6f9f; --accent2:#3f7d54;
+  --warn:#9a6b15; --danger:#b03a52; --ok:#3f7d54;
+  --code-bg:#ece5d3; --code-ink:#332f26; --row-alt:#eae2cf;
+  --h3:#3a352b; --h4:#2f6f9f; --quote:#4a4537; --cta-bg:#e6eef5;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+/* DARK — softened near-black (warmer / less harsh than pure #0f1115). */
+html[data-theme="dark"]{
+  --bg:#11141a; --panel:#171b23; --panel2:#1e2430; --line:#2b3240;
+  --ink:#dfe3ea; --muted:#99a2b1; --accent:#7cc4ff; --accent2:#a6e3a1;
+  --warn:#f9c74f; --danger:#f38ba8; --ok:#a6e3a1;
+  --code-bg:#0c1016; --code-ink:#d8dde8; --row-alt:#141821;
+  --h3:#cfd5e3; --h4:#7cc4ff; --quote:#cfd5e3; --cta-bg:#0d2030;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:13px;background:var(--code-bg);color:var(--code-ink);padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
+pre{font-family:var(--mono);font-size:12.5px;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto;color:var(--code-ink);position:relative}
+pre code{background:none;border:none;padding:0}
+.copy{position:absolute;top:8px;right:8px;background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:11px;font-family:var(--sans);cursor:pointer}
+.copy:hover{color:var(--accent);border-color:var(--accent)}
+/* floating light/dark toggle (top-right) */
+.theme-toggle{position:fixed;top:12px;right:14px;z-index:10000;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:12.5px;font-family:var(--sans);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.theme-toggle:hover{color:var(--accent);border-color:var(--accent)}
+
+.layout{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+.layout.no-toc{grid-template-columns:1fr}
+nav.side{position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--line);background:var(--panel);padding:18px 14px}
+nav.side h1{font-size:14px;margin:0 0 4px;letter-spacing:.5px;color:var(--ink)}
+nav.side .sub{font-size:11.5px;color:var(--muted);margin-bottom:14px}
+nav.side ol,nav.side ul{list-style:none;padding:0;margin:0}
+nav.side li{font-size:13px;margin:2px 0}
+nav.side li a{display:block;padding:5px 8px;color:var(--ink);border-radius:6px}
+nav.side li a:hover{background:var(--panel2);text-decoration:none}
+nav.side li.h3 a{padding-left:22px;font-size:12.5px;color:var(--h3)}
+nav.side .group{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin:14px 8px 4px}
+
+main{padding:28px 40px 80px;max-width:1100px}
+.layout.no-toc main{margin:0 auto}
+
+h1{font-size:28px;margin:0 0 6px}
+h2{font-size:22px;margin:32px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);scroll-margin-top:16px}
+h3{font-size:17px;margin:22px 0 6px;color:var(--h3);scroll-margin-top:16px}
+h4{font-size:14px;margin:14px 0 4px;color:var(--h4);scroll-margin-top:16px}
+.subtitle{color:var(--muted);font-size:14px;margin-top:-4px;margin-bottom:18px}
+p{margin:6px 0 10px}
+blockquote{border-left:3px solid var(--accent);background:var(--panel);margin:8px 0;padding:8px 14px;color:var(--quote)}
+ul,ol{padding-left:22px}
+li{margin:2px 0}
+
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);color:var(--h3);font-weight:600}
+tr:nth-child(even) td{background:var(--row-alt)}
+
+hr{border:none;border-top:1px solid var(--line);margin:24px 0}
+.anchor-link{color:var(--muted);font-weight:400;font-size:0.85em;margin-left:8px;opacity:0;transition:opacity .15s;text-decoration:none}
+h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
+
+/* inline TOC at top of main content */
+.toc-inline{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 16px;margin:14px 0 24px}
+.toc-inline > div{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.toc-inline ol,.toc-inline ul{margin:4px 0;padding-left:18px}
+.toc-inline li{font-size:13px;margin:1px 0}
+.toc-inline a{color:var(--h3)}
+
+/* mermaid diagram wrapper + toolbar */
+.diagram{position:relative;border:1px solid var(--line);border-radius:8px;background:var(--code-bg);margin:14px 0;overflow:hidden}
+.diagram .mermaid{padding:14px;margin:0;background:transparent;border:none;overflow:auto}
+.diagram .dt{display:flex;gap:6px;justify-content:flex-end;padding:6px 8px;background:var(--row-alt);border-bottom:1px solid var(--line)}
+.diagram .dt button{background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 10px;font-size:12px;font-family:var(--sans);cursor:pointer;min-width:30px}
+.diagram .dt button:hover{color:var(--accent);border-color:var(--accent)}
+.diagram .dt .zlabel{padding:3px 6px;font-size:11px;color:var(--muted);font-family:var(--mono);align-self:center}
+.diagram.fs{position:fixed;inset:0;z-index:9999;border-radius:0;border:none}
+.diagram.fs .mermaid{height:calc(100vh - 40px);display:flex;align-items:center;justify-content:center}
+
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.side{position:static;height:auto}}
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" title="Toggle light / dark">&#9790; Dark</button>
+<div class="layout">
+  <nav class="side">
+    <h1>TechieFlow — Development Metrics</h1>
+    <div class="sub">Last rendered: 2026-09-07</div>
+    <div class="group">Contents</div>
+    <ol>
+        <li><a href="#first-pass-rate-the-framework-s-own-requirements">1. First-pass rate — the framework&#x27;s own requirements</a></li>
+        <li><a href="#gate-catch-distribution">2. Gate catch distribution</a></li>
+        <li><a href="#escape-rate">3. Escape rate</a></li>
+        <li><a href="#throughput-and-rework-poolable">4. Throughput and rework — poolable</a></li>
+        <li><a href="#misses-what-was-missed-who-missed-it-what-the-fix-cost">5. Misses — what was missed, who missed it, what the fix cost</a></li>
+        <li class="h3"><a href="#a-attribution-linked-records-only">5a. Attribution — linked records only</a></li>
+        <li class="h3"><a href="#b-rework-cost-measured-and-apportioned-never-combine">5b. Rework cost — measured and apportioned never combine</a></li>
+        <li><a href="#effort-per-phase-time-tokens-model-fan-out">6. Effort per phase — time, tokens, model, fan-out</a></li>
+        <li class="h3"><a href="#a-the-reset-session-by-session">6a. The reset, session by session</a></li>
+        <li class="h3"><a href="#b-which-model-did-the-work">6b. Which model did the work</a></li>
+        <li class="h3"><a href="#c-subagent-fan-out-measured-on-its-own-denominator">6c. Subagent fan-out — measured, on its own denominator</a></li>
+        <li><a href="#what-is-missing">7. What is missing</a></li>
+    </ol>
+  </nav>
+  <main>
+    <h1>TechieFlow — Development Metrics</h1>
+    <div class="subtitle">Rendered 2026-09-07 &middot; source <code>METRICS.md</code></div>
+
+    <div class="toc-inline">
+      <div>Contents</div>
+      <ol>
+        <li><a href="#first-pass-rate-the-framework-s-own-requirements">1. First-pass rate — the framework&#x27;s own requirements</a></li>
+        <li><a href="#gate-catch-distribution">2. Gate catch distribution</a></li>
+        <li><a href="#escape-rate">3. Escape rate</a></li>
+        <li><a href="#throughput-and-rework-poolable">4. Throughput and rework — poolable</a></li>
+        <li><a href="#misses-what-was-missed-who-missed-it-what-the-fix-cost">5. Misses — what was missed, who missed it, what the fix cost</a></li>
+        <li class="h3"><a href="#a-attribution-linked-records-only">5a. Attribution — linked records only</a></li>
+        <li class="h3"><a href="#b-rework-cost-measured-and-apportioned-never-combine">5b. Rework cost — measured and apportioned never combine</a></li>
+        <li><a href="#effort-per-phase-time-tokens-model-fan-out">6. Effort per phase — time, tokens, model, fan-out</a></li>
+        <li class="h3"><a href="#a-the-reset-session-by-session">6a. The reset, session by session</a></li>
+        <li class="h3"><a href="#b-which-model-did-the-work">6b. Which model did the work</a></li>
+        <li class="h3"><a href="#c-subagent-fan-out-measured-on-its-own-denominator">6c. Subagent fan-out — measured, on its own denominator</a></li>
+        <li><a href="#what-is-missing">7. What is missing</a></li>
+      </ol>
+    </div>
+<p><strong>Snapshot as of 2026-09-07</strong> · project_type <code>framework</code> · schema v1</p>
+<p>This repository is the framework itself, not an application. It <strong>does</strong> have a checklist of its own — <code>docs/TechieFlow-Requirements.md</code>, 63 numbered lines each with a stated way to prove it — and since 2026-09-07 it is graded against them by <code>tests/requirements/run.sh</code> like any other project. What it has no data for is a <em>screen</em> verdict: it has no application to boot, so the gate catch distribution and escape rate below stay empty for a reason that is about screens, not about requirements. Alongside that it measures <strong>the cost of maintaining the framework</strong>, which in this snapshot is almost entirely the seven-session reset of 2026-09-04 to 2026-09-07.</p>
+<table>
+<thead><tr><th>Stream</th><th>Records</th><th>Span</th></tr></thead>
+<tbody>
+<tr><td><code>runs.jsonl</code></td><td>42</td><td>2026-08-28 → 2026-09-07</td></tr>
+<tr><td><code>gates.jsonl</code></td><td>12</td><td>2026-09-07 (the framework's own requirement lines, graded for the first time)</td></tr>
+<tr><td><code>sessions.jsonl</code></td><td>29</td><td>2026-08-20 → 2026-09-07</td></tr>
+<tr><td><code>commits.jsonl</code></td><td>52</td><td>2026-06-25 → 2026-09-07</td></tr>
+<tr><td><code>misses.jsonl</code></td><td>121 miss + 88 miss-fix + 53 miss-amend</td><td>2026-08-28 → 2026-09-07</td></tr>
+</tbody>
+</table>
+<hr>
+<h2 id="first-pass-rate-the-framework-s-own-requirements">1. First-pass rate — the framework's own requirements<a class="anchor-link" href="#first-pass-rate-the-framework-s-own-requirements">#</a></h2>
+<p><strong>100% of the 12 lines that can be graded, 12 of 63.</strong> Every one passed on its first recorded verdict.</p>
+<p>That number needs its denominator and its date, or it flatters the framework:</p>
+<table>
+<thead><tr><th></th><th></th></tr></thead>
+<tbody>
+<tr><td>Requirement lines in <code>docs/TechieFlow-Requirements.md</code></td><td>63</td></tr>
+<tr><td>Graded by a check that runs today</td><td>12</td></tr>
+<tr><td>Passed</td><td>12</td></tr>
+<tr><td>Failed</td><td>0</td></tr>
+<tr><td>Ungraded</td><td>51</td></tr>
+</tbody>
+</table>
+<p><strong>Why only 12.</strong> A line is graded only when its own Check column names something runnable — a self-test, a script, an npm script — and that artefact is run for the verdict. Of the other 51: <strong>14 name a fixture run</strong> (a real command on a real project, which no automated pass can stand in for), <strong>5 name a review</strong> by a person, <strong>1 needs a normal filesystem</strong> (<code>FR-63</code>, which a Windows mount cannot grade honestly), <strong>3 are script candidates that were never written</strong>, and <strong>28 describe a script in prose that has no runnable artefact behind it</strong>. Those 28 are the finding: the framework wrote down how it would check itself and then did not build the check.</p>
+<p><strong>What this figure is not.</strong> These 12 lines were graded for the first time on 2026-09-07, at the end of the reset, not as each was built. "Passed on the first recorded verdict" is literally true and it is not evidence that the framework got things right first time. The honest measure of that is its miss stream: <strong>121 misses logged during the same period</strong> (§5). Read the two together or neither.</p>
+<p>Until 2026-09-07 this section read "no data", on the reasoning that the framework had no checklist to verify. That was wrong: it has had 63 requirement lines since Session 2, named in every session restart prompt. Logged as <code>MISS-TechieFlow-20260907-16</code>.</p>
+<h2 id="gate-catch-distribution">2. Gate catch distribution<a class="anchor-link" href="#gate-catch-distribution">#</a></h2>
+<p><strong>No data</strong>, and here the original reasoning does hold: a gate distribution answers "which of the seven checks caught the failure", and those checks — build, acceptance, data, visual, assets, speed, standards — are applied to a running application's screens. This repository has none. All 12 framework verdicts passed, so there is no failure to attribute in any case.</p>
+<p>Nothing is inferred from the miss stream to fill the gap: the two are computed from different records by different definitions, and presenting one as the other would make the word meaningless.</p>
+<h2 id="escape-rate">3. Escape rate<a class="anchor-link" href="#escape-rate">#</a></h2>
+<p><strong>No data</strong> from <code>gates.jsonl</code>: an escape is a defect that got past every gate to a person, and with no screens to gate there is nothing for one to escape. The miss stream's own "found by a human" share — <strong>41%</strong> — is reported in §5 <strong>beside</strong> this, never merged into it. For the framework that share is the meaningful number, and it says the owner found two of every five framework defects.</p>
+<h2 id="throughput-and-rework-poolable">4. Throughput and rework — poolable<a class="anchor-link" href="#throughput-and-rework-poolable">#</a></h2>
+<table>
+<thead><tr><th>Figure</th><th>Value</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td>Runs recorded</td><td>42</td><td><code>framework-reset</code> 14 · <code>log-miss</code> 22 · <code>fix-issues</code> 6</td></tr>
+<tr><td>Rework ratio</td><td>insufficient data</td><td>no <code>build-phase</code> runs in this repository</td></tr>
+<tr><td>Batch size</td><td>insufficient data</td><td>same reason</td></tr>
+<tr><td>REQ throughput</td><td>1.83 REQ/hour</td><td>median across runs; here a "REQ" is a framework requirement line (FR-nn) touched by a maintenance run</td></tr>
+<tr><td>Sessions and tokens</td><td>29 sessions · 10,415,290 tokens</td><td>3 duplicate session ids collapsed, normal for OpenCode</td></tr>
+<tr><td>Commit cadence</td><td>2.17 commits per active day</td><td>52 commits over 24 active days</td></tr>
+<tr><td>Tokens per Verified</td><td>insufficient data</td><td>nothing is verified in this repository</td></tr>
+</tbody>
+</table>
+<h2 id="misses-what-was-missed-who-missed-it-what-the-fix-cost">5. Misses — what was missed, who missed it, what the fix cost<a class="anchor-link" href="#misses-what-was-missed-who-missed-it-what-the-fix-cost">#</a></h2>
+<p>121 misses logged: <strong>33 open, 87 resolved, 1 will-not-fix</strong>, with 88 fix records. Will-not-fix is a decision, not a backlog item, so it is not counted as open.</p>
+<table>
+<thead><tr><th>Cut</th><th>Distribution</th></tr></thead>
+<tbody>
+<tr><td>Class</td><td>wrong-behaviour 64 (53%) · unspecified-gap 26 (21%) · partial-implementation 17 (14%) · scope-creep 6 (5%) · other 3 · spec-contradiction 3 · missed-requirement 2</td></tr>
+<tr><td>Why it was missed (118 of 121 assessed)</td><td>insufficient-verify-method 46 (39%) · missing-checklist-item 40 (34%) · instruction-ignored 26 (22%) · ambiguous-acceptance 5 (4%) · other 1</td></tr>
+<tr><td>Whose gap (66 of 66 sorted)</td><td>weak-check 33 (50%) · unsaid 18 (27%) · ignored 15 (23%)</td></tr>
+<tr><td>Found by</td><td>agent-review 52 · owner 50 · library-feedback 11 · gate 8</td></tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Design-miss share: 21%</strong> — one miss in five was the specification's fault, not the build's.
+</li>
+<li><strong>Found by a human: 41%.</strong> Reported beside the gate-derived escape rate of §3, never merged into it.
+</li>
+<li><strong>55 misses predate the <code>sort</code> field</strong> (added 2026-09-07) and are outside the "whose gap" percentages. 53 fields have been completed by <code>miss-amend</code> records.
+</li>
+<li><strong>One escape carries no <code>why_missed</code>.</strong> Something got past every gate and nothing recorded why; that is the most valuable record in the stream and it is still incomplete.
+</li>
+</ul>
+<p>The headline finding of the "whose gap" cut: <strong>half of what the framework got wrong was a check that was too weak, not a rule nobody had written.</strong> That is why the reset's method was to turn prose into scripts rather than to add prose.</p>
+<h3 id="a-attribution-linked-records-only">5a. Attribution — <code>linked</code> records only<a class="anchor-link" href="#a-attribution-linked-records-only">#</a></h3>
+<p><strong>5 of 121 records (116 excluded as inferred or unknown.)</strong> An excluded record named a phase that no run record backs, so its model is unknown, and a per-model rate computed from guesses is a routing decision made on invented evidence.</p>
+<ul>
+<li>by origin phase: log-miss 3 · fix-issues 2
+</li>
+<li>by origin agent: flow-master 3 · general 2
+</li>
+<li>by origin model: gpt-5.6-sol 3 · unknown 1 · claude-opus-5 1
+</li>
+</ul>
+<p>At n=5 this supports no per-model conclusion and none is drawn. <strong>A per-model miss rate is observational, not causal:</strong> which model gets the hard work is not random.</p>
+<h3 id="b-rework-cost-measured-and-apportioned-never-combine">5b. Rework cost — measured and apportioned never combine<a class="anchor-link" href="#b-rework-cost-measured-and-apportioned-never-combine">#</a></h3>
+<table>
+<thead><tr><th>Attribution</th><th>Fix records</th><th>Tokens out per miss</th></tr></thead>
+<tbody>
+<tr><td><code>sole</code> — measured</td><td>4</td><td>289,563 (n=4 priced)</td></tr>
+<tr><td><code>shared</code> — apportioned by equal division, <strong>not a measurement</strong></td><td>63</td><td>81,140 (n=63)</td></tr>
+<tr><td>unattributable — no usable token window</td><td>20</td><td>not costed</td></tr>
+</tbody>
+</table>
+<p>Four further records stored as <code>none</code> do have a measured window; the divisor is recomputed at read time from the misses each run actually closed. <strong>No dollar figure exists</strong>: Claude Code carries <code>cost_usd: null</code> permanently and is never priced from a rate card. The only measured money in this repository is $0.230819 across one OpenCode <code>log-miss</code> run.</p>
+<h2 id="effort-per-phase-time-tokens-model-fan-out">6. Effort per phase — time, tokens, model, fan-out<a class="anchor-link" href="#effort-per-phase-time-tokens-model-fan-out">#</a></h2>
+<p>42 live run records. Token-window coverage: <code>main</code> 28 · <code>none</code> 7 · <code>conversation</code> 3 · <code>tree</code> 1 · absent 1. A window is only as good as its scope, and a run whose window could not be computed is excluded from every token figure rather than averaged in as a zero.</p>
+<table>
+<thead><tr><th>Phase</th><th>Runs</th><th>Wall clock</th><th>Tokens out</th><th>Tokens in</th><th>% out</th><th>% time</th></tr></thead>
+<tbody>
+<tr><td><code>framework-reset</code></td><td>14</td><td>56h 30m</td><td>7.9M</td><td>60.8k</td><td>95%</td><td>94%</td></tr>
+<tr><td><code>fix-issues</code></td><td>6</td><td>3h 05m</td><td>418.7k</td><td>6.6M</td><td>5%</td><td>5%</td></tr>
+<tr><td><code>log-miss</code></td><td>22</td><td>29m 45s</td><td>30.4k</td><td>2.9M</td><td>0%</td><td>1%</td></tr>
+</tbody>
+</table>
+<p><code>framework-reset</code> costing more than <code>log-miss</code> is a fact about what those phases are, not a finding about either.</p>
+<h3 id="a-the-reset-session-by-session">6a. The reset, session by session<a class="anchor-link" href="#a-the-reset-session-by-session">#</a></h3>
+<p>The framework's own maintenance, in the order it ran. Time on six of these fourteen records was computed from the record's own two timestamps, because they predate the <code>duration_s</code> field; that is arithmetic on recorded facts, and it is flagged here rather than left to assume.</p>
+<table>
+<thead><tr><th>Session</th><th>Runs</th><th>Wall clock</th><th>Tokens out</th><th>Files written</th></tr></thead>
+<tbody>
+<tr><td>Sessions 1 to 3 (before the <code>mode</code> field)</td><td>3</td><td>10h 56m</td><td>1.7M</td><td>48</td></tr>
+<tr><td>Sitting 4a</td><td>1</td><td>9h 55m</td><td>1.0M</td><td>2</td></tr>
+<tr><td>Sitting 4b</td><td>3</td><td>24h 38m</td><td>2.6M</td><td>104</td></tr>
+<tr><td>Sitting 4c</td><td>1</td><td>8h 21m</td><td>1.4M</td><td>42</td></tr>
+<tr><td>Session 5</td><td>1</td><td>53m 53s</td><td>989.5k</td><td>24</td></tr>
+<tr><td>Session 6</td><td>1</td><td>30m 19s</td><td><strong>unmeasured</strong></td><td>34</td></tr>
+<tr><td>Session 7</td><td>1</td><td>20m 37s</td><td>100.7k</td><td>4</td></tr>
+<tr><td>Session 7, merge fix</td><td>1</td><td>18m 24s</td><td>39.4k</td><td>5</td></tr>
+<tr><td>Codex removal</td><td>1</td><td>2m 35s</td><td>4.5k</td><td>41</td></tr>
+<tr><td>This metrics pass</td><td>1</td><td>32m 51s</td><td>45.5k</td><td>4</td></tr>
+<tr><td><strong>Total</strong></td><td><strong>14</strong></td><td><strong>56h 30m</strong></td><td><strong>7.9M over 13 records</strong></td><td><strong>308</strong></td></tr>
+</tbody>
+</table>
+<p>Session 6's own record carries no token window and is excluded from every token figure above rather than counted as zero. That gap is itself a recorded defect (<code>MISS-TechieFlow-20260907-09</code>): the emitter accepted a run record with no <code>ended</code>, so the run could never be costed. It is fixed, and the fix is what makes the other twelve rows complete.</p>
+<p>Reading the shape: <strong>the four Session 4 sittings account for 43 of the 56.5 hours and 5.0M of the 7.9M output tokens.</strong> That was the work of shrinking every task file, and it cost roughly three quarters of the whole reset. The five sessions that followed — the miss protocol, the readability split, the Playbook prompt, the merge fix and the Codex removal — took two hours and five minutes between them.</p>
+<h3 id="b-which-model-did-the-work">6b. Which model did the work<a class="anchor-link" href="#b-which-model-did-the-work">#</a></h3>
+<table>
+<thead><tr><th>Model</th><th>Tokens out</th><th>Runs</th><th>Share</th></tr></thead>
+<tbody>
+<tr><td>claude-fable-5-1</td><td>7.7M</td><td>9</td><td>98%</td></tr>
+<tr><td>claude-opus-5</td><td>190.1k</td><td>4</td><td>2%</td></tr>
+<tr><td>synthetic (no model recorded)</td><td>0</td><td>2</td><td>0%</td></tr>
+</tbody>
+</table>
+<p>Harness: <code>claude-code</code> on all 14 reset runs. Model routing across the whole repository was observed as on-tier 0 · drifted 10 · unknown 12 — observed, never enforced.</p>
+<h3 id="c-subagent-fan-out-measured-on-its-own-denominator">6c. Subagent fan-out — measured, on its own denominator<a class="anchor-link" href="#c-subagent-fan-out-measured-on-its-own-denominator">#</a></h3>
+<p><strong>Not observed on any of the 14 reset runs.</strong> Every one carried a <code>main</code>-scope window, which never reads the subagent transcripts, so a zero here means <em>not looked at</em>, not <em>none ran</em>. Three runs declared an <code>explore</code> subagent in their own emit; the declared figure is kept beside the measured one and never merged with it.</p>
+<h2 id="what-is-missing">7. What is missing<a class="anchor-link" href="#what-is-missing">#</a></h2>
+<ul>
+<li><strong>51 of the framework's 63 requirement lines are ungraded</strong> — 28 describe a script nobody built, 14 need a fixture run, 5 need a review, 3 are unbuilt candidates and 1 needs a filesystem this machine cannot provide. That is the largest gap on this page, and it is a gap in the framework's own verification, not in its telemetry.
+</li>
+<li><strong>No gate catch distribution or escape rate</strong>, because both describe a running application's screens and this repository has none.
+</li>
+<li><strong>One run record has no token window</strong> (Session 6), and one miss has no <code>why_missed</code>. Both are named above rather than filled in.
+</li>
+<li><strong>55 misses predate the <code>sort</code> field</strong> and are outside the "whose gap" percentages. They can be completed one at a time with <code>tf-emit.sh --amend &lt;miss_id&gt; sort &lt;value&gt;</code>.
+</li>
+<li><strong>Attribution covers 5 of 121 misses.</strong> Until more misses carry a linked run, no per-model or per-phase miss rate can be published from this repository.
+</li>
+<li><strong>Sessions 1 to 3 share one row</strong> because the <code>mode</code> field arrived with Sitting 4a; their three records are individually intact in the stream.
+</li>
+</ul>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+<script>
+// Light/dark toggle. The initial theme was already applied flash-free by the
+// <head> script (saved choice, else time-of-day). Clicking flips it, saves the
+// choice, and reloads so Mermaid re-renders in the matching theme.
+(function(){
+  var btn = document.getElementById('themeToggle');
+  if(!btn) return;
+  var relabel = function(){
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    btn.textContent = dark ? '☀ Light' : '☾ Dark';
+  };
+  relabel();
+  btn.addEventListener('click', function(){
+    var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    try{ localStorage.setItem('tf-theme', next); }catch(e){}
+    location.reload();
+  });
+})();
+
+// Copy buttons on every code <pre> — but NEVER on a `pre.mermaid`:
+// mermaid reads the <pre>'s textContent as the diagram source, so a button
+// appended here glues "copy" onto the last line and breaks the parse
+// (flowcharts → "Syntax error"; sequence diagrams silently absorb it).
+// Mermaid blocks get copy/export from their own .diagram toolbar instead.
+document.querySelectorAll('pre:not(.mermaid)').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy';
+  btn.textContent = 'copy';
+  btn.addEventListener('click', () => {
+    const text = pre.querySelector('code') ? pre.querySelector('code').innerText : pre.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'copied';
+      setTimeout(() => { btn.textContent = 'copy'; }, 1200);
+    });
+  });
+  pre.appendChild(btn);
+});
+
+// Mermaid init — theme follows the resolved light/dark theme
+if (window.mermaid) {
+  var mermaidTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default';
+  mermaid.initialize({ startOnLoad: true, theme: mermaidTheme, securityLevel: 'loose' });
+}
+
+// Mermaid toolbar wiring — run after mermaid renders
+function wireMermaidToolbars() {
+  document.querySelectorAll('.diagram').forEach(dia => {
+    if (dia.dataset.wired) return;
+    const merm = dia.querySelector('.mermaid');
+    const svg = merm && merm.querySelector('svg');
+    if (!svg) return;
+    dia.dataset.wired = '1';
+    let scale = 1;
+    const label = dia.querySelector('.zlabel');
+    const apply = () => {
+      svg.style.transform = `scale(${scale})`;
+      svg.style.transformOrigin = 'top left';
+      if (label) label.textContent = Math.round(scale * 100) + '%';
+    };
+    const setScale = (s) => { scale = Math.max(0.25, Math.min(4, s)); apply(); };
+    dia.querySelector('[data-zin]').onclick = () => setScale(scale * 1.2);
+    dia.querySelector('[data-zout]').onclick = () => setScale(scale / 1.2);
+    dia.querySelector('[data-fit]').onclick = () => {
+      svg.style.transform = '';
+      svg.removeAttribute('width');
+      svg.style.maxWidth = '100%';
+      svg.style.height = 'auto';
+      scale = 1;
+      if (label) label.textContent = 'Fit';
+    };
+    dia.querySelector('[data-one]').onclick = () => {
+      svg.style.transform = '';
+      svg.style.maxWidth = 'none';
+      svg.style.width = '';
+      svg.style.height = '';
+      scale = 1;
+      if (label) label.textContent = '100%';
+    };
+    dia.querySelector('[data-fs]').onclick = () => {
+      dia.classList.toggle('fs');
+      if (dia.classList.contains('fs')) {
+        document.addEventListener('keydown', escFs);
+      } else {
+        document.removeEventListener('keydown', escFs);
+      }
+    };
+    function escFs(e) { if (e.key === 'Escape') { dia.classList.remove('fs'); document.removeEventListener('keydown', escFs); } }
+    dia.querySelector('[data-pop]').onclick = () => openInNewTab(svg);
+    // Ctrl+wheel zoom
+    merm.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setScale(scale * (e.deltaY < 0 ? 1.1 : 1/1.1));
+    }, { passive: false });
+  });
+}
+
+function openInNewTab(svg) {
+  const svgSource = new XMLSerializer().serializeToString(svg);
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Diagram</title>
+<style>
+  html,body{margin:0;height:100%;background:#0f1115;color:#e6e8ee;font-family:system-ui,sans-serif}
+  .bar{position:fixed;top:0;left:0;right:0;padding:8px 12px;background:#161a22;border-bottom:1px solid #2a3142;display:flex;gap:8px;z-index:10}
+  .bar button{background:#1c2230;color:#9aa3b2;border:1px solid #2a3142;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer}
+  .bar button:hover{color:#7cc4ff;border-color:#7cc4ff}
+  .bar .hint{margin-left:auto;color:#9aa3b2;font-size:11.5px;align-self:center}
+  #stage{position:absolute;top:42px;bottom:0;left:0;right:0;overflow:hidden}
+  #stage svg{width:100%;height:100%}
+</style>
+</head><body>
+<div class="bar">
+  <button onclick="zpz.zoomIn()">+</button>
+  <button onclick="zpz.zoomOut()">−</button>
+  <button onclick="zpz.fit();zpz.center()">Fit</button>
+  <button onclick="zpz.resetZoom();zpz.center()">1:1</button>
+  <button onclick="window.print()">Print</button>
+  <button onclick="dlPng()">PNG</button>
+  <button onclick="dlSvg()">SVG</button>
+  <span class="hint">Drag to pan · Ctrl+wheel to zoom · + / − keys</span>
+</div>
+<div id="stage">${svgSource}</div>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"><\/script>
+<script>
+  const el = document.querySelector('#stage svg');
+  const zpz = svgPanZoom(el, { zoomScaleSensitivity: .3, minZoom: .2, maxZoom: 10, controlIconsEnabled: false, fit: true, center: true });
+  document.addEventListener('keydown', e => {
+    if (e.key === '+' || e.key === '=') zpz.zoomIn();
+    if (e.key === '-' || e.key === '_') zpz.zoomOut();
+    if (e.key === '0') { zpz.resetZoom(); zpz.center(); }
+  });
+  function dlSvg() {
+    const blob = new Blob([new XMLSerializer().serializeToString(el)], { type: 'image/svg+xml' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'diagram.svg'; a.click();
+  }
+  function dlPng() {
+    const src = new XMLSerializer().serializeToString(el);
+    const img = new Image();
+    const url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(src)));
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = el.clientWidth * 2; c.height = el.clientHeight * 2;
+      const ctx = c.getContext('2d'); ctx.scale(2,2); ctx.drawImage(img, 0, 0);
+      c.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'diagram.png'; a.click(); });
+    };
+    img.src = url;
+  }
+<\/script>
+</body></html>`;
+  const w = window.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+// Run wiring after mermaid finishes (it renders async)
+if (window.mermaid) {
+  setTimeout(wireMermaidToolbars, 400);
+  setTimeout(wireMermaidToolbars, 1200);  // safety re-run for slow renders
+}
+</script>
+</body>
+</html>

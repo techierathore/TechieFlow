@@ -173,7 +173,7 @@ Failure:
 |---|---|---|
 | `run_id` | string | The `started` timestamp of the owning run. Ties every REQ verdict in one verify pass together. |
 | `req_id` | string | e.g. `REQ-UI-004`. |
-| `req_class` | string | `UI` \| `FN` \| `RAG` \| `NFR` — the prefix segment of `req_id`. |
+| `req_class` | string | `UI` \| `FN` \| `RAG` \| `NFR` — the prefix segment of `req_id`. **`FR` added 2026-09-07**: the framework's own requirement lines (`docs/TechieFlow-Requirements.md`), graded by `tests/requirements/run.sh`. It is the one `req_class` that does not come from an application's checklist, and it never pools with the others — a framework line and a screen requirement are not the same unit. |
 | `attempt` | int | See §3.1. Derive it; never guess it. |
 | `verdict` | string | Mirrors the checklist vocabulary **exactly**: `Verified` \| `Needs re-verify` \| `FAIL` \| `Blocked` \| `Implemented` \| `Done (pre-existing)`. |
 | `gate` | string \| null | **The FIRST gate that failed**, or `null` on a pass. See §3.2. |

@@ -63,6 +63,11 @@ for f in "$ROOT/.tfcore/tasks"/*.md; do
   w=$(wc -w < "$f"); [[ $w -le 7000 ]] || { bad "$(basename "$f") is $w words, over the 7,000-word frontier budget (FR-43)"; over=$((over+1)); }
 done
 [[ $over -eq 0 ]] && ok "every task file is under 7,000 words (FR-43)"
+# FR-26: the verify task specifically, which was 11,850 words and caused 63 of 128 recorded
+# misses. Its own cap is 4,000, tighter than the 7,000 every task shares.
+vw=$(wc -w < "$ROOT/.tfcore/tasks/verify-phase.md" 2>/dev/null || echo 99999)
+[[ $vw -le 4000 ]] && ok "verify-phase.md is $vw words (FR-26: at most 4,000)" \
+                   || bad "verify-phase.md is $vw words, over the 4,000-word cap (FR-26)"
 shared=$(cat "$ROOT/.tfcore/tasks"/_*.md | wc -w)
 [[ $shared -le 3000 ]] && ok "shared rule files total $shared words (FR-44: under 3,000)" || bad "shared rule files total $shared words, over 3,000 (FR-44)"
 overp=0
