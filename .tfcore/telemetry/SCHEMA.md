@@ -39,7 +39,7 @@ Questions 1–3 are answered by `gates.jsonl`, which remains **the primary strea
 | `project_type_inferred` | bool | Present **only when `true`** — `metrics.project_type` was absent from `core-config.yaml` and `app` was assumed. Reports must label these records **unclassified**, never silently pool them. |
 | `backfilled` | bool | Present **only when `true`** — the record was reconstructed after the fact, not written at the moment of the event. Written exclusively by `tf-metrics.sh --backfill-*`. |
 | `inferred` | string[] | Present only on backfilled records. Names the fields that were **guessed rather than read**. |
-| `harness` | string \| null | `claude-code` \| `opencode` \| `codex` \| `null`. **Detected by `tf-emit.sh`, never declared by a task** — see below. |
+| `harness` | string \| null | `claude-code` \| `opencode` \| `null`. **Detected by `tf-emit.sh`, never declared by a task** — see below. `codex` is retired (2026-09-07): nothing writes it, and records that carry it stay valid and readable. |
 
 ### `project_type` — what it is and why it exists
 
@@ -70,11 +70,11 @@ So `install-metrics.sh` now re-examines **`docs` alone**, on a later refresh, an
 
 ### `harness` — detected, never declared
 
-The framework runs under **three harnesses**: Claude Code (`.claude/commands/TechieFlow/`), OpenCode (agents/tasks loaded from `opencode.jsonc`), and Codex (`.agents/skills/` plus `.codex/agents/`). The task content is identical across harnesses. A task template therefore **cannot know which one is executing it** — an agent copying a literal from the markdown would stamp whichever harness the example happened to name, and every per-harness comparison would be quietly wrong.
+The framework runs under **two harnesses**: Claude Code (`.claude/commands/TechieFlow/`) and OpenCode (agents/tasks loaded from `opencode.jsonc`). A third, Codex, was retired on 2026-09-07; records written before then may carry `harness: "codex"` and stay valid. The task content is identical across harnesses. A task template therefore **cannot know which one is executing it** — an agent copying a literal from the markdown would stamp whichever harness the example happened to name, and every per-harness comparison would be quietly wrong.
 
 So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit template.** Detection order:
 
-1. the adapter-owned `TF_HARNESS`, then harness environment variables (`CLAUDECODE`, `CLAUDE_CODE_*` → `claude-code`; any `OPENCODE*` → `opencode`; Codex thread/session markers → `codex`);
+1. the adapter-owned `TF_HARNESS`, then harness environment variables (`CLAUDECODE`, `CLAUDE_CODE_*` → `claude-code`; any `OPENCODE*` → `opencode`);
 2. the parent process chain, bounded to 12 levels (OpenCode sets no `OPENCODE_*` variables, so the process name is the only honest signal);
 3. **`null`** if neither resolves.
 
@@ -93,7 +93,7 @@ So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit 
 
 | Field | Type | Values / notes |
 |---|---|---|
-| `cmd` | string | `day1-brownfield` \| `day1-greenfield` \| `split-brd` \| `mockups` \| `build-phase` \| `verify-phase` \| `fix-issues` \| `triage-issues` \| `log-miss` \| `devguide` \| `productguide` \| `handoff-phase` \| `refresh-status` \| `amend-docs` |
+| `cmd` | string | `day1-brownfield` \| `day1-greenfield` \| `split-brd` \| `mockups` \| `build-phase` \| `verify-phase` \| `fix-issues` \| `triage-issues` \| `log-miss` \| `devguide` \| `productguide` \| `handoff-phase` \| `refresh-status` \| `amend-docs` \| `deploy-checklist` (added 2026-09-06) |
 | `mode` | string \| null | `build` \| `fix`. `build-phase` already distinguishes these (FIX mode) — capture it; the ratio is the rework metric. `null` for commands with no mode. |
 | `started` | string | ISO-8601 UTC. When the task began — the timestamp you noted at step 0, not "now minus a guess". |
 | `ended` | string | ISO-8601 UTC. Normally equal to `ts`. |
@@ -104,6 +104,7 @@ So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit 
 | `files_written` | int | A count the agent **already knows**. Do not shell out to compute it. |
 | `build_result` | string \| null | `pass` \| `fail` \| `not-run`. |
 | `harness` | string \| null | Injected by `tf-emit.sh` (§1). **Do not emit it yourself.** |
+| `yolo` | bool | Whether YOLO / goal mode was on for this run (D-12, FR-35; added 2026-09-05). Written by the task from the flag file at the status gate; wired into every task in Session 4c. |
 
 ---
 
@@ -120,7 +121,7 @@ So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit 
 | `routed` | bool | `model == tier_model`. Present only when both are known. Routing is observed, never enforced — `routed:false` is drift made visible, not an error. |
 | `tokens_in`, `tokens_out`, `tokens_cache_read`, `tokens_cache_write` | int | Σ over assistant messages whose timestamp ∈ [`started`, `ended`]. Requires the record to carry `started` + `ended` and the session pointer (`.tfcore/.session/<harness>.json` — written by the `session-pointer.sh` hook on Claude, by the plugin on OpenCode). |
 | `cost_usd` | number \| null | Σ real per-message cost from `opencode.db` on OpenCode; **always `null` on Claude Code** (the transcript has no cost and a rate-card estimate would be an estimate presented as a measurement). |
-| `tokens_scope` | string | `tree` = the full session tree — OpenCode: pointer session + descendant sessions; Claude: pointer transcript + the subagent transcripts beside it (`<transcript-dir>/<session-id>/subagents/agent-*.jsonl`, a deterministic path verified 2026-08-20 via a `SubagentStop` payload's `agent_transcript_path`). `main` = Claude main thread only (no subagents dir existed). `conversation` = an exact persisted Codex rollout counter bounded by documented conversation events; measured session data, not an estimate. `none` = window could not be computed (no pointer / unreadable store / empty window) — **tokens are never estimated**. |
+| `tokens_scope` | string | `tree` = the full session tree — OpenCode: pointer session + descendant sessions; Claude: pointer transcript + the subagent transcripts beside it (`<transcript-dir>/<session-id>/subagents/agent-*.jsonl`, a deterministic path verified 2026-08-20 via a `SubagentStop` payload's `agent_transcript_path`). `main` = Claude main thread only (no subagents dir existed). `conversation` = an exact persisted  measured session data, not an estimate. `none` = window could not be computed (no pointer / unreadable store / empty window) — **tokens are never estimated**. |
 
 | `attempt` | int | **`runs` only, added 2026-08-21.** `1 +` the number of prior non-backfilled `run` records with the same `cmd` whose `reqs_touched` intersects this record's. Stamped only when the record carries a non-empty `reqs_touched`; absent on backfilled records and on REQ-less runs (`metrics-report`, renders). Distinct from the gate-level `attempt` in §3.1 (per REQ per verify). This is the counter `routing.yaml` `escalation:` reads **at launch** — `bash .tfcore/utils/tf-emit.sh --next-run-attempt <cmd> <REQ-ID>...` prints the value the next record would get. Advisory: telemetry records, it never switches a model (DECISIONS.md 2026-08-21). |
 
@@ -392,6 +393,8 @@ This is the only stream that carries **three record kinds**: `miss` opens, `miss
 | `found_gate` | string \| null | When `found_by == "gate"`, which gate — same vocabulary as §3.2. `null` otherwise. |
 | `found_run_id` | string \| null | `started` of the finding run. |
 | `failure_class` | string \| null | The §3.3 closed vocabulary, reused verbatim. `null` where none applies. |
+| `what` | string \| null | **The one free-text field** (added 2026-09-05, reset Sitting 4a; D-10). One sentence, in the owner's words, saying what was missed. Never requirement text, file content or a secret (§9). Written into the human-readable `docs/<App>-Misses.md` beside the record by the emitter (§5.5.10, Session 5). |
+| `sort` | string \| null | **Whose gap it was** (added 2026-09-07, reset Session 5; FR-32). The four questions of the miss protocol, asked in order, the first that fits: `spec` (the app's spec did not say it; fix the checklist line) · `unsaid` (the framework never said it; one requirement line plus a check) · `weak-check` (a check existed and did not catch it; fix the check) · `ignored` (it was written and not followed; a hook, or delete the rule). Required by `tf-log-miss.sh`; defaulted by `tf-triage.sh` (`weak-check` for a demoted row, `spec` for a new one, `ignored` for a code edit during triage); amendable (§5.5.7). `null` on records written before the field existed; `FIELD_SINCE` keeps them out of the denominator. |
 
 **`origin_model`, `origin_harness` and `origin_confidence` are never written by an agent** — the same rule as `harness` (§1) and for the same reason: task markdown is shared byte-identically across three harnesses, so a copied literal would stamp the wrong model on every record and quietly corrupt every per-model comparison built on it. `tf-emit.sh` resolves all three from `origin_run_id`, and **forces `origin_model` / `origin_harness` to `null` whenever the lookup fails, overwriting anything the caller supplied.** A guess is worse than a gap here, because nothing downstream can see that it was one.
 
@@ -419,7 +422,7 @@ The agent's job on a `miss` record is therefore small and honest: name what was 
 | `verdict_after` | string | `Verified` \| `Needs re-verify` \| `FAIL` \| `deferred` \| `wont-fix` |
 | `reopened` | bool | `true` when this miss had already closed `Verified` and a later escape re-opened it. |
 | `cost_attribution` | string | **Derived by `tf-emit.sh`** from the fix run's `reqs_touched`: `sole` \| `shared:<n>` \| `none` — §5.5.3. |
-| `tokens_in`, `tokens_out`, `tokens_cache_read`, `tokens_cache_write`, `cost_usd`, `tokens_scope`, `model` | — | **Injected by `tf-emit.sh`** from the `fix_run_id` window, by exactly the §2.5 mechanism. Never written by an agent. `cost_usd` stays `null` on Claude Code and Codex, per §4. |
+| `tokens_in`, `tokens_out`, `tokens_cache_read`, `tokens_cache_write`, `cost_usd`, `tokens_scope`, `model` | — | **Injected by `tf-emit.sh`** from the `fix_run_id` window, by exactly the §2.5 mechanism. Never written by an agent. `cost_usd` stays `null` on Claude Code, per §4. |
 
 ### 5.5.3 `cost_attribution` — the field the money number stands on
 
@@ -507,6 +510,7 @@ That is what keeps it inside the append-only rule rather than an edit wearing a 
 | Field | Vocabulary |
 |---|---|
 | `why_missed` | §5.5.6's seven values |
+| `sort` | `spec` · `unsaid` · `weak-check` · `ignored` (§5.5.1; added 2026-09-07) |
 
 - **A judgement may be completed; an observation may not.** `why_missed` is a classification an analyst can still make honestly next week. `found_gate` is a fact about a run that is over — §3.5's *"never backfill the old records with a verdict they never had"* is this same rule seen from the other side.
 - **Nothing the emitter derives is ever amendable** — `origin_model`, `origin_harness`, `origin_confidence`, `cost_attribution` and every token/cost field are excluded outright. An amend that could set them would be a hole straight through §5.5.1's central rule.
@@ -525,6 +529,8 @@ It **prints its refusal on stdout** rather than failing silently — an agent th
 **Readers fold amendments into the parent before counting anything**, and re-apply the null-check while doing it: a stream merged from another machine can carry an amend and a later-written value in either order.
 
 ### 5.5.7b Closed vocabularies are enforced ON WRITE (added 2026-08-31)
+
+**Since 2026-09-05 (reset Sitting 4a) the emitter also refuses:** a record with no `kind`; a record carrying a field this document does not define for its kind (the allowlist is `_ALLOWED` in `tf-emit.sh`, kept in step with these tables); and a `miss` with no `miss_id`. It also overwrites, never merely fills, `harness` when the harness is detected, every derived cost and model field on a `runs`/`gates` record, and the cost fields on a `miss-fix`. A caller cannot self-report any of them. The `_metrics-emit-gate.md` prose that used to say all this was deleted in the same sitting; the script is the rule.
 
 `tf-emit.sh` validates `miss_class`, `artifact`, `severity`, `found_by` and `why_missed` on a `miss`, and `verdict_after` and `fix_cmd` on a `miss-fix`, against the vocabularies above. **A record carrying a value outside one is refused and never appended**, with the reason and the allowed values printed on stdout. It still exits 0 — telemetry has no veto (§10), and neither does a refused record.
 
@@ -566,6 +572,36 @@ the denominator on the wire, a consumer can agree with this reference **and** be
 resolved in this direction, so the two implementations agree by construction rather than by luck.)
 
 ---
+
+### 5.5.9 `kind: "review"` — an owner review, and what it cost (FR-36; built 2026-09-06, Sitting 4b)
+
+Decided in Session 2 of the reset (D-17): every phase that ends in an owner review records the review's outcome, so the cost of deviation is measurable in every phase, not only in build and verify. UAT issues stay `miss` records; a review record is the owner reading a phase's output and giving corrections.
+
+Written by the run that applies the corrections (`day1-greenfield --stage2`, `amend-docs`; build, verify and handoff reviews are wired in Sitting 4c), after that run's own `runs.jsonl` record exists:
+
+```json
+{"kind":"review","phase":"day1-review","reviewed_run_id":"2026-09-05T16:19:38Z",
+ "correction_run_id":"2026-09-06T05:02:11Z","corrections":2,
+ "what":"the lock screen had no way out and the acceptance lines were too dense to read"}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `phase` | string | `day1-review` · `build-review` · `verify-review` · `handoff-review` (closed vocabulary, enforced on write) |
+| `reviewed_run_id` | string | the `started` of the run that produced the reviewed output |
+| `correction_run_id` | string \| null | the `started` of the run that applied the corrections; null when the owner applied them by hand |
+| `corrections` | integer | how many corrections the owner gave (required) |
+| `what` | string | one sentence in the owner's words; the only free text, like `miss.what` |
+| `tokens_produce`, `cost_produce_usd`, `model_produce` | derived | copied from the run `reviewed_run_id` names (`tokens_out`, `cost_usd`, `model`); null when no run record matches |
+| `tokens_correct`, `cost_correct_usd`, `model_correct` | derived | the same from the run `correction_run_id` names |
+
+The two costs are the review's two numbers: what it cost to produce something the owner had to correct, and what the corrections cost. A caller's cost figure is discarded, as on `miss-fix`. Readers that count misses ignore this kind; `tf-metrics.sh` reports reviews since Session 5 (2026-09-07): the count, the corrections given, by phase, and the two token means over the records that carry them (§5.5.8).
+
+### 5.5.10 The readable file — `docs/<App>-Misses.md` (FR-31; built 2026-09-07, Session 5)
+
+The stream is for scripts. The owner reads `docs/<App>-Misses.md`: one row per `miss` record, newest first, in three tables (open, fixed, will not fix), each row holding the miss id and its row, when and by whom it was found, whose gap it was (`sort`, in words) and the `what` sentence. A record without a sentence shows its class and artifact instead; a record from before ids were required still gets a row.
+
+`tf-emit.sh` rebuilds the file and its HTML through `tf-misses-md.py` after **every** write to the misses stream, whichever door wrote it (log-miss, triage, fix-close, a hand-written record, an amend), so the file is never older than the record. It is **derived**: nothing reads it, nobody edits it, and a wrong row is corrected by a new record. A project whose stream predates the script gets the file by running `bash .tfcore/utils/tf-misses-md.sh` once. The check for FR-31 is in `tests/bugs/run.sh`: the row count equals the record count.
 
 ## 6. Provenance — three separations, one rule applied three times
 

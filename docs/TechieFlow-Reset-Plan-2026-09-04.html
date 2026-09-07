@@ -106,7 +106,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout no-toc">
   <main>
     <h1>TechieFlow — Reset Plan (started 2026-09-04)</h1>
-    <div class="subtitle">Rendered 2026-09-04 &middot; source <code>TechieFlow-Reset-Plan-2026-09-04.md</code></div>
+    <div class="subtitle">Rendered 2026-09-07 &middot; source <code>TechieFlow-Reset-Plan-2026-09-04.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
@@ -225,9 +225,9 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <h3 id="session-3-templates-become-schemas">Session 3 — Templates become schemas<a class="anchor-link" href="#session-3-templates-become-schemas">#</a></h3>
 <p><strong>Goal:</strong> every human document the framework produces gets a short required-shape list and a check script, so the AI cannot drift from the format. This comes before any task is shrunk, because the tasks exist to produce these documents.</p>
 <p><strong>Owner brings:</strong> a git branch created. For each document, which sections a small app truly needs and a rough maximum size. Claude proposes defaults from the existing documents across projects (TfLens, TechieBlog, Lekhak, AstroLyfe, TrBlazeUI have full sets); the owner adjusts.</p>
-<p><strong>The documents, in the order a project produces them:</strong> BRD, Architecture, UIDesign, Checklist (row rules only; it stays an agent document), Coding Standards, PROJECT-STATUS, UsageGuide, DevGuide, ProductGuide.</p>
+<p><strong>The documents, in the order a project produces them:</strong> BRD, Architecture, UIDesign, Checklist (row rules only; it stays an agent document), Coding Standards, PROJECT-STATUS, UsageGuide, DevGuide, ProductGuide. <strong>Added by the owner during Session 3 (2026-09-04):</strong> a tenth document, the Deployment Checklist, produced after UAT from the owner's pipeline guidance document; its schema is agreed in <code>TechieFlow-Document-Schemas.md</code> §3.10 and its template and command are built in Sitting 4b.</p>
 <p><strong>We do:</strong> for each template, write a schema block at the top: required sections in order, word or row budgets by app size, per-row rules such as "acceptance line contains when … then". Write one script, <code>tf-doc-check.sh</code>, that reads the schema and fails the phase if a generated document breaks it. Wire it into the status gate. Add an app size (S, M, L) question to day-1 that sets the budgets. Test the checker against existing documents from at least three projects and report which would fail today and why.</p>
-<p><strong>Output:</strong> nine schema-backed templates, one checker script, size caps at day-1. Both harnesses can run the checker.</p>
+<p><strong>Output:</strong> nine schema-backed templates, one checker script, size caps at day-1. Both harnesses can run the checker. <strong>Done 2026-09-04:</strong> nine templates with schema blocks, <code>tf-doc-check.sh</code> plus its self-test, status-gate step 7b, the day-1 size and kind question, the standards moved into <code>.tfcore/standards/</code>, and a shell-write guard on PROJECT-STATUS. Fourteen projects checked in report mode; the results and the owner's decisions are in <code>TechieFlow-Document-Schemas.md</code>. Three misses logged (24 to 26).</p>
 <h3 id="session-4-shrink-every-task-in-life-cycle-order">Session 4 — Shrink every task, in life-cycle order<a class="anchor-link" href="#session-4-shrink-every-task-in-life-cycle-order">#</a></h3>
 <p><strong>Goal:</strong> every task file the owner fully understands, roughly one third its current size overall, with prose that needed judgement kept, mechanical steps turned into scripts, and duplicates deleted.</p>
 <p><strong>The method, same for every file:</strong> Claude prints the task as a table, one row per block, with a one-line plain summary and a proposed verdict: keep as words, turn into a script, or delete as duplicate or obvious. The owner rules on each row and can ask "show me the block" or "why delete" on any row. Claude applies the verdicts, writes the replacement scripts, copies the file to the Claude Code mirror, confirms <code>opencode.jsonc</code> still points at it, and runs the command for real in both harnesses on a project at that life-cycle stage.</p>
@@ -241,14 +241,20 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </li>
 <li><strong>Output:</strong> the document-phase tasks shrunk and proven.
 </li>
+<li><strong>Done 2026-09-05:</strong> the three shared rule files and day1-greenfield, day1-brownfield, mockups, split-brd and amend-docs shrunk from 23,172 words to 4,237; six scripts, two hooks, five checker rules and FR-53 added; day1-brownfield and amend-docs ran clean on Xpenser in both harnesses; author-brd skipped, it is removed in 4c; misses 01 to 09 logged.
+</li>
 </ul>
 <p><strong>Sitting 4b — the build phase and the guides.</strong></p>
 <ul>
 <li><code>build-phase</code> (4,400 words), <code>devguide</code> (5,300), <code>productguide</code>, <code>handoff-phase</code>, <code>refresh-status</code>.
 </li>
+<li><strong>Added 2026-09-04:</strong> the Deployment Checklist template (schema in <code>TechieFlow-Document-Schemas.md</code> §3.10) and a small new command, <code>*deploy-checklist {App} {pipeline-document}</code>, that fills it from the owner's pipeline guidance and the Stack Q9 and Q10 answers after UAT. It sits beside handoff because handoff runs before UAT and deployment after.
+</li>
 <li><strong>Test on:</strong> the same design-stage project once it has a checklist, or a small project the owner chooses. A real build runs in both harnesses.
 </li>
 <li><strong>Output:</strong> the build and handoff tasks shrunk and proven.
+</li>
+<li><strong>Done 2026-09-06:</strong> build-phase, devguide, refresh-status and the flow-master persona shrunk from 15,649 words to 2,373 (productguide and handoff-phase left for later); the Large layout, the Phases document and the Deployment Checklist with <code>*deploy-checklist</code> built; <code>tf-phase.sh</code>, <code>tf-build.sh</code>, <code>tf-build-list.sh</code>, <code>tf-devguide-list.sh</code>, <code>tf-status-evidence.sh</code> and the goal supervisor with its 26-check self-test added; three hooks added: <code>guard-db.sh</code>, <code>guard-build.sh</code>, and the Stop hook now checks the checklist; deploy-checklist ran in both harnesses on TfLens and its copy; build, devguide and refresh-status ran for real on MyDiary in Claude Code (the build's screens turned out blank at runtime, which the DevGuide run caught); the same three commands on the MyDiary copy through OpenCode with an OpenAI model were started at the close of the sitting, their result is in the run record; FR-54 to FR-57 added; misses 10 to 24 of 2026-09-05 and 01 to 12 of 2026-09-06 logged.
 </li>
 </ul>
 <p><strong>Sitting 4c — verification and bug handling, last.</strong></p>
@@ -262,6 +268,8 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <li>YOLO handling is made uniform across every task (D-18): every command honours the flag; build-phase and verify default to it.
 </li>
 <li><strong>Output:</strong> all tasks shrunk. Total task words near 20,000. Both harnesses tested end to end.
+</li>
+<li><strong>Done 2026-09-07:</strong> verify-phase, triage-issues, fix-issues and log-miss shrunk from 17,552 words to 2,230, plus the new <code>*triage-and-fix</code> (283) and the verifier persona (388); all task files now total 20,282 words; twelve scripts added (the verify chain from work list to telemetry, the Windows head over the WebView2 DevTools port, triage, log-miss and fix-close) with two self-tests, 103 checks; the seven never-used commands removed from both harnesses; the verify hook checks every row against the ledger, the build guard covers browser tests, the checker takes a baseline so old findings warn instead of block; real runs in both harnesses: verify and triage on TechieBlog, fix-issues on MyDiary (the blank screens' root cause found and fixed); misses 17 to 27 of 2026-09-06 and 01 to 02 of 2026-09-07 logged.
 </li>
 </ul>
 <h3 id="session-5-the-miss-protocol-and-the-telemetry-explainer">Session 5 — The miss protocol and the telemetry explainer<a class="anchor-link" href="#session-5-the-miss-protocol-and-the-telemetry-explainer">#</a></h3>
@@ -278,6 +286,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <p><strong>Decided 2026-09-04 (FR-36):</strong> an owner review is recorded as a new record kind <code>review</code>, named by phase (<code>day1-review</code>, <code>build-review</code>, …), with corrections given, cost to produce, cost to correct. UAT issues stay misses.</p>
 <p><strong>We do, part two:</strong> Claude writes <code>docs/TechieFlow-Telemetry-Explained.md</code>: each of the five report numbers, what it means, how it is calculated, one real figure from the combined data and one from a named project, and the one sentence the owner says about it in a talk. The owner reads it and rewrites any sentence they would not say.</p>
 <p><strong>Output:</strong> a miss log a human can read, and a telemetry page the owner can present from.</p>
+<p><strong>Done 2026-09-07:</strong> every miss carries whose gap it was (<code>sort</code>: spec, unsaid, weak-check, ignored), required by <code>tf-log-miss.sh</code>, defaulted by triage, amendable once, reported; <code>docs/&lt;App&gt;-Misses.md</code> and its HTML rebuilt by the emitter after every miss record (FR-31, FR-32, D-10 closed); <code>tests/mirror/run.sh</code> added; the rollup keyed by project and id (the combined first-pass rate is 48%, not the 72% it printed); <code>TechieFlow-Telemetry-Explained.md</code> written with the five numbers and the owner's stage sentences; Session 4's 53 misses sorted (26 weak-check, 15 unsaid, 14 ignored) and 42 closed; FR-58 to FR-61 added; TechieBlog's 87 empty-database regressions closed as will-not-fix; a real <code>*log-miss</code> ran through OpenCode on the MyDiary copy; misses 03 and 04 of 2026-09-07 logged.</p>
 <h3 id="session-6-make-the-repository-readable-again-and-deploy">Session 6 — Make the repository readable again, and deploy<a class="anchor-link" href="#session-6-make-the-repository-readable-again-and-deploy">#</a></h3>
 <p><strong>Goal:</strong> the "read this first" file is short, the six-month log is archived, and every repo has the new framework.</p>
 <p><strong>We do:</strong> split <code>WorkFlow-Context.md</code> into a briefing of at most 3,000 words (what it is, how it is used, conventions, repo map, open items, maintenance contract) and <code>docs/CHANGELOG.md</code> holding the full maintenance log untouched. Trim README to what a new user needs, moving the rest to <code>docs/</code>. Run <code>update-framework.sh</code> against the projects the owner will build next (TechieRag, AstroLyfe, TrStudio), against one library repo, then the rest.</p>

@@ -1,5 +1,7 @@
 # Miss telemetry — AI-First Playbook (the team edition)
 
+> **The Codex adapter was removed on 2026-09-07** (D-14, FR-42). The framework supports Claude Code and OpenCode. Everything below that describes `.codex/`, `.agents/skills/` or a Codex code path is history, kept for traceability; see `docs/CHANGELOG.md`.
+
 **Status:** DESIGN — nothing in the Playbook is implemented yet. **The solo edition shipped its half on 2026-08-28**, so this design now has a working reference implementation to copy from rather than a sibling design document: `.tfcore/telemetry/SCHEMA.md` §5.5, `.tfcore/utils/tf-emit.sh`, `.tfcore/telemetry/tf-metrics.sh`.
 **Target repo:** `/mnt/c/3AIGenCode/AI-First-Playbook` (public team edition; source of truth is the private source repo).
 **Siblings:** `docs/Miss-Telemetry-TechieFlow.md` (the solo edition's version — read it first, especially its §0 implementation status) · `docs/Miss-Telemetry-TfLens.md`.

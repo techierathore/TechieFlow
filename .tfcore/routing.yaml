@@ -7,7 +7,7 @@
 # A phase declares a TIER, never a model. The tiers map resolves a tier to a
 # per-harness model id (Claude Code aliases: opus|sonnet|haiku|inherit|<id>,
 # pinnable via ANTHROPIC_DEFAULT_*_MODEL; OpenCode ids: provider/model, list
-# with `opencode models`; Codex model slugs: list with `codex debug models`).
+# with `opencode models`).
 # Routing is declared at the harness boundary and
 # OBSERVED by telemetry (runs.jsonl model/tier fields) — it is never enforced
 # mid-turn, because neither harness can switch a running turn's model.
@@ -23,26 +23,36 @@
 # §5.3/§5.4 and the rollout order in §6. Flipping the flag alone changes
 # nothing; that is deliberate.
 
-enabled: false
-
+# Owner decisions: 2026-09-05, Sonnet for every long-running Claude phase, Haiku for the cheap ones;
+# 2026-09-06, the OpenAI models for OpenCode (gpt-5.6-terra for frontier and standard, gpt-5.6-luna
+# for economy) after the OpenCode Go monthly limit was reached with MiMo.
+#
+# HOW TO CHANGE A MODEL (the plain version; the full guide is docs/TechieFlow-Routing-Guide.md):
+#   1. This file is the FRAMEWORK DEFAULT. A project gets a copy at .tfcore/routing.yaml when it is
+#      scaffolded, and update-framework.sh never overwrites that copy. So to change one project,
+#      edit the project's copy; to change every future project, edit this one.
+#   2. Edit the model id under `tiers:` for the harness you use (claude: opus|sonnet|haiku or a
+#      full id; opencode: provider/model as printed by `opencode models`).
+#   3. In the project folder run: bash .tfcore/utils/tf-routing-bind.sh
+#      That regenerates the harness bindings (.claude/agents/*.md, .claude/commands/tf/*.md,
+#      .opencode/opencode.json). Nothing changes until it runs.
+#   4. For one unattended run only, pass --model <id> to tf-goal.sh instead; the main agent uses
+#      it, the sub-agents still use the bindings from step 3.
+enabled: true
 # ---------------------------------------------------------------------------
 # Tier → model id, per harness. STARTING VALUES — the owner tunes these.
-# OpenCode ids below are from this machine's `opencode models` (opencode-go /
-# Zen gateway); swap for anthropic/* ids if an Anthropic key is configured.
+# OpenCode ids are provider/model as printed by `opencode models` on this machine.
 # ---------------------------------------------------------------------------
 tiers:
   frontier:
-    claude: opus
-    opencode: opencode-go/kimi-k3
-    codex: gpt-5.6
+    claude: sonnet
+    opencode: openai/gpt-5.6-terra
   standard:
     claude: sonnet
-    opencode: opencode-go/kimi-k2.7-code
-    codex: gpt-5.6-terra
+    opencode: openai/gpt-5.6-terra
   economy:
     claude: haiku
-    opencode: opencode-go/deepseek-v4-flash
-    codex: gpt-5.6-luna
+    opencode: openai/gpt-5.6-luna
 
 # ---------------------------------------------------------------------------
 # Phase → tier. One line each; values: frontier | standard | economy | inherit.
@@ -52,13 +62,14 @@ tiers:
 phases:
   day1-greenfield: frontier
   day1-brownfield: frontier
-  author-brd: frontier
   amend-docs: frontier
   mockups: standard
   split-brd: standard
   build-phase: standard
   fix-issues: frontier
+  triage-and-fix: frontier
   triage-issues: standard
+  log-miss: economy
   verify-phase: standard
   devguide: standard
   productguide: economy
@@ -79,7 +90,7 @@ subagents:
   tf-explorer: economy
 
 # ---------------------------------------------------------------------------
-# Tier → reasoning effort (used by Claude Code and Codex; ignored by OpenCode).
+# Tier → reasoning effort (used by Claude Code; ignored by OpenCode).
 # ---------------------------------------------------------------------------
 effort:
   frontier: high

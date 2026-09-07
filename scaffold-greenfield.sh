@@ -17,10 +17,6 @@
 # `dotnet build` once the project adds the NuGet packages:
 #   .claude/commands/trblazeui.md, .opencode/command/trblazeui.md, .trblazeui/
 #   .claude/commands/techierag.md, .opencode/command/techierag.md, .techierag/
-#   .codex/agents/{trblazeui,techierag}.toml — library-owned once the package
-#   ships it (TrBlazeUI.Components >= 2.0.3); until then tf-codex-bind.py writes
-#   a compat wrapper + the `.<lib>/.codex-agent-package-owned` marker so the
-#   package may replace it.
 #
 # Idempotent: re-running won't overwrite existing files — with one exception:
 # the harness agent mirror (.claude/commands/TechieFlow/agents/) is force-synced
@@ -52,8 +48,8 @@ fi
 
 # --------------------------------------------------------------------------
 # python3 is a HARD prerequisite, not a nice-to-have (added 2026-08-27 after a
-# macOS scaffold failed on a missing python3). It powers the Codex bindings
-# (tf-codex-bind.py), the HTML renderer (tf-render-html.py), the opencode.jsonc
+# macOS scaffold failed on a missing python3). It powers the HTML renderer
+# (tf-render-html.py), the opencode.jsonc
 # audit, tf-metrics.sh and every guard hook. Missing it does not fail loudly at
 # the point of use — the hooks fail OPEN by design — so a scaffold that skipped
 # it would look like it worked and leave the repo silently unguarded.
@@ -64,7 +60,7 @@ fi
 tf_ensure_python3() {
   if command -v python3 >/dev/null 2>&1; then return 0; fi
 
-  echo "  python3 not found — it is required (Codex bindings, HTML renderer, telemetry, guard hooks)."
+  echo "  python3 not found — it is required (HTML renderer, telemetry, guard hooks)."
 
   if [[ "${TF_NO_INSTALL:-0}" == "1" ]]; then
     echo "  TF_NO_INSTALL=1 set — not installing. Install python3 and re-run." >&2
@@ -117,7 +113,7 @@ tf_ensure_python3() {
 if ! tf_ensure_python3; then
   echo "" >&2
   echo "Refusing to continue without python3: the scaffold would appear to succeed" >&2
-  echo "while leaving the repo with no Codex bindings and no working guard hooks." >&2
+  echo "while leaving the repo with no working guard hooks." >&2
   exit 1
 fi
 
@@ -170,7 +166,6 @@ rsync -a \
   .tfcore/agents/ .claude/commands/TechieFlow/agents/
 
 # 4. Reference files at project root — only if missing
-[[ -f WORKFLOW.html ]]   || cp "$TEMPLATE/WORKFLOW.html"   .
 [[ -f opencode.jsonc ]]  || cp "$TEMPLATE/opencode.jsonc"  .
 
 # 4b. OpenCode harness bridge — framework-owned, ALWAYS refreshed (like 3b):
@@ -186,14 +181,6 @@ done
 # {file:...} refs resolve relative to the config file's directory — rewrite
 # ./.tfcore/ to ../.tfcore/ for the copy living inside .opencode/.
 sed 's|{file:\./\.tfcore/|{file:../.tfcore/|g' "$TEMPLATE/opencode.jsonc" > .opencode/opencode.jsonc
-
-# 4c. Codex adapter — repository skills, custom agents, hooks and exec policy.
-mkdir -p .codex/agents .codex/rules .agents/skills
-[[ -f .codex/config.toml ]] || cp "$TEMPLATE/.codex/config.toml" .codex/config.toml
-cp "$TEMPLATE/.codex/hooks.json" .codex/hooks.json
-cp "$TEMPLATE/.codex/rules/techieflow.rules" .codex/rules/techieflow.rules
-python3 .tfcore/utils/tf-codex-bind.py "$TARGET" || echo "  ⚠ Codex bindings could not be generated (python3 required)"
-echo "  Codex adapter installed — trust this repository and review /hooks before relying on guards"
 
 # 5. .claude/settings.json — yolo-except-git-writes. ONLY write if missing,
 #    so per-project tweaks survive scaffold re-runs.
@@ -258,6 +245,22 @@ if [[ ! -f .claude/settings.json ]]; then
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-artifacts.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-metrics.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-db.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-build.sh\""
           }
         ]
       },
@@ -267,6 +270,10 @@ if [[ ! -f .claude/settings.json ]]; then
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-metrics.sh\""
           },
           {
             "type": "command",
@@ -341,7 +348,6 @@ Folders/files created (only missing files filled — re-runs are safe):
   .tfcore/                  ← TechieFlow v4 customized (agents, tasks, templates)
   .claude/commands/            ← Claude Code slash commands (TechieFlow agents)
   .claude/settings.json        ← yolo-except-git-writes permissions
-  WORKFLOW.html                ← the human workflow guide (open in a browser; §17 = macOS / Windows / Linux)
   opencode.jsonc               ← OpenCode config (loads agents/tasks from .tfcore/ via {file:...} refs)
   .gitignore                   ← framework entries appended (deployed copies stay uncommitted)
   tests/playwright/  tests/unit/  src/
@@ -388,8 +394,8 @@ done
 #    package for library personas) and must never be committed in the app repo.
 #    Append-only + idempotent: existing anchored/slash variants are respected;
 #    user content is never rewritten.
-GI_LINES=(".tfcore/" ".claude/" ".opencode/" ".codex/" ".agents/skills/" "/CLAUDE.md" "/WORKFLOW.html" "/opencode.jsonc" "/.tf-scaffold-note.txt")
-GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?\.codex/?$' '^/?\.agents/skills/?$' '^/?CLAUDE\.md$' '^/?WORKFLOW\.html$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$')
+GI_LINES=(".tfcore/" ".claude/" ".opencode/" "/CLAUDE.md" "/opencode.jsonc" "/.tf-scaffold-note.txt")
+GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?CLAUDE\.md$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$')
 GI_MISSING=()
 for i in "${!GI_LINES[@]}"; do
   # tr strips CR so CRLF .gitignore files (Windows-authored) still match the $-anchor
@@ -525,4 +531,4 @@ echo "✔ Done."
 echo ""
 echo "Next: cd \"$TARGET\""
 echo "      dotnet new sln + blazor + add TrBlazeUI/TechieRag NuGets + dotnet build"
-echo "      open WORKFLOW.html, start Claude Code, follow §7 greenfield day-1 prompt"
+echo "      start Claude Code and run the greenfield day-1 command from .tf-scaffold-note.txt"

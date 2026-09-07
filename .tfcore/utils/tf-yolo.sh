@@ -99,6 +99,65 @@ case "$cmd" in
     OUTCOME="${1:-complete}"; SUMMARY="${2:-}"
     case "$OUTCOME" in complete|blocked) ;; *) SUMMARY="$OUTCOME $SUMMARY"; OUTCOME="complete" ;; esac
     mkdir -p "$STATE_DIR" 2>/dev/null || true
+    # The sentinel comes AFTER the status gate: on 2026-09-06 an OpenCode build wrote
+    # `blocked` with the status file untouched since day-1, every row Not Started and no run
+    # record (MISS-TechieFlow-20260906-13). So `done` is refused, without writing the
+    # sentinel, while the status file is older than the goal run's start or no run record
+    # has been appended since the goal started. Exit stays 0 (no veto); the message says
+    # what to finish first. TF_YOLO_DONE_FORCE=1 skips the check (owner use).
+    if [[ "${TF_YOLO_DONE_FORCE:-0}" != "1" && -f "$STATE_DIR/goal.json" ]]; then
+      _why="$(python3 - "$STATE_DIR/goal.json" "$ROOT" <<'PY2' 2>/dev/null
+import json, os, sys, datetime
+gj, root = sys.argv[1], sys.argv[2]
+try:
+    started = json.load(open(gj)).get("started") or ""
+    t0 = datetime.datetime.strptime(started[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=datetime.timezone.utc).timestamp()
+except Exception:
+    sys.exit(0)
+why = []
+ps = os.path.join(root, "PROJECT-STATUS" + ".md")
+if os.path.isfile(ps) and os.path.getmtime(ps) < t0 - 60:
+    why.append("the status file has not been written since this goal run started (%s)" % started)
+# The run record must be for the command the phase marker names (tf-phase.sh start <cmd>):
+# a verify-phase record alone let a build close without its build-phase record
+# (MISS-TechieFlow-20260906-15).
+want_cmd = None
+try:
+    pj = os.path.join(root, ".tfcore", ".session", "phase.json")
+    if os.path.isfile(pj) and os.path.getmtime(pj) >= t0 - 60:
+        want_cmd = (json.load(open(pj)) or {}).get("cmd") or None
+except Exception:
+    want_cmd = None
+runs = os.path.join(root, "docs", "metrics", "runs.jsonl"); last = None; last_cmd = None
+try:
+    for line in open(runs, encoding="utf-8", errors="replace"):
+        try: r = json.loads(line)
+        except Exception: continue
+        ts = r.get("ts")
+        if not ts: continue
+        try:
+            te = datetime.datetime.strptime(ts[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=datetime.timezone.utc).timestamp()
+        except Exception:
+            continue
+        if te >= t0 - 60:
+            last = ts
+            if want_cmd and r.get("kind") == "run" and r.get("cmd") == want_cmd:
+                last_cmd = ts
+except Exception:
+    pass
+if os.path.isfile(runs):
+    if last is None:
+        why.append("no run record has been appended to docs/metrics/runs.jsonl since the goal started")
+    elif want_cmd and last_cmd is None:
+        why.append("no run record for %s (the command the phase marker names) has been appended since the goal started" % want_cmd)
+print("; ".join(why))
+PY2
+)"
+      if [[ -n "$_why" ]]; then
+        echo "GOAL-DONE refused: the status gate has not run — $_why. Finish the gate (_status-update-gate.md: the status file, its HTML, the checker, the run record), then run this command again. Nothing was written."
+        exit 0
+      fi
+    fi
     printf '{"outcome":%s,"summary":%s,"ts":"%s"}\n' \
       "$(json_escape "$OUTCOME")" "$(json_escape "$SUMMARY")" "$(now_utc)" > "$DONE" 2>/dev/null || true
     # The grant ENDS WITH THE GOAL. Until 2026-08-28 `done` left the flag in place,

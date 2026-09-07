@@ -41,20 +41,6 @@ const failures = [];
 const notes = [];
 let passed = 0;
 
-// The Codex binder (.tfcore/utils/tf-codex-bind.py) needs Python 3.10 or newer. On an older
-// Python both routes print a warning and skip the Codex agents and skills, so those files are
-// only expected when the binder can run.
-const pythonVersion = (() => {
-  const result = spawnSync("python3", ["--version"], { encoding: "utf8" });
-  const match = /Python (\d+)\.(\d+)/.exec(`${result.stdout ?? ""}${result.stderr ?? ""}`);
-  return match ? `${match[1]}.${match[2]}` : "unknown";
-})();
-const codexBinderRuns = (() => {
-  const [major, minor] = pythonVersion.split(".").map(Number);
-  return major > 3 || (major === 3 && minor >= 10);
-})();
-if (!codexBinderRuns) notes.push(`python3 is ${pythonVersion}; the Codex binder needs 3.10 or newer, so neither route generates .codex/agents/ or .agents/skills/ on this machine (CI does).`);
-
 // ---------------------------------------------------------------- helpers
 
 function check(name, fn) {
@@ -205,13 +191,18 @@ function perturbInstalledProject(dir) {
   writeFileSync(join(dir, ".claude", "commands", "trblazeui.md"), "# NuGet persona v2\n");
   rmSync(join(dir, ".claude", "commands", "TechieFlow", "tasks", "verify-phase.md"));
   writeFileSync(join(dir, ".claude", "commands", "TechieFlow", "tasks", "old.md"), "stale mirror file\n");
+  // What a project scaffolded before 2026-09-07 still carries. Both routes must remove it:
+  // the Codex adapter was retired (D-14, FR-42) and WORKFLOW.html was dropped.
+  mkdirSync(join(dir, ".codex", "rules"), { recursive: true });
+  writeFileSync(join(dir, ".codex", "config.toml"), "# retired adapter\n");
+  writeFileSync(join(dir, ".codex", "rules", "techieflow.rules"), "retired\n");
+  mkdirSync(join(dir, ".agents", "skills", "techieflow-build"), { recursive: true });
+  writeFileSync(join(dir, ".agents", "skills", "techieflow-build", "SKILL.md"), "retired\n");
+  writeFileSync(join(dir, "WORKFLOW.html"), "<html>the retired workflow guide</html>\n");
   mkdirSync(join(dir, ".opencode", "command"), { recursive: true });
   writeFileSync(join(dir, ".opencode", "command", "techierag.md"), "# NuGet persona\n");
   appendFileSync(join(dir, ".opencode", "plugin", "techieflow.js"), "\n// local edit\n");
-  appendFileSync(join(dir, "WORKFLOW.html"), "<!-- local edit -->\n");
   appendFileSync(join(dir, "opencode.jsonc"), "// a comment only, no project keys\n");
-  appendFileSync(join(dir, ".codex", "config.toml"), "\n# owner tuned\n");
-  appendFileSync(join(dir, ".codex", "hooks.json"), "\n");
   writeFileSync(join(dir, "PROJECT-STATUS.md"), "# status\n");
   writeFileSync(join(dir, "CLAUDE.md"), "# claude\n");
   writeFileSync(join(dir, "docs", "MyApp-BRD.md"), "# BRD\n");
@@ -269,9 +260,7 @@ try {
       ".tfcore/tasks/build-phase.md", ".tfcore/core-config.yaml", ".tfcore/routing.yaml",
       ".claude/commands/TechieFlow/agents/analyst.md", ".claude/commands/TechieFlow/tasks/build-phase.md",
       ".claude/commands/generate-html.md", ".claude/settings.json", ".claude/commands/trblazeui.md",
-      ".opencode/plugin/techieflow.js", ".opencode/opencode.jsonc", "opencode.jsonc", "WORKFLOW.html",
-      ".codex/config.toml", ".codex/hooks.json", ".codex/rules/techieflow.rules",
-      ...(codexBinderRuns ? [".codex/agents/analyst.toml", ".agents/skills/techieflow-build/SKILL.md"] : []),
+      ".opencode/plugin/techieflow.js", ".opencode/opencode.jsonc", "opencode.jsonc",
       ".tf-scaffold-note.txt",
       "docs/metrics/runs.jsonl", "docs/metrics/gates.jsonl", "docs/metrics/sessions.jsonl",
       "docs/metrics/commits.jsonl", "docs/metrics/misses.jsonl", "docs/metrics/README.md",
@@ -289,7 +278,7 @@ try {
   });
   check("brownfield: managed .gitignore entries present, docs/metrics not ignored", () => {
     const all = new Set(lines(join(brownNpm, ".gitignore")));
-    for (const entry of [".tfcore/", ".claude/", ".opencode/", ".codex/", ".agents/skills/", "/CLAUDE.md", "/WORKFLOW.html", "/opencode.jsonc", "/.tf-scaffold-note.txt", "node_modules/", "/package.json", "/package-lock.json", "bin/", "obj/"]) {
+    for (const entry of [".tfcore/", ".claude/", ".opencode/", "/CLAUDE.md", "/opencode.jsonc", "/.tf-scaffold-note.txt", "node_modules/", "/package.json", "/package-lock.json", "bin/", "obj/"]) {
       assert(all.has(entry), `.gitignore is missing ${entry}`);
     }
     assert(!all.has("docs/") && !all.has("docs/metrics/"), ".gitignore hides docs/metrics");
@@ -338,18 +327,24 @@ try {
   shell(join(template, "update-framework.sh"), [updateShell]);
   node([installer, "update", `--target=${updateNpm}`]);
   check("update: installer result equals update-framework.sh result", () => assertSameTree(updateShell, updateNpm));
+  check("update: the retired Codex adapter and WORKFLOW.html are removed by both routes", () => {
+    for (const dir of [updateShell, updateNpm]) {
+      for (const path of [".codex", ".agents/skills", "WORKFLOW.html"]) {
+        assert(!existsSync(join(dir, path)), `${path} survived the update in ${basename(dir)}`);
+      }
+    }
+  });
+
   check("update: framework files refreshed", () => {
     assert(read(join(updateNpm, ".tfcore/tasks/build-phase.md")) === read(join(template, ".tfcore/tasks/build-phase.md")), "edited task not restored");
     assert(!existsSync(join(updateNpm, ".tfcore/tasks/stale-old-task.md")), "stale task not deleted");
     assert(!existsSync(join(updateNpm, ".tfcore/workflows")), "stale stock folder not removed");
     assert(existsSync(join(updateNpm, ".claude/commands/TechieFlow/tasks/verify-phase.md")), "deleted mirror file not restored");
     assert(!existsSync(join(updateNpm, ".claude/commands/TechieFlow/tasks/old.md")), "stale mirror file not deleted");
-    assert(read(join(updateNpm, "WORKFLOW.html")) === read(join(template, "WORKFLOW.html")), "WORKFLOW.html not refreshed");
     assert(read(join(updateNpm, "opencode.jsonc")) === read(join(template, "opencode.jsonc")), "root opencode.jsonc with no project keys not refreshed");
     assert(existsSync(join(updateNpm, "opencode.jsonc.bak")), "old opencode.jsonc not backed up");
     assert(read(join(updateNpm, ".opencode/plugin/techieflow.js")) === read(join(template, ".opencode/plugin/techieflow.js")), "plugin not refreshed");
     assert(existsSync(join(updateNpm, ".opencode/command/generate-html.md")), "short-form OpenCode command not deployed");
-    assert(read(join(updateNpm, ".codex/hooks.json")) === read(join(template, ".codex/hooks.json")), "Codex hooks not refreshed");
     assert(existsSync(join(updateNpm, ".claude/settings.json.bak")), "old settings.json not backed up");
     assert(!read(join(updateNpm, ".claude/settings.json")).includes("ownerKey"), "settings.json not refreshed");
   });
@@ -360,7 +355,6 @@ try {
     assert(read(join(updateNpm, ".claude/settings.local.json")) === "{ \"local\": true }\n", "settings.local.json touched");
     assert(read(join(updateNpm, ".claude/commands/trblazeui.md")) === "# NuGet persona v2\n", "NuGet persona under .claude/commands overwritten");
     assert(read(join(updateNpm, ".opencode/command/techierag.md")) === "# NuGet persona\n", "NuGet persona under .opencode/command overwritten");
-    assert(read(join(updateNpm, ".codex/config.toml")).includes("# owner tuned"), ".codex/config.toml replaced");
     for (const path of ["PROJECT-STATUS.md", "CLAUDE.md", "docs/MyApp-BRD.md", "docs/notes.md", "src/App/Program.cs"]) {
       assert(existsSync(join(updateNpm, path)), `${path} missing after update`);
     }
@@ -453,7 +447,7 @@ try {
     const ignore = read(join(uninstallDir, ".gitignore"));
     assert(ignore.startsWith("# Project rules\n/dist/\n"), "project .gitignore rules changed");
     const all = new Set(ignore.replace(/\r/g, "").split("\n"));
-    for (const entry of [".tfcore/", ".claude/", "/WORKFLOW.html", "/opencode.jsonc"]) assert(!all.has(entry), `.gitignore still lists ${entry}`);
+    for (const entry of [".tfcore/", ".claude/", "/opencode.jsonc"]) assert(!all.has(entry), `.gitignore still lists ${entry}`);
     assert(!ignore.includes("deployed copies, never commit"), ".gitignore still carries the framework block header");
     assert(all.has("node_modules/") && all.has("bin/"), "uninstall removed ignore rules that describe the project's own build output");
   });
@@ -534,7 +528,7 @@ try {
     assert(existsSync(join(jsTarget, "node_modules", "leftpad")), "the project's own dependency was removed from node_modules");
     assert(!existsSync(join(jsTarget, "node_modules", "@techierathore")), "the framework package is still under node_modules");
     assert(!existsSync(join(jsTarget, "node_modules", ".bin", "techieflow")), "the techieflow shim is still under node_modules/.bin");
-    for (const path of [".tfcore/agents/analyst.md", ".claude/commands/TechieFlow/agents/analyst.md", ".opencode/opencode.jsonc", "WORKFLOW.html"]) {
+    for (const path of [".tfcore/agents/analyst.md", ".claude/commands/TechieFlow/agents/analyst.md", ".opencode/opencode.jsonc"]) {
       assert(existsSync(join(jsTarget, path)), `${path} was not installed`);
     }
   });

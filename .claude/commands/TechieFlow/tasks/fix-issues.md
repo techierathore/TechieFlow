@@ -1,134 +1,15 @@
 # fix-issues
 
-The single front door for fixing bugs the owner found by running the app — UI layout, broken rendering, wrong data, or logic. You drop **a folder of screenshots (+ an optional description file)**; flow-master reproduces each issue, triages where it lives, fans the fix out to the right builder, re-verifies, and updates the docs. **You never invoke the UI / functional / RAG agents yourself — flow-master calls them as sub-agents.**
+`*fix-issues {App} {folder}` is the one command the owner hands a pile of evidence to: a folder of screenshots with an optional notes file. It reproduces each bug, logs it, fixes it through the builders, re-verifies the touched rows and closes the misses with the cost of the fix. The owner never calls a builder. If the owner's words ask only to analyse or log, this is `*triage-issues`, not a fix. It honours YOLO.
 
-## Why this exists
+First: `bash .tfcore/utils/tf-phase.sh start fix-issues {App}` prints the start time; keep it. The marker is what lets a migration run from this command.
 
-When the verifier passes but the running UI is still broken (overlapping controls, blank screens, wrong behavior), the owner needs ONE command to hand a pile of evidence to and have it fixed end-to-end — not to choreograph trblazeui, techierag, and the verifier by hand. `*fix-issues` is that command. It is generic: a bug can be anywhere (layout, data, logic, RAG), so it triages first and routes second. (Analysis WITHOUT fixing — "log these UAT bugs, don't fix yet" — is `*triage-issues`, not this task; see §0.)
+## Steps
 
-## Inputs
-
-- `{AppName}` (required; or resolve from `core-config.yaml`).
-- `{Folder}` (required) — a path to a folder the owner filled with **screenshots** of the broken screens and, optionally, a **description file** (`bugs.md` / `README.md` / `notes.txt`) naming what's wrong on each (e.g. "Dashboard: KPI cards overlap the chart; Clients list shows count 16 but rows are blank"). If `{Folder}` is omitted, ask once for the folder path. (Screenshots-in-a-folder is the intended evidence channel — do not require the owner to describe bugs in chat.)
-
-## SEQUENTIAL Execution
-
-### 0. Scope guard — was a FIX actually requested?
-
-**`*fix-issues` fixes.** If the owner's words ask only to **analyze / triage / log / document** the bugs, update the checklist, or re-verify other features — and do NOT ask for a fix — STOP: execute `.tfcore/tasks/triage-issues.md` instead (same evidence channel, docs-only deliverable) and let the owner decide about fixing afterwards. "Analyze these bugs" is NEVER permission to edit code.
-
-### 1. Ingest the evidence
-
-- List the folder. **Read every screenshot** (vision) and the description file if present. Build a working list of issues: `{ id, screen/route guess, role guess, symptom, evidence-image }`.
-- For each issue, classify a first-guess **kind**: `layout` (overlap/clip/off-viewport/unstyled), `render-empty` (blank table/chart/value), `data/logic` (wrong values, failed action), `rag` (bad/empty AI answer). Final classification happens after repro (§3).
-- If the description names screens/roles, use them; otherwise infer the screen from the screenshot (match against the DevGuide screen list / routes).
-
-### 2. Boot the app (per `_smoke-test-policy.md` + `verify-phase.md §Local-only`)
-
-- Boot the app yourself via the build-invocation-ladder; bring up dependent services (DB/LLM/API) in dependency order for a multi-service stack. "Can't run on Linux / it's multi-service / it targets Windows" are BANNED excuses; escalate per `verify-phase.md §3a` (rung #4 Windows-side → another port → ask the owner only as a last resort). Never propose a cloud deploy.
-- Resolve a test login from `docs/{AppName}-UsageGuide.md` / the DB — never auto-create a random user.
-
-### 3. Reproduce each issue live with Playwright
-
-For each issue, log in as the relevant role, navigate to the screen, and **reproduce the symptom**:
-- Take a fresh screenshot at desktop + a mobile width and compare to the owner's evidence.
-- Apply the **data render gate** (`verify-phase.md §4a`) and the **visual-truth gate** (`§4b`): is the control blank? do controls overlap / clip / sit off-viewport? is it unstyled?
-- Settle the issue's **kind** from what you observe (not just the owner's guess), and map it to the owning screen + `REQ-*` in `docs/{AppName}-Checklist.md` (use the DevGuide screen→REQ map). If an issue can't be reproduced, note it (maybe environment/data-specific) and ask the owner rather than guessing a fix.
-
-Echo a triage table before fixing:
-```
-Issue 1 → REQ-UI-007 (Dashboard) — kind: layout (KPI cards overlap chart @ both widths) → /trblazeui
-Issue 2 → REQ-FN-014 (Clients)   — kind: render-empty (grid 16 count, 0 rows)         → flow-master (data) 
-Issue 3 → REQ-RAG-003 (Assistant)— kind: rag (empty answer)                            → /techierag
-```
-
-### 4. Fan out the fixes to the right builder (flow-master calls them — the owner does not)
-
-In ONE turn, route each issue to its builder as a sub-agent, in parallel where they don't share files:
-- **`layout` / UI** → invoke **`/trblazeui`** as a sub-agent: fix the Razor/CSS/component so it renders correctly and matches the mockup (greenfield) / intended layout; cite the REQ + the symptom + the screenshot. Page-layout fixes are trblazeui's job.
-- **`render-empty` / `data` / `logic`** → spawn a **builder subagent** (`tf-builder` if the harness registers it, otherwise the harness's general subagent — Claude Code `Agent` tool / OpenCode `task` tool): fix the binding/guard/column-mapping/service/query so the control actually renders its data (the `verify-phase §4a` failure modes — undeclared params, column→property mismatch, throwing computed getters, null guards).
-- **`rag`** → invoke **`/techierag`** as a sub-agent: fix the RAG flow (ingestion/search/prompt/provider config).
-- Each sub-agent tags its fix with the `[REQ-*]` tag in the checklist Remarks (**NEVER a git commit — git is manual; agents never run git/gh**), logs any library gap to the owning feedback file, and returns `{ reqsFixed[], filesChanged[], notes[] }`. Every sub-agent prompt MUST carry the two standing rules from `build-phase.md §3` verbatim (no git; smoke it yourself — library agents don't read `.tfcore/` tasks). Wait for all to return.
-
-### 5. Re-smoke (data + visual) then re-verify the affected REQs
-
-- Rebuild (invocation ladder). Re-smoke each fixed screen yourself: data renders AND it looks right at desktop + mobile (per `_smoke-test-policy.md` — both gates). If a fix didn't take, loop back to §4 for that issue.
-- Chain the verifier: read `.tfcore/tasks/verify-phase.md` and run it inline scoped to the affected REQ IDs (skip its §0 question — scope is known). It applies §4a + §4b and writes verdicts into `docs/{AppName}-Checklist.md`.
-
-### 6. Update the docs (status gate)
-
-- **Checklist:** the verifier already wrote verdicts; confirm each fixed REQ is `Verified` (or note why not).
-- **DevGuide:** refresh the affected screens' observed render/visual status + Known issues (the verifier's §6b does this; if a screen wasn't in scope, update it via `*devguide {AppName} --update`).
-- **PROJECT-STATUS (FINAL GATE, per `_status-update-gate.md`):** update `PROJECT-STATUS.md` AND re-render `PROJECT-STATUS.html` — open requirements, a verification-log row, next command. A markdown-only update is incomplete.
-- **Never run git.** Investigate by reading working-tree files at `file:line`, never a diff.
-
-### 6a. Emit the run record — and CLOSE the misses you fixed
-
-Same turn as the status gate. Doctrine: `.tfcore/tasks/_metrics-emit-gate.md`; schema `.tfcore/telemetry/SCHEMA.md` §2 + §5.5. Stamp `started` with `date -u +%Y-%m-%dT%H:%M:%SZ` at §1, before you ingest anything.
-
-**Emit the run record FIRST.** The `miss-fix` records below carry no numbers of their own — they name this run, and `tf-emit.sh` copies its token window. A `miss-fix` emitted before its run record finds nothing and is costed `none`.
-
-```bash
-cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
-{"kind":"run","app":"{AppName}","cmd":"fix-issues","mode":"fix",
- "started":"<start>","ended":"<now>","duration_s":<n>,
- "reqs_touched":["REQ-UI-009"],"reqs_count":1,
- "subagents":["trblazeui"],"files_written":<n>,"build_result":"pass"}
-JSON
-```
-
-`mode` is always `"fix"` here — that is the whole point of this command. The verifier chained in §5 emits its own `gates.jsonl` and `misses.jsonl` records; do not emit those yourself.
-
-**Then one `miss-fix` per REQ you repaired.** This is what makes "what did that miss cost to fix" answerable at all:
-
-```bash
-for REQ in REQ-UI-009 REQ-FN-014; do
-  MID=$(bash .tfcore/utils/tf-emit.sh --open-miss "$REQ" | cut -d' ' -f1)
-  [ -z "$MID" ] && continue          # no open miss for this REQ — nothing to close
-  FA=$(bash .tfcore/utils/tf-emit.sh --next-fix-attempt "$MID")
-  cat <<JSON | bash .tfcore/utils/tf-emit.sh misses
-{"kind":"miss-fix","miss_id":"$MID","req_id":"$REQ",
- "fix_run_id":"<the §1 start timestamp>","fix_cmd":"fix-issues",
- "fix_attempt":$FA,"verdict_after":"<the verifier's verdict>","reopened":false}
-JSON
-done
-```
-
-- **`verdict_after` is the verifier's verdict from §5, not your assessment of your own fix.** `Verified` only where the verifier actually wrote it. A miss closed on the fixer's word is the same failure as a self-attested `Verified`.
-- **A REQ with no open miss is normal** — the owner reported something the gates never recorded as a miss. Open one first (`--next-miss-id`, `found_by:"owner"`, per `triage-issues` §6a) and then close it in the same run, so the defect has both a cause and a cost.
-- **Write no token, dollar, or `cost_attribution` field.** `tf-emit.sh` copies the window from `fix_run_id` and derives the attribution from that run's `reqs_touched` — `sole` when this fix touched one REQ, `shared:<n>` when it touched several. That distinction is the whole reason the cost figure can be defended, and it is not yours to assert (constraint 10).
-
-**Telemetry has no veto:** a failed emit never changes the outcome and is not worth reporting.
-
-### 7. HALT — report
-
-```
-# Fix-issues — {AppName}
-Evidence: {Folder} ({S} screenshots, {desc|no} description)
-Issues: {N} triaged → {u} UI/layout, {d} data/render, {r} RAG, {x} could-not-reproduce
-Fixed + re-verified: {f} REQs now Verified  |  Still open: {o} (reason)
-Docs: checklist + DevGuide + PROJECT-STATUS updated (+ HTML re-rendered)
-Next: {if open issues → re-run *fix-issues with the still-broken shots / *verify all ; else "all reported issues fixed and re-verified"}
-```
-
-## Hard rules
-
-- **A fix must be ASKED for.** Analyze/log/document-only requests route to `.tfcore/tasks/triage-issues.md` (§0) — never start fixing on an analysis request.
-- **One front door, flow-master routes.** The owner runs only `*fix-issues`; flow-master calls trblazeui / techierag / its own subagents. Never tell the owner to invoke a builder agent themselves.
-- **Triage from what you OBSERVE, not just the owner's words.** Reproduce live before fixing; classify by the actual data + visual gates.
-- **Both gates before "fixed".** A fix is done only when the screen renders its data AND looks right (no overlap/clip/off-viewport), confirmed by re-smoke + the verifier.
-- **Boot the app yourself**, incl. multi-service stacks; asking the owner to run it is the last resort. Never propose a cloud deploy.
-- **Use documented test users; never auto-create random ones.**
-- **Status gate is the last action** — PROJECT-STATUS `.md` AND `.html`. Never run git.
-
-## Output Checklist
-
-- [ ] Evidence folder ingested — screenshots read (vision) + description parsed; issue list built
-- [ ] App booted (incl. dependent services); documented test user used
-- [ ] Each issue reproduced live and triaged (kind + owning REQ) — triage table echoed
-- [ ] Fixes fanned out to the right builder (trblazeui / flow-master subagent / techierag) — owner did NOT invoke any agent
-- [ ] Re-smoked (data + visual) and verifier re-run on the affected REQs (verdicts in the checklist)
-- [ ] DevGuide affected screens refreshed; PROJECT-STATUS.md + .html updated (status gate)
-- [ ] `runs.jsonl` record emitted with `cmd:"fix-issues"`, `mode:"fix"` (§6a) — **before** the miss-fix records, so the token window exists to copy
-- [ ] One `misses.jsonl` `miss-fix` per repaired REQ that had an open miss, carrying the verifier's verdict — no token/cost/attribution field written by hand
-- [ ] Report printed with fixed vs still-open counts
+1. Triage first, as `.tfcore/tasks/triage-issues.md` steps 1 to 4: read the evidence, boot (`tf-verify-boot.sh start`), reproduce each issue on its screen with the screens script, map it to its row, and log it with `tf-triage.sh demote` or `new`. Then `bash .tfcore/utils/tf-triage.sh {App} close --started <the step-0 time> --cmd fix-issues` writes the escaped gate records and the misses with the discovery cost. A defect nobody logged has no miss to close, so this step is never skipped.
+2. `bash .tfcore/utils/tf-build-list.sh {App} --prompts` now prints FIX mode with the demoted rows, their clusters and one builder prompt each. Spawn every cluster in one turn, exactly as `.tfcore/tasks/build-phase.md` step 2 says: `[trblazeui]` through `/trblazeui`, `[techierag]` through `/techierag`, the rest through the builder sub-agent. A library gap goes into the library's feedback file and the row becomes `Blocked`; never a workaround.
+3. `bash .tfcore/utils/tf-build.sh` until PASS, then smoke every fixed screen with `tf-verify-screens.sh --screen …` (`.tfcore/tasks/_smoke-test-policy.md`); a screen that still fails re-enters step 2 for its rows.
+4. Execute `.tfcore/tasks/verify-phase.md` inline, scoped to the touched rows. Only that run writes `Verified`.
+5. `bash .tfcore/utils/tf-verify-boot.sh stop`, then `bash .tfcore/utils/tf-fix-close.sh {App} --started <the step-0 time> --subagents <what was fanned out> --build <pass|fail>`: the fix-issues run record first, then one miss-fix per touched row with the verifier's verdict from the ledger. A row the verifier left below `Verified` stays open with that verdict on its miss-fix.
+6. Run the status gate (`.tfcore/tasks/_status-update-gate.md`); the run record is the one step 5 wrote. When this run is the last step of a goal, write the sentinel (`.tfcore/tasks/_yolo-mode.md`).
+7. Report: evidence read, issues by kind, rows fixed and now `Verified`, rows still open and why, library gaps logged, and the next command from the gate.

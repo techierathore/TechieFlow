@@ -1,54 +1,57 @@
-# {AppName} — Product Guide
+<!-- tf-schema
+doc: productguide
+file: docs/{App}-ProductGuide.md
+header: App, Size, Date
+section: Welcome | required | max 150
+section: Getting started | required
+section: Roles at a glance | optional
+section: Using* | required
+section: Troubleshooting | optional
+entries: Using* |
+rule: entry-steps
+rule: entry-screenshot
+budget: S 2500 3500 | M 4500 6500 | L 4500 6500
+-->
+<!-- Authoring notes (agent only; never visible text).
+     The end user's manual: plain language, task by task, one real screenshot per task, no code and no
+     requirement ids. "Roles at a glance" only when there is more than one role. The Using section is
+     titled "Using {App}"; one `###` per task in the order a user meets them. -->
 
-> **Audience: end users (not developers).** This is the how-to-use-the-app manual — task-oriented, screenshot-illustrated, plain language. It explains *what each screen is for* and *how to do each thing*, not how the code works (that's the DevGuide). It is a HUMAN document → always written as markdown AND rendered to HTML.
+# {App} — Product Guide
 
-## Table of Contents
-
-<!-- Auto-maintained. Slug rule: .tfcore/templates/v4custom/html-render-shell.md §1. List each `## <Role/Area>` and its `### <Feature/Screen>` sub-entries. -->
-
-1. [Welcome](#welcome)
-2. [Getting started](#getting-started)
-3. [Roles at a glance](#roles-at-a-glance)
-4. [Using {AppName}](#using-appname)
+| | |
+|---|---|
+| App | {App} |
+| Size | Small, Medium or Large |
+| Date | {YYYY-MM-DD} |
 
 ## Welcome
 
-<one short paragraph: what {AppName} is and who it's for, in product language drawn from the BRD §1/§9 — no jargon, no architecture.>
+{What it does and who it is for, at most 150 words.}
 
 ## Getting started
 
-- **Sign in:** {how to reach the app + log in; the sign-in screen with its screenshot}.
-- **What you'll see first:** {the landing screen per role — keep it accurate to the real post-login landing, the same one the DevGuide's LANDING-TRUTH established}.
+1. {Open … and sign in.}
+2. {What you see first.}
 
-![Sign in](./screenshots/{AppName}/{anon}-login.png)
+![Sign in](screenshots/{App}/login.png)
 
 ## Roles at a glance
 
-<one row per user role/persona, plain-language "what this role can do" — derived from the BRD personas + the DevGuide's role→menu map.>
-
 | Role | What you can do |
-|------|-----------------|
+|---|---|
 | {Role} | {one line} |
 
-## Using {AppName}
+## Using {App}
 
-<!-- One `## {Role or Area}` section, then one `### {Feature / Screen}` block per screen, in the order a
-     user would naturally use them (navigation order from the DevGuide's menu map). Each block is
-     task-oriented and carries the REAL screenshot captured by the DevGuide OBSERVE pass. For a large
-     app this section is split per role into docs/productguides/ (see the task). -->
+### {Task name}
 
-### {Feature / Screen name}
-
-**What it's for:** {one or two plain sentences — the user benefit, from the BRD feature catalog.}
-
-**How to use it:**
-1. {step — what the user clicks/enters}
+1. {step}
 2. {step}
-3. {what they should see / the result}
+3. {what you should see}
 
-![{Screen name}](./screenshots/{AppName}/{role}-{screen-slug}.png)
+![{Task name}](screenshots/{App}/{screen-slug}.png)
 
-**Tips & notes:** {gotchas, limits, anything from the UsageGuide's known-limitations that a user should know — plain language, no defect IDs.}
+## Troubleshooting
 
-<!-- Repeat the ### block for every user-facing screen/feature. Omit purely internal/admin-plumbing
-     screens that an external user never touches, unless the role section is the admin guide. -->
+- {problem}: {what to do}

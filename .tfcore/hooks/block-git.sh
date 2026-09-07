@@ -7,7 +7,7 @@
 #
 #  1. GIT GUARD. Git is MANUAL in TechieFlow — agents never COMMIT, PUSH, STAGE,
 #     RESET, CHECKOUT or otherwise WRITE to git, ever (.tfcore/tasks/_smoke-test-policy.md
-#     §"Git is manual", _status-update-gate.md §"Never run git"). Outside YOLO,
+#     owner rule; this hook is the only place it is stated). Outside YOLO,
 #     agents never READ git either (status/log/diff/blame) — status evidence is the
 #     checklist table + working tree + a fresh build. In YOLO mode (below) READ-ONLY
 #     git/gh is allowed; WRITES stay blocked in every mode. settings.json's deny
@@ -55,7 +55,7 @@ block_git_msg() {
   cat >&2 <<'MSG'
 BLOCKED by TechieFlow policy: agents NEVER WRITE to git or gh — no commit / push / add / reset / checkout / stash / tag / merge / rebase / branch edits / gh pr|issue create|merge|close. Git is manual, owner-only, in EVERY mode including YOLO.
 Do NOT retry with another git/gh form. Instead:
-- Status updates / "what changed": read the checklist Requirements Status table + the working-tree files (ls -lt, find -newer, Read/Glob/Grep) + a fresh dotnet build — never commit history (.tfcore/tasks/_status-update-gate.md).
+- Status updates / "what changed": bash .tfcore/utils/tf-status-facts.sh <App> prints the facts from the checklist; the working-tree files (ls -lt, find -newer, Read) are the as-built code — never commit history.
 - Investigating code: read the files on disk at file:line — the working tree IS the as-built code.
 - Committing/tagging: never yours. Record REQ IDs in the checklist Remarks, not in commits. The owner commits manually.
 - If your command merely CONTAINS the word git (e.g. writing a doc, grepping for the string): use the Write/Edit/Grep tools instead of bash — that is the standing tool-preference rule anyway.
@@ -64,7 +64,7 @@ MSG
 block_read_msg() {
   if [[ "$STRICT_GIT" == "1" ]]; then
     cat >&2 <<'MSG'
-BLOCKED by TechieFlow Codex policy: agents do not run any git or gh command, including read-only status/log/diff/blame, in any mode.
+BLOCKED by TechieFlow policy: agents do not run any git or gh command, including read-only status/log/diff/blame, in any mode.
 Use the checklist Requirements Status table, working-tree files, filesystem metadata, and fresh build/test evidence instead. The owner performs version-control operations manually.
 MSG
     return
@@ -72,7 +72,7 @@ MSG
   cat >&2 <<'MSG'
 BLOCKED by TechieFlow policy: agents do not READ git outside YOLO mode (no status/log/diff/show/blame/grep) — git is manual, owner-only.
 Do NOT retry with another git/gh form. Instead:
-- Status updates / "what changed": read the checklist Requirements Status table + the working-tree files (ls -lt, find -newer, Read/Glob/Grep) + a fresh dotnet build — never commit history (.tfcore/tasks/_status-update-gate.md).
+- Status updates / "what changed": bash .tfcore/utils/tf-status-facts.sh <App> prints the facts from the checklist; the working-tree files (ls -lt, find -newer, Read) are the as-built code — never commit history.
 - Investigating code: read the files on disk at file:line — the working tree IS the as-built code.
 - Read-only git (status/log/diff/blame) becomes available only in YOLO / goal mode (`*yolo` → bash .tfcore/utils/tf-yolo.sh on). Git WRITES are never available.
 MSG

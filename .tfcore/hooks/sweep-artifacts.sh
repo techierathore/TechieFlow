@@ -2,7 +2,7 @@
 # TechieFlow hook — automatic sweep of expired run material (added 2026-08-26).
 #
 # Wired as a SessionStart hook in .claude/settings.json (Claude Code), as
-# `codex-adapter.py session-start` (Codex) and on the first root
+# on the first root
 # `session.created` in .opencode/plugin/techieflow.js (OpenCode).
 #
 # WHY: verify-phase.md §1 pins every run artifact under tests/.artifacts/ and
@@ -60,7 +60,7 @@ root = os.path.realpath(root)
 DRY = os.environ.get("TF_SWEEP_DRY_RUN") == "1"
 
 # Throttle: at most one sweep per hour per project, whichever harness fires it
-# (Codex re-fires session-start on every prompt; a walk of a big tree on every
+# (a harness may re-fire session-start on every prompt; a walk of a big tree on every
 # turn is waste). TF_SWEEP_FORCE=1 bypasses. Dry runs never touch the stamp.
 stamp = os.path.join(root, ".tfcore", ".session", "sweep.stamp")
 if not DRY and os.environ.get("TF_SWEEP_FORCE") != "1":

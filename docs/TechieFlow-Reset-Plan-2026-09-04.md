@@ -62,6 +62,8 @@ A session ends when its output exists and the owner understands it. Session 4 is
 
 **Output:** a corrected How-It-Works. A list of commands by usage. The "never use" list is removed in Session 4.
 
+**Done 2026-09-04:** `TechieFlow-How-It-Works.md` reviewed with the owner and corrected line by line; the twenty-two defects D-1 to D-22 recorded in its §8 and mirrored into the framework's own miss stream; every command given a verdict, which produced the list of seven never-used commands that Sitting 4c removed from both harnesses; the session itself recorded as the first `framework-reset` run (08:18 to 14:43 UTC, 569,794 output tokens).
+
 ### Session 2 — The framework's own requirements, and the standing .NET decisions
 
 **Goal:** the framework gets what every app gets: a checklist with testable lines. And the .NET decisions each app has been inventing on its own get written down once.
@@ -93,11 +95,11 @@ The ten questions:
 
 **Owner brings:** a git branch created. For each document, which sections a small app truly needs and a rough maximum size. Claude proposes defaults from the existing documents across projects (TfLens, TechieBlog, Lekhak, AstroLyfe, TrBlazeUI have full sets); the owner adjusts.
 
-**The documents, in the order a project produces them:** BRD, Architecture, UIDesign, Checklist (row rules only; it stays an agent document), Coding Standards, PROJECT-STATUS, UsageGuide, DevGuide, ProductGuide.
+**The documents, in the order a project produces them:** BRD, Architecture, UIDesign, Checklist (row rules only; it stays an agent document), Coding Standards, PROJECT-STATUS, UsageGuide, DevGuide, ProductGuide. **Added by the owner during Session 3 (2026-09-04):** a tenth document, the Deployment Checklist, produced after UAT from the owner's pipeline guidance document; its schema is agreed in `TechieFlow-Document-Schemas.md` §3.10 and its template and command are built in Sitting 4b.
 
 **We do:** for each template, write a schema block at the top: required sections in order, word or row budgets by app size, per-row rules such as "acceptance line contains when … then". Write one script, `tf-doc-check.sh`, that reads the schema and fails the phase if a generated document breaks it. Wire it into the status gate. Add an app size (S, M, L) question to day-1 that sets the budgets. Test the checker against existing documents from at least three projects and report which would fail today and why.
 
-**Output:** nine schema-backed templates, one checker script, size caps at day-1. Both harnesses can run the checker.
+**Output:** nine schema-backed templates, one checker script, size caps at day-1. Both harnesses can run the checker. **Done 2026-09-04:** nine templates with schema blocks, `tf-doc-check.sh` plus its self-test, status-gate step 7b, the day-1 size and kind question, the standards moved into `.tfcore/standards/`, and a shell-write guard on PROJECT-STATUS. Fourteen projects checked in report mode; the results and the owner's decisions are in `TechieFlow-Document-Schemas.md`. Three misses logged (24 to 26).
 
 ### Session 4 — Shrink every task, in life-cycle order
 
@@ -110,11 +112,14 @@ The ten questions:
 - Then `day1-greenfield` (3,400 words), `day1-brownfield` (7,300), `mockups`, `split-brd`, `amend-docs`, `author-brd`.
 - **Test on:** a project in design or redevelopment, TechieRag or TrStudio, the owner picks. Day-1 or amend-docs runs for real in both harnesses, and the Session 3 checker passes on what it produces.
 - **Output:** the document-phase tasks shrunk and proven.
+- **Done 2026-09-05:** the three shared rule files and day1-greenfield, day1-brownfield, mockups, split-brd and amend-docs shrunk from 23,172 words to 4,237; six scripts, two hooks, five checker rules and FR-53 added; day1-brownfield and amend-docs ran clean on Xpenser in both harnesses; author-brd skipped, it is removed in 4c; misses 01 to 09 logged.
 
 **Sitting 4b — the build phase and the guides.**
 - `build-phase` (4,400 words), `devguide` (5,300), `productguide`, `handoff-phase`, `refresh-status`.
+- **Added 2026-09-04:** the Deployment Checklist template (schema in `TechieFlow-Document-Schemas.md` §3.10) and a small new command, `*deploy-checklist {App} {pipeline-document}`, that fills it from the owner's pipeline guidance and the Stack Q9 and Q10 answers after UAT. It sits beside handoff because handoff runs before UAT and deployment after.
 - **Test on:** the same design-stage project once it has a checklist, or a small project the owner chooses. A real build runs in both harnesses.
 - **Output:** the build and handoff tasks shrunk and proven.
+- **Done 2026-09-06:** build-phase, devguide, refresh-status and the flow-master persona shrunk from 15,649 words to 2,373 (productguide and handoff-phase left for later); the Large layout, the Phases document and the Deployment Checklist with `*deploy-checklist` built; `tf-phase.sh`, `tf-build.sh`, `tf-build-list.sh`, `tf-devguide-list.sh`, `tf-status-evidence.sh` and the goal supervisor with its 26-check self-test added; three hooks added: `guard-db.sh`, `guard-build.sh`, and the Stop hook now checks the checklist; deploy-checklist ran in both harnesses on TfLens and its copy; build, devguide and refresh-status ran for real on MyDiary in Claude Code (the build's screens turned out blank at runtime, which the DevGuide run caught); the same three commands on the MyDiary copy through OpenCode with an OpenAI model were started at the close of the sitting, their result is in the run record; FR-54 to FR-57 added; misses 10 to 24 of 2026-09-05 and 01 to 12 of 2026-09-06 logged.
 
 **Sitting 4c — verification and bug handling, last.**
 - `verify-phase` (11,850 words, the largest), `fix-issues`, `triage-issues`, `log-miss`.
@@ -122,6 +127,7 @@ The ten questions:
 - The seven commands the owner decided to remove on 2026-09-04 are removed here, with their registrations, from both harnesses: create-brd (author-brd), elicit (advanced-elicitation), document-project, index-docs, shard-doc, execute-checklist, kb-mode-interaction. `create-doc` stays because brainstorm's brief, competitor analysis and market research depend on it.
 - YOLO handling is made uniform across every task (D-18): every command honours the flag; build-phase and verify default to it.
 - **Output:** all tasks shrunk. Total task words near 20,000. Both harnesses tested end to end.
+- **Done 2026-09-07:** verify-phase, triage-issues, fix-issues and log-miss shrunk from 17,552 words to 2,230, plus the new `*triage-and-fix` (283) and the verifier persona (388); all task files now total 20,282 words; twelve scripts added (the verify chain from work list to telemetry, the Windows head over the WebView2 DevTools port, triage, log-miss and fix-close) with two self-tests, 103 checks; the seven never-used commands removed from both harnesses; the verify hook checks every row against the ledger, the build guard covers browser tests, the checker takes a baseline so old findings warn instead of block; real runs in both harnesses: verify and triage on TechieBlog, fix-issues on MyDiary (the blank screens' root cause found and fixed); misses 17 to 27 of 2026-09-06 and 01 to 02 of 2026-09-07 logged.
 
 ### Session 5 — The miss protocol and the telemetry explainer
 
@@ -139,6 +145,8 @@ The ten questions:
 
 **Output:** a miss log a human can read, and a telemetry page the owner can present from.
 
+**Done 2026-09-07:** every miss carries whose gap it was (`sort`: spec, unsaid, weak-check, ignored), required by `tf-log-miss.sh`, defaulted by triage, amendable once, reported; `docs/<App>-Misses.md` and its HTML rebuilt by the emitter after every miss record (FR-31, FR-32, D-10 closed); `tests/mirror/run.sh` added; the rollup keyed by project and id (the combined first-pass rate is 48%, not the 72% it printed); `TechieFlow-Telemetry-Explained.md` written with the five numbers and the owner's stage sentences; Session 4's 53 misses sorted (26 weak-check, 15 unsaid, 14 ignored) and 42 closed; FR-58 to FR-61 added; TechieBlog's 87 empty-database regressions closed as will-not-fix; a real `*log-miss` ran through OpenCode on the MyDiary copy; misses 03 and 04 of 2026-09-07 logged.
+
 ### Session 6 — Make the repository readable again, and deploy
 
 **Goal:** the "read this first" file is short, the six-month log is archived, and every repo has the new framework.
@@ -147,6 +155,8 @@ The ten questions:
 
 **Output:** a framework a newcomer, or the owner in six months, can pick up in twenty minutes, deployed everywhere.
 
+**Done 2026-09-07:** `WorkFlow-Context.md` cut from 48,593 words to 1,961 and `README.md` from 16,963 to 1,864, with the six-month log moved verbatim to `docs/CHANGELOG.md` and the machine setup, permissions and gotchas into their own documents (`TechieFlow-Setup.md`, `TechieFlow-Permissions-And-YOLO.md`, `TechieFlow-FAQ.md`); `update-framework.sh` run over all 23 projects carrying `.tfcore/` in three passes, all exit 0, verified by content, every project's readable miss file written, no dead `opencode.jsonc` reference left and the dead `author-brd` routing entry removed from twenty; five framework defects logged (misses 05 to 10 of 2026-09-07), four fixed and proven and the stale `WORKFLOW.html` left for the owner's decision; five checks added, each proven by planting its defect; FR-62 added and FR-47's check rewritten; self-tests mirror 12, doc-check 12, bugs 51, verify 67, goal 29.
+
 ### Session 7 — Write the Playbook review prompt, version 2
 
 **Goal:** carry what these sessions taught into the Playbook review.
@@ -154,6 +164,8 @@ The ten questions:
 **We do:** rewrite `AI-First-Playbook-Review-Prompt.md` with the final keep/script/delete table format, the schema block format, the miss protocol wording, and a list of what went wrong during the TechieFlow sessions so the Playbook review does not repeat it. Built in Claude Code, tested only in OpenCode.
 
 **Output:** the version 2 prompt. The Playbook sessions then follow their own plan.
+
+**Done 2026-09-07:** `AI-First-Playbook-Review-Prompt.md` rewritten as version 2 (3,180 words) carrying the reset's methods, the list of what went wrong in the seven sessions, and what a corporate team changes; version 1's premise refuted by measurement, the Playbook's weight being its 8,630-word shipped verifier, its 29,800 words of commands and 196,498 words of committed run evidence rather than its 61 prose rules; Step 1 proven by a real OpenCode run on the Playbook, which under-reported one folder by 58 percent and so found D-21 recurring; misses 11 and 12 of 2026-09-07 logged, 11 closed and 12 left open. **The seven-session reset is complete.** Afterwards, `main` was merged into `dev` and the npm installer was brought back in step with the shell scripts (misses 13 and 14, FR-63): validate 4 checks, `test:install` 30 checks, none failing.
 
 ---
 

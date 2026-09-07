@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TechieFlow — Telemetry Explained</title>
+<script>
+/* Resolve the theme BEFORE first paint (no flash). Saved choice wins; otherwise
+   pick by time of day — light 07:00–19:00 local, softened dark at night. */
+(function(){
+  try{
+    var t = localStorage.getItem('tf-theme');
+    if(t!=='light' && t!=='dark'){ var h = new Date().getHours(); t = (h>=7 && h<19) ? 'light' : 'dark'; }
+    document.documentElement.setAttribute('data-theme', t);
+  }catch(e){ document.documentElement.setAttribute('data-theme','light'); }
+})();
+</script>
+<style>
+/* LIGHT is the default theme — a warm off-white, easy on the eyes (never bright white). */
+:root{
+  --bg:#f4f1e9; --panel:#efe9db; --panel2:#e7e0cd; --line:#d8cfb6;
+  --ink:#2e2a22; --muted:#6f6857; --accent:#2f6f9f; --accent2:#3f7d54;
+  --warn:#9a6b15; --danger:#b03a52; --ok:#3f7d54;
+  --code-bg:#ece5d3; --code-ink:#332f26; --row-alt:#eae2cf;
+  --h3:#3a352b; --h4:#2f6f9f; --quote:#4a4537; --cta-bg:#e6eef5;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+/* DARK — softened near-black (warmer / less harsh than pure #0f1115). */
+html[data-theme="dark"]{
+  --bg:#11141a; --panel:#171b23; --panel2:#1e2430; --line:#2b3240;
+  --ink:#dfe3ea; --muted:#99a2b1; --accent:#7cc4ff; --accent2:#a6e3a1;
+  --warn:#f9c74f; --danger:#f38ba8; --ok:#a6e3a1;
+  --code-bg:#0c1016; --code-ink:#d8dde8; --row-alt:#141821;
+  --h3:#cfd5e3; --h4:#7cc4ff; --quote:#cfd5e3; --cta-bg:#0d2030;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:13px;background:var(--code-bg);color:var(--code-ink);padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
+pre{font-family:var(--mono);font-size:12.5px;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto;color:var(--code-ink);position:relative}
+pre code{background:none;border:none;padding:0}
+.copy{position:absolute;top:8px;right:8px;background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:11px;font-family:var(--sans);cursor:pointer}
+.copy:hover{color:var(--accent);border-color:var(--accent)}
+/* floating light/dark toggle (top-right) */
+.theme-toggle{position:fixed;top:12px;right:14px;z-index:10000;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:12.5px;font-family:var(--sans);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.theme-toggle:hover{color:var(--accent);border-color:var(--accent)}
+
+.layout{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+.layout.no-toc{grid-template-columns:1fr}
+nav.side{position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--line);background:var(--panel);padding:18px 14px}
+nav.side h1{font-size:14px;margin:0 0 4px;letter-spacing:.5px;color:var(--ink)}
+nav.side .sub{font-size:11.5px;color:var(--muted);margin-bottom:14px}
+nav.side ol,nav.side ul{list-style:none;padding:0;margin:0}
+nav.side li{font-size:13px;margin:2px 0}
+nav.side li a{display:block;padding:5px 8px;color:var(--ink);border-radius:6px}
+nav.side li a:hover{background:var(--panel2);text-decoration:none}
+nav.side li.h3 a{padding-left:22px;font-size:12.5px;color:var(--h3)}
+nav.side .group{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin:14px 8px 4px}
+
+main{padding:28px 40px 80px;max-width:1100px}
+.layout.no-toc main{margin:0 auto}
+
+h1{font-size:28px;margin:0 0 6px}
+h2{font-size:22px;margin:32px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);scroll-margin-top:16px}
+h3{font-size:17px;margin:22px 0 6px;color:var(--h3);scroll-margin-top:16px}
+h4{font-size:14px;margin:14px 0 4px;color:var(--h4);scroll-margin-top:16px}
+.subtitle{color:var(--muted);font-size:14px;margin-top:-4px;margin-bottom:18px}
+p{margin:6px 0 10px}
+blockquote{border-left:3px solid var(--accent);background:var(--panel);margin:8px 0;padding:8px 14px;color:var(--quote)}
+ul,ol{padding-left:22px}
+li{margin:2px 0}
+
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);color:var(--h3);font-weight:600}
+tr:nth-child(even) td{background:var(--row-alt)}
+
+hr{border:none;border-top:1px solid var(--line);margin:24px 0}
+.anchor-link{color:var(--muted);font-weight:400;font-size:0.85em;margin-left:8px;opacity:0;transition:opacity .15s;text-decoration:none}
+h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
+
+/* inline TOC at top of main content */
+.toc-inline{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 16px;margin:14px 0 24px}
+.toc-inline > div{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.toc-inline ol,.toc-inline ul{margin:4px 0;padding-left:18px}
+.toc-inline li{font-size:13px;margin:1px 0}
+.toc-inline a{color:var(--h3)}
+
+/* mermaid diagram wrapper + toolbar */
+.diagram{position:relative;border:1px solid var(--line);border-radius:8px;background:var(--code-bg);margin:14px 0;overflow:hidden}
+.diagram .mermaid{padding:14px;margin:0;background:transparent;border:none;overflow:auto}
+.diagram .dt{display:flex;gap:6px;justify-content:flex-end;padding:6px 8px;background:var(--row-alt);border-bottom:1px solid var(--line)}
+.diagram .dt button{background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 10px;font-size:12px;font-family:var(--sans);cursor:pointer;min-width:30px}
+.diagram .dt button:hover{color:var(--accent);border-color:var(--accent)}
+.diagram .dt .zlabel{padding:3px 6px;font-size:11px;color:var(--muted);font-family:var(--mono);align-self:center}
+.diagram.fs{position:fixed;inset:0;z-index:9999;border-radius:0;border:none}
+.diagram.fs .mermaid{height:calc(100vh - 40px);display:flex;align-items:center;justify-content:center}
+
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.side{position:static;height:auto}}
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" title="Toggle light / dark">&#9790; Dark</button>
+<div class="layout">
+  <nav class="side">
+    <h1>TechieFlow — Telemetry Explained</h1>
+    <div class="sub">Last rendered: 2026-09-07</div>
+    <div class="group">Contents</div>
+    <ol>
+        <li><a href="#where-the-numbers-come-from-and-how-to-answer-how-do-you-know">0. Where the numbers come from, and how to answer &quot;how do you know&quot;</a></li>
+        <li><a href="#first-pass-rate">1. First-pass rate</a></li>
+        <li><a href="#which-check-caught-it">2. Which check caught it</a></li>
+        <li><a href="#escape-rate">3. Escape rate</a></li>
+        <li><a href="#misses-and-rework-cost">4. Misses and rework cost</a></li>
+        <li><a href="#effort-per-phase">5. Effort per phase</a></li>
+        <li><a href="#what-is-not-in-the-numbers-yet">6. What is not in the numbers yet</a></li>
+    </ol>
+  </nav>
+  <main>
+    <h1>TechieFlow — Telemetry Explained</h1>
+    <div class="subtitle">Rendered 2026-09-07 &middot; source <code>TechieFlow-Telemetry-Explained.md</code></div>
+
+    <div class="toc-inline">
+      <div>Contents</div>
+      <ol>
+        <li><a href="#where-the-numbers-come-from-and-how-to-answer-how-do-you-know">0. Where the numbers come from, and how to answer &quot;how do you know&quot;</a></li>
+        <li><a href="#first-pass-rate">1. First-pass rate</a></li>
+        <li><a href="#which-check-caught-it">2. Which check caught it</a></li>
+        <li><a href="#escape-rate">3. Escape rate</a></li>
+        <li><a href="#misses-and-rework-cost">4. Misses and rework cost</a></li>
+        <li><a href="#effort-per-phase">5. Effort per phase</a></li>
+        <li><a href="#what-is-not-in-the-numbers-yet">6. What is not in the numbers yet</a></li>
+      </ol>
+    </div>
+<table>
+<thead><tr><th></th><th></th></tr></thead>
+<tbody>
+<tr><td>Purpose</td><td>The five numbers the framework's report prints, each in plain words: what it means, how it is worked out, one real figure from all the projects together and one from a named project, and the sentence the owner says about it on stage.</td></tr>
+<tr><td>Audience</td><td>The owner, for talks, blog posts and interviews. Anyone who asks "how do you know".</td></tr>
+<tr><td>Status</td><td>Written 2026-09-07 in Session 5 of the reset, from the streams as they stood that day. The owner rewrites any stage sentence they would not say. Figures are re-read from the report before every use; the ones here are a snapshot.</td></tr>
+<tr><td>Companion</td><td><code>TechieFlow-How-It-Works.md</code> §6 (what the streams are), <code>.tfcore/telemetry/SCHEMA.md</code> (every field), <code>TechieFlow-Reset-Plan-2026-09-04.md</code> (Session 5).</td></tr>
+</tbody>
+</table>
+<hr>
+<h2 id="where-the-numbers-come-from-and-how-to-answer-how-do-you-know">0. Where the numbers come from, and how to answer "how do you know"<a class="anchor-link" href="#where-the-numbers-come-from-and-how-to-answer-how-do-you-know">#</a></h2>
+<p>Every project the framework runs in keeps five files under <code>docs/metrics/</code>. One line is added per event and no line is ever edited: one line per command run, one per requirement graded in a verify, one per miss and one more when it is fixed, one per chat session, one per commit. A script, <code>tf-metrics.sh</code>, reads the files and prints the five numbers below. It refuses to mix things that must not be mixed: figures reconstructed after the fact never pool with figures written at the time, an app never pools with a library, and a miss whose origin is guessed never enters a per-model figure. It prints <code>insufficient data</code> instead of a number when fewer than three records support it.</p>
+<p>The figures in this page were read on 2026-09-07 from nine repositories: TfLens, TechieBlog, TechieRag, TrBlazeUI, Lekhak, AppManager, MyDiary, Xpenser and the framework itself. The OpenCode test copies (<code>TfLens-oc</code>, <code>TechieBlog-oc</code>, <code>MyDiary-oc</code>) are left out, because each carries a copy of its original's history and would count it twice. To re-read them:</p>
+<pre><code>bash .tfcore/telemetry/tf-metrics.sh --rollup &lt;repo&gt; &lt;repo&gt; …      # all together, still segmented
+bash .tfcore/telemetry/tf-metrics.sh --report &lt;repo&gt;               # one project</code></pre>
+<p>Two facts to say before any number:</p>
+<ul>
+<li><strong>Tokens, not dollars.</strong> Claude Code reports tokens and never a price, so the framework never converts. Dollars appear only on OpenCode runs, where the harness measured them. Every token figure is output tokens, counted from the harness's own transcript inside the run's time window; a run whose window could not be read is left out, never counted as zero.
+</li>
+<li><strong>The unit is the run, not the feature.</strong> "A build phase costs three hours" is a fact the streams hold. "Requirement 14 took two hours" is not, and nothing here will produce it.
+</li>
+</ul>
+<p>Three caveats that belong beside the figures they touch are marked below with ⚠.</p>
+<hr>
+<h2 id="first-pass-rate">1. First-pass rate<a class="anchor-link" href="#first-pass-rate">#</a></h2>
+<p><strong>What it means.</strong> Of all the requirements the verifier has ever graded, the share that passed the first time they were verified. It measures how often the agent gets a requirement right without rework.</p>
+<p><strong>How it is worked out.</strong> Every verify writes one line per requirement with an attempt number: 1 the first time that requirement is graded, 2 the next, and so on. A requirement counts as first-pass when its attempt-1 line says <code>Verified</code>. The rate is first-pass requirements divided by requirements graded, per project type, over live records only. A requirement is identified by its project and its id together, because every project has a REQ-UI-001 (this was wrong until 2026-09-07 and printed 72%; the corrected figure is below).</p>
+<table>
+<thead><tr><th>Where</th><th>Requirements graded</th><th>Passed first time</th><th>First-pass rate</th></tr></thead>
+<tbody>
+<tr><td>All apps together</td><td>420</td><td>201</td><td>48%</td></tr>
+<tr><td>TfLens (the metrics dashboard, seven screens)</td><td>178</td><td>36</td><td>20%</td></tr>
+<tr><td>TechieBlog</td><td>155</td><td>125</td><td>81%</td></tr>
+<tr><td>Lekhak</td><td>54</td><td>29</td><td>54%</td></tr>
+<tr><td>MyDiary (first project on the reset framework)</td><td>27</td><td>7</td><td>26%</td></tr>
+<tr><td>TfLens's first period, when it was a documents-only project</td><td>113</td><td>106</td><td>94%, reported apart</td></tr>
+</tbody>
+</table>
+<p>⚠ TfLens is the outlier and the reason the reset happened: 178 requirements for a seven-screen app, written before the acceptance line had a fixed shape, so the verifier and the builder read the same line differently.</p>
+<p><strong>On stage.</strong> "Across my apps, about half of the requirements passed verification the first time. On TfLens it was one in five; on TechieBlog four in five. The difference was the specification, not the model: TfLens had a hundred and seventy-eight requirements for a seven-screen app, and the acceptance lines had no fixed shape."</p>
+<hr>
+<h2 id="which-check-caught-it">2. Which check caught it<a class="anchor-link" href="#which-check-caught-it">#</a></h2>
+<p><strong>What it means.</strong> The verifier applies seven checks to every requirement, always in the same order: does it build, does its acceptance test pass, does the screen show real data, does it look right against the mockup, did the stylesheet and scripts load, is it within its speed budget, does the code follow the standards. The first check to fail is written down. Counting those first failures shows which checks do the work. A failure found by a person after every check passed is written as <code>escaped</code>.</p>
+<p><strong>How it is worked out.</strong> Every failed grading line names the check that failed. The distribution is the count per check over all failures, per project type, live records only. A check added after the stream started (speed, assets, mockup comparison) is also reported against the records that actually ran it, so its share is not understated.</p>
+<table>
+<thead><tr><th>Check</th><th>All apps (293 failures)</th><th>TfLens (96)</th><th>Lekhak (28)</th></tr></thead>
+<tbody>
+<tr><td>acceptance test</td><td>127 (43%) ⚠</td><td>12</td><td>8</td></tr>
+<tr><td>escaped, a person found it</td><td>45 (15%)</td><td>22</td><td>0</td></tr>
+<tr><td>no check named</td><td>44 (15%)</td><td>44</td><td>0</td></tr>
+<tr><td>data present (render)</td><td>31 (11%)</td><td>0</td><td>5</td></tr>
+<tr><td>visual, against the mockup</td><td>27 (9%)</td><td>13</td><td>8</td></tr>
+<tr><td>build</td><td>10 (3%)</td><td>2</td><td>4</td></tr>
+<tr><td>mockup comparison</td><td>5 (2%)</td><td>3</td><td>0</td></tr>
+<tr><td>standards</td><td>1</td><td>0</td><td>0</td></tr>
+</tbody>
+</table>
+<p>The late checks, over every repository: the speed check has run on 8 records and caught nothing; the assets check on 108 and caught nothing; the mockup comparison on 217 and caught 8.</p>
+<p>⚠ 107 of the 127 acceptance failures come from one TechieBlog verify on 2026-09-06 that ran against an empty local database with the staff accounts behind a must-change-password screen. Those rows should have been graded "not observable, environment"; the rule now exists (FR-61) and the numbers will look different once it is applied.</p>
+<p><strong>On stage.</strong> "When a requirement fails, the acceptance test is what catches it, four times in ten. The visual check and the data check together catch one in five. The speed and assets checks have never caught anything yet, and the mockup comparison caught eight failures in two hundred runs. And one failure in seven was caught by nothing: I found it."</p>
+<hr>
+<h2 id="escape-rate">3. Escape rate<a class="anchor-link" href="#escape-rate">#</a></h2>
+<p><strong>What it means.</strong> Of the requirements that failed at some point, the share whose failure got past every check and was found by a person, in testing or in production. It says how far the automation can be trusted. A second figure sits beside it, from the miss stream: of all misses, the share found by the owner or by production rather than by a check or an agent's own review. The two are computed from different records and are never merged.</p>
+<p><strong>How it is worked out.</strong> From the grading stream: requirements with an <code>escaped</code> line divided by requirements with any failed line, per project type. From the miss stream: misses whose <code>found_by</code> is owner or production divided by all misses.</p>
+<table>
+<thead><tr><th>Where</th><th>Escape rate (grading stream)</th><th>Misses found by a person (miss stream)</th></tr></thead>
+<tbody>
+<tr><td>All apps together</td><td>21%</td><td>32%, 108 of 340 misses across the nine repositories</td></tr>
+<tr><td>TfLens</td><td>33%</td><td>49%, 42 of 86</td></tr>
+<tr><td>TechieBlog</td><td>1%</td><td>0 of 89 (all found by the verify)</td></tr>
+<tr><td>TrBlazeUI (library)</td><td>100%, 12 of 12</td><td>45%, 5 of 11</td></tr>
+<tr><td>MyDiary</td><td>100%, 20 of 20</td><td>48%, 20 of 42</td></tr>
+<tr><td>The framework itself</td><td>no grading stream</td><td>36%, 39 of 108</td></tr>
+</tbody>
+</table>
+<p>MyDiary's 100% is one event: the first build's screens were all blank at runtime and the owner found it, not the verifier, which had no driver for the Windows head. TrBlazeUI's 100% is the library case: its verify has no screens of its own to check, so every failure came from a consumer.</p>
+<p><strong>On stage.</strong> "One failure in five got past every automated check and was found by me. On TfLens, half of the eighty-six recorded misses were found by me, not by the framework. That number is why the verify task was rewritten."</p>
+<hr>
+<h2 id="misses-and-rework-cost">4. Misses and rework cost<a class="anchor-link" href="#misses-and-rework-cost">#</a></h2>
+<p><strong>What it means.</strong> A miss is one thing an agent got wrong: a requirement built wrongly, half built, never specified, or a rule ignored. One defect is one miss however many times it fails. Each miss records what kind it was, which practice let it through, whose gap it was, who found it, and, when it is fixed, what the fix cost in tokens. Together they show where the process leaks and what each leak costs.</p>
+<p><strong>How it is worked out.</strong> Every miss is one record; a fix is a second record linked to it, carrying the output tokens of the run that made the fix. The cost is a measurement only when that run fixed exactly one miss (<code>sole</code>); when one run fixed several, the window is divided equally and reported apart as apportioned. A fix with no run record has no cost and is counted as such, never as free.</p>
+<table>
+<thead><tr><th></th><th>All nine repositories</th><th>TfLens</th><th>The framework itself</th></tr></thead>
+<tbody>
+<tr><td>Misses logged</td><td>340: 244 open, 95 fixed, 1 will not fix</td><td>86: 37 open, 49 fixed</td><td>108: 73 open, 34 fixed</td></tr>
+<tr><td>Which practice failed (of those assessed)</td><td>the check was too weak 48% · the checklist had a hole 27% · an instruction was ignored 15% · the acceptance line was ambiguous 8%</td><td>41 · 19 · 5 · 13</td><td>37 · 37 · 25 · 5</td></tr>
+<tr><td>What kind</td><td>wrong behaviour 30% · regression 26% ⚠ · half built 20% · never specified 14%</td><td>half built 29, wrong behaviour 24, never specified 19</td><td>wrong behaviour 53, never specified 26</td></tr>
+<tr><td>Who found it</td><td>a check 133 · the owner 108 · an agent's review 81 · a library consumer 17</td><td>owner 42, agent review 26, check 17</td><td>agent review 51, owner 39, library 11</td></tr>
+<tr><td>Fix cost, measured (one miss per run)</td><td>108,671 output tokens per miss, 8 fixes</td><td>171,804, 4 fixes</td><td>too few to say, 2 fixes</td></tr>
+<tr><td>Fix cost, apportioned (several per run)</td><td>34,417 per miss, 115 fixes</td><td>39,877, 66 fixes</td><td>17,745, 18 fixes</td></tr>
+<tr><td>Fixes with no cost recorded</td><td>21</td><td>5</td><td>15</td></tr>
+</tbody>
+</table>
+<p>⚠ 87 of the 90 regressions are the TechieBlog empty-database verify of §2; they are one environment problem logged 87 times, and FR-61 is the answer.</p>
+<p><strong>Per model, per agent.</strong> Only misses whose origin run is on record enter this: 139 of 340. By model: claude-opus-5 65, claude-sonnet-5 40 (all from one MyDiary build), unknown 31, gpt-5.6-sol 3. By agent: the TrBlazeUI builder 67, general-purpose builders 39, flow-master 31. This is observational. The hard work went to the expensive model on purpose, so a per-model miss rate is not a ranking.</p>
+<p><strong>Whose gap (from 2026-09-07).</strong> Every new miss now answers four questions in order: did the app's spec say it, did the framework say it, was there a check that failed to catch it, was it written and ignored. The answer decides the fix: a checklist line, a requirement line plus a check, a fixed check, or a hook. The first fifty-one misses sorted this way are Session 4's own: the reset's own defects (<code>docs/TechieFlow-Misses.md</code>).</p>
+<p><strong>On stage.</strong> "Half of my recorded misses happened because the check was too weak, a quarter because the specification had a hole, and one in seven because the agent ignored an instruction it had just read. Fixing one miss on its own cost about a hundred thousand output tokens. When a fix run repaired several at once, about thirty-five thousand each."</p>
+<hr>
+<h2 id="effort-per-phase">5. Effort per phase<a class="anchor-link" href="#effort-per-phase">#</a></h2>
+<p><strong>What it means.</strong> For each command: how many times it ran, how long it took, how many output tokens it used, on which model, and how much of that went to sub-agents. It shows what each stage of the life cycle costs, and lets a cheap model be compared with an expensive one on the same kind of work.</p>
+<p><strong>How it is worked out.</strong> Every command writes one run record with its start and end; the emitter reads the harness's own transcript between those two times and counts the tokens, per model, main thread and sub-agents apart. Medians are over the runs that had a readable window. Fan-out is counted only on runs whose window included the sub-agent transcripts.</p>
+<table>
+<thead><tr><th>Command</th><th>Runs</th><th>Median time</th><th>Median output tokens</th><th>Share of all recorded time</th><th>Share of all output</th></tr></thead>
+<tbody>
+<tr><td>build-phase</td><td>23</td><td>2 h 51 min</td><td>457,000 (10 of 23 measured)</td><td>44%</td><td>22%</td></tr>
+<tr><td>verify-phase</td><td>29</td><td>30 min</td><td>98,000 (18 of 29)</td><td>25%</td><td>8%</td></tr>
+<tr><td>fix-issues</td><td>43</td><td>35 min</td><td>130,000 (30 of 43)</td><td>15%</td><td>19%</td></tr>
+<tr><td>amend-docs</td><td>9</td><td>20 min</td><td>91,000 (8 of 9)</td><td>3%</td><td>9%</td></tr>
+<tr><td>triage-issues</td><td>7</td><td>23 min</td><td>127,000 (5 of 7)</td><td>1%</td><td>2%</td></tr>
+<tr><td>mockups</td><td>3</td><td>25 min</td><td>99,000</td><td>1%</td><td>1%</td></tr>
+<tr><td>log-miss</td><td>21</td><td>2 min 27 s</td><td>7,900 (14 of 21)</td><td>under 1%</td><td>under 1%</td></tr>
+<tr><td>framework-reset (this reset, 8 sittings)</td><td>8</td><td>5 h 53 min</td><td>764,000 (8 of 8)</td><td>7%</td><td>27%</td></tr>
+</tbody>
+</table>
+<p>Over the nine repositories: 163 runs, 219 hours of recorded time, 25.1 million output tokens. The build phase spent 38% of its output in sub-agents where that was observed. The reset of the framework, 6.7 million output tokens, cost more output than every build phase together, 5.5 million.</p>
+<p>Named projects: TfLens's eight build runs took a median of 2 h 16 min and 457,000 output tokens each, half of everything TfLens ever spent. TechieBlog's twenty-two fix runs took a median of 37 min and 165,000 tokens each, two thirds of its recorded output. Dollars exist only where OpenCode ran: MyDiary's day-1 on mimo-v2.5 cost $0.06, a deploy checklist $0.05, one log-miss on glm-5.3 $0.23.</p>
+<p><strong>On stage.</strong> "A build phase is a three-hour, half-million-token run. A verify is half an hour and a hundred thousand tokens. Logging a miss takes two minutes. And rewriting the framework itself, eight sittings, cost more output tokens than all my build phases put together."</p>
+<hr>
+<h2 id="what-is-not-in-the-numbers-yet">6. What is not in the numbers yet<a class="anchor-link" href="#what-is-not-in-the-numbers-yet">#</a></h2>
+<ul>
+<li><strong>Owner reviews.</strong> Since 2026-09-06 a review of a phase's output is a record: how many corrections the owner gave, what producing the output cost, what the corrections cost. Two exist (MyDiary day-1). The report prints them; the figure is not yet worth a sentence.
+</li>
+<li><strong>Idea-stage commands</strong> (brainstorm, project brief) write no run record yet, so their cost is unknown.
+</li>
+<li><strong>Runs whose window could not be read</strong> (13 of 23 builds) are outside every token figure. The per-run medians are of the measured ones, and the table says how many that is.
+</li>
+<li><strong>Dollars for Claude Code</strong> will never appear; that is a decision, not a gap.
+</li>
+</ul>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+<script>
+// Light/dark toggle. The initial theme was already applied flash-free by the
+// <head> script (saved choice, else time-of-day). Clicking flips it, saves the
+// choice, and reloads so Mermaid re-renders in the matching theme.
+(function(){
+  var btn = document.getElementById('themeToggle');
+  if(!btn) return;
+  var relabel = function(){
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    btn.textContent = dark ? '☀ Light' : '☾ Dark';
+  };
+  relabel();
+  btn.addEventListener('click', function(){
+    var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    try{ localStorage.setItem('tf-theme', next); }catch(e){}
+    location.reload();
+  });
+})();
+
+// Copy buttons on every code <pre> — but NEVER on a `pre.mermaid`:
+// mermaid reads the <pre>'s textContent as the diagram source, so a button
+// appended here glues "copy" onto the last line and breaks the parse
+// (flowcharts → "Syntax error"; sequence diagrams silently absorb it).
+// Mermaid blocks get copy/export from their own .diagram toolbar instead.
+document.querySelectorAll('pre:not(.mermaid)').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy';
+  btn.textContent = 'copy';
+  btn.addEventListener('click', () => {
+    const text = pre.querySelector('code') ? pre.querySelector('code').innerText : pre.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'copied';
+      setTimeout(() => { btn.textContent = 'copy'; }, 1200);
+    });
+  });
+  pre.appendChild(btn);
+});
+
+// Mermaid init — theme follows the resolved light/dark theme
+if (window.mermaid) {
+  var mermaidTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default';
+  mermaid.initialize({ startOnLoad: true, theme: mermaidTheme, securityLevel: 'loose' });
+}
+
+// Mermaid toolbar wiring — run after mermaid renders
+function wireMermaidToolbars() {
+  document.querySelectorAll('.diagram').forEach(dia => {
+    if (dia.dataset.wired) return;
+    const merm = dia.querySelector('.mermaid');
+    const svg = merm && merm.querySelector('svg');
+    if (!svg) return;
+    dia.dataset.wired = '1';
+    let scale = 1;
+    const label = dia.querySelector('.zlabel');
+    const apply = () => {
+      svg.style.transform = `scale(${scale})`;
+      svg.style.transformOrigin = 'top left';
+      if (label) label.textContent = Math.round(scale * 100) + '%';
+    };
+    const setScale = (s) => { scale = Math.max(0.25, Math.min(4, s)); apply(); };
+    dia.querySelector('[data-zin]').onclick = () => setScale(scale * 1.2);
+    dia.querySelector('[data-zout]').onclick = () => setScale(scale / 1.2);
+    dia.querySelector('[data-fit]').onclick = () => {
+      svg.style.transform = '';
+      svg.removeAttribute('width');
+      svg.style.maxWidth = '100%';
+      svg.style.height = 'auto';
+      scale = 1;
+      if (label) label.textContent = 'Fit';
+    };
+    dia.querySelector('[data-one]').onclick = () => {
+      svg.style.transform = '';
+      svg.style.maxWidth = 'none';
+      svg.style.width = '';
+      svg.style.height = '';
+      scale = 1;
+      if (label) label.textContent = '100%';
+    };
+    dia.querySelector('[data-fs]').onclick = () => {
+      dia.classList.toggle('fs');
+      if (dia.classList.contains('fs')) {
+        document.addEventListener('keydown', escFs);
+      } else {
+        document.removeEventListener('keydown', escFs);
+      }
+    };
+    function escFs(e) { if (e.key === 'Escape') { dia.classList.remove('fs'); document.removeEventListener('keydown', escFs); } }
+    dia.querySelector('[data-pop]').onclick = () => openInNewTab(svg);
+    // Ctrl+wheel zoom
+    merm.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setScale(scale * (e.deltaY < 0 ? 1.1 : 1/1.1));
+    }, { passive: false });
+  });
+}
+
+function openInNewTab(svg) {
+  const svgSource = new XMLSerializer().serializeToString(svg);
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Diagram</title>
+<style>
+  html,body{margin:0;height:100%;background:#0f1115;color:#e6e8ee;font-family:system-ui,sans-serif}
+  .bar{position:fixed;top:0;left:0;right:0;padding:8px 12px;background:#161a22;border-bottom:1px solid #2a3142;display:flex;gap:8px;z-index:10}
+  .bar button{background:#1c2230;color:#9aa3b2;border:1px solid #2a3142;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer}
+  .bar button:hover{color:#7cc4ff;border-color:#7cc4ff}
+  .bar .hint{margin-left:auto;color:#9aa3b2;font-size:11.5px;align-self:center}
+  #stage{position:absolute;top:42px;bottom:0;left:0;right:0;overflow:hidden}
+  #stage svg{width:100%;height:100%}
+</style>
+</head><body>
+<div class="bar">
+  <button onclick="zpz.zoomIn()">+</button>
+  <button onclick="zpz.zoomOut()">−</button>
+  <button onclick="zpz.fit();zpz.center()">Fit</button>
+  <button onclick="zpz.resetZoom();zpz.center()">1:1</button>
+  <button onclick="window.print()">Print</button>
+  <button onclick="dlPng()">PNG</button>
+  <button onclick="dlSvg()">SVG</button>
+  <span class="hint">Drag to pan · Ctrl+wheel to zoom · + / − keys</span>
+</div>
+<div id="stage">${svgSource}</div>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"><\/script>
+<script>
+  const el = document.querySelector('#stage svg');
+  const zpz = svgPanZoom(el, { zoomScaleSensitivity: .3, minZoom: .2, maxZoom: 10, controlIconsEnabled: false, fit: true, center: true });
+  document.addEventListener('keydown', e => {
+    if (e.key === '+' || e.key === '=') zpz.zoomIn();
+    if (e.key === '-' || e.key === '_') zpz.zoomOut();
+    if (e.key === '0') { zpz.resetZoom(); zpz.center(); }
+  });
+  function dlSvg() {
+    const blob = new Blob([new XMLSerializer().serializeToString(el)], { type: 'image/svg+xml' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'diagram.svg'; a.click();
+  }
+  function dlPng() {
+    const src = new XMLSerializer().serializeToString(el);
+    const img = new Image();
+    const url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(src)));
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = el.clientWidth * 2; c.height = el.clientHeight * 2;
+      const ctx = c.getContext('2d'); ctx.scale(2,2); ctx.drawImage(img, 0, 0);
+      c.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'diagram.png'; a.click(); });
+    };
+    img.src = url;
+  }
+<\/script>
+</body></html>`;
+  const w = window.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+// Run wiring after mermaid finishes (it renders async)
+if (window.mermaid) {
+  setTimeout(wireMermaidToolbars, 400);
+  setTimeout(wireMermaidToolbars, 1200);  // safety re-run for slow renders
+}
+</script>
+</body>
+</html>

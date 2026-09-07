@@ -197,7 +197,7 @@ npx @techierathore/techieflow@latest install --greenfield
 ls -a
 ```
 
-You should see `.tfcore`, `.claude`, `.opencode`, `.codex`, `.agents`, `opencode.jsonc`, `WORKFLOW.html`, `docs`, `src`, `tests` and no `node_modules`.
+You should see `.tfcore`, `.claude`, `.opencode`, `opencode.jsonc`, `docs`, `src`, `tests` and no `node_modules`.
 
 ---
 

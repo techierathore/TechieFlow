@@ -10,8 +10,8 @@
 #   bash .tfcore/utils/tf-goal.sh [options] <app-dir> @goal.md
 #
 # Options
-#   --harness claude|opencode|codex   default: claude
-#   --model <id>                claude: --model; opencode: -m; codex: -m
+#   --harness claude|opencode   default: claude
+#   --model <id>                claude: --model; opencode: -m
 #   --buffer-min <n>            minutes added after a stated limit-reset time (default 15)
 #   --probe-min <n>             limit hit but NO reset time parseable → fire a one-turn probe every n
 #                               minutes until the API answers again, then resume (default 15)
@@ -19,11 +19,21 @@
 #   --default-wait-min <n>      (legacy) only used to stamp resume_at in goal.json when probing
 #   --max-cycles <n>            give up after n launches (default 60)
 #   --idle-retry-sec <n>        pause before re-prompting an agent that stopped without finishing (default 30)
+#   --stall-min <n>             a cycle whose output has not grown for n minutes is killed and
+#                               re-prompted (default 15; 0 disables) — MISS-TechieFlow-20260905-22
 #   --resume                    continue the last goal run recorded in .tfcore/.session/goal.json
+#   --fresh                     with --resume: keep the goal and the cycle count but start a NEW
+#                               harness session (the old one hung on continue). The supervisor does
+#                               this by itself after two stalled resumes in a row.
 #   --dry-run                   print the commands, run nothing
 #
 # Exit codes: 0 goal complete · 3 agent declared the goal BLOCKED (owner input
-# needed) · 4 max cycles reached · 2 usage error.
+# needed) · 4 max cycles reached · 5 the provider refuses the model (a monthly or
+# balance limit OpenCode reports only in its own log) · 2 usage error · 130 stopped
+# by Ctrl-C / kill (the harness child is stopped too; `--resume` continues the same session).
+#
+# Test-only knobs (tests/goal/run.sh): TF_GOAL_FAKE_CMD="<shell>" replaces the harness
+# command; TF_GOAL_STALL_SEC / TF_GOAL_STALL_TICK set the stall clock in seconds.
 #
 # Files (all under <app-dir>/.tfcore/.session/, never committed):
 #   yolo.json        YOLO flag (tf-yolo.sh on --source goal) — the hook reads it
@@ -42,19 +52,14 @@
 #   claude   -p "<prompt>" --permission-mode bypassPermissions --output-format stream-json --verbose
 #            resume: claude -p --resume <session_id> "<continue>"   (fallback: --continue)
 #   opencode run --auto "<prompt>"      resume: opencode run --auto -c "<continue>"
-#   codex exec --json --sandbox workspace-write -c approval_policy="never" "<prompt>"
-#            NB: `--ask-for-approval` is NOT a `codex exec` flag (verified against
-#            codex-cli 0.149.1: "error: unexpected argument '--ask-for-approval'",
 #            exit 2). The approval policy is set as a config override instead.
-#            resume: codex exec resume <thread-id> "<continue>" --json
 #   Override command lines with TF_GOAL_CLAUDE_FLAGS / TF_GOAL_OPENCODE_FLAGS /
-#   TF_GOAL_CODEX_FLAGS.
 
 set -u
 
 HARNESS="claude"; MODEL=""; BUFFER_MIN=15; DEFAULT_WAIT_MIN=60; MAX_CYCLES=60; IDLE_RETRY=30
-PROBE_MIN=15; PROBE_MAX_H=8
-RESUME=0; DRY=0
+PROBE_MIN=15; PROBE_MAX_H=8; STALL_MIN=15
+RESUME=0; FRESH=0; DRY=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --harness) HARNESS="$2"; shift 2 ;;
@@ -65,7 +70,9 @@ while [[ $# -gt 0 ]]; do
     --probe-max-hours) PROBE_MAX_H="$2"; shift 2 ;;
     --max-cycles) MAX_CYCLES="$2"; shift 2 ;;
     --idle-retry-sec) IDLE_RETRY="$2"; shift 2 ;;
+    --stall-min) STALL_MIN="$2"; shift 2 ;;
     --resume) RESUME=1; shift ;;
+    --fresh) FRESH=1; shift ;;
     --dry-run) DRY=1; shift ;;
     -h|--help) sed -n '2,45p' "$0"; exit 0 ;;
     --) shift; break ;;
@@ -74,12 +81,13 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 APP_DIR="${1:-}"; GOAL_ARG="${2:-}"
+[[ -n "${TF_GOAL_CLASSIFY:-}" ]] && DRY=1   # the classify debug path touches no state
 if [[ -z "$APP_DIR" || ( -z "$GOAL_ARG" && $RESUME -eq 0 ) ]]; then
   echo "usage: tf-goal.sh [options] <app-dir> \"<goal>\" | @goal.md   (or --resume <app-dir>)" >&2; exit 2
 fi
 APP_DIR="$(cd "$APP_DIR" 2>/dev/null && pwd)" || { echo "no such dir: $1" >&2; exit 2; }
 [[ -d "$APP_DIR/.tfcore" ]] || { echo "$APP_DIR has no .tfcore/ — scaffold it first" >&2; exit 2; }
-case "$HARNESS" in claude|opencode|codex) ;; *) echo "--harness must be claude|opencode|codex" >&2; exit 2 ;; esac
+case "$HARNESS" in claude|opencode) ;; *) echo "--harness must be claude|opencode" >&2; exit 2 ;; esac
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required" >&2; exit 2; }
 
 STATE_DIR="$APP_DIR/.tfcore/.session"; mkdir -p "$STATE_DIR"
@@ -94,6 +102,9 @@ else
 fi
 
 ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+# nap: a sleep the INT/TERM trap can interrupt at once (bash defers a trap while a
+# foreground command runs, so a plain `sleep 300` held a kill for up to five minutes).
+nap() { sleep "$1" & wait $!; }
 log() { printf '[%s] tf-goal: %s\n' "$(ts)" "$*" | tee -a "$LOG" >&2; }
 
 state_get() { python3 -c 'import json,sys
@@ -117,18 +128,31 @@ if [[ $RESUME -eq 1 ]]; then
   HARNESS="$(state_get harness)"; HARNESS="${HARNESS:-claude}"
   CYCLE="$(state_get cycle)"; CYCLE="${CYCLE:-0}"
   SESSION_ID="$(state_get session_id)"
-  log "resuming goal (cycle $CYCLE, session ${SESSION_ID:-none})"
+  STALLS="$(state_get stalls)"; STALLS="${STALLS:-0}"
+  if [[ $FRESH -eq 1 ]]; then log "resuming goal (cycle $CYCLE) in a FRESH session — the old one (${SESSION_ID:-none}) is left behind"; SESSION_ID=""; STALLS=0; state_set session_id "" stalls 0
+  else log "resuming goal (cycle $CYCLE, session ${SESSION_ID:-none})"; fi
 else
-  CYCLE=0; SESSION_ID=""
-  state_set goal "$GOAL" harness "$HARNESS" cycle 0 session_id "" started "$(ts)" last_reason "start"
-  rm -f "$DONE"
+  # Refuse to start over a run that looks active in this folder: a goal.json written or
+  # touched in the last three hours whose last_reason is not a finished state. A second
+  # supervisor here would clobber the first one's state and flag (MISS-TechieFlow-20260905-21).
+  if [[ $DRY -eq 0 && -f "$STATE" ]] && [[ -n "$(find "$STATE" -mmin -180 2>/dev/null)" ]]; then
+    _lr="$(state_get last_reason)"
+    case "$_lr" in
+      done:*|max-cycles|stopped|"") ;;
+      *) echo "tf-goal: a run looks active in $APP_DIR (goal.json last_reason=$_lr, touched $(date -u -r "$STATE" +%H:%MZ)). Wait for it, or continue it with --resume." >&2; exit 2 ;;
+    esac
+  fi
+  CYCLE=0; SESSION_ID=""; STALLS=0
+  if [[ $DRY -eq 0 ]]; then   # a dry run touches nothing: no state, no flag, no log line
+    state_set goal "$GOAL" harness "$HARNESS" cycle 0 session_id "" stalls 0 started "$(ts)" last_reason "start"
+    rm -f "$DONE"
+  fi
 fi
 
 # ---------------------------------------------------------------- prompts
 # PREAMBLE IS HARNESS-NEUTRAL. Every claim in it must hold for claude AND opencode
-# AND codex, because all three are sent this text verbatim. Anything true of only
-# one harness goes in that harness's block below (see the `codex` note after
-# FIRST_PROMPT) — never in here. The 2026-08-28 Codex adapter review put Codex's
+# because both are sent this text verbatim. Anything true of only
+# one harness goes in that harness's block below — never in here. The 2026-08-28 review put its
 # strict no-git policy into this shared text, which then told Claude and OpenCode
 # goal runs to avoid read-only git that their own hook allows; nothing written down
 # had said the preamble was shared, so this comment is that rule.
@@ -137,6 +161,7 @@ UNATTENDED GOAL RUN — YOLO MODE IS ON (TechieFlow rule .tfcore/tasks/_yolo-mod
 - Nobody is watching. NEVER ask a question, NEVER pause for confirmation, NEVER end your turn with a plan, options, or "shall I…". Decide the sensible default yourself and record the decision in the checklist Remarks.
 - Permissions: deletes are allowed when they are necessary and precisely scoped. Git WRITES (commit/push/add/reset/checkout/stash/tag) are blocked in every mode — never attempt them; the owner commits. Read-only git (status/log/diff/blame) is decided by the harness policy stated below, if any; where nothing further is stated it is available in this mode as supplementary evidence only — the checklist Requirements Status table and the working tree stay primary.
 - Re-entry: start from PROJECT-STATUS.md + docs/*-Checklist.md (Requirements Status table) — continue from the weakest open REQ; do not redo terminal rows.
+- A build, a test run or any long command runs in the FOREGROUND and you wait for it (a ten-minute timeout is fine). Never start it as a background job and end your turn to wait for it: the turn ending kills the job, and nobody will wake you.
 - A build pass means the WHOLE checklist: every open REQ reaches at least `Implemented` in this pass, then the verifier is chained inline, then FIX mode loops on FAIL rows until they pass. Never stop with "run build-phase again for the remaining REQs".
 - When the goal is met (every in-scope REQ terminal, PROJECT-STATUS.md + .html updated, run record emitted): run
       bash .tfcore/utils/tf-yolo.sh done complete "<one-line summary>"
@@ -145,19 +170,13 @@ UNATTENDED GOAL RUN — YOLO MODE IS ON (TechieFlow rule .tfcore/tasks/_yolo-mod
   Do not run either command before that point — the supervisor stops the moment you do.
 TXT
 
-CONTINUE_PROMPT="Continue the UNATTENDED GOAL RUN (YOLO ON). The previous turn ended without the goal-done sentinel — pick up from PROJECT-STATUS.md + the checklist Requirements Status table and keep going. Do not summarise, do not ask; work until the goal is met, then run: bash .tfcore/utils/tf-yolo.sh done complete \"<summary>\". The goal, again:
+CONTINUE_PROMPT="Continue the UNATTENDED GOAL RUN (YOLO ON). The previous turn ended without the goal-done sentinel — pick up from PROJECT-STATUS.md + the checklist Requirements Status table and keep going. Do not summarise, do not ask; work until the goal is met, then run: bash .tfcore/utils/tf-yolo.sh done complete \"<summary>\". Builds and tests run in the FOREGROUND and you wait for them; never end the turn to wait for a background job (the turn ending kills it). The goal, again:
 $GOAL"
 
 FIRST_PROMPT="$PREAMBLE
 
 THE GOAL:
 $GOAL"
-if [[ "$HARNESS" == codex ]]; then
-  FIRST_PROMPT="$FIRST_PROMPT
-
-CODEX POLICY NOTE: \`.codex/rules/techieflow.rules\` forbids every git/gh command even in YOLO mode, read-only diagnostics included. Use working-tree files and framework artifacts; do not attempt read-only git."
-fi
-
 # ---------------------------------------------------------------- harness command
 harness_cmd() { # $1 = first|resume ; prints the argv via NUL-separated echo
   local kind="$1" prompt
@@ -181,19 +200,12 @@ harness_cmd() { # $1 = first|resume ; prints the argv via NUL-separated echo
     fi
     CMD+=("$prompt")
   else
-    if [[ "$kind" == resume && -n "$SESSION_ID" ]]; then
-      CMD=(codex exec resume "$SESSION_ID" "$prompt" --json)
-    else
-      CMD=(codex exec --json --sandbox workspace-write -c approval_policy="never")
-      [[ -n "$MODEL" ]] && CMD+=(-m "$MODEL")
-      local tier effort
-      tier="$(bash "$APP_DIR/.tfcore/utils/tf-harness.sh" tier build-phase)"
-      effort="$(bash "$APP_DIR/.tfcore/utils/tf-harness.sh" effort "$tier")"
-      [[ -n "$effort" ]] && CMD+=(-c "model_reasoning_effort=\"$effort\"")
-      # shellcheck disable=SC2206
-      [[ -n "${TF_GOAL_CODEX_FLAGS:-}" ]] && CMD+=($TF_GOAL_CODEX_FLAGS)
-      CMD+=("$prompt")
+    CMD=(opencode run --auto)
+    [[ -n "$MODEL" ]] && CMD+=(-m "$MODEL")
+    if [[ "$kind" == resume ]]; then
+      if [[ -n "$SESSION_ID" ]]; then CMD+=(-s "$SESSION_ID"); else CMD+=(-c); fi
     fi
+    CMD+=("$prompt")
   fi
 }
 
@@ -220,9 +232,35 @@ now = time.time()
 def out(kind, detail):
     print(f"{kind}\t{detail}"); sys.exit(0)
 
+# ---- 0. Claude Code stream-json: the last `result` line says how the turn ended, and a
+# clean one (is_error false) is a STOP, never a crash. Until 2026-09-06 the crash regex
+# below matched the harmless field "api_error_status":null that every clean result carries,
+# so every early stop was called a harness error and backed off 2m, 4m, 8m … instead of
+# being re-prompted after 30s (MISS-TechieFlow-20260905-23, MISS-TechieFlow-20260906-01).
+last_result = None
+for line in text.splitlines():
+    line = line.strip()
+    if not line.startswith("{") or '"result"' not in line:
+        continue
+    try:
+        d = json.loads(line)
+    except Exception:
+        continue
+    if isinstance(d, dict) and d.get("type") == "result":
+        last_result = d
+if last_result is not None and rc == 0 and not last_result.get("is_error"):
+    out("IDLE", "clean stop: result is_error=false, %s turn(s)" % last_result.get("num_turns", "?"))
+# a rejected rate_limit_event carries the exact reset epoch — better than parsing "9am"
+if last_result is not None and last_result.get("is_error"):
+    ev = re.findall(r'"rate_limit_info"\s*:\s*\{[^{}]*"status"\s*:\s*"rejected"[^{}]*"resetsAt"\s*:\s*(\d{10})', text)
+    if not ev:
+        ev = re.findall(r'"status"\s*:\s*"rejected"[^{}]*?"resetsAt"\s*:\s*(\d{10})', text)
+    if ev:
+        out("LIMIT", f"{int(ev[-1]) + buffer_min*60}\tparsed")
+
 # ---- 1. usage limit?
 LIMIT_PAT = re.compile(
-    r"(usage limit|hit your limit|exceeded your .*limit|you've hit your (5-hour|weekly|usage) limit|rate[ _-]?limit(ed)?|"
+    r"(usage limit|hit your limit|exceeded your .*limit|you've hit your (5-hour|weekly|usage) limit|rate[ _-]?limit(ed)?(?!_event)|"
     r"limit (has been )?(reached|exceeded)|too many requests|\b429\b|overloaded_error|quota exceeded|"
     r"out of extra usage|resets? (at|in)\b|weekly limit|session limit)", re.I)
 m = LIMIT_PAT.search(tail)
@@ -280,7 +318,7 @@ if m:
     out("LIMIT", f"{int(resume_at)}\tparsed")
 
 # ---- 2. a crash / API error / auth problem?
-if rc != 0 or re.search(r"(api_error|internal server error|\b5\d\d\b .*error|ECONNRESET|ETIMEDOUT|ENOTFOUND|socket hang up|"
+if rc != 0 or re.search(r"(api_error(?!_status)|internal server error|\b5\d\d\b .*error|ECONNRESET|ETIMEDOUT|ENOTFOUND|socket hang up|"
                         r"authentication_error|invalid api key|not logged in|please run /login|error_during_execution|"
                         r"\"is_error\"\s*:\s*true|Error: .*(fetch|network|connect))", tail, re.I):
     out("CRASH", f"rc={rc}")
@@ -290,7 +328,7 @@ out("IDLE", "no sentinel")
 PY
 }
 
-extract_session_id() { # from a cycle's output file (Claude/OpenCode/Codex JSONL)
+extract_session_id() { # from a cycle's output file (Claude/OpenCode JSONL)
   python3 - "$1" <<'PY' 2>/dev/null
 import sys, json, re
 sid = ""
@@ -318,10 +356,8 @@ probe_until_clear() {
     n=$(( n + 1 ))
     if [[ "$HARNESS" == claude ]]; then
       ( cd "$APP_DIR" && claude -p --max-turns 1 --output-format text "Reply with the single word OK." ) > "$pout" 2>&1; prc=$?
-    elif [[ "$HARNESS" == opencode ]]; then
-      ( cd "$APP_DIR" && opencode run --auto "Reply with the single word OK." ) > "$pout" 2>&1; prc=$?
     else
-      ( cd "$APP_DIR" && codex exec --json --sandbox read-only -c approval_policy="never" "Reply with the single word OK." ) > "$pout" 2>&1; prc=$?
+      ( cd "$APP_DIR" && opencode run --auto "Reply with the single word OK." ) > "$pout" 2>&1; prc=$?
     fi
     if [[ $prc -eq 0 ]] && ! grep -qiE 'usage limit|hit your limit|rate[ _-]?limit|limit (has been )?(reached|exceeded)|too many requests|\b429\b|overloaded|weekly limit|resets? (at|in)\b' "$pout"; then
       log "probe #$n OK"; return 0
@@ -329,7 +365,7 @@ probe_until_clear() {
     log "probe #$n still limited (rc=$prc: $(head -c 120 "$pout" | tr '\n' ' ')) — next in ${PROBE_MIN}m"
     state_set resume_at "probe #$((n+1)) at $(date -d "+${PROBE_MIN} min" '+%H:%M' 2>/dev/null)"
     if [[ $(date +%s) -ge $deadline ]]; then log "probe window (${PROBE_MAX_H}h) exhausted — resuming anyway"; return 1; fi
-    sleep $(( PROBE_MIN * 60 ))
+    nap $(( PROBE_MIN * 60 ))
   done
 }
 
@@ -338,18 +374,95 @@ sleep_until() { # epoch
   while :; do
     now=$(date +%s); left=$(( target - now )); [[ $left -le 0 ]] && break
     state_set resume_at "$(date -u -d "@$target" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "$target")"
-    if [[ $left -gt 300 ]]; then sleep 300; else sleep "$left"; fi
+    if [[ $left -gt 300 ]]; then nap 300; else nap "$left"; fi
   done
   state_set resume_at ""
 }
 
-# Debug: `tf-goal.sh --classify <output-file> [rc] <app-dir> x` prints the classification and exits.
+# Debug: `TF_GOAL_CLASSIFY=<output-file> [TF_GOAL_CLASSIFY_RC=n] tf-goal.sh <app-dir> x` prints the classification and exits.
 if [[ -n "${TF_GOAL_CLASSIFY:-}" ]]; then classify_output "$TF_GOAL_CLASSIFY" "${TF_GOAL_CLASSIFY_RC:-0}"; exit 0; fi
+
+# ---------------------------------------------------------------- the harness child
+# The harness runs as a background child in its own process group, so the supervisor can
+# (a) watch its output file grow and kill it after STALL_MIN silent minutes — the OpenCode
+# run that printed nothing for 43 minutes while the supervisor waited forever
+# (MISS-TechieFlow-20260905-22) — and (b) take the child down with it on Ctrl-C / kill,
+# instead of leaving an orphaned agent working in the folder (the previous trap only
+# cleared the YOLO flag and did not even exit, so a killed supervisor carried on to the
+# next cycle: MISS-TechieFlow-20260906-02).
+CHILD=""; STALLED=0
+STALL_SEC="${TF_GOAL_STALL_SEC:-$(( STALL_MIN * 60 ))}"; STALL_TICK="${TF_GOAL_STALL_TICK:-30}"
+kill_child() {
+  [[ -n "$CHILD" ]] || return 0
+  kill -0 "$CHILD" 2>/dev/null || { CHILD=""; return 0; }
+  kill -TERM -- "-$CHILD" 2>/dev/null || kill -TERM "$CHILD" 2>/dev/null || true
+  local i=0
+  while kill -0 "$CHILD" 2>/dev/null && [[ $i -lt 10 ]]; do sleep 1; i=$((i+1)); done
+  kill -KILL -- "-$CHILD" 2>/dev/null || kill -KILL "$CHILD" 2>/dev/null || true
+  CHILD=""
+}
+run_cycle() { # runs "${CMD[@]}" in $APP_DIR, output to $OUT and $LOG; sets RC, STALLED
+  STALLED=0
+  local quiet=0 prev=-1 size
+  if [[ -n "${TF_GOAL_FAKE_CMD:-}" ]]; then CMD=(bash -c "$TF_GOAL_FAKE_CMD"); fi
+  if command -v setsid >/dev/null 2>&1; then
+    ( cd "$APP_DIR" && TF_YOLO=1 exec setsid "${CMD[@]}" ) > >(tee -a "$LOG" > "$OUT") 2>&1 &
+  else
+    ( cd "$APP_DIR" && TF_YOLO=1 exec "${CMD[@]}" ) > >(tee -a "$LOG" > "$OUT") 2>&1 &
+  fi
+  CHILD=$!
+  while kill -0 "$CHILD" 2>/dev/null; do
+    nap "$STALL_TICK"
+    kill -0 "$CHILD" 2>/dev/null || break
+    size="$(stat -c %s "$OUT" 2>/dev/null || echo 0)"
+    if [[ "$size" == "$prev" ]]; then quiet=$(( quiet + STALL_TICK )); else quiet=0; prev="$size"; fi
+    if [[ "$STALL_SEC" -gt 0 && $quiet -ge "$STALL_SEC" ]]; then
+      log "STALL: no output for $(( quiet / 60 ))m$(( quiet % 60 ))s (cycle $CYCLE, ${size} bytes) — stopping the harness, re-prompting"
+      kill_child; STALLED=1; break
+    fi
+  done
+  wait "$CHILD" 2>/dev/null; RC=$?; CHILD=""
+  sleep 1  # let tee flush
+}
+# OpenCode prints NOTHING on a provider refusal — `opencode run` shows its header and waits
+# while ~/.local/share/opencode/log/opencode.log says "Monthly usage limit reached. Resets in
+# 6 days" (2026-09-06, three silent 15-minute stalls on MyDiary-oc; MISS-TechieFlow-20260906-11).
+# After a stall the supervisor reads that log for stream errors newer than the cycle start.
+OPENCODE_LOG="${TF_GOAL_OPENCODE_LOG:-$HOME/.local/share/opencode/log/opencode.log}"
+opencode_log_error() { # $1 = cycle start epoch; prints the newest provider error text since then, or nothing
+  [[ "$HARNESS" == opencode && -f "$OPENCODE_LOG" ]] || return 0
+  python3 - "$OPENCODE_LOG" "$1" <<'PY2' 2>/dev/null
+import re, sys, datetime
+path, since = sys.argv[1], float(sys.argv[2])
+last = ""
+try:
+    for line in open(path, errors="replace"):
+        if "stream error" not in line: continue
+        m = re.search(r"timestamp=(\S+)", line)
+        try:
+            ts = datetime.datetime.fromisoformat(m.group(1).replace("Z", "+00:00")).timestamp()
+        except Exception:
+            continue
+        if ts < since: continue
+        e = re.search(r'error\.error="([^"]*)"', line)
+        last = (e.group(1) if e else line.strip())[:300]
+except Exception:
+    pass
+print(last)
+PY2
+}
+on_signal() {
+  trap - INT TERM
+  log "supervisor stopped by signal (cycle $CYCLE) — stopping the harness child; continue with --resume"
+  kill_child
+  state_set last_reason "stopped" ended "$(ts)"
+  exit 130
+}
 
 # ---------------------------------------------------------------- main loop
 export TF_YOLO=1
 # Pin the state dir to the APP (not the caller's cwd / a parent repo's CLAUDE_PROJECT_DIR).
-CLAUDE_PROJECT_DIR="$APP_DIR" TF_PROJECT_DIR="$APP_DIR" bash "$YOLO_SH" on --source goal --goal "$GOAL" >/dev/null 2>&1 || true
+[[ $DRY -eq 0 ]] && { CLAUDE_PROJECT_DIR="$APP_DIR" TF_PROJECT_DIR="$APP_DIR" bash "$YOLO_SH" on --source goal --goal "$GOAL" >/dev/null 2>&1 || true; }
 
 # The flag we just wrote is OURS — clear it on EVERY exit path (goal done, max
 # cycles, Ctrl-C, kill). Without this it survives the run and silently puts every
@@ -362,9 +475,9 @@ clear_goal_yolo() {
   grep -q '"source":[[:space:]]*"goal"' "$f" 2>/dev/null || return 0
   CLAUDE_PROJECT_DIR="$APP_DIR" TF_PROJECT_DIR="$APP_DIR" bash "$YOLO_SH" off >/dev/null 2>&1 || true
 }
-trap clear_goal_yolo EXIT INT TERM
+[[ $DRY -eq 0 ]] && { trap clear_goal_yolo EXIT; trap on_signal INT TERM; }
 BACKOFF=120
-KIND=first; [[ $RESUME -eq 1 && $CYCLE -gt 0 ]] && KIND=resume
+KIND=first; [[ $RESUME -eq 1 && $CYCLE -gt 0 && $FRESH -eq 0 ]] && KIND=resume
 
 while :; do
   if [[ -f "$DONE" ]]; then
@@ -374,24 +487,42 @@ while :; do
     [[ "$OUTCOME" == blocked ]] && exit 3 || exit 0
   fi
   if [[ $CYCLE -ge $MAX_CYCLES ]]; then log "max cycles ($MAX_CYCLES) reached — stopping"; state_set last_reason "max-cycles"; exit 4; fi
-  CYCLE=$((CYCLE + 1)); state_set cycle "$CYCLE"
+  CYCLE=$((CYCLE + 1))
   harness_cmd "$KIND"
   OUT="$STATE_DIR/goal-cycle-$CYCLE.out"
+  if [[ $DRY -eq 1 ]]; then echo "dry run — would launch cycle $CYCLE ($KIND):" >&2; printf '  %q' "${CMD[@]}"; echo; exit 0; fi
+  state_set cycle "$CYCLE"; CYCLE_START="$(date +%s)"
   log "cycle $CYCLE ($KIND) → ${CMD[*]:0:6} … (prompt ${#CMD[-1]} chars)"
-  if [[ $DRY -eq 1 ]]; then printf '  %q' "${CMD[@]}"; echo; exit 0; fi
 
-  ( cd "$APP_DIR" && TF_YOLO=1 "${CMD[@]}" ) > >(tee -a "$LOG" > "$OUT") 2>&1
-  RC=$?
-  sleep 1  # let tee flush
+  # The run's start is now, not when the agent reaches step 0: write an unclaimed marker the
+  # first command's `tf-phase.sh start` claims (MISS-TechieFlow-20260905-20).
+  [[ $CYCLE -eq 1 && -f "$APP_DIR/.tfcore/utils/tf-phase.sh" ]] && bash "$APP_DIR/.tfcore/utils/tf-phase.sh" goal "$(basename "$APP_DIR")" >/dev/null 2>&1 || true
+  run_cycle
   SID="$(extract_session_id "$OUT")"; [[ -n "$SID" ]] && { SESSION_ID="$SID"; state_set session_id "$SID"; }
-  if [[ "$HARNESS" == codex ]]; then
-    python3 "$APP_DIR/.tfcore/utils/tf-codex-telemetry.py" "$APP_DIR" "$OUT" || true
-  fi
   KIND=resume
 
   if [[ -f "$DONE" ]]; then continue; fi
 
-  IFS=$'\t' read -r CLASS DETAIL HOW < <(classify_output "$OUT" "$RC")
+  if [[ $STALLED -eq 1 ]]; then
+    CLASS=IDLE; DETAIL="stalled ${STALL_MIN}m"; HOW=""
+    PERR="$(opencode_log_error "$CYCLE_START")"
+    if [[ -n "$PERR" ]] && grep -qiE "usage limit|monthly|balance|quota|rate limit|429|insufficient|billing|unauthorized|api key" <<<"$PERR"; then
+      log "the provider refused the model while the harness printed nothing (cycle $CYCLE): $PERR — the owner must act (enable balance, wait for the reset, or pick another model); stopping"
+      state_set last_reason "provider-limit" ended "$(ts)"
+      exit 5
+    fi
+    STALLS=$(( STALLS + 1 )); state_set stalls "$STALLS"
+    # A resumed session that hangs twice running is not coming back (OpenCode `-c` printed its
+    # header and nothing else for 15 minutes, twice, on 2026-09-06): the next cycle starts a
+    # fresh session with the full goal; the checklist and PROJECT-STATUS carry the state.
+    if [[ "$KIND" == resume && $STALLS -ge 2 ]]; then
+      log "two stalled resumes in a row — the next cycle starts a FRESH session (the old one, ${SESSION_ID:-none}, is left behind)"
+      KIND=first; SESSION_ID=""; STALLS=0; state_set session_id "" stalls 0
+    fi
+  else
+    IFS=$'\t' read -r CLASS DETAIL HOW < <(classify_output "$OUT" "$RC")
+    STALLS=0; state_set stalls 0
+  fi
   case "$CLASS" in
     LIMIT)
       if [[ "$HOW" == probe ]]; then
@@ -400,7 +531,7 @@ while :; do
         state_set last_reason "limit-probe" resume_at "probing every ${PROBE_MIN}m"
         probe_until_clear
         log "probe succeeded — resuming session ${SESSION_ID:-(--continue)} after a ${BUFFER_MIN}m buffer"
-        sleep $(( BUFFER_MIN * 60 ))
+        nap $(( BUFFER_MIN * 60 ))
       else
         WHEN="$(date -d "@$DETAIL" '+%Y-%m-%d %H:%M %Z' 2>/dev/null || echo "$DETAIL")"
         log "USAGE LIMIT hit (cycle $CYCLE) — RETRY AT $WHEN (stated reset + ${BUFFER_MIN}m buffer). Sleeping."
@@ -412,10 +543,10 @@ while :; do
     CRASH)
       log "harness/API error (cycle $CYCLE, $DETAIL) — backing off ${BACKOFF}s then resuming"
       state_set last_reason "crash:$DETAIL"
-      sleep "$BACKOFF"; BACKOFF=$(( BACKOFF * 2 )); [[ $BACKOFF -gt 1800 ]] && BACKOFF=1800 ;;
+      nap "$BACKOFF"; BACKOFF=$(( BACKOFF * 2 )); [[ $BACKOFF -gt 1800 ]] && BACKOFF=1800 ;;
     IDLE|*)
-      log "agent stopped without the goal-done sentinel (cycle $CYCLE) — re-prompting in ${IDLE_RETRY}s"
+      log "agent stopped without the goal-done sentinel (cycle $CYCLE, ${DETAIL:-no sentinel}) — re-prompting in ${IDLE_RETRY}s"
       state_set last_reason "idle"
-      sleep "$IDLE_RETRY"; BACKOFF=120 ;;
+      nap "$IDLE_RETRY"; BACKOFF=120 ;;
   esac
 done

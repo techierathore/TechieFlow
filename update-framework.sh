@@ -46,7 +46,6 @@
 #                                        PreToolUse block-git + guard-artifacts + guard-status +
 #                                        guard-verify, Stop guard-status-html — 2026-08-25;
 #                                        SessionStart sweep-artifacts — 2026-08-26)
-#   WORKFLOW.html
 #
 # OpenCode agents/tasks are NOT mirrored to .opencode/command/TechieFlow/ (that
 # subtree was removed — it only registered phantom slash commands). OpenCode
@@ -54,7 +53,7 @@
 #
 # Ensured (append-only, idempotent):
 #   .gitignore — framework block (.tfcore/, .claude/, .opencode/, /CLAUDE.md,
-#   /WORKFLOW.html, /opencode.jsonc, /.tf-scaffold-note.txt): deployed copies
+#   /opencode.jsonc, /.tf-scaffold-note.txt): deployed copies
 #   must never be committed in an app repo. Existing entries are respected;
 #   nothing is removed or rewritten.
 #
@@ -69,10 +68,6 @@
 #   .claude/settings.local.json         (per-machine one-off approvals — never touched)
 #   .claude/commands/{trblazeui,techierag}.md  (NuGet-deployed library agents)
 #   .opencode/command/{trblazeui,techierag}.md
-#   .codex/agents/{trblazeui,techierag}.toml   (library-owned once the package
-#                                        ships it — TrBlazeUI >= 2.0.3; the
-#                                        compat wrapper is regenerated only
-#                                        while it is still the framework's own)
 #   opencode.jsonc                      (may have project-specific agents; the
 #                                        framework's keys now arrive via the
 #                                        refreshed .opencode/opencode.jsonc)
@@ -126,8 +121,8 @@ fi
 
 # --------------------------------------------------------------------------
 # python3 is a HARD prerequisite, not a nice-to-have (added 2026-08-27 after a
-# macOS scaffold failed on a missing python3). It powers the Codex bindings
-# (tf-codex-bind.py), the HTML renderer (tf-render-html.py), the opencode.jsonc
+# macOS scaffold failed on a missing python3). It powers the HTML renderer
+# (tf-render-html.py), the opencode.jsonc
 # audit, tf-metrics.sh and every guard hook. Missing it does not fail loudly at
 # the point of use — the hooks fail OPEN by design — so a scaffold that skipped
 # it would look like it worked and leave the repo silently unguarded.
@@ -138,7 +133,7 @@ fi
 tf_ensure_python3() {
   if command -v python3 >/dev/null 2>&1; then return 0; fi
 
-  echo "  python3 not found — it is required (Codex bindings, HTML renderer, telemetry, guard hooks)."
+  echo "  python3 not found — it is required (HTML renderer, telemetry, guard hooks)."
 
   if [[ "${TF_NO_INSTALL:-0}" == "1" ]]; then
     echo "  TF_NO_INSTALL=1 set — not installing. Install python3 and re-run." >&2
@@ -191,7 +186,7 @@ tf_ensure_python3() {
 if ! tf_ensure_python3; then
   echo "" >&2
   echo "Refusing to continue without python3: the scaffold would appear to succeed" >&2
-  echo "while leaving the repo with no Codex bindings and no working guard hooks." >&2
+  echo "while leaving the repo with no working guard hooks." >&2
   exit 1
 fi
 
@@ -307,6 +302,7 @@ FRAMEWORK_SUBDIRS=(
   data
   utils
   hooks
+  standards
   workflows
   agent-teams
 )
@@ -474,6 +470,22 @@ CANONICAL_SETTINGS='{
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-artifacts.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-metrics.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-db.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-build.sh\""
           }
         ]
       },
@@ -483,6 +495,10 @@ CANONICAL_SETTINGS='{
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-metrics.sh\""
           },
           {
             "type": "command",
@@ -666,8 +682,8 @@ if [[ -f opencode.jsonc ]]; then
   # framework agent and command until it is fixed.
   # Collect FIRST, into plain variables. This script runs under `set -euo
   # pipefail`, where `printf | grep ... | while ...` aborts the WHOLE script the
-  # moment grep matches nothing — silently skipping every step below (the Codex
-  # adapter, WORKFLOW.html, the .gitignore block, metrics). Grep-in-a-pipeline is
+  # moment grep matches nothing — silently skipping every step below (the
+  # .gitignore block, metrics). Grep-in-a-pipeline is
   # not safe here; `|| true` on the assignment is.
   OC_DEAD_LINES="$(printf '%s\n' "$OC_AUDIT" | grep '^DIAG|dead-ref|' || true)"
   OC_BASH_LINES="$(printf '%s\n' "$OC_AUDIT" | grep '^DIAG|bare-bash-allow|' || true)"
@@ -695,19 +711,22 @@ if [[ -f opencode.jsonc ]]; then
   fi
 fi
 
-# 4b. Codex adapter. Preserve project-owned config.toml; refresh the framework
-# policy files and regenerate agents/skills from canonical .tfcore content.
-echo "  .codex/ + .agents/skills/ — Codex adapter"
-if [[ $DRY_RUN -eq 0 ]]; then
-  mkdir -p .codex/agents .codex/rules .agents/skills
-  [[ -f .codex/config.toml ]] || cp "$TEMPLATE/.codex/config.toml" .codex/config.toml
-  cp "$TEMPLATE/.codex/hooks.json" .codex/hooks.json
-  cp "$TEMPLATE/.codex/rules/techieflow.rules" .codex/rules/techieflow.rules
-  python3 .tfcore/utils/tf-codex-bind.py "$TARGET" || echo "  ⚠ Codex bindings could not be generated (python3 required)"
-  echo "  Codex hooks changed or installed — trust this repository and review /hooks"
-else
-  echo "  WOULD preserve/create .codex/config.toml; refresh hooks/rules; regenerate agents/skills"
-fi
+# 4b. Codex adapter — REMOVED 2026-09-07 (D-14, FR-42). The framework supports two
+# harnesses, Claude Code and OpenCode. The adapter was frozen through the reset and is
+# now taken out of every project it was deployed to. Nothing here is project content:
+# .codex/ held a config file plus generated bindings, and .agents/skills/ was generated
+# in full from .tfcore/tasks/. A project that wants Codex back takes it from git history.
+for legacy_codex in .codex .agents/skills; do
+  if [[ -e "$legacy_codex" ]]; then
+    if [[ $DRY_RUN -eq 1 ]]; then
+      echo "  WOULD remove $legacy_codex/ — the Codex adapter is no longer part of the framework"
+    else
+      rm -rf "$legacy_codex"
+      echo "  removed $legacy_codex/ — the Codex adapter is no longer part of the framework"
+    fi
+  fi
+done
+[[ $DRY_RUN -eq 0 && -d .agents ]] && rmdir .agents 2>/dev/null && echo "  removed the emptied .agents/"
 
 # Library agents under .opencode/command/ root preserved
 for f in trblazeui.md techierag.md; do
@@ -717,15 +736,18 @@ for f in trblazeui.md techierag.md; do
 done
 
 # --------------------------------------------------------------------------
-# 4. WORKFLOW.html — canonical workflow guide, always overwrite
+# 4. WORKFLOW.html — DROPPED 2026-09-07. It was a second full description of the
+# process, revised last before the reset, and it still taught commands that no
+# longer exist. What it said is now in the framework's README and in the documents
+# under docs/. A project keeps no copy, because a stale copy is worse than none.
 # --------------------------------------------------------------------------
-if [[ -f "$TEMPLATE/WORKFLOW.html" ]]; then
+if [[ -f WORKFLOW.html ]]; then
   if [[ $DRY_RUN -eq 1 ]]; then
-    rsync $RSYNC_FLAGS "$TEMPLATE/WORKFLOW.html" "WORKFLOW.html" || true
+    echo "  WOULD remove WORKFLOW.html — superseded by the README and docs/"
   else
-    cp "$TEMPLATE/WORKFLOW.html" "WORKFLOW.html"
+    rm -f WORKFLOW.html
+    echo "  removed WORKFLOW.html — superseded by the README and docs/"
   fi
-  echo "  WORKFLOW.html"
 fi
 
 # --------------------------------------------------------------------------
@@ -843,8 +865,8 @@ fi
 #    if any of these are already tracked, the owner must run
 #    `git rm -r --cached <path>` once (git is manual, owner-only).
 # --------------------------------------------------------------------------
-GI_LINES=(".tfcore/" ".claude/" ".opencode/" ".codex/" ".agents/skills/" "/CLAUDE.md" "/WORKFLOW.html" "/opencode.jsonc" "/.tf-scaffold-note.txt")
-GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?\.codex/?$' '^/?\.agents/skills/?$' '^/?CLAUDE\.md$' '^/?WORKFLOW\.html$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$')
+GI_LINES=(".tfcore/" ".claude/" ".opencode/" "/CLAUDE.md" "/opencode.jsonc" "/.tf-scaffold-note.txt")
+GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?CLAUDE\.md$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$')
 GI_MISSING=()
 for i in "${!GI_LINES[@]}"; do
   # tr strips CR so CRLF .gitignore files (Windows-authored) still match the $-anchor

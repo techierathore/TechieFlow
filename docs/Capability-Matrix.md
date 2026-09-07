@@ -1,5 +1,7 @@
 # Capability Matrix — Claude Code, OpenCode, and Codex (for TechieFlow's harness adapter)
 
+> **The Codex adapter was removed on 2026-09-07** (D-14, FR-42). The framework supports Claude Code and OpenCode. Everything below that describes `.codex/`, `.agents/skills/` or a Codex code path is history, kept for traceability; see `docs/CHANGELOG.md`.
+
 > **Codex addendum (2026-08-24):** Codex is implemented as the third adapter.
 > Current facts and paths are in `CodexChanges.md`. The historical two-column
 > investigation below remains the evidence for the original adapter.

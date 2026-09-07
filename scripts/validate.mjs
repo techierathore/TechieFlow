@@ -116,9 +116,7 @@ function deployedFiles() {
   for (const f of filesUnder(join(root, ".opencode", "command"))) {
     if (f.endsWith(".md") && !libraryPersonas.has(f.split("/").pop())) out.push(rel(f));
   }
-  out.push(".codex/config.toml", ".codex/hooks.json");
-  for (const f of filesUnder(join(root, ".codex", "rules"))) out.push(rel(f));
-  out.push("opencode.jsonc", "WORKFLOW.html");
+  out.push("opencode.jsonc");
   return out.filter((r) => !/(^|\/)(\.DS_Store|Thumbs\.db|desktop\.ini)$/.test(r) && !r.endsWith(".bak"));
 }
 
@@ -128,11 +126,11 @@ const mustNotShip = [
   ".claude/commands/trblazeui.md", ".claude/commands/techierag.md",
   ".opencode/command/trblazeui.md", ".opencode/command/techierag.md",
   ".opencode/node_modules", ".opencode/package.json", ".opencode/package-lock.json", ".opencode/.gitignore",
-  ".codex/agents", ".agents", ".techierag", ".trblazeui", ".github",
+  ".techierag", ".trblazeui", ".github",
   "scaffold-brownfield.sh", "scaffold-greenfield.sh", "update-framework.sh",
   "scripts/test-install.mjs", "scripts/validate.mjs",
   "docs/TechieFlow-Requirements.md", "docs/TechieFlow-How-It-Works.md", "docs/metrics",
-  "DECISIONS.md", "WorkFlow-Context.md", "CodexChanges.md",
+  "DECISIONS.md", "WorkFlow-Context.md",
 ];
 // The package ships the framework plus the installer's own three files under scripts/.
 // Those never reach a project: the installer copies the framework folders only.

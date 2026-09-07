@@ -3,8 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TechieFlow Model Routing Guide — TechieFlow</title>
+<title>TechieFlow — Model Routing Guide</title>
 <script>
+/* Resolve the theme BEFORE first paint (no flash). Saved choice wins; otherwise
+   pick by time of day — light 07:00–19:00 local, softened dark at night. */
 (function(){
   try{
     var t = localStorage.getItem('tf-theme');
@@ -13,7 +15,8 @@
   }catch(e){ document.documentElement.setAttribute('data-theme','light'); }
 })();
 </script>
-<style>/* LIGHT is the default theme — a warm off-white, easy on the eyes (never bright white). */
+<style>
+/* LIGHT is the default theme — a warm off-white, easy on the eyes (never bright white). */
 :root{
   --bg:#f4f1e9; --panel:#efe9db; --panel2:#e7e0cd; --line:#d8cfb6;
   --ink:#2e2a22; --muted:#6f6857; --accent:#2f6f9f; --accent2:#3f7d54;
@@ -95,212 +98,126 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 .diagram.fs{position:fixed;inset:0;z-index:9999;border-radius:0;border:none}
 .diagram.fs .mermaid{height:calc(100vh - 40px);display:flex;align-items:center;justify-content:center}
 
-@media(max-width:900px){.layout{grid-template-columns:1fr}nav.side{position:static;height:auto}}</style>
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.side{position:static;height:auto}}
+</style>
 </head>
 <body>
-<button id="themeToggle" class="theme-toggle" title="Toggle light / dark">☾ Dark</button>
+<button id="themeToggle" class="theme-toggle" title="Toggle light / dark">&#9790; Dark</button>
 <div class="layout">
-<nav class="side"><h1>TechieFlow Model Routing Guide</h1><div class="sub">Last rendered: 2026-08-21</div><div class="group">Contents</div><ol><li><a href="#the-problem-routing-solves">1. The problem routing solves</a></li>
-<li><a href="#the-three-tiers">2. The three tiers</a></li>
-<li><a href="#the-complete-map-what-runs-on-what">3. The complete map — what runs on what</a></li>
-<li class="h3"><a href="#phases-the-commands-you-type">3.1 Phases (the commands you type)</a></li>
-<li class="h3"><a href="#personas-and-subagents-the-agents-that-do-the-work">3.2 Personas and subagents (the agents that do the work)</a></li>
-<li><a href="#turning-it-on-and-off">4. Turning it on and off</a></li>
-<li><a href="#what-you-will-and-won-t-see-in-the-tui">5. What you will — and won't — see in the TUI</a></li>
-<li><a href="#changing-the-map-every-case-with-examples">6. Changing the map — every case, with examples</a></li>
-<li class="h3"><a href="#moving-a-phase-between-tiers">6.1 Moving a phase between tiers</a></li>
-<li class="h3"><a href="#moving-a-subagent-between-tiers">6.2 Moving a subagent between tiers</a></li>
-<li class="h3"><a href="#changing-which-model-a-tier-means-per-tier-per-harness">6.3 Changing which model a tier means — per tier, per harness</a></li>
-<li class="h3"><a href="#escalation-when-the-base-tier-isn-t-cutting-it">6.4 Escalation — when the base tier isn't cutting it</a></li>
-<li class="h3"><a href="#editing-routing-yaml-by-hand">6.5 Editing routing.yaml by hand</a></li>
-<li><a href="#under-the-hood-what-actually-gets-generated">7. Under the hood — what actually gets generated</a></li>
-<li><a href="#reading-the-results-the-tuning-loop">8. Reading the results — the tuning loop</a></li>
-<li><a href="#troubleshooting">9. Troubleshooting</a></li></ol></nav><main>
-<h1>TechieFlow Model Routing Guide</h1>
-<div class="subtitle">Run cheap phases on cheap models — the owner&#x27;s guide to per-phase model tiers</div>
-<div class="toc-inline"><div>Contents</div><ol><li><a href="#the-problem-routing-solves">1. The problem routing solves</a></li>
-<li><a href="#the-three-tiers">2. The three tiers</a></li>
-<li><a href="#the-complete-map-what-runs-on-what">3. The complete map — what runs on what</a></li>
-<li><a href="#turning-it-on-and-off">4. Turning it on and off</a></li>
-<li><a href="#what-you-will-and-won-t-see-in-the-tui">5. What you will — and won't — see in the TUI</a></li>
-<li><a href="#changing-the-map-every-case-with-examples">6. Changing the map — every case, with examples</a></li>
-<li><a href="#under-the-hood-what-actually-gets-generated">7. Under the hood — what actually gets generated</a></li>
-<li><a href="#reading-the-results-the-tuning-loop">8. Reading the results — the tuning loop</a></li>
-<li><a href="#troubleshooting">9. Troubleshooting</a></li></ol></div>
-<p><strong>Audience:</strong> the framework owner. <strong>TL;DR:</strong> run cheap phases on cheap models, expensive thinking on expensive models — one script controls everything. <strong>Design doc:</strong> <code>docs/Adapter-Design.md §5</code> (the reasoning) · <strong>quick summary:</strong> README §17b / WORKFLOW.html §17b.</p>
-<h2 id="the-problem-routing-solves">1. The problem routing solves<a class="anchor-link" href="#the-problem-routing-solves">#</a></h2>
-<p>Every TechieFlow phase used to run on whatever model your session happened to be using. Day-1 architecture — where a wrong decision costs days of rework — and re-rendering markdown to HTML — pure mechanics — cost exactly the same per token. Over a project's life the mechanical phases (renders, status refreshes, reports) plus the bulk token spend of builder subagents dominate the bill, while the genuinely hard thinking is a handful of runs.</p>
-<p>Routing assigns every phase and every subagent a <strong>tier</strong>, and maps each tier to a real model per harness. It is:</p>
-<ul><li><strong>OFF by default</strong> — a freshly scaffolded or updated app changes nothing until you turn it on.</li><li><strong>Per-app</strong> — enable it on one project, leave the others alone.</li><li><strong>Reversible</strong> — <code>off</code> removes every generated file and your map survives for the next <code>on</code>.</li><li><strong>Observed, never enforced</strong> — nothing blocks a phase from running on the "wrong" model; the telemetry records what actually ran so drift is visible, not hidden.</li></ul>
-<p>A real measured datapoint (TechieBlog pilot, 2026-08-20): one complete <code>metrics-report</code> phase on the economy tier — 14,000 output tokens, full report written — cost <strong>$0.036</strong>. The same phase on the frontier model is roughly 10× that for identical output.</p>
-<h2 id="the-three-tiers">2. The three tiers<a class="anchor-link" href="#the-three-tiers">#</a></h2>
+  <nav class="side">
+    <h1>TechieFlow — Model Routing Guide</h1>
+    <div class="sub">Last rendered: 2026-09-06</div>
+    <div class="group">Contents</div>
+    <ol>
+        <li><a href="#what-routing-is-in-one-paragraph">1. What routing is, in one paragraph</a></li>
+        <li><a href="#the-current-defaults">2. The current defaults</a></li>
+        <li><a href="#where-the-models-are-written-down">3. Where the models are written down</a></li>
+        <li><a href="#how-to-change-a-model-the-four-cases">4. How to change a model, the four cases</a></li>
+        <li><a href="#turning-routing-on-and-off">5. Turning routing on and off</a></li>
+        <li><a href="#how-to-see-what-ran">6. How to see what ran</a></li>
+        <li><a href="#two-things-that-surprise-people">7. Two things that surprise people</a></li>
+        <li><a href="#when-something-is-wrong">8. When something is wrong</a></li>
+    </ol>
+  </nav>
+  <main>
+    <h1>TechieFlow — Model Routing Guide</h1>
+    <div class="subtitle">Rendered 2026-09-06 &middot; source <code>TechieFlow-Routing-Guide.md</code></div>
+
+    <div class="toc-inline">
+      <div>Contents</div>
+      <ol>
+        <li><a href="#what-routing-is-in-one-paragraph">1. What routing is, in one paragraph</a></li>
+        <li><a href="#the-current-defaults">2. The current defaults</a></li>
+        <li><a href="#where-the-models-are-written-down">3. Where the models are written down</a></li>
+        <li><a href="#how-to-change-a-model-the-four-cases">4. How to change a model, the four cases</a></li>
+        <li><a href="#turning-routing-on-and-off">5. Turning routing on and off</a></li>
+        <li><a href="#how-to-see-what-ran">6. How to see what ran</a></li>
+        <li><a href="#two-things-that-surprise-people">7. Two things that surprise people</a></li>
+        <li><a href="#when-something-is-wrong">8. When something is wrong</a></li>
+      </ol>
+    </div>
 <table>
-<tr><th>Tier</th><th>Mental model</th><th>Claude Code model</th><th>OpenCode model (shipped defaults)</th></tr>
-<tr><td><code>frontier</code></td><td>The expensive thinking. Mistakes here are the costliest to discover late.</td><td><code>opus</code></td><td><code>opencode-go/kimi-k3</code></td></tr>
-<tr><td><code>standard</code></td><td>The everyday building. Needs real competence, not brilliance.</td><td><code>sonnet</code></td><td><code>opencode-go/kimi-k2.7-code</code></td></tr>
-<tr><td><code>economy</code></td><td>The mechanical work. Format, assemble, scan, report.</td><td><code>haiku</code></td><td><code>opencode-go/deepseek-v4-flash</code></td></tr>
+<thead><tr><th></th><th></th></tr></thead>
+<tbody>
+<tr><td>Purpose</td><td>Which model runs which command, where that is written down, and how to change it.</td></tr>
+<tr><td>Audience</td><td>The framework owner.</td></tr>
+<tr><td>Status</td><td>Rewritten in plain words 2026-09-06 (Sitting 4b), when the owner found the old guide confusing. Default OpenCode models changed to the OpenAI ones the same day.</td></tr>
+<tr><td>Companion</td><td><code>.tfcore/routing.yaml</code> (the file itself, with the same how-to in its header), <code>TechieFlow-How-It-Works.md</code> §2 "Model routing".</td></tr>
+</tbody>
 </table>
-<p>The models are <strong>starting values, yours to change</strong> (§6). Claude side accepts the aliases <code>opus</code> / <code>sonnet</code> / <code>haiku</code> or a full model id; OpenCode side takes <code>provider/model</code> ids — list everything your account offers with <code>opencode models</code>.</p>
-<h2 id="the-complete-map-what-runs-on-what">3. The complete map — what runs on what<a class="anchor-link" href="#the-complete-map-what-runs-on-what">#</a></h2>
-<h3 id="phases-the-commands-you-type">3.1 Phases (the commands you type)<a class="anchor-link" href="#phases-the-commands-you-type">#</a></h3>
+<hr>
+<h2 id="what-routing-is-in-one-paragraph">1. What routing is, in one paragraph<a class="anchor-link" href="#what-routing-is-in-one-paragraph">#</a></h2>
+<p>Every command and every sub-agent is given a <strong>tier</strong>: <code>frontier</code> for the expensive thinking, <code>standard</code> for everyday building, <code>economy</code> for mechanical work. Each tier is then mapped to one real model per harness. Day-1 documents run on the frontier tier; a build runs on standard; rendering HTML runs on economy. Routing only sets the model a command starts on. It never switches a model mid-run, and it never blocks anything: the run record says which model actually ran, so a drift is visible, not hidden.</p>
+<h2 id="the-current-defaults">2. The current defaults<a class="anchor-link" href="#the-current-defaults">#</a></h2>
 <table>
-<tr><th>Phase</th><th>Tier</th><th>Why this tier</th></tr>
-<tr><td><code>day1-greenfield</code></td><td>frontier</td><td>Architecture + BRD from nothing; errors here poison everything downstream.</td></tr>
-<tr><td><code>day1-brownfield</code></td><td>frontier</td><td>Same, plus whole-codebase comprehension of an existing app.</td></tr>
-<tr><td><code>author-brd</code></td><td>frontier</td><td>Requirements authoring — bad acceptance criteria fail every later gate.</td></tr>
-<tr><td><code>amend-docs</code></td><td>frontier</td><td>Surgical edits to the day-1 docs; must understand the whole picture.</td></tr>
-<tr><td><code>fix-issues</code></td><td>frontier</td><td>The <em>diagnosis</em> half (root-causing from screenshots) is frontier work; the fixes themselves fan out to standard builders.</td></tr>
-<tr><td><code>mockups</code></td><td>standard</td><td>Bounded design from a known component catalog. Promote to frontier if greenfield first-pass mockups disappoint — it's the easiest override.</td></tr>
-<tr><td><code>split-brd</code></td><td>standard</td><td>BRD → checklist rows with acceptance authoring; not mechanical enough for economy.</td></tr>
-<tr><td><code>build-phase</code></td><td>standard</td><td>The orchestrator: clustering, fan-out, FIX-mode detection. The expensive judgement already lives in the BRD/architecture.</td></tr>
-<tr><td><code>verify-phase</code></td><td>standard</td><td>Test <em>generation</em> and the visual-truth eyeball need a capable vision model; the gates themselves are deterministic scripts.</td></tr>
-<tr><td><code>triage-issues</code></td><td>standard</td><td>Reproduce, classify, log — no code changes.</td></tr>
-<tr><td><code>devguide</code></td><td>standard</td><td>Large code-tracing; cheap models lose the thread across page → service → query.</td></tr>
-<tr><td><code>productguide</code></td><td>economy</td><td>Screenshot-illustrated how-to assembly from existing material.</td></tr>
-<tr><td><code>handoff-phase</code></td><td>economy</td><td>Wrap-up docs and re-renders.</td></tr>
-<tr><td><code>refresh-status</code></td><td>economy</td><td>Evidence gathering (build + mtimes + tables). Promote to standard if recovery notes look wrong — the reconcile judgement is occasionally subtle.</td></tr>
-<tr><td><code>render-workflow-docs</code></td><td>economy</td><td>Markdown → HTML.</td></tr>
-<tr><td><code>generate-html</code></td><td>economy</td><td>Markdown → HTML.</td></tr>
-<tr><td><code>metrics-report</code></td><td>economy</td><td>Runs <code>tf-metrics.sh</code> and formats the output.</td></tr>
+<thead><tr><th>Tier</th><th>Claude Code</th><th>OpenCode</th><th>Used for</th></tr></thead>
+<tbody>
+<tr><td><code>frontier</code></td><td><code>sonnet</code></td><td><code>openai/gpt-5.6-terra</code></td><td>day1-greenfield, day1-brownfield, amend-docs, fix-issues</td></tr>
+<tr><td><code>standard</code></td><td><code>sonnet</code></td><td><code>openai/gpt-5.6-terra</code></td><td>build-phase, verify-phase, mockups, split-brd, triage-issues, devguide, and the builder sub-agents</td></tr>
+<tr><td><code>economy</code></td><td><code>haiku</code></td><td><code>openai/gpt-5.6-luna</code></td><td>refresh-status, handoff-phase, productguide, metrics-report, HTML rendering, the explorer sub-agent</td></tr>
+</tbody>
 </table>
-<h3 id="personas-and-subagents-the-agents-that-do-the-work">3.2 Personas and subagents (the agents that do the work)<a class="anchor-link" href="#personas-and-subagents-the-agents-that-do-the-work">#</a></h3>
-<p>Personas get the tier of their <em>primary phase</em>; subagents get their own row in the map. This matters because typing <code>*verify all MyApp</code> inside the flow-verifier persona is routed through the <strong>persona's</strong> model, and every builder the build orchestrator spawns runs on the <strong>subagent's</strong> model.</p>
+<p>Why these: the owner's decisions of 2026-09-05 (Sonnet for every long Claude run, Haiku for the cheap ones) and 2026-09-06 (OpenAI models for OpenCode, after the OpenCode Go monthly limit was reached with MiMo). Codex is frozen; its column in the file is kept but not maintained.</p>
+<p>Your normal chat is never routed. Opening OpenCode or Claude Code looks exactly as before; routing shows only when a command runs or a persona is selected.</p>
+<h2 id="where-the-models-are-written-down">3. Where the models are written down<a class="anchor-link" href="#where-the-models-are-written-down">#</a></h2>
+<p>There are two copies of the same file, and knowing which one you are editing is the whole trick.</p>
 <table>
-<tr><th>Agent</th><th>Kind</th><th>Tier</th><th>Claude model</th><th>OpenCode model</th><th>When it runs</th></tr>
-<tr><td><code>flow-master</code></td><td>persona</td><td>standard (= build-phase)</td><td>sonnet</td><td>opencode-go/kimi-k2.7-code</td><td>The super-agent: build, fix, triage, utilities typed as <code>*commands</code></td></tr>
-<tr><td><code>flow-analyst</code></td><td>persona</td><td>frontier (= day-1)</td><td>opus</td><td>opencode-go/kimi-k3</td><td>Day-1 docs, mockups, split-brd, amendments</td></tr>
-<tr><td><code>flow-architect</code></td><td>persona</td><td>frontier (= day-1)</td><td>opus</td><td>opencode-go/kimi-k3</td><td>Optional deep architecture dives</td></tr>
-<tr><td><code>flow-verifier</code></td><td>persona</td><td>standard (= verify-phase)</td><td>sonnet</td><td>opencode-go/kimi-k2.7-code</td><td><code>*verify ui/functional/all</code></td></tr>
-<tr><td><code>tf-builder</code></td><td>subagent</td><td>standard</td><td>sonnet</td><td>opencode-go/kimi-k2.7-code</td><td>One per FN/NFR cluster in build-phase §3 and fix-issues §4</td></tr>
-<tr><td><code>trblazeui</code></td><td>subagent</td><td>standard</td><td>sonnet</td><td>opencode-go/kimi-k2.7-code</td><td>UI clusters (REQ-UI-*) — wraps the NuGet-deployed persona</td></tr>
-<tr><td><code>techierag</code></td><td>subagent</td><td>standard</td><td>sonnet</td><td>opencode-go/kimi-k2.7-code</td><td>RAG clusters (REQ-RAG-*) — wraps the NuGet-deployed persona</td></tr>
-<tr><td><code>tf-test-writer</code></td><td>subagent</td><td>standard</td><td>sonnet</td><td>opencode-go/kimi-k2.7-code</td><td>Verify-phase §4 test generation, one per cluster</td></tr>
-<tr><td><code>tf-explorer</code></td><td>subagent</td><td>economy</td><td>haiku</td><td>opencode-go/deepseek-v4-flash</td><td>Read-only scans (devguide OBSERVE, index-docs)</td></tr>
-<tr><td><code>build</code> (OpenCode) / your session (Claude)</td><td>default chat</td><td><strong>never routed</strong></td><td>your <code>/model</code> choice</td><td>your TUI selection</td><td>Your normal conversation — routing deliberately leaves it alone</td></tr>
+<thead><tr><th>File</th><th>What it is</th><th>Who changes it</th></tr></thead>
+<tbody>
+<tr><td><code>TechieFlow/.tfcore/routing.yaml</code></td><td>The <strong>framework default</strong>. Copied into a project when the project is scaffolded.</td><td>Edit it to change what every <em>future</em> project starts with.</td></tr>
+<tr><td><code>&lt;project&gt;/.tfcore/routing.yaml</code></td><td>The <strong>project's own copy</strong>. <code>update-framework.sh</code> never overwrites it.</td><td>Edit it to change <em>this</em> project.</td></tr>
+</tbody>
 </table>
-<blockquote><p><strong>Why builders are standard, not economy</strong> — the single most-challenged row. A cheap builder that ships a page with a blank data table doesn't save money: it costs a full verify → fix-issues → re-verify cycle, which dwarfs the per-token saving. This is a <em>hypothesis with a measurement attached</em>: the rework ratio in <code>runs.jsonl</code> (§8) confirms or overturns it with your own data.</p></blockquote>
-<h2 id="turning-it-on-and-off">4. Turning it on and off<a class="anchor-link" href="#turning-it-on-and-off">#</a></h2>
-<p>Everything is one script, run from the app repo. It edits <code>.tfcore/routing.yaml</code> for you and regenerates all harness bindings — you never touch a generated file.</p>
-<pre><code>cd /mnt/c/1MyCode/TechieBlog
-bash .tfcore/utils/tf-routing.sh status     # read-only: what routing is/would be doing
-bash .tfcore/utils/tf-routing.sh on         # enable  → generates ~23 binding files
-bash .tfcore/utils/tf-routing.sh off        # disable → removes exactly those files</code></pre>
-<p><code>status</code> prints the live tier/model/phase table for THIS app, whether the bindings on disk agree with the flag, the advisory escalation policy (§6.4), and where routing shows up in the TUI.</p>
-<p>After <code>on</code>, <strong>you keep using the same commands you always used</strong>:</p>
-<table>
-<tr><th>Harness</th><th>You type</th><th>What changed</th></tr>
-<tr><td>OpenCode</td><td><code>/techieflow:tasks:verify-phase all MyApp</code> — unchanged</td><td>The phase now executes on its tier's model</td></tr>
-<tr><td>OpenCode</td><td>Tab to <code>flow-verifier</code>, then <code>*verify all MyApp</code> — unchanged</td><td>The persona carries its tier's model</td></tr>
-<tr><td>Claude Code</td><td><code>/tf:verify-phase all MyApp</code> — new short wrapper</td><td>Runs the phase on the tier model for that turn</td></tr>
-<tr><td>Claude Code</td><td><code>/TechieFlow:agents:verifier *verify all MyApp</code> — the old way</td><td>Still works, <strong>unrouted</strong> (session model)</td></tr>
-</table>
-<h2 id="what-you-will-and-won-t-see-in-the-tui">5. What you will — and won't — see in the TUI<a class="anchor-link" href="#what-you-will-and-won-t-see-in-the-tui">#</a></h2>
-<p><strong>Opening OpenCode looks exactly the same as before. That is deliberate.</strong> Your normal chat runs on the default <code>build</code> agent, and routing never binds it — your conversation stays on the model YOU picked. If you enable routing, open the TUI and see your usual model in the status bar: that is correct behavior, not a failure.</p>
-<p>Routing is visible in exactly three places:</p>
-<ol><li><strong>Running a phase command.</strong> <code>/techieflow:tasks:metrics-report MyApp</code> → the footer shows the run executing on <code>deepseek-v4-flash</code> while it works.</li><li><strong>Switching persona.</strong> Tab to <code>flow-master</code> / <code>flow-verifier</code> / <code>flow-analyst</code> — each shows and uses its bound model.</li><li><strong>The telemetry.</strong> Every run lands in <code>docs/metrics/runs.jsonl</code> with declared tier, observed model, <code>routed: true/false</code>, tokens, and (OpenCode) real dollar cost.</li></ol>
-<p><strong>Verified gotcha #1 — the model sticks (OpenCode).</strong> After a routed command finishes, that TUI session <strong>continues on the phase's model</strong>. It does not bounce back to your selection. If you finish an economy phase and keep chatting, you are chatting with the economy model until you pick another from the model list or start a new session.</p>
-<p><strong>Verified gotcha #2 — turn-scoped (Claude Code).</strong> The mirror image: a <code>/tf:&lt;phase&gt;</code> wrapper's model lasts exactly one turn; your next plain prompt reverts to the session model automatically.</p>
-<h2 id="changing-the-map-every-case-with-examples">6. Changing the map — every case, with examples<a class="anchor-link" href="#changing-the-map-every-case-with-examples">#</a></h2>
-<p>Each command edits <code>routing.yaml</code> and immediately regenerates the bindings. Verify any change with <code>status</code>.</p>
-<h3 id="moving-a-phase-between-tiers">6.1 Moving a phase between tiers<a class="anchor-link" href="#moving-a-phase-between-tiers">#</a></h3>
-<pre><code># Greenfield mockups keep missing the mark → give them the frontier model:
-bash .tfcore/utils/tf-routing.sh set-tier mockups frontier
-
-# Verify feels like overkill on standard for a stable app → try economy:
-bash .tfcore/utils/tf-routing.sh set-tier verify-phase economy
-
-# Recovery notes from refresh-status look sloppy → promote it:
-bash .tfcore/utils/tf-routing.sh set-tier refresh-status standard
-
-# Take a phase out of routing entirely (runs on the session model again):
-bash .tfcore/utils/tf-routing.sh set-tier devguide inherit</code></pre>
-<h3 id="moving-a-subagent-between-tiers">6.2 Moving a subagent between tiers<a class="anchor-link" href="#moving-a-subagent-between-tiers">#</a></h3>
-<pre><code># Test the &quot;cheap builders&quot; hypothesis yourself (watch the rework ratio!):
-bash .tfcore/utils/tf-routing.sh set-tier tf-builder economy
-
-# UI builders struggle with a complex design system → promote just them:
-bash .tfcore/utils/tf-routing.sh set-tier trblazeui frontier</code></pre>
-<h3 id="changing-which-model-a-tier-means-per-tier-per-harness">6.3 Changing which model a tier means — per tier, per harness<a class="anchor-link" href="#changing-which-model-a-tier-means-per-tier-per-harness">#</a></h3>
-<pre><code># FRONTIER — try a different top model on OpenCode:
-bash .tfcore/utils/tf-routing.sh set-model frontier opencode opencode-go/qwen3.8-max
-# ...and pin Claude&#x27;s frontier to opus explicitly:
-bash .tfcore/utils/tf-routing.sh set-model frontier claude opus
-
-# STANDARD — swap the workhorse:
-bash .tfcore/utils/tf-routing.sh set-model standard opencode opencode-go/kimi-k2.7-code
-bash .tfcore/utils/tf-routing.sh set-model standard claude sonnet
-
-# ECONOMY — chase the cheapest model that doesn&#x27;t degrade output:
-bash .tfcore/utils/tf-routing.sh set-model economy opencode opencode-go/mimo-v2.5
+<p>The file is short and flat: a <code>tiers:</code> block (tier to model, per harness), a <code>phases:</code> block (command to tier), a <code>subagents:</code> block, and an <code>effort:</code> block. Its header repeats the steps below.</p>
+<p><strong>Nothing happens until the bindings are regenerated.</strong> The harnesses do not read <code>routing.yaml</code>; they read files generated from it (<code>.opencode/opencode.json</code>, <code>.claude/commands/tf/*.md</code>, <code>.claude/agents/*.md</code>). Every change ends with the bind step.</p>
+<h2 id="how-to-change-a-model-the-four-cases">4. How to change a model, the four cases<a class="anchor-link" href="#how-to-change-a-model-the-four-cases">#</a></h2>
+<p>All commands run inside the project folder.</p>
+<p><strong>Case 1, this project, one tier.</strong> The script edits the file and regenerates the bindings in one go:</p>
+<pre><code class="language-bash">bash .tfcore/utils/tf-routing.sh set-model standard opencode openai/gpt-5.6-terra
 bash .tfcore/utils/tf-routing.sh set-model economy claude haiku</code></pre>
-<p>Find OpenCode ids with <code>opencode models</code>. On the Claude side you can also repoint what the aliases mean machine-wide with environment variables: <code>ANTHROPIC_DEFAULT_OPUS_MODEL</code>, <code>ANTHROPIC_DEFAULT_SONNET_MODEL</code>, <code>ANTHROPIC_DEFAULT_HAIKU_MODEL</code>.</p>
-<h3 id="escalation-when-the-base-tier-isn-t-cutting-it">6.4 Escalation — when the base tier isn't cutting it<a class="anchor-link" href="#escalation-when-the-base-tier-isn-t-cutting-it">#</a></h3>
-<p><code>routing.yaml</code> carries an <strong>advisory</strong> escalation policy, ported from the AI-First Playbook's <code>model-tiers.yml</code>:</p>
-<pre><code>escalation:
-  fix-issues:
-    after_attempts: 2
-    tier: frontier</code></pre>
-<p>Meaning: if the same REQs have already been through <code>fix-issues</code> twice without reaching <code>Verified</code>, launch the <strong>third</strong> run on the frontier tier. Three things it is <em>not</em>:</p>
+<p>Model ids: for Claude Code <code>opus</code>, <code>sonnet</code>, <code>haiku</code> or a full id; for OpenCode <code>provider/model</code> exactly as <code>opencode models</code> prints it.</p>
+<p><strong>Case 2, this project, move a command or a sub-agent to another tier:</strong></p>
+<pre><code class="language-bash">bash .tfcore/utils/tf-routing.sh set-tier mockups frontier
+bash .tfcore/utils/tf-routing.sh set-tier tf-builder economy
+bash .tfcore/utils/tf-routing.sh set-tier devguide inherit     # take it out of routing</code></pre>
+<p><strong>Case 3, edit the file by hand</strong> (either copy), then regenerate:</p>
+<pre><code class="language-bash">bash .tfcore/utils/tf-routing.sh bind</code></pre>
+<p>For the framework default there is nothing to bind; the next scaffold copies the file. To bring an existing project up to a changed default, change its own copy (case 1 or 3), because the updater leaves it alone on purpose.</p>
+<p><strong>Case 4, one unattended run only.</strong> Pass the model to the supervisor; the file is untouched:</p>
+<pre><code class="language-bash">bash .tfcore/utils/tf-goal.sh --harness opencode --model openai/gpt-5.6-terra /path/to/App @goal.md</code></pre>
+<p>The main agent uses that model. The sub-agents it spawns still use the project's bindings, so when a provider is down, change the project's tiers too (case 1), or the sub-agents will fail while the main agent works. That is what happened on 2026-09-06.</p>
+<h2 id="turning-routing-on-and-off">5. Turning routing on and off<a class="anchor-link" href="#turning-routing-on-and-off">#</a></h2>
+<pre><code class="language-bash">bash .tfcore/utils/tf-routing.sh status   # what this project would do, and whether the bindings match
+bash .tfcore/utils/tf-routing.sh on       # write the bindings
+bash .tfcore/utils/tf-routing.sh off      # remove exactly those files; the map stays for next time</code></pre>
+<p>With routing off, every command runs on whatever model the session is on. <code>status</code> is the first thing to run when a model looks wrong.</p>
+<h2 id="how-to-see-what-ran">6. How to see what ran<a class="anchor-link" href="#how-to-see-what-ran">#</a></h2>
+<p>Every run appends a line to <code>docs/metrics/runs.jsonl</code> with the tier the file declared, the model the harness actually used, and <code>routed: true</code> when they match. On OpenCode the line also carries the real dollar cost. After a few weeks, <code>*metrics</code> shows whether cheaper tiers cost more rework; that data, not opinion, decides the map.</p>
+<h2 id="two-things-that-surprise-people">7. Two things that surprise people<a class="anchor-link" href="#two-things-that-surprise-people">#</a></h2>
 <ul>
-<li><strong>Not runtime.</strong> Nothing switches a running phase's model — neither harness can, and the one place it could be faked (OpenCode's undocumented <code>chat.message</code> mutation) has no Claude Code equivalent (DECISIONS.md 2026-08-21).</li>
-<li><strong>Not enforced.</strong> It is applied by whoever launches the command — you, or a wrapper script — by reading the attempt history <em>before</em> the run starts.</li>
-<li><strong>Not a binding.</strong> <code>set-escalation</code> edits <code>routing.yaml</code> only; it generates no files, so it needs no <code>bind</code>.</li>
+<li><strong>OpenCode keeps the model.</strong> After a routed command finishes, that OpenCode session stays on the command's model. Pick your model again, or start a new session, before chatting on.
+</li>
+<li><strong>Claude Code reverts.</strong> A <code>/tf:&lt;phase&gt;</code> wrapper's model lasts one turn; the next prompt is back on the session model. The old long command form (<code>/TechieFlow:agents:verifier *verify …</code>) still works but is not routed.
+</li>
 </ul>
-<p>How to apply it at launch:</p>
-<pre><code># 1. What attempt would the next fix-issues run on these REQs be?
-bash .tfcore/utils/tf-emit.sh --next-run-attempt fix-issues REQ-UI-009 REQ-FN-011   # → 3
-# 2. status prints the policy next to the base tier:
-bash .tfcore/utils/tf-routing.sh status
-#    Escalation (ADVISORY ...):
-#      fix-issues   after 2 attempt(s) on the same REQs -&gt; launch the next on frontier (base tier: frontier)
-# 3. If the answer exceeds after_attempts, launch on the escalation tier:
-#    Claude Code:  /model opus  then  /tf:fix-issues ...   (or run the old command form on opus)
-#    OpenCode:     pick the tier model from the model list, then /techieflow:tasks:fix-issues ...</code></pre>
-<p>The attempt history is the checklist's own record: <code>attempt</code> on each <code>runs.jsonl</code> record (§2.5 of <code>SCHEMA.md</code> — <code>1 +</code> prior non-backfilled runs of the same <code>cmd</code> touching any of the same REQs), with the per-REQ verdict history in <code>gates.jsonl</code> and the Verification Log in <code>PROJECT-STATUS.md</code> as the human-readable view. Tune the threshold from the data — if third attempts on the base tier usually succeed anyway, raise it; if second attempts mostly fail, lower it:</p>
-<pre><code>bash .tfcore/utils/tf-routing.sh set-escalation fix-issues 3 frontier   # raise the threshold
-bash .tfcore/utils/tf-routing.sh set-escalation build-phase 2 frontier  # add a policy for another phase</code></pre>
-<p>With the shipped map <code>fix-issues</code> is already <code>frontier</code>, so the default row only bites after you demote it (<code>set-tier fix-issues standard</code>) — which is exactly the experiment it exists to make safe.</p>
-<h3 id="editing-routing-yaml-by-hand">6.5 Editing routing.yaml by hand<a class="anchor-link" href="#editing-routing-yaml-by-hand">#</a></h3>
-<p>The file is deliberately human-editable (flat, two-space indent, commented). After any manual edit:</p>
-<pre><code>bash .tfcore/utils/tf-routing.sh bind      # re-apply → regenerates all bindings</code></pre>
-<h2 id="under-the-hood-what-actually-gets-generated">7. Under the hood — what actually gets generated<a class="anchor-link" href="#under-the-hood-what-actually-gets-generated">#</a></h2>
-<p>You never need this section to <em>use</em> routing; it is here so nothing is a black box.</p>
+<h2 id="when-something-is-wrong">8. When something is wrong<a class="anchor-link" href="#when-something-is-wrong">#</a></h2>
 <table>
-<tr><th>File</th><th>Harness</th><th>What it does</th></tr>
-<tr><td><code>.opencode/opencode.json</code></td><td>OpenCode</td><td>Pure-JSON binding file loaded alongside the framework config. Adds <code>model</code> to each persona (deep-merges — prompt/permission preserved), registers <code>tf-builder</code>/<code>tf-test-writer</code>/<code>tf-explorer</code> as subagents with their models, and re-declares each <code>techieflow:tasks:*</code> command with its tier model.</td></tr>
-<tr><td><code>.claude/commands/tf/&lt;phase&gt;.md</code> × 17</td><td>Claude</td><td>Wrapper commands: frontmatter <code>model:</code> + <code>effort:</code> from the tier; body loads the owner persona then executes the task with your arguments.</td></tr>
-<tr><td><code>.claude/agents/{tf-builder, tf-test-writer, tf-explorer, trblazeui, techierag}.md</code></td><td>Claude</td><td>Tier-bound subagent definitions (the library two adopt the NuGet-deployed personas).</td></tr>
-<tr><td><code>.tfcore/.session/routing-bind.manifest</code></td><td>both</td><td>The exact list of generated files. <code>off</code> deletes precisely this list — never anything else.</td></tr>
+<thead><tr><th>You see</th><th>Why</th><th>Do</th></tr></thead>
+<tbody>
+<tr><td>A command ran on the wrong model</td><td>It was started unrouted, or the bindings are stale</td><td><code>status</code>; then <code>bind</code></td></tr>
+<tr><td>Sub-agents fail while the main agent works</td><td>Sub-agents use the project's bindings, not <code>--model</code></td><td>Change the tiers in the project's copy, then <code>bind</code></td></tr>
+<tr><td>OpenCode prints its header and nothing else</td><td>The provider refused the model; OpenCode says so only in its own log (<code>~/.local/share/opencode/log/opencode.log</code>)</td><td>The supervisor stops with exit 5 and the provider's message; pick another model or wait for the reset</td></tr>
+<tr><td>The TUI looks unchanged after <code>on</code></td><td>Expected: your chat is never routed</td><td>Run a command or select a persona</td></tr>
+<tr><td>An error mentions <code>.opencode/opencode.json</code></td><td>A generated file was edited by hand</td><td>Never edit generated files; <code>bind</code></td></tr>
+</tbody>
 </table>
-<p>All generated files live under gitignored paths — <strong>nothing to commit in the app</strong>. <code>update-framework.sh</code> re-runs the generator on every refresh, so framework updates and your routing coexist: your <code>routing.yaml</code> is never overwritten, your bindings are always regenerated from it (verified in the TechieBlog pilot).</p>
-<h2 id="reading-the-results-the-tuning-loop">8. Reading the results — the tuning loop<a class="anchor-link" href="#reading-the-results-the-tuning-loop">#</a></h2>
-<p>Every phase run appends a record to <code>docs/metrics/runs.jsonl</code> (full field reference: <code>docs/TechieFlow-Telemetry-Guide.md</code>):</p>
-<pre><code>{&quot;kind&quot;:&quot;run&quot;,&quot;cmd&quot;:&quot;verify-phase&quot;,&quot;app&quot;:&quot;TechieBlog&quot;,&quot;harness&quot;:&quot;opencode&quot;,
- &quot;tier&quot;:&quot;standard&quot;,
- &quot;tier_model&quot;:&quot;opencode-go/kimi-k2.7-code&quot;,
- &quot;model&quot;:&quot;opencode-go/kimi-k2.7-code&quot;,
- &quot;routed&quot;:true,
- &quot;tokens_in&quot;:784,&quot;tokens_out&quot;:42310,&quot;tokens_cache_read&quot;:310221,
- &quot;cost_usd&quot;:0.41,&quot;tokens_scope&quot;:&quot;tree&quot;, &quot;...&quot;:&quot;...&quot;}</code></pre>
-<ul><li><code>tier</code> / <code>tier_model</code> — what routing <strong>declared</strong> should run.</li><li><code>model</code> — what <strong>actually</strong> ran (from the harness's own store, never self-reported).</li><li><code>routed</code> — do they match. <code>false</code> = drift (someone ran the phase unrouted); visible, never blocked.</li><li><code>cost_usd</code> — real dollars on OpenCode; always <code>null</code> on Claude (no cost source exists — the framework never estimates).</li></ul>
-<p><strong>The deciding question after ~2 weeks:</strong> does the rework ratio rise on cheaper tiers? Run <code>*metrics</code> (or read <code>runs.jsonl</code>): if standard-tier builders hold the first-pass rate, consider demoting more phases; if <code>mode:"fix"</code> re-entries climb after a demotion, promote back. Data corrects the map — not opinion, and not this guide.</p>
-<h2 id="troubleshooting">9. Troubleshooting<a class="anchor-link" href="#troubleshooting">#</a></h2>
-<table>
-<tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr>
-<tr><td>"I turned it on and the TUI looks the same"</td><td>Expected — the default chat agent is never routed (§5)</td><td>Run a phase command or Tab to a persona</td></tr>
-<tr><td><code>status</code> says flag and bindings disagree</td><td>An update or manual edit got out of sync</td><td><code>bash .tfcore/utils/tf-routing.sh bind</code></td></tr>
-<tr><td>A phase ran on the wrong model</td><td>Invoked unrouted (old Claude command form, or model picked manually)</td><td>Check <code>runs.jsonl</code> → <code>routed:false</code> confirms; use <code>/tf:&lt;phase&gt;</code> (Claude) or the <code>/techieflow:tasks:*</code> command (OpenCode)</td></tr>
-<tr><td><code>fix-issues</code> keeps failing on the same REQs</td><td>That's what escalation is for (§6.4) — it is advisory, so nothing happens until you act on it</td><td><code>tf-emit.sh --next-run-attempt fix-issues &lt;REQs&gt;</code>; if it exceeds <code>after_attempts</code>, launch the next run on the escalation tier</td></tr>
-<tr><td>Follow-up chat is on the phase's model (OpenCode)</td><td>Verified behavior — the session keeps the command's model</td><td>Pick your model from the model list, or start a new session</td></tr>
-<tr><td>"I want my normal chat cheaper too"</td><td>That's not routing's job</td><td>TUI model list, or <code>"model"</code> in <code>~/.config/opencode/opencode.jsonc</code></td></tr>
-<tr><td>Config error mentioning <code>.opencode/opencode.json</code></td><td>Hand-edited generated file</td><td>Never edit generated files — <code>bind</code> regenerates them</td></tr>
-<tr><td>Want a clean slate</td><td>—</td><td><code>off</code> removes everything generated; your <code>routing.yaml</code> map survives for the next <code>on</code></td></tr>
-</table>
-</main>
+  </main>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
-<script>// Light/dark toggle. The initial theme was already applied flash-free by the
+<script>
+// Light/dark toggle. The initial theme was already applied flash-free by the
 // <head> script (saved choice, else time-of-day). Clicking flips it, saves the
 // choice, and reloads so Mermaid re-renders in the matching theme.
 (function(){
@@ -456,6 +373,7 @@ function openInNewTab(svg) {
 if (window.mermaid) {
   setTimeout(wireMermaidToolbars, 400);
   setTimeout(wireMermaidToolbars, 1200);  // safety re-run for slow renders
-}</script>
+}
+</script>
 </body>
 </html>

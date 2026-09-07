@@ -150,7 +150,7 @@ sections:
       - id: architecture-considerations
         title: Architecture Considerations
         template: |
-          - **Repository Structure:** {{repo_thoughts}}
+          - **Repository Structure:** decided at day-1 from the stack answer set; name no projects or folders here (owner, 2026-09-06)
           - **Service Architecture:** {{service_thoughts}}
           - **Integration Requirements:** {{integration_needs}}
           - **Security/Compliance:** {{security_requirements}}

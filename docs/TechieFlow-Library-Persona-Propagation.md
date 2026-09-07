@@ -1,5 +1,7 @@
 # Library Persona Propagation
 
+> **The Codex adapter was removed on 2026-09-07** (D-14, FR-42). The framework supports Claude Code and OpenCode. Everything below that describes `.codex/`, `.agents/skills/` or a Codex code path is history, kept for traceability; see `docs/CHANGELOG.md`.
+
 This is the source-of-truth map for the AI instructions shipped by the
 TrBlazeUI and TechieRag NuGet packages. Do not fix only the copies in this
 TechieFlow repository: the next consumer build can overwrite them from the

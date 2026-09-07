@@ -1,98 +1,88 @@
+<!-- tf-schema
+doc: project-status
+file: PROJECT-STATUS.md
+header: project, last_updated, current_phase, last_verified_build, last_verified_date
+section: Where I am | required | max 80
+section: Next command to run | required | max 60
+section: Open requirements | required | max 200
+section: Known blockers | required | max 150
+section: Verification log | required | max 250
+section: Library feedback summary | required | max 60
+section: Standards compliance | required | max 60
+section: Deferred / future | required | max 100
+max-lines: 120
+target-lines: 60
+rule: next-command-blocks
+rule: verification-log
+rule: open-requirements-max-10
+-->
+<!-- Authoring notes (agent only; never visible text).
+     A one-page snapshot of the CURRENT state, overwritten in place, never appended to. Exactly the
+     eight sections above, in this order, with their word limits; guard-status.sh refuses any other
+     heading and any write over 120 lines; tf-doc-check.sh refuses over-long sections. What a run did
+     is not written here: a run adds ONE Verification-log row (at most five kept) and updates the
+     checklist Remarks; the rest lives in the telemetry streams.
+     Next command to run: exactly two code blocks, one line each, labelled Claude Code then OpenCode,
+     so either can be copied on its own. No prose about the technical work. -->
+
 ---
-project: {AppName}
-stack: .NET 9 / Blazor [Server|WASM|Auto] / TrBlazeUI / TechieRag / [MAUI]
+project: {App}
 last_updated: {YYYY-MM-DD}
-current_phase: Discovery | UI build | UI verify | Functional build | Functional verify | Handoff | Released
-last_verified_build: PASS | FAIL | not-run
+current_phase: {Day-1 | Build | Verify | UAT | Handoff | Released} — {at most a half-line qualifier}
+last_verified_build: {PASS | FAIL | not-run}
 last_verified_date: {YYYY-MM-DD}
 ---
 
-# {AppName} — Status
-
-<!--
-  ============================================================================
-  THIS FILE IS A CRISP, FIXED-SHAPE SNAPSHOT — OVERWRITE IT, NEVER APPEND TO IT.
-  It has exactly the sections below and NO others. It should stay well under
-  ~60 lines — a human reads it in ten seconds.
-
-  When you update status you REPLACE the content of these sections in place.
-  Do NOT add a new dated section per run. The following are BANNED (they are
-  what turns this file into an unreadable 280-line append-log):
-    - A per-run prose H2 like "## *verify all — formal coverage matrix (DATE)",
-      "## *fix-issues — …", "## *build-phase — …". A run records its outcome as
-      ONE row in "## Verification log" + updated Remarks IN THE CHECKLIST. Period.
-    - A paragraph crammed into `current_phase:` or "## Where I am". `current_phase`
-      is ONE short line. The blow-by-blow lives in the checklist Remarks + .verify/.
-  See .tfcore/tasks/_status-update-gate.md §"CRISP, FIXED-SHAPE snapshot".
-  ENFORCED MECHANICALLY: the .tfcore/hooks/guard-status.sh PreToolUse hook
-  BLOCKS any write that adds a non-template H2, a command-run heading, a
-  paragraph current_phase, or a file longer than ~120 lines.
-  ============================================================================
--->
+# {App} — Status
 
 ## Where I am
-<one short paragraph — the current STATE only: which phase, what is built/verified, what is open.
- This is a status snapshot, NOT a technical to-do list. Do not narrate the implementation work
- still to be done (how to wire a service, fix a binding, etc.) — that lives in the checklist REQ rows.>
+
+{At most 80 words: which phase, what is built and verified, what is open. State, not story.}
 
 ## Next command to run
-<!--
-  Express the next step ONLY as a command pointed at a checklist/scope. NOT a prose description of
-  the technical work. The "what to do" already lives in the checklist's REQ rows — here we just say
-  WHICH COMMAND to run against WHICH checklist/REQs. At most one line naming the target checklist or
-  REQ IDs may accompany the command block.
 
-  GOOD:
-    ```
-    /TechieFlow:agents:verifier *verify ui      (OpenCode: /flow-verifier *verify ui)
-    ```
-    Resumes FAILed REQ-UI-007, REQ-UI-012 in docs/{AppName}-Checklist.md.
-
-  BAD (do not do this — technical narrative belongs in the checklist, not here):
-    Next, wire the AstroData service into the dashboard, fix the empty ruling-planet
-    table binding, add validation to the onboarding form, then re-run verification...
--->
+Claude Code:
 ```
-/<agent> <exact prompt>      (OpenCode: <exact prompt>)
+/TechieFlow:agents:flow-master *build-phase {App}
 ```
-<one optional line naming the target checklist or REQ IDs>
+OpenCode:
+```
+/flow-master *build-phase {App}
+```
+{Optional one line naming the target REQ ids.}
 
 ## Open requirements
-- [ ] REQ-UI-013 — <desc>
-- [ ] REQ-FN-007 — <desc>
+
+| Status | Count |
+|---|---|
+| Not Started | {n} |
+| In Progress | {n} |
+| Implemented | {n} |
+| Needs re-verify | {n} |
+| Blocked | {n} |
+
+- [ ] REQ-UI-001 — {short name} (at most ten named rows)
 
 ## Known blockers
-- None / <list>
-<!--
-  Known blockers are PROJECT-level issues — broken code, missing tests, real compile errors, hardcoded secrets, etc.
-  They are NOT environment / wrong-rung issues. Banned entries (these go in WORKFLOW.html §0 territory, not here):
-    - "MAUI build cannot run on WSL"
-    - "NETSDK1178 — iOS/Android/MacCatalyst workload missing"
-    - "Microsoft.iOS.Sdk / Microsoft.Android.Sdk / Microsoft.MacCatalyst.Sdk missing"
-    - "dotnet not in PATH"
-    - Anything that means "I used the wrong build invocation ladder rung"
-  If you wrote one of those, you skipped .tfcore/templates/v4custom/build-invocation-ladder.md.
-  Switch rungs and rebuild.
--->
 
+- None
 
 ## Verification log
-<!-- Status detail lives in the checklist's "Requirements Status" table (the single
-     source of truth). This log is just a dated index of verification passes. -->
+
+Last five passes; older passes live in `docs/metrics/gates.jsonl`.
+
 | Date | Phase | Result | Status table |
-|------|-------|--------|--------------|
-| {YYYY-MM-DD} | UI verify | 14/14 Verified | docs/{AppName}-Checklist.md#requirements-status |
+|---|---|---|---|
+| {YYYY-MM-DD} | {verify all} | {14/14 Verified} | docs/{App}-Checklist.md#requirements-status |
 
 ## Library feedback summary
-- TrBlazeUI: 0 major, 0 minor — docs/{AppName}-TrBlazeUI-Feedback.md
-- TechieRag: 0 major, 0 minor — docs/{AppName}-TechieRag-Feedback.md
 
-<!-- One feedback file PER library (separate teams). Files are created on first issue. -->
+- {Library}: {n} open — docs/{App}-{Library}-Feedback.md
 
-## Standards compliance (last verifier check)
-- Underscore fields: not yet run
-- Test method underscores: not yet run
-- Mis-prefixed fields: not yet run
+## Standards compliance
+
+- Last check {YYYY-MM-DD}: {n} findings, see the checklist Remarks.
 
 ## Deferred / future
-- <parked ideas>
+
+- {parked ideas, one line each}

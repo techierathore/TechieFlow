@@ -13,8 +13,8 @@
 # and overriding the config's pinned outputDir. This hook makes the rule
 # MECHANICAL, the same way block-git.sh made the git ban mechanical.
 #
-# Wired in .claude/settings.json → hooks.PreToolUse (matcher "Bash"); Codex via
-# .tfcore/hooks/codex-adapter.py pre-tool; OpenCode via .opencode/plugin/techieflow.js.
+# Wired in .claude/settings.json → hooks.PreToolUse (matcher "Bash");
+# OpenCode via .opencode/plugin/techieflow.js.
 # Exit 2 + stderr = block the call and feed the message back to the agent.
 #
 # What it blocks:

@@ -1,122 +1,17 @@
 # mockups
 
-Produce the **UI design / mockups** for a greenfield app: a per-screen UI Design Spec (`docs/{AppName}-UIDesign.md`) plus **rendered HTML mockups** (`docs/mockups/*.html`) styled to look like TrBlazeUI, each annotated with a `region → TrBlazeUI control` component map. This is the visual design the build is matched against and the verifier's visual-truth gate diffs the live app against.
+`*mockups {App} [screen|all] [--update]` produces the UI design: `docs/{App}-UIDesign.md`, one section per screen, and one HTML mockup per screen in `docs/mockups/`. The build implements from them; the verifier compares the built screen to them. Called by both day-1 tasks and by `*amend-docs`; `--update` refreshes only new or changed screens and leaves the rest untouched. Never edit source code here.
 
-## Why this exists
+First: `bash .tfcore/utils/tf-phase.sh start mockups {App}` prints the start time and marks the command running.
 
-A greenfield app has no code, so its UI is built freehand from prose requirements — which is exactly why a new app's UI comes out broken (overlapping controls, wrong layout, nothing to verify against). Mockups give the build an **approved visual contract** and give `verify-phase.md §4b` a **baseline to diff** the running screen against. They are **TrBlazeUI-replicable by construction**: the analyst designs only with controls the library actually ships, so `/trblazeui` can reproduce them 1:1.
+## Steps
 
-## When to use
-
-- **At greenfield day-1** — auto-run by `day1-greenfield §3.6`, after the BRD draft; approved with the BRD + Architecture before build.
-- **On demand** — `*mockups {AppName}` to (re)generate, or `*mockups {AppName} --update` to refresh only changed/new screens after an `*amend-docs` that added UI.
-- **Greenfield only.** Brownfield already has built screens — it uses the DevGuide's captured screenshots (`devguide §5a/§5b`) as its visual baseline instead.
-
-## Inputs
-
-- `{AppName}` (required; or resolve from `core-config.yaml`).
-- `{Scope}` — OPTIONAL: `all` (default) · a screen/route · a comma-list. Limits which screens are (re)mocked.
-- `--update` — OPTIONAL: refresh only screens whose BRD feature changed or that are new; preserve unchanged mockups verbatim.
-
-## SEQUENTIAL Execution
-
-### 1. Read the TrBlazeUI component catalog FIRST (design only with what exists)
-
-Before designing anything, learn what the library actually provides:
-- Read `.trblazeui/TrBlazeUI-AI-Reference.md` (the component reference; if absent, run `dotnet build` once to deploy it, or ask the `/trblazeui` agent for its component catalog).
-- Optionally converse with the **`/trblazeui` agent** to confirm which controls exist and how they're composed (it owns the library knowledge).
-- Build a working list of available controls (nav, cards, grids, forms, dialogs, charts, layout shells, inputs). **You design ONLY with these** — a mockup that uses a layout/control TrBlazeUI can't produce is worse than none (it guarantees drift). If a screen genuinely needs something the library lacks, note it and log a `docs/{AppName}-TrBlazeUI-Feedback.md` entry (TR-NNN) so the gap is tracked rather than silently designed-in.
-
-### 2. Derive the screen list from the BRD
-
-- Read `docs/{AppName}-BRD.md` §9 Feature catalog — its screens-and-routes tables and per-feature workflows are the screen list. Also read `docs/{AppName}-Architecture.md` for the UI host/layout choice.
-- Produce the flat screen list: `screen (route) → role(s) → owning BRD-N`. Echo a one-line count: `N screens to mock`.
-- **No-UI app:** if the concept is purely an API/service with no screens, record `docs/{AppName}-UIDesign.md` = "skipped — no UI in this app" and HALT (this is not an error; `day1-greenfield` treats it as skipped).
-
-### 3. Design each screen — spec + rendered mockup (FAN OUT for many screens)
-
-Load `.tfcore/templates/v4custom/app-uidesign-tmpl.md`. For each screen (fan out across subagents when there are many — one per screen-cluster — to bound tokens):
-
-1. Decide the **layout** (regions: nav, sidebar, content blocks) using TrBlazeUI's layout shell components.
-2. Write the **component map** — every region → the specific TrBlazeUI control that renders it + the data it shows + its empty/loading/error states. This is the build contract.
-3. Produce the **rendered mockup** `docs/mockups/{screen-slug}.html`: a self-contained HTML page that *looks like the real screen* using TrBlazeUI's design language (its CSS tokens / classes where known, or a close visual approximation — spacing, colors, typography, component shapes). Use realistic placeholder data so the layout reads true. Each mockup is a static preview, not wired — but its STRUCTURE (regions, control types, arrangement) must be what the build will produce.
-4. Fill the screen's spec block in `docs/{AppName}-UIDesign.md` (mockup link, component map table, layout one-liner, interaction + state notes).
-
-Keep the visual language consistent across screens (one shell, one theme, one spacing system) so the set reads as one app.
-
-#### 3b. ANCHOR THE MOCKUP — `data-testid` is what makes it gradeable (MANDATORY since 2026-08-31)
-
-A mockup is not only a picture for the owner to approve. Since 2026-08-31 it is **the input to a gate**: `verify-phase` §4b2 compares the built screen against it mechanically, and **it can only compare elements that carry the same `data-testid` on both sides.**
-
-**Put a `data-testid` on every element the build must get right**, using the same name the built component will carry:
-
-- the layout regions — `app-sidebar`, `app-header`, `main` (match the shell's real names; a mockup that says `sidebar` where the app says `app-sidebar` pairs with nothing and grades nothing);
-- every **badge, pill, chip and status indicator** — these are the single most-escaped class, because a pill flattened to plain text still *has text* and passes every other gate;
-- every **icon or icon button**;
-- each **KPI tile / card**, individually — especially two adjacent cards the design distinguishes (a dashed border meaning *estimate* beside a solid one meaning *measured* is a real distinction the gate now reads, and it can only read it on an anchored element);
-- each **table** and each **chart**;
-- any value cell whose **width is part of the design** — a formatted number that must not break mid-digit.
-
-**Why this is worth the keystrokes, stated plainly.** The gate's depth is bounded by what both sides anchor, and the failure mode is **silent and inverted: the less of a screen the gate can see, the cleaner its verdict looks.** A screen the gate cannot reach into does not report "I could not grade this" as a defect — it reports `UNGRADEABLE`, which is honest but buys nothing. Upstream, three columns anchored only at the container level yielded three coarse comparisons and a `PASS`, while a human then found two structural defects on that same screen by eye (TfLens **TF-011**).
-
-Two things make this cheaper than it sounds:
-
-- **The walker descends any anchored subtree** — card, column, grid, `<dl>`, list, table alike — so an anchor on a *container* now buys real depth, not just one comparison. You do not need an id on every leaf.
-- **The gate tells you what is missing.** Each screen's run output carries `anchor_deficit.add_data_testid_to_mockup`, naming the app testids the mockup lacks. Closing the gap later is a mechanical edit — but doing it here is free.
-
-**Do not invent ids the build will not use.** An anchor that pairs with nothing is worse than no anchor: it costs effort and grades nothing. Take the names from the component map you just wrote in step 2, and use the same ones in `*build-phase`.
-
-### 4. Assemble + render
-
-- Fill the UIDesign header (§"Design system" from §1's catalog — name the layout shell, theme, and the controls inventory the app uses).
-- Regenerate the UIDesign Table of Contents (slug rule `html-render-shell.md §1`; list each `### Screen:` under "Screens").
-- Render `docs/{AppName}-UIDesign.md` → `docs/{AppName}-UIDesign.html` via `.tfcore/tasks/generate-html.md` (shared shell — it's a human doc). The `docs/mockups/*.html` screens are already HTML; leave them as-is.
-- **`--update`:** only (re)write changed/new screens + their mockups; preserve the rest verbatim; re-render the UIDesign HTML.
-
-### 5. PROJECT-STATUS note (light touch — NOT the full gate)
-
-Add/refresh one line under "Where I am" / artifacts: `Mockups generated {date}: docs/{AppName}-UIDesign.md (+ .html) + docs/mockups/ ({N} screens)`. This task does not change build/verify state — do not touch `current_phase` or `last_verified_build`. (When run inside `day1-greenfield`, that task owns the status write.)
-
-### 5a. Emit the run record (telemetry)
-
-Same turn as the status/PROJECT-STATUS write. Doctrine + the ten constraints: `.tfcore/tasks/_metrics-emit-gate.md`. Schema: `.tfcore/telemetry/SCHEMA.md` §2. Stamp `started` with `date -u +%Y-%m-%dT%H:%M:%SZ` as your FIRST action of this task — it cannot be reconstructed at the end.
-
-```bash
-cat <<'JSON' | bash .tfcore/utils/tf-emit.sh runs
-{"kind":"run","app":"{AppName}","cmd":"mockups","mode":null,
- "started":"<start>","ended":"<now>","duration_s":<n>,
- "reqs_touched":[],"reqs_count":0,
- "subagents":[],"files_written":<n>,"build_result":"not-run"}
-JSON
-```
-
-`reqs_touched` carries REQ IDs only — never requirement text — and `[]` is correct when this task touched no specific REQ. **Telemetry has no veto:** if the emit fails, the phase still succeeded; do not retry, do not diagnose, do not mention it.
-
-### 6. HALT — report
-
-```
-# Mockups — {AppName}
-Screens mocked: {N}   TrBlazeUI controls used: {list}   Library gaps logged: {g}
-Files: docs/{AppName}-UIDesign.md (+ .html) · docs/mockups/*.html ({N} screens)
-Next: review/approve the mockups (open docs/mockups/*.html); they are the visual contract the build matches and the verifier diffs against. Then *split-brd → *build-phase.
-```
-
-## Hard rules
-
-- **TrBlazeUI-replicable only.** Read the component catalog first; design with controls that exist. A mockup the library can't produce is a defect — flag + log the gap, never design it in silently.
-- **Every screen has a component map** (`region → TrBlazeUI control`). The map is the build contract; a pretty picture with no control mapping is not enough.
-- **Mockups are a HUMAN doc → rendered to HTML.** Unlike the checklist, the UIDesign spec renders to HTML; the mockups are HTML by construction.
-- **Greenfield only.** Do not run for a brownfield app with built screens (use the DevGuide screenshots instead).
-- **Never edit source code.** This task only writes the design docs/mockups.
-- **Incremental on `--update`.** Preserve unchanged screens verbatim; only remock what changed.
-
-## Output Checklist
-
-- [ ] TrBlazeUI component catalog read FIRST; design uses only existing controls (gaps logged to the feedback file)
-- [ ] Screen list derived from BRD §9 feature catalog (or "skipped — no UI" recorded)
-- [ ] `docs/{AppName}-UIDesign.md` written: per-screen spec with a `region → TrBlazeUI control` component map + state notes
-- [ ] `docs/mockups/{screen}.html` rendered for every screen, styled to look like TrBlazeUI, consistent across the set
-- [ ] **Every mockup anchored with `data-testid` (§3b)** — layout regions under the shell's real names, plus every badge/pill, icon, KPI tile, table, chart and width-critical value cell. Ids taken from the §2 component map so they pair with what the build will render. Without them `verify-phase` §4b2 returns `UNGRADEABLE`, which is not a pass.
-- [ ] `docs/{AppName}-UIDesign.html` rendered (human doc); mockups left as HTML; the checklist is NOT involved here
-- [ ] PROJECT-STATUS got the one-line mockups note (no full status gate)
-- [ ] Report printed; mockups ready for owner approval
+1. `bash .tfcore/utils/tf-mockups-locate.sh` moves any mockup found elsewhere in the repository into `docs/mockups/` and lists what is there.
+2. Read the component reference of the UI library named in the Architecture's Stack decisions (for TrBlazeUI, `.trblazeui/TrBlazeUI-AI-Reference.md`; build once if it is absent). Design only with controls that exist. A control the library lacks is logged as an entry in `docs/{App}-<Library>-Feedback.md`, never designed in silently.
+3. Read the BRD's Screens and flow table: every row is a screen, with its route, roles and fields; a dialog row belongs to its parent screen. A screen that already has a mockup in `docs/mockups/` keeps it and is linked. An app with no screens records "skipped — no UI" in the UIDesign and stops.
+4. For each screen without a mockup (fan out one sub-agent per group of screens when there are many): decide the layout regions, map every region to a control, write `docs/mockups/<screen-slug>.html` with realistic placeholder data in the library's visual language, and fill the screen's section in `docs/{App}-UIDesign.md` from `.tfcore/templates/v4custom/app-uidesign-tmpl.md` (mockup link, roles, regions-to-controls table, fields table, the dialogs it opens, the empty, loading and error states). One shell, one theme, one spacing system across the set.
+5. Make the set click through. The entry screen is the sign-in page (or onboarding, or the home page when there is neither). Every link and every navigation button goes to the mockup it names, written as `<a href="screen.html">` or a form action, never as a script (`onclick="location.href=…"` is refused: it dies in any viewer without scripts): sign in opens the home screen, logout returns to sign in, an "Add" button opens the add screen, a row opens its detail, every menu item leads to its screen. Every screen has a way out. A button that does not navigate shows a message with `onclick`. A dialog opens on its parent page. Sign-in needs no credentials: the button alone navigates.
+6. Anchor every element the build must match with `data-testid`, using the names from the regions-to-controls table: the layout regions, every badge and status indicator, every icon button, every card, table and chart, and every value cell whose width matters. The verifier compares only anchored elements; a mockup without anchors is ungradeable.
+7. `bash .tfcore/utils/tf-doc-check.sh --app {App}`: it refuses a broken link, an unreachable or dead-end screen, an inert button and an unanchored mockup. Fix every FAIL.
+8. When run on its own (not inside a day-1 task), run the status gate (`.tfcore/tasks/_status-update-gate.md`) with `"cmd":"mockups"`.
+9. Report: screens mocked, screens kept, controls used, library gaps logged, and the files written.

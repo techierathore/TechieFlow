@@ -52,7 +52,7 @@ LATE_GATES = {"perf": "2026-08-10", "assets": "2026-08-31", "mockup-parity": "20
 # fill, so counting it as "not assessed" understates the practice being measured.
 # It leaves that field's denominator and is reported separately. SCHEMA.md §5.5.6 /
 # §3.5. Keep this table in sync when an optional field is added to any stream.
-FIELD_SINCE = {"why_missed": "2026-08-28"}
+FIELD_SINCE = {"why_missed": "2026-08-28", "sort": "2026-09-07"}
 
 # Fields a `miss-amend` record may complete, and their closed vocabularies.
 # Kept identical to tf-emit.sh's `_AMENDABLE`; the emitter enforces it on write and
@@ -62,7 +62,11 @@ AMENDABLE_FIELDS = {
     "why_missed": ("missing-checklist-item", "insufficient-verify-method",
                    "code-audit-limitation", "ambiguous-acceptance",
                    "dependency-not-declared", "instruction-ignored", "other"),
+    "sort": ("spec", "unsaid", "weak-check", "ignored"),
 }
+# The four-question sort in words, for the report (SCHEMA.md §5.5.10).
+SORT_WORDS = {"spec": "the app's spec did not say it", "unsaid": "the framework never said it",
+              "weak-check": "the check was too weak", "ignored": "said and ignored"}
 MIN_N = 3  # fewer supporting records than this -> "insufficient data", never a number
 
 
@@ -206,6 +210,7 @@ def analyse_misses(misses):
     opened = [m for m in misses if m.get("kind") == "miss" and not m.get("backfilled")]
     fixes = [m for m in misses if m.get("kind") == "miss-fix" and not m.get("backfilled")]
     amends = [m for m in misses if m.get("kind") == "miss-amend"]
+    reviews = [m for m in misses if m.get("kind") == "review"]
 
     # ---- fold amendments into their parents BEFORE anything is counted (§5.5.7).
     # An amend completes a field the miss left null; it can never overwrite one, so
@@ -235,8 +240,10 @@ def analyse_misses(misses):
     # reported separately — never silently, and never backfilled with a value
     # nobody assessed at the time.
     def _eligible(rec, field):
+        # A record written after the field existed, or one that carries it anyway (an older
+        # record completed by an amend is sorted, whatever its date; Session 5, 2026-09-07).
         since = FIELD_SINCE.get(field)
-        return not since or (rec.get("ts") or "") >= since
+        return not since or (rec.get("ts") or "") >= since or bool(rec.get(field))
 
     # Latest fix per miss decides open/closed; a fix naming no known miss is an orphan.
     known = {m.get("miss_id") for m in opened}
@@ -349,12 +356,21 @@ def analyse_misses(misses):
     sole_tokens, sole_priced_n = tok(sole)
     shared_priced = [f for f in shared if f.get("tokens_out") is not None]
 
-    # Dollars exist ONLY where a harness measured them. Claude Code and Codex carry
+    # Dollars exist ONLY where a harness measured them. Claude Code carries
     # cost_usd:null permanently (SCHEMA.md §4) and are never priced from a rate card
     # here — a pooled sum over mixed harnesses would silently under-report.
     paid = [f for f in sole if f.get("cost_usd") is not None]
     escaped = [m for m in opened if m.get("found_by") in ("owner", "production")]
     design = [m for m in opened if m.get("miss_class") == "unspecified-gap"]
+
+    # Owner reviews (§5.5.9): how many corrections each phase's output needed, and what
+    # producing it and correcting it cost. Token means divide by the records that carry the
+    # figure (§5.5.8), never by all of them.
+    def _mean(key):
+        xs = [r[key] for r in reviews if isinstance(r.get(key), (int, float))]
+        return (round(float(sum(xs)) / len(xs), 1) if len(xs) >= MIN_N else None), len(xs)
+    tp, tp_n = _mean("tokens_produce")
+    tc, tc_n = _mean("tokens_correct")
 
     return {
         "misses_total": len(opened),
@@ -381,6 +397,22 @@ def analyse_misses(misses):
                                    if m.get("found_by") in ("owner", "production")
                                    and not m.get("why_missed")
                                    and _eligible(m, "why_missed")),
+        # Whose gap (§5.5.10, FR-32): the four-question sort. Same denominator rule as
+        # why_missed — records that carry it, out of records that could have.
+        "sort_n": sum(1 for m in opened if m.get("sort")),
+        "sort_eligible": sum(1 for m in opened if _eligible(m, "sort")),
+        "sort_predates_field": sum(1 for m in opened if not _eligible(m, "sort")),
+        "sort": OrderedDict(
+            sorted(Counter(m["sort"] for m in opened if m.get("sort")).items(),
+                   key=lambda kv: (-kv[1], kv[0]))),
+        # Owner reviews (§5.5.9)
+        "reviews_n": len(reviews),
+        "review_corrections": sum(r["corrections"] for r in reviews if isinstance(r.get("corrections"), int)),
+        "reviews_by_phase": OrderedDict(
+            sorted(Counter(r.get("phase") or "?" for r in reviews).items(),
+                   key=lambda kv: (-kv[1], kv[0]))),
+        "review_tokens_produce_mean": tp, "review_tokens_produce_n": tp_n,
+        "review_tokens_correct_mean": tc, "review_tokens_correct_n": tc_n,
         "class_distribution": OrderedDict(
             sorted(Counter(m.get("miss_class") or "?" for m in opened).items(),
                    key=lambda kv: (-kv[1], kv[0]))),
@@ -455,7 +487,7 @@ def analyse_phases(runs):
          confident fan-out figures largely composed of runs that could not have
          seen a subagent. Tree-scope only, with the exclusion printed.
 
-      3. DOLLARS.  Never pooled across harness (SCHEMA.md §4). Claude and Codex
+      3. DOLLARS.  Never pooled across harness (SCHEMA.md §4). Claude
          carry cost_usd:null permanently; a sum over mixed records under-reports
          silently. Reported per harness or not at all.
 
@@ -921,28 +953,34 @@ def analyse(repos):
 
     # REQs with ANY backfilled record are excluded from the live first-pass rate:
     # their live `attempt` numbering restarts at 1 (SCHEMA.md §3.1).
-    tainted = {g.get("req_id") for g in back}
+    # A requirement is keyed by (app, req_id): REQ-UI-001 exists in every project, so a rollup that
+    # keyed on req_id alone counted TfLens's and TechieBlog's as one requirement and its first-pass
+    # rate was wrong (MISS-TechieFlow-20260907-03, Session 5).
+    def rk(r):
+        return (r.get("app"), r.get("req_id"))
 
-    out = {"per_repo": per_repo, "tainted_reqs": sorted(x for x in tainted if x),
+    tainted = {rk(g) for g in back}
+
+    out = {"per_repo": per_repo, "tainted_reqs": sorted("%s:%s" % x for x in tainted if x[1]),
            "live": {}, "backfilled": {}, "pooled": {},
            "misses": analyse_misses(misses),
            "phases": analyse_phases(runs)}
 
     for label, bucket in (("live", live), ("backfilled", back)):
         for ptype, recs in sorted(seg(bucket).items()):
-            eligible = [r for r in recs if label == "backfilled" or r.get("req_id") not in tainted]
-            reqs = {r.get("req_id") for r in eligible}
-            first_pass = {r.get("req_id") for r in eligible
+            eligible = [r for r in recs if label == "backfilled" or rk(r) not in tainted]
+            reqs = {rk(r) for r in eligible}
+            first_pass = {rk(r) for r in eligible
                           if r.get("attempt") == 1 and r.get("verdict") == "Verified"}
             failures = [r for r in recs if r.get("verdict") not in ("Verified", "Done (pre-existing)")]
             dist = Counter(r.get("gate") or "unattributed" for r in failures)
-            escaped_reqs = {r.get("req_id") for r in recs if r.get("gate") == "escaped"}
-            failed_reqs = {r.get("req_id") for r in failures}
+            escaped_reqs = {rk(r) for r in recs if r.get("gate") == "escaped"}
+            failed_reqs = {rk(r) for r in failures}
             out[label][ptype] = {
                 "records": len(recs),
                 "reqs_scored": len(reqs),
                 "reqs_excluded_backfill_taint":
-                    len({r.get("req_id") for r in recs if r.get("req_id") in tainted})
+                    len({rk(r) for r in recs if rk(r) in tainted})
                     if label == "live" else 0,
                 "first_pass_n": len(first_pass),
                 "first_pass_rate": pct(len(first_pass), len(reqs)) if len(reqs) >= MIN_N else "insufficient data (n=%d)" % len(reqs),
@@ -1225,7 +1263,7 @@ def print_phases(p, W):
 def print_misses(m, W):
     """The §5.5 block. Two exclusions are printed with the figures they bound —
     an exclusion the reader cannot see is indistinguishable from a bug."""
-    if not m["misses_total"] and not m["miss_fixes_total"]:
+    if not m["misses_total"] and not m["miss_fixes_total"] and not m.get("reviews_n"):
         return
     print("")
     print("-" * W)
@@ -1269,9 +1307,29 @@ def print_misses(m, W):
               % m["escapes_missing_why"])
         print("       nothing recorded why. That is the most valuable record in the stream.")
         print("       Complete it: tf-emit.sh --amend <miss_id> why_missed <value>  (§5.5.7)")
+    # whose gap — the four-question sort (§5.5.10). Its own denominator, like why_missed.
+    if m.get("sort"):
+        print("  whose gap           : (%d of %d misses sorted)" % (m["sort_n"], m["sort_eligible"]))
+        for k, n in m["sort"].items():
+            print("      %-12s %4d  %-5s %s" % (k, n, pct(n, m["sort_n"]), SORT_WORDS.get(k, "")))
+    if m.get("sort_predates_field"):
+        print("     %d miss(es) predate the sort field (added %s); sort them with"
+              % (m["sort_predates_field"], FIELD_SINCE["sort"]))
+        print("     tf-emit.sh --amend <miss_id> sort <spec|unsaid|weak-check|ignored>")
     if m["amendments_applied"]:
         print("  amendments folded   : %d field(s) completed by miss-amend records (§5.5.7)"
               % m["amendments_applied"])
+    # owner reviews (§5.5.9): corrections per reviewed phase, and the two costs
+    if m.get("reviews_n"):
+        print("  owner reviews       : %d review(s), %d correction(s) given — "
+              % (m["reviews_n"], m["review_corrections"])
+              + "  ".join("%s=%d" % kv for kv in m["reviews_by_phase"].items()))
+        print("     tokens to produce the reviewed output : %s (n=%d)"
+              % (m["review_tokens_produce_mean"] if m["review_tokens_produce_mean"] is not None
+                 else "insufficient data", m["review_tokens_produce_n"]))
+        print("     tokens to apply the corrections       : %s (n=%d)"
+              % (m["review_tokens_correct_mean"] if m["review_tokens_correct_mean"] is not None
+                 else "insufficient data", m["review_tokens_correct_n"]))
     if m["orphan_amends"]:
         print("     ⚠ %d miss-amend record(s) name no known miss, or a field outside the"
               % m["orphan_amends"])
@@ -1315,7 +1373,7 @@ def print_misses(m, W):
     else:
         print("        USD per miss        : no measured dollars (%d priced records)"
               % m["cost_usd_records"])
-        print("           Claude Code and Codex carry cost_usd:null permanently and are NEVER")
+        print("           Claude Code carries cost_usd:null permanently and is NEVER")
         print("           priced from a rate card here (SCHEMA.md §4). Real dollars come from")
         print("           OpenCode runs; token counts are the honest figure everywhere else.")
     print("     shared (apportioned): %d fix records — equal division, NOT a measurement"
