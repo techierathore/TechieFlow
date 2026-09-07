@@ -19,3 +19,26 @@ tmpclaude-*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# TechieFlow framework — deployed copies, never commit (managed by scaffold/update-framework.sh)
+.tfcore/
+.claude/
+.opencode/
+.codex/
+.agents/skills/
+/CLAUDE.md
+/WORKFLOW.html
+/opencode.jsonc
+/.tf-scaffold-note.txt
+
+# TechieFlow agent artifacts — machine-generated test harness & logs, never commit (managed by scaffold/update-framework.sh)
+node_modules/
+/package.json
+/package-lock.json
+test-results/
+test-results-*/
+/scripts-*/
+playwright-report/
+.verify/
+logs/
+/docs/.last-verify.json

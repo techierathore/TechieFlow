@@ -28,11 +28,11 @@ Open work for this session:
 4. Build it in Claude Code and test it only in OpenCode, per the plan's rule for Playbook work.
 5. Close the reset: one `framework-reset` run record, mode `session-7`; propose the Done line for Session 7; refresh the memory file; and tell the owner plainly that the seven sessions are complete and what happens next (the distribution pipeline on `main`, then the Playbook's own sessions, then the blog, then building resumes).
 
-Three decisions are still the owner's and are carried into this session:
+All three decisions the prompt carried are now taken (2026-09-07):
 
-1. The **Codex adapter**: removed now, or after the reset (D-14, FR-42)? It is frozen, not propagated, and every project still carries it.
-2. **`WORKFLOW.html`**: regenerated, or dropped? It is 227 KB, last revised 2026-08-28, still teaches three commands removed in Sitting 4c, and `update-framework.sh` force-deploys it into all 23 projects (`MISS-TechieFlow-20260907-10`, open). Session 6 deliberately added no check for it, because a check that fails every day gets ignored.
-3. **Which documents count as public-facing** for FR-47. Session 6 scoped the check to the README, the briefing and the templates, and deliberately left the reset's own working documents out, because they name MyDiary and other fixtures on purpose. If the owner wants a wider scope, the names come out of those documents and the check's file list grows.
+1. The **Codex adapter is removed** — from the framework, both delivery routes and all 23 projects (D-14 closed, FR-42 built as a check).
+2. **`WORKFLOW.html` is dropped**, not regenerated; the README and the documents under `docs/` say what it said, and the updater removes it from a project that still has one.
+3. **FR-47's scope stands** as Session 6 set it: the README, the briefing and the templates, with the reset's working documents deliberately out.
 
 Method, unchanged: tables for anything the owner rules on, questions numbered after the table with a suggested answer, every script proven by a real run with its output shown, files mirrored to `.claude/commands/TechieFlow/` (`bash tests/mirror/run.sh` proves it), `opencode.jsonc` checked, both harnesses. Plain words. Owner-reviewed documents change only after the owner's yes. Every gap is logged as a miss through `tf-log-miss.sh` with its sort, the maintainer's own included. Every open decision is restated in full at the end of a message as a yes-or-no question. Fable 5.1 only in the reset session; Sonnet for long Claude runs; OpenCode through `tf-goal.sh --harness opencode --model openai/gpt-5.6-terra`.
 

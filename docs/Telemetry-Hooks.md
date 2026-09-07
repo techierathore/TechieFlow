@@ -1,5 +1,7 @@
 # Telemetry Hook Points — per-phase model, tier, tokens, attempt, verdict
 
+> **The Codex adapter was removed on 2026-09-07** (D-14, FR-42). The framework supports Claude Code and OpenCode. Everything below that describes `.codex/`, `.agents/skills/` or a Codex code path is history, kept for traceability; see `docs/CHANGELOG.md`.
+
 > **Codex addendum (2026-08-24):** `.codex/hooks.json` writes the session pointer
 > via `codex-adapter.py`; `codex exec --json` is parsed by
 > `tf-codex-telemetry.py` for authoritative headless usage. Interactive

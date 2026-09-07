@@ -235,29 +235,6 @@ TechieFlow integrates with OpenCode via a project-level `opencode.jsonc`/`openco
     }
     ```
 
-### Codex (CLI & Web)
-
-TechieFlow's full build/runtime workflow is supported in local Codex CLI, IDE,
-and desktop sessions. The scaffold/update scripts install `.codex/` project
-config, custom agents, hooks and rules plus reusable workflows under
-`.agents/skills/`. Trust the repository and review `/hooks` after installation
-or a hook update.
-
-Codex loads the root `AGENTS.md`. Invoke `$techieflow-build`,
-`$techieflow-verify`, `$techieflow-refresh-status`, or name the skill in plain
-language. Literal Claude/OpenCode `*command` and slash names are vocabulary
-aliases, not Codex command registrations.
-
-For an unattended local run:
-
-```bash
-bash .tfcore/utils/tf-goal.sh --harness codex . "<goal>"
-```
-
-Codex cloud cannot automatically reach local `winrun`, Appium hosts, NuGet
-credentials, or already-running services. It is static-only unless equivalent
-infrastructure is explicitly provisioned.
-
 ## Special Agents
 
 There are two TechieFlow agents — in the future they'll be consolidated into a single Flow-Master.

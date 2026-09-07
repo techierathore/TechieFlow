@@ -16,9 +16,6 @@
 #                                         model-only agent entries merge, command
 #                                         entries must be complete → they carry
 #                                         template+description+model)
-#   Codex:
-#     .codex/agents/*.toml + .agents/skills/techieflow-*/SKILL.md, generated
-#     by tf-codex-bind.py. Subagent model/effort is pinned when routing is on;
 #     skills remain thin loaders and do not claim to switch the main thread.
 #
 # When `enabled: false` (the default) every generated artifact is REMOVED, using
@@ -221,5 +218,4 @@ with open(manifest_path, "w", encoding="utf-8", newline="\n") as fh:
 print("tf-routing-bind: routing enabled — %d artifact(s) generated (%d stale removed)"
       % (len(generated), removed))
 PY
-python3 "$SELF_DIR/tf-codex-bind.py" "$ROOT" || echo "tf-routing-bind: warning: Codex bindings were not refreshed" >&2
 exit 0

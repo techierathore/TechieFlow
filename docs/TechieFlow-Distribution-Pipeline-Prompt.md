@@ -1,5 +1,7 @@
 # TechieFlow — Distribution Pipeline: Session Prompt
 
+> **The Codex adapter was removed on 2026-09-07** (D-14, FR-42). The framework supports Claude Code and OpenCode. Everything below that describes `.codex/`, `.agents/skills/` or a Codex code path is history, kept for traceability; see `docs/CHANGELOG.md`.
+
 | | |
 |---|---|
 | Purpose | A prompt for one Claude Code session that gives TechieFlow the same distribution the AI-First Playbook already has: an npm package, a one-shot installer, pre-publish checks, and a GitHub Actions release pipeline. |

@@ -1,5 +1,7 @@
 # Miss telemetry — TechieFlow (the framework itself)
 
+> **The Codex adapter was removed on 2026-09-07** (D-14, FR-42). The framework supports Claude Code and OpenCode. Everything below that describes `.codex/`, `.agents/skills/` or a Codex code path is history, kept for traceability; see `docs/CHANGELOG.md`.
+
 **Status: IMPLEMENTED — shipped 2026-08-28**, plus the `miss-amend` follow-up the same day (§0.35). Everything in §4–§8 below is built, deployed and verified end to end in this repo. **`.tfcore/telemetry/SCHEMA.md` §5.5 is now the authoritative field reference**; this document is the design record and the *why*, kept because the reasoning behind the three provenance rules is the part that will be re-litigated, not the field list.
 **Audience:** the framework owner + whichever agent extends it.
 **Siblings:** `docs/Miss-Telemetry-TfLens.md` (how the numbers get displayed — **not implemented**) · `docs/Miss-Telemetry-AI-First-Playbook.md` (the team edition's version of the same idea — **not implemented**).

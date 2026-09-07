@@ -62,6 +62,8 @@ A session ends when its output exists and the owner understands it. Session 4 is
 
 **Output:** a corrected How-It-Works. A list of commands by usage. The "never use" list is removed in Session 4.
 
+**Done 2026-09-04:** `TechieFlow-How-It-Works.md` reviewed with the owner and corrected line by line; the twenty-two defects D-1 to D-22 recorded in its §8 and mirrored into the framework's own miss stream; every command given a verdict, which produced the list of seven never-used commands that Sitting 4c removed from both harnesses; the session itself recorded as the first `framework-reset` run (08:18 to 14:43 UTC, 569,794 output tokens).
+
 ### Session 2 — The framework's own requirements, and the standing .NET decisions
 
 **Goal:** the framework gets what every app gets: a checklist with testable lines. And the .NET decisions each app has been inventing on its own get written down once.
@@ -162,6 +164,8 @@ The ten questions:
 **We do:** rewrite `AI-First-Playbook-Review-Prompt.md` with the final keep/script/delete table format, the schema block format, the miss protocol wording, and a list of what went wrong during the TechieFlow sessions so the Playbook review does not repeat it. Built in Claude Code, tested only in OpenCode.
 
 **Output:** the version 2 prompt. The Playbook sessions then follow their own plan.
+
+**Done 2026-09-07:** `AI-First-Playbook-Review-Prompt.md` rewritten as version 2 (3,180 words) carrying the reset's methods, the list of what went wrong in the seven sessions, and what a corporate team changes; version 1's premise refuted by measurement, the Playbook's weight being its 8,630-word shipped verifier, its 29,800 words of commands and 196,498 words of committed run evidence rather than its 61 prose rules; Step 1 proven by a real OpenCode run on the Playbook, which under-reported one folder by 58 percent and so found D-21 recurring; misses 11 and 12 of 2026-09-07 logged, 11 closed and 12 left open. **The seven-session reset is complete.** Afterwards, `main` was merged into `dev` and the npm installer was brought back in step with the shell scripts (misses 13 and 14, FR-63): validate 4 checks, `test:install` 30 checks, none failing.
 
 ---
 

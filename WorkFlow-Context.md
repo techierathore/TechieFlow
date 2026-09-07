@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-09-07, at the close of Session 6 of the reset. |
+| Last updated | 2026-09-07, at the close of the reset. |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -14,7 +14,7 @@
 
 TechieFlow is a software development harness companion. One person with domain knowledge takes a product through the whole life cycle, with AI agents doing the work and the person managing and reviewing every output. It is the template copied into each application, not an application itself.
 
-It runs in two harnesses, **Claude Code** and **OpenCode**, and must behave the same in both. A Codex adapter exists, is frozen, and is not propagated.
+It runs in two harnesses, **Claude Code** and **OpenCode**, and must behave the same in both. Nothing else is supported.
 
 The owner's portfolio is .NET, Blazor, TrBlazeUI and MAUI, but **the framework itself is technology-neutral**. No persona, task or shared rule names a language, database, UI library or host. Those facts live in a stack answer set (`docs/TechieFlow-Stack-Defaults-DotNet.md` is the owner's) and in each project's Architecture document.
 
@@ -26,7 +26,7 @@ Alongside the work the framework measures the work: five append-only streams und
 |---|---|
 | `docs/TechieFlow-How-It-Works.md` | What every command does, what surrounds it, what it costs, where the design falls short. |
 | `docs/TechieFlow-Document-Schemas.md` | The required shape, size and row rules of every document the framework produces. |
-| `docs/TechieFlow-Requirements.md` | The framework's own checklist: 61 lines, each with a way to check it. Agent document. |
+| `docs/TechieFlow-Requirements.md` | The framework's own checklist: 63 lines, each with a way to check it. Agent document. |
 | `docs/TechieFlow-Telemetry-Explained.md` | The five report numbers, with real figures and the sentence to say about each. |
 | `docs/TechieFlow-Reset-Plan-2026-09-04.md` | The seven sessions that shrank the framework, one Done line each. |
 | `README.md` | How a person installs it and drives it. |
@@ -81,7 +81,7 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 | `.tfcore/tasks/` | One file per command, plus the three shared rule files every command loads (`_status-update-gate`, `_smoke-test-policy`, `_metrics-emit-gate`) and `_yolo-mode`. |
 | `.tfcore/templates/v4custom/` | Nineteen templates. Each human document's template opens with its schema block. |
 | `.tfcore/standards/` | The technology-neutral coding standards and the .NET set. |
-| `.tfcore/hooks/` | Eleven shell hooks plus the Codex adapter. Eight refuse an action; three do housekeeping. |
+| `.tfcore/hooks/` | Eleven shell hooks. Eight refuse an action; three do housekeeping. |
 | `.tfcore/utils/` | The scripts, `tf-*`. Every mechanical step of every task is one of these. |
 | `.tfcore/telemetry/` | `SCHEMA.md` (read before emitting), `install-metrics.sh`, `tf-metrics.sh`, the `pre-commit` template the owner installs. |
 | `.tfcore/core-config.yaml` | Per-project settings: application name, size, kind, phase, which documents load. |
@@ -90,7 +90,6 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 | `opencode.jsonc`, `.opencode/` | OpenCode's registrations and its guard-bridge plugin. There is no OpenCode mirror; it reads `.tfcore/` through file references. |
 | `tests/` | The self-tests: `mirror`, `doc-check`, `bugs`, `verify`, `goal`. |
 | `scaffold-*.sh`, `update-framework.sh` | Deploy the framework into a project, or refresh it. |
-| `WORKFLOW.html` | The old human workflow reference, force-deployed into every project. Last revised before the reset and now out of date; see the open items. |
 
 ---
 
@@ -104,12 +103,9 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 
 | Item | Whose |
 |---|---|
-| The **Codex adapter** is frozen. Whether it is removed now or after the reset is undecided (D-14, FR-42). | Owner decision |
-| **Distribution**: the framework has no package or release pipeline. That work runs on `main` from `docs/TechieFlow-Distribution-Pipeline-Prompt.md` (D-22, FR-48 to FR-52). | In progress, separate branch |
-| **Session 7** of the reset writes version 2 of the Playbook review prompt. | Next session |
+| **Distribution**: the framework is an npm package with a validation workflow, merged from `main` on 2026-09-07. Publishing it is the remaining step (FR-48 to FR-52). | Owner action |
 | Three requirements name a **script that has not been written**: FR-58 (refuse `done complete` while rows are unfinished), FR-60 (refuse a banned head name in a brief), FR-61 (grade a row not observable when the environment lacks the data). The idea-stage commands still emit no run record (FR-34, FR-60). | Maintainer |
-| **`WORKFLOW.html` is three sessions out of date** and is force-deployed to every project: 227 KB, last revised 2026-08-28, still teaching commands removed in Sitting 4c (`MISS-TechieFlow-20260907-10`). Either it is regenerated from the README and the documents of §1, or it is dropped and projects are pointed at those documents. No check names it until that is decided, because a self-test that fails every day teaches people to ignore it. | Owner decision |
-| **Four misses stay open** with their outcome named in `docs/TechieFlow-Misses.md`. | Maintainer |
+| **Open misses** are listed with their outcome in `docs/TechieFlow-Misses.md`; the one this maintainer owes a fix for is 12 of 2026-09-07, that a hidden framework folder is invisible to search and nothing enforces the rule. | Maintainer |
 | **TrStudio is not on this machine.** It is a named fixture and could not be refreshed here. | Owner action |
 | **TfLens** needs the miss stream read into its pages before its figures are quotable, and carries three fixes named in its own feedback file. | Separate repo |
 | **TrSetup has thousands of tracked build-output files.** Its ignore rules are correct and inert until the index entries go. `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the commands. Agents never run version control. | Owner action |
@@ -128,6 +124,7 @@ When you change the framework, change all of these together.
 
 1. **Mirror parity.** Any edit to `.tfcore/agents/` or `.tfcore/tasks/` is copied byte-for-byte to `.claude/commands/TechieFlow/`. Prove it with `bash tests/mirror/run.sh`. Never create `.opencode/command/TechieFlow/`.
 2. **A new task needs four wirings**: the file under `.tfcore/tasks/`, the mirror, the command registered on its owning persona (mirrored too), and an entry in `opencode.jsonc`.
+2b. **Anything that changes what a project receives goes into both delivery routes**: the shell scripts and `scripts/install.mjs`. A hook registration, a new folder under `.tfcore/`, a change to how an existing project is refreshed. `npm run test:install` compares the two routes file by file and is the check; run it on a normal filesystem, because a Windows mount reports every file executable and yields one false difference.
 3. **A new rule is a script or a hook, not a paragraph.** A rule ignored twice never gets a third paragraph. Task files hold steps only; explanation and history belong in the documents of §1 and in the changelog.
 4. **Prove every script by running it.** A script the maintainer has not run on a real project is not done. Both harnesses.
 5. **Log every gap as a miss** through `tf-log-miss.sh`, with its sort, before proposing the fix.

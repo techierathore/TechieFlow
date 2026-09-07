@@ -64,7 +64,7 @@ MSG
 block_read_msg() {
   if [[ "$STRICT_GIT" == "1" ]]; then
     cat >&2 <<'MSG'
-BLOCKED by TechieFlow Codex policy: agents do not run any git or gh command, including read-only status/log/diff/blame, in any mode.
+BLOCKED by TechieFlow policy: agents do not run any git or gh command, including read-only status/log/diff/blame, in any mode.
 Use the checklist Requirements Status table, working-tree files, filesystem metadata, and fresh build/test evidence instead. The owner performs version-control operations manually.
 MSG
     return

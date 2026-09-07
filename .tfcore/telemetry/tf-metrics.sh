@@ -356,7 +356,7 @@ def analyse_misses(misses):
     sole_tokens, sole_priced_n = tok(sole)
     shared_priced = [f for f in shared if f.get("tokens_out") is not None]
 
-    # Dollars exist ONLY where a harness measured them. Claude Code and Codex carry
+    # Dollars exist ONLY where a harness measured them. Claude Code carries
     # cost_usd:null permanently (SCHEMA.md §4) and are never priced from a rate card
     # here — a pooled sum over mixed harnesses would silently under-report.
     paid = [f for f in sole if f.get("cost_usd") is not None]
@@ -487,7 +487,7 @@ def analyse_phases(runs):
          confident fan-out figures largely composed of runs that could not have
          seen a subagent. Tree-scope only, with the exclusion printed.
 
-      3. DOLLARS.  Never pooled across harness (SCHEMA.md §4). Claude and Codex
+      3. DOLLARS.  Never pooled across harness (SCHEMA.md §4). Claude
          carry cost_usd:null permanently; a sum over mixed records under-reports
          silently. Reported per harness or not at all.
 
@@ -1373,7 +1373,7 @@ def print_misses(m, W):
     else:
         print("        USD per miss        : no measured dollars (%d priced records)"
               % m["cost_usd_records"])
-        print("           Claude Code and Codex carry cost_usd:null permanently and are NEVER")
+        print("           Claude Code carries cost_usd:null permanently and is NEVER")
         print("           priced from a rate card here (SCHEMA.md §4). Real dollars come from")
         print("           OpenCode runs; token counts are the honest figure everywhere else.")
     print("     shared (apportioned): %d fix records — equal division, NOT a measurement"

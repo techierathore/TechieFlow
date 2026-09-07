@@ -17,7 +17,7 @@ import shutil
 import sys
 
 NAMES = {"mockup", "mockups", "wireframe", "wireframes", "designs", "screens", "ui-mockups", "mock-ups"}
-SKIP_DIRS = {".tfcore", ".claude", ".opencode", ".codex", ".agents", ".git", "node_modules", "bin", "obj",
+SKIP_DIRS = {".tfcore", ".claude", ".opencode", ".git", "node_modules", "bin", "obj",
              "OldDocs", "tests", "wwwroot"}
 EXT = (".html", ".htm", ".png", ".jpg", ".jpeg", ".svg")
 

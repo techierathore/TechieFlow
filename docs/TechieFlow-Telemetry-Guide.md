@@ -1,5 +1,7 @@
 # TechieFlow Development Telemetry Guide
 
+> **The Codex adapter was removed on 2026-09-07** (D-14, FR-42). The framework supports Claude Code and OpenCode. Everything below that describes `.codex/`, `.agents/skills/` or a Codex code path is history, kept for traceability; see `docs/CHANGELOG.md`.
+
 > **Codex:** headless/goal runs parse authoritative `codex exec --json`
 > `turn.completed.usage` through `tf-codex-telemetry.py`. Interactive
 > `SessionEnd` records identify the session/model but leave token and cost fields

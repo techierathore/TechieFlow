@@ -35,6 +35,31 @@ Everything below predates the reset and is preserved as it was written.
 
 ## Maintenance log (newest first)
 
+### 2026-09-07 — the Codex adapter removed, and WORKFLOW.html dropped
+
+Both on the owner's decision, closing D-14 (open since the Session 1 review) and `MISS-TechieFlow-20260907-10`.
+
+**Codex.** The framework supported three harnesses on paper and two in practice. The adapter was frozen through the reset and is now gone: `.codex/` and `.agents/skills/` deleted here, the binder, the telemetry reader and the adapter hook deleted with them, and every Codex branch taken out of the goal supervisor, the harness resolver, the emitter's harness detection, the routing scripts, `routing.yaml`, three guard hooks, four templates, the user guide and the telemetry schema. Both delivery routes stopped deploying it and started **removing** it, so one propagation pass cleaned every project rather than anyone deleting folders by hand. The telemetry schema keeps `codex` as a **retired** `harness` value, because records written before today carry it and a reader must still understand them.
+
+**WORKFLOW.html.** 227 KB, last revised before the reset, still teaching three commands removed in Sitting 4c, and force-deployed into every project. Everything it said is now in the README and the documents under `docs/`. Dropped, and removed from every project the same way.
+
+**Across the estate:** 23 projects refreshed, all exit 0, and verified afterwards to hold no `.codex/`, no `.agents/`, no `WORKFLOW.html` and none of the three Codex scripts. **Checks:** FR-42's check is built as two greps in `tests/mirror/run.sh` — the shipped framework and the readable files may not say Codex at all, and no delivery script may carry a Codex code path — and the install test now seeds a retired adapter into a project and proves both routes remove it. **At the close:** mirror 15, doc-check 12, bugs 51, verify 67, goal 29; `test:install` 31 checks and `validate` 4, with the package down from 211 files to 204.
+
+The eleven documents that describe the adapter's design keep their content under a banner saying it was removed, so the history stays traceable without misleading anyone.
+
+### 2026-09-07 — main merged into dev: the npm installer brought back in step with the shell scripts
+
+The owner merged `main`, which carries the distribution pipeline, into `dev`, which carries the reset. The validation workflow then failed five of thirty checks in `npm run test:install`, all of them the same shape: the installer had been written on `main` while the shell scripts were changing on `dev`, so the two routes no longer produced the same project.
+
+- **`.claude/settings.json` differed in every install path.** The installer registered nine hooks; the shell scripts register fourteen. Missing were `guard-status`, `guard-metrics`, `guard-db` and `guard-build` on Bash, and `guard-metrics` on writes. A project installed from the package therefore ran without the guards that refuse a hand-edited telemetry file, a database write outside build and fix, and a backgrounded build in unattended mode. Logged as `MISS-TechieFlow-20260907-13`, severity blocker.
+- **`.tfcore/standards/` never arrived** when a project was migrated from the old `.bmad-core` layout, because the installer's list of framework subfolders was written before Session 3 added that folder. The project came out with no coding standards file. Logged as `-14`.
+
+Both are fixed in `scripts/install.mjs`. On a clean filesystem the suite now reads: validate 4 checks, `test:install` **30 checks, none failing**, and `npm pack --dry-run` shipping 211 files.
+
+**A third difference is local only and not a defect.** Run on a Windows mount, the test reports `opencode.jsonc` as differing between the two routes. The content is identical; the executable bit is not. Every file under `/mnt/c` reports mode 777, so the installer marks the file executable while the shell route's `cp` keeps the existing 644. On ext4, which is what the workflow runs, both routes agree. The requirement now says to run the test on a normal filesystem.
+
+**The rule that was missing.** Nothing in the maintenance contract said that a change to what a project receives has to go into both delivery routes, which is why the settings drifted through four sittings unnoticed. Added as FR-63, and as item 2b of the contract in `WorkFlow-Context.md`. The check already existed and did its job the moment the branches met.
+
 ### 2026-09-07 — Session 7: the Playbook review prompt, version 2, and the end of the reset
 
 `docs/AI-First-Playbook-Review-Prompt.md` rewritten as version 2 (3,180 words), carrying the methods the reset proved: the keep-as-words / turn-into-a-script / delete table, the schema block with a budget as a target and a maximum, the four-question miss sort with its `sort` field, the acceptance-line form, the instruction budget per model tier, and the rule that a rule ignored twice becomes a script or is deleted. It carries a list of what went wrong in the seven sessions, and a section on what a corporate team changes: OpenCode has no blocking end-of-turn hook, a rule that depends on remembering fails faster with more people, the review gates have named humans, and onboarding is a deliverable rather than documentation.

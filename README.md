@@ -54,7 +54,7 @@ The scaffolders never touch a file that already exists. The updater force-overwr
 
 | Overwritten (the framework wins) | Preserved (your work, never touched) |
 |---|---|
-| `.tfcore/{tasks,templates,agents,standards,utils,hooks,telemetry}/`, `.claude/commands/TechieFlow/`, `.claude/settings.json`, `.opencode/`, `WORKFLOW.html` | `docs/`, `src/`, `tests/`, `PROJECT-STATUS.md`, `CLAUDE.md`, `.editorconfig`, `.tfcore/core-config.yaml`, `.tfcore/routing.yaml`, the root `opencode.jsonc`, the NuGet-deployed library personas |
+| `.tfcore/{tasks,templates,agents,standards,utils,hooks,telemetry}/`, `.claude/commands/TechieFlow/`, `.claude/settings.json`, `.opencode/` | `docs/`, `src/`, `tests/`, `PROJECT-STATUS.md`, `CLAUDE.md`, `.editorconfig`, `.tfcore/core-config.yaml`, `.tfcore/routing.yaml`, the root `opencode.jsonc`, the NuGet-deployed library personas |
 
 Everything the framework drops into a project is a copy, so the scripts also keep the project's `.gitignore` ignoring those copies, and a second block for machine-generated test material. They never run git themselves: if a framework file was committed before the ignore entry existed, you untrack it yourself once.
 

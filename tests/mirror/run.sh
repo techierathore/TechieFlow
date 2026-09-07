@@ -123,6 +123,37 @@ else
   ok "FR-47: skipped, no private-name list at $priv_file"
 fi
 
+# 5d. FR-42 — the Codex adapter is gone and stays gone (removed 2026-09-07, D-14).
+#     The one allowed mention is the telemetry schema's note that `codex` is a RETIRED harness
+#     value: records written before the removal carry it and a reader must still understand them.
+#     Two checks, because the delivery scripts legitimately still name the paths they REMOVE.
+#     (a) the shipped framework and the readable files may not say Codex at all;
+#     (b) the delivery scripts may not carry a Codex code path — the markers that would deploy,
+#         generate or dispatch to it. The install test is exempt: its job is to prove removal.
+codex_hits=0
+while IFS= read -r hit; do
+  file="${hit%%:*}"
+  [[ "$file" == "$ROOT/.tfcore/telemetry/SCHEMA.md" ]] && continue
+  bad "FR-42: $(realpath --relative-to="$ROOT" "$file") still names Codex"
+  codex_hits=$((codex_hits+1))
+done < <(grep -rilI 'codex' "$ROOT/.tfcore" "$ROOT/.claude/commands" "$ROOT/.opencode" \
+           "$ROOT/package.json" "$ROOT/README.md" "$ROOT/WorkFlow-Context.md" 2>/dev/null \
+         | grep -v '/\.session/\|/node_modules/' | sed 's/$/:/')
+[[ $codex_hits -eq 0 ]] && ok "FR-42: the shipped framework and the readable files name no Codex"
+
+paths=0
+for f in "$ROOT/scaffold-brownfield.sh" "$ROOT/scaffold-greenfield.sh" "$ROOT/update-framework.sh" "$ROOT/scripts/install.mjs"; do
+  if grep -qiE 'tf-codex-bind|tf-codex-telemetry|codex-adapter|codex exec|harness codex|deployCodexAdapter' "$f" 2>/dev/null; then
+    bad "FR-42: $(basename "$f") still carries a Codex code path"; paths=$((paths+1))
+  fi
+done
+[[ $paths -eq 0 ]] && ok "FR-42: no delivery script carries a Codex code path"
+for leftover in "$ROOT/.codex" "$ROOT/.agents" "$ROOT/WORKFLOW.html" \
+                "$ROOT/.tfcore/hooks/codex-adapter.py" "$ROOT/.tfcore/utils/tf-codex-bind.py"; do
+  [[ -e "$leftover" ]] && bad "FR-42: $(basename "$leftover") is still on disk"
+done
+[[ ! -e "$ROOT/.codex" && ! -e "$ROOT/WORKFLOW.html" ]] && ok "FR-42/FR-62: .codex/, .agents/ and WORKFLOW.html are gone from the framework"
+
 echo
 echo "mirror self-test: $pass passed, $fail failed"
 [[ $fail -eq 0 ]]

@@ -11,7 +11,7 @@
 # What it does:
 #   - Adds .tfcore/, .claude/commands/ if missing
 #   - Adds .claude/settings.json (yolo-except-git-writes-writes; hook-gated deletes) if missing
-#   - Copies WORKFLOW.html and opencode.jsonc if missing
+#   - Copies opencode.jsonc if missing
 #   - Drops a note pointing to the brownfield day-1 /analyst prompt
 #
 # What it deliberately does NOT touch:
@@ -48,8 +48,8 @@ fi
 
 # --------------------------------------------------------------------------
 # python3 is a HARD prerequisite, not a nice-to-have (added 2026-08-27 after a
-# macOS scaffold failed on a missing python3). It powers the Codex bindings
-# (tf-codex-bind.py), the HTML renderer (tf-render-html.py), the opencode.jsonc
+# macOS scaffold failed on a missing python3). It powers the HTML renderer
+# (tf-render-html.py), the opencode.jsonc
 # audit, tf-metrics.sh and every guard hook. Missing it does not fail loudly at
 # the point of use — the hooks fail OPEN by design — so a scaffold that skipped
 # it would look like it worked and leave the repo silently unguarded.
@@ -60,7 +60,7 @@ fi
 tf_ensure_python3() {
   if command -v python3 >/dev/null 2>&1; then return 0; fi
 
-  echo "  python3 not found — it is required (Codex bindings, HTML renderer, telemetry, guard hooks)."
+  echo "  python3 not found — it is required (HTML renderer, telemetry, guard hooks)."
 
   if [[ "${TF_NO_INSTALL:-0}" == "1" ]]; then
     echo "  TF_NO_INSTALL=1 set — not installing. Install python3 and re-run." >&2
@@ -113,7 +113,7 @@ tf_ensure_python3() {
 if ! tf_ensure_python3; then
   echo "" >&2
   echo "Refusing to continue without python3: the scaffold would appear to succeed" >&2
-  echo "while leaving the repo with no Codex bindings and no working guard hooks." >&2
+  echo "while leaving the repo with no working guard hooks." >&2
   exit 1
 fi
 
@@ -189,7 +189,6 @@ rsync -a \
   .tfcore/agents/ .claude/commands/TechieFlow/agents/
 
 # 4. Reference files at root — only if missing
-[[ -f WORKFLOW.html ]]  || cp "$TEMPLATE/WORKFLOW.html"  .
 [[ -f opencode.jsonc ]] || cp "$TEMPLATE/opencode.jsonc" .
 
 # 4b. OpenCode harness bridge — framework-owned, ALWAYS refreshed (like 3b):
@@ -205,16 +204,6 @@ done
 # {file:...} refs resolve relative to the config file's directory — rewrite
 # ./.tfcore/ to ../.tfcore/ for the copy living inside .opencode/.
 sed 's|{file:\./\.tfcore/|{file:../.tfcore/|g' "$TEMPLATE/opencode.jsonc" > .opencode/opencode.jsonc
-
-# 4c. Codex adapter — repository skills, custom agents, hooks and exec policy.
-# Config is a project baseline and is preserved when already present; the
-# framework-owned hooks/rules and generated agents/skills are refreshed.
-mkdir -p .codex/agents .codex/rules .agents/skills
-[[ -f .codex/config.toml ]] || cp "$TEMPLATE/.codex/config.toml" .codex/config.toml
-cp "$TEMPLATE/.codex/hooks.json" .codex/hooks.json
-cp "$TEMPLATE/.codex/rules/techieflow.rules" .codex/rules/techieflow.rules
-python3 .tfcore/utils/tf-codex-bind.py "$TARGET" || echo "  ⚠ Codex bindings could not be generated (python3 required)"
-echo "  Codex adapter installed — trust this repository and review /hooks before relying on guards"
 
 # 5. .claude/settings.json — yolo-except-git-writes, only if missing
 if [[ ! -f .claude/settings.json ]]; then
@@ -390,7 +379,6 @@ Added (only missing files filled — re-runs are safe):
   .tfcore/                  ← TechieFlow v4 customized (agents, tasks, templates)
   .claude/commands/            ← Claude Code slash commands (TechieFlow agents)
   .claude/settings.json        ← yolo-except-git-writes permissions
-  WORKFLOW.html                ← the human workflow guide (open in a browser; §17 = macOS / Windows / Linux)
   opencode.jsonc               ← OpenCode config (loads agents/tasks from .tfcore/ via {file:...} refs)
   .gitignore                   ← framework entries appended (deployed copies stay uncommitted)
 
@@ -430,8 +418,8 @@ fi
 #    package for library personas) and must never be committed in the app repo.
 #    Append-only + idempotent: existing anchored/slash variants are respected;
 #    user content is never rewritten.
-GI_LINES=(".tfcore/" ".claude/" ".opencode/" ".codex/" ".agents/skills/" "/CLAUDE.md" "/WORKFLOW.html" "/opencode.jsonc" "/.tf-scaffold-note.txt")
-GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?\.codex/?$' '^/?\.agents/skills/?$' '^/?CLAUDE\.md$' '^/?WORKFLOW\.html$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$')
+GI_LINES=(".tfcore/" ".claude/" ".opencode/" "/CLAUDE.md" "/opencode.jsonc" "/.tf-scaffold-note.txt")
+GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?CLAUDE\.md$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$')
 GI_MISSING=()
 for i in "${!GI_LINES[@]}"; do
   # tr strips CR so CRLF .gitignore files (Windows-authored) still match the $-anchor
@@ -566,5 +554,4 @@ echo ""
 echo "✔ Done. Existing source tree was NOT touched."
 echo ""
 echo "Next: cd \"$TARGET\""
-echo "      open WORKFLOW.html in a browser"
-echo "      start Claude Code, follow §7 brownfield day-1 /analyst prompt"
+echo "      start Claude Code and run the brownfield day-1 command from .tf-scaffold-note.txt"

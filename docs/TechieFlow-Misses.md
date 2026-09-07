@@ -3,18 +3,17 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 118 logged: 35 open, 82 fixed, 1 will not fix |
+| Count | 120 logged: 33 open, 86 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
 | Updated | 2026-09-07 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
-## Open (35)
+## Open (33)
 
 | Miss | Found | Whose gap | What went wrong |
 |---|---|---|---|
 | MISS-TechieFlow-20260907-12 | 2026-09-07 by owner | said and ignored | The D-21 rule that hidden framework folders are invisible to search was written down and still cost 58 percent of a folder's true size when OpenCode measured the Playbook with a shell glob. |
-| MISS-TechieFlow-20260907-10 | 2026-09-07 by owner | the check was too weak | WORKFLOW.html is force-deployed to every project and still teaches three commands removed in Sitting 4c, because the removed-command check looks at the task files and the harness registrations but never at the human reference. |
 | MISS-TechieFlow-20260907-04 | 2026-09-07 by gate | the check was too weak | The readable miss file's unchanged check compared only the header above the Updated line, so an amend that changed a row but no count left the file stale; the bugs self-test caught it before release and the check now compares everything but the date. |
 | MISS-TechieFlow-20260907-03 | 2026-09-07 by agent-review | the check was too weak | The cross-project rollup keyed a requirement by its id alone, so REQ-UI-001 of TfLens and REQ-UI-001 of TechieBlog counted as one requirement and the combined first-pass rate printed 72% where the true figure is 48%; found by re-reading the numbers before the explainer, fixed by keying on project and id. |
 | MISS-TechieFlow-20260907-01 | 2026-09-07 by agent-review | said and ignored | The OpenCode verify on TechieBlog-oc (gpt-5.6-terra, 2026-09-07) skipped step 4 of the verify task: the old specs died on missing environment variables and no test was written for the 101 rows without one, so the run ended in twelve minutes with 101 rows not tested and only the screens checks graded; the task's step 4 was read and not done, which is the instruction-ignored pattern, and the Claude run on the same project wrote and repaired tests for three hours. |
@@ -33,7 +32,6 @@
 | MISS-TechieFlow-20260904-17 | 2026-09-04 by owner | not sorted | no sentence recorded (unspecified-gap, other, why: missing-checklist-item) |
 | MISS-TechieFlow-20260904-16 | 2026-09-04 by owner | not sorted | no sentence recorded (unspecified-gap, other, why: missing-checklist-item) |
 | MISS-TechieFlow-20260904-15 | 2026-09-04 by owner | not sorted | no sentence recorded (unspecified-gap, other, why: missing-checklist-item) |
-| MISS-TechieFlow-20260904-14 | 2026-09-04 by owner | not sorted | no sentence recorded (scope-creep, other, why: missing-checklist-item) |
 | MISS-TechieFlow-20260904-13 | 2026-09-04 by agent-review | not sorted | no sentence recorded (unspecified-gap, other, why: missing-checklist-item) |
 | MISS-TechieFlow-20260904-12 | 2026-09-04 by agent-review | not sorted | no sentence recorded (unspecified-gap, other, why: missing-checklist-item) |
 | MISS-TechieFlow-20260904-11 | 2026-09-04 by agent-review | not sorted | no sentence recorded (unspecified-gap, other, why: insufficient-verify-method) |
@@ -49,11 +47,14 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (82)
+## Fixed (86)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260907-14 | 2026-09-07 by owner | 2026-09-07 by fix-issues | the framework never said it | The npm installer's framework subfolder list left out standards, so a project migrated from the old layout came out with no coding standards file. |
+| MISS-TechieFlow-20260907-13 | 2026-09-07 by owner | 2026-09-07 by fix-issues | the framework never said it | The npm installer wrote a settings.json missing five hook registrations the shell scripts had gained, so a project installed from the package ran without the metrics, database and build guards. |
 | MISS-TechieFlow-20260907-11 | 2026-09-07 by owner | 2026-09-07 by fix-issues | the check was too weak | The Playbook review prompt was drafted from folder word counts taken only at the top level, so 174 files and 196,498 words counted as zero and the prompt nearly shipped the wrong headline finding. |
+| MISS-TechieFlow-20260907-10 | 2026-09-07 by owner | 2026-09-07 by fix-issues | the check was too weak | WORKFLOW.html is force-deployed to every project and still teaches three commands removed in Sitting 4c, because the removed-command check looks at the task files and the harness registrations but never at the human reference. |
 | MISS-TechieFlow-20260907-09 | 2026-09-07 by owner | 2026-09-07 by fix-issues | the check was too weak | A run record with no ended at all was accepted and could never be costed: the guard only replaced an ended that lied, so this session's own record landed with no duration. |
 | MISS-TechieFlow-20260907-08 | 2026-09-07 by owner | 2026-09-07 by fix-issues | the check was too weak | The updater kept a project's root opencode.jsonc because its dead BMAD-era registrations looked like project content, so that repo loaded no framework agents in OpenCode at all and only a warning was printed. |
 | MISS-TechieFlow-20260907-07 | 2026-09-07 by owner | 2026-09-07 by fix-issues | the framework never said it | Nothing capped or checked the two files a person reads first, so the briefing reached 344 KB and the README 121 KB and both still named commands the framework had removed. |
@@ -108,6 +109,7 @@
 | MISS-TechieFlow-20260905-03 (FR-39) | 2026-09-05 by agent-review | 2026-09-07 by fix-issues | the check was too weak | tf-emit.sh appends a miss record that has no miss_id, although miss_id is the join key to its fix record, so a caller that skips --next-miss-id writes an orphan. |
 | MISS-TechieFlow-20260905-02 (FR-40) | 2026-09-05 by agent-review | 2026-09-07 by fix-issues | the check was too weak | Six task files edited in .tfcore on 2026-08-31 were never copied to the Claude Code mirror, so the two harnesses ran different smoke, metrics, mockup, render and verify rules for five days; no parity check ran. |
 | MISS-TechieFlow-20260905-01 | 2026-09-05 by owner | 2026-09-07 by fix-issues | said and ignored | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
+| MISS-TechieFlow-20260904-14 | 2026-09-04 by owner | 2026-09-07 by fix-issues | not sorted | no sentence recorded (scope-creep, other, why: missing-checklist-item) |
 | MISS-TechieFlow-20260831-10 | 2026-08-31 by agent-review | 2026-08-31 by fix-issues | not sorted | no sentence recorded (wrong-behaviour, src, why: insufficient-verify-method) |
 | MISS-TechieFlow-20260831-09 | 2026-08-31 by library-feedback | 2026-08-31 by fix-issues | not sorted | no sentence recorded (unspecified-gap, src, why: insufficient-verify-method) |
 | MISS-TechieFlow-20260831-08 | 2026-08-31 by library-feedback | 2026-08-31 by fix-issues | not sorted | no sentence recorded (spec-contradiction, src, why: missing-checklist-item) |

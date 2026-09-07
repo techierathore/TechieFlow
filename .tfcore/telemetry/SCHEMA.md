@@ -39,7 +39,7 @@ Questions 1–3 are answered by `gates.jsonl`, which remains **the primary strea
 | `project_type_inferred` | bool | Present **only when `true`** — `metrics.project_type` was absent from `core-config.yaml` and `app` was assumed. Reports must label these records **unclassified**, never silently pool them. |
 | `backfilled` | bool | Present **only when `true`** — the record was reconstructed after the fact, not written at the moment of the event. Written exclusively by `tf-metrics.sh --backfill-*`. |
 | `inferred` | string[] | Present only on backfilled records. Names the fields that were **guessed rather than read**. |
-| `harness` | string \| null | `claude-code` \| `opencode` \| `codex` \| `null`. **Detected by `tf-emit.sh`, never declared by a task** — see below. |
+| `harness` | string \| null | `claude-code` \| `opencode` \| `null`. **Detected by `tf-emit.sh`, never declared by a task** — see below. `codex` is retired (2026-09-07): nothing writes it, and records that carry it stay valid and readable. |
 
 ### `project_type` — what it is and why it exists
 
@@ -70,11 +70,11 @@ So `install-metrics.sh` now re-examines **`docs` alone**, on a later refresh, an
 
 ### `harness` — detected, never declared
 
-The framework runs under **three harnesses**: Claude Code (`.claude/commands/TechieFlow/`), OpenCode (agents/tasks loaded from `opencode.jsonc`), and Codex (`.agents/skills/` plus `.codex/agents/`). The task content is identical across harnesses. A task template therefore **cannot know which one is executing it** — an agent copying a literal from the markdown would stamp whichever harness the example happened to name, and every per-harness comparison would be quietly wrong.
+The framework runs under **two harnesses**: Claude Code (`.claude/commands/TechieFlow/`) and OpenCode (agents/tasks loaded from `opencode.jsonc`). A third, Codex, was retired on 2026-09-07; records written before then may carry `harness: "codex"` and stay valid. The task content is identical across harnesses. A task template therefore **cannot know which one is executing it** — an agent copying a literal from the markdown would stamp whichever harness the example happened to name, and every per-harness comparison would be quietly wrong.
 
 So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit template.** Detection order:
 
-1. the adapter-owned `TF_HARNESS`, then harness environment variables (`CLAUDECODE`, `CLAUDE_CODE_*` → `claude-code`; any `OPENCODE*` → `opencode`; Codex thread/session markers → `codex`);
+1. the adapter-owned `TF_HARNESS`, then harness environment variables (`CLAUDECODE`, `CLAUDE_CODE_*` → `claude-code`; any `OPENCODE*` → `opencode`);
 2. the parent process chain, bounded to 12 levels (OpenCode sets no `OPENCODE_*` variables, so the process name is the only honest signal);
 3. **`null`** if neither resolves.
 
@@ -121,7 +121,7 @@ So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit 
 | `routed` | bool | `model == tier_model`. Present only when both are known. Routing is observed, never enforced — `routed:false` is drift made visible, not an error. |
 | `tokens_in`, `tokens_out`, `tokens_cache_read`, `tokens_cache_write` | int | Σ over assistant messages whose timestamp ∈ [`started`, `ended`]. Requires the record to carry `started` + `ended` and the session pointer (`.tfcore/.session/<harness>.json` — written by the `session-pointer.sh` hook on Claude, by the plugin on OpenCode). |
 | `cost_usd` | number \| null | Σ real per-message cost from `opencode.db` on OpenCode; **always `null` on Claude Code** (the transcript has no cost and a rate-card estimate would be an estimate presented as a measurement). |
-| `tokens_scope` | string | `tree` = the full session tree — OpenCode: pointer session + descendant sessions; Claude: pointer transcript + the subagent transcripts beside it (`<transcript-dir>/<session-id>/subagents/agent-*.jsonl`, a deterministic path verified 2026-08-20 via a `SubagentStop` payload's `agent_transcript_path`). `main` = Claude main thread only (no subagents dir existed). `conversation` = an exact persisted Codex rollout counter bounded by documented conversation events; measured session data, not an estimate. `none` = window could not be computed (no pointer / unreadable store / empty window) — **tokens are never estimated**. |
+| `tokens_scope` | string | `tree` = the full session tree — OpenCode: pointer session + descendant sessions; Claude: pointer transcript + the subagent transcripts beside it (`<transcript-dir>/<session-id>/subagents/agent-*.jsonl`, a deterministic path verified 2026-08-20 via a `SubagentStop` payload's `agent_transcript_path`). `main` = Claude main thread only (no subagents dir existed). `conversation` = an exact persisted  measured session data, not an estimate. `none` = window could not be computed (no pointer / unreadable store / empty window) — **tokens are never estimated**. |
 
 | `attempt` | int | **`runs` only, added 2026-08-21.** `1 +` the number of prior non-backfilled `run` records with the same `cmd` whose `reqs_touched` intersects this record's. Stamped only when the record carries a non-empty `reqs_touched`; absent on backfilled records and on REQ-less runs (`metrics-report`, renders). Distinct from the gate-level `attempt` in §3.1 (per REQ per verify). This is the counter `routing.yaml` `escalation:` reads **at launch** — `bash .tfcore/utils/tf-emit.sh --next-run-attempt <cmd> <REQ-ID>...` prints the value the next record would get. Advisory: telemetry records, it never switches a model (DECISIONS.md 2026-08-21). |
 
@@ -422,7 +422,7 @@ The agent's job on a `miss` record is therefore small and honest: name what was 
 | `verdict_after` | string | `Verified` \| `Needs re-verify` \| `FAIL` \| `deferred` \| `wont-fix` |
 | `reopened` | bool | `true` when this miss had already closed `Verified` and a later escape re-opened it. |
 | `cost_attribution` | string | **Derived by `tf-emit.sh`** from the fix run's `reqs_touched`: `sole` \| `shared:<n>` \| `none` — §5.5.3. |
-| `tokens_in`, `tokens_out`, `tokens_cache_read`, `tokens_cache_write`, `cost_usd`, `tokens_scope`, `model` | — | **Injected by `tf-emit.sh`** from the `fix_run_id` window, by exactly the §2.5 mechanism. Never written by an agent. `cost_usd` stays `null` on Claude Code and Codex, per §4. |
+| `tokens_in`, `tokens_out`, `tokens_cache_read`, `tokens_cache_write`, `cost_usd`, `tokens_scope`, `model` | — | **Injected by `tf-emit.sh`** from the `fix_run_id` window, by exactly the §2.5 mechanism. Never written by an agent. `cost_usd` stays `null` on Claude Code, per §4. |
 
 ### 5.5.3 `cost_attribution` — the field the money number stands on
 

@@ -17,7 +17,7 @@ You need four things on the machine.
 |---|---|---|
 | Node.js 20 or newer | Runs the installer. Nothing is added to your project. | `node --version` |
 | bash | The framework's guard hooks and helper scripts run under bash. macOS and Linux have it. On Windows, work inside WSL or Git Bash. | `bash --version` |
-| Python 3.10 or newer | Powers the HTML renderer, the telemetry writer and the guard hooks. An older Python 3 works but skips the Codex files. | `python3 --version` |
+| Python 3 | Powers the HTML renderer, the telemetry writer and the guard hooks. | `python3 --version` |
 | Claude Code or OpenCode | The harness that runs the agents. Either one. Both work from the same install. | `claude --version` or `opencode --version` |
 
 For a .NET project you also need the .NET SDK. Run `dotnet --version` to check.
@@ -42,8 +42,6 @@ The npm package itself holds the framework folders, this document and a `scripts
 | `.opencode/opencode.jsonc` | The framework's OpenCode configuration. OpenCode reads the personas and tasks straight from `.tfcore/` through it. | Refreshed. |
 | `.opencode/command/generate-html.md` | The short `/generate-html` command for OpenCode. | Added on update only. |
 | `opencode.jsonc` | The root OpenCode configuration, for your own additions. | Refreshed only when it holds nothing of yours, with the old file kept as `opencode.jsonc.bak`. |
-| `.codex/` and `.agents/skills/` | The Codex adapter, generated from the same personas and tasks. | Refreshed. `config.toml` is yours and is kept. |
-| `WORKFLOW.html` | The human workflow guide. Open it in a browser. | Refreshed. |
 | `.tf-scaffold-note.txt` | A note with your next command. Delete it when read. | Left alone. |
 | `docs/metrics/` | Five empty telemetry files and a README. This is your project's history: commit it. | Left alone. |
 | `.gitignore` | Lines that keep the copies above out of your commits. Appended, never rewritten. | Appended. |
@@ -242,7 +240,6 @@ The installer and the updater never write to:
 - `.tfcore/core-config.yaml` and `.tfcore/routing.yaml` after the first install
 - `.claude/settings.local.json`
 - `.claude/commands/trblazeui.md`, `.claude/commands/techierag.md` and the same names under `.opencode/command/`. These come from the NuGet packages.
-- `.codex/config.toml` after the first install
 - `opencode.jsonc` at the root when it holds a key of your own
 
 Existing lines in `.gitignore` and `.gitattributes` are never rewritten. The managed lines are appended once and recognised on every later run.
@@ -316,7 +313,6 @@ It installs the framework if it is not there yet, then removes the leftover pack
 | The framework is under `node_modules/@techierathore/techieflow/` and nowhere else | You ran `npm install`. See section 9. Run `npx @techierathore/techieflow@latest install`. |
 | `bash was not found` | On Windows, run the command inside WSL or Git Bash. |
 | `python3 was not found` | Install Python 3 and run the command again. On macOS: `brew install python3`. On Ubuntu or WSL: `sudo apt-get install -y python3`. |
-| `Codex bindings could not be generated` | Your Python is older than 3.10. Everything except the Codex files is installed. Upgrade Python and run `update` to add them. |
 | `Refusing to install into the framework itself` | You ran the command inside a clone of this repository. Pass `--target=<your project>`. |
 | `does not look installed` on update | The folder has no `.tfcore/`. Run `install` first. |
 | Claude Code does not show the `/TechieFlow:agents:analyst` command | Restart Claude Code in the project folder. Check that `.claude/commands/TechieFlow/agents/analyst.md` exists. |

@@ -10,8 +10,8 @@
 #   bash .tfcore/utils/tf-goal.sh [options] <app-dir> @goal.md
 #
 # Options
-#   --harness claude|opencode|codex   default: claude
-#   --model <id>                claude: --model; opencode: -m; codex: -m
+#   --harness claude|opencode   default: claude
+#   --model <id>                claude: --model; opencode: -m
 #   --buffer-min <n>            minutes added after a stated limit-reset time (default 15)
 #   --probe-min <n>             limit hit but NO reset time parseable → fire a one-turn probe every n
 #                               minutes until the API answers again, then resume (default 15)
@@ -52,13 +52,8 @@
 #   claude   -p "<prompt>" --permission-mode bypassPermissions --output-format stream-json --verbose
 #            resume: claude -p --resume <session_id> "<continue>"   (fallback: --continue)
 #   opencode run --auto "<prompt>"      resume: opencode run --auto -c "<continue>"
-#   codex exec --json --sandbox workspace-write -c approval_policy="never" "<prompt>"
-#            NB: `--ask-for-approval` is NOT a `codex exec` flag (verified against
-#            codex-cli 0.149.1: "error: unexpected argument '--ask-for-approval'",
 #            exit 2). The approval policy is set as a config override instead.
-#            resume: codex exec resume <thread-id> "<continue>" --json
 #   Override command lines with TF_GOAL_CLAUDE_FLAGS / TF_GOAL_OPENCODE_FLAGS /
-#   TF_GOAL_CODEX_FLAGS.
 
 set -u
 
@@ -92,7 +87,7 @@ if [[ -z "$APP_DIR" || ( -z "$GOAL_ARG" && $RESUME -eq 0 ) ]]; then
 fi
 APP_DIR="$(cd "$APP_DIR" 2>/dev/null && pwd)" || { echo "no such dir: $1" >&2; exit 2; }
 [[ -d "$APP_DIR/.tfcore" ]] || { echo "$APP_DIR has no .tfcore/ — scaffold it first" >&2; exit 2; }
-case "$HARNESS" in claude|opencode|codex) ;; *) echo "--harness must be claude|opencode|codex" >&2; exit 2 ;; esac
+case "$HARNESS" in claude|opencode) ;; *) echo "--harness must be claude|opencode" >&2; exit 2 ;; esac
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required" >&2; exit 2; }
 
 STATE_DIR="$APP_DIR/.tfcore/.session"; mkdir -p "$STATE_DIR"
@@ -156,9 +151,8 @@ fi
 
 # ---------------------------------------------------------------- prompts
 # PREAMBLE IS HARNESS-NEUTRAL. Every claim in it must hold for claude AND opencode
-# AND codex, because all three are sent this text verbatim. Anything true of only
-# one harness goes in that harness's block below (see the `codex` note after
-# FIRST_PROMPT) — never in here. The 2026-08-28 Codex adapter review put Codex's
+# because both are sent this text verbatim. Anything true of only
+# one harness goes in that harness's block below — never in here. The 2026-08-28 review put its
 # strict no-git policy into this shared text, which then told Claude and OpenCode
 # goal runs to avoid read-only git that their own hook allows; nothing written down
 # had said the preamble was shared, so this comment is that rule.
@@ -183,12 +177,6 @@ FIRST_PROMPT="$PREAMBLE
 
 THE GOAL:
 $GOAL"
-if [[ "$HARNESS" == codex ]]; then
-  FIRST_PROMPT="$FIRST_PROMPT
-
-CODEX POLICY NOTE: \`.codex/rules/techieflow.rules\` forbids every git/gh command even in YOLO mode, read-only diagnostics included. Use working-tree files and framework artifacts; do not attempt read-only git."
-fi
-
 # ---------------------------------------------------------------- harness command
 harness_cmd() { # $1 = first|resume ; prints the argv via NUL-separated echo
   local kind="$1" prompt
@@ -212,19 +200,12 @@ harness_cmd() { # $1 = first|resume ; prints the argv via NUL-separated echo
     fi
     CMD+=("$prompt")
   else
-    if [[ "$kind" == resume && -n "$SESSION_ID" ]]; then
-      CMD=(codex exec resume "$SESSION_ID" "$prompt" --json)
-    else
-      CMD=(codex exec --json --sandbox workspace-write -c approval_policy="never")
-      [[ -n "$MODEL" ]] && CMD+=(-m "$MODEL")
-      local tier effort
-      tier="$(bash "$APP_DIR/.tfcore/utils/tf-harness.sh" tier build-phase)"
-      effort="$(bash "$APP_DIR/.tfcore/utils/tf-harness.sh" effort "$tier")"
-      [[ -n "$effort" ]] && CMD+=(-c "model_reasoning_effort=\"$effort\"")
-      # shellcheck disable=SC2206
-      [[ -n "${TF_GOAL_CODEX_FLAGS:-}" ]] && CMD+=($TF_GOAL_CODEX_FLAGS)
-      CMD+=("$prompt")
+    CMD=(opencode run --auto)
+    [[ -n "$MODEL" ]] && CMD+=(-m "$MODEL")
+    if [[ "$kind" == resume ]]; then
+      if [[ -n "$SESSION_ID" ]]; then CMD+=(-s "$SESSION_ID"); else CMD+=(-c); fi
     fi
+    CMD+=("$prompt")
   fi
 }
 
@@ -347,7 +328,7 @@ out("IDLE", "no sentinel")
 PY
 }
 
-extract_session_id() { # from a cycle's output file (Claude/OpenCode/Codex JSONL)
+extract_session_id() { # from a cycle's output file (Claude/OpenCode JSONL)
   python3 - "$1" <<'PY' 2>/dev/null
 import sys, json, re
 sid = ""
@@ -375,10 +356,8 @@ probe_until_clear() {
     n=$(( n + 1 ))
     if [[ "$HARNESS" == claude ]]; then
       ( cd "$APP_DIR" && claude -p --max-turns 1 --output-format text "Reply with the single word OK." ) > "$pout" 2>&1; prc=$?
-    elif [[ "$HARNESS" == opencode ]]; then
-      ( cd "$APP_DIR" && opencode run --auto "Reply with the single word OK." ) > "$pout" 2>&1; prc=$?
     else
-      ( cd "$APP_DIR" && codex exec --json --sandbox read-only -c approval_policy="never" "Reply with the single word OK." ) > "$pout" 2>&1; prc=$?
+      ( cd "$APP_DIR" && opencode run --auto "Reply with the single word OK." ) > "$pout" 2>&1; prc=$?
     fi
     if [[ $prc -eq 0 ]] && ! grep -qiE 'usage limit|hit your limit|rate[ _-]?limit|limit (has been )?(reached|exceeded)|too many requests|\b429\b|overloaded|weekly limit|resets? (at|in)\b' "$pout"; then
       log "probe #$n OK"; return 0
@@ -520,9 +499,6 @@ while :; do
   [[ $CYCLE -eq 1 && -f "$APP_DIR/.tfcore/utils/tf-phase.sh" ]] && bash "$APP_DIR/.tfcore/utils/tf-phase.sh" goal "$(basename "$APP_DIR")" >/dev/null 2>&1 || true
   run_cycle
   SID="$(extract_session_id "$OUT")"; [[ -n "$SID" ]] && { SESSION_ID="$SID"; state_set session_id "$SID"; }
-  if [[ "$HARNESS" == codex ]]; then
-    python3 "$APP_DIR/.tfcore/utils/tf-codex-telemetry.py" "$APP_DIR" "$OUT" || true
-  fi
   KIND=resume
 
   if [[ -f "$DONE" ]]; then continue; fi

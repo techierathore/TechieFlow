@@ -20,7 +20,7 @@
 // scripts/test-install.mjs proves that by running both routes and comparing the results.
 //
 // Needs: node, bash and python3. The framework's own helper scripts (telemetry setup,
-// build-output ignore audit, Codex bindings) are run exactly as the shell scripts run them.
+// build-output ignore audit) are run exactly as the shell scripts run them.
 
 import { spawnSync } from "node:child_process";
 import {
@@ -201,7 +201,7 @@ function checkTools() {
   }
   pythonCommand = findPython();
   if (!pythonCommand) {
-    throw new Error("python3 was not found. It powers the HTML renderer, the telemetry writer, the Codex bindings and every guard hook.\n"
+    throw new Error("python3 was not found. It powers the HTML renderer, the telemetry writer and every guard hook.\n"
       + "  Install it and run this command again:\n"
       + "    macOS:          brew install python3\n"
       + "    Ubuntu / WSL:   sudo apt-get install -y python3\n"
@@ -237,8 +237,8 @@ function ensureSafeTarget() {
 // Same lines, same patterns and same header text as the shell scripts. Append-only: an
 // entry already present in any anchored or slash variant is respected, nothing is rewritten.
 const frameworkIgnore = {
-  lines: [".tfcore/", ".claude/", ".opencode/", ".codex/", ".agents/skills/", "/CLAUDE.md", "/WORKFLOW.html", "/opencode.jsonc", "/.tf-scaffold-note.txt"],
-  patterns: [/^\/?\.tfcore\/?$/, /^\/?\.claude\/?$/, /^\/?\.opencode\/?$/, /^\/?\.codex\/?$/, /^\/?\.agents\/skills\/?$/, /^\/?CLAUDE\.md$/, /^\/?WORKFLOW\.html$/, /^\/?opencode\.jsonc$/, /^\/?\.tf-scaffold-note\.txt$/],
+  lines: [".tfcore/", ".claude/", ".opencode/", "/CLAUDE.md", "/opencode.jsonc", "/.tf-scaffold-note.txt"],
+  patterns: [/^\/?\.tfcore\/?$/, /^\/?\.claude\/?$/, /^\/?\.opencode\/?$/, /^\/?CLAUDE\.md$/, /^\/?opencode\.jsonc$/, /^\/?\.tf-scaffold-note\.txt$/],
   header: ["# TechieFlow framework — deployed copies, never commit (managed by scaffold/update-framework.sh)"],
   label: "framework entries",
 };
@@ -353,6 +353,22 @@ const canonicalSettings = String.raw`{
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-artifacts.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-metrics.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-db.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-build.sh\""
           }
         ]
       },
@@ -362,6 +378,10 @@ const canonicalSettings = String.raw`{
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-metrics.sh\""
           },
           {
             "type": "command",
@@ -426,7 +446,6 @@ Added (only missing files filled — re-runs are safe):
   .tfcore/                  ← TechieFlow v4 customized (agents, tasks, templates)
   .claude/commands/            ← Claude Code slash commands (TechieFlow agents)
   .claude/settings.json        ← yolo-except-git-writes permissions
-  WORKFLOW.html                ← the human workflow guide (open in a browser; §17 = macOS / Windows / Linux)
   opencode.jsonc               ← OpenCode config (loads agents/tasks from .tfcore/ via {file:...} refs)
   .gitignore                   ← framework entries appended (deployed copies stay uncommitted)
 
@@ -468,7 +487,6 @@ Folders/files created (only missing files filled — re-runs are safe):
   .tfcore/                  ← TechieFlow v4 customized (agents, tasks, templates)
   .claude/commands/            ← Claude Code slash commands (TechieFlow agents)
   .claude/settings.json        ← yolo-except-git-writes permissions
-  WORKFLOW.html                ← the human workflow guide (open in a browser; §17 = macOS / Windows / Linux)
   opencode.jsonc               ← OpenCode config (loads agents/tasks from .tfcore/ via {file:...} refs)
   .gitignore                   ← framework entries appended (deployed copies stay uncommitted)
   tests/playwright/  tests/unit/  src/
@@ -515,15 +533,20 @@ function deployOpenCodeBridge() {
   writeText(join(target, ".opencode", "opencode.jsonc"), openCodeConfigCopy());
 }
 
-function deployCodexAdapter() {
-  say("  .codex/ + .agents/skills/ — Codex adapter");
-  if (dryRun) { say("  WOULD preserve/create .codex/config.toml; refresh hooks/rules; regenerate agents/skills"); return; }
-  for (const folder of [".codex/agents", ".codex/rules", ".agents/skills"]) mkdirSync(join(target, folder), { recursive: true });
-  copyFile(join(sourceRoot, ".codex", "config.toml"), join(target, ".codex", "config.toml"), { onlyIfMissing: true });
-  copyFile(join(sourceRoot, ".codex", "hooks.json"), join(target, ".codex", "hooks.json"));
-  copyFile(join(sourceRoot, ".codex", "rules", "techieflow.rules"), join(target, ".codex", "rules", "techieflow.rules"));
-  const result = runPython([join(target, ".tfcore", "utils", "tf-codex-bind.py"), target]);
-  if (result.status !== 0) say("  ⚠ Codex bindings could not be generated (python3 required)");
+// The Codex adapter was removed on 2026-09-07 (D-14, FR-42) and WORKFLOW.html was dropped the
+// same day: it was a second full description of the process, last revised before the reset, and
+// it still taught commands that no longer exist. Both are taken out of a project that has them.
+// Nothing here is project content: .codex/ held a config file plus generated bindings,
+// .agents/skills/ was generated in full from .tfcore/tasks/, and WORKFLOW.html was a copy.
+function removeRetiredFiles() {
+  for (const path of [".codex", ".agents/skills", "WORKFLOW.html"]) {
+    const full = join(target, path);
+    if (!existsSync(full)) continue;
+    if (dryRun) { say(`  ${would}remove ${path} — no longer part of the framework`); continue; }
+    rmSync(full, { recursive: true, force: true });
+    say(`  removed ${path} — no longer part of the framework`);
+  }
+  if (!dryRun) { try { rmdirSync(join(target, ".agents")); say("  removed the emptied .agents/"); } catch {} }
 }
 
 function deployHousekeeping() {
@@ -619,13 +642,11 @@ async function install() {
   say("  syncing agent files from .tfcore/agents/ → .claude/commands/TechieFlow/agents/");
   copyTree(dryRun ? join(sourceRoot, ".tfcore", "agents") : join(target, ".tfcore", "agents"), join(target, ".claude", "commands", "TechieFlow", "agents"));
   // 4. reference files at the root, only if missing
-  copyFile(join(sourceRoot, "WORKFLOW.html"), join(target, "WORKFLOW.html"), { onlyIfMissing: true });
   copyFile(join(sourceRoot, "opencode.jsonc"), join(target, "opencode.jsonc"), { onlyIfMissing: true });
   // 4b. OpenCode bridge, always refreshed
   deployOpenCodeBridge();
-  // 4c. Codex adapter
-  deployCodexAdapter();
-  if (!dryRun) say("  Codex adapter installed — trust this repository and review /hooks before relying on guards");
+  // 4c. files earlier versions deployed and the framework no longer ships
+  removeRetiredFiles();
   // 5. Claude Code permissions, only if missing
   if (writeText(join(target, ".claude", "settings.json"), `${canonicalSettings}\n`, { onlyIfMissing: true })) { if (!dryRun) say("  created .claude/settings.json"); }
   else say("  .claude/settings.json already exists — preserved");
@@ -650,13 +671,15 @@ async function install() {
   say("");
   say(`Next: cd "${target}"`);
   if (greenfield) say("      dotnet new sln + blazor + add TrBlazeUI/TechieRag NuGets + dotnet build");
-  say("      open WORKFLOW.html in a browser");
   say(`      start Claude Code or OpenCode and run the ${greenfield ? "greenfield" : "brownfield"} day-1 command from .tf-scaffold-note.txt`);
 }
 
 // ---------------------------------------------------------------- update (update-framework.sh)
 
-const frameworkSubdirs = ["agents", "tasks", "telemetry", "templates", "checklists", "data", "utils", "hooks", "workflows", "agent-teams"];
+// Keep this in step with FRAMEWORK_SUBDIRS in update-framework.sh. `standards` arrived with the
+// document schemas and was missing here, so a project migrated from the old layout came out
+// without its coding standards (found by scripts/test-install.mjs, 2026-09-07).
+const frameworkSubdirs = ["agents", "tasks", "telemetry", "templates", "checklists", "data", "utils", "hooks", "standards", "workflows", "agent-teams"];
 const frameworkTopFiles = ["enhanced-ide-development-workflow.md", "user-guide.md", "working-in-the-brownfield.md", "install-manifest.yaml", "TOKEN-GUIDE.md"];
 const legacyConfigPattern = /\.bmad-core|bmad-(master|orchestrator|analyst|architect|verifier)|BMad:/;
 
@@ -866,16 +889,10 @@ function update() {
   deployOpenCodeBridge();
   refreshRootOpenCodeConfig();
 
-  // 4b. Codex adapter
-  deployCodexAdapter();
-  if (!dryRun) say("  Codex hooks changed or installed — trust this repository and review /hooks");
+  // 4b. files earlier versions deployed and the framework no longer ships
+  removeRetiredFiles();
   for (const file of libraryPersonas) if (existsSync(join(target, ".opencode", "command", file))) say(`  .opencode/command/${file} — preserved (NuGet-deployed)`);
 
-  // 4. WORKFLOW.html, always refreshed
-  if (existsSync(join(sourceRoot, "WORKFLOW.html"))) {
-    copyFile(join(sourceRoot, "WORKFLOW.html"), join(target, "WORKFLOW.html"));
-    say("  WORKFLOW.html");
-  }
   // 5. NuGet persona shims: gap-fill only, never an overwrite
   shimLegacyPersonas({ gapOnly: true });
   // 6, 7. messages about stale references in files the owner owns
@@ -924,29 +941,18 @@ function uninstall() {
   plan(".opencode/opencode.jsonc");
   plan(".opencode/opencode.json", "(generated by routing)");
   for (const file of shippedFiles(".opencode/command", ".md")) if (!libraryPersonas.has(file)) plan(`.opencode/command/${file}`);
-  plan(".codex/hooks.json");
-  plan(".codex/rules/techieflow.rules");
-  if (existsSync(join(target, ".codex", "config.toml"))) {
-    if (sameAsShipped(".codex/config.toml", ".codex/config.toml")) plan(".codex/config.toml");
-    else keep(".codex/config.toml", "you changed it");
-  }
-  const codexAgents = join(target, ".codex", "agents");
-  if (existsSync(codexAgents)) for (const f of readdirSync(codexAgents)) {
-    if (f.endsWith(".toml") && /description = "TechieFlow [a-z-]+ (specialist|role)\."/.test(read(join(codexAgents, f)))) plan(`.codex/agents/${f}`);
-    else keep(`.codex/agents/${f}`, "not written by the framework");
-  }
-  const skills = join(target, ".agents", "skills");
-  if (existsSync(skills)) for (const f of readdirSync(skills)) if (f.startsWith("techieflow-")) plan(`.agents/skills/${f}`);
+  // Retired on 2026-09-07 but still present in a project set up by an older version.
+  for (const path of [".codex", ".agents/skills"]) if (existsSync(join(target, path))) plan(path, "(retired Codex adapter)");
   for (const lib of [".trblazeui", ".techierag"]) {
     if (!existsSync(join(target, lib))) continue;
     const rest = readdirSync(join(target, lib)).filter((f) => f !== ".codex-agent-package-owned" && f !== ".gitignore");
     plan(`${lib}/.codex-agent-package-owned`);
     if (rest.length === 0) plan(`${lib}/.gitignore`);
   }
-  for (const [path, shipped] of [["WORKFLOW.html", "WORKFLOW.html"], ["opencode.jsonc", "opencode.jsonc"]]) {
-    if (!existsSync(join(target, path))) continue;
-    if (sameAsShipped(path, shipped)) plan(path);
-    else keep(path, "you changed it");
+  if (existsSync(join(target, "WORKFLOW.html"))) plan("WORKFLOW.html", "(retired human workflow guide)");
+  if (existsSync(join(target, "opencode.jsonc"))) {
+    if (sameAsShipped("opencode.jsonc", "opencode.jsonc")) plan("opencode.jsonc");
+    else keep("opencode.jsonc", "you changed it");
   }
   plan(".tf-scaffold-note.txt");
   const hook = join(target, ".git", "hooks", "pre-commit");

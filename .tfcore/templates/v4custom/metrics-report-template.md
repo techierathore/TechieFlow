@@ -99,7 +99,7 @@ pooled deliberately.*
 | Tokens per `Verified` REQ | {n} |
 | Commit cadence | {n} commits/active day over {n} days |
 
-**Cost in USD is not reported here.** Claude Code transcripts and Codex usage
+**Cost in USD is not reported here.** Claude Code transcripts and usage
 payloads carry token counts but no per-message dollar cost, and this framework runs
 on subscriptions where marginal per-token cost is not the real unit. Multiplying
 tokens by a rate card would be an estimate presented as a measurement, so the row
@@ -192,7 +192,7 @@ than the worst. Read it as a question to investigate, never as a ranking to rout
 | Unattributable (`none` — no usable token window) | {n} | — |
 
 **Dollars.** {Either: "$X per miss — MEASURED, from {n} OpenCode records." Or:
-"No measured dollars. Claude Code and Codex carry `cost_usd: null` permanently —
+"No measured dollars. Claude Code carries `cost_usd: null` permanently —
 no cost source exists on either, and pricing tokens from a rate card here would be
 an estimate presented as a measurement. Tokens are the honest figure."}
 

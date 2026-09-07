@@ -31,7 +31,7 @@ It does now; it did not until 2026-08-27. The 2026-08-20 split moved framework c
 
 Because the framework is invisible to every default file-search tool, and until 2026-08-27 nothing told the agents that. **Two independent filters stack**, and you have to defeat both:
 
-- `.tfcore/`, `.claude/`, `.codex/`, `.opencode/` and `.agents/skills/` are **hidden dot-directories** — ripgrep (which backs the agents' Grep tool) skips hidden paths by default.
+- `.tfcore/`, `.claude/` and `.opencode/` are **hidden dot-directories** — ripgrep (which backs the agents' Grep tool) skips hidden paths by default.
 - They are also in the **managed `.gitignore` block** the scaffolders write into every app (§3) — and ripgrep honours `.gitignore` by default too.
 
 So `rg --hidden` is *not* enough in an app repo; it takes `rg --hidden --no-ignore` (`rg -uu`). And since nothing under `.tfcore/` is *tracked* in an app, `git grep` and `git ls-files` return zero rows as well. An agent that globs for a filename gets nothing and reasonably concludes the framework isn't installed.

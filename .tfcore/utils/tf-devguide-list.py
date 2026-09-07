@@ -47,7 +47,7 @@ def cfg(key, default):
     return default
 
 
-PRUNE = {"bin", "obj", "node_modules", ".git", ".artifacts", "OldDocs", "dist", ".tfcore", ".claude", ".opencode", ".codex", "packages", "TestResults"}
+PRUNE = {"bin", "obj", "node_modules", ".git", ".artifacts", "OldDocs", "dist", ".tfcore", ".claude", ".opencode", "packages", "TestResults"}
 
 
 def walk(root, exts, skip_samples=False):

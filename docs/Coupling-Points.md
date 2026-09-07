@@ -1,5 +1,7 @@
 # Coupling Points — where TechieFlow depends on harness behaviour
 
+> **The Codex adapter was removed on 2026-09-07** (D-14, FR-42). The framework supports Claude Code and OpenCode. Everything below that describes `.codex/`, `.agents/skills/` or a Codex code path is history, kept for traceability; see `docs/CHANGELOG.md`.
+
 > **Codex addendum (2026-08-24):** `.codex/`, `.agents/skills/`,
 > `codex-adapter.py`, and `tf-codex-bind.py` form the third adapter. Exact-parity
 > gaps are maintained in `CodexChanges.md` §5; the historical register below is
