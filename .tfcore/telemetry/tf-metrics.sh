@@ -34,6 +34,7 @@ import re
 import subprocess
 import sys
 from collections import Counter, defaultdict, OrderedDict
+from datetime import datetime
 
 STREAMS = ("runs", "gates", "sessions", "commits", "misses")
 VERDICTS = ("Verified", "Needs re-verify", "FAIL", "Blocked", "Implemented", "Done (pre-existing)")
@@ -496,6 +497,34 @@ def analyse_phases(runs):
     when someone asks how it was measured."""
     live = [r for r in runs if r.get("kind", "run") == "run" and not r.get("backfilled")]
 
+    # A run that carries both ends but no `duration_s` was silently worth ZERO TIME here,
+    # while its tokens still counted — so a phase's total time was a sum over some of its
+    # runs and its tokens a sum over others (found 2026-09-07: the reset's own 13 runs
+    # reported 16h49m, because 6 of them predate the field and the true figure is ~55h).
+    # Deriving it is arithmetic on two recorded facts, not a guess, so it is done — and
+    # counted, so the report can say how many of its minutes were derived rather than read.
+    # `ended` itself may be absent on an older record; SCHEMA.md's own rule is that `ended`
+    # IS the moment the record was written, which is exactly what `ts` holds.
+    def _secs(a, b):
+        try:
+            fmt = "%Y-%m-%dT%H:%M:%SZ"
+            return int((datetime.strptime(b, fmt) - datetime.strptime(a, fmt)).total_seconds())
+        except Exception:
+            return None
+
+    derived_n = 0
+    for r in live:
+        if r.get("duration_s") or not r.get("started"):
+            continue
+        end = r.get("ended") or r.get("ts")
+        if not end:
+            continue
+        d = _secs(r["started"], end)
+        if d is not None and d >= 0:
+            r["duration_s"] = d
+            r["duration_derived"] = "ended" if r.get("ended") else "ts"
+            derived_n += 1
+
     def scope_of(r):
         return r.get("tokens_scope") or "absent"
 
@@ -564,6 +593,10 @@ def analyse_phases(runs):
                 "median": median(durs),
                 "max": max(durs) if durs else None,
                 "n": len(durs),
+                # how many of those minutes were computed from the record's own two
+                # timestamps because the record predates `duration_s` — arithmetic on
+                # recorded facts, but the reader is told rather than left to assume.
+                "derived_n": sum(1 for r in rs if r.get("duration_derived")),
             },
             "share_of_duration": pct(sum(durs), grand_dur),
             "tokens_measured_n": len(priced),
@@ -581,6 +614,27 @@ def analyse_phases(runs):
                 key=lambda kv: (-kv[1]["tokens_out"], kv[0]))),
             "harnesses": OrderedDict(sorted(Counter(r.get("harness") or "?" for r in rs).items())),
             "modes": OrderedDict(sorted(Counter(r.get("mode") or "—" for r in rs).items())),
+            # A phase run in named modes (a reset's sessions, a build's fresh/fix passes)
+            # is several different jobs under one `cmd`. The per-mode split says which,
+            # in the order they happened. Same denominators as the phase above: a run
+            # with no computable window contributes no tokens, never a zero.
+            "by_mode": OrderedDict(
+                (mode, {
+                    "runs": len([r for r in rs if (r.get("mode") or "—") == mode]),
+                    "duration_s": sum(r.get("duration_s") or 0
+                                      for r in rs if (r.get("mode") or "—") == mode),
+                    "tokens_out": sum(r.get("tokens_out") or 0
+                                      for r in rs if (r.get("mode") or "—") == mode and has_tokens(r)),
+                    "tokens_unmeasured_n": len([r for r in rs
+                                                if (r.get("mode") or "—") == mode and not has_tokens(r)]),
+                    "files_written": sum(r.get("files_written") or 0
+                                         for r in rs if (r.get("mode") or "—") == mode),
+                    "first_started": min((r.get("started") or "" for r in rs
+                                          if (r.get("mode") or "—") == mode), default=""),
+                })
+                for mode in sorted({(r.get("mode") or "—") for r in rs},
+                                   key=lambda m: min((r.get("started") or "" for r in rs
+                                                      if (r.get("mode") or "—") == m), default=""))),
             "build_result": OrderedDict(sorted(Counter(r.get("build_result") or "—" for r in rs).items())),
             "reqs_touched_total": sum(r.get("reqs_count") or 0 for r in rs),
             "files_written_total": sum(r.get("files_written") or 0 for r in rs),
@@ -951,6 +1005,20 @@ def analyse(repos):
     live = [g for g in gates if not g.get("backfilled")]
     back = [g for g in gates if g.get("backfilled")]
 
+    # `attempt` is DEFINED by §3.1 as 1 + the number of prior live gate records for the same
+    # requirement in the same app — a count over this very stream, not a judgement. A record
+    # that omits it was therefore being read as "no attempt", which drops it out of the
+    # first-pass rate and reports 0% for a set of records that all passed on their first and
+    # only verdict (found 2026-09-07 on the framework's own requirement lines). Derived here,
+    # in stream order, for records that lack it. A record that carries one is never touched.
+    _seen = {}
+    for g in sorted(live, key=lambda r: (r.get("ts") or "", r.get("run_id") or "")):
+        key = (g.get("app"), g.get("req_id"))
+        _seen[key] = _seen.get(key, 0) + 1
+        if g.get("attempt") is None:
+            g["attempt"] = _seen[key]
+            g["attempt_derived"] = True
+
     # REQs with ANY backfilled record are excluded from the live first-pass rate:
     # their live `attempt` numbering restarts at 1 (SCHEMA.md §3.1).
     # A requirement is keyed by (app, req_id): REQ-UI-001 exists in every project, so a rollup that
@@ -1192,8 +1260,9 @@ def print_phases(p, W):
     for cmd, m in p["phases"].items():
         print("  [%s]  %d run(s)" % (cmd, m["runs"]))
         d = m["duration_s"]
-        print("     wall clock       : total %s · median %s · max %s   (n=%d timed)"
-              % (_hms(d["total"]), _hms(d["median"]), _hms(d["max"]), d["n"]))
+        print("     wall clock       : total %s · median %s · max %s   (n=%d timed%s)"
+              % (_hms(d["total"]), _hms(d["median"]), _hms(d["max"]), d["n"],
+                 ", %d derived from the record's own timestamps" % d["derived_n"] if d.get("derived_n") else ""))
         t = m["tokens"]
         print("     tokens           : out %s · in %s · cache-read %s · cache-write %s"
               % (_k(t["out"]), _k(t["in"]), _k(t["cache_read"]), _k(t["cache_write"])))
@@ -1255,7 +1324,15 @@ def print_phases(p, W):
             print("     cost (%s)  : $%s over %d record(s) — MEASURED, never pooled "
                   "across harness" % (h, c["usd"], c["records"]))
         if m["reqs_touched_total"] or m["files_written_total"]:
-            print("     work             : %d REQ touch(es) · %d file(s) written"
+            bm = m.get("by_mode") or {}
+        if len(bm) > 1:
+            print("     by mode          : (in the order they ran)")
+            for mode, v in bm.items():
+                unm = ("  [%d unmeasured]" % v["tokens_unmeasured_n"]) if v["tokens_unmeasured_n"] else ""
+                print("         %-22s %2d run(s)  %8s  %8s out  %3d file(s)%s"
+                      % (mode, v["runs"], _hms(v["duration_s"]), _k(v["tokens_out"]),
+                         v["files_written"], unm))
+        print("     work             : %d REQ touch(es) · %d file(s) written"
                   % (m["reqs_touched_total"], m["files_written_total"]))
         print("")
 

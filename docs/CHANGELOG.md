@@ -35,6 +35,59 @@ Everything below predates the reset and is preserved as it was written.
 
 ## Maintenance log (newest first)
 
+### 2026-09-07 — the checks built: framework coverage from 12 lines to 29, and three defects it found on the first run
+
+The 28 requirement lines whose Check column described a script nobody had written now have one, or an honest reason they cannot. `tests/requirements/checks.sh` holds a purpose-built check per line, and the grader runs it: **29 of 63 lines graded, 27 passing, 34 ungraded** with the reason stated for each.
+
+Ten lines gained a real check — technology neutrality, the banned document shapes, the `Verified` ledger guard, the root-litter guard, the yolo field, the review-record refusals, the schema's command vocabulary, the release order, the honest `ended`, and the database guard, most of them driving the hook directly and asserting both the refusal and the allowed case. Five more were repointed at the self-test whose planted defect already proved them, and three at the installer test.
+
+**The first run found three defects that had been live for days.**
+
+- **FR-03 fails.** The framework claims no persona or task names a technology, and the analyst and `build-phase` hardcode routing to the TrBlazeUI and TechieRag library agents. Left failing, because the fix is the owner's call: either library routing is a stated exception, or the tasks route by requirement prefix to whatever library agents a project has (`MISS-TechieFlow-20260907-18`).
+- **FR-34 fails.** Four tasks wire no run record: `create-doc`, `generate-html`, `facilitate-brainstorming-session`, `create-deep-research-prompt`. This is the idea-stage gap D-13 named in Session 1; it is now a number instead of a paragraph.
+- **The telemetry schema had never listed five command values its own tasks were writing** — `framework-reset` among them, 27 records across the estate. Added (`MISS-TechieFlow-20260907-17`, fixed).
+
+A fourth, minor, stays open: the database guard reads the whole command line, so it refused a documentation edit and a read-only search because a migration tool's name appeared in the text (`MISS-TechieFlow-20260907-19`).
+
+**Two documents were written for the work that follows.** `docs/AI-First-Playbook-Review-Prompt.md` is now version 3: it replaces version 2's "about 30 requirement lines, each with a way to check it" with "fewer lines, the grader built in the same session, and the ungraded count as the headline" — because version 2's wording is exactly how this framework acquired 28 checks that did not exist. And `docs/TfLens-Metrics-Update-Prompt.md` is a hand-over brief for the TfLens team: the five things now in the streams that its pages cannot show, and the three reader-side rules that change numbers it already publishes.
+
+### 2026-09-07 — the framework graded against its own checklist for the first time
+
+The owner rejected the reasoning in the metrics report, and was right. It said the framework had no first-pass rate because it had "no checklist of its own to verify". It has had one since Session 2: **`docs/TechieFlow-Requirements.md`, 63 numbered lines, each with a stated check**, named in every session restart prompt. The framework had been demanding of every application a verification it never performed on itself. Logged as `MISS-TechieFlow-20260907-16`, severity blocker, sorted `ignored` — the rule was written down and not followed.
+
+**`tests/requirements/run.sh`** now grades it. A line is graded only when its own Check column names something runnable; that artefact is run and its exit status is the verdict. A line whose check is a fixture run, a review, or a script that was never built is reported **ungraded with the reason**, never guessed.
+
+| | |
+|---|---|
+| Requirement lines | 63 |
+| Graded, and passing | 12 |
+| Ungraded | 51 — 28 describe a script nobody built · 14 need a fixture run · 5 need a review · 3 unbuilt candidates · 1 needs a non-Windows filesystem |
+
+Those 28 are the real finding: the framework wrote down how it would check itself and then did not build the check. Five lines were repointed at the test that genuinely proves them (FR-14, FR-24, FR-26, FR-43, FR-44), and FR-26 gained a real check — the verify task, once 11,850 words, is now held under 4,000 and measures 964.
+
+**Two reporting defects fell out of it.** `req_class` gained `FR` in the schema, deliberately and dated, so the framework's own lines can be graded without being pooled with an application's screens. And a gate record with no `attempt` was invisible to the first-pass rate, which reported **0% for twelve records that had all passed**; `attempt` is defined by the schema as a count over the stream, so it is now derived at read time when absent. Verified not to move any application's published figures: TfLens stays at 20% and 94%, Lekhak at 54%.
+
+### 2026-09-07 — the reset measured: `docs/metrics/METRICS.md` written, and a phase's time was being under-reported
+
+The framework had never written its own metrics report. Producing it found that the reset's cost was being under-reported by two thirds.
+
+**A run with both timestamps and no `duration_s` was worth zero time.** Six of the reset's records predate that field, so the report summed time over seven runs while summing tokens over twelve: `framework-reset` showed **16h49m** where the same records already proved **55h57m**. The duration is now derived at read time from the record's own `started` and `ended` (or from `ts`, which the schema defines as the moment the record was written), and the report says how many of its minutes were derived rather than read. Logged as `MISS-TechieFlow-20260907-15`, fixed, and propagated to all 23 projects. The correction also moves the repository's REQ throughput from 1.86 to 1.83 an hour, which is the honest figure.
+
+**A phase can now be broken down by mode**, so a reset reads session by session rather than as one 56-hour block. The framework's own numbers, at the close:
+
+| | |
+|---|---|
+| The reset | 14 runs, 56h 30m, 7.9M output tokens, 308 files written |
+| Where it went | the four Session 4 sittings took 43 of the 56.5 hours and 5.0M of the 7.9M tokens |
+| Everything after Session 4 | 2h 05m across five sessions |
+| Models | claude-fable-5-1 98% of output over 9 runs; claude-opus-5 2% over 4 |
+| Misses | 121 logged, 33 open, 87 resolved, 1 will-not-fix |
+| Whose gap, of the 66 sorted | check too weak 50% · never said 27% · said and ignored 23% |
+
+That last row is the reset's own justification: **half of what the framework got wrong was a check too weak to catch it, not a rule nobody had written.** Turning prose into scripts was the right treatment.
+
+Reported honestly rather than filled in: `gates.jsonl` is empty, so this repository has no first-pass rate, gate distribution or escape rate, and Session 6's own run record carries no token window and is excluded from every token figure instead of counted as zero.
+
 ### 2026-09-07 — the Codex adapter removed, and WORKFLOW.html dropped
 
 Both on the owner's decision, closing D-14 (open since the Session 1 review) and `MISS-TechieFlow-20260907-10`.
