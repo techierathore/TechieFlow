@@ -91,9 +91,6 @@ files:
   - path: .tfcore\tasks\test-design.md
     hash: bcd13a95d296ce22
     modified: false
-  - path: .tfcore\tasks\shard-doc.md
-    hash: a83c900f64ea3d4f
-    modified: false
   - path: .tfcore\tasks\risk-profile.md
     hash: addf5d143cfe6f12
     modified: false
@@ -106,23 +103,11 @@ files:
   - path: .tfcore\tasks\nfr-assess.md
     hash: b9011d038b81a69b
     modified: false
-  - path: .tfcore\tasks\kb-mode-interaction.md
-    hash: 4d6b921c24ba4999
-    modified: false
-  - path: .tfcore\tasks\index-docs.md
-    hash: 70b1d526b19d015e
-    modified: false
   - path: .tfcore\tasks\generate-ai-frontend-prompt.md
     hash: ca4cabd824ea1b60
     modified: false
   - path: .tfcore\tasks\facilitate-brainstorming-session.md
     hash: 38594d876614e077
-    modified: false
-  - path: .tfcore\tasks\execute-checklist.md
-    hash: 8a704b6f2bc52e12
-    modified: false
-  - path: .tfcore\tasks\document-project.md
-    hash: 98f8790d20e83cf3
     modified: false
   - path: .tfcore\tasks\create-next-story.md
     hash: 99e5cc3237a9cffd
@@ -147,9 +132,6 @@ files:
     modified: false
   - path: .tfcore\tasks\apply-qa-fixes.md
     hash: 70e6143a80f7296b
-    modified: false
-  - path: .tfcore\tasks\advanced-elicitation.md
-    hash: d39118bf32237a21
     modified: false
   - path: .tfcore\data\test-priorities-matrix.md
     hash: 1dd5698a46ab054e

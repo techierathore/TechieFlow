@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TechieFlow — Questions and gotchas</title>
+<script>
+/* Resolve the theme BEFORE first paint (no flash). Saved choice wins; otherwise
+   pick by time of day — light 07:00–19:00 local, softened dark at night. */
+(function(){
+  try{
+    var t = localStorage.getItem('tf-theme');
+    if(t!=='light' && t!=='dark'){ var h = new Date().getHours(); t = (h>=7 && h<19) ? 'light' : 'dark'; }
+    document.documentElement.setAttribute('data-theme', t);
+  }catch(e){ document.documentElement.setAttribute('data-theme','light'); }
+})();
+</script>
+<style>
+/* LIGHT is the default theme — a warm off-white, easy on the eyes (never bright white). */
+:root{
+  --bg:#f4f1e9; --panel:#efe9db; --panel2:#e7e0cd; --line:#d8cfb6;
+  --ink:#2e2a22; --muted:#6f6857; --accent:#2f6f9f; --accent2:#3f7d54;
+  --warn:#9a6b15; --danger:#b03a52; --ok:#3f7d54;
+  --code-bg:#ece5d3; --code-ink:#332f26; --row-alt:#eae2cf;
+  --h3:#3a352b; --h4:#2f6f9f; --quote:#4a4537; --cta-bg:#e6eef5;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+/* DARK — softened near-black (warmer / less harsh than pure #0f1115). */
+html[data-theme="dark"]{
+  --bg:#11141a; --panel:#171b23; --panel2:#1e2430; --line:#2b3240;
+  --ink:#dfe3ea; --muted:#99a2b1; --accent:#7cc4ff; --accent2:#a6e3a1;
+  --warn:#f9c74f; --danger:#f38ba8; --ok:#a6e3a1;
+  --code-bg:#0c1016; --code-ink:#d8dde8; --row-alt:#141821;
+  --h3:#cfd5e3; --h4:#7cc4ff; --quote:#cfd5e3; --cta-bg:#0d2030;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:13px;background:var(--code-bg);color:var(--code-ink);padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
+pre{font-family:var(--mono);font-size:12.5px;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto;color:var(--code-ink);position:relative}
+pre code{background:none;border:none;padding:0}
+.copy{position:absolute;top:8px;right:8px;background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:11px;font-family:var(--sans);cursor:pointer}
+.copy:hover{color:var(--accent);border-color:var(--accent)}
+/* floating light/dark toggle (top-right) */
+.theme-toggle{position:fixed;top:12px;right:14px;z-index:10000;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:12.5px;font-family:var(--sans);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.theme-toggle:hover{color:var(--accent);border-color:var(--accent)}
+
+.layout{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+.layout.no-toc{grid-template-columns:1fr}
+nav.side{position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--line);background:var(--panel);padding:18px 14px}
+nav.side h1{font-size:14px;margin:0 0 4px;letter-spacing:.5px;color:var(--ink)}
+nav.side .sub{font-size:11.5px;color:var(--muted);margin-bottom:14px}
+nav.side ol,nav.side ul{list-style:none;padding:0;margin:0}
+nav.side li{font-size:13px;margin:2px 0}
+nav.side li a{display:block;padding:5px 8px;color:var(--ink);border-radius:6px}
+nav.side li a:hover{background:var(--panel2);text-decoration:none}
+nav.side li.h3 a{padding-left:22px;font-size:12.5px;color:var(--h3)}
+nav.side .group{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin:14px 8px 4px}
+
+main{padding:28px 40px 80px;max-width:1100px}
+.layout.no-toc main{margin:0 auto}
+
+h1{font-size:28px;margin:0 0 6px}
+h2{font-size:22px;margin:32px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);scroll-margin-top:16px}
+h3{font-size:17px;margin:22px 0 6px;color:var(--h3);scroll-margin-top:16px}
+h4{font-size:14px;margin:14px 0 4px;color:var(--h4);scroll-margin-top:16px}
+.subtitle{color:var(--muted);font-size:14px;margin-top:-4px;margin-bottom:18px}
+p{margin:6px 0 10px}
+blockquote{border-left:3px solid var(--accent);background:var(--panel);margin:8px 0;padding:8px 14px;color:var(--quote)}
+ul,ol{padding-left:22px}
+li{margin:2px 0}
+
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);color:var(--h3);font-weight:600}
+tr:nth-child(even) td{background:var(--row-alt)}
+
+hr{border:none;border-top:1px solid var(--line);margin:24px 0}
+.anchor-link{color:var(--muted);font-weight:400;font-size:0.85em;margin-left:8px;opacity:0;transition:opacity .15s;text-decoration:none}
+h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
+
+/* inline TOC at top of main content */
+.toc-inline{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 16px;margin:14px 0 24px}
+.toc-inline > div{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.toc-inline ol,.toc-inline ul{margin:4px 0;padding-left:18px}
+.toc-inline li{font-size:13px;margin:1px 0}
+.toc-inline a{color:var(--h3)}
+
+/* mermaid diagram wrapper + toolbar */
+.diagram{position:relative;border:1px solid var(--line);border-radius:8px;background:var(--code-bg);margin:14px 0;overflow:hidden}
+.diagram .mermaid{padding:14px;margin:0;background:transparent;border:none;overflow:auto}
+.diagram .dt{display:flex;gap:6px;justify-content:flex-end;padding:6px 8px;background:var(--row-alt);border-bottom:1px solid var(--line)}
+.diagram .dt button{background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 10px;font-size:12px;font-family:var(--sans);cursor:pointer;min-width:30px}
+.diagram .dt button:hover{color:var(--accent);border-color:var(--accent)}
+.diagram .dt .zlabel{padding:3px 6px;font-size:11px;color:var(--muted);font-family:var(--mono);align-self:center}
+.diagram.fs{position:fixed;inset:0;z-index:9999;border-radius:0;border:none}
+.diagram.fs .mermaid{height:calc(100vh - 40px);display:flex;align-items:center;justify-content:center}
+
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.side{position:static;height:auto}}
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" title="Toggle light / dark">&#9790; Dark</button>
+<div class="layout no-toc">
+  <main>
+    <h1>TechieFlow — Questions and gotchas</h1>
+    <div class="subtitle">Rendered 2026-09-07 &middot; source <code>TechieFlow-FAQ.md</code></div>
+
+<table>
+<thead><tr><th></th><th></th></tr></thead>
+<tbody>
+<tr><td>Purpose</td><td>The things that trip people up, each with the answer and the date it was fixed.</td></tr>
+<tr><td>Audience</td><td>Anyone using the framework who has just hit something surprising.</td></tr>
+<tr><td>Status</td><td>Moved out of <code>README.md</code> on 2026-09-07 (Session 6 of the reset), unedited. Every entry predates the reset, so a few describe commands and task sections that Session 4 renamed or removed; the answer's substance still holds. <code>docs/TechieFlow-How-It-Works.md</code> is the current description.</td></tr>
+<tr><td>Companion</td><td><code>README.md</code>, <code>docs/TechieFlow-Setup.md</code>, <code>docs/TechieFlow-Permissions-And-YOLO.md</code>.</td></tr>
+</tbody>
+</table>
+<hr>
+<h2 id="faq-gotchas">15. FAQ &amp; gotchas<a class="anchor-link" href="#faq-gotchas">#</a></h2>
+<p><strong>Q: Rendering docs to HTML burns enormous tokens every phase. Is the model really writing all that by hand?</strong></p>
+<p>It was, until 2026-08-27. There was no renderer: <code>html-render-shell.md</code> was a 494-line prose spec and both render tasks told the agent to implement it by hand. One phase re-rendering four documents emitted ~300 KB of HTML — roughly <strong>75–80k output tokens</strong> — and <code>PROJECT-STATUS.html</code> is mandatory at the end of <em>every</em> phase.</p>
+<p>One command now:</p>
+<pre><code class="language-bash">bash .tfcore/utils/tf-render-html.sh docs/MyApp-BRD.md PROJECT-STATUS.md</code></pre>
+<p>Dependency-free (Python 3 stdlib — no pandoc, no node, no pip). It <strong>extracts the §2 CSS, §3 theme script and §7 JS out of <code>html-render-shell.md</code> at render time</strong> instead of duplicating them, so the shell cannot drift from its own spec. Passing a <code>*-Checklist.md</code> is refused with exit 2 — that ban is mechanical now, not prose. It also runs the §5.5 Mermaid self-check; those warnings are defects in the <strong>source markdown</strong>, so fix the diagram and re-render, never edit generated HTML. (TfLens TF-003 — a gap, not a regression.)</p>
+<p><strong>Q: Does <code>update-framework.sh</code> update the root <code>opencode.jsonc</code>? Mine looks very old.</strong></p>
+<p>It does now; it did not until 2026-08-27. The 2026-08-20 split moved framework config to <code>.opencode/opencode.jsonc</code> (refreshed every run, wins on conflicts) and demoted the root file to project-only keys — then preserved it forever. A survey of all ten apps carrying the file found <strong>none has any project-only content</strong>; nine held a 138–154 line copy of a 925-line template, all nine missing the <code>trblazeui</code>/<code>techierag</code> agents. Two still wired the <code>build-ui/rag/functional-phase</code> commands dissolved 2026-06-26 as <code>{file:}</code> refs to deleted files — and <strong>a dead <code>{file:}</code> ref hard-fails OpenCode's entire config load</strong>, so those repos silently loaded no framework agents or commands. The root file now refreshes like <code>.claude/settings.json</code>: replaced when nothing project-owned would be lost (old → <code>opencode.jsonc.bak</code>), preserved with the project-only keys named when there is, dead refs reported either way.</p>
+<p><strong>Q: An agent says a framework file — <code>tf-metrics.sh</code>, a task, a template — is "not present anywhere in this tree". It obviously is. Why?</strong></p>
+<p>Because the framework is invisible to every default file-search tool, and until 2026-08-27 nothing told the agents that. <strong>Two independent filters stack</strong>, and you have to defeat both:</p>
+<ul>
+<li><code>.tfcore/</code>, <code>.claude/</code>, <code>.codex/</code>, <code>.opencode/</code> and <code>.agents/skills/</code> are <strong>hidden dot-directories</strong> — ripgrep (which backs the agents' Grep tool) skips hidden paths by default.
+</li>
+<li>They are also in the <strong>managed <code>.gitignore</code> block</strong> the scaffolders write into every app (§3) — and ripgrep honours <code>.gitignore</code> by default too.
+</li>
+</ul>
+<p>So <code>rg --hidden</code> is <em>not</em> enough in an app repo; it takes <code>rg --hidden --no-ignore</code> (<code>rg -uu</code>). And since nothing under <code>.tfcore/</code> is <em>tracked</em> in an app, <code>git grep</code> and <code>git ls-files</code> return zero rows as well. An agent that globs for a filename gets nothing and reasonably concludes the framework isn't installed.</p>
+<p><strong>This is not fixed by un-ignoring the framework.</strong> That ignore block is deliberate and load-bearing — deployed copies are re-synced from the template by <code>update-framework.sh</code> and must never be committed in an app (§3). The fix is on the agent side: every framework file has exactly one canonical path, and whatever needs it names that path, so <strong>existence is confirmed by reading the literal path, never by searching for the name</strong>. The rule now lives in <code>.tfcore/tasks/_status-update-gate.md</code> §"The framework tree is INVISIBLE to search" (a shared include, so every checklist-executing task gets it), is restated in verify-phase's verdict rules, and ships in the <code>AGENTS.md</code> / <code>CLAUDE.md</code> hard rules for new apps.</p>
+<p><strong>Why it matters more than a wasted search:</strong> the false negative doesn't stay in the transcript. It gets written into a checklist Remarks cell, a BRD §4 status row, or a blocker — and the next agent inherits it as fact, closing a gate that was never actually blocked.</p>
+<p><strong>When it really <em>is</em> missing:</strong> a fresh clone genuinely has no <code>.tfcore/</code>, because it was never committed. That repo needs <code>update-framework.sh &lt;repo&gt;</code> run once <em>on that machine</em> (§16) — one command, never a reason to reimplement what the missing file does.</p>
+<p><strong>Q: What if the agent ignores the coding standards mid-implementation?</strong></p>
+<p>The verifier's standards-compliance grep checks (§10, item 3) catch the most common violations and produce coverage misses. When you see a miss like <code>STANDARDS: underscore-field in src/Foo.cs:42</code> flagged in the checklist's Requirements Status table, tell the implementing agent: <em>"Fix the standards violations flagged in the Requirements Status table of docs/&lt;APP&gt;-Checklist.md per docs/&lt;APP&gt;-Coding-Standards.md."</em> Loop until clean.</p>
+<p><strong>Q: What if existing brownfield code doesn't use the <code>obj</code> field prefix?</strong></p>
+<p>First: the prefix only applies if THIS project chose <code>obj</code> — the field prefix is a per-project day-1 decision recorded in <code>docs/&lt;APP&gt;-Coding-Standards.md</code> (e.g. AstroLyfe uses bare PascalCase, no prefix). If it did, the analyst flags it as standards drift in the day-1 output summary. You then either: (a) let the standards-compliance grep checks in the verify pass catch them and fold the fixes into the regular build loop (the implementing agent renames as it touches the file), or (b) explicitly ask flow-master for a one-shot rename pass: <em>"Rename every non-obj-prefixed instance field in src/ to use the obj prefix per docs/&lt;APP&gt;-Coding-Standards.md, in one commit per file."</em> Option (a) is lower-risk; option (b) is faster if you want a clean baseline.</p>
+<p><strong>Q: I want to change the coding standards mid-project. Will the agents pick it up?</strong></p>
+<p>Yes — they read <code>docs/&lt;APP&gt;-Coding-Standards.md</code> on every invocation. Update the file, then in the next implementation prompt include <em>"NOTE: the coding standards file was updated; conform new code to it and flag any existing non-conforming areas in your output summary."</em></p>
+<p><strong>Q: Should the architecture document be updated as the code changes?</strong></p>
+<p>Yes. Handoff includes "if the architecture changed during implementation, update Architecture.md first to reflect 'as-built', then regenerate the HTML." For mid-flight structural changes, the implementing agent should note it; <code>/flow-master</code> reconciles at handoff. For a deliberate scope/structure change, run <code>*amend-docs &lt;APP&gt; "&lt;what changed&gt;"</code> (§7.9).</p>
+<p><strong>Q: <code>scaffold-brownfield.sh</code> / <code>scaffold-greenfield.sh</code> re-run wiped my work?</strong></p>
+<p>No for your work product — framework files copy with <code>rsync --ignore-existing</code>. EXCEPTION: the harness agent mirror under <code>.claude/commands/TechieFlow/agents/</code> is force-synced from <code>.tfcore/agents/</code> on every run — edit agents only in <code>.tfcore/agents/</code>. (The old <code>.opencode/command/TechieFlow/</code> mirror no longer exists — OpenCode loads agents/tasks from <code>opencode.jsonc</code> <code>{file:./.tfcore/...}</code> references.)</p>
+<p><strong>Q: <code>*yolo</code> doesn't stop Bash prompts.</strong></p>
+<p>It does now (2026-08-21, §12a). <code>*yolo</code> writes <code>.tfcore/.session/yolo.json</code>; the PreToolUse hook reads it and stops asking for <code>rm</code>/<code>rmdir</code>/<code>sudo</code> and allows read-only git. If you still see a delete prompt: (1) the app's <code>.claude/settings.json</code> predates the change and still has <code>Bash(rm *)</code> under <code>ask</code> — run <code>update-framework.sh &lt;app&gt;</code>; a settings <code>ask</code> rule prompts in every mode, even bypass; (2) the agent forgot to run <code>tf-yolo.sh on</code> — type <code>*yolo</code> again or run it yourself. Git <strong>writes</strong> prompt for nobody — they are denied outright in every mode.</p>
+<p><strong>Q: My unattended goal run stopped on "You've hit your limit · resets …".</strong></p>
+<p>Use the supervisor, not a bare session: <code>bash .tfcore/utils/tf-goal.sh &lt;app-dir&gt; "&lt;goal&gt;"</code> (§12a). It parses the reset time, sleeps until reset + 15 min, and resumes the same session; <code>--resume &lt;app-dir&gt;</code> continues after a reboot. Watch <code>.tfcore/.session/goal.log</code>.</p>
+<p><strong>Q: <code>*build-phase</code> implemented a few REQs and told me to run it again for the rest.</strong></p>
+<p>That ending is banned (build-phase §2b). Re-run it — FRESH/FIX detection picks up the open rows — and, if it happens again, quote §2b back: a pass is done when every working-list REQ is ≥ <code>Implemented</code>; context pressure means more sub-agent clusters, not a shorter pass.</p>
+<p><strong>Q: Mermaid not rendering in BRD.html / Architecture.html.</strong></p>
+<p>(1) Offline + CDN script blocked — inline mermaid.min.js instead. (2) Missing <code>mermaid.initialize</code> — check end of HTML. (3) Malformed code fence — confirm <code>`</code><code>mermaid</code> on its own line and valid Mermaid syntax.</p>
+<p><strong>Q: Verifier says "Playwright not installed".</strong></p>
+<p>Vidur self-heals browser binaries. If install fails: did you run §0?</p>
+<p><strong>Q: Agent implemented things <em>not</em> in the requirements doc.</strong></p>
+<p><em>"Revert anything not tied to a REQ-</em> ID."* Add new REQ first if you actually want it.</p>
+<p><strong>Q: Slash command <code>/trblazeui</code> shows "no skill".</strong></p>
+<p>Run <code>dotnet build</code> once to fire the TrBlazeUI NuGet deploy target. If still missing: <code>dotnet build -t:TrBlazeUIRedeployAgentFiles</code>. Restart Claude Code so it rescans skills.</p>
+<p><strong>Q: Should I commit the HTML files?</strong></p>
+<p>Yes for all of <code>PROJECT-STATUS.html</code>, <code>&lt;APP&gt;-BRD.html</code>, <code>&lt;APP&gt;-Architecture.html</code>, <code>&lt;APP&gt;-&lt;Library&gt;-Feedback.md</code>. Browseable on GitHub without cloning, and they're the human-facing artifacts.</p>
+<p><strong>Q: Standard TechieFlow story-by-story flow — ever?</strong></p>
+<p>Only with a second person. For solo + Claude Max, the compressed flow is strictly faster. The stock story-flow agents and tasks no longer ship with this scaffold (trimmed 2026-06-12) — obtain a full story-by-story agent set separately if that day comes.</p>
+<p><strong>Q: How do I keep token usage down?</strong></p>
+<p>Read <code>.tfcore/TOKEN-GUIDE.md</code> (ships with every project). Key levers: don't load whole docs or repo trees into context; checklists stay markdown-only (never rendered to HTML — HTML adds weight with no AI benefit); fan work out to subagents instead of loading everything in one session; use <code>*amend-docs</code> and <code>*devguide --update</code> for incremental refreshes instead of re-running phases from scratch; use <code>*refresh-status</code> to recover a broken session instead of re-running the whole phase.</p>
+<p><strong>Q: A screen passed verification but was rendering blank OR was visually broken — how is it prevented now?</strong></p>
+<p>Before the gates, verification only checked acceptance-test pass/fail (HTTP 200, no exception, element present). A screen could pass while its data table showed zero rows, or while every control rendered its data but the controls <strong>overlapped / sat off-screen / were clipped</strong> so the running app was unusable. Two gates close both holes:</p>
+<ul>
+<li><strong>Render gate (verify-phase §4a):</strong> the verifier asserts every control listed in the DevGuide actually renders its data — no blank table, no count-over-zero-rows, no empty chart.
+</li>
+<li><strong>Visual-truth gate (§4b):</strong> it then asserts the screen LOOKS right — no control overlap, every control in-viewport and non-zero-size, checked at desktop + mobile widths, the screenshot inspected, and diffed against the mockup when one exists.
+</li>
+</ul>
+<p>A REQ is <code>Verified</code> only if acceptance passes AND data renders AND the screen looks right; otherwise it drops to <code>Needs re-verify</code> / <code>FAIL</code>. <code>Done (pre-existing)</code> is treated as an unverified migrated claim and gets the same sweep. The DevGuide's observed render/visual tags are refreshed each run, keeping DevGuide ⇄ Checklist ⇄ Verifier runtime-true.</p>
+<p><strong>Q: The verifier passed but the running UI is broken — who do I call?</strong></p>
+<p><code>/TechieFlow:agents:flow-master *fix-issues {AppName} {folder}</code> (§7.11). Drop a folder of screenshots of the broken screens (optionally a <code>bugs.md</code> naming what's wrong on each). Flow-master reads them (vision), reproduces each issue live with Playwright, triages it (layout / data / logic / RAG), and <strong>fans the fix out to the right builder</strong> — <code>/trblazeui</code> for layout, its own subagents for data/logic, <code>/techierag</code> for RAG. You never invoke a builder agent yourself. It then re-smokes (data + visual), re-verifies the affected REQs, and updates the DevGuide + checklist + PROJECT-STATUS.</p>
+<p><strong>Q: I found bugs at UAT / in production — I want them analyzed and logged, but NOT fixed yet</strong></p>
+<p><code>/TechieFlow:agents:flow-master *triage-issues {AppName} {evidence}</code> (§7.12). Same evidence channel as <code>*fix-issues</code> (a screenshots folder), plus it accepts a written bug list. Flow-master reproduces each issue live and delivers <strong>docs only</strong>: regressed REQs demoted to <code>Needs re-verify</code> with dated <code>⚠ UAT bug</code> remarks, new <code>Planned</code> REQ rows for unspecified defects, refreshed DevGuide known-issues, and a PROJECT-STATUS whose next command is the <code>*fix-issues</code> pointer naming the REQ IDs. Add <code>verify</code> to also regression-re-verify the affected screens' sibling REQs. It never edits <code>src/</code>/<code>tests/</code> and never spawns a builder — you decide when the fixing starts.</p>
+<p><strong>Q: How does a developer understand or verify the AI-generated code?</strong></p>
+<p>Run <code>/TechieFlow:agents:flow-master *devguide {AppName}</code> (also auto-run at handoff). It produces <code>docs/{AppName}-DevGuide.md</code> + a styled <code>.html</code>: every screen grouped by user role, each with a flowchart tracing the full stack (Razor page → service → data-access → stored procedure/query), a Controls table (with observed render-status from the OBSERVE pass), and a Data-lineage table. Use it to find the right service method for a bug, confirm the correct stored procedure is called, or check that a control is bound to the right DTO property. Re-run with <code>--update</code> after implementing changes to refresh only the affected screens. See §6 for the full schema and the 3-pass generation model.</p>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+<script>
+// Light/dark toggle. The initial theme was already applied flash-free by the
+// <head> script (saved choice, else time-of-day). Clicking flips it, saves the
+// choice, and reloads so Mermaid re-renders in the matching theme.
+(function(){
+  var btn = document.getElementById('themeToggle');
+  if(!btn) return;
+  var relabel = function(){
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    btn.textContent = dark ? '☀ Light' : '☾ Dark';
+  };
+  relabel();
+  btn.addEventListener('click', function(){
+    var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    try{ localStorage.setItem('tf-theme', next); }catch(e){}
+    location.reload();
+  });
+})();
+
+// Copy buttons on every code <pre> — but NEVER on a `pre.mermaid`:
+// mermaid reads the <pre>'s textContent as the diagram source, so a button
+// appended here glues "copy" onto the last line and breaks the parse
+// (flowcharts → "Syntax error"; sequence diagrams silently absorb it).
+// Mermaid blocks get copy/export from their own .diagram toolbar instead.
+document.querySelectorAll('pre:not(.mermaid)').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy';
+  btn.textContent = 'copy';
+  btn.addEventListener('click', () => {
+    const text = pre.querySelector('code') ? pre.querySelector('code').innerText : pre.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'copied';
+      setTimeout(() => { btn.textContent = 'copy'; }, 1200);
+    });
+  });
+  pre.appendChild(btn);
+});
+
+// Mermaid init — theme follows the resolved light/dark theme
+if (window.mermaid) {
+  var mermaidTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default';
+  mermaid.initialize({ startOnLoad: true, theme: mermaidTheme, securityLevel: 'loose' });
+}
+
+// Mermaid toolbar wiring — run after mermaid renders
+function wireMermaidToolbars() {
+  document.querySelectorAll('.diagram').forEach(dia => {
+    if (dia.dataset.wired) return;
+    const merm = dia.querySelector('.mermaid');
+    const svg = merm && merm.querySelector('svg');
+    if (!svg) return;
+    dia.dataset.wired = '1';
+    let scale = 1;
+    const label = dia.querySelector('.zlabel');
+    const apply = () => {
+      svg.style.transform = `scale(${scale})`;
+      svg.style.transformOrigin = 'top left';
+      if (label) label.textContent = Math.round(scale * 100) + '%';
+    };
+    const setScale = (s) => { scale = Math.max(0.25, Math.min(4, s)); apply(); };
+    dia.querySelector('[data-zin]').onclick = () => setScale(scale * 1.2);
+    dia.querySelector('[data-zout]').onclick = () => setScale(scale / 1.2);
+    dia.querySelector('[data-fit]').onclick = () => {
+      svg.style.transform = '';
+      svg.removeAttribute('width');
+      svg.style.maxWidth = '100%';
+      svg.style.height = 'auto';
+      scale = 1;
+      if (label) label.textContent = 'Fit';
+    };
+    dia.querySelector('[data-one]').onclick = () => {
+      svg.style.transform = '';
+      svg.style.maxWidth = 'none';
+      svg.style.width = '';
+      svg.style.height = '';
+      scale = 1;
+      if (label) label.textContent = '100%';
+    };
+    dia.querySelector('[data-fs]').onclick = () => {
+      dia.classList.toggle('fs');
+      if (dia.classList.contains('fs')) {
+        document.addEventListener('keydown', escFs);
+      } else {
+        document.removeEventListener('keydown', escFs);
+      }
+    };
+    function escFs(e) { if (e.key === 'Escape') { dia.classList.remove('fs'); document.removeEventListener('keydown', escFs); } }
+    dia.querySelector('[data-pop]').onclick = () => openInNewTab(svg);
+    // Ctrl+wheel zoom
+    merm.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setScale(scale * (e.deltaY < 0 ? 1.1 : 1/1.1));
+    }, { passive: false });
+  });
+}
+
+function openInNewTab(svg) {
+  const svgSource = new XMLSerializer().serializeToString(svg);
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Diagram</title>
+<style>
+  html,body{margin:0;height:100%;background:#0f1115;color:#e6e8ee;font-family:system-ui,sans-serif}
+  .bar{position:fixed;top:0;left:0;right:0;padding:8px 12px;background:#161a22;border-bottom:1px solid #2a3142;display:flex;gap:8px;z-index:10}
+  .bar button{background:#1c2230;color:#9aa3b2;border:1px solid #2a3142;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer}
+  .bar button:hover{color:#7cc4ff;border-color:#7cc4ff}
+  .bar .hint{margin-left:auto;color:#9aa3b2;font-size:11.5px;align-self:center}
+  #stage{position:absolute;top:42px;bottom:0;left:0;right:0;overflow:hidden}
+  #stage svg{width:100%;height:100%}
+</style>
+</head><body>
+<div class="bar">
+  <button onclick="zpz.zoomIn()">+</button>
+  <button onclick="zpz.zoomOut()">−</button>
+  <button onclick="zpz.fit();zpz.center()">Fit</button>
+  <button onclick="zpz.resetZoom();zpz.center()">1:1</button>
+  <button onclick="window.print()">Print</button>
+  <button onclick="dlPng()">PNG</button>
+  <button onclick="dlSvg()">SVG</button>
+  <span class="hint">Drag to pan · Ctrl+wheel to zoom · + / − keys</span>
+</div>
+<div id="stage">${svgSource}</div>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"><\/script>
+<script>
+  const el = document.querySelector('#stage svg');
+  const zpz = svgPanZoom(el, { zoomScaleSensitivity: .3, minZoom: .2, maxZoom: 10, controlIconsEnabled: false, fit: true, center: true });
+  document.addEventListener('keydown', e => {
+    if (e.key === '+' || e.key === '=') zpz.zoomIn();
+    if (e.key === '-' || e.key === '_') zpz.zoomOut();
+    if (e.key === '0') { zpz.resetZoom(); zpz.center(); }
+  });
+  function dlSvg() {
+    const blob = new Blob([new XMLSerializer().serializeToString(el)], { type: 'image/svg+xml' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'diagram.svg'; a.click();
+  }
+  function dlPng() {
+    const src = new XMLSerializer().serializeToString(el);
+    const img = new Image();
+    const url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(src)));
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = el.clientWidth * 2; c.height = el.clientHeight * 2;
+      const ctx = c.getContext('2d'); ctx.scale(2,2); ctx.drawImage(img, 0, 0);
+      c.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'diagram.png'; a.click(); });
+    };
+    img.src = url;
+  }
+<\/script>
+</body></html>`;
+  const w = window.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+// Run wiring after mermaid finishes (it renders async)
+if (window.mermaid) {
+  setTimeout(wireMermaidToolbars, 400);
+  setTimeout(wireMermaidToolbars, 1200);  // safety re-run for slow renders
+}
+</script>
+</body>
+</html>

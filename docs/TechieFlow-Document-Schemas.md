@@ -4,7 +4,7 @@
 |---|---|
 | Purpose | For each human document the framework produces: which sections it must have, how big it may be, and what every row must contain. A checker script enforces this, so the AI cannot drift from the shape. |
 | Audience | The owner (reviews the section lists, the size limits and the decisions in §7). Agents read the same rules in machine form at the top of each template. |
-| Status | **Built in Session 3 of the reset and closed 2026-09-04.** Nine templates carry a schema block; `tf-doc-check.sh` enforces it; the status gate runs it; day-1 asks the size. §6 holds the real results on fourteen projects. The tenth document, the Deployment Checklist (§3.10), is agreed and is built in Sitting 4b. |
+| Status | **Built in Session 3 of the reset and closed 2026-09-04.** Nine templates carry a schema block; `tf-doc-check.sh` enforces it; the status gate runs it; day-1 asks the size. §6 holds the real results on fourteen projects. The tenth document, the Deployment Checklist (§3.10), is agreed and is built in Sitting 4b. **Sitting 4b (2026-09-05):** the Large layout (§2) and the eleventh document, Phases (§3.11), agreed and built into the checker, the splitter and the status scripts. |
 | Companion | `TechieFlow-Reset-Plan-2026-09-04.md` (Session 3), `TechieFlow-Requirements.md` (FR-07 to FR-09, FR-14, FR-15, FR-17), `TechieFlow-How-It-Works.md` §8 (D-1, D-2, D-3, D-20). |
 
 ---
@@ -32,7 +32,17 @@ The size is chosen at day-1 and written into `core-config.yaml` and every docume
 |---|---|---|---|
 | Small | up to 10 | one | up to 50 |
 | Medium | up to 20 | any | up to 100 |
-| Large | more than 20, or more than 100 requirements | any | split into phases; each phase is its own Small or Medium BRD, checklist and build |
+| Large | more than 20, or more than 100 requirements | any | split into phases; each phase fits Medium on its own and has its own BRD, checklist, UIDesign, DevGuide and build |
+
+**How a Large project is laid out** (owner, 2026-09-05, Sitting 4b). A document that has one section per screen splits by phase, so an agent loads only the phase it is working on; a document that does not stays single.
+
+- Per phase: BRD, checklist, UIDesign, DevGuide. Each phase must fit Medium on its own: at most 20 screens and 100 requirements.
+- Single: Architecture, Coding Standards, PROJECT-STATUS, the Phases table (§3.11), UsageGuide, ProductGuide, and the mockup folder, which stays one click-through set because a phase-1 screen may link to a phase-2 screen. UsageGuide and ProductGuide stay single because no agent reads them during build or verify and their per-screen entries are short; if one passes its maximum the checker says so and it is split then.
+- Names: phase 1 keeps the plain names (`docs/<App>-BRD.md`, `docs/<App>-Checklist.md`, `docs/<App>-UIDesign.md`, `docs/<App>-DevGuide.md`), so a project that grows into Large never renames anything. Phase 2 onward are `docs/<App>-P2-BRD.md`, `docs/<App>-P2-Checklist.md`, `docs/<App>-P2-UIDesign.md`, `docs/<App>-P2-DevGuide.md`, and so on.
+- Numbers: `BRD-N` and `REQ-` ids run on across phases and are never reused. If phase 1 ends at BRD-40, phase 2 starts at BRD-41.
+- Which phase a command works on: `appPhase:` in `core-config.yaml`, 1 by default, so Small and Medium projects need nothing. Build, verify, refresh-status, the facts script and the BRD status script read that phase's BRD, checklist, UIDesign and DevGuide; `*amend-docs` adds to that phase; a phase is done when its checklist is all Verified and handoff moves the number on. PROJECT-STATUS "Where I am" names the phase.
+- Day-1 writes every phase's BRD at once, so the owner reviews the whole scope once; a later phase's BRD can still change through `*amend-docs` before it is built. Every screen gets its mockup at stage 1.
+- Growth: when `*amend-docs` would take a Small project past 50 requirements it raises the size to Medium; a phase split is proposed only when Medium's cap would pass.
 
 **What counts as a screen** (owner, 2026-09-04). A screen is a page with its own route. Every routed page counts, including sign in, register, forgot password, reset password, and any licence, subscription or role screens. AppManager provides the API behind those screens; the application builds the screens. Dialogs, tabs and panels inside a page are regions of that page, not screens. They are listed under their parent screen in the UIDesign, drawn in that screen's mockup, and verified on that page. By this rule TfLens has thirteen screens, which is Medium by screens; its 169 requirements are beyond Medium in any case, which is the D-3 complaint.
 
@@ -41,7 +51,7 @@ A known defect follows from this and is logged as a miss (§8): the verifier tod
 **Kind.** A project is an `app` or a `library`. Kind sits beside Size. For a library the UIDesign and mockups are optional, and the screen maps become component maps:
 
 - A UI library with a sample app (TrBlazeUI): the DevGuide's component map links every component to the sample-app screen that shows it, with that screen's screenshot.
-- A service library (TechieRag): the component map is the consumer's view, one entry per service with how it is called, and it lives in the UsageGuide.
+- A service library (TechieRag): the DevGuide's map has one entry per public service: how it is registered and called, its call chain and where to break, for the developer who maintains the library. The UsageGuide keeps only how a consumer installs and calls the package. (Owner, 2026-09-06: the map is developer material; this reverses the service-library half of decision 5 in §7.1, see §7.2 M.)
 
 **Where the size and kind are asked.** Greenfield day-1 asks one more question after the concept: "Size: Small, Medium or Large? From the concept I count N screens and N roles, so I propose X." Brownfield day-1 counts the routes in the code and confirms the same way. The answer is written to `appSize:` and `appKind:` in `core-config.yaml` and into every document header. `*amend-docs` reads the cap from there and proposes a phase split when an addition would pass it (FR-10; wired in Session 4a).
 
@@ -59,12 +69,12 @@ What it is for: the owner's statement of what the product does, screen by screen
 
 | Order | Section | Small | Medium / Large | Content rule |
 |---|---|---|---|---|
-| 0 | Header table | required | required | App, Kind, Size, Stack answer set, Status, Date |
+| 0 | Header table | required | required | App, Kind, Size, Stack answer set, Status, Date. A Large project adds Phase (`1 of 3`), and Size is the phase's own size. |
 | 1 | Summary | required | required | What it is, for whom, why. At most 200 words. |
 | 2 | Scope | required | required | Two lists: in, out. |
 | 3 | Users and roles | required | required | One table. |
 | 4 | Screens and flow | required | required | One table: screen, route, role, mockup link, fields. A dialog is a row under its parent screen with `on /route` in the Route column. Then the primary journey as a numbered list. |
-| 5 | Requirements | required | required | The `BRD-N` ledger. Every item: id, title, screen, mockup link, one acceptance line in the "When …, then …" form. Ids never renumbered. |
+| 5 | Requirements | required | required | The `BRD-N` ledger, grouped under a `###` heading per screen that opens with one plain sentence saying what the screen does. Every item: id, a title in everyday words, screen, mockup link, one acceptance line in the "When …, then …" form of at most 30 words (target 20) holding one behaviour; a line that bundles steps is split into items (owner, 2026-09-06; miss 13). Ids never renumbered. |
 | 6 | Non-functional requirements | required | required | One table. A speed requirement uses the `perf-budget:` form, only where the owner gave a number. |
 | 7 | Development status | required | required | One row per screen with counts. Written by the status gate, not by hand. |
 | 8 | Context diagram | optional | required | |
@@ -94,7 +104,7 @@ What it is for: the technical decisions, once, so no phase re-invents them. Prod
 
 Removed: Deployment (decided after UAT; how a developer runs the application is in the UsageGuide), Primary data flow (folded into the Component map as the request list), Target architecture (replaced by the status column), Sources harvested, Table of Contents.
 
-Budget: Small 2,500 target, 3,500 maximum. Medium 4,000 target, 6,000 maximum. Checks: the stack table, the solution table, the request list, the ER diagram and the four-column decisions table are all present.
+Budget: Small 2,500 target, 3,500 maximum. Medium 4,000 target, 6,000 maximum. Checks: the stack table, the solution table, the request list, the ER diagram and the four-column decisions table are all present. **Added 2026-09-06 (owner, after the MyDiary review; miss 16):** the Stack decisions table has a row for each of questions 1 to 8 and 11 (9 and 10 are decided after UAT); for an app, one Solution structure row is named exactly the app, and `<App>.App` is refused.
 
 ### 3.3 UIDesign — `docs/<App>-UIDesign.md`
 
@@ -112,6 +122,8 @@ Removed: How to use, Library gaps (the library feedback file owns them), Table o
 
 Budget: 300 words plus the per-screen figures, so a ten-screen Small app is 2,800 words target and 4,300 maximum. Checks: every screen has its mockup, its two tables and its three states; every mockup file in `docs/mockups/` is linked from a screen (a warning otherwise).
 
+**Mockup rules** (owner, 2026-09-05, Sitting 4a; FR-53). The mockups are one click-through set, not separate pictures: every link and form action opens a mockup that exists; every screen can be reached by clicking from the sign-in page (or the home page when there is none); every screen has a way out; a button that does not navigate shows a message; sign-in needs no credentials, the button alone navigates; and every mockup carries `data-testid` anchors, because the verifier compares only anchored elements. The checker refuses the set otherwise. **Added 2026-09-06 after the owner found the MiMo MyDiary set broken by hand (miss 15):** navigation is a link (`<a href="screen.html">`) or a form action, never a script, because a script dies in any viewer without scripts and the click-through cannot be checked without running one; every menu item leads to its screen; a link is resolved from the mockup folder the way a browser does, not by its file name; every stylesheet a mockup names exists. In a brownfield repository, mockups found outside `docs/mockups/` are moved there first (`tf-mockups-locate.sh`), so there is only ever one mockup folder.
+
 ### 3.4 Checklist — `docs/<App>-Checklist.md`
 
 An agent document. The owner does not review it and it is never rendered. Only the row rules matter.
@@ -122,14 +134,15 @@ Row rules, each checked by script:
 
 1. Table header is exactly `| ID | Requirement | Status | % | Remarks | Details |`.
 2. ID matches `REQ-UI-`, `REQ-FN-`, `REQ-RAG-` or `REQ-NFR-` plus three digits. No duplicates.
-3. Status is one of the fixed values. `Verified` is written only by a verify run (hook exists).
+3. Status is one of the fixed values. `Verified` is written only by a verify run (hook exists). `Owner-UAT` marks a row only the owner can close from the UsageGuide test plan (added in Sitting 4a, 2026-09-05).
 4. `%` is 0, 25, 50, 75 or 100.
 5. The Details link resolves to an anchor in the same file.
-6. Every detail entry names its `BRD-N` item, and every `BRD-N` item in the BRD has at least one row.
+6. Every detail entry names its `BRD-N` item, and every `BRD-N` item in the BRD has at least one row. A row logged from UAT by `*triage-issues` or `*log-miss` starts as `Not Started` with the marker `BRD-pending`; the checker warns, not fails, until `*amend-docs` gives it its BRD item (owner, 2026-09-07, Sitting 4c).
 7. Every UI row carries a mockup link to a file that exists.
-8. Every row has exactly one acceptance line, and it reads **"When `<actor>` `<does what>` on `<screen>`, then `<a result a browser robot can observe>`"**. An optional "Given …," may precede it. UI and functional rows name the screen; a NFR row names the measurement instead and, for speed, carries `perf-budget:` in the fixed form.
+8. Every row has exactly one acceptance line, and it reads **"When `<actor>` `<does what>` on `<screen>`, then `<a result a browser robot can observe>`"**. An optional "Given …," may precede it. UI and functional rows name the screen; a NFR row names the measurement instead and, for speed, carries `perf-budget:` in the fixed form. The line is at most 30 words, target 20, and holds one behaviour; the title is everyday words (owner, 2026-09-06; miss 13).
 9. Remarks holds the current state only, at most 60 words. The history of a row lives in the telemetry streams.
 10. Row count is within the size cap.
+11. A Remarks cell that says something is "not present" or "not found" must name the path that was tried (FR-27; added in Sitting 4a, 2026-09-05).
 
 ### 3.5 Coding Standards — `docs/<App>-Coding-Standards.md`
 
@@ -151,7 +164,7 @@ Sections, fixed, in order, with a word limit each: Where I am (80), Next command
 
 Rules: at most 120 lines, 60 as the target. **Next command to run holds exactly two one-line code blocks, the first labelled Claude Code and the second OpenCode**, so each can be copied on its own. Verification log keeps the last five rows, and no cell in it exceeds 20 words: a result is a count, not a story. Open requirements shows counts by status and at most ten named rows.
 
-The fix, built: the checker enforces all of the above at the status gate whichever way the file was written; a shell write to PROJECT-STATUS (redirection, tee, cp, mv, sed -i, a script) is refused by the guard hook in both harnesses; the checker becomes a Stop hook in Session 6.
+The fix, built: the checker enforces all of the above at the status gate whichever way the file was written; a shell write to PROJECT-STATUS (redirection, tee, cp, mv, sed -i, a script) is refused by the guard hook in both harnesses; since Sitting 4a (2026-09-05) the Stop hook also refuses to end a turn while the status file fails the checker, its HTML is stale, the BRD's Development status table is older than the checklist, or no run record follows the status write (OpenCode receives the same message as a nudge, since it has no blocking Stop hook).
 
 ### 3.7 UsageGuide — `docs/<App>-UsageGuide.md`
 
@@ -165,7 +178,7 @@ What it is for: the owner's test plan. Who to sign in as, how to start it, what 
 | 4 | Automated tests | required | required | The command and what it covers. |
 | 5 | Known limitations | required | required | |
 | 6 | Platform notes | optional | optional | Only when the app runs on more than one platform. |
-| 7 | Component map | service libraries | service libraries | One entry per service: what it does, how it is called. |
+| 7 | How to call it | libraries | libraries | Install and register the package, then one call example per public service or component (2026-09-06; was "Component map" for service libraries). |
 
 Removed: Smoke checklist (folded into section 3), the separate Setup and Deployment sections (folded into the Execution guide), the long section titles.
 
@@ -180,7 +193,7 @@ What it is for: a developer's map from each screen to the code that serves it, w
 | 0 | Header table | required | required | App, Kind, Size, Verified on (the run the screenshots and line numbers come from), Date |
 | 1 | Architecture cheat-sheet | required | required | One diagram and at most 300 words. |
 | 2 | Roles and menu map | apps | apps | |
-| 3 | Screen-by-screen code map | required | required | One `###` per screen (per component for a UI library). Each entry: the screenshot (file must exist); one "Call chain:" line, page method to service class and method to data-access class and method; a where-to-break table, one row per step: file and line, function, the variable to watch, the value it should hold. Example row: `Login.razor.cs:127`, `HandleLogin`, `aLogin.Email`, the email typed in the box. Target 300 words per screen, maximum 450. |
+| 3 | Screen-by-screen code map | required | required | One `###` per screen (per component for a UI library, per public service for a service library). Each entry: the screenshot (file must exist); one "Call chain:" line, page method to service class and method to data-access class and method; a where-to-break table, one row per step: file and line, function, the variable to watch, the value it should hold. Example row: `Login.razor.cs:127`, `HandleLogin`, `aLogin.Email`, the email typed in the box. Target 300 words per screen, maximum 450. |
 | 4 | Cross-cutting flows | required | required | Sign-in, configuration, logging, errors, each with its own call chain and where-to-break table. |
 | 5 | Known issues | required | required | |
 
@@ -204,7 +217,7 @@ What it is for: the end user's manual, task by task, with a screenshot per task.
 
 Budget: Small 2,500 target, 3,500 maximum. Medium 4,500 target, 6,500 maximum.
 
-### 3.10 Deployment Checklist — `docs/<App>-Deployment-Checklist.md` (agreed 2026-09-04; template and command built in Sitting 4b)
+### 3.10 Deployment Checklist — `docs/<App>-Deployment-Checklist.md` (agreed 2026-09-04; template, checker rules and `*deploy-checklist` built 2026-09-06)
 
 Raised by the owner in this session: the two existing deployment checklists (TfLens, TechieBlog) are a mess and the document needs a schema like the others. The survey of those two confirmed it. Both are long (6,500 and 12,200 words), one has eight checkboxes and the other none, both re-describe the same secrets in three or four places, one mixes a local Docker path with the production path in one file, one carries a variable that another section says was deleted, and one says on its first page that the pipeline is settled and on its last that it has never run against the real server.
 
@@ -226,6 +239,17 @@ What it is for: the steps to put the application on its host, produced after UAT
 Rules: every item in sections 3 to 6 is a checkbox; no narrative sections; one hosting target per document. Budget 2,500 target, 4,000 maximum, every size.
 
 Produced by a small new command, `*deploy-checklist <App> <pipeline-document>`, built in Sitting 4b beside the handoff task, because handoff runs before UAT and deployment comes after.
+
+### 3.11 Phases — `docs/<App>-Phases.md` (agreed 2026-09-05, Sitting 4b; Large projects only)
+
+What it is for: the one place that says which screens and requirements belong to which phase of a Large project. Written at day-1 when the size comes out Large, or by `*amend-docs` when a project grows past Medium; the owner reviews it with the BRD. A Small or Medium project does not have this file.
+
+| Order | Section | Content rule |
+|---|---|---|
+| 0 | Header table | App, Kind, Size (Large), Date |
+| 1 | Phases | One table: phase, name, screens, BRD range, status (planned, building, done). A range is `BRD-a to BRD-b`; an item added to an earlier phase after a later one exists takes the next free id and the row gets a second range, comma-separated (2026-09-06). |
+
+Checks: every screen in the UIDesign files sits in exactly one phase; every phase row has its BRD and checklist files; each phase's BRD ids fall inside that phase's range; no `BRD-N` or `REQ-` id appears in two phases. Budget 300 target, 600 maximum.
 
 ---
 
@@ -250,9 +274,9 @@ FAIL PROJECT-STATUS.md: "Next command to run" must hold exactly two code blocks,
 
 It exits with failure when any line says FAIL. `--warn` prints every finding as WARN and exits clean: report mode for an existing project, after which each finding is logged as a miss and fixed through `*amend-docs`.
 
-Where it runs: step 7b of the status gate (`_status-update-gate.md`), on the documents the command wrote, before the HTML render. Both harnesses run it, because it is a shell script called from the task. It becomes a Stop hook in Session 6, after the fixture projects pass.
+Where it runs: step 7b of the status gate (`_status-update-gate.md`), on the documents the command wrote, before the HTML render. Both harnesses run it, because it is a shell script called from the task. Since Sitting 4a (2026-09-05) the Stop hook runs it on PROJECT-STATUS.md as well, so a skipped step cannot end the turn.
 
-Self-test: `bash tests/doc-check/run.sh` builds a minimal Small app document set (nine documents, two mockups, two screenshots) that passes with no findings, and a broken twin that fails on thirteen lines, one per planted defect. This is the FR-14 check; the distribution pipeline runs it.
+Self-test: `bash tests/doc-check/run.sh` builds a minimal Small app document set (nine documents, two mockups, two screenshots) that passes with no findings, and a broken twin that fails on twenty lines, one per planted defect (thirteen from Session 3; the rule 11 remark and six mockup click-through defects added in Sitting 4a). This is the FR-14 check; the distribution pipeline runs it.
 
 ---
 
@@ -301,7 +325,7 @@ Every existing project fails on the acceptance line and on the two-block next co
 | 2 | Budgets | A target and a maximum for every document, not one number. Fixed numbers only for Coding Standards and the Remarks cell. |
 | 3 | Acceptance line | "When … on `<screen>`, then …"; "Given" allowed as a prefix; NFR rows name the measurement. |
 | 4 | What counts as a screen | Every routed page counts, sign-in and AppManager-backed screens included. Dialogs are regions of their page. |
-| 5 | Kind | `app` or `library`. TrBlazeUI's component map links to the sample app; TechieRag's lives in the UsageGuide. |
+| 5 | Kind | `app` or `library`. TrBlazeUI's component map links to the sample app; TechieRag's lives in the UsageGuide. **Service-library half reversed 2026-09-06 (7.2 M): the map lives in the DevGuide.** |
 | 6 | Coding Standards | Baked into the framework: a neutral core file plus a .NET file in `.tfcore/standards/`, and a short per-project file. |
 | 7 | Remarks | Current state only, at most 60 words. |
 | 8 | Block or warn | Block on shape and row rules and on the maximum budget; `--warn` for existing projects; Stop hook in Session 6. |
@@ -316,9 +340,20 @@ Every existing project fails on the acceptance line and on the two-block next co
 | F | Which command produces it | A small new command, `*deploy-checklist <App> <pipeline-document>`, built in Sitting 4b. |
 | G | Tenth document in the Reset Plan | Yes; the plan now lists it under Session 3 and Sitting 4b. |
 
-### 7.2 Still open
+### 7.2 Taken on 2026-09-05 (Sitting 4b)
 
-Nothing. Session 3 closed on 2026-09-04.
+| # | Decision | Result |
+|---|---|---|
+| H | Large layout | As in §2: per-screen documents (BRD, checklist, UIDesign, DevGuide) split by phase; the rest stay single; phase 1 keeps the plain names; ids run on across phases; `appPhase:` selects the phase. |
+| I | Phases document | An eleventh document, one table, Large projects only (§3.11). |
+| J | Day-1 on a Large project | Every phase's BRD is written at once; every screen gets its mockup at stage 1. |
+| K | Growth | Small grows to Medium first; a phase split is proposed only past Medium's cap. |
+| L | UsageGuide and ProductGuide | Stay single for every size. |
+| M | Service-library map (2026-09-06) | Lives in the DevGuide, for the developer who maintains the library: one entry per public service with registration, call chain and where to break. The UsageGuide's library section becomes "How to call it": install, register, one call per service or component. |
+
+### 7.3 Still open
+
+Nothing.
 
 ---
 

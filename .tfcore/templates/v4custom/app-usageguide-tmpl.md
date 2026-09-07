@@ -8,7 +8,7 @@ section: How to test, screen by screen | required
 section: Automated tests | required
 section: Known limitations | required
 section: Platform notes | optional
-section: Component map | library
+section: How to call it | library
 entries: How to test, screen by screen |
 per-entry: 90 120
 budget: S 2500 3500 | M 4000 6000 | L 4000 6000
@@ -23,7 +23,8 @@ rule: entry-expected
      120 words: who to sign in as, numbered steps, the expected result, the REQ ids covered.
      The Execution guide is copy-pasteable commands, one per line, no narrative. Hosting and production
      deployment are not here; they are in the Deployment Checklist after UAT.
-     For a service library the Component map section lists every service and how a consumer calls it. -->
+     For a library, "How to call it" says how a consumer installs and registers the package and gives one call
+     example per public service or component; the maintainer's map of each service is the DevGuide's. -->
 
 # {App} — Usage Guide
 
@@ -76,6 +77,6 @@ Open {http://localhost:port} and sign in as user 1.
 
 {Only when the app runs on more than one platform.}
 
-## Component map
+## How to call it
 
-{Service libraries only. One entry per service: what it does, how it is called, a short snippet.}
+{Libraries only. How to install and register the package, then one call example per public service or component. The maintainer's map of each service is in the DevGuide.}

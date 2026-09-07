@@ -106,7 +106,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout">
   <nav class="side">
     <h1>TechieFlow — Document Schemas</h1>
-    <div class="sub">Last rendered: 2026-09-04</div>
+    <div class="sub">Last rendered: 2026-09-06</div>
     <div class="group">Contents</div>
     <ol>
         <li><a href="#how-a-schema-works">1. How a schema works</a></li>
@@ -121,19 +121,21 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
         <li class="h3"><a href="#usageguide-docs-usageguide-md">3.7 UsageGuide — docs/&amp;lt;App&amp;gt;-UsageGuide.md</a></li>
         <li class="h3"><a href="#devguide-docs-devguide-md">3.8 DevGuide — docs/&amp;lt;App&amp;gt;-DevGuide.md</a></li>
         <li class="h3"><a href="#productguide-docs-productguide-md">3.9 ProductGuide — docs/&amp;lt;App&amp;gt;-ProductGuide.md</a></li>
-        <li class="h3"><a href="#deployment-checklist-docs-deployment-checklist-md-agreed-2026-09-04-template-and-command-built-in-sitting-4b">3.10 Deployment Checklist — docs/&amp;lt;App&amp;gt;-Deployment-Checklist.md (agreed 2026-09-04; template and command built in Sitting 4b)</a></li>
+        <li class="h3"><a href="#deployment-checklist-docs-deployment-checklist-md-agreed-2026-09-04-template-checker-rules-and-deploy-checklist-built-2026-09-06">3.10 Deployment Checklist — docs/&amp;lt;App&amp;gt;-Deployment-Checklist.md (agreed 2026-09-04; template, checker rules and *deploy-checklist built 2026-09-06)</a></li>
+        <li class="h3"><a href="#phases-docs-phases-md-agreed-2026-09-05-sitting-4b-large-projects-only">3.11 Phases — docs/&amp;lt;App&amp;gt;-Phases.md (agreed 2026-09-05, Sitting 4b; Large projects only)</a></li>
         <li><a href="#the-checker-as-built">4. The checker, as built</a></li>
         <li><a href="#what-changed-in-the-framework">5. What changed in the framework</a></li>
         <li><a href="#what-the-checker-says-about-existing-documents">6. What the checker says about existing documents</a></li>
         <li><a href="#decisions">7. Decisions</a></li>
         <li class="h3"><a href="#taken-on-2026-09-04">7.1 Taken on 2026-09-04</a></li>
-        <li class="h3"><a href="#still-open">7.2 Still open</a></li>
+        <li class="h3"><a href="#taken-on-2026-09-05-sitting-4b">7.2 Taken on 2026-09-05 (Sitting 4b)</a></li>
+        <li class="h3"><a href="#still-open">7.3 Still open</a></li>
         <li><a href="#misses-logged-in-this-session">8. Misses logged in this session</a></li>
     </ol>
   </nav>
   <main>
     <h1>TechieFlow — Document Schemas</h1>
-    <div class="subtitle">Rendered 2026-09-04 &middot; source <code>TechieFlow-Document-Schemas.md</code></div>
+    <div class="subtitle">Rendered 2026-09-06 &middot; source <code>TechieFlow-Document-Schemas.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
@@ -150,13 +152,15 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
         <li class="h3"><a href="#usageguide-docs-usageguide-md">3.7 UsageGuide — docs/&amp;lt;App&amp;gt;-UsageGuide.md</a></li>
         <li class="h3"><a href="#devguide-docs-devguide-md">3.8 DevGuide — docs/&amp;lt;App&amp;gt;-DevGuide.md</a></li>
         <li class="h3"><a href="#productguide-docs-productguide-md">3.9 ProductGuide — docs/&amp;lt;App&amp;gt;-ProductGuide.md</a></li>
-        <li class="h3"><a href="#deployment-checklist-docs-deployment-checklist-md-agreed-2026-09-04-template-and-command-built-in-sitting-4b">3.10 Deployment Checklist — docs/&amp;lt;App&amp;gt;-Deployment-Checklist.md (agreed 2026-09-04; template and command built in Sitting 4b)</a></li>
+        <li class="h3"><a href="#deployment-checklist-docs-deployment-checklist-md-agreed-2026-09-04-template-checker-rules-and-deploy-checklist-built-2026-09-06">3.10 Deployment Checklist — docs/&amp;lt;App&amp;gt;-Deployment-Checklist.md (agreed 2026-09-04; template, checker rules and *deploy-checklist built 2026-09-06)</a></li>
+        <li class="h3"><a href="#phases-docs-phases-md-agreed-2026-09-05-sitting-4b-large-projects-only">3.11 Phases — docs/&amp;lt;App&amp;gt;-Phases.md (agreed 2026-09-05, Sitting 4b; Large projects only)</a></li>
         <li><a href="#the-checker-as-built">4. The checker, as built</a></li>
         <li><a href="#what-changed-in-the-framework">5. What changed in the framework</a></li>
         <li><a href="#what-the-checker-says-about-existing-documents">6. What the checker says about existing documents</a></li>
         <li><a href="#decisions">7. Decisions</a></li>
         <li class="h3"><a href="#taken-on-2026-09-04">7.1 Taken on 2026-09-04</a></li>
-        <li class="h3"><a href="#still-open">7.2 Still open</a></li>
+        <li class="h3"><a href="#taken-on-2026-09-05-sitting-4b">7.2 Taken on 2026-09-05 (Sitting 4b)</a></li>
+        <li class="h3"><a href="#still-open">7.3 Still open</a></li>
         <li><a href="#misses-logged-in-this-session">8. Misses logged in this session</a></li>
       </ol>
     </div>
@@ -165,7 +169,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <tbody>
 <tr><td>Purpose</td><td>For each human document the framework produces: which sections it must have, how big it may be, and what every row must contain. A checker script enforces this, so the AI cannot drift from the shape.</td></tr>
 <tr><td>Audience</td><td>The owner (reviews the section lists, the size limits and the decisions in §7). Agents read the same rules in machine form at the top of each template.</td></tr>
-<tr><td>Status</td><td><strong>Built in Session 3 of the reset and closed 2026-09-04.</strong> Nine templates carry a schema block; <code>tf-doc-check.sh</code> enforces it; the status gate runs it; day-1 asks the size. §6 holds the real results on fourteen projects. The tenth document, the Deployment Checklist (§3.10), is agreed and is built in Sitting 4b.</td></tr>
+<tr><td>Status</td><td><strong>Built in Session 3 of the reset and closed 2026-09-04.</strong> Nine templates carry a schema block; <code>tf-doc-check.sh</code> enforces it; the status gate runs it; day-1 asks the size. §6 holds the real results on fourteen projects. The tenth document, the Deployment Checklist (§3.10), is agreed and is built in Sitting 4b. <strong>Sitting 4b (2026-09-05):</strong> the Large layout (§2) and the eleventh document, Phases (§3.11), agreed and built into the checker, the splitter and the status scripts.</td></tr>
 <tr><td>Companion</td><td><code>TechieFlow-Reset-Plan-2026-09-04.md</code> (Session 3), <code>TechieFlow-Requirements.md</code> (FR-07 to FR-09, FR-14, FR-15, FR-17), <code>TechieFlow-How-It-Works.md</code> §8 (D-1, D-2, D-3, D-20).</td></tr>
 </tbody>
 </table>
@@ -192,16 +196,33 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <tbody>
 <tr><td>Small</td><td>up to 10</td><td>one</td><td>up to 50</td></tr>
 <tr><td>Medium</td><td>up to 20</td><td>any</td><td>up to 100</td></tr>
-<tr><td>Large</td><td>more than 20, or more than 100 requirements</td><td>any</td><td>split into phases; each phase is its own Small or Medium BRD, checklist and build</td></tr>
+<tr><td>Large</td><td>more than 20, or more than 100 requirements</td><td>any</td><td>split into phases; each phase fits Medium on its own and has its own BRD, checklist, UIDesign, DevGuide and build</td></tr>
 </tbody>
 </table>
+<p><strong>How a Large project is laid out</strong> (owner, 2026-09-05, Sitting 4b). A document that has one section per screen splits by phase, so an agent loads only the phase it is working on; a document that does not stays single.</p>
+<ul>
+<li>Per phase: BRD, checklist, UIDesign, DevGuide. Each phase must fit Medium on its own: at most 20 screens and 100 requirements.
+</li>
+<li>Single: Architecture, Coding Standards, PROJECT-STATUS, the Phases table (§3.11), UsageGuide, ProductGuide, and the mockup folder, which stays one click-through set because a phase-1 screen may link to a phase-2 screen. UsageGuide and ProductGuide stay single because no agent reads them during build or verify and their per-screen entries are short; if one passes its maximum the checker says so and it is split then.
+</li>
+<li>Names: phase 1 keeps the plain names (<code>docs/&lt;App&gt;-BRD.md</code>, <code>docs/&lt;App&gt;-Checklist.md</code>, <code>docs/&lt;App&gt;-UIDesign.md</code>, <code>docs/&lt;App&gt;-DevGuide.md</code>), so a project that grows into Large never renames anything. Phase 2 onward are <code>docs/&lt;App&gt;-P2-BRD.md</code>, <code>docs/&lt;App&gt;-P2-Checklist.md</code>, <code>docs/&lt;App&gt;-P2-UIDesign.md</code>, <code>docs/&lt;App&gt;-P2-DevGuide.md</code>, and so on.
+</li>
+<li>Numbers: <code>BRD-N</code> and <code>REQ-</code> ids run on across phases and are never reused. If phase 1 ends at BRD-40, phase 2 starts at BRD-41.
+</li>
+<li>Which phase a command works on: <code>appPhase:</code> in <code>core-config.yaml</code>, 1 by default, so Small and Medium projects need nothing. Build, verify, refresh-status, the facts script and the BRD status script read that phase's BRD, checklist, UIDesign and DevGuide; <code>*amend-docs</code> adds to that phase; a phase is done when its checklist is all Verified and handoff moves the number on. PROJECT-STATUS "Where I am" names the phase.
+</li>
+<li>Day-1 writes every phase's BRD at once, so the owner reviews the whole scope once; a later phase's BRD can still change through <code>*amend-docs</code> before it is built. Every screen gets its mockup at stage 1.
+</li>
+<li>Growth: when <code>*amend-docs</code> would take a Small project past 50 requirements it raises the size to Medium; a phase split is proposed only when Medium's cap would pass.
+</li>
+</ul>
 <p><strong>What counts as a screen</strong> (owner, 2026-09-04). A screen is a page with its own route. Every routed page counts, including sign in, register, forgot password, reset password, and any licence, subscription or role screens. AppManager provides the API behind those screens; the application builds the screens. Dialogs, tabs and panels inside a page are regions of that page, not screens. They are listed under their parent screen in the UIDesign, drawn in that screen's mockup, and verified on that page. By this rule TfLens has thirteen screens, which is Medium by screens; its 169 requirements are beyond Medium in any case, which is the D-3 complaint.</p>
 <p>A known defect follows from this and is logged as a miss (§8): the verifier today cannot drive a dialog, so dialogs have been built as separate routed screens to get them verified. Session 4c rewrites the verify task so a dialog is verified on its parent page, and the build never promotes a dialog to a route to make it testable.</p>
 <p><strong>Kind.</strong> A project is an <code>app</code> or a <code>library</code>. Kind sits beside Size. For a library the UIDesign and mockups are optional, and the screen maps become component maps:</p>
 <ul>
 <li>A UI library with a sample app (TrBlazeUI): the DevGuide's component map links every component to the sample-app screen that shows it, with that screen's screenshot.
 </li>
-<li>A service library (TechieRag): the component map is the consumer's view, one entry per service with how it is called, and it lives in the UsageGuide.
+<li>A service library (TechieRag): the DevGuide's map has one entry per public service: how it is registered and called, its call chain and where to break, for the developer who maintains the library. The UsageGuide keeps only how a consumer installs and calls the package. (Owner, 2026-09-06: the map is developer material; this reverses the service-library half of decision 5 in §7.1, see §7.2 M.)
 </li>
 </ul>
 <p><strong>Where the size and kind are asked.</strong> Greenfield day-1 asks one more question after the concept: "Size: Small, Medium or Large? From the concept I count N screens and N roles, so I propose X." Brownfield day-1 counts the routes in the code and confirms the same way. The answer is written to <code>appSize:</code> and <code>appKind:</code> in <code>core-config.yaml</code> and into every document header. <code>*amend-docs</code> reads the cap from there and proposes a phase split when an addition would pass it (FR-10; wired in Session 4a).</p>
@@ -214,12 +235,12 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <table>
 <thead><tr><th>Order</th><th>Section</th><th>Small</th><th>Medium / Large</th><th>Content rule</th></tr></thead>
 <tbody>
-<tr><td>0</td><td>Header table</td><td>required</td><td>required</td><td>App, Kind, Size, Stack answer set, Status, Date</td></tr>
+<tr><td>0</td><td>Header table</td><td>required</td><td>required</td><td>App, Kind, Size, Stack answer set, Status, Date. A Large project adds Phase (<code>1 of 3</code>), and Size is the phase's own size.</td></tr>
 <tr><td>1</td><td>Summary</td><td>required</td><td>required</td><td>What it is, for whom, why. At most 200 words.</td></tr>
 <tr><td>2</td><td>Scope</td><td>required</td><td>required</td><td>Two lists: in, out.</td></tr>
 <tr><td>3</td><td>Users and roles</td><td>required</td><td>required</td><td>One table.</td></tr>
 <tr><td>4</td><td>Screens and flow</td><td>required</td><td>required</td><td>One table: screen, route, role, mockup link, fields. A dialog is a row under its parent screen with <code>on /route</code> in the Route column. Then the primary journey as a numbered list.</td></tr>
-<tr><td>5</td><td>Requirements</td><td>required</td><td>required</td><td>The <code>BRD-N</code> ledger. Every item: id, title, screen, mockup link, one acceptance line in the "When …, then …" form. Ids never renumbered.</td></tr>
+<tr><td>5</td><td>Requirements</td><td>required</td><td>required</td><td>The <code>BRD-N</code> ledger, grouped under a <code>###</code> heading per screen that opens with one plain sentence saying what the screen does. Every item: id, a title in everyday words, screen, mockup link, one acceptance line in the "When …, then …" form of at most 30 words (target 20) holding one behaviour; a line that bundles steps is split into items (owner, 2026-09-06; miss 13). Ids never renumbered.</td></tr>
 <tr><td>6</td><td>Non-functional requirements</td><td>required</td><td>required</td><td>One table. A speed requirement uses the <code>perf-budget:</code> form, only where the owner gave a number.</td></tr>
 <tr><td>7</td><td>Development status</td><td>required</td><td>required</td><td>One row per screen with counts. Written by the status gate, not by hand.</td></tr>
 <tr><td>8</td><td>Context diagram</td><td>optional</td><td>required</td><td></td></tr>
@@ -247,7 +268,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </tbody>
 </table>
 <p>Removed: Deployment (decided after UAT; how a developer runs the application is in the UsageGuide), Primary data flow (folded into the Component map as the request list), Target architecture (replaced by the status column), Sources harvested, Table of Contents.</p>
-<p>Budget: Small 2,500 target, 3,500 maximum. Medium 4,000 target, 6,000 maximum. Checks: the stack table, the solution table, the request list, the ER diagram and the four-column decisions table are all present.</p>
+<p>Budget: Small 2,500 target, 3,500 maximum. Medium 4,000 target, 6,000 maximum. Checks: the stack table, the solution table, the request list, the ER diagram and the four-column decisions table are all present. <strong>Added 2026-09-06 (owner, after the MyDiary review; miss 16):</strong> the Stack decisions table has a row for each of questions 1 to 8 and 11 (9 and 10 are decided after UAT); for an app, one Solution structure row is named exactly the app, and <code>&lt;App&gt;.App</code> is refused.</p>
 <h3 id="uidesign-docs-uidesign-md">3.3 UIDesign — <code>docs/&lt;App&gt;-UIDesign.md</code><a class="anchor-link" href="#uidesign-docs-uidesign-md">#</a></h3>
 <p>What it is for: one section per screen, mapping every region to a control and listing every field, beside the mockup. The build implements from it; the verifier compares the built screen to it. Optional for libraries.</p>
 <table>
@@ -262,6 +283,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </table>
 <p>Removed: How to use, Library gaps (the library feedback file owns them), Table of Contents.</p>
 <p>Budget: 300 words plus the per-screen figures, so a ten-screen Small app is 2,800 words target and 4,300 maximum. Checks: every screen has its mockup, its two tables and its three states; every mockup file in <code>docs/mockups/</code> is linked from a screen (a warning otherwise).</p>
+<p><strong>Mockup rules</strong> (owner, 2026-09-05, Sitting 4a; FR-53). The mockups are one click-through set, not separate pictures: every link and form action opens a mockup that exists; every screen can be reached by clicking from the sign-in page (or the home page when there is none); every screen has a way out; a button that does not navigate shows a message; sign-in needs no credentials, the button alone navigates; and every mockup carries <code>data-testid</code> anchors, because the verifier compares only anchored elements. The checker refuses the set otherwise. <strong>Added 2026-09-06 after the owner found the MiMo MyDiary set broken by hand (miss 15):</strong> navigation is a link (<code>&lt;a href="screen.html"&gt;</code>) or a form action, never a script, because a script dies in any viewer without scripts and the click-through cannot be checked without running one; every menu item leads to its screen; a link is resolved from the mockup folder the way a browser does, not by its file name; every stylesheet a mockup names exists. In a brownfield repository, mockups found outside <code>docs/mockups/</code> are moved there first (<code>tf-mockups-locate.sh</code>), so there is only ever one mockup folder.</p>
 <h3 id="checklist-docs-checklist-md">3.4 Checklist — <code>docs/&lt;App&gt;-Checklist.md</code><a class="anchor-link" href="#checklist-docs-checklist-md">#</a></h3>
 <p>An agent document. The owner does not review it and it is never rendered. Only the row rules matter.</p>
 <p>Sections, in order: Goal, Requirements Status (the one table), then one section per page or group holding the detail entries. No other sections: a <code>UAT Bugs</code> or <code>Feedback tracker</code> section goes into the misses stream instead.</p>
@@ -271,7 +293,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </li>
 <li>ID matches <code>REQ-UI-</code>, <code>REQ-FN-</code>, <code>REQ-RAG-</code> or <code>REQ-NFR-</code> plus three digits. No duplicates.
 </li>
-<li>Status is one of the fixed values. <code>Verified</code> is written only by a verify run (hook exists).
+<li>Status is one of the fixed values. <code>Verified</code> is written only by a verify run (hook exists). <code>Owner-UAT</code> marks a row only the owner can close from the UsageGuide test plan (added in Sitting 4a, 2026-09-05).
 </li>
 <li><code>%</code> is 0, 25, 50, 75 or 100.
 </li>
@@ -281,11 +303,13 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </li>
 <li>Every UI row carries a mockup link to a file that exists.
 </li>
-<li>Every row has exactly one acceptance line, and it reads <strong>"When <code>&lt;actor&gt;</code> <code>&lt;does what&gt;</code> on <code>&lt;screen&gt;</code>, then <code>&lt;a result a browser robot can observe&gt;</code>"</strong>. An optional "Given …," may precede it. UI and functional rows name the screen; a NFR row names the measurement instead and, for speed, carries <code>perf-budget:</code> in the fixed form.
+<li>Every row has exactly one acceptance line, and it reads <strong>"When <code>&lt;actor&gt;</code> <code>&lt;does what&gt;</code> on <code>&lt;screen&gt;</code>, then <code>&lt;a result a browser robot can observe&gt;</code>"</strong>. An optional "Given …," may precede it. UI and functional rows name the screen; a NFR row names the measurement instead and, for speed, carries <code>perf-budget:</code> in the fixed form. The line is at most 30 words, target 20, and holds one behaviour; the title is everyday words (owner, 2026-09-06; miss 13).
 </li>
 <li>Remarks holds the current state only, at most 60 words. The history of a row lives in the telemetry streams.
 </li>
 <li>Row count is within the size cap.
+</li>
+<li>A Remarks cell that says something is "not present" or "not found" must name the path that was tried (FR-27; added in Sitting 4a, 2026-09-05).
 </li>
 </ol>
 <h3 id="coding-standards-docs-coding-standards-md">3.5 Coding Standards — <code>docs/&lt;App&gt;-Coding-Standards.md</code><a class="anchor-link" href="#coding-standards-docs-coding-standards-md">#</a></h3>
@@ -303,7 +327,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <p>The owner's report (2026-09-04): agents fill it with long accounts of what they did and fixed, and the next-command section is not in a fixed place and shows one harness only. Two causes were found: the hook watches only the harness's file-write tool, so a write through the shell is not seen; and it checks headings and length, not content.</p>
 <p>Sections, fixed, in order, with a word limit each: Where I am (80), Next command to run (60), Open requirements (200), Known blockers (150), Verification log (250), Library feedback summary (60), Standards compliance (60), Deferred / future (100). Same for every size and kind.</p>
 <p>Rules: at most 120 lines, 60 as the target. <strong>Next command to run holds exactly two one-line code blocks, the first labelled Claude Code and the second OpenCode</strong>, so each can be copied on its own. Verification log keeps the last five rows, and no cell in it exceeds 20 words: a result is a count, not a story. Open requirements shows counts by status and at most ten named rows.</p>
-<p>The fix, built: the checker enforces all of the above at the status gate whichever way the file was written; a shell write to PROJECT-STATUS (redirection, tee, cp, mv, sed -i, a script) is refused by the guard hook in both harnesses; the checker becomes a Stop hook in Session 6.</p>
+<p>The fix, built: the checker enforces all of the above at the status gate whichever way the file was written; a shell write to PROJECT-STATUS (redirection, tee, cp, mv, sed -i, a script) is refused by the guard hook in both harnesses; since Sitting 4a (2026-09-05) the Stop hook also refuses to end a turn while the status file fails the checker, its HTML is stale, the BRD's Development status table is older than the checklist, or no run record follows the status write (OpenCode receives the same message as a nudge, since it has no blocking Stop hook).</p>
 <h3 id="usageguide-docs-usageguide-md">3.7 UsageGuide — <code>docs/&lt;App&gt;-UsageGuide.md</code><a class="anchor-link" href="#usageguide-docs-usageguide-md">#</a></h3>
 <p>What it is for: the owner's test plan. Who to sign in as, how to start it, what to click on every screen and what should happen. Started at day-1, finished at handoff.</p>
 <table>
@@ -315,7 +339,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <tr><td>4</td><td>Automated tests</td><td>required</td><td>required</td><td>The command and what it covers.</td></tr>
 <tr><td>5</td><td>Known limitations</td><td>required</td><td>required</td><td></td></tr>
 <tr><td>6</td><td>Platform notes</td><td>optional</td><td>optional</td><td>Only when the app runs on more than one platform.</td></tr>
-<tr><td>7</td><td>Component map</td><td>service libraries</td><td>service libraries</td><td>One entry per service: what it does, how it is called.</td></tr>
+<tr><td>7</td><td>How to call it</td><td>libraries</td><td>libraries</td><td>Install and register the package, then one call example per public service or component (2026-09-06; was "Component map" for service libraries).</td></tr>
 </tbody>
 </table>
 <p>Removed: Smoke checklist (folded into section 3), the separate Setup and Deployment sections (folded into the Execution guide), the long section titles.</p>
@@ -328,7 +352,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <tr><td>0</td><td>Header table</td><td>required</td><td>required</td><td>App, Kind, Size, Verified on (the run the screenshots and line numbers come from), Date</td></tr>
 <tr><td>1</td><td>Architecture cheat-sheet</td><td>required</td><td>required</td><td>One diagram and at most 300 words.</td></tr>
 <tr><td>2</td><td>Roles and menu map</td><td>apps</td><td>apps</td><td></td></tr>
-<tr><td>3</td><td>Screen-by-screen code map</td><td>required</td><td>required</td><td>One <code>###</code> per screen (per component for a UI library). Each entry: the screenshot (file must exist); one "Call chain:" line, page method to service class and method to data-access class and method; a where-to-break table, one row per step: file and line, function, the variable to watch, the value it should hold. Example row: <code>Login.razor.cs:127</code>, <code>HandleLogin</code>, <code>aLogin.Email</code>, the email typed in the box. Target 300 words per screen, maximum 450.</td></tr>
+<tr><td>3</td><td>Screen-by-screen code map</td><td>required</td><td>required</td><td>One <code>###</code> per screen (per component for a UI library, per public service for a service library). Each entry: the screenshot (file must exist); one "Call chain:" line, page method to service class and method to data-access class and method; a where-to-break table, one row per step: file and line, function, the variable to watch, the value it should hold. Example row: <code>Login.razor.cs:127</code>, <code>HandleLogin</code>, <code>aLogin.Email</code>, the email typed in the box. Target 300 words per screen, maximum 450.</td></tr>
 <tr><td>4</td><td>Cross-cutting flows</td><td>required</td><td>required</td><td>Sign-in, configuration, logging, errors, each with its own call chain and where-to-break table.</td></tr>
 <tr><td>5</td><td>Known issues</td><td>required</td><td>required</td><td></td></tr>
 </tbody>
@@ -349,7 +373,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </tbody>
 </table>
 <p>Budget: Small 2,500 target, 3,500 maximum. Medium 4,500 target, 6,500 maximum.</p>
-<h3 id="deployment-checklist-docs-deployment-checklist-md-agreed-2026-09-04-template-and-command-built-in-sitting-4b">3.10 Deployment Checklist — <code>docs/&lt;App&gt;-Deployment-Checklist.md</code> (agreed 2026-09-04; template and command built in Sitting 4b)<a class="anchor-link" href="#deployment-checklist-docs-deployment-checklist-md-agreed-2026-09-04-template-and-command-built-in-sitting-4b">#</a></h3>
+<h3 id="deployment-checklist-docs-deployment-checklist-md-agreed-2026-09-04-template-checker-rules-and-deploy-checklist-built-2026-09-06">3.10 Deployment Checklist — <code>docs/&lt;App&gt;-Deployment-Checklist.md</code> (agreed 2026-09-04; template, checker rules and <code>*deploy-checklist</code> built 2026-09-06)<a class="anchor-link" href="#deployment-checklist-docs-deployment-checklist-md-agreed-2026-09-04-template-checker-rules-and-deploy-checklist-built-2026-09-06">#</a></h3>
 <p>Raised by the owner in this session: the two existing deployment checklists (TfLens, TechieBlog) are a mess and the document needs a schema like the others. The survey of those two confirmed it. Both are long (6,500 and 12,200 words), one has eight checkboxes and the other none, both re-describe the same secrets in three or four places, one mixes a local Docker path with the production path in one file, one carries a variable that another section says was deleted, and one says on its first page that the pipeline is settled and on its last that it has never run against the real server.</p>
 <p>What it is for: the steps to put the application on its host, produced after UAT from the pipeline guidance document the owner supplies (Stack Q9 and Q10). One document per hosting target. Running the application locally is not in it; that is the UsageGuide's Execution guide.</p>
 <table>
@@ -369,6 +393,16 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </table>
 <p>Rules: every item in sections 3 to 6 is a checkbox; no narrative sections; one hosting target per document. Budget 2,500 target, 4,000 maximum, every size.</p>
 <p>Produced by a small new command, <code>*deploy-checklist &lt;App&gt; &lt;pipeline-document&gt;</code>, built in Sitting 4b beside the handoff task, because handoff runs before UAT and deployment comes after.</p>
+<h3 id="phases-docs-phases-md-agreed-2026-09-05-sitting-4b-large-projects-only">3.11 Phases — <code>docs/&lt;App&gt;-Phases.md</code> (agreed 2026-09-05, Sitting 4b; Large projects only)<a class="anchor-link" href="#phases-docs-phases-md-agreed-2026-09-05-sitting-4b-large-projects-only">#</a></h3>
+<p>What it is for: the one place that says which screens and requirements belong to which phase of a Large project. Written at day-1 when the size comes out Large, or by <code>*amend-docs</code> when a project grows past Medium; the owner reviews it with the BRD. A Small or Medium project does not have this file.</p>
+<table>
+<thead><tr><th>Order</th><th>Section</th><th>Content rule</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>Header table</td><td>App, Kind, Size (Large), Date</td></tr>
+<tr><td>1</td><td>Phases</td><td>One table: phase, name, screens, BRD range, status (planned, building, done). A range is <code>BRD-a to BRD-b</code>; an item added to an earlier phase after a later one exists takes the next free id and the row gets a second range, comma-separated (2026-09-06).</td></tr>
+</tbody>
+</table>
+<p>Checks: every screen in the UIDesign files sits in exactly one phase; every phase row has its BRD and checklist files; each phase's BRD ids fall inside that phase's range; no <code>BRD-N</code> or <code>REQ-</code> id appears in two phases. Budget 300 target, 600 maximum.</p>
 <hr>
 <h2 id="the-checker-as-built">4. The checker, as built<a class="anchor-link" href="#the-checker-as-built">#</a></h2>
 <p><code>bash .tfcore/utils/tf-doc-check.sh</code> takes document paths, or <code>--app &lt;App&gt;</code> to check every human document of that app plus <code>PROJECT-STATUS.md</code>. For each document it finds the template by file name, reads the schema block, and checks:</p>
@@ -390,8 +424,8 @@ FAIL docs/TrSetup-Checklist.md: REQ-FN-012 acceptance line does not read "When &
 FAIL docs/TrSetup-UIDesign.md: screen "Settings" has no mockup link (docs/mockups/&lt;screen&gt;.html)
 FAIL PROJECT-STATUS.md: "Next command to run" must hold exactly two code blocks, Claude Code then OpenCode; found 1</code></pre>
 <p>It exits with failure when any line says FAIL. <code>--warn</code> prints every finding as WARN and exits clean: report mode for an existing project, after which each finding is logged as a miss and fixed through <code>*amend-docs</code>.</p>
-<p>Where it runs: step 7b of the status gate (<code>_status-update-gate.md</code>), on the documents the command wrote, before the HTML render. Both harnesses run it, because it is a shell script called from the task. It becomes a Stop hook in Session 6, after the fixture projects pass.</p>
-<p>Self-test: <code>bash tests/doc-check/run.sh</code> builds a minimal Small app document set (nine documents, two mockups, two screenshots) that passes with no findings, and a broken twin that fails on thirteen lines, one per planted defect. This is the FR-14 check; the distribution pipeline runs it.</p>
+<p>Where it runs: step 7b of the status gate (<code>_status-update-gate.md</code>), on the documents the command wrote, before the HTML render. Both harnesses run it, because it is a shell script called from the task. Since Sitting 4a (2026-09-05) the Stop hook runs it on PROJECT-STATUS.md as well, so a skipped step cannot end the turn.</p>
+<p>Self-test: <code>bash tests/doc-check/run.sh</code> builds a minimal Small app document set (nine documents, two mockups, two screenshots) that passes with no findings, and a broken twin that fails on twenty lines, one per planted defect (thirteen from Session 3; the rule 11 remark and six mockup click-through defects added in Sitting 4a). This is the FR-14 check; the distribution pipeline runs it.</p>
 <hr>
 <h2 id="what-changed-in-the-framework">5. What changed in the framework<a class="anchor-link" href="#what-changed-in-the-framework">#</a></h2>
 <table>
@@ -434,7 +468,7 @@ FAIL PROJECT-STATUS.md: "Next command to run" must hold exactly two code blocks,
 <tr><td>2</td><td>Budgets</td><td>A target and a maximum for every document, not one number. Fixed numbers only for Coding Standards and the Remarks cell.</td></tr>
 <tr><td>3</td><td>Acceptance line</td><td>"When … on <code>&lt;screen&gt;</code>, then …"; "Given" allowed as a prefix; NFR rows name the measurement.</td></tr>
 <tr><td>4</td><td>What counts as a screen</td><td>Every routed page counts, sign-in and AppManager-backed screens included. Dialogs are regions of their page.</td></tr>
-<tr><td>5</td><td>Kind</td><td><code>app</code> or <code>library</code>. TrBlazeUI's component map links to the sample app; TechieRag's lives in the UsageGuide.</td></tr>
+<tr><td>5</td><td>Kind</td><td><code>app</code> or <code>library</code>. TrBlazeUI's component map links to the sample app; TechieRag's lives in the UsageGuide. <strong>Service-library half reversed 2026-09-06 (7.2 M): the map lives in the DevGuide.</strong></td></tr>
 <tr><td>6</td><td>Coding Standards</td><td>Baked into the framework: a neutral core file plus a .NET file in <code>.tfcore/standards/</code>, and a short per-project file.</td></tr>
 <tr><td>7</td><td>Remarks</td><td>Current state only, at most 60 words.</td></tr>
 <tr><td>8</td><td>Block or warn</td><td>Block on shape and row rules and on the maximum budget; <code>--warn</code> for existing projects; Stop hook in Session 6.</td></tr>
@@ -449,8 +483,20 @@ FAIL PROJECT-STATUS.md: "Next command to run" must hold exactly two code blocks,
 <p>| E | Deployment Checklist schema (§3.10) | Accepted as listed. |
 | F | Which command produces it | A small new command, <code>*deploy-checklist &lt;App&gt; &lt;pipeline-document&gt;</code>, built in Sitting 4b. |
 | G | Tenth document in the Reset Plan | Yes; the plan now lists it under Session 3 and Sitting 4b. |</p>
-<h3 id="still-open">7.2 Still open<a class="anchor-link" href="#still-open">#</a></h3>
-<p>Nothing. Session 3 closed on 2026-09-04.</p>
+<h3 id="taken-on-2026-09-05-sitting-4b">7.2 Taken on 2026-09-05 (Sitting 4b)<a class="anchor-link" href="#taken-on-2026-09-05-sitting-4b">#</a></h3>
+<table>
+<thead><tr><th>#</th><th>Decision</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>H</td><td>Large layout</td><td>As in §2: per-screen documents (BRD, checklist, UIDesign, DevGuide) split by phase; the rest stay single; phase 1 keeps the plain names; ids run on across phases; <code>appPhase:</code> selects the phase.</td></tr>
+<tr><td>I</td><td>Phases document</td><td>An eleventh document, one table, Large projects only (§3.11).</td></tr>
+<tr><td>J</td><td>Day-1 on a Large project</td><td>Every phase's BRD is written at once; every screen gets its mockup at stage 1.</td></tr>
+<tr><td>K</td><td>Growth</td><td>Small grows to Medium first; a phase split is proposed only past Medium's cap.</td></tr>
+<tr><td>L</td><td>UsageGuide and ProductGuide</td><td>Stay single for every size.</td></tr>
+<tr><td>M</td><td>Service-library map (2026-09-06)</td><td>Lives in the DevGuide, for the developer who maintains the library: one entry per public service with registration, call chain and where to break. The UsageGuide's library section becomes "How to call it": install, register, one call per service or component.</td></tr>
+</tbody>
+</table>
+<h3 id="still-open">7.3 Still open<a class="anchor-link" href="#still-open">#</a></h3>
+<p>Nothing.</p>
 <hr>
 <h2 id="misses-logged-in-this-session">8. Misses logged in this session<a class="anchor-link" href="#misses-logged-in-this-session">#</a></h2>
 <p>Framework defects found during Session 3, each recorded in <code>docs/metrics/misses.jsonl</code> with the sentence below (the sentence itself is stored in a readable file from Session 5, per D-10).</p>

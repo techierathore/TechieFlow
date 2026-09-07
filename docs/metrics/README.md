@@ -16,6 +16,9 @@ after the fact.
 was missed, which phase/agent/model let it through, who found it) and `miss-fix`
 (closed: the repair run and its token/cost window, linked by `miss_id`). It is
 what makes "how much did that miss cost to fix" answerable. SCHEMA.md §5.5.
+The readable version is `docs/<App>-Misses.md`: one row per miss with the owner's
+sentence and whose gap it was, rebuilt from this stream after every miss record
+(SCHEMA.md §5.5.10). Read that file; never edit it.
 
 Schema, enums, and every known limitation: `.tfcore/telemetry/SCHEMA.md`.
 Report: `/TechieFlow:agents:flow-master *metrics <AppName>` (OpenCode: `/flow-master *metrics <AppName>`) → `METRICS.md`.

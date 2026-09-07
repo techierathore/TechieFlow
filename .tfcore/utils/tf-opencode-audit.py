@@ -99,18 +99,34 @@ def main():
             diags.append("DIAG|dead-ref|%s" % ref)
 
     # --- project-only content ---------------------------------------------
+    # A key counts as project content only if it could actually work. Two kinds
+    # cannot, and calling them project content is what kept a repo's root config
+    # frozen with every framework agent dead (MISS-TechieFlow-20260907-08):
+    #   - the framework's own retired names: `techieflow:` and the `bmad`
+    #     prefixes it carried before the rename;
+    #   - any key whose every {file:} reference is missing from the app, so the
+    #     block cannot load whatever it names. That rule needs no list of old
+    #     prefixes and so survives the next rename.
+    dead_refs = set(d.split("|", 2)[2] for d in diags if d.startswith("DIAG|dead-ref|"))
+
+    def is_litter(key, block):
+        low = key.lower()
+        if low.startswith("techieflow:") or low.startswith("bmad:") or low.startswith("bmad-"):
+            return True
+        refs = re.findall(r"\{file:([^}]*)\}", json.dumps(block))
+        return bool(refs) and all(r in dead_refs for r in refs)
+
     project = []
     for k in app:
         if k not in tmpl:
             project.append(k)
-    for k in (app.get("agent") or {}):
-        if k not in (tmpl.get("agent") or {}):
-            project.append("agent.%s" % k)
-    for k in (app.get("command") or {}):
-        if k in (tmpl.get("command") or {}):
+    for k, blk in (app.get("agent") or {}).items():
+        if k in (tmpl.get("agent") or {}) or is_litter(k, blk):
             continue
-        if k.startswith("techieflow:"):
-            continue  # retired FRAMEWORK command — litter, not project content
+        project.append("agent.%s" % k)
+    for k, blk in (app.get("command") or {}).items():
+        if k in (tmpl.get("command") or {}) or is_litter(k, blk):
+            continue
         project.append("command.%s" % k)
 
     if app_raw == tmpl_raw:

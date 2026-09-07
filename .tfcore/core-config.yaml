@@ -23,6 +23,11 @@ customTechnicalDocuments: null
 # into phases). Kind is app or library. tf-doc-check.sh reads them when a document header lacks them.
 appSize: null
 appKind: null
+# appPhase: the phase being worked on a Large project (reset Sitting 4b, 2026-09-05). 1 means the
+# plain file names (docs/{AppName}-BRD.md, -Checklist, -UIDesign, -DevGuide); 2 onward means
+# docs/{AppName}-P2-BRD.md and so on. Small and Medium projects leave it at 1. Set with
+# tf-day1-files.sh {AppName} --phase N; handoff moves it on when a phase is all Verified.
+appPhase: 1
 # devLoadAlwaysFiles: the day-1 tasks rewrite this list with the project's concrete paths
 # (docs/{AppName}-Coding-Standards.md + docs/{AppName}-Architecture.md). Empty until then —
 # the stock paths (docs/architecture/coding-standards.md etc.) never exist in this flow.

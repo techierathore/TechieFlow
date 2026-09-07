@@ -10,6 +10,8 @@ section: Cross-cutting | required
 section: Decisions log | required
 section: Module responsibilities | optional-small
 section: Open questions | optional
+rule: stack-rows
+rule: head-project
 budget: S 2500 3500 | M 4000 6000 | L 4000 6000
 rule: stack-table
 rule: solution-table

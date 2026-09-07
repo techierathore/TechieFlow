@@ -8,6 +8,7 @@
 
 # Per-machine / local-only — never commit
 .claude/settings.local.json
+tests/.artifacts/
 .opencode/session/
 .tfcore/.session/
 *.bak

@@ -4,14 +4,17 @@
 
 Turn `docs/metrics/*.jsonl` into a report the owner can read and, more importantly, **defend**. Produces `docs/metrics/METRICS.md` + `docs/metrics/METRICS.html`.
 
-This task answers four questions and nothing else:
+This task answers five questions and nothing else:
 
 1. **First-pass rate** — what fraction of REQs reach `Verified` on attempt 1?
 2. **Gate catch distribution** — of all failures, which gate caught them?
 3. **Escape rate** — what fraction of defects reached UAT/production instead of being caught by a gate?
 4. **Miss attribution and rework cost** — *what* was missed, *which phase / agent / model* let it through, and *what did fixing it cost*? (SCHEMA.md §5.5)
+5. **Effort per phase** — what did each phase cost in **wall clock**, **tokens**, on **which model**, and with how much **subagent fan-out**? (SCHEMA.md §2.6, added 2026-08-31)
 
-Everything else in the report is context for those four.
+Everything else in the report is context for those five.
+
+**Question 5 is about the RUN, not the ticket.** It is an aggregate over `runs.jsonl` grouped by `cmd`. It is emphatically **not** cycle-time-per-feature — that remains a non-goal (SCHEMA.md §0), there is no per-feature timing field, and there will not be one. "`*build-phase` runs cost a median of 26 minutes and 39k output tokens" is a phase figure. "REQ-UI-004 took two hours" is not, and nothing in the streams can honestly produce it.
 
 Read `.tfcore/telemetry/SCHEMA.md` before you start. Read `.tfcore/tasks/_metrics-emit-gate.md` if you are unsure what may be written where.
 
@@ -29,6 +32,14 @@ bash .tfcore/telemetry/tf-metrics.sh --report . --json
 ```
 
 For a cross-project view, pass every repo: `bash .tfcore/telemetry/tf-metrics.sh --rollup . /path/to/OtherApp --json`.
+
+The **effort-per-phase** block (question 5) rides in the same payload under `phases`. To read it on its own — a printed table plus the per-phase detail — use:
+
+```bash
+bash .tfcore/telemetry/tf-metrics.sh --phases .          # or --phases . /path/to/OtherApp --json
+```
+
+Same standing as `--report`: read-only, no git, agent-safe.
 
 **Use this output. Do not recompute anything by hand.** The provenance separations of §2 are enforced inside that script — it has no code path that emits a combined figure. Hand arithmetic over the raw JSONL is exactly how an indefensible number gets into a report, and it is also how "insufficient data" quietly becomes "0%".
 
@@ -67,7 +78,9 @@ If you find yourself wanting to write "overall, across all projects, …" — **
 - Records with `project_type_inferred: true` are **unclassified** — give them their own row labelled as such. Do not silently fold them into `app`.
 - Name the REQs excluded from the live first-pass rate because they carry backfilled history (the tool lists them). A hidden exclusion is a lie of omission.
 - **Miss counts are poolable; miss *attribution* is not.** A miss counts as a miss whoever missed it, so raw counts and the class distribution may pool freely. The per-phase / per-agent / per-model rates run over `origin_confidence:"linked"` records only, and the excluded count is printed with them.
-- **A per-model miss rate is observational, not causal, and the page must say so once.** Which model gets the hard work is not random, and a reader who takes the ranking at face value will make a routing decision on a confounded number.
+- **A per-model miss rate is observational, not causal, and the page must say so once.** Which model gets the hard work is not random, and a reader who takes the ranking at face value will make a routing decision on a confounded number. **The same warning applies to per-phase effort:** `*build-phase` costing more than `*log-miss` is a fact about what those phases *are*, not a finding about either.
+- **Per-phase effort carries three denominators and all three are printed.** Token figures cover only runs whose window was computable (`tokens_measured_n` vs `tokens_unmeasured_n`); **fan-out figures cover `tokens_scope:"tree"` records only**, because a `main` window never read the subagent transcripts and its `0` means *not observed*, not *none ran*; dollars are per harness and never pooled. A phase figure quoted without its denominator is the TF-005 defect wearing a different hat.
+- **Where declared and measured fan-out disagree, the measured one is right, and say both.** `subagents` is a list an agent typed into its own emit; `subagent_runs` is counted from the harness's own store (SCHEMA §2.6). The gap between them is itself a finding about how well tasks self-report.
 
 ### 4. Write `docs/metrics/METRICS.md`
 
@@ -90,6 +103,7 @@ First-pass rate: {live, per project_type — or "insufficient data"}
 Gate catch: {top gate} {n}%  |  Escape rate: {x}%
 Misses: {m} logged ({o} open) · design-miss share {d}% · attributed {a}/{m}
 Rework cost: {tokens} tokens per miss (measured, n={s}) {| $X measured, OpenCode only}
+Effort/phase: heaviest {cmd} — {time} wall, {tokens} out ({pct} of all output), fan-out observed on {n}/{N} runs
 Written: docs/metrics/METRICS.md + .html
 {if backfilled records present: "Backfilled data is reported in a separate column and cannot support a published first-pass rate."}
 ```
@@ -115,6 +129,11 @@ Then stop. Do not run the status gate — this task reports on history, it does 
 - [ ] `miss-amend` records folded into their parents before counting; amendments applied and orphaned amends both reported
 - [ ] Open-miss count excludes `wont-fix` (a decision, not a backlog item) and reports it in its own bucket
 - [ ] Measured (`sole`) and apportioned (`shared:n`) rework cost in separate labelled columns — never one blended number
+- [ ] Rework-cost means divide by the records that **carry** `tokens_out` (`tokens_per_miss_measured_n`), with `tokens_unrecorded_sole_n` stated — an unrecorded repair is never averaged in as a free one (SCHEMA §5.5.8)
+- [ ] Effort-per-phase section written from `phases` — per-phase wall clock, tokens, **per-model output split**, and subagent fan-out
+- [ ] Every per-phase token figure carries `tokens_measured_n` / `tokens_unmeasured_n`; every fan-out figure carries `fanout.observed_n` and names why the rest were excluded (not `tree` scope vs predating the field)
+- [ ] Declared (`subagents`) and measured (`subagent_runs`) fan-out both shown where they disagree, with the measured one named as authoritative
+- [ ] No per-feature or per-REQ cycle time anywhere on the page — the unit is the run
 - [ ] Dollars quoted only where a harness measured them; no rate-card estimate anywhere on the page
 - [ ] No "overall" / "total" / "combined" figure for first-pass rate, gate distribution, or escape rate
 - [ ] Every table containing backfilled data carries the inferred-fields footnote

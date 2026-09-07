@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # TechieFlow PreToolUse hook — blocks convoluted PROJECT-STATUS.md writes.
 #
-# PROJECT-STATUS is a CRISP, FIXED-SHAPE snapshot agents OVERWRITE — never an
-# append-log. See .tfcore/tasks/_status-update-gate.md §"CRISP, FIXED-SHAPE
-# snapshot" and .tfcore/templates/v4custom/app-project-status-tmpl.md. The prose
-# rule alone kept failing (AstroLyfe's 286-line mess, repeat offenses after);
-# this hook makes the shape MECHANICAL, the same way block-git.sh made the git
-# ban mechanical.
+# PROJECT-STATUS is a one-page snapshot agents overwrite in place, never an
+# append-log. The shape is the template .tfcore/templates/v4custom/app-project-status-tmpl.md;
+# the steps are .tfcore/tasks/_status-update-gate.md. The prose rule alone kept
+# failing (AstroLyfe's 286-line mess, repeat offenses after); this hook makes the
+# shape mechanical, the same way block-git.sh made the git ban mechanical.
 #
 # Wired in .claude/settings.json → hooks.PreToolUse (matcher "Write|Edit|MultiEdit"
 # AND matcher "Bash"); OpenCode via .opencode/plugin/techieflow.js.
@@ -128,24 +127,21 @@ if is_full_write:
         errors.append(
             f"This write is {n_lines} lines. PROJECT-STATUS is a one-page snapshot "
             "(~60 lines, hard cap 120). TRIM to the template shape — blow-by-blow "
-            "history lives in the checklist Remarks and .verify/ artifacts, never here."
+            "history lives in the checklist Remarks and the telemetry streams, never here."
         )
 
 if errors:
     print(
-        "BLOCKED by TechieFlow policy: PROJECT-STATUS is a CRISP, FIXED-SHAPE "
-        "snapshot you OVERWRITE in place — never append to, never restructure "
-        "(.tfcore/tasks/_status-update-gate.md).",
+        "BLOCKED by TechieFlow policy: PROJECT-STATUS is a one-page snapshot you "
+        "overwrite in place, never append to (.tfcore/tasks/_status-update-gate.md).",
         file=sys.stderr,
     )
     for e in errors:
         print(" - " + e, file=sys.stderr)
     print(
-        "Fix and retry: keep ONLY the template sections (Where I am / Next command "
-        "to run / Open requirements / Known blockers / Verification log / Library "
-        "feedback summary / Standards compliance / Deferred / future), overwrite "
-        "their content in place, add ONE Verification-log row for this run, and put "
-        "the detail in docs/<APP>-Checklist.md Remarks. Do NOT pad, do NOT narrate.",
+        "Fix and retry: run bash .tfcore/utils/tf-status-facts.sh <App> and write only "
+        "the eight template sections (.tfcore/templates/v4custom/app-project-status-tmpl.md), "
+        "each overwritten in place. The detail goes in the checklist Remarks, not here.",
         file=sys.stderr,
     )
     sys.exit(2)

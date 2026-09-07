@@ -17,12 +17,16 @@ rule: entry-break-table
 <!-- Authoring notes (agent only; never visible text).
      A developer's map from each screen to the code that serves it, written so they can set breakpoints
      and debug it. Documents the code AS BUILT, read at file:line; never inferred from folder names.
-     One `###` per screen (per component for a UI library, linked to the sample-app screen that shows it).
+     One `###` per screen (per component for a UI library, linked to the sample-app screen that shows it;
+     per public service for a service library: registration, call chain, where to break; owner 2026-09-06).
      Each entry: the screenshot captured from the running app; one "Call chain:" line, page method to
      service class and method to data-access class and method; a where-to-break table, one row per step:
      file and line, function, the variable to watch, the value it should hold. Line numbers are as of
      "Verified on"; the function name is what to search for when a line has moved.
-     Produced when the build completes the checklist; refreshed at handoff. -->
+     Produced when the build completes the checklist; refreshed at handoff.
+     Large project: one DevGuide per phase (docs/{App}-DevGuide.md, docs/{App}-P2-DevGuide.md, …) with a
+     header row "| Phase | n of m |". Cross-cutting flows are written once, in phase 1; a later phase
+     repeats them only if it changed them, otherwise one line points at phase 1's section. -->
 
 # {App} — Developer Guide
 

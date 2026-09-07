@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TechieFlow — Permissions and YOLO mode</title>
+<script>
+/* Resolve the theme BEFORE first paint (no flash). Saved choice wins; otherwise
+   pick by time of day — light 07:00–19:00 local, softened dark at night. */
+(function(){
+  try{
+    var t = localStorage.getItem('tf-theme');
+    if(t!=='light' && t!=='dark'){ var h = new Date().getHours(); t = (h>=7 && h<19) ? 'light' : 'dark'; }
+    document.documentElement.setAttribute('data-theme', t);
+  }catch(e){ document.documentElement.setAttribute('data-theme','light'); }
+})();
+</script>
+<style>
+/* LIGHT is the default theme — a warm off-white, easy on the eyes (never bright white). */
+:root{
+  --bg:#f4f1e9; --panel:#efe9db; --panel2:#e7e0cd; --line:#d8cfb6;
+  --ink:#2e2a22; --muted:#6f6857; --accent:#2f6f9f; --accent2:#3f7d54;
+  --warn:#9a6b15; --danger:#b03a52; --ok:#3f7d54;
+  --code-bg:#ece5d3; --code-ink:#332f26; --row-alt:#eae2cf;
+  --h3:#3a352b; --h4:#2f6f9f; --quote:#4a4537; --cta-bg:#e6eef5;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+/* DARK — softened near-black (warmer / less harsh than pure #0f1115). */
+html[data-theme="dark"]{
+  --bg:#11141a; --panel:#171b23; --panel2:#1e2430; --line:#2b3240;
+  --ink:#dfe3ea; --muted:#99a2b1; --accent:#7cc4ff; --accent2:#a6e3a1;
+  --warn:#f9c74f; --danger:#f38ba8; --ok:#a6e3a1;
+  --code-bg:#0c1016; --code-ink:#d8dde8; --row-alt:#141821;
+  --h3:#cfd5e3; --h4:#7cc4ff; --quote:#cfd5e3; --cta-bg:#0d2030;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:13px;background:var(--code-bg);color:var(--code-ink);padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
+pre{font-family:var(--mono);font-size:12.5px;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto;color:var(--code-ink);position:relative}
+pre code{background:none;border:none;padding:0}
+.copy{position:absolute;top:8px;right:8px;background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:11px;font-family:var(--sans);cursor:pointer}
+.copy:hover{color:var(--accent);border-color:var(--accent)}
+/* floating light/dark toggle (top-right) */
+.theme-toggle{position:fixed;top:12px;right:14px;z-index:10000;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:12.5px;font-family:var(--sans);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.theme-toggle:hover{color:var(--accent);border-color:var(--accent)}
+
+.layout{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+.layout.no-toc{grid-template-columns:1fr}
+nav.side{position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--line);background:var(--panel);padding:18px 14px}
+nav.side h1{font-size:14px;margin:0 0 4px;letter-spacing:.5px;color:var(--ink)}
+nav.side .sub{font-size:11.5px;color:var(--muted);margin-bottom:14px}
+nav.side ol,nav.side ul{list-style:none;padding:0;margin:0}
+nav.side li{font-size:13px;margin:2px 0}
+nav.side li a{display:block;padding:5px 8px;color:var(--ink);border-radius:6px}
+nav.side li a:hover{background:var(--panel2);text-decoration:none}
+nav.side li.h3 a{padding-left:22px;font-size:12.5px;color:var(--h3)}
+nav.side .group{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin:14px 8px 4px}
+
+main{padding:28px 40px 80px;max-width:1100px}
+.layout.no-toc main{margin:0 auto}
+
+h1{font-size:28px;margin:0 0 6px}
+h2{font-size:22px;margin:32px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);scroll-margin-top:16px}
+h3{font-size:17px;margin:22px 0 6px;color:var(--h3);scroll-margin-top:16px}
+h4{font-size:14px;margin:14px 0 4px;color:var(--h4);scroll-margin-top:16px}
+.subtitle{color:var(--muted);font-size:14px;margin-top:-4px;margin-bottom:18px}
+p{margin:6px 0 10px}
+blockquote{border-left:3px solid var(--accent);background:var(--panel);margin:8px 0;padding:8px 14px;color:var(--quote)}
+ul,ol{padding-left:22px}
+li{margin:2px 0}
+
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);color:var(--h3);font-weight:600}
+tr:nth-child(even) td{background:var(--row-alt)}
+
+hr{border:none;border-top:1px solid var(--line);margin:24px 0}
+.anchor-link{color:var(--muted);font-weight:400;font-size:0.85em;margin-left:8px;opacity:0;transition:opacity .15s;text-decoration:none}
+h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
+
+/* inline TOC at top of main content */
+.toc-inline{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 16px;margin:14px 0 24px}
+.toc-inline > div{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.toc-inline ol,.toc-inline ul{margin:4px 0;padding-left:18px}
+.toc-inline li{font-size:13px;margin:1px 0}
+.toc-inline a{color:var(--h3)}
+
+/* mermaid diagram wrapper + toolbar */
+.diagram{position:relative;border:1px solid var(--line);border-radius:8px;background:var(--code-bg);margin:14px 0;overflow:hidden}
+.diagram .mermaid{padding:14px;margin:0;background:transparent;border:none;overflow:auto}
+.diagram .dt{display:flex;gap:6px;justify-content:flex-end;padding:6px 8px;background:var(--row-alt);border-bottom:1px solid var(--line)}
+.diagram .dt button{background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 10px;font-size:12px;font-family:var(--sans);cursor:pointer;min-width:30px}
+.diagram .dt button:hover{color:var(--accent);border-color:var(--accent)}
+.diagram .dt .zlabel{padding:3px 6px;font-size:11px;color:var(--muted);font-family:var(--mono);align-self:center}
+.diagram.fs{position:fixed;inset:0;z-index:9999;border-radius:0;border:none}
+.diagram.fs .mermaid{height:calc(100vh - 40px);display:flex;align-items:center;justify-content:center}
+
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.side{position:static;height:auto}}
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" title="Toggle light / dark">&#9790; Dark</button>
+<div class="layout no-toc">
+  <main>
+    <h1>TechieFlow — Permissions and YOLO mode</h1>
+    <div class="subtitle">Rendered 2026-09-07 &middot; source <code>TechieFlow-Permissions-And-YOLO.md</code></div>
+
+<table>
+<thead><tr><th></th><th></th></tr></thead>
+<tbody>
+<tr><td>Purpose</td><td>Why the harness stops asking you for permission, how the git ban is enforced, and what YOLO mode changes. Includes the shipped <code>settings.json</code> and every guard hook with the incident that produced it.</td></tr>
+<tr><td>Audience</td><td>The owner, and anyone who has to explain why an agent was refused.</td></tr>
+<tr><td>Status</td><td>Moved out of <code>README.md</code> on 2026-09-07 (Session 6 of the reset), unedited. Written before the reset: the hook list grew afterwards to eleven, adding the database, build and metrics guards. <code>docs/TechieFlow-How-It-Works.md</code> §2 carries the current list.</td></tr>
+<tr><td>Companion</td><td><code>README.md</code>, <code>docs/TechieFlow-How-It-Works.md</code>, <code>.tfcore/tasks/_yolo-mode.md</code>.</td></tr>
+</tbody>
+</table>
+<hr>
+<h2 id="permissions-yolo-except-git-writes">12. Permissions (yolo-except-git-writes)<a class="anchor-link" href="#permissions-yolo-except-git-writes">#</a></h2>
+<p>The pre-built config <strong>auto-allows</strong> Read/Glob/Grep/Edit/Write/MultiEdit and <strong>all Bash</strong> (bare <code>"Bash"</code>) — so create/update/<strong>move</strong> run with zero prompts. <strong>Deletes and <code>sudo</code></strong> (<code>rm</code>, <code>rmdir</code>, <code>find -delete</code>, <code>sudo</code>) <strong>ask — via the hook, not via a settings <code>ask</code> rule</strong> (see the YOLO box below for why). <strong>Denies</strong> catastrophic <code>rm -rf</code> root/home paths <strong>and every git/gh WRITE subcommand</strong> (<code>git commit|push|add|reset|checkout|switch|restore|merge|rebase|stash|clean|pull|fetch|…</code>, <code>gh pr|issue|repo|release create|merge|close|…</code>) — git is manual in TechieFlow; agents never write it, so it is a hard deny, in <strong>every</strong> permission mode including bypass. Permission precedence is <code>deny → ask → hook → allow</code>. <em>(Cross-project tip: to let a session work in another app's folder without per-path prompts, add that root to <code>permissions.additionalDirectories</code> in this project's settings.json — keep those machine-specific paths out of any shared template.)</em></p>
+<p><strong>The git ban is TWO layers, because prefix rules alone leak.</strong> <code>Bash(git commit*)</code> is a literal prefix match — it never sees <code>cd src &amp;&amp; git commit</code> or <code>echo done; git add -A</code>, which the bare <code>"Bash"</code> allow would wave straight through. That is exactly how agents kept "accidentally" running git during status updates. So the config also wires a <strong>PreToolUse hook</strong> — <code>.tfcore/hooks/block-git.sh</code> — that parses every Bash call (compound forms, <code>bash -c "…"</code>, <code>eval</code>, <code>$(…)</code>, wrappers like <code>sudo</code>/<code>env</code>/<code>xargs</code>) and classifies each <code>git</code>/<code>gh</code> node as <strong>read</strong> (<code>status</code>/<code>log</code>/<code>diff</code>/<code>show</code>/<code>blame</code>/<code>grep</code>/<code>branch</code>/<code>tag -l</code>/<code>stash list</code>/<code>remote -v</code>/<code>config --get</code>, <code>gh pr list|view</code>…) or <strong>write</strong> (everything else). Writes are blocked always; reads are blocked outside YOLO and allowed in YOLO. The block message carries the local-evidence recipe (checklist tables + working-tree files + fresh build) so the agent continues correctly instead of flailing. You still run git yourself: in a separate terminal, or by typing <code>!git …</code> in the session (user-typed bang commands bypass agent tool permissions).</p>
+<h3 id="a-yolo-goal-mode-i-ve-given-you-all-the-permissions-run-until-it-s-done-2026-08-21">12a. YOLO / goal mode — "I've given you all the permissions; run until it's done" (2026-08-21)<a class="anchor-link" href="#a-yolo-goal-mode-i-ve-given-you-all-the-permissions-run-until-it-s-done-2026-08-21">#</a></h3>
+<p><code>*yolo</code> used to be agent-side only (skip elicitation) and the owner still got prompted for every delete and blocked on every git read — which is how a VM goal run took <strong>3 days</strong>, mostly waiting for a human. Now <code>*yolo</code>, the word <strong>YOLO</strong> anywhere in a command, an active Claude Code <strong><code>/goal</code></strong>, or a <code>tf-goal.sh</code> run all mean the same thing, defined in <strong><code>.tfcore/tasks/_yolo-mode.md</code></strong>:</p>
+<table>
+<thead><tr><th></th><th>Normal</th><th>YOLO</th></tr></thead>
+<tbody>
+<tr><td><code>rm</code> / <code>rmdir</code> / <code>sudo</code></td><td>hook asks</td><td><strong>allowed, no prompt</strong> (catastrophic <code>rm -rf /</code>/<code>~</code> still denied)</td></tr>
+<tr><td>git/gh <strong>reads</strong> (<code>status</code>/<code>log</code>/<code>diff</code>/<code>blame</code>, <code>gh pr view</code>)</td><td>blocked</td><td><strong>allowed</strong></td></tr>
+<tr><td>git/gh <strong>writes</strong> (<code>commit</code>/<code>push</code>/<code>add</code>/<code>reset</code>/<code>checkout</code>/<code>stash</code>/<code>tag</code>, `gh pr create</td><td>merge`)</td><td>blocked</td><td><strong>blocked — always</strong></td></tr>
+<tr><td>Elicitation, phase-boundary pauses, "confirm the BRD-N list", "ask once" questions</td><td>pause</td><td><strong>decide the default, record it, continue</strong></td></tr>
+<tr><td>Build pass scope</td><td>whole checklist (§2b)</td><td>whole checklist <strong>+ automatic FIX loop</strong> on verifier FAIL rows (build-phase §6c, ≤5 cycles)</td></tr>
+<tr><td>Turn ending</td><td>may hand back</td><td><strong>only</strong> when the goal is complete (<code>tf-yolo.sh done complete</code>) or every remaining REQ is owner-gated (<code>done blocked</code>)</td></tr>
+</tbody>
+</table>
+<p><strong>Mechanics.</strong> The flag is <code>.tfcore/.session/yolo.json</code> (<code>bash .tfcore/utils/tf-yolo.sh on|off|status</code>; never committed). <code>block-git.sh</code> reads it (plus <code>TF_YOLO=1</code> and the hook payload's <code>permission_mode</code> — Claude Code's <code>bypassPermissions</code>/<code>auto</code> count as YOLO); the OpenCode plugin reads the same flag and auto-approves its <code>rm */sudo *</code> asks via <code>permission.ask</code>. <strong>Why the delete prompt moved out of <code>settings.json</code>:</strong> Claude Code honours a settings <code>ask</code> rule <em>even in <code>bypassPermissions</code> mode and even when a hook says allow</em> — so as long as <code>Bash(rm *)</code> sat in <code>ask</code>, no mode could stop the prompt. A hook-issued <code>ask</code> can be withheld; a settings <code>ask</code> cannot.</p>
+<p><strong>Usage limits (5-hour / weekly).</strong> Nothing inside a session can wait a limit out, so the wait lives in a supervisor: <code>bash .tfcore/utils/tf-goal.sh &lt;app-dir&gt; "&lt;goal&gt;"</code> runs the goal headless (<code>claude -p --permission-mode bypassPermissions</code>, or <code>--harness opencode</code> → <code>opencode run --auto</code>), parses the reset time from the limit message (<code>resets 7pm (Asia/Kolkata)</code>, <code>resets in 2h 14m</code>, <code>usage limit reached|&lt;epoch&gt;</code>, weekly <code>resets Tue 3pm</code>), <strong>sleeps until reset + 15 min</strong> (<code>--buffer-min</code>), logs <code>RETRY AT …</code> to <code>.tfcore/.session/goal.log</code>, and <strong>resumes the same session</strong> (<code>--resume &lt;id&gt;</code>). Crashes back off 2 → 30 min; an agent that stops without finishing is re-prompted; it exits only on the agent's sentinel (<code>0</code> complete, <code>3</code> owner-blocked, <code>4</code> max cycles). <code>--resume &lt;app-dir&gt;</code> picks up after a reboot. The agent's part of the bargain is the status gate: every phase ends with PROJECT-STATUS + checklist written, so a resume is lossless.</p>
+<p><strong>Build passes are whole-checklist, YOLO or not.</strong> The other 3-day culprit: build-phase runs that implemented a few REQs, wrote "next command: <code>*build-phase</code> for the remaining REQs" and stopped. <code>build-phase.md §2b</code> now bans that ending — a pass is done when <strong>every</strong> working-list REQ is ≥ <code>Implemented</code> (or a logged <code>Blocked</code>/owner-gated blocker), the verifier has been chained, and (in YOLO) its FAIL rows have been looped. Long list ⇒ more sub-agent clusters, never a shorter pass. <code>_status-update-gate.md</code> item 5 carries the matching rule for the next-command line.</p>
+<p><strong>Codex permission difference.</strong> <code>.codex/hooks.json</code> routes shell and file changes through <code>.tfcore/hooks/codex-adapter.py</code>, while <code>.codex/rules/techieflow.rules</code> provides the command policy. Codex keeps every agent-issued <code>git</code> and <code>gh</code> command blocked in normal and YOLO modes (including reads); this is intentionally stricter than the Claude/OpenCode YOLO table above. Trust the repository and inspect <code>/hooks</code> after scaffold/update. <code>$techieflow-yolo</code> changes TechieFlow pause/delete behavior, but never relaxes Codex's version-control boundary.</p>
+<p><strong>Q: Config (canonical version in scaffold-brownfield.sh / scaffold-greenfield.sh)</strong></p>
+<pre><code class="language-json">{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash",
+      "Edit", "Write", "MultiEdit", "NotebookEdit",
+      "Read", "Glob", "Grep", "TodoWrite", "WebFetch", "WebSearch", "Task"
+    ],
+    "ask": [],
+    "deny": [
+      "Bash(rm -rf /)", "Bash(rm -rf /*)", "Bash(rm -rf ~)", "Bash(rm -rf ~/*)",
+      "Bash(git commit*)", "Bash(git push*)", "Bash(git add*)", "Bash(git reset*)",
+      "Bash(git checkout*)", "Bash(git switch*)", "Bash(git restore*)", "Bash(git merge*)",
+      "… every other git WRITE subcommand (rebase, cherry-pick, revert, clean, pull, fetch, init, clone, …) …",
+      "Bash(gh pr create*)", "Bash(gh pr merge*)", "Bash(gh issue create*)", "… every gh WRITE verb …"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash",
+        "hooks": [ { "type": "command",
+                     "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/block-git.sh\"" },
+                   { "type": "command",
+                     "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-artifacts.sh\"" } ] },
+      { "matcher": "Write|Edit|MultiEdit",
+        "hooks": [ { "type": "command",
+                     "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status.sh\"" },
+                   { "type": "command",
+                     "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-verify.sh\"" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command",
+                     "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-status-html.sh\"" } ] }
+    ]
+  }
+}</code></pre>
+<p><strong>Repo-root artifact directories are blocked mechanically (2026-08-25).</strong> A fourth PreToolUse hook — <code>.tfcore/hooks/guard-artifacts.sh</code>, matcher <code>Bash</code> — blocks any command that points <code>--output</code> / <code>--output-dir</code> at a root-level <code>test-results*</code> or <code>scripts-*</code> directory, or <code>mkdir</code>s one. The prose rule in <code>verify-phase.md</code> §1 had been strengthened twice and broken three times (fourteen <code>test-results-*</code> dirs in one app, four <code>scripts-cluster-*</code> in the next fan-out, ten <code>test-results-*</code> in TechieBlog) — every time from an agent passing <code>--output test-results-&lt;slug&gt;</code> and overriding the config's pinned <code>outputDir</code>. The sanctioned isolation form <code>--output tests/.artifacts/&lt;slug&gt;</code> passes, as do <code>tests/</code>, <code>docs/screenshots/</code> and the project's own tracked <code>scripts/</code>. A bare <code>-o</code> is deliberately <em>not</em> matched (Playwright has no <code>-o</code>; <code>grep -o</code> / <code>curl -o</code> are legitimate).</p>
+<p><strong>A stale <code>PROJECT-STATUS.html</code> blocks the end of the turn (2026-08-25).</strong> The first <strong>Stop</strong> hook — <code>.tfcore/hooks/guard-status-html.sh</code> — refuses to let a turn end while <code>PROJECT-STATUS.html</code> is older than <code>PROJECT-STATUS.md</code>, or missing. <code>_status-update-gate.md</code> §8 ("re-render in the same turn, full stop") had failed twice in a row; the owner spent 4h40m reading a page that still listed retracted owner-actions. Stop, not PostToolUse, because the rule is about the turn — an agent legitimately renders the HTML several tool calls after writing the markdown. It honours <code>stop_hook_active</code> so a turn that genuinely cannot render still terminates. mtime only: content parity stays an agent responsibility.</p>
+<p><strong>Expired run material is deleted automatically (2026-08-26).</strong> Pinning artifacts under <code>tests/.artifacts/</code> fixed <em>where</em> they land but not that they ever leave — Playwright wipes only its own <code>outputDir</code>, so per-cluster subfolders, harness scripts and multi-hundred-MB host logs piled up (TechieBlog: 1.1 GB under <code>tests/.artifacts/</code> + 101 MB of <code>.verify/*.log</code>, mostly two weeks stale). A <strong>SessionStart</strong> hook — <code>.tfcore/hooks/sweep-artifacts.sh</code>, no veto, exit 0 always — deletes files under <code>tests/.artifacts/</code> and <code>.verify/</code> older than the retention window (default <strong>7 days</strong>; <code>artifactRetentionDays: N</code> in <code>.tfcore/core-config.yaml</code> or <code>TF_ARTIFACT_RETENTION_DAYS=N</code>; <code>0</code> disables the age sweep), prunes emptied dirs, and removes banned repo-root legacy dirs (<code>test-results*/</code>, <code>scripts-*/</code>, <code>playwright-report/</code>) regardless of age. Files newer than the window are untouched, so a run in flight is never disturbed and a mixed-age <code>harness/</code> keeps its recent scripts. Never follows symlinks, never leaves the project root, never touches tracked <code>tests/verify/</code> or the project's own <code>scripts/</code>. Throttled to once per hour per project (<code>.tfcore/.session/sweep.stamp</code>); <code>TF_SWEEP_DRY_RUN=1</code> previews. Codex runs it from <code>codex-adapter.py session-start</code>; OpenCode from the plugin on the first root <code>session.created</code>. The one-line summary of what was removed is surfaced into the session.</p>
+<p>Both new guards run in every harness: Codex through <code>codex-adapter.py</code> (<code>pre-tool</code> and the new <code>stop</code> mode wired in <code>.codex/hooks.json</code>), OpenCode through <code>.opencode/plugin/techieflow.js</code> (the bash guard in <code>tool.execute.before</code>; the Stop check as a one-shot follow-up prompt on root <code>session.idle</code>, since OpenCode has no blocking Stop hook). Hooks load at session start — neither takes effect in an already-running session.</p>
+<p><strong>PROJECT-STATUS shape is enforced mechanically too (2026-07-09).</strong> A second PreToolUse hook — <code>.tfcore/hooks/guard-status.sh</code>, matcher <code>Write|Edit|MultiEdit</code> — blocks any write to <code>PROJECT-STATUS.md</code> that violates the crisp fixed-shape snapshot rule: an H2 outside the template's section set (per-run dated sections like <code>## *verify all — coverage matrix (DATE)</code> are the classic disease), a heading naming a command run, a paragraph stuffed into <code>current_phase:</code>, or a full-file write past ~120 lines. The block message tells the agent exactly how to reshape (overwrite the template sections in place, ONE Verification-log row per run, detail into the checklist Remarks). Same philosophy as the git ban: prose rules kept failing, so the harness enforces it. See <code>.tfcore/tasks/_status-update-gate.md</code>.</p>
+<p><strong><code>Verified</code> verdicts are enforced mechanically too (2026-07-10).</strong> A third PreToolUse hook — <code>.tfcore/hooks/guard-verify.sh</code>, matcher <code>Write|Edit|MultiEdit</code> — blocks any write to a <code>*-Checklist.md</code> that <em>introduces</em> a <code>Verified</code> status cell unless a same-day run ledger <code>docs/.last-verify.json</code> exists, which only an <em>executed</em> <code>verify-phase</code> run writes (verify-phase §6: boot → scoped tests → §4a data-render + §4b visual-truth gates → ledger → verdicts). This exists because a build orchestrator did its own smoke and wrote the <code>Verified</code> verdicts itself (TrSetup, 2026-07-09) — self-attestation the "chain the verifier" prose didn't stop. A self-smoke's ceiling is <code>Implemented</code> (<code>_smoke-test-policy.md §"Smoke is NOT verify"</code>); <code>*refresh-status</code> may reconcile a lagging Status column to a row's <em>pre-existing</em> dated verdict by writing the ledger with <code>"mode":"reconcile"</code>. Demotions (e.g. <code>Verified → Needs re-verify</code>) are never blocked.</p>
+<p><strong>WSL (Windows):</strong></p>
+<pre><code class="language-bash">/mnt/c/3AIGenCode/TechieFlow/update-framework.sh /path/to/app</code></pre>
+<p><strong>macOS:</strong></p>
+<pre><code class="language-bash">/Volumes/MacD/MyCode/TechieFlow/update-framework.sh /path/to/app</code></pre>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+<script>
+// Light/dark toggle. The initial theme was already applied flash-free by the
+// <head> script (saved choice, else time-of-day). Clicking flips it, saves the
+// choice, and reloads so Mermaid re-renders in the matching theme.
+(function(){
+  var btn = document.getElementById('themeToggle');
+  if(!btn) return;
+  var relabel = function(){
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    btn.textContent = dark ? '☀ Light' : '☾ Dark';
+  };
+  relabel();
+  btn.addEventListener('click', function(){
+    var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    try{ localStorage.setItem('tf-theme', next); }catch(e){}
+    location.reload();
+  });
+})();
+
+// Copy buttons on every code <pre> — but NEVER on a `pre.mermaid`:
+// mermaid reads the <pre>'s textContent as the diagram source, so a button
+// appended here glues "copy" onto the last line and breaks the parse
+// (flowcharts → "Syntax error"; sequence diagrams silently absorb it).
+// Mermaid blocks get copy/export from their own .diagram toolbar instead.
+document.querySelectorAll('pre:not(.mermaid)').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy';
+  btn.textContent = 'copy';
+  btn.addEventListener('click', () => {
+    const text = pre.querySelector('code') ? pre.querySelector('code').innerText : pre.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'copied';
+      setTimeout(() => { btn.textContent = 'copy'; }, 1200);
+    });
+  });
+  pre.appendChild(btn);
+});
+
+// Mermaid init — theme follows the resolved light/dark theme
+if (window.mermaid) {
+  var mermaidTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default';
+  mermaid.initialize({ startOnLoad: true, theme: mermaidTheme, securityLevel: 'loose' });
+}
+
+// Mermaid toolbar wiring — run after mermaid renders
+function wireMermaidToolbars() {
+  document.querySelectorAll('.diagram').forEach(dia => {
+    if (dia.dataset.wired) return;
+    const merm = dia.querySelector('.mermaid');
+    const svg = merm && merm.querySelector('svg');
+    if (!svg) return;
+    dia.dataset.wired = '1';
+    let scale = 1;
+    const label = dia.querySelector('.zlabel');
+    const apply = () => {
+      svg.style.transform = `scale(${scale})`;
+      svg.style.transformOrigin = 'top left';
+      if (label) label.textContent = Math.round(scale * 100) + '%';
+    };
+    const setScale = (s) => { scale = Math.max(0.25, Math.min(4, s)); apply(); };
+    dia.querySelector('[data-zin]').onclick = () => setScale(scale * 1.2);
+    dia.querySelector('[data-zout]').onclick = () => setScale(scale / 1.2);
+    dia.querySelector('[data-fit]').onclick = () => {
+      svg.style.transform = '';
+      svg.removeAttribute('width');
+      svg.style.maxWidth = '100%';
+      svg.style.height = 'auto';
+      scale = 1;
+      if (label) label.textContent = 'Fit';
+    };
+    dia.querySelector('[data-one]').onclick = () => {
+      svg.style.transform = '';
+      svg.style.maxWidth = 'none';
+      svg.style.width = '';
+      svg.style.height = '';
+      scale = 1;
+      if (label) label.textContent = '100%';
+    };
+    dia.querySelector('[data-fs]').onclick = () => {
+      dia.classList.toggle('fs');
+      if (dia.classList.contains('fs')) {
+        document.addEventListener('keydown', escFs);
+      } else {
+        document.removeEventListener('keydown', escFs);
+      }
+    };
+    function escFs(e) { if (e.key === 'Escape') { dia.classList.remove('fs'); document.removeEventListener('keydown', escFs); } }
+    dia.querySelector('[data-pop]').onclick = () => openInNewTab(svg);
+    // Ctrl+wheel zoom
+    merm.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setScale(scale * (e.deltaY < 0 ? 1.1 : 1/1.1));
+    }, { passive: false });
+  });
+}
+
+function openInNewTab(svg) {
+  const svgSource = new XMLSerializer().serializeToString(svg);
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Diagram</title>
+<style>
+  html,body{margin:0;height:100%;background:#0f1115;color:#e6e8ee;font-family:system-ui,sans-serif}
+  .bar{position:fixed;top:0;left:0;right:0;padding:8px 12px;background:#161a22;border-bottom:1px solid #2a3142;display:flex;gap:8px;z-index:10}
+  .bar button{background:#1c2230;color:#9aa3b2;border:1px solid #2a3142;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer}
+  .bar button:hover{color:#7cc4ff;border-color:#7cc4ff}
+  .bar .hint{margin-left:auto;color:#9aa3b2;font-size:11.5px;align-self:center}
+  #stage{position:absolute;top:42px;bottom:0;left:0;right:0;overflow:hidden}
+  #stage svg{width:100%;height:100%}
+</style>
+</head><body>
+<div class="bar">
+  <button onclick="zpz.zoomIn()">+</button>
+  <button onclick="zpz.zoomOut()">−</button>
+  <button onclick="zpz.fit();zpz.center()">Fit</button>
+  <button onclick="zpz.resetZoom();zpz.center()">1:1</button>
+  <button onclick="window.print()">Print</button>
+  <button onclick="dlPng()">PNG</button>
+  <button onclick="dlSvg()">SVG</button>
+  <span class="hint">Drag to pan · Ctrl+wheel to zoom · + / − keys</span>
+</div>
+<div id="stage">${svgSource}</div>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"><\/script>
+<script>
+  const el = document.querySelector('#stage svg');
+  const zpz = svgPanZoom(el, { zoomScaleSensitivity: .3, minZoom: .2, maxZoom: 10, controlIconsEnabled: false, fit: true, center: true });
+  document.addEventListener('keydown', e => {
+    if (e.key === '+' || e.key === '=') zpz.zoomIn();
+    if (e.key === '-' || e.key === '_') zpz.zoomOut();
+    if (e.key === '0') { zpz.resetZoom(); zpz.center(); }
+  });
+  function dlSvg() {
+    const blob = new Blob([new XMLSerializer().serializeToString(el)], { type: 'image/svg+xml' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'diagram.svg'; a.click();
+  }
+  function dlPng() {
+    const src = new XMLSerializer().serializeToString(el);
+    const img = new Image();
+    const url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(src)));
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = el.clientWidth * 2; c.height = el.clientHeight * 2;
+      const ctx = c.getContext('2d'); ctx.scale(2,2); ctx.drawImage(img, 0, 0);
+      c.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'diagram.png'; a.click(); });
+    };
+    img.src = url;
+  }
+<\/script>
+</body></html>`;
+  const w = window.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+// Run wiring after mermaid finishes (it renders async)
+if (window.mermaid) {
+  setTimeout(wireMermaidToolbars, 400);
+  setTimeout(wireMermaidToolbars, 1200);  // safety re-run for slow renders
+}
+</script>
+</body>
+</html>

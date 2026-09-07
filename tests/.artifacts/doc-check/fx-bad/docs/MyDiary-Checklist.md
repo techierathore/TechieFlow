@@ -15,7 +15,7 @@ Build the journal site described in the BRD.
 |----|-------------|--------|---|---------|---------|
 | REQ-UI-001 | Login screen | Not Started | 0% | — | [view](#d-req-ui-001) |
 | REQ-FN-001 | Search entries | Started | 10% | history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history history | [view](#d-req-fn-001) |
-| REQ-NFR-001 | Entries list speed | Not Started | 0% | — | [view](#d-req-nfr-001) |
+| REQ-NFR-001 | Entries list speed | Not Started | 0% | perf script not present anywhere in this tree | [view](#d-req-nfr-001) |
 
 ## Page: Login (`/login`)
 
@@ -27,7 +27,7 @@ Build the journal site described in the BRD.
 
 <a id="d-req-fn-001"></a>
 - **REQ-FN-001** — Search entries. *BRD:* BRD-2
-  - *Acceptance:* Given three entries exist, when the writer types `holiday` in the search box on Entries and presses Enter, then only entries containing `holiday` are listed.
+  - *Acceptance:* Given three entries exist, when the writer types `holiday` on Entries and presses Enter, then only matching entries are listed.
 
 ## Non-functional
 

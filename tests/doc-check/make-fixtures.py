@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build a minimal passing document set for a fake Small app (MyDiary) and a broken twin."""
-import os, shutil, sys
+import os, re, shutil, sys
 
 BASE = os.environ.get("TF_FIXTURE_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".artifacts", "doc-check")
 GOOD = os.path.join(BASE, "fx-good")
@@ -52,7 +52,7 @@ A private journal site. One user writes dated entries and finds them again later
 - **BRD-1** — Sign in. *Screen:* Login · *Mockup:* [mockup](mockups/login.html)
   - *Acceptance:* When the writer enters a valid email and password on Login and presses Enter, then the Entries screen opens.
 - **BRD-2** — Search entries. *Screen:* Entries · *Mockup:* [mockup](mockups/entries.html)
-  - *Acceptance:* When the writer types `holiday` in the search box on Entries and presses Enter, then only entries containing `holiday` are listed.
+  - *Acceptance:* When the writer types `holiday` in the search box on Entries and presses Enter, then only matching entries are listed.
 
 ## 6. Non-functional requirements
 
@@ -85,7 +85,14 @@ ARCH = """# MyDiary — Architecture
 | Q | Topic | Decision | Source |
 |---|---|---|---|
 | Q1 | Configuration | appsettings.json | answer set |
+| Q2 | Secrets in development | user secrets | answer set |
+| Q3 | Database | PostgreSQL in a container | answer set |
 | Q4 | Authentication | AppManager | owner |
+| Q5 | Logging | Serilog to file | answer set |
+| Q6 | Tests | xUnit, test project from day one | answer set |
+| Q7 | Layout and naming | src/ and tests/; the head is `MyDiary` | answer set |
+| Q8 | User interface | TrBlazeUI, Blazor Server | answer set |
+| Q11 | Standing rules | the answer set's list | answer set |
 
 ## 2. Solution structure
 
@@ -217,7 +224,7 @@ Build the journal site described in the BRD.
 
 <a id="d-req-fn-001"></a>
 - **REQ-FN-001** — Search entries. *BRD:* BRD-2
-  - *Acceptance:* Given three entries exist, when the writer types `holiday` in the search box on Entries and presses Enter, then only entries containing `holiday` are listed.
+  - *Acceptance:* Given three entries exist, when the writer types `holiday` on Entries and presses Enter, then only matching entries are listed.
 
 ## Non-functional
 
@@ -433,7 +440,78 @@ MyDiary is a private journal.
 ![Write an entry](screenshots/MyDiary/entries.png)
 """
 
+
+LOGIN_HTML = """<html><body data-testid="app-shell">
+<form data-testid="login-form" action="entries.html"><input data-testid="email"><input data-testid="password">
+<button type="submit" data-testid="login-button">Sign in</button></form></body></html>"""
+ENTRIES_HTML = """<html><body data-testid="app-shell"><nav data-testid="app-header"><a href="login.html">Log out</a></nav>
+<button data-testid="add-entry" onclick="alert('Add entry dialog opens here')">Add</button>
+<table data-testid="entries-table"><tr><td>Holiday</td></tr></table></body></html>"""
+
+DC = """# MyDiary — Deployment Checklist
+
+| | |
+|---|---|
+| App | MyDiary |
+| Hosting target | VPS |
+| Pipeline document | docs/deployment-brief.md |
+| Date | 2026-09-06 |
+| Proven | never |
+
+## 1. Who does what
+
+| Step | Done by |
+|---|---|
+| Build and publish the artefact | pipeline |
+| Approve the release | owner |
+
+## 2. Secrets and settings
+
+| Name | Where it is set | What breaks without it |
+|---|---|---|
+| CONNECTION_STRING | host environment variable | the application cannot start |
+| APP_KEY | host environment variable | sign-in fails |
+
+## 3. Before the first deploy
+
+- [ ] Create the database user — `psql -c "\\du"` lists it
+
+## 4. Deploy
+
+- [ ] Publish the artefact to /srv/mydiary — the folder holds today's build
+- [ ] Restart the service — `systemctl status mydiary` says active
+
+## 5. After the deploy
+
+- [ ] `curl -I https://mydiary.example/health` — HTTP 200
+
+## 6. Rollback
+
+- [ ] Point the symlink at the previous build and restart — the previous version answers
+
+A rollback does not undo: database migrations.
+
+## 7. Routine operations
+
+| Task | Command |
+|---|---|
+| Restart the service | `systemctl restart mydiary` |
+
+## 8. Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| 502 from the proxy | service down | restart it |
+
+## 9. Proven
+
+| What | Executed for real | When |
+|---|---|---|
+| Deploy to the VPS | no | — |
+"""
+
 FILES = {
+    "docs/MyDiary-Deployment-Checklist.md": DC,
     "docs/MyDiary-BRD.md": BRD,
     "docs/MyDiary-Architecture.md": ARCH,
     "docs/MyDiary-UIDesign.md": UI,
@@ -443,8 +521,8 @@ FILES = {
     "docs/MyDiary-UsageGuide.md": UG,
     "docs/MyDiary-DevGuide.md": DG,
     "docs/MyDiary-ProductGuide.md": PG,
-    "docs/mockups/login.html": "<html></html>",
-    "docs/mockups/entries.html": "<html></html>",
+    "docs/mockups/login.html": LOGIN_HTML,
+    "docs/mockups/entries.html": ENTRIES_HTML,
     "docs/screenshots/MyDiary/login.png": "png",
     "docs/screenshots/MyDiary/entries.png": "png",
 }
@@ -471,13 +549,236 @@ bad["docs/MyDiary-Checklist.md"] = (CL.replace("*Acceptance:* When the writer en
                                                "*Acceptance:* login works.")
                                     .replace("| REQ-FN-001 | Search entries | Not Started | 0% | — |",
                                              "| REQ-FN-001 | Search entries | Started | 10% | " + " ".join(["history"] * 70) + " |")
+                                    .replace("| REQ-NFR-001 | ", "| REQ-NFR-001 | ", 1))
+# a Remarks cell that says "not present" without naming the path tried (FR-27)
+bad["docs/MyDiary-Checklist.md"] = re.sub(r"(\| REQ-NFR-001 \|[^|]*\|[^|]*\|[^|]*\|)[^|]*\|",
+                                          r"\1 perf script not present anywhere in this tree |",
+                                          bad["docs/MyDiary-Checklist.md"], count=1)
+bad["docs/MyDiary-Checklist.md"] = (bad["docs/MyDiary-Checklist.md"]
                                     + "\n## UAT Bugs\n\n- a bug\n")
+# a bundled acceptance line (five behaviours, 41 words) in the broken BRD
+bad["docs/MyDiary-BRD.md"] = bad["docs/MyDiary-BRD.md"].replace(
+    "*Acceptance:* When the writer types `holiday` in the search box on Entries and presses Enter, then only matching entries are listed.",
+    "*Acceptance:* When the writer opens Entries, then the list shows every entry newest first with a preview and a thumbnail, the search box filters as the writer types, Enter opens the first result, empty slots are dropped, and a timer can be started.")
 bad["PROJECT-STATUS.md"] = PS.replace("OpenCode:\n```\n/flow-master *build-phase MyDiary\n```\n", "").replace(
     "Day-1 documents drafted. Nothing built.", " ".join(["narrative"] * 90))
 bad["docs/MyDiary-Architecture.md"] = ARCH.replace("```mermaid\n  erDiagram", "```mermaid\n  flowchart").replace(
-    "## 6. Decisions log", "## 6. Deployment\n\nVPS.\n\n## 7. Decisions log")
+    "## 6. Decisions log", "## 6. Deployment\n\nVPS.\n\n## 7. Decisions log").replace(
+    "| `MyDiary` | web app | the head |", "| `MyDiary.App` | web app | the head |").replace(
+    "| Q3 | Database | PostgreSQL in a container | answer set |\n", "")
 bad["docs/MyDiary-UIDesign.md"] = UI.replace("**States:** empty: form blank · loading: button spinner · error: red alert under the form", "")
 bad["docs/MyDiary-DevGuide.md"] = DG.replace("| `src/MyDiary/Pages/Login.razor.cs:127` | `HandleLogin` | `aLogin.Email` | the email typed in the box |\n", "").replace(
     "| File and line | Function | Watch | Expected value |\n|---|---|---|---|\n", "")
+bad["docs/mockups/login.html"] = "<html><body><a href=\"missing.html\">Go</a><button>Sign in</button></body></html>"
+bad["docs/mockups/entries.html"] = "<html><body data-testid=\"app-shell\"><button onclick=\"alert(1)\">Add</button></body></html>"
+# deployment checklist: a narrative line in Deploy, a secret described twice, a Proven placeholder
+bad["docs/MyDiary-Deployment-Checklist.md"] = (DC.replace("| Proven | never |", "| Proven | {date} |")
+    .replace("- [ ] Restart the service — `systemctl status mydiary` says active",
+             "Then restart the service and check it is up.\n- [ ] Restart the service — `systemctl status mydiary` says active")
+    .replace("| Restart the service | `systemctl restart mydiary` |",
+             "| Restart the service | `systemctl restart mydiary` |\n| CONNECTION_STRING | set it again in the unit file |"))
 write_set(BAD, bad)
-print("fixtures written:", GOOD, BAD)
+
+# ---------------------------------------------------------------------------
+# A Large project (BigApp), two phases, laid out as docs/TechieFlow-Document-Schemas.md §2 says:
+# phase 1 keeps the plain names, phase 2 is BigApp-P2-*, BRD and REQ ids run on, one mockup set.
+# ---------------------------------------------------------------------------
+LARGE = os.path.join(BASE, "fx-large")
+LARGE_BAD = os.path.join(BASE, "fx-large-bad")
+
+
+def big(text):
+    return text.replace("MyDiary", "BigApp")
+
+
+PHASES = """# BigApp — Phases
+
+| | |
+|---|---|
+| App | BigApp |
+| Kind | app |
+| Size | Large |
+| Date | 2026-09-05 |
+
+## Phases
+
+| Phase | Name | Screens | BRD range | Status |
+|---|---|---|---|---|
+| 1 | Core | Login, Entries | BRD-1 to BRD-3 | building |
+| 2 | Reports | Reports | BRD-4 to BRD-5 | planned |
+"""
+
+BRD1 = big(BRD).replace("| Size | Small |\n", "| Size | Small |\n| Phase | 1 of 2 |\n")
+UI1 = big(UI).replace("| Size | Small |\n", "| Size | Small |\n| Phase | 1 of 2 |\n")
+CL1 = big(CL).replace("| Size | Small |\n", "| Size | Small |\n| Phase | 1 of 2 |\n")
+ARCH_L = big(ARCH).replace("| Size | Small |", "| Size | Large |") + """
+## 7. Module responsibilities
+
+| Module | Owns |
+|---|---|
+| Entries | writing and finding entries |
+| Reports | monthly summaries |
+"""
+
+BRD2 = """# BigApp — Business Requirements (phase 2)
+
+| | |
+|---|---|
+| App | BigApp |
+| Kind | app |
+| Size | Small |
+| Phase | 2 of 2 |
+| Stack answer set | dotnet |
+| Status | Draft |
+| Date | 2026-09-05 |
+
+## 1. Summary
+
+Phase 2 adds monthly reports over the entries written in phase 1.
+
+## 2. Scope
+
+**In:**
+- Monthly report screen.
+
+**Out:**
+- Export.
+
+## 3. Users and roles
+
+| Role | Who they are | What they need |
+|---|---|---|
+| Writer | the owner | see how much was written |
+
+## 4. Screens and flow
+
+| Screen | Route | Role | Mockup | Fields |
+|---|---|---|---|---|
+| Reports | `/reports` | Writer | [mockup](mockups/reports.html) | month, count |
+
+**Primary journey:**
+1. The writer opens Reports from the menu and picks a month.
+
+## 5. Requirements
+
+- **BRD-4** — Monthly report. *Screen:* Reports · *Mockup:* [mockup](mockups/reports.html)
+  - *Acceptance:* When the writer picks a month on Reports, then the screen shows the number of entries written that month.
+
+## 6. Non-functional requirements
+
+| Id | Area | Requirement | Measure |
+|---|---|---|---|
+| BRD-5 | Performance | Reports open quickly | perf-budget: p95 load <= 2000ms @ concurrency 1 |
+
+## 7. Development status
+
+**Snapshot as of 2026-09-05.**
+
+| Screen | Requirements | Verified | Open | Status |
+|---|---|---|---|---|
+| Reports | 2 | 0 | 2 | Planned |
+"""
+
+UI2 = """# BigApp — UI Design (phase 2)
+
+| | |
+|---|---|
+| App | BigApp |
+| Kind | app |
+| Size | Small |
+| Phase | 2 of 2 |
+| UI library | TrBlazeUI 2.0 |
+| Theme | both |
+
+## Design system
+
+Same shell, theme and spacing as phase 1.
+
+## Screens
+
+### Screen: Reports (`/reports`)
+
+**Mockup:** [mockups/reports.html](mockups/reports.html) · **Roles:** Writer · **BRD:** BRD-4
+
+| Region | Control | Shows or binds |
+|---|---|---|
+| Month picker | TrSelect | month |
+| Summary | TrCard | count |
+
+| Field | Type | Required | Validation |
+|---|---|---|---|
+| Month | select | yes | a past month |
+
+**Dialogs opened here:** none
+
+**States:** empty: "No entries that month" · loading: skeleton card · error: alert
+"""
+
+CL2 = """# BigApp — Checklist (phase 2)
+
+| | |
+|---|---|
+| App | BigApp |
+| Size | Small |
+| Phase | 2 of 2 |
+
+## Goal
+
+Add monthly reports over phase 1's entries.
+
+## Requirements Status
+
+| ID | Requirement | Status | % | Remarks | Details |
+|----|-------------|--------|---|---------|---------|
+| REQ-UI-002 | Monthly report | Not Started | 0% | — | [view](#d-req-ui-002) |
+| REQ-NFR-002 | Reports speed | Not Started | 0% | — | [view](#d-req-nfr-002) |
+
+## Page: Reports (`/reports`)
+
+<a id="d-req-ui-002"></a>
+- **REQ-UI-002** — Monthly report. *BRD:* BRD-4 · *Mockup:* mockups/reports.html
+  - *Acceptance:* When the writer picks a month on Reports, then the screen shows the number of entries written that month.
+
+## Non-functional
+
+<a id="d-req-nfr-002"></a>
+- **REQ-NFR-002** — Reports speed. *BRD:* BRD-5
+  - *Acceptance:* When the Reports screen is measured with one user, then p95 load is within budget; perf-budget: p95 load <= 2000ms @ concurrency 1
+"""
+
+ENTRIES_HTML_L = ENTRIES_HTML.replace('<a href="login.html">Log out</a>', '<a href="reports.html" data-testid="nav-reports">Reports</a> <a href="login.html">Log out</a>')
+REPORTS_HTML = """<html><body data-testid="app-shell"><nav data-testid="app-header"><a href="entries.html">Entries</a></nav>
+<select data-testid="month"><option>2026-08</option></select><div data-testid="count">12 entries</div></body></html>"""
+
+LFILES = {
+    "docs/BigApp-Phases.md": PHASES,
+    "docs/BigApp-BRD.md": BRD1,
+    "docs/BigApp-Architecture.md": ARCH_L,
+    "docs/BigApp-UIDesign.md": UI1,
+    "docs/BigApp-Checklist.md": CL1,
+    "docs/BigApp-P2-BRD.md": BRD2,
+    "docs/BigApp-P2-UIDesign.md": UI2,
+    "docs/BigApp-P2-Checklist.md": CL2,
+    "docs/BigApp-Coding-Standards.md": big(CS),
+    "PROJECT-STATUS.md": big(PS),
+    "docs/BigApp-UsageGuide.md": big(UG).replace("| Size | Small |", "| Size | Large |"),
+    "docs/mockups/login.html": LOGIN_HTML,
+    "docs/mockups/entries.html": ENTRIES_HTML_L,
+    "docs/mockups/reports.html": REPORTS_HTML,
+    ".tfcore/core-config.yaml": "appSize: L\nappKind: app\nappPhase: 2\n",
+}
+write_set(LARGE, LFILES)
+
+lbad = dict(LFILES)
+# a screen in two phases, a status outside the fixed values, a phase row with no BRD file
+lbad["docs/BigApp-Phases.md"] = PHASES.replace("| 1 | Core | Login, Entries | BRD-1 to BRD-3 | building |",
+                                               "| 1 | Core | Login, Entries, Reports | BRD-1 to BRD-3 | started |") \
+                                      + "| 3 | Export | Export | BRD-6 to BRD-9 | planned |\n"
+# phase 1 BRD without its Phase row although the project has phases
+lbad["docs/BigApp-BRD.md"] = BRD1.replace("| Phase | 1 of 2 |\n", "")
+# phase 2 BRD: header says phase 1, and it reuses BRD-2 (which is also outside its range)
+lbad["docs/BigApp-P2-BRD.md"] = BRD2.replace("| Phase | 2 of 2 |", "| Phase | 1 of 2 |").replace("**BRD-4**", "**BRD-2**").replace("| Reports | 2 | 0 | 2 | Planned |", "| Reports | 2 | 0 | 2 | Planned |")
+# phase 2 checklist reuses REQ-UI-001 from phase 1
+lbad["docs/BigApp-P2-Checklist.md"] = CL2.replace("REQ-UI-002", "REQ-UI-001").replace("d-req-ui-002", "d-req-ui-001").replace("*BRD:* BRD-4", "*BRD:* BRD-2")
+write_set(LARGE_BAD, lbad)
+print("fixtures written:", GOOD, BAD, LARGE, LARGE_BAD)

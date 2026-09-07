@@ -19,6 +19,8 @@
 #   tf-emit.sh --amend MISS-App-20260828-01 why_missed missing-checklist-item
 #                                               # fills a field that is still null on a miss already on
 #                                               # the stream (SCHEMA.md §5.5.7). Never overwrites.
+#   tf-emit.sh --origin-of REQ-UI-014           # prints "<started> <cmd> <agent>" of the last build or fix
+#                                               # run that touched the row, nothing when there is none
 #   tf-emit.sh --where                          # prints the resolved docs/metrics dir
 #
 # STREAMS: runs | gates | sessions | commits | misses   (anything else is dropped)
@@ -131,6 +133,39 @@ PY
   exit 0
 fi
 
+# --- read helper: which run caused a row's defect ------------------------
+# Prints "<started> <cmd> <agent>" for the most recent non-backfilled build-phase
+# or fix-issues run whose reqs_touched holds the REQ, nothing when there is none
+# (the caller then leaves origin_run_id out and the record is marked inferred).
+# Used by tf-log-miss.sh and tf-triage.sh (Sitting 4c, 2026-09-06).
+if [[ "$1" == "--origin-of" ]]; then
+  REQ="$2"
+  [[ -n "$REQ" ]] || exit 0
+  python3 - "$MET_DIR/runs.jsonl" "$REQ" 2>"$TF_ERR" <<'PY2' || true
+import json, sys
+path, req = sys.argv[1], sys.argv[2].upper()
+best = None
+try:
+    with open(path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            if r.get("kind") != "run" or r.get("backfilled") or r.get("cmd") not in ("build-phase", "fix-issues"):
+                continue
+            if req in [str(x).upper() for x in (r.get("reqs_touched") or [])]:
+                if best is None or r.get("started", "") >= best.get("started", ""):
+                    best = r
+except FileNotFoundError:
+    pass
+if best:
+    subs = best.get("subagents") or []
+    print(best.get("started", ""), best.get("cmd"), subs[0] if subs else "flow-master")
+PY2
+  exit 0
+fi
+
 # --- read helper: next RUN attempt number for a cmd + REQ set ------------
 # run attempt = 1 + count of prior NON-BACKFILLED `run` records with the same
 # cmd whose reqs_touched intersects the given REQ IDs. Same counting rule that
@@ -170,9 +205,10 @@ fi
 # `miss-fix`, and a collision would silently merge two defects into one lifecycle.
 if [[ "$1" == "--next-miss-id" ]]; then
   python3 - "$MET_DIR/misses.jsonl" "$ROOT" 2>"$TF_ERR" <<'PY' || true
-import datetime, glob, json, os, sys
+import datetime, glob, json, os, re, sys
 path, root = sys.argv[1], sys.argv[2]
-hits = glob.glob(os.path.join(root, "docs", "*-Checklist.md"))
+hits = [h for h in glob.glob(os.path.join(root, "docs", "*-Checklist.md"))
+        if not re.search(r"-(Deployment|P\d+)-Checklist\.md$", h)]  # only the phase-1 work list names the app
 app = (os.path.basename(hits[0])[: -len("-Checklist.md")] if len(hits) == 1
        else os.path.basename(os.path.abspath(root)))
 day = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d")
@@ -304,6 +340,9 @@ AMENDABLE = {
     "why_missed": ("missing-checklist-item", "insufficient-verify-method",
                    "code-audit-limitation", "ambiguous-acceptance",
                    "dependency-not-declared", "instruction-ignored", "other"),
+    # whose gap it was, the four-question sort (FR-32, Session 5): a judgement a reader can
+    # still make later, so a miss logged before the field existed can be sorted now.
+    "sort": ("spec", "unsaid", "weak-check", "ignored"),
 }
 if fld not in AMENDABLE:
     print("REFUSED %s is not an amendable field (SCHEMA.md §5.5.7)" % fld); raise SystemExit(0)
@@ -360,7 +399,7 @@ esac
 # The program is captured into a variable rather than fed on stdin — a heredoc
 # on `python3 -` would REPLACE the caller's piped JSON and silently drop every event.
 TF_PROG="$(cat <<'PY'
-import json, os, sys, datetime, glob, re
+import json, os, sys, datetime, glob, re, time
 
 met_dir, stream, root = sys.argv[1], sys.argv[2], sys.argv[3]
 dbg = os.environ.get("TF_METRICS_DEBUG")
@@ -505,7 +544,11 @@ except Exception:
 # app name — inferred from the one checklist, else the repo directory name
 def _app_name():
     try:
-        hits = glob.glob(os.path.join(root, "docs", "*-Checklist.md"))
+        # The Deployment Checklist and a Large project's phase-n checklists share the suffix;
+        # only <App>-Checklist.md names the app, else a copy such as TfLens-oc was recorded
+        # under its folder name (MISS-TechieFlow-20260906-04).
+        hits = [h for h in glob.glob(os.path.join(root, "docs", "*-Checklist.md"))
+                if not re.search(r"-(Deployment|P\d+)-Checklist\.md$", h)]
         if len(hits) == 1:
             return os.path.basename(hits[0])[: -len("-Checklist.md")]
     except Exception:
@@ -524,6 +567,54 @@ def enrich(rec):
     DECISIONS.md 2026-08-20)."""
     rec.setdefault("v", 1)
     rec.setdefault("ts", NOW)
+    # A run record says whether YOLO was on (D-12, FR-35; Sitting 4c, 2026-09-06): the task
+    # never has to remember it. TF_YOLO=1 (the supervisor) or a live .tfcore/.session/yolo.json.
+    if rec.get("kind") == "run" and "yolo" not in rec:
+        on = os.environ.get("TF_YOLO") == "1"
+        if not on:
+            try:
+                fl = os.path.join(root, ".tfcore", ".session", "yolo.json")
+                on = os.path.isfile(fl) and (time.time() - os.path.getmtime(fl)) < 24 * 3600
+            except Exception:
+                on = False
+        rec["yolo"] = bool(on)
+    # A run record without `started` takes it from the command marker written by
+    # tf-phase.sh start (step 0 of every task), when the marker names the same command.
+    if rec.get("kind") == "run" and not rec.get("started"):
+        try:
+            with open(os.path.join(root, ".tfcore", ".session", "phase.json"), encoding="utf-8") as fh:
+                mk = json.load(fh) or {}
+            if mk.get("started") and (not rec.get("cmd") or mk.get("cmd") == rec.get("cmd")):
+                rec["started"] = mk["started"]
+                rec.setdefault("ended", NOW)
+                sys.stdout.write("tf-emit: started taken from the command marker (%s)\n" % mk["started"])
+        except Exception:
+            pass
+    # A run's `ended` is when the record is written, never a guess: an ended in the
+    # future (more than a minute past now) or before started is replaced with now and
+    # duration_s recomputed (MISS-TechieFlow-20260905-11: a day-1 run wrote 17:05 at 16:40).
+    # The same rule the other way round: a run record with NO `ended` was silently
+    # accepted and could never be costed — the effort-per-phase figure just lost it
+    # (MISS-TechieFlow-20260907-09, the session-6 record itself). `ended` is when the
+    # record is written, so an absent one is filled in, never left empty.
+    if rec.get("kind") == "run" and not isinstance(rec.get("ended"), str):
+        rec["ended"] = NOW
+    if rec.get("kind") == "run" and isinstance(rec.get("ended"), str):
+        t_end, t_now = _iso_ms(rec["ended"]), _iso_ms(NOW)
+        t_start = _iso_ms(rec["started"]) if isinstance(rec.get("started"), str) else None
+        if t_end is not None and t_now is not None and (t_end > t_now + 60_000 or (t_start is not None and t_end < t_start)):
+            sys.stdout.write("tf-emit: ended %s is not a measurement (it lies %s); set to now, %s\n"
+                             % (rec["ended"], "in the future" if t_end > t_now else "before started", NOW))
+            rec["ended"] = NOW
+            if t_start is not None and "duration_s" in rec:
+                rec["duration_s"] = max(0, (t_now - t_start) // 1000)
+    # A run record that omits duration_s gets it from started and ended (the devguide and
+    # refresh-status records of 2026-09-06 had none; MISS-TechieFlow-20260906-10).
+    if rec.get("kind") == "run" and "duration_s" not in rec and rec.get("started") and rec.get("ended"):
+        try:
+            rec["duration_s"] = max(0, (_iso_ms(rec["ended"]) - _iso_ms(rec["started"])) // 1000)
+        except Exception:
+            pass
     if "project_type" not in rec:
         if PTYPE:
             rec["project_type"] = PTYPE
@@ -531,7 +622,10 @@ def enrich(rec):
             # Default, but NEVER silently — the report labels these unclassified.
             rec["project_type"] = "app"
             rec["project_type_inferred"] = True
-    rec.setdefault("harness", HARNESS)
+    if HARNESS:
+        rec["harness"] = HARNESS          # detected, never declared (SCHEMA.md §1)
+    else:
+        rec.setdefault("harness", None)
     rec.setdefault("app", APP)
     return rec
 
@@ -891,6 +985,7 @@ _AMENDABLE = {
     "why_missed": ("missing-checklist-item", "insufficient-verify-method",
                    "code-audit-limitation", "ambiguous-acceptance",
                    "dependency-not-declared", "instruction-ignored", "other"),
+    "sort": ("spec", "unsaid", "weak-check", "ignored"),
 }
 
 def _amend_ok(rec):
@@ -952,6 +1047,14 @@ _MISS_ENUMS = {
     "why_missed": ("missing-checklist-item", "insufficient-verify-method",
                    "code-audit-limitation", "ambiguous-acceptance",
                    "dependency-not-declared", "instruction-ignored", "other"),
+    # whose gap (FR-32, Session 5 2026-09-07): spec = the app's spec did not say it (fix the
+    # checklist line) · unsaid = the framework never said it (a requirement line plus a check) ·
+    # weak-check = a check existed and did not catch it (fix the check) · ignored = it was written
+    # and not followed (a hook, or delete the rule)
+    "sort": ("spec", "unsaid", "weak-check", "ignored"),
+}
+_REVIEW_ENUMS = {
+    "phase": ("day1-review", "build-review", "verify-review", "handoff-review"),
 }
 _FIX_ENUMS = {
     "verdict_after": ("Verified", "Needs re-verify", "FAIL", "deferred", "wont-fix"),
@@ -975,6 +1078,72 @@ def _enums_ok(rec, table):
     return True
 
 
+# --- shape check (added 2026-09-05, reset Sitting 4a) ------------------------
+# A record may carry only the fields SCHEMA.md defines for its kind (plus the
+# ones this script injects). A `miss` must carry a miss_id from --next-miss-id.
+# Anything else is REFUSED on stdout and never appended, the same choice as
+# _enums_ok(): a field nobody defined is a field no report can read.
+_COMMON = {"v", "ts", "kind", "app", "project_type", "project_type_inferred", "harness", "backfilled"}
+_ALLOWED = {
+    ("runs", "run"): {"cmd", "mode", "yolo", "started", "ended", "duration_s", "reqs_touched", "reqs_count",
+                      "subagents", "files_written", "build_result", "tier", "tier_model", "model", "models",
+                      "routed", "tokens_in", "tokens_out", "tokens_cache_read", "tokens_cache_write",
+                      "cost_usd", "tokens_scope", "attempt", "subagent_runs", "tokens_out_subagents",
+                      "model_tokens_out", "session_id", "usage_start_event_ts", "usage_end_event_ts"},
+    ("gates", "gate"): {"run_id", "req_id", "req_class", "attempt", "verdict", "gate", "gates_run",
+                        "failure_class", "prior_verdict", "proof", "escaped", "phase", "result", "detail", "at",
+                        "tier", "tier_model", "model", "models", "tokens_in", "tokens_out", "tokens_cache_read",
+                        "tokens_cache_write", "cost_usd", "tokens_scope", "model_tokens_out", "routed",
+                        "subagent_runs", "tokens_out_subagents", "session_id"},
+    ("sessions", "session"): {"session_id", "model", "duration_s", "input_tokens", "output_tokens",
+                              "cache_read_tokens", "cache_creation_tokens", "cost_usd", "children_sessions"},
+    ("commits", "commit"): {"sha", "files", "insertions", "deletions", "subject_prefix", "branch"},
+    ("misses", "miss"): {"miss_id", "req_id", "req_class", "miss_class", "artifact", "severity", "origin_phase",
+                         "origin_agent", "origin_run_id", "origin_model", "origin_harness", "origin_confidence",
+                         "why_missed", "found_by", "found_phase", "found_gate", "found_run_id", "failure_class",
+                         "what", "sort"},
+    ("misses", "miss-fix"): {"miss_id", "req_id", "fix_run_id", "fix_cmd", "fix_attempt", "verdict_after",
+                             "reopened", "cost_attribution", "tokens_in", "tokens_out", "tokens_cache_read",
+                             "tokens_cache_write", "cost_usd", "tokens_scope", "model"},
+    ("misses", "miss-amend"): {"miss_id", "field", "value"},
+    # an owner review of a phase's output (FR-36, built 2026-09-06): how many corrections were
+    # given, what producing the reviewed output cost, what applying the corrections cost. The two
+    # costs are copied from the runs named by reviewed_run_id and correction_run_id (their `started`).
+    ("misses", "review"): {"phase", "reviewed_run_id", "correction_run_id", "corrections", "what",
+                           "tokens_produce", "tokens_correct", "cost_produce_usd", "cost_correct_usd",
+                           "model_produce", "model_correct"},
+}
+# Fields the emitter derives for runs/gates: a caller's value is discarded.
+_DERIVED = ("harness", "tier", "tier_model", "model", "models", "model_tokens_out", "routed",
+            "tokens_in", "tokens_out", "tokens_cache_read", "tokens_cache_write", "cost_usd",
+            "tokens_scope", "subagent_runs", "tokens_out_subagents")
+
+
+def _shape_ok(rec):
+    kind = rec.get("kind")
+    if not isinstance(rec, dict) or not kind:
+        sys.stdout.write("tf-emit: REFUSED — record has no \"kind\" (SCHEMA.md §1). Nothing was appended.\n")
+        return False
+    allowed = _ALLOWED.get((stream, kind))
+    if allowed is None:
+        sys.stdout.write("tf-emit: REFUSED — kind %r is not a record kind of the %s stream. Nothing was appended.\n" % (kind, stream))
+        return False
+    unknown = sorted(set(rec) - allowed - _COMMON)
+    if unknown:
+        sys.stdout.write("tf-emit: REFUSED — field(s) not in SCHEMA.md for a %s record: %s. Add the field to the schema first, or drop it. Nothing was appended.\n" % (kind, ", ".join(unknown)))
+        return False
+    if kind == "run" and rec.get("build_result") not in (None, "pass", "fail", "not-run"):
+        sys.stdout.write("tf-emit: REFUSED — build_result must be pass, fail or not-run (SCHEMA.md §2); got %r. Put the detail in the checklist Remarks or Known blockers, not here. Nothing was appended.\n" % (rec.get("build_result"),))
+        return False
+    if kind == "miss" and not rec.get("miss_id"):
+        sys.stdout.write("tf-emit: REFUSED — a miss record needs a miss_id; get one with: bash .tfcore/utils/tf-emit.sh --next-miss-id. Nothing was appended.\n")
+        return False
+    if stream in ("runs", "gates") and not rec.get("backfilled"):
+        for f in _DERIVED:
+            rec.pop(f, None)
+    return True
+
+
 def enrich_miss(rec):
     if stream != "misses":
         return rec
@@ -984,6 +1153,21 @@ def enrich_miss(rec):
         return None
     if rec.get("kind") == "miss-fix" and not _enums_ok(rec, _FIX_ENUMS):
         return None
+    if rec.get("kind") == "review":
+        if not _enums_ok(rec, _REVIEW_ENUMS):
+            return None
+        if not isinstance(rec.get("corrections"), int) or rec["corrections"] < 0:
+            sys.stdout.write("tf-emit: REFUSED — a review record needs \"corrections\", a whole number of corrections the owner gave. Nothing was appended.\n")
+            return None
+        for f in ("tokens_produce", "tokens_correct", "cost_produce_usd", "cost_correct_usd", "model_produce", "model_correct"):
+            rec.pop(f, None)            # derived, never a caller's figure
+        runs = _runs_by_start()
+        for side, key in (("produce", "reviewed_run_id"), ("correct", "correction_run_id")):
+            src = runs.get(rec.get(key)) if rec.get(key) else None
+            rec["tokens_" + side] = src.get("tokens_out") if src else None
+            rec["cost_" + side + "_usd"] = src.get("cost_usd") if src else None
+            rec["model_" + side] = src.get("model") if src else None
+        return rec
     try:
         kind = rec.get("kind")
         runs = _runs_by_start()
@@ -1003,9 +1187,11 @@ def enrich_miss(rec):
                 rec["origin_harness"] = None
         elif kind == "miss-fix":
             src = runs.get(rec.get("fix_run_id")) if rec.get("fix_run_id") else None
+            for f in _COST_FIELDS:
+                rec.pop(f, None)            # a caller's cost figure is never kept
             if src:
                 for f in _COST_FIELDS:
-                    if f in src and f not in rec:
+                    if f in src:
                         rec[f] = src[f]
                 if "cost_attribution" not in rec:
                     touched = src.get("reqs_touched") or []
@@ -1048,6 +1234,8 @@ def enrich_miss(rec):
 # .gitattributes block pins to LF. These files are LF on every platform.
 lines = []
 for rec in records:
+    if not _shape_ok(rec):
+        continue
     out = enrich_miss(enrich_run(stamp_attempt(enrich(rec))))
     if out is None:                 # a refused miss-amend (§5.5.7) — dropped, never appended
         continue
@@ -1071,5 +1259,12 @@ except Exception as e:
 PY
 )"
 python3 -c "$TF_PROG" "$MET_DIR" "$STREAM" "$ROOT" 2>"$TF_ERR"
+
+# The readable miss list beside the record (FR-31, Session 5 2026-09-07): after any write to the
+# misses stream, docs/<App>-Misses.md and its HTML are rebuilt from the stream, so the file is
+# never older than the record. Best effort, like everything else here.
+if [[ "$STREAM" == "misses" ]]; then
+  python3 "$(dirname "${BASH_SOURCE[0]}")/tf-misses-md.py" --root "$ROOT" --quiet 2>"$TF_ERR" || true
+fi
 
 exit 0

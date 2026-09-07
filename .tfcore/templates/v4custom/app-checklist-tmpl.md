@@ -17,12 +17,15 @@ rule: checklist-rows
        - Details links to the entry's anchor in this file
        - every entry names its BRD-N item; UI rows link a mockup that exists
        - exactly one acceptance line per entry: "When <actor> <does what> on <screen>, then <observable result>"
-         ("Given …," may precede it; NFR rows name the measurement instead of a screen)
+         ("Given …," may precede it; NFR rows name the measurement instead of a screen); at most 30 words,
+         target 20, one behaviour per row (a bundled line is split into rows); the title is everyday words
        - a perf-budget line is copied verbatim from the BRD, never invented:
          perf-budget: <p50|p95|max> <ttfb|load> <= <N>ms [@ concurrency <N>]
        - Remarks holds the current state only, at most 60 words; history lives in gates.jsonl and misses.jsonl
      Prefix routing: REQ-UI- built from the mockups by the UI sub-agent; REQ-RAG- by the RAG sub-agent;
-     REQ-FN- and REQ-NFR- by the build phase. `*verify ui|functional|all` filters this table by prefix. -->
+     REQ-FN- and REQ-NFR- by the build phase. `*verify ui|functional|all` filters this table by prefix.
+     Large project: one checklist per phase (docs/{App}-Checklist.md, docs/{App}-P2-Checklist.md, …), a
+     header row "| Phase | n of m |", REQ numbers running on across phases. tf-split-brd.sh does this. -->
 
 # {App} — Checklist
 
@@ -43,7 +46,7 @@ rule: checklist-rows
 | REQ-FN-001 | {short name} | Not Started | 0% | — | [view](#d-req-fn-001) |
 | REQ-NFR-001 | {short name} | Not Started | 0% | — | [view](#d-req-nfr-001) |
 
-**Status values:** `Not Started` · `In Progress` · `Implemented` · `Verified` · `Done (pre-existing)` · `Needs re-verify` · `PARTIAL` · `FAIL` · `Blocked` · `N/A`.
+**Status values:** `Not Started` · `In Progress` · `Implemented` · `Verified` · `Done (pre-existing)` · `Needs re-verify` · `PARTIAL` · `FAIL` · `Blocked` · `Owner-UAT` · `N/A`. `Owner-UAT` marks a row only the owner can close, by following the UsageGuide test plan; the verifier cannot reach it from this machine.
 
 ## Page: {Screen name} (`/route`)
 

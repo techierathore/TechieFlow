@@ -20,7 +20,10 @@ rule: mockup-links
      the screen opens, and the empty, loading and error states. Do not describe in prose what the mockup
      already shows. Use only controls that exist in the UI library's catalogue; a missing control goes
      to the library feedback file, not into a workaround. The set of screens must equal the BRD's
-     Screens and flow table. For a library, this document is optional. -->
+     Screens and flow table. For a library, this document is optional.
+     Large project: one UIDesign per phase (docs/{App}-UIDesign.md, docs/{App}-P2-UIDesign.md, …) with a
+     header row "| Phase | n of m |"; its screens are exactly that phase's row in docs/{App}-Phases.md.
+     The mockup folder stays one click-through set across every phase. -->
 
 # {App} — UI Design
 

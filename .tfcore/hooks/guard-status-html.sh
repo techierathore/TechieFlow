@@ -1,102 +1,147 @@
 #!/usr/bin/env bash
-# TechieFlow Stop hook — refuses to end a turn while PROJECT-STATUS.html is stale.
+# TechieFlow Stop hook — refuses to end a turn while the status gate is incomplete.
 #
-# _status-update-gate.md §8: "If you edited PROJECT-STATUS.md you re-render
-# PROJECT-STATUS.html in the same turn, full stop." The owner reads the .html; a
-# markdown-only update leaves the page the human actually looks at stale, which
-# defeats the entire purpose of the gate.
+# The gate (_status-update-gate.md) is six steps an agent can forget. This hook
+# checks the RESULT of each step, so a forgotten step cannot end the turn. It
+# prints one line per outstanding item, each naming the one command to run.
 #
-# The prose rule kept failing silently: on 2026-08-25 the owner was reading a
-# PROJECT-STATUS.html rendered 4.5 hours earlier that still listed REQ-FN-062 as
-# blocked and repeated three "owner actions" he had already completed. guard-status.sh
-# already enforces the SHAPE of the markdown; nothing checked that the sibling HTML
-# was current. This closes that gap.
+#   1. PROJECT-STATUS.html missing or older than PROJECT-STATUS.md
+#        -> bash .tfcore/utils/tf-render-html.sh PROJECT-STATUS.md
+#   Only when PROJECT-STATUS.md was written in this session (newer than the
+#   session pointer .tfcore/.session/<harness>.json):
+#   2. tf-doc-check.sh FAILs on PROJECT-STATUS.md      -> fix the file, re-run the check
+#   3. docs/<App>-BRD.md older than docs/<App>-Checklist.md
+#        -> bash .tfcore/utils/tf-brd-status.sh <App>
+#   4. no runs.jsonl record after the status write     -> the run record (_metrics-emit-gate.md)
 #
-# Stop (not PostToolUse) is the right trigger because the rule is about the TURN,
-# not the edit — an agent legitimately writes the .md and then renders the .html
-# a few tool calls later. This only complains when the turn is actually ending
-# with the two files out of sync.
-#
-# Wired in .claude/settings.json → hooks.Stop; Codex via .codex/hooks.json Stop →
-# codex-adapter.py stop; OpenCode via .opencode/plugin/techieflow.js session.idle
-# (one-shot nudge — OpenCode has no blocking Stop hook).
-# Exit 2 + stderr = block the stop and feed the message back to the agent.
-# Honours stop_hook_active so a wedged turn can still terminate (no loop).
+# Wired in .claude/settings.json -> hooks.Stop; OpenCode via
+# .opencode/plugin/techieflow.js session.idle (a nudge: OpenCode has no blocking
+# Stop hook). Exit 2 + stderr = block the stop and feed the message to the agent.
+# Honours stop_hook_active so a wedged turn can still end (no loop).
 # Fails OPEN (exit 0) if python3 or parseable JSON is unavailable.
 
 INPUT="$(cat)"
 command -v python3 >/dev/null 2>&1 || exit 0
 
 TF_HOOK_INPUT="$INPUT" TF_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}" python3 - <<'PY'
-import json, os, sys
+import datetime
+import glob
+import json
+import os
+import subprocess
+import sys
 
 try:
     data = json.loads(os.environ.get("TF_HOOK_INPUT", ""))
 except Exception:
     sys.exit(0)
 
-# Already re-invoked once for this stop — let the turn end rather than loop.
 if data.get("stop_hook_active"):
     sys.exit(0)
 
 root = os.environ.get("TF_PROJECT_DIR") or os.getcwd()
 md = os.path.join(root, "PROJECT-STATUS.md")
 html = os.path.join(root, "PROJECT-STATUS.html")
-
 if not os.path.isfile(md):
     sys.exit(0)
 
+problems = []
 md_mtime = os.path.getmtime(md)
 
+# 1. HTML present and current
 if not os.path.isfile(html):
-    print(
-        "BLOCKED by TechieFlow policy: PROJECT-STATUS.md exists but "
-        "PROJECT-STATUS.html does not. The owner reads the HTML "
-        "(_status-update-gate.md §8) — render it before ending the turn, using "
-        ".tfcore/templates/v4custom/html-render-shell.md. Never hand-roll a "
-        "different scaffold.",
-        file=sys.stderr,
-    )
-    sys.exit(2)
+    problems.append("PROJECT-STATUS.html does not exist. Run: bash .tfcore/utils/tf-render-html.sh PROJECT-STATUS.md")
+elif md_mtime > os.path.getmtime(html):
+    problems.append("PROJECT-STATUS.html is older than PROJECT-STATUS.md. Run: bash .tfcore/utils/tf-render-html.sh PROJECT-STATUS.md")
 
-html_mtime = os.path.getmtime(html)
 
-if md_mtime > html_mtime:
-    drift = int(md_mtime - html_mtime)
-    if drift >= 3600:
-        ago = f"{drift // 3600}h {(drift % 3600) // 60}m"
-    elif drift >= 60:
-        ago = f"{drift // 60}m"
+def session_start():
+    """mtime of the harness's session pointer; None when there is none (checks 2-4 skipped)."""
+    d = os.path.join(root, ".tfcore", ".session")
+    if any(k.startswith("OPENCODE") for k in os.environ):
+        cands = [os.path.join(d, "opencode.json")]
+    elif os.environ.get("CLAUDECODE") or any(k.startswith("CLAUDE_CODE") for k in os.environ):
+        cands = [os.path.join(d, "claude-code.json")]
     else:
-        ago = f"{drift}s"
-    print(
-        "BLOCKED by TechieFlow policy: PROJECT-STATUS.html is STALE — "
-        f"PROJECT-STATUS.md is {ago} newer (_status-update-gate.md §8).",
-        file=sys.stderr,
-    )
-    print(
-        " - The owner reads the .html. A markdown-only update is an INCOMPLETE "
-        "update: it leaves the page the human actually looks at showing the "
-        "previous run's reality (closed REQs still open, retracted owner-actions "
-        "still listed, the wrong next command).",
-        file=sys.stderr,
-    )
-    print(
-        " - Re-render PROJECT-STATUS.html from the markdown NOW, in this turn, "
-        "using the shared scaffold in "
-        ".tfcore/templates/v4custom/html-render-shell.md (§1 slug rule, §2 CSS, "
-        "§3 skeleton, §4 anchors, §7 JS). Keep the existing shell — update the "
-        "body sections, the subtitle's current_phase/last-updated line, and add "
-        "the new Verification-log row. Sidebar TOC iff >6 H2s.",
-        file=sys.stderr,
-    )
-    print(
-        " - Then confirm parity: same H2 set and same slugs in both files, and no "
-        "string surviving in the HTML that the markdown no longer says.",
-        file=sys.stderr,
-    )
-    sys.exit(2)
+        cands = [os.path.join(d, "claude-code.json"), os.path.join(d, "opencode.json")]
+    times = [os.path.getmtime(p) for p in cands if os.path.isfile(p)]
+    return max(times) if times else None
 
-sys.exit(0)
+
+start = session_start()
+written_this_session = start is not None and md_mtime >= start
+
+if written_this_session:
+    # 2. the checker passes on the status file
+    try:
+        chk = os.path.join(root, ".tfcore", "utils", "tf-doc-check.sh")
+        if os.path.isfile(chk):
+            out = subprocess.run(["bash", chk, "--quiet", "PROJECT-STATUS.md"], cwd=root,
+                                 capture_output=True, text=True, timeout=60).stdout
+            fails = [l for l in out.splitlines() if l.startswith("FAIL")]
+            if fails:
+                problems.append(f"PROJECT-STATUS.md fails the document check ({len(fails)} line(s)). Fix it, then run: bash .tfcore/utils/tf-doc-check.sh PROJECT-STATUS.md")
+                problems.extend("  " + l for l in fails[:5])
+    except Exception:
+        pass
+
+    # 2b. the checker passes on every checklist written this session. Until 2026-09-06 only
+    # PROJECT-STATUS was checked here, so a build closed its gate with three Remarks cells over
+    # 60 words in the checklist and nothing refused the stop (MISS-TechieFlow-20260906-06).
+    try:
+        chk = os.path.join(root, ".tfcore", "utils", "tf-doc-check.sh")
+        if os.path.isfile(chk):
+            for cl in sorted(glob.glob(os.path.join(root, "docs", "*-Checklist.md"))):
+                if os.path.getmtime(cl) < start:
+                    continue
+                rel = os.path.relpath(cl, root)
+                out = subprocess.run(["bash", chk, "--quiet", rel], cwd=root,
+                                     capture_output=True, text=True, timeout=120).stdout
+                fails = [l for l in out.splitlines() if l.startswith("FAIL")]
+                if fails:
+                    problems.append(f"{rel} fails the document check ({len(fails)} line(s)). Fix the rows, then run: bash .tfcore/utils/tf-doc-check.sh {rel}")
+                    problems.extend("  " + l for l in fails[:5])
+    except Exception:
+        pass
+
+    # 3. the BRD's Development status table is not older than the checklist
+    try:
+        for cl in glob.glob(os.path.join(root, "docs", "*-Checklist.md")):
+            app = os.path.basename(cl)[: -len("-Checklist.md")]
+            brd = os.path.join(root, "docs", f"{app}-BRD.md")
+            if os.path.isfile(brd) and os.path.getmtime(cl) > os.path.getmtime(brd):
+                problems.append(f"docs/{app}-BRD.md is older than docs/{app}-Checklist.md. Run: bash .tfcore/utils/tf-brd-status.sh {app}")
+    except Exception:
+        pass
+
+    # 4. a run record follows the status write (5 minutes of tolerance for emit-before-write)
+    try:
+        runs = os.path.join(root, "docs", "metrics", "runs.jsonl")
+        last = None
+        if os.path.isfile(runs):
+            with open(runs, encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    try:
+                        ts = json.loads(line).get("ts")
+                    except Exception:
+                        continue
+                    if ts:
+                        last = ts
+        last_epoch = None
+        if last:
+            last_epoch = datetime.datetime.strptime(last[:19], "%Y-%m-%dT%H:%M:%S").replace(
+                tzinfo=datetime.timezone.utc).timestamp()
+        if last_epoch is None or last_epoch < md_mtime - 300:
+            problems.append("PROJECT-STATUS.md was written but no run record follows it in docs/metrics/runs.jsonl. Append the run record: .tfcore/tasks/_metrics-emit-gate.md")
+    except Exception:
+        pass
+
+if not problems:
+    sys.exit(0)
+
+print("BLOCKED by TechieFlow policy: the status gate is not complete (_status-update-gate.md).", file=sys.stderr)
+for p in problems:
+    print(" - " + p, file=sys.stderr)
+sys.exit(2)
 PY
 exit $?

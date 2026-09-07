@@ -25,6 +25,9 @@ rule: mockup-links
      Size and requirement cap: Small up to 10 screens, one role, 50 requirements; Medium up to 20 screens,
      100 requirements; Large is split into phases, each phase its own BRD. Every routed page is a screen;
      dialogs, tabs and panels are regions of their page and are listed under it.
+     Large project: one BRD per phase, phase 1 in docs/{App}-BRD.md, phase n in docs/{App}-Pn-BRD.md; the
+     header gains a row "| Phase | n of m |", Size is the phase's own size (Small or Medium), and BRD-N
+     runs on from the previous phase's last id. The phase plan is docs/{App}-Phases.md.
      Mermaid: quote every label (A["Order (v2)"]); never use `end` as a node id. -->
 
 # {App} — Business Requirements
@@ -71,7 +74,11 @@ One row per routed page. A dialog is a row under its parent screen with `on /rou
 
 ## 5. Requirements
 
-One item per thing the verifier will test. Each names its screen, links the mockup, and states its acceptance in the form the checklist will carry.
+One item per thing the verifier will test. Each names its screen, links the mockup, and states its acceptance in the form the checklist will carry. Items are grouped under a `###` heading per screen that opens with one plain sentence saying what the screen does. A title is everyday words; an acceptance line is at most 30 words, target 20, and holds one behaviour: a line that bundles steps ("slots shown; Enter advances; empties dropped; a timer starts") is split into one item each (owner, 2026-09-06).
+
+### {Screen name}
+
+{One plain sentence: what this screen does, for whom.}
 
 - **BRD-1** — {Title}. *Screen:* {Screen name} · *Mockup:* [mockup](mockups/{screen-slug}.html)
   - *Acceptance:* When {actor} {does what} on {screen}, then {a result a browser robot can observe}.

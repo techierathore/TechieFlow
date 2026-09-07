@@ -106,7 +106,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout">
   <nav class="side">
     <h1>TechieFlow — How It Works</h1>
-    <div class="sub">Last rendered: 2026-09-04</div>
+    <div class="sub">Last rendered: 2026-09-07</div>
     <div class="group">Contents</div>
     <ol>
         <li><a href="#overview">1. Overview</a></li>
@@ -121,6 +121,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
         <li class="h3"><a href="#bugs-flow-master">3.7 Bugs — flow-master</a></li>
         <li class="h3"><a href="#ship-flow-master">3.8 Ship — flow-master</a></li>
         <li class="h3"><a href="#maintenance-flow-master">3.9 Maintenance — flow-master</a></li>
+        <li class="h3"><a href="#running-unattended-the-supervisor">3.10 Running unattended — the supervisor</a></li>
         <li><a href="#what-surrounds-every-command">4. What surrounds every command</a></li>
         <li class="h3"><a href="#example-a-document-producing-command-day1-greenfield-techiedesk">4.1 Example: a document-producing command, *day1-greenfield TechieDesk</a></li>
         <li class="h3"><a href="#example-a-code-producing-command-build-phase-techierag">4.2 Example: a code-producing command, *build-phase TechieRag</a></li>
@@ -134,7 +135,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
   </nav>
   <main>
     <h1>TechieFlow — How It Works</h1>
-    <div class="subtitle">Rendered 2026-09-04 &middot; source <code>TechieFlow-How-It-Works.md</code></div>
+    <div class="subtitle">Rendered 2026-09-07 &middot; source <code>TechieFlow-How-It-Works.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
@@ -151,6 +152,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
         <li class="h3"><a href="#bugs-flow-master">3.7 Bugs — flow-master</a></li>
         <li class="h3"><a href="#ship-flow-master">3.8 Ship — flow-master</a></li>
         <li class="h3"><a href="#maintenance-flow-master">3.9 Maintenance — flow-master</a></li>
+        <li class="h3"><a href="#running-unattended-the-supervisor">3.10 Running unattended — the supervisor</a></li>
         <li><a href="#what-surrounds-every-command">4. What surrounds every command</a></li>
         <li class="h3"><a href="#example-a-document-producing-command-day1-greenfield-techiedesk">4.1 Example: a document-producing command, *day1-greenfield TechieDesk</a></li>
         <li class="h3"><a href="#example-a-code-producing-command-build-phase-techierag">4.2 Example: a code-producing command, *build-phase TechieRag</a></li>
@@ -187,7 +189,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <tr><td><strong>Command</strong></td><td>An instruction typed to a persona, prefixed with <code>*</code>, such as <code>*build-phase TechieRag</code>. Each command maps to one task file.</td><td>A CLI sub-command.</td></tr>
 <tr><td><strong>Task</strong></td><td>A markdown file holding the step-by-step procedure for one command. The agent reads it and follows it.</td><td>A runbook, or a script written in prose.</td></tr>
 <tr><td><strong>Template</strong></td><td>The blueprint for one document: a skeleton with placeholders and guidance for each section. The agent fills it to produce the BRD, the Architecture, and the other documents. Sixteen exist under <code>.tfcore/templates/v4custom/</code>. At present the guidance is loose prose, so a generated document may add, skip, or over-fill sections without anything stopping it. Session 3 of the reset gives each template a strict structure (required sections in order, size limits, row rules) and a script that rejects a document that breaks it.</td><td>A document template plus a validator.</td></tr>
-<tr><td><strong>Hook</strong></td><td>A small script the harness runs automatically before or after an agent action, with power to block it. Eight exist. Example: every <code>git</code> command is blocked.</td><td>A pre-commit hook or a CI policy check. Runs regardless of the agent's intent.</td></tr>
+<tr><td><strong>Hook</strong></td><td>A small script the harness runs automatically before or after an agent action, with power to block it. Eleven exist (2026-09-06). Eight refuse an action and print why: every <code>git</code> write; a test folder at the repository root; a PROJECT-STATUS write in the wrong shape, from any tool or the shell; a hand edit of a telemetry file; <code>Verified</code> written without a verify run; a database write outside build-phase and fix-issues; a build, test or app run started in the background while YOLO is on; and ending a turn while the status gate is incomplete (stale HTML, a failing PROJECT-STATUS or checklist, a stale BRD table, no run record). Three do housekeeping: the session pointer at start and on every prompt, the sweep of old test artefacts at start, and the session telemetry line at end. All run in both harnesses.</td><td>A pre-commit hook or a CI policy check. Runs regardless of the agent's intent.</td></tr>
 <tr><td><strong>Utility script</strong></td><td>A shell or Python script the agent runs instead of doing a step by hand, such as the HTML renderer or the telemetry writer. Seventeen exist under <code>.tfcore/utils/</code>.</td><td>A build tool or CLI utility.</td></tr>
 <tr><td><strong><code>.tfcore/</code></strong></td><td>The framework's folder inside each project. Hidden, ignored by git, refreshed by <code>update-framework.sh</code>. Holds personas, tasks, templates, hooks, scripts. Never edited inside a project.</td><td>The installed copy of a library.</td></tr>
 <tr><td><strong>Harness mirror</strong></td><td>Claude Code discovers commands only under <code>.claude/commands/</code>, so every persona and task is copied there byte for byte. OpenCode instead reads file paths from <code>opencode.jsonc</code>. Both must stay in step with <code>.tfcore/</code>.</td><td>Two build configurations pointing at one source tree.</td></tr>
@@ -196,7 +198,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <tr><td><strong>Status gate</strong></td><td>The rule that every command ends by rewriting <code>PROJECT-STATUS.md</code> in a fixed shape. A hook rejects a malformed write.</td><td>A mandatory end-of-job report.</td></tr>
 <tr><td><strong>YOLO mode</strong></td><td>Run to completion with no questions and all permissions except git writes. Set by a flag file with a 24-hour expiry. The owner's preferred mode for most commands.</td><td>An unattended batch run.</td></tr>
 <tr><td><strong>Model routing</strong></td><td>A YAML file mapping each command to a cost tier (frontier, standard, economy) and each tier to a model per harness. Currently disabled.</td><td>Selecting machine size per pipeline stage.</td></tr>
-<tr><td><strong>Telemetry streams</strong></td><td>The measurement system. Five files under <code>docs/metrics/</code>, one line appended per event, never edited: command runs (command, model, time, tokens), verification verdicts (first check that failed), misses (kind, phase, finder, fix cost), chat sessions (tokens in and out), and the owner's git commits. A report reads them into five figures; see section 6.</td><td>An append-only event log with a reporting query.</td></tr>
+<tr><td><strong>Telemetry streams</strong></td><td>The measurement system. Five files under <code>docs/metrics/</code>, one line appended per event, never edited: command runs (command, model, time, tokens), verification verdicts (first check that failed), misses (kind, phase, finder, whose gap, the owner's sentence, fix cost; mirrored into a readable <code>docs/&lt;App&gt;-Misses.md</code>), chat sessions (tokens in and out), and the owner's git commits. A report reads them into five figures; see section 6.</td><td>An append-only event log with a reporting query.</td></tr>
 </tbody>
 </table>
 <hr>
@@ -349,15 +351,19 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <h3 id="bugs-flow-master">3.7 Bugs — flow-master<a class="anchor-link" href="#bugs-flow-master">#</a></h3>
 <p><strong><code>*triage-issues {App} {evidence} [verify]</code></strong>: analysis only. Takes screenshots and/or a written bug list, reproduces each bug, logs it against its requirement, demotes the row to <code>Needs re-verify</code>, adds rows for unspecified defects, and names the <code>*fix-issues</code> command to run next. Never edits code. Its telemetry line is marked <code>escaped</code>.</p>
 <p><strong><code>*fix-issues {App} {folder}</code></strong>: takes a folder of screenshots and an optional notes file, reproduces each bug, fixes the code (UI via the TrBlazeUI sub-agent), re-smokes, re-verifies the touched rows, updates the documents.</p>
-<p><strong><code>*log-miss {App} "description"</code></strong>: the twenty-second record. Writes one miss line classifying the miss and a remark on the checklist row. No reproduction, no code. <strong>Defect:</strong> D-10 (the record stores categories only, not the description).</p>
+<p><strong><code>*log-miss {App} "description"</code></strong>: the twenty-second record. First sorts the miss with four questions, asked in order (did the app's spec say it; did the framework say it; was there a check that did not catch it; was it written and ignored), because the answer decides the fix: a checklist line, a requirement line plus a check, a fixed check, or a hook. Then writes one miss record carrying the sentence and the answer, a remark on the checklist row, and one row in the readable <code>docs/&lt;App&gt;-Misses.md</code>, which is rebuilt from the records after every miss. No reproduction, no code. D-10 closed in Session 5 (2026-09-07).</p>
 <h3 id="ship-flow-master">3.8 Ship — flow-master<a class="anchor-link" href="#ship-flow-master">#</a></h3>
 <p><strong><code>*handoff-phase {App}</code></strong>: run once when the checklist is green, before owner testing. Finalises the UsageGuide (test users, screen-by-screen test plan), generates or refreshes the DevGuide, consolidates library feedback, re-renders HTML, sets status to Handoff.</p>
 <p><strong><code>*devguide {App} [--update]</code></strong>: the developer's low-level document. Every screen traced from page to control to service to data access, with a screenshot. Re-runnable for changed screens only. Generated automatically at brownfield day-1 and at handoff. <strong>Defect:</strong> D-7.</p>
 <p><strong><code>*productguide {App}</code></strong>: the end-user manual, screenshot-illustrated, task by task. On demand. Owner usage: not yet used.</p>
+<p><strong><code>*deploy-checklist {App} {pipeline-document}</code></strong> (added in Sitting 4b, 2026-09-06): the steps to put the application on its host, one document per hosting target, written after UAT from the owner's pipeline guidance document and the Stack answers about hosting and production secrets. Every step is a checkbox, every secret is named once, and the document says what has been executed for real. Schema: <code>TechieFlow-Document-Schemas.md</code> §3.10.</p>
 <h3 id="maintenance-flow-master">3.9 Maintenance — flow-master<a class="anchor-link" href="#maintenance-flow-master">#</a></h3>
 <p><strong><code>*refresh-status {App}</code></strong>: rebuilds PROJECT-STATUS from evidence (checklist table, file modification times, a fresh build) after an interrupted run. Never reads git. Owner usage: after brownfield onboarding of older projects.</p>
 <p><strong><code>*metrics {App}</code></strong>: reads the five telemetry files and writes <code>docs/metrics/METRICS.md</code> and <code>.html</code>. Owner usage: recent, regular.</p>
 <p><strong><code>*generate-html</code>, <code>*render-workflow-docs</code></strong>: render markdown to styled HTML through <code>tf-render-html.sh</code>. The checklist is never rendered.</p>
+<h3 id="running-unattended-the-supervisor">3.10 Running unattended — the supervisor<a class="anchor-link" href="#running-unattended-the-supervisor">#</a></h3>
+<p><code>bash .tfcore/utils/tf-goal.sh [--harness opencode] [--model &lt;id&gt;] &lt;app-folder&gt; "&lt;goal&gt;"</code> (or <code>@goal.md</code> for a goal written in a file) starts a harness session in YOLO mode with that goal and keeps it running until the agent writes the done sentinel. It waits out a usage limit (reads the reset time, sleeps until reset plus 15 minutes, resumes the same session), retries a crash with a growing pause, and re-prompts an agent that stopped early. <code>--resume</code> picks up after a reboot. The state and the full log live under <code>&lt;app&gt;/.tfcore/.session/</code> (<code>goal.log</code>, <code>goal.json</code>, <code>goal-done.json</code>); nothing is committed. Exit codes: 0 complete, 3 blocked on the owner, 4 too many cycles.</p>
+<p>Examples from the reset's own test runs (2026-09-05): <code>bash .tfcore/utils/tf-goal.sh --model sonnet /mnt/c/1MyCode/MyDiary @goal.md</code> for Claude Code, and the same with <code>--harness opencode --model opencode-go/mimo-v2.5</code> for OpenCode. The interactive alternative is to start Claude Code with <code>--permission-mode bypassPermissions</code>, type <code>/goal &lt;condition&gt;</code>, then <code>*yolo</code> and the command; that gives YOLO and the goal loop but not the limit wait. (Moved here from <code>_yolo-mode.md</code> in Sitting 4b, 2026-09-05.)</p>
 <hr>
 <h2 id="what-surrounds-every-command">4. What surrounds every command<a class="anchor-link" href="#what-surrounds-every-command">#</a></h2>
 <p>Every command is wrapped by the same three mechanisms: shared rules read before the work, hooks watching during the work, and the status gate closing the work.</p>
@@ -379,7 +385,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
     E --&gt; H{"Hook check&lt;br/&gt;on every file write&lt;br/&gt;and shell command"}
     H --&gt;|"allowed"| E
     H --&gt;|"refused, reason printed"| E
-    H --- N["Always refused:&lt;br/&gt;git · writing Verified without a verify run ·&lt;br/&gt;malformed PROJECT-STATUS · test output outside tests/.artifacts"]
+    H --- N["Always refused:&lt;br/&gt;git · writing Verified without a verify run ·&lt;br/&gt;malformed PROJECT-STATUS · test output outside tests/.artifacts ·&lt;br/&gt;hand edits of telemetry files · database writes outside build and fix ·&lt;br/&gt;a backgrounded build in YOLO ·&lt;br/&gt;ending the turn with the status gate incomplete&lt;br/&gt;(stale HTML, a failing PROJECT-STATUS or checklist, stale BRD table, no run record)"]
     E --&gt; F["Status gate&lt;br/&gt;PROJECT-STATUS rewritten · HTML re-rendered"]
     F --&gt; G["Telemetry&lt;br/&gt;one line appended to runs.jsonl"]
     G --&gt; Z["Next command printed"]</pre>
@@ -501,7 +507,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <tbody>
 <tr><td><code>runs.jsonl</code></td><td>command run: command, model, harness, start, end, tokens, sub-agents</td><td>every task, at the status gate</td></tr>
 <tr><td><code>gates.jsonl</code></td><td>requirement graded in a verify run, with the first check that failed</td><td>verify-phase, triage-issues</td></tr>
-<tr><td><code>misses.jsonl</code></td><td>thing the agent got wrong, plus a second line when it is fixed</td><td>log-miss, triage-issues, fix-issues</td></tr>
+<tr><td><code>misses.jsonl</code></td><td>thing the agent got wrong, plus a second line when it is fixed; every line is also one row in the readable <code>docs/&lt;App&gt;-Misses.md</code>, rebuilt after each write (Session 5)</td><td>log-miss, triage-issues, fix-issues</td></tr>
 <tr><td><code>sessions.jsonl</code></td><td>chat session: tokens in and out</td><td>a hook at session end</td></tr>
 <tr><td><code>commits.jsonl</code></td><td>one git commit by the owner</td><td>a git hook the owner installs; agents never run it</td></tr>
 </tbody>
@@ -530,7 +536,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <h3 id="the-five-questions-the-report-answers">6.2 The five questions the report answers<a class="anchor-link" href="#the-five-questions-the-report-answers">#</a></h3>
 <p>The report (<code>*metrics</code>) answers five questions.</p>
 <ol>
-<li><strong>First-pass rate.</strong> Of all requirements, the share marked Verified on their first verification. It measures how often the agent gets a requirement right without rework. Example: 100 requirements, 70 verified first time, first-pass rate 70 percent.
+<li><strong>First-pass rate.</strong> Of all requirements, the share marked Verified on their first verification. It measures how often the agent gets a requirement right without rework. Example: 100 requirements, 70 verified first time, first-pass rate 70 percent. Across projects a requirement is counted by its project and its id together, because every project has a REQ-UI-001; until 2026-09-07 the rollup counted by id alone and printed 72 percent where the figure is 48 (Session 5). The five numbers, with real figures and the sentence to say about each, are in <code>TechieFlow-Telemetry-Explained.md</code>.
 </li>
 <li><strong>Which check caught it.</strong> The verifier applies seven checks to every requirement in a fixed order, and the first to fail is recorded. The checks: build (does it compile), acceptance (does the requirement's automated test pass), data (does the screen show real data), visual (does the screen look right and match the mockup), assets (did the stylesheet and scripts load), speed (within the declared budget), standards (does the code follow the coding standards). The distribution shows which checks do the work. Failures concentrated in "data" mean screens are wired to nothing. Failures concentrated in "visual" mean working screens that look broken. Few failures caught by any check while people keep finding bugs means the checks are not looking at the right things, which is the TfLens pattern.
 </li>
@@ -553,7 +559,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <tr><td>The verify task</td><td>11,850 words</td><td>The largest task and the source of most "verify method insufficient" misses; the instructions for what to check are interleaved with instructions for how to set up.</td></tr>
 <tr><td>All tasks together</td><td>70,000 words</td><td>Tasks repeat one another, so a change in one leaves the others stale.</td></tr>
 <tr><td>Rules stated as MUST or NEVER in prose</td><td>622</td><td>Each depends on the agent remembering it.</td></tr>
-<tr><td>Rules enforced by hooks</td><td>8</td><td>These always hold. No agent has run git since the hook was installed.</td></tr>
+<tr><td>Rules enforced by hooks</td><td>8 (11 hook scripts, 3 of them housekeeping)</td><td>These always hold. No agent has run git since the hook was installed.</td></tr>
 <tr><td><code>WorkFlow-Context.md</code>, the session briefing</td><td>344 KB</td><td>Mostly a six-month incident log. A session that reads it spends attention on history.</td></tr>
 <tr><td><code>README.md</code></td><td>121 KB</td><td>The same problem for a human reader.</td></tr>
 </tbody>
@@ -568,7 +574,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <li>Explanation and history move to human documents. The task keeps the step, not the story.
 </li>
 </ul>
-<p>The mechanical parts already work: 8 hooks, 17 scripts, 16 templates, 3 scaffold scripts. The prose is what grew, and the prose is what the reset removes.</p>
+<p>The mechanical parts already work: 11 hooks, 17 scripts, 16 templates, 3 scaffold scripts. The prose is what grew, and the prose is what the reset removes.</p>
 <hr>
 <h2 id="defects-and-gaps-found-in-the-session-1-review">8. Defects and gaps found in the Session 1 review<a class="anchor-link" href="#defects-and-gaps-found-in-the-session-1-review">#</a></h2>
 <p>These are inputs to <code>TechieFlow-Requirements.md</code> (Session 2). Each becomes a requirement line with a check, or is closed as not a defect.</p>

@@ -106,7 +106,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout no-toc">
   <main>
     <h1>TechieFlow — Reset Plan (started 2026-09-04)</h1>
-    <div class="subtitle">Rendered 2026-09-04 &middot; source <code>TechieFlow-Reset-Plan-2026-09-04.md</code></div>
+    <div class="subtitle">Rendered 2026-09-07 &middot; source <code>TechieFlow-Reset-Plan-2026-09-04.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
@@ -241,6 +241,8 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </li>
 <li><strong>Output:</strong> the document-phase tasks shrunk and proven.
 </li>
+<li><strong>Done 2026-09-05:</strong> the three shared rule files and day1-greenfield, day1-brownfield, mockups, split-brd and amend-docs shrunk from 23,172 words to 4,237; six scripts, two hooks, five checker rules and FR-53 added; day1-brownfield and amend-docs ran clean on Xpenser in both harnesses; author-brd skipped, it is removed in 4c; misses 01 to 09 logged.
+</li>
 </ul>
 <p><strong>Sitting 4b — the build phase and the guides.</strong></p>
 <ul>
@@ -251,6 +253,8 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <li><strong>Test on:</strong> the same design-stage project once it has a checklist, or a small project the owner chooses. A real build runs in both harnesses.
 </li>
 <li><strong>Output:</strong> the build and handoff tasks shrunk and proven.
+</li>
+<li><strong>Done 2026-09-06:</strong> build-phase, devguide, refresh-status and the flow-master persona shrunk from 15,649 words to 2,373 (productguide and handoff-phase left for later); the Large layout, the Phases document and the Deployment Checklist with <code>*deploy-checklist</code> built; <code>tf-phase.sh</code>, <code>tf-build.sh</code>, <code>tf-build-list.sh</code>, <code>tf-devguide-list.sh</code>, <code>tf-status-evidence.sh</code> and the goal supervisor with its 26-check self-test added; three hooks added: <code>guard-db.sh</code>, <code>guard-build.sh</code>, and the Stop hook now checks the checklist; deploy-checklist ran in both harnesses on TfLens and its copy; build, devguide and refresh-status ran for real on MyDiary in Claude Code (the build's screens turned out blank at runtime, which the DevGuide run caught); the same three commands on the MyDiary copy through OpenCode with an OpenAI model were started at the close of the sitting, their result is in the run record; FR-54 to FR-57 added; misses 10 to 24 of 2026-09-05 and 01 to 12 of 2026-09-06 logged.
 </li>
 </ul>
 <p><strong>Sitting 4c — verification and bug handling, last.</strong></p>
@@ -264,6 +268,8 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <li>YOLO handling is made uniform across every task (D-18): every command honours the flag; build-phase and verify default to it.
 </li>
 <li><strong>Output:</strong> all tasks shrunk. Total task words near 20,000. Both harnesses tested end to end.
+</li>
+<li><strong>Done 2026-09-07:</strong> verify-phase, triage-issues, fix-issues and log-miss shrunk from 17,552 words to 2,230, plus the new <code>*triage-and-fix</code> (283) and the verifier persona (388); all task files now total 20,282 words; twelve scripts added (the verify chain from work list to telemetry, the Windows head over the WebView2 DevTools port, triage, log-miss and fix-close) with two self-tests, 103 checks; the seven never-used commands removed from both harnesses; the verify hook checks every row against the ledger, the build guard covers browser tests, the checker takes a baseline so old findings warn instead of block; real runs in both harnesses: verify and triage on TechieBlog, fix-issues on MyDiary (the blank screens' root cause found and fixed); misses 17 to 27 of 2026-09-06 and 01 to 02 of 2026-09-07 logged.
 </li>
 </ul>
 <h3 id="session-5-the-miss-protocol-and-the-telemetry-explainer">Session 5 — The miss protocol and the telemetry explainer<a class="anchor-link" href="#session-5-the-miss-protocol-and-the-telemetry-explainer">#</a></h3>
@@ -280,6 +286,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <p><strong>Decided 2026-09-04 (FR-36):</strong> an owner review is recorded as a new record kind <code>review</code>, named by phase (<code>day1-review</code>, <code>build-review</code>, …), with corrections given, cost to produce, cost to correct. UAT issues stay misses.</p>
 <p><strong>We do, part two:</strong> Claude writes <code>docs/TechieFlow-Telemetry-Explained.md</code>: each of the five report numbers, what it means, how it is calculated, one real figure from the combined data and one from a named project, and the one sentence the owner says about it in a talk. The owner reads it and rewrites any sentence they would not say.</p>
 <p><strong>Output:</strong> a miss log a human can read, and a telemetry page the owner can present from.</p>
+<p><strong>Done 2026-09-07:</strong> every miss carries whose gap it was (<code>sort</code>: spec, unsaid, weak-check, ignored), required by <code>tf-log-miss.sh</code>, defaulted by triage, amendable once, reported; <code>docs/&lt;App&gt;-Misses.md</code> and its HTML rebuilt by the emitter after every miss record (FR-31, FR-32, D-10 closed); <code>tests/mirror/run.sh</code> added; the rollup keyed by project and id (the combined first-pass rate is 48%, not the 72% it printed); <code>TechieFlow-Telemetry-Explained.md</code> written with the five numbers and the owner's stage sentences; Session 4's 53 misses sorted (26 weak-check, 15 unsaid, 14 ignored) and 42 closed; FR-58 to FR-61 added; TechieBlog's 87 empty-database regressions closed as will-not-fix; a real <code>*log-miss</code> ran through OpenCode on the MyDiary copy; misses 03 and 04 of 2026-09-07 logged.</p>
 <h3 id="session-6-make-the-repository-readable-again-and-deploy">Session 6 — Make the repository readable again, and deploy<a class="anchor-link" href="#session-6-make-the-repository-readable-again-and-deploy">#</a></h3>
 <p><strong>Goal:</strong> the "read this first" file is short, the six-month log is archived, and every repo has the new framework.</p>
 <p><strong>We do:</strong> split <code>WorkFlow-Context.md</code> into a briefing of at most 3,000 words (what it is, how it is used, conventions, repo map, open items, maintenance contract) and <code>docs/CHANGELOG.md</code> holding the full maintenance log untouched. Trim README to what a new user needs, moving the rest to <code>docs/</code>. Run <code>update-framework.sh</code> against the projects the owner will build next (TechieRag, AstroLyfe, TrStudio), against one library repo, then the rest.</p>

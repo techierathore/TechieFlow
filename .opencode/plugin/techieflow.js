@@ -24,7 +24,7 @@
 //   session.idle (root session)            -> Stop  {stop_hook_active}   -> guard-status-html.sh
 //   session.created (first root session)   -> SessionStart              -> sweep-artifacts.sh
 // OpenCode has no blocking Stop hook, so the stale-PROJECT-STATUS.html guard
-// (_status-update-gate.md §8) is bridged as a ONE-SHOT nudge: when the root
+// (_status-update-gate.md step 4) is bridged as a ONE-SHOT nudge: when the root
 // session idles with the .html older than the .md, the guard's message is sent
 // back into that session as a follow-up prompt. The second idle passes
 // stop_hook_active=true (the Claude loop guard) so it can never ping-pong.
@@ -132,8 +132,8 @@ export const TechieFlowPlugin = async ({ directory, client }) => {
                 text:
                   "[TechieFlow harness — guard-status-html.sh]\n" +
                   msg +
-                  "\n\nThis is the policy operating correctly, not an obstacle: re-render " +
-                  "PROJECT-STATUS.html from PROJECT-STATUS.md now, then finish.",
+                  "\n\nThis is the policy operating correctly, not an obstacle: do what each " +
+                  "line above says, then finish.",
               },
             ],
           },
@@ -233,8 +233,8 @@ export const TechieFlowPlugin = async ({ directory, client }) => {
       let payload = null
       let scripts = []
       if (input.tool === "bash") {
-        payload = { tool_name: "Bash", tool_input: { command: String(args.command || "") } }
-        scripts = ["block-git.sh", "guard-artifacts.sh", "guard-status.sh"]
+        payload = { tool_name: "Bash", tool_input: { command: String(args.command || ""), run_in_background: !!(args.background || args.run_in_background) } }
+        scripts = ["block-git.sh", "guard-artifacts.sh", "guard-status.sh", "guard-metrics.sh", "guard-db.sh", "guard-build.sh"]
       } else if (input.tool === "edit") {
         payload = {
           tool_name: "Edit",
@@ -244,20 +244,47 @@ export const TechieFlowPlugin = async ({ directory, client }) => {
             new_string: String(args.newString || ""),
           },
         }
-        scripts = ["guard-status.sh", "guard-verify.sh"]
+        scripts = ["guard-status.sh", "guard-verify.sh", "guard-metrics.sh"]
       } else if (input.tool === "write") {
         payload = {
           tool_name: "Write",
           tool_input: { file_path: String(args.filePath || ""), content: String(args.content || "") },
         }
-        scripts = ["guard-status.sh", "guard-verify.sh"]
+        scripts = ["guard-status.sh", "guard-verify.sh", "guard-metrics.sh"]
       } else if (input.tool === "apply_patch") {
+        // OpenAI models edit ONLY through apply_patch (no edit/write tool), so refusing the
+        // patch outright left every OpenAI run unable to update a checklist row or the status
+        // file (MISS-TechieFlow-20260906-14). Instead, each file in the patch is vetted by the
+        // same guards an Edit would meet: old_string = the removed lines, new_string = the
+        // added lines (a new file arrives as a Write with its full content).
         const patch = String(args.patchText || "")
-        if (/PROJECT-STATUS\.md|-Checklist\.md/i.test(patch)) {
-          throw new Error(
-            "TechieFlow: apply_patch is not allowed on PROJECT-STATUS.md or *-Checklist.md — " +
-              "use the edit or write tool for those files so the status/verify guards can vet the change.",
-          )
+        const files = []
+        let cur = null
+        for (const raw of patch.split("\n")) {
+          let m
+          if ((m = raw.match(/^\*\*\* (Update|Add) File: (.+)$/))) {
+            cur = { path: m[2].trim(), kind: m[1], old: [], neu: [] }
+            files.push(cur)
+          } else if (raw.startsWith("*** ")) {
+            cur = null
+          } else if (cur && raw.startsWith("+")) {
+            cur.neu.push(raw.slice(1))
+          } else if (cur && raw.startsWith("-")) {
+            cur.old.push(raw.slice(1))
+          }
+        }
+        for (const f of files) {
+          const p =
+            f.kind === "Add"
+              ? { tool_name: "Write", tool_input: { file_path: f.path, content: f.neu.join("\n") } }
+              : { tool_name: "Edit", tool_input: { file_path: f.path, old_string: f.old.join("\n"), new_string: f.neu.join("\n") } }
+          p.hook_event_name = "PreToolUse"
+          p.cwd = root
+          p.session_id = input.sessionID
+          for (const script of ["guard-status.sh", "guard-verify.sh", "guard-metrics.sh"]) {
+            const msg = guardBlocks(script, p)
+            if (msg) throw new Error(msg)
+          }
         }
         return
       } else {

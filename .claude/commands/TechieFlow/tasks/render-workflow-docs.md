@@ -70,15 +70,20 @@ Apply the shell. Title: `{AppName} — Project Status`. Subtitle: `Last rendered
 
 PROJECT-STATUS usually has 4–6 H2 sections — under the >6 threshold, so NO sidebar (use the `no-toc` class on `.layout`). Inline TOC may still appear if ≥2 H2.
 
-ADD a prominent call-to-action box at the very top of `<main>` (above the inline TOC):
+**`tf-render-html.sh` emits the "NEXT COMMAND TO RUN" call-to-action box itself** (since 2026-08-31, TfLens TF-010) — you do not add it, and you must not hand-patch it in afterwards. It special-cases `PROJECT-STATUS.md`, reads the **first fenced code block under `## Next command to run`**, and emits this markup immediately after the subtitle `<div>`, above the frontmatter table and the inline TOC:
 
 ```html
-<div style="padding:20px; background:var(--cta-bg); border:2px solid var(--accent); border-radius:10px; margin:20px 0;">
+<div class="cta-next" style="padding:20px; background:var(--cta-bg); border:2px solid var(--accent); border-radius:10px; margin:20px 0;">
   <div style="font-size:11px; color:var(--muted); letter-spacing:.5px;">NEXT COMMAND TO RUN</div>
-  <div style="font-family:var(--mono); font-size:18px; margin-top:6px;">{value from Next command section of PROJECT-STATUS.md}</div>
+  <div style="font-family:var(--mono); font-size:18px; margin-top:6px;">{first line of that code block}</div>
 </div>
 ```
-(Uses theme variables so the box stays legible in both light and dark — never hardcode hex here.)
+
+Theme variables only, never a hex — that is what `--cta-bg` is for, in both palettes.
+
+**If the box is missing, the source is missing, not the render.** The renderer emits nothing when `## Next command to run` is absent or its code block is empty — an absent box is honest, an invented command is not. Fix `PROJECT-STATUS.md` per `_status-update-gate.md` and re-render; do not edit the HTML.
+
+> **Why this is worth a paragraph.** From TF-003 (when hand-authoring moved into the script) until 2026-08-31 this section *required* the box and the renderer never emitted one, so the Output Checklist item below was unfalsifiable by reading the task, and the only workaround — patching the generated HTML — was overwritten by the next render. The tell was `--cta-bg`: a shell variable defined in both palettes and used by nothing.
 
 Render the frontmatter (project, stack, current_phase, last_verified_build, last_verified_date) as a clear definition list near the top.
 
@@ -103,7 +108,7 @@ List the three written file paths (one per line). End with: `Open each in a brow
 - [ ] Shared shell applied to every output (no hand-rolled palettes)
 - [ ] `docs/{AppName}-BRD.html` (or chosen variant) self-contained
 - [ ] `docs/{AppName}-Architecture.html` (or chosen variant) self-contained
-- [ ] `PROJECT-STATUS.html` self-contained with "NEXT COMMAND TO RUN" call-to-action
+- [ ] `PROJECT-STATUS.html` self-contained, and its "NEXT COMMAND TO RUN" call-to-action present — **check it with `grep -c "NEXT COMMAND TO RUN" PROJECT-STATUS.html`, which must print `1`.** The renderer emits it (§5); a `0` means `PROJECT-STATUS.md` has no `## Next command to run` code block, which is a status-gate defect to fix in the markdown — never by editing the HTML.
 - [ ] Mermaid blocks wrapped in `.diagram` with toolbar
 - [ ] Mermaid validity pass done (shell §5.5): every non-trivial label double-quoted, no `end` node ids, bare labels fixed not emitted
 - [ ] Copy-button JS + mermaid toolbar JS present in each file

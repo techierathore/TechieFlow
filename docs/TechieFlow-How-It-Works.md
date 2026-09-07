@@ -30,7 +30,7 @@ The framework runs in two harnesses, Claude Code and OpenCode, and must work ide
 | **Command** | An instruction typed to a persona, prefixed with `*`, such as `*build-phase TechieRag`. Each command maps to one task file. | A CLI sub-command. |
 | **Task** | A markdown file holding the step-by-step procedure for one command. The agent reads it and follows it. | A runbook, or a script written in prose. |
 | **Template** | The blueprint for one document: a skeleton with placeholders and guidance for each section. The agent fills it to produce the BRD, the Architecture, and the other documents. Sixteen exist under `.tfcore/templates/v4custom/`. At present the guidance is loose prose, so a generated document may add, skip, or over-fill sections without anything stopping it. Session 3 of the reset gives each template a strict structure (required sections in order, size limits, row rules) and a script that rejects a document that breaks it. | A document template plus a validator. |
-| **Hook** | A small script the harness runs automatically before or after an agent action, with power to block it. Eight exist. Example: every `git` command is blocked. | A pre-commit hook or a CI policy check. Runs regardless of the agent's intent. |
+| **Hook** | A small script the harness runs automatically before or after an agent action, with power to block it. Eleven exist (2026-09-06). Eight refuse an action and print why: every `git` write; a test folder at the repository root; a PROJECT-STATUS write in the wrong shape, from any tool or the shell; a hand edit of a telemetry file; `Verified` written without a verify run; a database write outside build-phase and fix-issues; a build, test or app run started in the background while YOLO is on; and ending a turn while the status gate is incomplete (stale HTML, a failing PROJECT-STATUS or checklist, a stale BRD table, no run record). Three do housekeeping: the session pointer at start and on every prompt, the sweep of old test artefacts at start, and the session telemetry line at end. All run in both harnesses. | A pre-commit hook or a CI policy check. Runs regardless of the agent's intent. |
 | **Utility script** | A shell or Python script the agent runs instead of doing a step by hand, such as the HTML renderer or the telemetry writer. Seventeen exist under `.tfcore/utils/`. | A build tool or CLI utility. |
 | **`.tfcore/`** | The framework's folder inside each project. Hidden, ignored by git, refreshed by `update-framework.sh`. Holds personas, tasks, templates, hooks, scripts. Never edited inside a project. | The installed copy of a library. |
 | **Harness mirror** | Claude Code discovers commands only under `.claude/commands/`, so every persona and task is copied there byte for byte. OpenCode instead reads file paths from `opencode.jsonc`. Both must stay in step with `.tfcore/`. | Two build configurations pointing at one source tree. |
@@ -39,7 +39,7 @@ The framework runs in two harnesses, Claude Code and OpenCode, and must work ide
 | **Status gate** | The rule that every command ends by rewriting `PROJECT-STATUS.md` in a fixed shape. A hook rejects a malformed write. | A mandatory end-of-job report. |
 | **YOLO mode** | Run to completion with no questions and all permissions except git writes. Set by a flag file with a 24-hour expiry. The owner's preferred mode for most commands. | An unattended batch run. |
 | **Model routing** | A YAML file mapping each command to a cost tier (frontier, standard, economy) and each tier to a model per harness. Currently disabled. | Selecting machine size per pipeline stage. |
-| **Telemetry streams** | The measurement system. Five files under `docs/metrics/`, one line appended per event, never edited: command runs (command, model, time, tokens), verification verdicts (first check that failed), misses (kind, phase, finder, fix cost), chat sessions (tokens in and out), and the owner's git commits. A report reads them into five figures; see section 6. | An append-only event log with a reporting query. |
+| **Telemetry streams** | The measurement system. Five files under `docs/metrics/`, one line appended per event, never edited: command runs (command, model, time, tokens), verification verdicts (first check that failed), misses (kind, phase, finder, whose gap, the owner's sentence, fix cost; mirrored into a readable `docs/<App>-Misses.md`), chat sessions (tokens in and out), and the owner's git commits. A report reads them into five figures; see section 6. | An append-only event log with a reporting query. |
 
 ---
 
@@ -162,7 +162,7 @@ flowchart LR
 
 **`*fix-issues {App} {folder}`**: takes a folder of screenshots and an optional notes file, reproduces each bug, fixes the code (UI via the TrBlazeUI sub-agent), re-smokes, re-verifies the touched rows, updates the documents.
 
-**`*log-miss {App} "description"`**: the twenty-second record. Writes one miss line classifying the miss and a remark on the checklist row. No reproduction, no code. **Defect:** D-10 (the record stores categories only, not the description).
+**`*log-miss {App} "description"`**: the twenty-second record. First sorts the miss with four questions, asked in order (did the app's spec say it; did the framework say it; was there a check that did not catch it; was it written and ignored), because the answer decides the fix: a checklist line, a requirement line plus a check, a fixed check, or a hook. Then writes one miss record carrying the sentence and the answer, a remark on the checklist row, and one row in the readable `docs/<App>-Misses.md`, which is rebuilt from the records after every miss. No reproduction, no code. D-10 closed in Session 5 (2026-09-07).
 
 ### 3.8 Ship — flow-master
 
@@ -172,6 +172,8 @@ flowchart LR
 
 **`*productguide {App}`**: the end-user manual, screenshot-illustrated, task by task. On demand. Owner usage: not yet used.
 
+**`*deploy-checklist {App} {pipeline-document}`** (added in Sitting 4b, 2026-09-06): the steps to put the application on its host, one document per hosting target, written after UAT from the owner's pipeline guidance document and the Stack answers about hosting and production secrets. Every step is a checkbox, every secret is named once, and the document says what has been executed for real. Schema: `TechieFlow-Document-Schemas.md` §3.10.
+
 ### 3.9 Maintenance — flow-master
 
 **`*refresh-status {App}`**: rebuilds PROJECT-STATUS from evidence (checklist table, file modification times, a fresh build) after an interrupted run. Never reads git. Owner usage: after brownfield onboarding of older projects.
@@ -179,6 +181,12 @@ flowchart LR
 **`*metrics {App}`**: reads the five telemetry files and writes `docs/metrics/METRICS.md` and `.html`. Owner usage: recent, regular.
 
 **`*generate-html`, `*render-workflow-docs`**: render markdown to styled HTML through `tf-render-html.sh`. The checklist is never rendered.
+
+### 3.10 Running unattended — the supervisor
+
+`bash .tfcore/utils/tf-goal.sh [--harness opencode] [--model <id>] <app-folder> "<goal>"` (or `@goal.md` for a goal written in a file) starts a harness session in YOLO mode with that goal and keeps it running until the agent writes the done sentinel. It waits out a usage limit (reads the reset time, sleeps until reset plus 15 minutes, resumes the same session), retries a crash with a growing pause, and re-prompts an agent that stopped early. `--resume` picks up after a reboot. The state and the full log live under `<app>/.tfcore/.session/` (`goal.log`, `goal.json`, `goal-done.json`); nothing is committed. Exit codes: 0 complete, 3 blocked on the owner, 4 too many cycles.
+
+Examples from the reset's own test runs (2026-09-05): `bash .tfcore/utils/tf-goal.sh --model sonnet /mnt/c/1MyCode/MyDiary @goal.md` for Claude Code, and the same with `--harness opencode --model opencode-go/mimo-v2.5` for OpenCode. The interactive alternative is to start Claude Code with `--permission-mode bypassPermissions`, type `/goal <condition>`, then `*yolo` and the command; that gives YOLO and the goal loop but not the limit wait. (Moved here from `_yolo-mode.md` in Sitting 4b, 2026-09-05.)
 
 ---
 
@@ -195,7 +203,7 @@ flowchart TD
     E --> H{"Hook check<br/>on every file write<br/>and shell command"}
     H -->|"allowed"| E
     H -->|"refused, reason printed"| E
-    H --- N["Always refused:<br/>git · writing Verified without a verify run ·<br/>malformed PROJECT-STATUS · test output outside tests/.artifacts"]
+    H --- N["Always refused:<br/>git · writing Verified without a verify run ·<br/>malformed PROJECT-STATUS · test output outside tests/.artifacts ·<br/>hand edits of telemetry files · database writes outside build and fix ·<br/>a backgrounded build in YOLO ·<br/>ending the turn with the status gate incomplete<br/>(stale HTML, a failing PROJECT-STATUS or checklist, stale BRD table, no run record)"]
     E --> F["Status gate<br/>PROJECT-STATUS rewritten · HTML re-rendered"]
     F --> G["Telemetry<br/>one line appended to runs.jsonl"]
     G --> Z["Next command printed"]
@@ -297,7 +305,7 @@ Five files under `docs/metrics/`. Each line is one event. Nothing is edited afte
 |---|---|---|
 | `runs.jsonl` | command run: command, model, harness, start, end, tokens, sub-agents | every task, at the status gate |
 | `gates.jsonl` | requirement graded in a verify run, with the first check that failed | verify-phase, triage-issues |
-| `misses.jsonl` | thing the agent got wrong, plus a second line when it is fixed | log-miss, triage-issues, fix-issues |
+| `misses.jsonl` | thing the agent got wrong, plus a second line when it is fixed; every line is also one row in the readable `docs/<App>-Misses.md`, rebuilt after each write (Session 5) | log-miss, triage-issues, fix-issues |
 | `sessions.jsonl` | chat session: tokens in and out | a hook at session end |
 | `commits.jsonl` | one git commit by the owner | a git hook the owner installs; agents never run it |
 
@@ -327,7 +335,7 @@ Fix, verify and build account for 90 of the 142 recorded runs. The run record do
 
 The report (`*metrics`) answers five questions.
 
-1. **First-pass rate.** Of all requirements, the share marked Verified on their first verification. It measures how often the agent gets a requirement right without rework. Example: 100 requirements, 70 verified first time, first-pass rate 70 percent.
+1. **First-pass rate.** Of all requirements, the share marked Verified on their first verification. It measures how often the agent gets a requirement right without rework. Example: 100 requirements, 70 verified first time, first-pass rate 70 percent. Across projects a requirement is counted by its project and its id together, because every project has a REQ-UI-001; until 2026-09-07 the rollup counted by id alone and printed 72 percent where the figure is 48 (Session 5). The five numbers, with real figures and the sentence to say about each, are in `TechieFlow-Telemetry-Explained.md`.
 
 2. **Which check caught it.** The verifier applies seven checks to every requirement in a fixed order, and the first to fail is recorded. The checks: build (does it compile), acceptance (does the requirement's automated test pass), data (does the screen show real data), visual (does the screen look right and match the mockup), assets (did the stylesheet and scripts load), speed (within the declared budget), standards (does the code follow the coding standards). The distribution shows which checks do the work. Failures concentrated in "data" mean screens are wired to nothing. Failures concentrated in "visual" mean working screens that look broken. Few failures caught by any check while people keep finding bugs means the checks are not looking at the right things, which is the TfLens pattern.
 
@@ -353,7 +361,7 @@ An analogy: a new team member is handed a sixty-page manual to read before every
 | The verify task | 11,850 words | The largest task and the source of most "verify method insufficient" misses; the instructions for what to check are interleaved with instructions for how to set up. |
 | All tasks together | 70,000 words | Tasks repeat one another, so a change in one leaves the others stale. |
 | Rules stated as MUST or NEVER in prose | 622 | Each depends on the agent remembering it. |
-| Rules enforced by hooks | 8 | These always hold. No agent has run git since the hook was installed. |
+| Rules enforced by hooks | 8 (11 hook scripts, 3 of them housekeeping) | These always hold. No agent has run git since the hook was installed. |
 | `WorkFlow-Context.md`, the session briefing | 344 KB | Mostly a six-month incident log. A session that reads it spends attention on history. |
 | `README.md` | 121 KB | The same problem for a human reader. |
 
@@ -365,7 +373,7 @@ Three moves shrink a task, applied block by block in Session 4 of the reset:
 - A rule the agent has ignored more than once becomes a hook, which cannot be ignored, or is deleted.
 - Explanation and history move to human documents. The task keeps the step, not the story.
 
-The mechanical parts already work: 8 hooks, 17 scripts, 16 templates, 3 scaffold scripts. The prose is what grew, and the prose is what the reset removes.
+The mechanical parts already work: 11 hooks, 17 scripts, 16 templates, 3 scaffold scripts. The prose is what grew, and the prose is what the reset removes.
 
 ---
 

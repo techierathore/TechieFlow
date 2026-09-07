@@ -13,7 +13,14 @@
 | Q | Topic | Decision | Source |
 |---|---|---|---|
 | Q1 | Configuration | appsettings.json | answer set |
+| Q2 | Secrets in development | user secrets | answer set |
+| Q3 | Database | PostgreSQL in a container | answer set |
 | Q4 | Authentication | AppManager | owner |
+| Q5 | Logging | Serilog to file | answer set |
+| Q6 | Tests | xUnit, test project from day one | answer set |
+| Q7 | Layout and naming | src/ and tests/; the head is `MyDiary` | answer set |
+| Q8 | User interface | TrBlazeUI, Blazor Server | answer set |
+| Q11 | Standing rules | the answer set's list | answer set |
 
 ## 2. Solution structure
 

@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TechieFlow — Misses</title>
+<script>
+/* Resolve the theme BEFORE first paint (no flash). Saved choice wins; otherwise
+   pick by time of day — light 07:00–19:00 local, softened dark at night. */
+(function(){
+  try{
+    var t = localStorage.getItem('tf-theme');
+    if(t!=='light' && t!=='dark'){ var h = new Date().getHours(); t = (h>=7 && h<19) ? 'light' : 'dark'; }
+    document.documentElement.setAttribute('data-theme', t);
+  }catch(e){ document.documentElement.setAttribute('data-theme','light'); }
+})();
+</script>
+<style>
+/* LIGHT is the default theme — a warm off-white, easy on the eyes (never bright white). */
+:root{
+  --bg:#f4f1e9; --panel:#efe9db; --panel2:#e7e0cd; --line:#d8cfb6;
+  --ink:#2e2a22; --muted:#6f6857; --accent:#2f6f9f; --accent2:#3f7d54;
+  --warn:#9a6b15; --danger:#b03a52; --ok:#3f7d54;
+  --code-bg:#ece5d3; --code-ink:#332f26; --row-alt:#eae2cf;
+  --h3:#3a352b; --h4:#2f6f9f; --quote:#4a4537; --cta-bg:#e6eef5;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+/* DARK — softened near-black (warmer / less harsh than pure #0f1115). */
+html[data-theme="dark"]{
+  --bg:#11141a; --panel:#171b23; --panel2:#1e2430; --line:#2b3240;
+  --ink:#dfe3ea; --muted:#99a2b1; --accent:#7cc4ff; --accent2:#a6e3a1;
+  --warn:#f9c74f; --danger:#f38ba8; --ok:#a6e3a1;
+  --code-bg:#0c1016; --code-ink:#d8dde8; --row-alt:#141821;
+  --h3:#cfd5e3; --h4:#7cc4ff; --quote:#cfd5e3; --cta-bg:#0d2030;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:13px;background:var(--code-bg);color:var(--code-ink);padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
+pre{font-family:var(--mono);font-size:12.5px;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto;color:var(--code-ink);position:relative}
+pre code{background:none;border:none;padding:0}
+.copy{position:absolute;top:8px;right:8px;background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:11px;font-family:var(--sans);cursor:pointer}
+.copy:hover{color:var(--accent);border-color:var(--accent)}
+/* floating light/dark toggle (top-right) */
+.theme-toggle{position:fixed;top:12px;right:14px;z-index:10000;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:12.5px;font-family:var(--sans);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.theme-toggle:hover{color:var(--accent);border-color:var(--accent)}
+
+.layout{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+.layout.no-toc{grid-template-columns:1fr}
+nav.side{position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--line);background:var(--panel);padding:18px 14px}
+nav.side h1{font-size:14px;margin:0 0 4px;letter-spacing:.5px;color:var(--ink)}
+nav.side .sub{font-size:11.5px;color:var(--muted);margin-bottom:14px}
+nav.side ol,nav.side ul{list-style:none;padding:0;margin:0}
+nav.side li{font-size:13px;margin:2px 0}
+nav.side li a{display:block;padding:5px 8px;color:var(--ink);border-radius:6px}
+nav.side li a:hover{background:var(--panel2);text-decoration:none}
+nav.side li.h3 a{padding-left:22px;font-size:12.5px;color:var(--h3)}
+nav.side .group{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin:14px 8px 4px}
+
+main{padding:28px 40px 80px;max-width:1100px}
+.layout.no-toc main{margin:0 auto}
+
+h1{font-size:28px;margin:0 0 6px}
+h2{font-size:22px;margin:32px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);scroll-margin-top:16px}
+h3{font-size:17px;margin:22px 0 6px;color:var(--h3);scroll-margin-top:16px}
+h4{font-size:14px;margin:14px 0 4px;color:var(--h4);scroll-margin-top:16px}
+.subtitle{color:var(--muted);font-size:14px;margin-top:-4px;margin-bottom:18px}
+p{margin:6px 0 10px}
+blockquote{border-left:3px solid var(--accent);background:var(--panel);margin:8px 0;padding:8px 14px;color:var(--quote)}
+ul,ol{padding-left:22px}
+li{margin:2px 0}
+
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);color:var(--h3);font-weight:600}
+tr:nth-child(even) td{background:var(--row-alt)}
+
+hr{border:none;border-top:1px solid var(--line);margin:24px 0}
+.anchor-link{color:var(--muted);font-weight:400;font-size:0.85em;margin-left:8px;opacity:0;transition:opacity .15s;text-decoration:none}
+h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
+
+/* inline TOC at top of main content */
+.toc-inline{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 16px;margin:14px 0 24px}
+.toc-inline > div{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.toc-inline ol,.toc-inline ul{margin:4px 0;padding-left:18px}
+.toc-inline li{font-size:13px;margin:1px 0}
+.toc-inline a{color:var(--h3)}
+
+/* mermaid diagram wrapper + toolbar */
+.diagram{position:relative;border:1px solid var(--line);border-radius:8px;background:var(--code-bg);margin:14px 0;overflow:hidden}
+.diagram .mermaid{padding:14px;margin:0;background:transparent;border:none;overflow:auto}
+.diagram .dt{display:flex;gap:6px;justify-content:flex-end;padding:6px 8px;background:var(--row-alt);border-bottom:1px solid var(--line)}
+.diagram .dt button{background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 10px;font-size:12px;font-family:var(--sans);cursor:pointer;min-width:30px}
+.diagram .dt button:hover{color:var(--accent);border-color:var(--accent)}
+.diagram .dt .zlabel{padding:3px 6px;font-size:11px;color:var(--muted);font-family:var(--mono);align-self:center}
+.diagram.fs{position:fixed;inset:0;z-index:9999;border-radius:0;border:none}
+.diagram.fs .mermaid{height:calc(100vh - 40px);display:flex;align-items:center;justify-content:center}
+
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.side{position:static;height:auto}}
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" title="Toggle light / dark">&#9790; Dark</button>
+<div class="layout no-toc">
+  <main>
+    <h1>TechieFlow — Misses</h1>
+    <div class="subtitle">Rendered 2026-09-07 &middot; source <code>TechieFlow-Misses.md</code></div>
+
+    <div class="toc-inline">
+      <div>Contents</div>
+      <ol>
+        <li><a href="#open-35">Open (35)</a></li>
+        <li><a href="#fixed-82">Fixed (82)</a></li>
+        <li><a href="#will-not-fix-1">Will not fix (1)</a></li>
+      </ol>
+    </div>
+<table>
+<thead><tr><th></th><th></th></tr></thead>
+<tbody>
+<tr><td>App</td><td>TechieFlow</td></tr>
+<tr><td>Count</td><td>118 logged: 35 open, 82 fixed, 1 will not fix</td></tr>
+<tr><td>Source</td><td><code>docs/metrics/misses.jsonl</code>, one row per miss record. Rewritten by <code>tf-misses-md.sh</code> on every new record. Never edit it: a wrong row is corrected by a new record.</td></tr>
+<tr><td>Updated</td><td>2026-09-07</td></tr>
+</tbody>
+</table>
+<p><strong>Whose gap</strong> answers the four questions of the miss protocol: <strong>the app's spec</strong> did not say it, so the checklist line is fixed; <strong>the framework never said it</strong>, so one requirement line and a check are added; <strong>the check was too weak</strong> (a review, or a script that did not fire), so the check is fixed; <strong>said and ignored</strong>, so the rule becomes a hook or is deleted. <strong>not sorted</strong> means the record predates the sort or nobody has answered yet; <code>bash .tfcore/utils/tf-emit.sh --amend &lt;miss&gt; sort &lt;spec|unsaid|weak-check|ignored&gt;</code> completes it.</p>
+<h2 id="open-35">Open (35)<a class="anchor-link" href="#open-35">#</a></h2>
+<table>
+<thead><tr><th>Miss</th><th>Found</th><th>Whose gap</th><th>What went wrong</th></tr></thead>
+<tbody>
+<tr><td>MISS-TechieFlow-20260907-12</td><td>2026-09-07 by owner</td><td>said and ignored</td><td>The D-21 rule that hidden framework folders are invisible to search was written down and still cost 58 percent of a folder's true size when OpenCode measured the Playbook with a shell glob.</td></tr>
+<tr><td>MISS-TechieFlow-20260907-10</td><td>2026-09-07 by owner</td><td>the check was too weak</td><td>WORKFLOW.html is force-deployed to every project and still teaches three commands removed in Sitting 4c, because the removed-command check looks at the task files and the harness registrations but never at the human reference.</td></tr>
+<tr><td>MISS-TechieFlow-20260907-04</td><td>2026-09-07 by gate</td><td>the check was too weak</td><td>The readable miss file's unchanged check compared only the header above the Updated line, so an amend that changed a row but no count left the file stale; the bugs self-test caught it before release and the check now compares everything but the date.</td></tr>
+<tr><td>MISS-TechieFlow-20260907-03</td><td>2026-09-07 by agent-review</td><td>the check was too weak</td><td>The cross-project rollup keyed a requirement by its id alone, so REQ-UI-001 of TfLens and REQ-UI-001 of TechieBlog counted as one requirement and the combined first-pass rate printed 72% where the true figure is 48%; found by re-reading the numbers before the explainer, fixed by keying on project and id.</td></tr>
+<tr><td>MISS-TechieFlow-20260907-01</td><td>2026-09-07 by agent-review</td><td>said and ignored</td><td>The OpenCode verify on TechieBlog-oc (gpt-5.6-terra, 2026-09-07) skipped step 4 of the verify task: the old specs died on missing environment variables and no test was written for the 101 rows without one, so the run ended in twelve minutes with 101 rows not tested and only the screens checks graded; the task's step 4 was read and not done, which is the instruction-ignored pattern, and the Claude run on the same project wrote and repaired tests for three hours.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-26</td><td>2026-09-06 by agent-review</td><td>the framework never said it</td><td>The TechieBlog verify (Sonnet, 2026-09-06) wrote 86 rows FAIL on the acceptance check and 87 regression misses because the local database had no published post and the seeded staff accounts sat behind a must-change-password screen, and nothing in the verify task or the smoke policy says what a verify does when the test data the acceptance needs is missing: create it through the application as the test user, pass a password gate through its screen, and record a row as not observable with the environment reason when neither is possible, never as a failure of the code; for Session 5's sort.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-08 (FR-41)</td><td>2026-09-06 by agent-review</td><td>said and ignored</td><td>The MyDiary build agent wrote the sentinel as complete with 69 of 77 rows still Implemented, although the yolo rule says blocked when everything left needs the owner, and here the owner must set up Appium or FlaUI before any UI row can be verified; the honest outcome was blocked.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-17 (FR-01)</td><td>2026-09-06 by owner</td><td>the framework never said it</td><td>The analyst brainstorm and project-brief steps proposed project names (src/MyDiary.App) without reading the stack answer set, so the MiMo day-1 copied a banned name from the brief; the brief template asks for repository thoughts and the idea-stage commands have no run record kind, so nothing checked it.</td></tr>
+<tr><td>MISS-TechieFlow-20260904-26</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, other, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-25</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, other, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-24</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (missed-requirement, other, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-23</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (missed-requirement, other, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-22</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (scope-creep, other, why: instruction-ignored)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-21</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, other, why: instruction-ignored)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-20</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, checklist, why: ambiguous-acceptance)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-19</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, other, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-18</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, other, why: instruction-ignored)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-17</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, other, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-16</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, other, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-15</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, other, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-14</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (scope-creep, other, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-13</td><td>2026-09-04 by agent-review</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, other, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-12</td><td>2026-09-04 by agent-review</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, other, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-11</td><td>2026-09-04 by agent-review</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, other, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-10</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, other, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-09</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, other, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-08</td><td>2026-09-04 by agent-review</td><td>not sorted</td><td>no sentence recorded (partial-implementation, other, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-07</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, devguide, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-06</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, other, why: ambiguous-acceptance)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-05</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, uidesign, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-04</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, architecture, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-03</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, brd, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-02</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, brd, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260904-01</td><td>2026-09-04 by owner</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, other, why: instruction-ignored)</td></tr>
+<tr><td>(no id, record 55)</td><td>2026-09-05 by owner</td><td>not sorted</td><td>The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule.</td></tr>
+</tbody>
+</table>
+<h2 id="fixed-82">Fixed (82)<a class="anchor-link" href="#fixed-82">#</a></h2>
+<table>
+<thead><tr><th>Miss</th><th>Found</th><th>Closed</th><th>Whose gap</th><th>What went wrong</th></tr></thead>
+<tbody>
+<tr><td>MISS-TechieFlow-20260907-11</td><td>2026-09-07 by owner</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The Playbook review prompt was drafted from folder word counts taken only at the top level, so 174 files and 196,498 words counted as zero and the prompt nearly shipped the wrong headline finding.</td></tr>
+<tr><td>MISS-TechieFlow-20260907-09</td><td>2026-09-07 by owner</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>A run record with no ended at all was accepted and could never be costed: the guard only replaced an ended that lied, so this session's own record landed with no duration.</td></tr>
+<tr><td>MISS-TechieFlow-20260907-08</td><td>2026-09-07 by owner</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The updater kept a project's root opencode.jsonc because its dead BMAD-era registrations looked like project content, so that repo loaded no framework agents in OpenCode at all and only a warning was printed.</td></tr>
+<tr><td>MISS-TechieFlow-20260907-07</td><td>2026-09-07 by owner</td><td>2026-09-07 by fix-issues</td><td>the framework never said it</td><td>Nothing capped or checked the two files a person reads first, so the briefing reached 344 KB and the README 121 KB and both still named commands the framework had removed.</td></tr>
+<tr><td>MISS-TechieFlow-20260907-06</td><td>2026-09-07 by owner</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>tf-log-miss.sh printed 'Miss logged' with an id and said the readable file was rewritten after the emitter had refused the record for a bad artifact value and appended nothing.</td></tr>
+<tr><td>MISS-TechieFlow-20260907-05</td><td>2026-09-07 by owner</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>FR-47 says a script greps every public document for private project names, but no such script was ever written, so a private project was named in the public README for months.</td></tr>
+<tr><td>MISS-TechieFlow-20260907-02</td><td>2026-09-07 by gate</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The checklist-edit helper shared by the triage and verdict scripts cut a long Remarks cell to sixty words and then added the ellipsis as a word of its own, so three rows the TechieBlog triage wrote carried 61 words and the Stop hook refused the turn until the agent trimmed them; the ellipsis now rides on the last word, and the self-tests did not cover a remark over the limit.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-27</td><td>2026-09-06 by gate</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>Removing the seven never-used commands left every project's own routing file naming author-brd, and the binding generator wrote an OpenCode file reference to the vanished task, so OpenCode refused to start on TechieBlog-oc; the generator now skips a phase whose task file does not exist and says so, and the stale line was removed from the three projects refreshed today (the other projects hit the warning, not the error, at their next update).</td></tr>
+<tr><td>MISS-TechieFlow-20260906-25</td><td>2026-09-06 by gate</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The fix close script passed the verify ledger's raw verdict (RENDER-FAIL) as a miss-fix verdict_after, a field whose vocabulary is the five checklist statuses, so the emitter refused all twenty miss-fix records of the MyDiary fix run and the cost of the fix was not attached to any miss; the self-test had covered only PASS and FAIL, and the script now maps every ledger verdict to a status and writes one run record per start.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-24</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>said and ignored</td><td>The maintainer ran a process clean-up that filtered by working directory while its own shell had drifted into the MyDiary folder from an earlier cd, and killed its own command (exit 144); the 4b watch-out that the shell's working directory persists between commands was repeated, so every clean-up now runs from a script file that excludes its own shell and every command names absolute paths.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-23</td><td>2026-09-06 by gate</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The verify boot script wrapped the Windows project path in quote characters inside the cmd.exe command, and the WSL bridge handed those quotes to dotnet as part of the path, so the MyDiary Windows head never started and the fix agent spent its first cycle launching it by hand; the self-test could not catch it because the fixture has no Windows head, and the path is now passed bare unless it holds a space.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-22</td><td>2026-09-06 by gate</td><td>2026-09-07 by fix-issues</td><td>said and ignored</td><td>The TechieBlog verify (Sonnet) started the browser tests in the background and ended its turn waiting for them, so the supervisor had to re-prompt a second cycle; the build guard knew only dotnet, msbuild and npm verbs, not npx playwright test or the verify scripts, and now refuses those backgrounded too (third occurrence of the backgrounded-run failure after misses 23 of 2026-09-05 and 05 of 2026-09-06).</td></tr>
+<tr><td>MISS-TechieFlow-20260906-21</td><td>2026-09-06 by gate</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The document checker cut a checklist detail entry at the next anchor only when no list dash preceded it, so two consecutive list-item entries were read as one and a row could borrow the next row's BRD id or acceptance line (the third parser with this boundary bug after tf-build-list.py and the new list script, miss 18); the bugs self-test caught it on a row triage added, and the checker now stops at a dash-prefixed anchor too.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-20</td><td>2026-09-06 by gate</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The database guard matched the name of the migration tool inside an echo string and refused a verify run's read of two seed SQL files and a select on TechieBlog, because it matched words anywhere in the command text; it now strips echo and printf strings and comment lines before matching, so only a command that runs a migrator or writes through a client is refused.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-19</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The Stop hook and the status gate ran the document checker on every checklist a command wrote and blocked on any FAIL line, so on an existing project whose checklist predates the schemas (TechieBlog: 376 old findings) no verify or build could ever end its turn without repairing rows it must not touch, against the Session 3 decision that old findings warn and are repaired through amend-docs; tf-phase.sh start now records a baseline of the findings present when a command starts and the checker prints those as OLD and blocks only on new ones.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-18</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The checklist entry parser in tf-build-list.py read past the end of a row's detail entry into the next one when the next entry started with a list dash, so a row with no mockup or BRD id of its own could inherit the next row's; the verify self-test caught the same bug in the new list script, and both now stop at the next entry.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-17</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The old verify task described driving MAUI Android, iOS and Mac Catalyst heads over Appium with the same render and visual checks, but no script in the framework ever implemented that drive, so the prose promised a verify that could not happen; the shrunk task now says those heads have no driver yet and their rows are recorded as not verified.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-16</td><td>2026-09-06 by owner</td><td>2026-09-07 by fix-issues</td><td>said and ignored</td><td>The maintainer reported no monitors running while the watch on the MyDiary devguide run from 10:28 was still alive after five hours, because it stopped only the monitors it remembered instead of listing them; a running-work report is read from the harness list, never from memory (second occurrence after miss 24 of 2026-09-05).</td></tr>
+<tr><td>MISS-TechieFlow-20260906-15 (FR-20)</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The second OpenCode build on the MyDiary copy (gpt-5.6-terra) marked 85 rows Implemented, ran the verifier on 28 rows and wrote the status file, but left no build-phase run record and no gate records, and the new sentinel guard accepted it because any run record since the goal start satisfied it; the guard now requires a run record for the command the phase marker names.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-14 (FR-40)</td><td>2026-09-06 by agent-review</td><td>2026-09-06 by fix-issues</td><td>the check was too weak</td><td>OpenAI models in OpenCode edit files only through apply_patch, and the OpenCode plugin refused every apply_patch that touched the checklist or the status file and told the agent to use edit or write tools it does not have, so no OpenAI-model run could ever update a row or the status; the plugin now maps an apply_patch onto the same write guards per file instead of refusing it.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-13 (FR-20)</td><td>2026-09-06 by agent-review</td><td>2026-09-06 by fix-issues</td><td>said and ignored</td><td>The OpenCode build on the MyDiary copy (gpt-5.6-terra) wrote code across three fresh sessions, built and tested it, then wrote the sentinel blocked with all 87 rows Not Started, the status file untouched since day-1 and no build-phase run record, because nothing mechanical tied the sentinel to the status gate; tf-yolo.sh done now refuses the sentinel until the status file and a run record are newer than the goal start.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-12</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the framework never said it</td><td>The maintainer ran a relative-path patch and a miss emit from whatever folder the previous command had left as the working directory, so a supervisor patch landed in the MyDiary copy and a framework miss record landed in TfLens-oc's stream; every script edit and emit now uses the absolute framework path.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-11</td><td>2026-09-06 by agent-review</td><td>2026-09-06 by fix-issues</td><td>the framework never said it</td><td>When the opencode-go provider refuses a model (monthly usage limit reached, resets in six days) opencode run prints only its header and waits, and the refusal appears only in the OpenCode log file, so three fifteen-minute stalls on MyDiary-oc and a one-line probe looked like hangs; the supervisor now reads that log after a silent stall and stops with exit 5 and the provider message.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-10 (FR-55)</td><td>2026-09-06 by agent-review</td><td>2026-09-06 by fix-issues</td><td>the check was too weak</td><td>The devguide and refresh-status run records on MyDiary carried no duration_s because the tasks left it out and the emitter only recomputed one that was present; the emitter now derives it from started and ended.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-09</td><td>2026-09-06 by agent-review</td><td>2026-09-06 by fix-issues</td><td>the framework never said it</td><td>On the MyDiary copy the glm-5.2 build's first cycle went silent after 15 minutes and both continue cycles (opencode run -c) printed only their header for 15 minutes each, so a resumed OpenCode session can hang forever; the new stall watchdog caught all three, and the supervisor now starts a fresh session after two stalled resumes and accepts --resume --fresh.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-07 (FR-18)</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the framework never said it</td><td>The smoke policy names a desktop and a mobile browser width and no evidence file, and FR-18's check reads a smoke log that no task writes, so the MyDiary MAUI build wrote no smoke evidence at all and marked 69 rows Implemented on a code trace against the mockups; the policy needs a native-head path and a named evidence file.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-06 (FR-14)</td><td>2026-09-06 by agent-review</td><td>2026-09-06 by fix-issues</td><td>said and ignored</td><td>The MyDiary build closed its status gate with three checklist Remarks cells over 60 words (REQ-NFR-006 to 008), because the Stop hook ran the checker on PROJECT-STATUS only and the agent skipped step 7b on the checklist; the hook now checks every checklist written in the session.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-05 (FR-46)</td><td>2026-09-06 by agent-review</td><td>2026-09-06 by fix-issues</td><td>said and ignored</td><td>For the second time after miss 23 the Sonnet build agent started the build as a background job and ended its turn with Waiting for the build, three cycles in a row, and each turn end killed the job; the supervisor's prompt now says builds run in the foreground, and the second occurrence makes this a hook candidate under FR-46.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-04</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The emitter named the app from the one *-Checklist.md in docs, so once TfLens-oc had a Deployment Checklist beside it the run record and the next miss id fell back to the folder name TfLens-oc, and a Large project's phase-2 checklist would do the same; deployment and phase-n checklists are now excluded.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-03</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The build ladder counted only CS, MSB and NU codes as code errors, so a MyDiary build failing on sixteen Razor RZ9991 errors was taken for a wrong rung on every rung and reported NOT-RUN, a host issue and never a project blocker, while the agent carried on as if the code were fine; RZ, BL and XAML codes now count.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-02</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>Killing the supervisor with TERM ran a trap that only cleared the YOLO flag and did not exit, and bash held the signal until the running sleep ended, so the stopped MyDiary supervisor woke, launched cycle 8 without its flag and left a harness child to be killed by hand; the trap now stops the child, records stopped and exits 130, and every sleep is interruptible.</td></tr>
+<tr><td>MISS-TechieFlow-20260906-01</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The supervisor's crash pattern api_error also matched the harmless field api_error_status that every clean Claude result line carries, so cycles 5 to 7 of the MyDiary build, each a clean early stop, were called harness errors and backed off 2, 4 and 8 minutes instead of being re-prompted after 30 seconds; the classifier now reads the result line first.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-24</td><td>2026-09-06 by owner</td><td>2026-09-07 by fix-issues</td><td>the framework never said it</td><td>Asked which of the three background shells in Claude Code was doing what, the maintainer listed operating-system processes instead and called the interactive session a third shell; the owner reads the harness shell list, so a running-work report names each background command by its launch line and its folder.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-23 (FR-41)</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>said and ignored</td><td>The MyDiary build agent started the build as a background task and ended its turn with "Waiting for the build to finish", which killed the task; the supervisor then labelled the clean early stop a harness error and backed off 120 then 240 seconds instead of re-prompting after 30; an early stop with exit 0 is a stop, not a crash, and a task never waits on a background job.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-22 (FR-40)</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the framework never said it</td><td>The OpenCode run of deploy-checklist on TfLens initialised and then produced no output for 43 minutes, and the supervisor has no stall watchdog, so it waited forever; a cycle whose output does not grow for fifteen minutes must be killed and re-prompted, and the OpenCode hang on this repository is unexplained.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-21</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the framework never said it</td><td>The maintainer ran the supervisor in dry-run mode against TfLens while a real run was active there, which rewrote the live goal.json and appended a fake cycle line to its log; a dry run must never touch a folder with an active run, and the supervisor should refuse it.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-20 (FR-55)</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>said and ignored</td><td>The MiMo stage 2 run on the MyDiary copy ran step 0 last, so its run record says it started at 05:37 and ended at 05:38 after 38 minutes of work, and the review record copied that as the cost to correct; the supervisor now writes the start marker when its first cycle begins and the command claims it.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-19</td><td>2026-09-06 by owner</td><td>2026-09-07 by fix-issues</td><td>said and ignored</td><td>The maintainer compressed a Session 3 decision (a service library's map lives in the UsageGuide) into half a table cell and a decision line, so the owner could not see where it came from or why, and questioned it as invented; a decision is restated with its source and reason, never as a half sentence.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-18 (FR-54)</td><td>2026-09-06 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the framework never said it</td><td>The Phases table allowed one id range per phase, so an item added to phase 1 after phase 2 existed had no legal id; a row may now carry several ranges and the checker reads them all.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-16 (FR-14)</td><td>2026-09-06 by owner</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The checker only asks whether the Architecture has a Stack decisions table, so the MiMo run named the head MyDiary.App against the .NET answer set and left questions out of the table, and the owner found both by reading; a row per stack question and the head named exactly &lt;App&gt; are the candidate checks.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-15 (FR-53)</td><td>2026-09-06 by owner</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The mockup click-through check passed the MiMo set although its menus navigated by script, its Settings item went nowhere and thirteen screens could not be reached by clicking; the check resolved links by file name and counted a script as a link, so the owner found the set broken by hand.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-14</td><td>2026-09-06 by owner</td><td>2026-09-07 by fix-issues</td><td>said and ignored</td><td>The maintainer ended a report with a one-line pointer to three open decisions made two messages earlier; the owner called it dense chatting and could not tell what was being asked, so every open decision is now restated in full.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-13 (FR-15)</td><td>2026-09-05 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the framework never said it</td><td>The MyDiary BRD from MiMo packs four or five testable behaviours into one acceptance line (slots shown; Enter advances; empty slots dropped; timer starts), so 50 items stand where about 100 belong and the verifier grades a bundle; nothing in the checker sees a bundled then-clause.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-12 (FR-14)</td><td>2026-09-05 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The checker counted only the bold BRD-N ledger items and ignored the ids in the Non-functional table, so seven MyDiary NFR requirements escaped the cap, the checklist cross-check and the phase range check until the reading of the output found them.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-11 (FR-39)</td><td>2026-09-05 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The MyDiary day-1 run in OpenCode wrote a run record whose ended time (17:05) was 25 minutes after the record was appended (16:40), an invented duration; the emitter accepted it, so it must set ended to now when it lies in the future or before started.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-10 (FR-10)</td><td>2026-09-05 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the framework never said it</td><td>amend-docs proposed a phase split whenever a project passed its size cap, so a Small project growing past 50 requirements (Xpenser with family scope) would have been split into phases instead of first becoming Medium; the split belongs only past Medium, and FR-10 and D-3 did not say which cap.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-09 (FR-21)</td><td>2026-09-05 by agent-review</td><td>2026-09-07 by fix-issues</td><td>said and ignored</td><td>The Xpenser day-1 run in Claude Code created a test user and patched two stored procedures in the development database although the task says create no user and day-1 writes documents only; a hook that refuses database writes outside build and fix is the candidate fix.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-08 (FR-41)</td><td>2026-09-05 by owner</td><td>2026-09-07 by fix-issues</td><td>the framework never said it</td><td>The unattended Xpenser day-1 run was launched with a bare claude -p instead of the goal supervisor tf-goal.sh, so the usage-limit halt was not survived automatically; unattended runs go through the supervisor, and the YOLO rule will say so in 4c.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-07 (FR-39)</td><td>2026-09-05 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The emitter accepted a run record whose build_result was free text ('PASS (API+Web, DbMigration excluded)') instead of pass, fail or not-run, in the Xpenser OpenCode run; it now refuses it.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-06 (FR-14)</td><td>2026-09-05 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>The checker compared BRD screen names with their qualifier attached, so 'Profile (planned)' and 'Profile' were reported as two different screens during the Xpenser brownfield run; found by reading the run log, fixed the same hour.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-05</td><td>2026-09-05 by owner</td><td>2026-09-07 by fix-issues</td><td>the framework never said it</td><td>Mockups were repeatedly delivered as unlinked HTML files with no navigation and dead buttons; nothing in the framework required a click-through set where every link and button behaves.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-04 (FR-41)</td><td>2026-09-05 by owner</td><td>2026-09-07 by fix-issues</td><td>the framework never said it</td><td>The YOLO rule and the flow-master run-workflow command say YOLO logs a phase boundary and continues, but the owner's rule is that YOLO runs one command to completion and never crosses an owner review into the next phase; fixed in 4c when YOLO is made uniform.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-03 (FR-39)</td><td>2026-09-05 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>tf-emit.sh appends a miss record that has no miss_id, although miss_id is the join key to its fix record, so a caller that skips --next-miss-id writes an orphan.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-02 (FR-40)</td><td>2026-09-05 by agent-review</td><td>2026-09-07 by fix-issues</td><td>the check was too weak</td><td>Six task files edited in .tfcore on 2026-08-31 were never copied to the Claude Code mirror, so the two harnesses ran different smoke, metrics, mockup, render and verify rules for five days; no parity check ran.</td></tr>
+<tr><td>MISS-TechieFlow-20260905-01</td><td>2026-09-05 by owner</td><td>2026-09-07 by fix-issues</td><td>said and ignored</td><td>The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule.</td></tr>
+<tr><td>MISS-TechieFlow-20260831-10</td><td>2026-08-31 by agent-review</td><td>2026-08-31 by fix-issues</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, src, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260831-09</td><td>2026-08-31 by library-feedback</td><td>2026-08-31 by fix-issues</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, src, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260831-08</td><td>2026-08-31 by library-feedback</td><td>2026-08-31 by fix-issues</td><td>not sorted</td><td>no sentence recorded (spec-contradiction, src, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260831-07</td><td>2026-08-31 by library-feedback</td><td>2026-08-31 by fix-issues</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, architecture, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260831-06</td><td>2026-08-31 by library-feedback</td><td>2026-08-31 by fix-issues</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, architecture, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260831-05</td><td>2026-08-31 by library-feedback</td><td>2026-08-31 by fix-issues</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, architecture, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260831-04</td><td>2026-08-31 by library-feedback</td><td>2026-08-31 by fix-issues</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, architecture, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260831-03</td><td>2026-08-31 by library-feedback</td><td>2026-08-31 by fix-issues</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, config, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260831-02</td><td>2026-08-31 by library-feedback</td><td>2026-08-31 by fix-issues</td><td>not sorted</td><td>no sentence recorded (unspecified-gap, architecture, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260831-01</td><td>2026-08-31 by library-feedback</td><td>2026-08-31 by fix-issues</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, src, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-18</td><td>2026-08-28 by owner</td><td>2026-08-28 by fix-issues</td><td>not sorted</td><td>no sentence recorded (partial-implementation, src, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-17</td><td>2026-08-28 by agent-review</td><td>2026-08-28 by fix-issues</td><td>not sorted</td><td>no sentence recorded (partial-implementation, config, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-16</td><td>2026-08-28 by agent-review</td><td>2026-08-28 by fix-issues</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, src, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-15</td><td>2026-08-28 by agent-review</td><td>2026-08-28 by fix-issues</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, src, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-14</td><td>2026-08-28 by agent-review</td><td>2026-08-28 by fix-issues</td><td>not sorted</td><td>no sentence recorded (partial-implementation, src, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-13</td><td>2026-08-28 by owner</td><td>2026-08-28 by log-miss</td><td>not sorted</td><td>no sentence recorded (scope-creep, config, why: instruction-ignored)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-12</td><td>2026-08-28 by agent-review</td><td>2026-08-28 by log-miss</td><td>not sorted</td><td>no sentence recorded (partial-implementation, config, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-11</td><td>2026-08-28 by owner</td><td>2026-08-28 by fix-issues</td><td>not sorted</td><td>no sentence recorded (scope-creep, config, why: instruction-ignored)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-10</td><td>2026-08-28 by agent-review</td><td>2026-08-28 by fix-issues</td><td>not sorted</td><td>no sentence recorded (spec-contradiction, config, why: ambiguous-acceptance)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-09</td><td>2026-08-28 by agent-review</td><td>2026-08-28 by fix-issues</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, devguide, why: instruction-ignored)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-08</td><td>2026-08-28 by agent-review</td><td>2026-08-28 by fix-issues</td><td>not sorted</td><td>no sentence recorded (partial-implementation, config, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-07</td><td>2026-08-28 by agent-review</td><td>2026-08-28 by fix-issues</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, config, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-06</td><td>2026-08-28 by library-feedback</td><td>2026-08-28 by log-miss</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, src, why: insufficient-verify-method)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-05</td><td>2026-08-28 by library-feedback</td><td>2026-08-28 by log-miss</td><td>not sorted</td><td>no sentence recorded (spec-contradiction, architecture, why: missing-checklist-item)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-04</td><td>2026-08-28 by owner</td><td>2026-08-28 by log-miss</td><td>not sorted</td><td>no sentence recorded (partial-implementation, src, why: instruction-ignored)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-02</td><td>2026-08-28 by agent-review</td><td>2026-08-28 by log-miss</td><td>not sorted</td><td>no sentence recorded (wrong-behaviour, src)</td></tr>
+<tr><td>MISS-TechieFlow-20260828-01</td><td>2026-08-28 by owner</td><td>2026-08-28 by log-miss</td><td>not sorted</td><td>no sentence recorded (partial-implementation, src)</td></tr>
+</tbody>
+</table>
+<h2 id="will-not-fix-1">Will not fix (1)<a class="anchor-link" href="#will-not-fix-1">#</a></h2>
+<table>
+<thead><tr><th>Miss</th><th>Found</th><th>Closed</th><th>Whose gap</th><th>What went wrong</th></tr></thead>
+<tbody>
+<tr><td>MISS-TechieFlow-20260828-03</td><td>2026-08-28 by agent-review</td><td>2026-08-28 by log-miss</td><td>not sorted</td><td>no sentence recorded (other, other)</td></tr>
+</tbody>
+</table>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+<script>
+// Light/dark toggle. The initial theme was already applied flash-free by the
+// <head> script (saved choice, else time-of-day). Clicking flips it, saves the
+// choice, and reloads so Mermaid re-renders in the matching theme.
+(function(){
+  var btn = document.getElementById('themeToggle');
+  if(!btn) return;
+  var relabel = function(){
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    btn.textContent = dark ? '☀ Light' : '☾ Dark';
+  };
+  relabel();
+  btn.addEventListener('click', function(){
+    var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    try{ localStorage.setItem('tf-theme', next); }catch(e){}
+    location.reload();
+  });
+})();
+
+// Copy buttons on every code <pre> — but NEVER on a `pre.mermaid`:
+// mermaid reads the <pre>'s textContent as the diagram source, so a button
+// appended here glues "copy" onto the last line and breaks the parse
+// (flowcharts → "Syntax error"; sequence diagrams silently absorb it).
+// Mermaid blocks get copy/export from their own .diagram toolbar instead.
+document.querySelectorAll('pre:not(.mermaid)').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy';
+  btn.textContent = 'copy';
+  btn.addEventListener('click', () => {
+    const text = pre.querySelector('code') ? pre.querySelector('code').innerText : pre.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'copied';
+      setTimeout(() => { btn.textContent = 'copy'; }, 1200);
+    });
+  });
+  pre.appendChild(btn);
+});
+
+// Mermaid init — theme follows the resolved light/dark theme
+if (window.mermaid) {
+  var mermaidTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default';
+  mermaid.initialize({ startOnLoad: true, theme: mermaidTheme, securityLevel: 'loose' });
+}
+
+// Mermaid toolbar wiring — run after mermaid renders
+function wireMermaidToolbars() {
+  document.querySelectorAll('.diagram').forEach(dia => {
+    if (dia.dataset.wired) return;
+    const merm = dia.querySelector('.mermaid');
+    const svg = merm && merm.querySelector('svg');
+    if (!svg) return;
+    dia.dataset.wired = '1';
+    let scale = 1;
+    const label = dia.querySelector('.zlabel');
+    const apply = () => {
+      svg.style.transform = `scale(${scale})`;
+      svg.style.transformOrigin = 'top left';
+      if (label) label.textContent = Math.round(scale * 100) + '%';
+    };
+    const setScale = (s) => { scale = Math.max(0.25, Math.min(4, s)); apply(); };
+    dia.querySelector('[data-zin]').onclick = () => setScale(scale * 1.2);
+    dia.querySelector('[data-zout]').onclick = () => setScale(scale / 1.2);
+    dia.querySelector('[data-fit]').onclick = () => {
+      svg.style.transform = '';
+      svg.removeAttribute('width');
+      svg.style.maxWidth = '100%';
+      svg.style.height = 'auto';
+      scale = 1;
+      if (label) label.textContent = 'Fit';
+    };
+    dia.querySelector('[data-one]').onclick = () => {
+      svg.style.transform = '';
+      svg.style.maxWidth = 'none';
+      svg.style.width = '';
+      svg.style.height = '';
+      scale = 1;
+      if (label) label.textContent = '100%';
+    };
+    dia.querySelector('[data-fs]').onclick = () => {
+      dia.classList.toggle('fs');
+      if (dia.classList.contains('fs')) {
+        document.addEventListener('keydown', escFs);
+      } else {
+        document.removeEventListener('keydown', escFs);
+      }
+    };
+    function escFs(e) { if (e.key === 'Escape') { dia.classList.remove('fs'); document.removeEventListener('keydown', escFs); } }
+    dia.querySelector('[data-pop]').onclick = () => openInNewTab(svg);
+    // Ctrl+wheel zoom
+    merm.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setScale(scale * (e.deltaY < 0 ? 1.1 : 1/1.1));
+    }, { passive: false });
+  });
+}
+
+function openInNewTab(svg) {
+  const svgSource = new XMLSerializer().serializeToString(svg);
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Diagram</title>
+<style>
+  html,body{margin:0;height:100%;background:#0f1115;color:#e6e8ee;font-family:system-ui,sans-serif}
+  .bar{position:fixed;top:0;left:0;right:0;padding:8px 12px;background:#161a22;border-bottom:1px solid #2a3142;display:flex;gap:8px;z-index:10}
+  .bar button{background:#1c2230;color:#9aa3b2;border:1px solid #2a3142;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer}
+  .bar button:hover{color:#7cc4ff;border-color:#7cc4ff}
+  .bar .hint{margin-left:auto;color:#9aa3b2;font-size:11.5px;align-self:center}
+  #stage{position:absolute;top:42px;bottom:0;left:0;right:0;overflow:hidden}
+  #stage svg{width:100%;height:100%}
+</style>
+</head><body>
+<div class="bar">
+  <button onclick="zpz.zoomIn()">+</button>
+  <button onclick="zpz.zoomOut()">−</button>
+  <button onclick="zpz.fit();zpz.center()">Fit</button>
+  <button onclick="zpz.resetZoom();zpz.center()">1:1</button>
+  <button onclick="window.print()">Print</button>
+  <button onclick="dlPng()">PNG</button>
+  <button onclick="dlSvg()">SVG</button>
+  <span class="hint">Drag to pan · Ctrl+wheel to zoom · + / − keys</span>
+</div>
+<div id="stage">${svgSource}</div>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"><\/script>
+<script>
+  const el = document.querySelector('#stage svg');
+  const zpz = svgPanZoom(el, { zoomScaleSensitivity: .3, minZoom: .2, maxZoom: 10, controlIconsEnabled: false, fit: true, center: true });
+  document.addEventListener('keydown', e => {
+    if (e.key === '+' || e.key === '=') zpz.zoomIn();
+    if (e.key === '-' || e.key === '_') zpz.zoomOut();
+    if (e.key === '0') { zpz.resetZoom(); zpz.center(); }
+  });
+  function dlSvg() {
+    const blob = new Blob([new XMLSerializer().serializeToString(el)], { type: 'image/svg+xml' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'diagram.svg'; a.click();
+  }
+  function dlPng() {
+    const src = new XMLSerializer().serializeToString(el);
+    const img = new Image();
+    const url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(src)));
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = el.clientWidth * 2; c.height = el.clientHeight * 2;
+      const ctx = c.getContext('2d'); ctx.scale(2,2); ctx.drawImage(img, 0, 0);
+      c.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'diagram.png'; a.click(); });
+    };
+    img.src = url;
+  }
+<\/script>
+</body></html>`;
+  const w = window.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+// Run wiring after mermaid finishes (it renders async)
+if (window.mermaid) {
+  setTimeout(wireMermaidToolbars, 400);
+  setTimeout(wireMermaidToolbars, 1200);  // safety re-run for slow renders
+}
+</script>
+</body>
+</html>

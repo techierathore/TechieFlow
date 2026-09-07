@@ -1,0 +1,49 @@
+# TechieFlow — Sitting 4b, restart prompt for the second window
+
+| | |
+|---|---|
+| Purpose | The text the owner pastes into a fresh Claude Code window to continue Sitting 4b without losing what the first window did. Written 2026-09-06 09:06 UTC at the owner's request, when the first window's context had grown too long. |
+| Audience | The owner, and the maintainer session that reads it. |
+| Companion | `TechieFlow-Reset-Plan-2026-09-04.md`, `TechieFlow-Document-Schemas.md` §7.2, `TechieFlow-Requirements.md` |
+
+---
+
+## The prompt (paste from here)
+
+We are on the TechieFlow reset, Session 4, Sitting 4b, second window. Branch: dev, everything uncommitted; I commit, agents never run git. Read, in this order: docs/TechieFlow-Reset-Plan-2026-09-04.md, docs/TechieFlow-How-It-Works.md, docs/TechieFlow-Document-Schemas.md, docs/TechieFlow-Requirements.md, then docs/TechieFlow-Sitting-4b-Restart-Prompt.md in full.
+
+State on 2026-09-06 09:06 UTC. Done and proven in the first window:
+
+- The Large layout (Schemas §2, §3.11): per-screen documents split by phase, phase 1 keeps the plain names, `appPhase` in core-config, the Phases document, a phase row may carry several id ranges; checker, splitter, facts script, BRD status script and day-1 files script are phase-aware; the self-test has a two-phase fixture.
+- Miss 09 fix: `bash .tfcore/utils/tf-phase.sh start <command> <App>` is step 0 of every task; `guard-db.sh` refuses direct SQL writes from every command and migration runners unless the marker says build-phase or fix-issues; wired in both harnesses and the scaffold and update scripts; the supervisor writes the start marker when its first cycle begins and the first command claims it.
+- build-phase 4,412 to 688 words, with `tf-build.sh` (the rung ladder as a script, proven on Xpenser through the Windows bridge), `tf-build-list.sh --prompts` (mode, clusters, one sub-agent prompt per cluster from `build-subagent-prompt.md`), `_yolo-mode.md` 1,543 to 457, How-It-Works §3.10 for unattended runs.
+- flow-master persona 3,499 to 542 words; fifteen commands dropped; `*help` table kept; `*deploy-checklist` added.
+- devguide 5,274 to 649 with `tf-devguide-list.sh` (proven on Xpenser and TechieRag); the service-library map lives in the DevGuide for the maintainer (Schemas decision M); the UsageGuide library section is "How to call it".
+- refresh-status 2,388 to 494 with `tf-status-evidence.sh` (proven on Xpenser).
+- Deployment Checklist: template, four checker rules, the `*deploy-checklist` task, registered in both harnesses and the schema. Run for real on TfLens: Sonnet wrote `docs/TfLens-Deployment-Checklist.md` (0 FAIL, the owner deploys from it, the old one is in OldDocs); OpenCode with glm-5.2 wrote the same on the light copy `/mnt/c/1MyCode/TfLens-oc` (0 FAIL). MiMo hung silently on TfLens for 43 minutes (miss 22) and is not yet re-tested on the copy.
+- Readability: an acceptance line is at most 30 words (target 20), one behaviour, plain titles, one plain sentence per screen group in the BRD; the checker holds the cap. Architecture checks: a stack row for Q1 to Q8 and Q11; the head project named exactly the app, `<App>.App` refused. Mockups: real links only, no script navigation, no dead menu item, paths resolved from the mockup folder, stylesheets must exist.
+- Emitter: an `ended` in the future is replaced with now; `started` comes from the marker; the `review` record kind exists (FR-36) and the first two real `day1-review` records are on MyDiary and its copy.
+- Requirements FR-54 to FR-57 added; FR-10, 15, 36, 53, 55 reworded. Misses 10 to 24 of 2026-09-05 logged. The Reset Plan carries the 4a done note. The first window's run record (mode `sitting-4b`) was written 2026-09-06 09:06 UTC.
+- MyDiary (`/mnt/c/1MyCode/MyDiary`): Large, 25 screens, two phases, 114 items; stage 1 and stage 2 done on Sonnet and reviewed by the owner. The scratch copy `/mnt/c/1MyCode/MyDiary-oc` holds MiMo's set, also through stage 2 with 0 FAIL. `*build-phase MyDiary` was running in the MyDiary folder through `tf-goal.sh` on Sonnet: 35 of 77 phase-1 rows were Implemented, the verifier had not run, and Sonnet's usage limit hit at 06:57 UTC (reset 09:15 UTC). The owner stopped the supervisor at 09:10 UTC to close the window. Its state is intact in `MyDiary/.tfcore/.session/goal.json` (session id, cycle 4) and its log in `goal.log`. First action of the new window, once the clock passes 09:15 UTC: `bash /mnt/c/3AIGenCode/TechieFlow/.tfcore/utils/tf-goal.sh --resume /mnt/c/1MyCode/MyDiary` as a background shell, then carry on with the list below while it runs.
+
+Open work for this window, in order:
+
+1. Resume the MyDiary build as above, let it finish, and read its result honestly: the checker, the run records (mode build and fix), the smoke, the verifier's counts, the rows left below Implemented and why. Then run `*build-phase MyDiary` on the copy through OpenCode with `opencode-go/glm-5.2` (MiMo is on the watch list until item 2 clears it). The goal text is in the appendix.
+2. Re-test MiMo on `/mnt/c/1MyCode/TfLens-oc` with the deploy-checklist goal (appendix) to learn whether the hang is the model. Report either way.
+3. Supervisor fixes, only once no supervisor is executing the framework's copy of `tf-goal.sh`: a stall watchdog (kill and re-prompt after fifteen silent minutes), stop the child process when the supervisor is killed, and classify a clean early stop (exit 0, no sentinel) as a stop with a thirty-second retry, not a harness error with a doubling backoff (misses 22, 23).
+4. Real runs still owed in both harnesses: `*devguide MyDiary` and `*refresh-status MyDiary` once the build is done. `*handoff-phase` and `*productguide` were not on this sitting's list and stay for later.
+5. Close the sitting: one `framework-reset` run record, mode `sitting-4b`, for this window; propose the 4b done note for the Reset Plan and wait for my yes; refresh the memory file `reset-sitting-4b-progress.md`.
+
+Method, unchanged: print each remaining task as a table (block, plain summary, verdict), questions in a numbered list after the table with a suggested answer, never inside a cell; I rule on every row; write the scripts; prove every script and hook with a real run and show me the output; mirror the file to `.claude/commands/TechieFlow/`; confirm `opencode.jsonc` still points at it; run the command for real in both harnesses. Plain words; owner-reviewed documents (the plan, How-It-Works, the Stack documents, the Schemas doc) change only after my yes; every gap found is logged as a miss with one sentence, my own slips included, never as a Claude Code feedback report; every open decision is restated in full at the end of a message, never as a pointer. Model routing stands: Sonnet for every long Claude run, OpenCode through `tf-goal.sh --harness opencode --model <id>`; Fable 5.1 only in this reset session.
+
+Watch-outs the first window paid for: `cd` into the application folder before running a script that reads its working tree (a script run from the framework folder prints NOTHING); never touch a folder with an active supervisor (it now refuses a second run and a dry run changes nothing); when I ask about "shells", I mean Claude Code's background shell list, so name each one by its launch line and its folder; MyDiary, MyDiary-oc, TfLens and TfLens-oc carry today's framework through `update-framework.sh`, every other project does not.
+
+## Appendix: the goal texts used in the first window
+
+### deploy-checklist on TfLens (both harnesses)
+
+    Load the flow-master persona (.tfcore/agents/flow-master.md) and run `*deploy-checklist TfLens docs/claude-code-deployment-brief-v3.2.md`, following .tfcore/tasks/deploy-checklist.md step by step, starting with step 0. The hosting target is the VPS production pipeline the brief describes; one document, docs/TfLens-Deployment-Checklist.md. The Architecture is an older document: if it has no Q9 (hosting) or Q10 (production secrets and pipeline) row in its Stack decisions, take both answers from the brief and add the two rows, citing the brief. Facts about this app come from the brief, the existing (archived) checklist, docker-compose.prod.template.yml, the Dockerfile and appsettings; never invent a secret name or a command. The checker must print 0 FAIL for PROJECT-STATUS.md and the new checklist; the older TfLens documents are reported with `--warn` and left alone. Run the status gate with `"cmd":"deploy-checklist"`, then `bash .tfcore/utils/tf-yolo.sh done complete "<one line: target, steps per section, secrets named, contradictions found>"`. Never deploy, never run git.
+
+### build-phase on MyDiary (Sonnet; reuse for the OpenCode copy with MyDiary-oc)
+
+    Load the flow-master persona (.tfcore/agents/flow-master.md) and run `*build-phase MyDiary`, following .tfcore/tasks/build-phase.md step by step, starting with step 0 (`bash .tfcore/utils/tf-phase.sh start build-phase MyDiary`). This is phase 1 of a Large project (appPhase 1 in .tfcore/core-config.yaml): the work list is docs/MyDiary-Checklist.md, the design is docs/MyDiary-UIDesign.md with docs/mockups/, the stack is the Architecture's Stack decisions (.NET MAUI Blazor Hybrid, SQLite, no server, no AppManager). There is no code yet: create the solution and projects the Architecture's Solution structure names (the primary head is named exactly `MyDiary`), build with `bash .tfcore/utils/tf-build.sh`, and implement every open row through the clusters `bash .tfcore/utils/tf-build-list.sh MyDiary --prompts` prints. Smoke as the smoke policy says, chain the verifier, loop FIX mode on its failures, run the status gate and the run record, and only then `bash .tfcore/utils/tf-yolo.sh done complete "<one line: rows Implemented, Verified, Blocked, cycles>"`. A row that needs something only the owner has goes under Known blockers, not into a question. Never run git.

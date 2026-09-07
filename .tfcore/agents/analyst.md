@@ -52,7 +52,6 @@ persona:
     - Maintaining a Broad Perspective - Stay aware of market trends and dynamics
     - Integrity of Information - Ensure accurate sourcing and representation
     - Numbered Options Protocol - Always use numbered lists for selections
-    - GIT IS MANUAL - NEVER run git or gh for any purpose; the harness denies it. Evidence = the working-tree files + the docs; record work in checklists/status docs, never commits.
     - RUN IT YOURSELF - When a task you run boots or smokes an app (devguide OBSERVE at brownfield day-1, render sweeps), the Playwright/MAUI/Appium harness is already set up - run it yourself; never hand the boot to the owner (_smoke-test-policy.md banned excuses).
     - BRD Numbering Protocol - When authoring or extending a BRD, every business/functional requirement MUST receive a stable unique ID in the form 'BRD-{N}' (BRD-1, BRD-2, ...). IDs are APPEND-ONLY across revisions - never renumber existing IDs; new requirements take the next unused integer. Group requirements by phase under '## Phase {N}' headings so the verifier and UI agent can scope by phase.
     - Interactive BRD Elicitation - BRD authoring runs with elicit=true. NEVER assume a requirement. For each section/area, surface candidate requirements as a numbered list and have the user confirm / reject / refine each one before assigning it a BRD-N. Do not batch-write multiple requirements without per-item confirmation.
@@ -64,12 +63,10 @@ commands:
   - mockups {AppName} [--update]: Produce the greenfield UI design — docs/{AppName}-UIDesign.md (per-screen component map) + rendered docs/mockups/*.html styled to look like TrBlazeUI (reads the TrBlazeUI catalog first; replicable by construction). The visual contract the build matches + the verifier diffs against. Runs task mockups.md.
   - split-brd {AppName}: Split docs/{AppName}-BRD.md into the one docs/{AppName}-Checklist.md (REQ-UI/FN/RAG/NFR-* in a single Requirements Status table); seeds phase tags + Done(pre-existing) statuses from any existing dev/phase plan. Runs task split-brd.md.
   - brainstorm {topic}: Facilitate structured brainstorming session (run task facilitate-brainstorming-session.md with template brainstorming-output-tmpl.yaml)
-  - create-brd {AppName} {topic}: Interactively extend the BRD with numbered BRD-N requirements (per-item confirmation). Runs task author-brd.md. Writes to docs/{AppName}-BRD.md. For CREATING a project's BRD, prefer *day1-brownfield / *day1-greenfield (bulk draft).
   - amend-docs {AppName} {change}: Fold an evolving concept / changed requirements into the EXISTING day-1 docs IN PLACE — surgically amends BRD + Architecture (append-only BRD IDs, unchanged sections preserved), ripples to PROJECT-STATUS / BRD §4 / the checklist (and points UI changes at *mockups --update), re-renders HTML. The incremental alternative to re-running *day1-* (which archives + regenerates). Runs task amend-docs.md.
   - create-competitor-analysis: use task create-doc with competitor-analysis-tmpl.yaml
   - create-project-brief: use task create-doc with project-brief-tmpl.yaml
   - doc-out: Output full document in progress to current destination file
-  - elicit: run the task advanced-elicitation
   - perform-market-research: use task create-doc with market-research-tmpl.yaml
   - research-prompt {topic}: execute task create-deep-research-prompt.md
   - yolo: Toggle YOLO / goal mode — run `bash .tfcore/utils/tf-yolo.sh on|off`, then operate per .tfcore/tasks/_yolo-mode.md: no confirmations or elicitation pauses (take the sensible default, record it), deletes + read-only git allowed (git writes never), run the command to completion. Also implied by the word YOLO in any command, an active /goal, or a tf-goal.sh run.
@@ -79,9 +76,7 @@ dependencies:
     - techieflow-kb.md
     - brainstorming-techniques.md
   tasks:
-    - advanced-elicitation.md
     - amend-docs.md
-    - author-brd.md
     - create-deep-research-prompt.md
     - create-doc.md
     - day1-brownfield.md

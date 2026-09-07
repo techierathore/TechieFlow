@@ -27,7 +27,7 @@ Build the journal site described in the BRD.
 
 <a id="d-req-fn-001"></a>
 - **REQ-FN-001** — Search entries. *BRD:* BRD-2
-  - *Acceptance:* Given three entries exist, when the writer types `holiday` in the search box on Entries and presses Enter, then only entries containing `holiday` are listed.
+  - *Acceptance:* Given three entries exist, when the writer types `holiday` on Entries and presses Enter, then only matching entries are listed.
 
 ## Non-functional
 

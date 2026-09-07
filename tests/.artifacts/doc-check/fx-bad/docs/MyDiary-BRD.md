@@ -36,7 +36,7 @@ A private journal site. One user writes dated entries and finds them again later
 - **BRD-1** — Sign in. *Screen:* Login · *Mockup:* [mockup](mockups/login.html)
   - *Acceptance:* When the writer enters a valid email and password on Login and presses Enter, then the Entries screen opens.
 - **BRD-2** — Search entries. *Screen:* Entries · *Mockup:* [mockup](mockups/entries.html)
-  - *Acceptance:* When the writer types `holiday` in the search box on Entries and presses Enter, then only entries containing `holiday` are listed.
+  - *Acceptance:* When the writer opens Entries, then the list shows every entry newest first with a preview and a thumbnail, the search box filters as the writer types, Enter opens the first result, empty slots are dropped, and a timer can be started.
 
 ## 6. Non-functional requirements
 
