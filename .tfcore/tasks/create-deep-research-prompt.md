@@ -276,3 +276,7 @@ CRITICAL: collaborate with the user to develop specific, actionable research que
 - Balance comprehensiveness with focus
 - Document assumptions and limitations clearly
 - Plan for iterative refinement based on initial findings
+
+## Record the run
+
+First action of this task: `bash .tfcore/utils/tf-phase.sh start create-deep-research-prompt {App}`. Last action: one `runs.jsonl` record carrying `"cmd":"create-deep-research-prompt"`, written as `.tfcore/tasks/_metrics-emit-gate.md` shows. No status gate here — this command advances no phase. Telemetry has no veto: if the write fails, the command still succeeded.

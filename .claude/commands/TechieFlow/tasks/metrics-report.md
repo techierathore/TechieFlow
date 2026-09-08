@@ -108,6 +108,8 @@ Written: docs/metrics/METRICS.md + .html
 {if backfilled records present: "Backfilled data is reported in a separate column and cannot support a published first-pass rate."}
 ```
 
+Then one `runs.jsonl` record carrying `"cmd":"metrics-report"`, written as `.tfcore/tasks/_metrics-emit-gate.md` shows; `bash .tfcore/utils/tf-phase.sh start metrics-report {App}` is the first action of this task, so the start time is measured.
+
 Then stop. Do not run the status gate — this task reports on history, it does not advance the project, and PROJECT-STATUS is not where metrics go.
 
 ## Hard rules

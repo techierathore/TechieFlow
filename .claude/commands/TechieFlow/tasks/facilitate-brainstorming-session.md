@@ -134,3 +134,7 @@ Generate structured document with these sections:
 - Always ask before switching techniques: "Ready to try a different approach?"
 - Offer options: "Should we explore this idea deeper or generate more alternatives?"
 - Respect their process and timing
+
+## Record the run
+
+First action of this task: `bash .tfcore/utils/tf-phase.sh start facilitate-brainstorming-session {App}`. Last action: one `runs.jsonl` record carrying `"cmd":"facilitate-brainstorming-session"`, written as `.tfcore/tasks/_metrics-emit-gate.md` shows. No status gate here — this command advances no phase. Telemetry has no veto: if the write fails, the command still succeeded.

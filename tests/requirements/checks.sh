@@ -32,11 +32,17 @@ import re, sys, pathlib
 # split so this file does not itself trip the database guard on a tool name
 names = ["dotnet","blazor","maui","postgres","serilog","xunit","dapper","db"+"up","trblazeui","bluehost"]
 pat = re.compile(r'\b(' + "|".join(names) + r')\b', re.I)
+route = re.compile(r'[\[/`"]\s*(trblazeui|techierag)\b', re.I)
 root = pathlib.Path(sys.argv[1])
 hits = []
 for sub in ("agents", "tasks"):
     for f in (root / ".tfcore" / sub).glob("*.md"):
         for line in f.read_text(errors="replace").splitlines():
+            # The framework ships two library sub-agents and routes to them by name
+            # (WorkFlow-Context §2). A routing form -- /trblazeui, [techierag] -- names a
+            # framework component, not a technology choice, and is the stated exception.
+            if route.search(line):
+                continue
             if pat.search(line) and "example" not in line.lower():
                 hits.append(f"{f.name}: {line.strip()[:70]}")
 if hits:
@@ -208,8 +214,76 @@ fr_34() {
   for f in "$ROOT"/.tfcore/tasks/*.md; do
     b="$(basename "$f")"
     [[ "$b" == _* ]] && continue
-    grep -qE 'tf-phase\.sh|_status-update-gate|tf-emit\.sh|status gate' "$f" \
+    # A real wiring, not the words. `metrics-report.md` passed this for months on the
+    # sentence "Do not run the status gate" (owner, 2026-09-08): the phrase matched while
+    # the command recorded nothing. Only a call to the scripts, or a reference to the gate
+    # FILE, counts now.
+    grep -qE 'tf-phase\.sh|tf-emit\.sh|_status-update-gate\.md' "$f" \
       || { echo "$b wires no run record" >&2; bad=1; }
   done
+  return $bad
+}
+
+# --- G. What the owner reads (added 2026-09-08, owner) ------------------------------------
+# FR-64: an agent working document is never rendered to HTML. Two are banned by name and the
+# renderer must refuse both with exit 2, while an ordinary human document still renders.
+fr_64() {
+  local d="$SCRATCH/fr64" bad=0
+  mkdir -p "$d/docs"
+  printf '# X — Misses\n\n| | |\n|---|---|\n| Source | one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. |\n\n## Open (0)\n' > "$d/docs/X-Misses.md"
+  printf '# X — Checklist\n\n## Requirements Status\n\n| ID | Requirement |\n|---|---|\n| REQ-UI-001 | a |\n' > "$d/docs/X-Checklist.md"
+  printf '# X — Usage Guide\n\n## Getting started\n\nOpen the app.\n' > "$d/docs/X-UsageGuide.md"
+  bash "$ROOT/.tfcore/utils/tf-render-html.sh" "$d/docs/X-Misses.md" >/dev/null 2>&1
+  [[ $? -eq 2 ]] || { echo "the miss log was not refused" >&2; bad=1; }
+  bash "$ROOT/.tfcore/utils/tf-render-html.sh" "$d/docs/X-Checklist.md" >/dev/null 2>&1
+  [[ $? -eq 2 ]] || { echo "the checklist was not refused" >&2; bad=1; }
+  bash "$ROOT/.tfcore/utils/tf-render-html.sh" "$d/docs/X-UsageGuide.md" >/dev/null 2>&1 \
+    || { echo "an ordinary document failed to render" >&2; bad=1; }
+  [[ -f "$d/docs/X-Misses.html" || -f "$d/docs/X-Checklist.html" ]] && { echo "HTML was written anyway" >&2; bad=1; }
+  # and nothing anywhere in the framework's own tree carries one
+  local hf
+  while IFS= read -r hf; do echo "banned file: $hf" >&2; bad=1; done < <(
+    find "$ROOT/docs" -maxdepth 2 \( -name '*-Misses.html' -o -name '*-Checklist.html' \) 2>/dev/null)
+  return $bad
+}
+
+# FR-65: a decision for the owner is a document with options, a recommendation and a block to
+# paste back, and no glossary. The checker must refuse one that is missing any of them.
+fr_65() {
+  local d="$SCRATCH/fr65" good bad=0 out
+  mkdir -p "$d/docs"
+  good="$ROOT/tests/.artifacts/doc-check/fx-good/docs/MyDiary-Decision-Request.md"
+  [[ -f $good ]] || python3 "$ROOT/tests/doc-check/make-fixtures.py" >/dev/null 2>&1
+  [[ -f $good ]] || { echo "no decision-request fixture" >&2; return 1; }
+  cp "$good" "$d/docs/MyDiary-Decision-Request.md"
+  bash "$ROOT/.tfcore/utils/tf-doc-check.sh" "$d/docs/MyDiary-Decision-Request.md" --quiet >/dev/null 2>&1 \
+    || { echo "a well-formed decision request was refused" >&2; bad=1; }
+  for edit in 's/\*\*My recommendation.*//' 's/^```$//' 's/^## What happened$/## Glossary\n\nA denominator is the number you divide by.\n\n## What happened/'; do
+    sed "$edit" "$good" > "$d/docs/MyDiary-Decision-Request.md"
+    out="$(bash "$ROOT/.tfcore/utils/tf-doc-check.sh" "$d/docs/MyDiary-Decision-Request.md" --quiet 2>&1)"
+    [[ $? -ne 0 ]] || { echo "not refused after: $edit" >&2; bad=1; }
+  done
+  return $bad
+}
+
+# FR-66: an upstream defect is always filable, in the fixed shape, and every entry answers
+# "Blocks:" first. The checker must refuse an entry that does not, and a Summary that never
+# says what is blocked.
+fr_66() {
+  local d="$SCRATCH/fr66" good bad=0
+  mkdir -p "$d/docs"
+  good="$ROOT/tests/.artifacts/doc-check/fx-good/docs/MyDiary-TechieFlow-Feedback.md"
+  [[ -f $good ]] || python3 "$ROOT/tests/doc-check/make-fixtures.py" >/dev/null 2>&1
+  [[ -f $good ]] || { echo "no feedback fixture" >&2; return 1; }
+  cp "$good" "$d/docs/MyDiary-TechieFlow-Feedback.md"
+  bash "$ROOT/.tfcore/utils/tf-doc-check.sh" "$d/docs/MyDiary-TechieFlow-Feedback.md" --quiet >/dev/null 2>&1 \
+    || { echo "a well-formed feedback file was refused" >&2; bad=1; }
+  grep -v '^- \*\*Blocks:\*\*' "$good" > "$d/docs/MyDiary-TechieFlow-Feedback.md"
+  bash "$ROOT/.tfcore/utils/tf-doc-check.sh" "$d/docs/MyDiary-TechieFlow-Feedback.md" --quiet >/dev/null 2>&1 \
+    && { echo "an entry with no Blocks answer was accepted" >&2; bad=1; }
+  sed 's/^Nothing is blocked\.$/Some notes./; s/^1 entry: .*$/One thing came up./' "$good" \
+    > "$d/docs/MyDiary-TechieFlow-Feedback.md"
+  bash "$ROOT/.tfcore/utils/tf-doc-check.sh" "$d/docs/MyDiary-TechieFlow-Feedback.md" --quiet >/dev/null 2>&1 \
+    && { echo "a Summary that never says what is blocked was accepted" >&2; bad=1; }
   return $bad
 }

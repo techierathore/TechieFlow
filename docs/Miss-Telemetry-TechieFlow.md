@@ -5,7 +5,7 @@
 **Status: IMPLEMENTED — shipped 2026-08-28**, plus the `miss-amend` follow-up the same day (§0.35). Everything in §4–§8 below is built, deployed and verified end to end in this repo. **`.tfcore/telemetry/SCHEMA.md` §5.5 is now the authoritative field reference**; this document is the design record and the *why*, kept because the reasoning behind the three provenance rules is the part that will be re-litigated, not the field list.
 **Audience:** the framework owner + whichever agent extends it.
 **Siblings:** `docs/Miss-Telemetry-TfLens.md` (how the numbers get displayed — **not implemented**) · `docs/Miss-Telemetry-AI-First-Playbook.md` (the team edition's version of the same idea — **not implemented**).
-**Reference:** `.tfcore/telemetry/SCHEMA.md` §5.5 · `.tfcore/tasks/_metrics-emit-gate.md` constraint 10 · `docs/TechieFlow-Telemetry-Guide.md` §3.5 · `WORKFLOW.html` §17 · `WorkFlow-Context.md` §5 (2026-08-28 entries).
+**Reference:** `.tfcore/telemetry/SCHEMA.md` §5.5 · `.tfcore/tasks/_metrics-emit-gate.md` constraint 10 · `docs/TechieFlow-Telemetry-Explained.md` · `WorkFlow-Context.md` §5 (2026-08-28 entries).
 
 ---
 
@@ -258,7 +258,7 @@ Six front doors, ordered by volume:
 | `.tfcore/tasks/{verify-phase,build-phase,triage-issues,fix-issues,amend-docs}.md` | The emit steps above |
 | `.tfcore/tasks/log-miss.md` + `.tfcore/agents/flow-master.md` | The new command, its help entry and its deps |
 | `.tfcore/tasks/metrics-report.md` + `templates/v4custom/metrics-report-template.md` | The new report section |
-| `WORKFLOW.html` §17, `README.md`, `docs/TechieFlow-Telemetry-Guide.md` | Human-facing documentation |
+| `README.md`, `docs/TechieFlow-Telemetry-Explained.md` | Human-facing documentation |
 | Harness mirrors | `.claude/commands/TechieFlow/` must stay byte-identical; `opencode.jsonc` registration; `tf-codex-bind.py` regeneration for `.agents/skills/` |
 
 **`.gitattributes` needs no change** — all three scaffold scripts already manage `docs/metrics/*.jsonl text eol=lf merge=union`, which covers the new file by glob.

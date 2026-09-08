@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-09-07, at the close of the reset. |
+| Last updated | 2026-09-08. |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -26,7 +26,7 @@ Alongside the work the framework measures the work: five append-only streams und
 |---|---|
 | `docs/TechieFlow-How-It-Works.md` | What every command does, what surrounds it, what it costs, where the design falls short. |
 | `docs/TechieFlow-Document-Schemas.md` | The required shape, size and row rules of every document the framework produces. |
-| `docs/TechieFlow-Requirements.md` | The framework's own checklist: 63 lines, each with a way to check it. Agent document. |
+| `docs/TechieFlow-Requirements.md` | The framework's own checklist: 68 lines, each with a way to check it, 34 of them proved by a script. Agent document. |
 | `docs/TechieFlow-Telemetry-Explained.md` | The five report numbers, with real figures and the sentence to say about each. |
 | `docs/TechieFlow-Reset-Plan-2026-09-04.md` | The seven sessions that shrank the framework, one Done line each. |
 | `README.md` | How a person installs it and drives it. |
@@ -65,6 +65,9 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 - **The framework tree is invisible to file search.** `.tfcore/` is hidden and git-ignored, so Grep and Glob return nothing for files that are there. Confirm a file by reading its literal path, and never write "not present" without naming the path tried.
 - **Every miss is logged through `tf-log-miss.sh` with its sort** — whose gap it was: `spec`, `unsaid`, `weak-check` or `ignored`. The maintainer's own misses included.
 - **Owner-reviewed documents change only after the owner says yes.** `TechieFlow-How-It-Works.md`, the Stack documents, the Reset Plan, this file, the README, and any BRD or mockup. Propose in plain words first.
+- **Plain English to the owner; a decision goes in a file, not the conversation; an upstream defect is always filed, `Blocks: yes|no` first, and `no` never stops the run.** `.tfcore/tasks/_owner-language.md`.
+- **An agent document is never rendered to HTML.** The checklist and the miss list are refused by name; anything else whose only reader is an agent stays markdown.
+- **A rule is a script, and it is written once.** `tests/mirror/run.sh` refuses the same sentence in two rule files (26 deliberate ones baselined) and holds the word caps. When a cap is reached, delete prose a check has replaced; never raise the cap.
 - **Public documents name only public repositories**: TechieRag, TechieDesk, TrBlazeUI, TfLens, TechieBlog, TrStudio, TrSetup, Xpenser.
 
 ---
@@ -79,7 +82,7 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 | `docs/` | The framework's own documents (the table in §1), plus its telemetry under `docs/metrics/`. |
 | `.tfcore/agents/` | The four personas. |
 | `.tfcore/tasks/` | One file per command, plus the three shared rule files every command loads (`_status-update-gate`, `_smoke-test-policy`, `_metrics-emit-gate`) and `_yolo-mode`. |
-| `.tfcore/templates/v4custom/` | Nineteen templates. Each human document's template opens with its schema block. |
+| `.tfcore/templates/v4custom/` | Twenty-two templates, fourteen carrying a schema block. Each human document's template opens with its own. |
 | `.tfcore/standards/` | The technology-neutral coding standards and the .NET set. |
 | `.tfcore/hooks/` | Eleven shell hooks. Eight refuse an action; three do housekeeping. |
 | `.tfcore/utils/` | The scripts, `tf-*`. Every mechanical step of every task is one of these. |
@@ -107,7 +110,9 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | Three requirements name a **script that has not been written**: FR-58 (refuse `done complete` while rows are unfinished), FR-60 (refuse a banned head name in a brief), FR-61 (grade a row not observable when the environment lacks the data). The idea-stage commands still emit no run record (FR-34, FR-60). | Maintainer |
 | **Open misses** are listed with their outcome in `docs/TechieFlow-Misses.md`; the one this maintainer owes a fix for is 12 of 2026-09-07, that a hidden framework folder is invisible to search and nothing enforces the rule. | Maintainer |
 | **TrStudio is not on this machine.** It is a named fixture and could not be refreshed here. | Owner action |
-| **TfLens** needs the miss stream read into its pages before its figures are quotable, and carries three fixes named in its own feedback file. | Separate repo |
+| **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` (that repository, not this one) and waiting on the owner's go-ahead. | Separate repo |
+| **`*amend-docs` has no step that closes a miss it fixed**, so a document miss stays open forever. `tf-fix-close.sh` works and `fix_cmd: "amend-docs"` is already legal; only the wiring is missing. 121 of 360 misses are open, 25 of them for this reason. TfLens `TF-016`, Low, nothing blocked, no figure wrong. | Maintainer |
+| **286 misses predate the `sort` field** (2026-09-07). Nothing is backfilled and no stream is edited: a reader derives what it can from the `why_missed` already on the record and labels it derived, and the field-start date reports the rest as predating the question, never as unanswered. No action, by anyone. | Closed |
 | **TrSetup has thousands of tracked build-output files.** Its ignore rules are correct and inert until the index entries go. `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the commands. Agents never run version control. | Owner action |
 | **Both library packages need republishing** so the persona fixes reach consumers (TR-002, TR-RAG-002). | Owner action |
 | **TechieRag holds two products in one repository**, which the one-checklist assumption cannot resolve: split the repo, or teach telemetry about it. | Owner decision |

@@ -70,6 +70,28 @@ vw=$(wc -w < "$ROOT/.tfcore/tasks/verify-phase.md" 2>/dev/null || echo 99999)
                    || bad "verify-phase.md is $vw words, over the 4,000-word cap (FR-26)"
 shared=$(cat "$ROOT/.tfcore/tasks"/_*.md | wc -w)
 [[ $shared -le 3000 ]] && ok "shared rule files total $shared words (FR-44: under 3,000)" || bad "shared rule files total $shared words, over 3,000 (FR-44)"
+
+# FR-67: the same rule written in two places. A word cap stops a file growing; nothing
+# stopped the SAME rule being copied into a second and a third file, which is how a rule
+# set rots — the copies drift and a reader who finds one never learns there was another.
+# 26 deliberate duplicates are baselined; the 27th fails. MISS-TechieFlow-20260908-04.
+# FR-68: a persona command that exists in one harness only. The mirror check above covers
+# TASK FILES; a command with no task file of its own slipped past it for the whole reset --
+# seven did (MISS-TechieFlow-20260908-06). OpenCode cannot alias, so every command name needs
+# its own registration.
+if cp_out="$(python3 "$ROOT/tests/mirror/cmd-parity.py" 2>&1)"; then
+  ok "${cp_out#ok   }"
+else
+  bad "a persona command does not resolve in both harnesses"
+  printf '%s\n' "$cp_out" | sed 's/^/     /'
+fi
+
+if dup_out="$(python3 "$ROOT/tests/mirror/dup-check.py" 2>&1)"; then
+  ok "${dup_out#ok   }"
+else
+  bad "a rule is written in more than one place"
+  printf '%s\n' "$dup_out" | sed 's/^/     /'
+fi
 overp=0
 for f in "$ROOT/.tfcore/agents"/*.md; do
   w=$(wc -w < "$f"); [[ $w -le 1500 ]] || { bad "$(basename "$f") is $w words, over the 1,500-word persona cap (FR-44)"; overp=$((overp+1)); }
@@ -106,7 +128,13 @@ document-project
 index-docs
 shard-doc
 execute-checklist
-kb-mode-interaction"
+kb-mode-interaction
+create-competitor-analysis
+perform-market-research
+create-backend-architecture
+create-brownfield-architecture
+create-front-end-architecture
+create-full-stack-architecture"
 done
 [[ $gone_hits -eq 0 ]] && ok "no readable surface names a removed command"
 

@@ -479,6 +479,22 @@ def is_requirements_checklist(base, raw):
                 or "SINGLE SOURCE OF TRUTH" in head)
 
 
+def is_miss_list(base, raw):
+    """Is this THE derived miss log, or an ordinary document about misses?
+
+    `docs/{AppName}-Misses.md` is rebuilt from `misses.jsonl` on every write and is
+    read by agents and by the owner in markdown. Rendering it produced an HTML copy
+    nobody opened, re-rendered on every miss, in every project — 20 of them across
+    the estate before this refusal existed (owner, 2026-09-08).
+
+    Identify the document, do not guess from the suffix, exactly as the checklist
+    rule does: the name must match AND the content must carry the generator's own
+    Source row. A hand-written note called `Release-Misses.md` has neither."""
+    if not re.search(r"-Misses\.md$", base, re.I):
+        return False
+    return "Rewritten by `tf-misses-md.sh`" in raw[:2000]
+
+
 NEXT_CMD_H2 = re.compile(r"^##\s+Next command to run\s*$", re.I)
 
 
@@ -540,6 +556,10 @@ def render(md_path, css, head_js, body_js, out_dir=None):
     if is_requirements_checklist(base, raw_probe):
         raise Refused("%s is the requirements checklist — checklists are AI-agent "
                       "working documents and are NEVER rendered to HTML "
+                      "(html-render-shell §0)." % base)
+    if is_miss_list(base, raw_probe):
+        raise Refused("%s is the derived miss log — it is read in markdown by agents "
+                      "and by the owner, and is NEVER rendered to HTML "
                       "(html-render-shell §0)." % base)
 
     raw = raw_probe

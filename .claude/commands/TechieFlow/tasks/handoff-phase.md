@@ -23,26 +23,28 @@ The Usage Guide was created at day-1 (`day1-*` §7.4) from `.tfcore/templates/v4
 
 Below, "populate" means refresh these sections of the existing doc. Hard rules:
 
-- **No narrative prose anywhere.** No "this app uses Blazor Server because…", no caveats, no explanations. The deployment-steps section must look like a runbook — one command per line, numbered in execution order.
+- **No narrative prose anywhere.** No "this app is built this way because…", no caveats, no explanations. The deployment-steps section must look like a runbook — one command per line, numbered in execution order.
 - **Skip any step that doesn't apply.** If the repo has no SQL migrations, omit the database-setup step entirely — do not leave "N/A" placeholders or "// not applicable" comments.
 - **No optional steps in the numbered list.** The numbered deployment-steps section is the minimum sufficient set of commands to go from `git clone` to a running app. Anything optional goes in "Known limitations" or a separate doc.
 
 Detection sources for each section:
 
-- **Prerequisites**: SDK version from `global.json` / `.csproj` `<TargetFramework>`. Add a one-line entry for each external runtime the build/test commands depend on (Node only if Playwright tests exist; Postgres/SQL Server/etc. only if migrations exist; MAUI workload only if there's a MAUI project). One line each. No prose.
+**Every command below comes from the project, never from this file.** The restore, build, run and test commands are the ones the project's Architecture stack table and `docs/{App}-Coding-Standards.md` name, and `bash .tfcore/utils/tf-build.sh --print` prints the build command this repository actually uses. A toolchain assumed here would be wrong on the next project.
+
+- **Prerequisites**: the runtime version from wherever this stack pins it (the Architecture stack table names the file). Then one line for each external runtime the build, run or test commands depend on — a package runtime only if the tests need one, a database server only if migrations exist, a platform workload only if a project targets that platform. One line each. No prose.
 - **Deployment steps**: detect in this order and emit one numbered step per command:
   1. `git clone <repo>` (always)
-  2. `dotnet restore` (always)
-  3. SQL migrations — scan `database/`, `db/migrations/`, `src/*Db/Scripts/`, and any DbUp project's `<EmbeddedResource>` paths. List `.sql` files in lexicographic order, one per line. If a DbUp project exists, prefer `dotnet run --project src/{AppName}.Db` as a single step instead of listing each SQL file.
-  4. `dotnet build`
-  5. Backend run — find the API/service startup project. One `dotnet run --project ... --urls http://localhost:5100` line.
-  6. Frontend run — find the Web/UI startup project. One `dotnet run --project ... --urls http://localhost:5099` line.
-  7. "Open http://localhost:5099 in a browser."
-  - For MAUI: replace step 5/6 with `winrun "dotnet build src/{AppName}.Maui"` then `winrun "dotnet run --project src/{AppName}.Maui"`.
-  - If frontend and backend are the same project (Blazor Server-only): collapse steps 5+6 into one.
-- **Test**: `dotnet test`. Add `npx playwright test` ONLY if the repo has Playwright tests checked in.
+  2. Restore dependencies — the stack's restore command (always)
+  3. Database migrations — scan the migration folders the Architecture names, plus the conventional ones (`database/`, `db/migrations/`, `migrations/`). List the migration files in the order they run, one per line; if the stack has a migration runner, prefer one step invoking it over listing every file.
+  4. Build — the stack's build command
+  5. Backend run — find the service or API entry point. One line, with the port it listens on.
+  6. Frontend run — find the UI entry point. One line, with its port.
+  7. "Open http://localhost:<frontend port> in a browser."
+  - A packaged desktop or mobile head replaces steps 5 and 6 with that platform's build-and-run pair.
+  - If frontend and backend are one process, collapse steps 5 and 6 into one.
+- **Test**: the stack's test command. Add the browser-test command ONLY if such tests are checked in.
 - **Smoke checklist**: one checkbox per top-level BRD capability (5–10 max). Each line is a user action, not a technical step ("Log in as admin and load the dashboard" — NOT "verify JWT validation").
-- **Known limitations**: pull every `Blocked` REQ row from the checklist Status table + every entry from the per-library feedback files (`docs/{AppName}-TrBlazeUI-Feedback.md`, `docs/{AppName}-TechieRag-Feedback.md`). One line each. Cross-reference to issue IDs (TR-NNN, TR-RAG-NNN).
+- **Known limitations**: pull every `Blocked` REQ row from the checklist Status table + every entry from the per-library feedback files (`docs/{AppName}-{Library}-Feedback.md`, one per library the project uses). One line each. Cross-reference each to its issue id.
 
 **If you find yourself writing more than one line per numbered step, you're doing it wrong** — the user has explicitly called out that the deployment steps got polluted with "unnecessary details" in past runs. Strip aggressively.
 
@@ -50,7 +52,7 @@ Detection sources for each section:
 
 - `current_phase: Handoff` (the user manually sets `Released` after UAT passes — §5)
 - `last_updated`: today
-- `last_verified_build: PASS` (you just verified — confirm with `dotnet build` if uncertain)
+- `last_verified_build: PASS` (you just verified — confirm with `bash .tfcore/utils/tf-build.sh` if uncertain)
 - `last_verified_date`: today
 - "Where I am": one paragraph — "All REQ-* verified; awaiting UAT per usage doc."
 - "Next command to run": `Manual UAT per docs/{AppName}-UsageGuide.md smoke checklist.`
@@ -90,7 +92,7 @@ Run `.tfcore/tasks/devguide.md` for `{AppName}` (`*devguide {AppName}`) so the s
 
 ### 4. Consolidate the per-library feedback files
 
-For EACH of `docs/{AppName}-TrBlazeUI-Feedback.md` and `docs/{AppName}-TechieRag-Feedback.md` (and any other `docs/{AppName}-{LibName}-Feedback.md`) that exists — they are separate files because each goes to a different team:
+For EACH `docs/{AppName}-{Upstream}-Feedback.md` that exists — one per library the project uses, plus the framework's own — they are separate files because each goes to a different team:
 - Deduplicate entries (same expected/actual pair = duplicate; merge them).
 - Sort by severity: blocker → major → minor → nice-to-have.
 - Ensure each entry has all the schema fields (Severity, Repro, Expected, Actual, Encountered in, Workaround, Suggested fix). Fill in missing ones from context if possible.
@@ -108,11 +110,11 @@ If no feedback file exists (no library issues encountered), skip this step.
 
 Deliver:
 - "✔ {AppName} is ready for UAT." OR
-- "⚠ {AppName} has {N} `Blocked` (library-gap) items — see docs/{AppName}-TrBlazeUI-Feedback.md / docs/{AppName}-TechieRag-Feedback.md before UAT."
+- "⚠ {AppName} has {N} `Blocked` (library-gap) items — see the `docs/{AppName}-{Upstream}-Feedback.md` files before UAT."
 
 Then explicitly tell the user:
 1. Open `docs/{AppName}-UsageGuide.md` and run the smoke checklist.
-2. Hand each per-library feedback file to its team (or file as GitHub issues against that library's repo): `docs/{AppName}-TrBlazeUI-Feedback.md` → TrBlazeUI team, `docs/{AppName}-TechieRag-Feedback.md` → TechieRag team. The library teams use this same framework, so the file drops straight into their flow.
+2. Hand each feedback file to the team named in its file name (or file its entries as issues against that repository). Those teams use this same framework, so the file drops straight into their flow.
 3. After UAT passes, manually update `PROJECT-STATUS.md`: `current_phase: Released`.
 4. For end-user / external documentation, run `*productguide {AppName}` (flow-master) — it builds a screenshot-illustrated, task-oriented user manual (MD + HTML) from the DevGuide's screen map + captured screenshots. On-demand; re-run with `--update` as the UI evolves.
 

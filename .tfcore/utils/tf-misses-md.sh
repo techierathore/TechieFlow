@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# tf-misses-md.sh — rebuild the readable miss list docs/<App>-Misses.md and its HTML from the
-# misses stream (Session 5, 2026-09-07; FR-31). tf-emit.sh runs it after every write to that
-# stream; run it by hand once on a project whose stream is older than this script.
+# tf-misses-md.sh — rebuild the readable miss list docs/<App>-Misses.md from the misses
+# stream (Session 5, 2026-09-07; FR-31). Markdown only: the miss log is never rendered to
+# HTML. tf-emit.sh runs it after every write to that stream; run it by hand once on a
+# project whose stream is older than this script.
 #
-#   bash .tfcore/utils/tf-misses-md.sh [--root <repo>] [--app <App>] [--no-html] [--quiet]
+#   bash .tfcore/utils/tf-misses-md.sh [--root <repo>] [--app <App>] [--quiet]
 #
 # Exit 0 always. Details: tf-misses-md.py.
 set -u

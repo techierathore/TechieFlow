@@ -11,7 +11,7 @@ Ask once each, and nothing per section:
 1. `{App}` if missing. PascalCase, no spaces.
 2. The concept: "Describe the app, any length: a sentence, paragraphs, bullets, half-baked notes, comparisons to other apps. You will edit the document afterwards." Read all of it. Never cap or summarise the owner's input.
 3. Hints, optional: paths to notes or mockups to harvest, and drafting instructions. `none` is fine.
-4. The stack: "Which answer set: `dotnet` (`.tfcore/templates/stack-defaults/dotnet.md`), or answer the questions in `.tfcore/templates/stack-questions.md`?" Then ask only the questions the set leaves open (for dotnet: Q4, and the rendering mode of Q8).
+4. The stack: "Which answer set (the files under `.tfcore/templates/stack-defaults/`), or answer the questions in `.tfcore/templates/stack-questions.md`?" Then ask only the questions that answer set leaves open — each set names its own.
 5. The size: count the routed pages in the concept (every page with its own route, sign-in included; dialogs and tabs are regions of a page) and the roles, then ask: "Size: Small (up to 10 screens, one role, 50 requirements), Medium (up to 20 screens, 100 requirements) or Large (split into phases)? I count {N} screens and {N} roles, so I propose {X}." Kind is `app` unless the concept is a library.
 
 Then, in this order:
@@ -32,7 +32,7 @@ Only with `--stage2`, and only when `docs/{App}-BRD.md` exists. Ask nothing.
 
 0. If the owner gave corrections at the review, apply them to the stage-1 documents first (ids never renumbered; `bash .tfcore/utils/tf-doc-check.sh --app {App}` must pass), count them, and after this run's record append a `review` record: `{"kind":"review","phase":"day1-review","reviewed_run_id":"<stage 1 started>","correction_run_id":"<this run's started>","corrections":N,"what":"<one sentence>"}` through `tf-emit.sh misses`.
 1. Checklist: run `.tfcore/tasks/split-brd.md` for `{App}` (Large: with `--all-phases`, one checklist per phase). The owner never types `*split-brd`.
-2. Coding Standards: `docs/{App}-Coding-Standards.md` from `app-coding-standards-tmpl.md`. "Standards applied" names `.tfcore/standards/coding-standards-core.md` and the stack file, plus the choices the stack file leaves open (for dotnet, the instance-field prefix, default `obj`). "Project rules" stays empty unless the concept demands a rule true of this project alone.
+2. Coding Standards: `docs/{App}-Coding-Standards.md` from `app-coding-standards-tmpl.md`. "Standards applied" names `.tfcore/standards/coding-standards-core.md` and the stack file, plus the choices the stack file leaves open, taking that file's stated default for each. "Project rules" stays empty unless the concept demands a rule true of this project alone.
 3. `bash .tfcore/utils/tf-day1-files.sh {App} --prefix {obj|none}` writes `.editorconfig`, `AGENTS.md` and `CLAUDE.md` from their templates.
 4. UsageGuide: `docs/{App}-UsageGuide.md` from `app-usageguide-tmpl.md`. The Test users table lists the intended accounts, one per role, none created. The Execution guide is at roadmap level, marking commands that depend on projects not yet built. One "How to test" section per screen in navigation order, naming the user, the steps, the expected result and the REQ ids.
 5. `bash .tfcore/utils/tf-gitignore-audit.sh . --fix`. Read its output. Any untracking commands it prints go into your summary for the owner to run; agents never run git.

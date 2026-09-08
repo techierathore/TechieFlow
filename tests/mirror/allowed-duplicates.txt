@@ -1,0 +1,31 @@
+# Duplicated sentences that are deliberate. One per line:
+#   <hash>  <files>  <the first words>
+# Regenerate with: python3 tests/mirror/dup-check.py --write
+# Adding a line here is a decision — the copy must be intended, not accidental.
+
+5619364799a2  .tfcore/agents/analyst.md,.tfcore/agents/architect.md  do not load any external agent files as the complete configuration is 
+5eb0c4f63726  .tfcore/agents/analyst.md,.tfcore/agents/architect.md  read the full yaml block that follows in this file to understand your 
+90335b9659bc  .tfcore/agents/flow-master.md,.tfcore/agents/verifier.md  - everything the owner reads is plain, simple english, a question for 
+f11866779761  .tfcore/agents/flow-master.md,.tfcore/agents/verifier.md  - on activation, say who you are and print the command table below onc
+f474cb804cb7  .tfcore/agents/flow-master.md,.tfcore/agents/verifier.md  yes|no" first, and never stopping the run when the answer is no:
+15cf9a2aeac2  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  any untracking commands it prints go into your summary for the owner t
+34dcdb7ea088  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  one row per phase, each within medium, every screen in exactly one pha
+6b9306bd463b  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  one "how to test" section per screen in navigation order, naming the u
+6e1b2f8966e7  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  if the count would pass the size cap, propose a phase split instead of
+b7922c7d3615  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  bash .tfcore/utils/tf-day1-files.sh {app} --size {s|m|l} --kind {app|l
+f1a21d1f6f5d  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md,docs/TechieFlow-Document-Schemas.md  a dialog is a row under its parent screen with on /route in the route 
+a4c93b38f04e  .tfcore/tasks/fix-issues.md,.tfcore/tasks/triage-and-fix.md,.tfcore/tasks/verify-phase.md  when this run is the last step of a goal, write the sentinel .tfcore/t
+1d93367cb06a  .tfcore/tasks/generate-html.md,.tfcore/tasks/render-workflow-docs.md  every non-trivial label double-quoted, no end node ids, bare labels fi
+4f551977c8c3  .tfcore/tasks/handoff-phase.md,.tfcore/tasks/productguide.md  stamp started with date -u +%y-%m-%dt%h:%m:%sz as your first action of
+b9c9d9416993  .tfcore/tasks/handoff-phase.md,.tfcore/tasks/productguide.md  reqstouched carries req ids only — never requirement text — and is cor
+e4ede6312612  .tfcore/tasks/handoff-phase.md,.tfcore/tasks/productguide.md  telemetry has no veto: if the emit fails, the phase still succeeded;
+39271a11699f  .tfcore/tasks/metrics-report.md,docs/TechieFlow-Telemetry-Runbook.md  first-pass rate — what fraction of reqs reach verified on attempt 1?
+e32a5d8d950c  .tfcore/tasks/metrics-report.md,docs/TechieFlow-Telemetry-Runbook.md  a pooled gate distribution understates the visual gate, because librar
+2a1e3df8a117  docs/TechieFlow-Distribution-Pipeline-Prompt.md,docs/TechieFlow-Library-Persona-Propagation.md,docs/TechieFlow-Routing-Guide.md,docs/TechieFlow-Telemetry-Guide.md  everything below that describes .codex/, .agents/skills/ or a codex co
+1c87de8c4d71  docs/TechieFlow-FAQ.md,docs/TechieFlow-Permissions-And-YOLO.md,docs/TechieFlow-Setup.md  | status | moved out of readme.md on 2026-09-07 session 6 of the reset
+5a6404a46d73  docs/TechieFlow-How-It-Works.md,docs/TechieFlow-Telemetry-Explained.md  it measures how often the agent gets a requirement right without rewor
+ba6c24a3a653  docs/TechieFlow-How-It-Works.md,docs/TechieFlow-Telemetry-Explained.md  a checklist line, a requirement line plus a check, a fixed check, or a
+1dbb5b5f6ba1  docs/TechieFlow-Stack-Defaults-DotNet.md,docs/TechieFlow-Stack-Questions.md  no unnecessary folders at the repository root data, database, scripts 
+0a453c00cba4  docs/TechieFlow-TechieRag-Feedback.md,docs/TechieFlow-TrBlazeUI-Feedback.md  the shim only refreshes when a script runs, so a persona updated by do
+2c0eeb716d78  docs/TechieFlow-TechieRag-Feedback.md,docs/TechieFlow-TrBlazeUI-Feedback.md  files at the .claude/ root are ignored, so the persona is invisible.
+5dfb15b15ad5  docs/TechieFlow-TechieRag-Feedback.md,docs/TechieFlow-TrBlazeUI-Feedback.md  per library so it can be handed to or picked up by the owning team dir

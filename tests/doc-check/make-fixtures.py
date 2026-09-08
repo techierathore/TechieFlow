@@ -510,7 +510,112 @@ A rollback does not undo: database migrations.
 | Deploy to the VPS | no | — |
 """
 
+DR = """# MyDiary — decisions I need from you
+
+| | |
+|---|---|
+| App | MyDiary |
+| Written | 2026-09-08 |
+| Waiting on | 1 decision. Nothing has been changed yet. |
+
+## What happened
+
+The search box on the entries screen has to decide what happens when someone types a
+word that appears in no entry. Both answers are reasonable and they read very
+differently to someone using the app, so it is your call.
+
+## What I need you to decide
+
+### 1. What the search box shows when nothing matches
+
+Someone types "holiday" and has never written the word. The screen has to say
+something.
+
+| Option | What happens | What it costs |
+|---|---|---|
+| **A — an empty list with a line of text** | The screen stays where it is and says nothing was found. | Nothing; it is half a day. |
+| **B — suggestions from near matches** | The screen offers the closest words that do exist. | Two days, and the search gets slower on a big diary. |
+
+**My recommendation: A** — the diary is one person's, so a near match is usually a typo they can see for themselves.
+
+## What I do when you answer
+
+1. Amend the brief with the answer and add the acceptance line.
+2. Update the entries mockup.
+3. Re-check both documents. About twenty minutes.
+
+## Copy this back to me
+
+```
+MyDiary: decision 1 — go with option A, an empty list and a line of text.
+```
+"""
+
+FB = """# TechieFlow feedback — found while building MyDiary
+
+| | |
+|---|---|
+| App | MyDiary |
+| Upstream | TechieFlow |
+| Updated | 2026-09-08 |
+
+## Summary
+
+1 entry: 0 blocking now, 1 filed and not blocking, 0 fixed upstream.
+
+Nothing is blocked.
+
+## Entries
+
+### TF-001 — the status file gets a new date even when nothing changed
+
+- **Severity:** minor
+- **Blocks:** no — the file is correct, only its date moves; the build carried on
+- **Repro:** run `*refresh-status MyDiary` twice with no work in between
+- **Expected:** the second run leaves the file alone
+- **Actual:** the date changes, so the file looks new when it is not
+- **Encountered in:** `*refresh-status`
+- **Workaround:** ignore the date
+- **Suggested fix:** compare everything but the date before writing, the way the miss list does
+"""
+
+BRIEF = """# MyDiary — Brief
+
+| | |
+|---|---|
+| App | MyDiary |
+| Date | 2026-09-08 |
+
+## What it is
+
+A private journal. One person writes a dated entry each day and finds it again later by
+searching for a word they remember. Nothing is shared and nobody else can read it.
+
+## Who it is for
+
+One writer, on their own machine. There is no second role: no reviewer, no administrator,
+nobody to share with. That is the whole audience.
+
+## Must do
+
+1. The writer signs in and lands on their entries.
+2. The writer writes an entry against today's date.
+3. The writer finds an old entry by searching for a word in it.
+
+## Out of scope
+
+Sharing an entry with anyone. Comments. Tags or folders. A mobile application. Anything
+that assumes a second person exists.
+
+## Open questions
+
+What should the search box show when a word matches nothing.
+"""
+
 FILES = {
+    "docs/MyDiary-Brief.md": BRIEF,
+    "docs/MyDiary-Decision-Request.md": DR,
+    "docs/MyDiary-TechieFlow-Feedback.md": FB,
     "docs/MyDiary-Deployment-Checklist.md": DC,
     "docs/MyDiary-BRD.md": BRD,
     "docs/MyDiary-Architecture.md": ARCH,
@@ -556,6 +661,21 @@ bad["docs/MyDiary-Checklist.md"] = re.sub(r"(\| REQ-NFR-001 \|[^|]*\|[^|]*\|[^|]
                                           bad["docs/MyDiary-Checklist.md"], count=1)
 bad["docs/MyDiary-Checklist.md"] = (bad["docs/MyDiary-Checklist.md"]
                                     + "\n## UAT Bugs\n\n- a bug\n")
+# the brief: "Must do" written as prose instead of a numbered list of outcomes
+bad["docs/MyDiary-Brief.md"] = BRIEF.replace(
+    "1. The writer signs in and lands on their entries.\n2. The writer writes an entry against today's date.\n3. The writer finds an old entry by searching for a word in it.",
+    "It should let someone sign in, write entries and search them, and generally be pleasant to use.")
+# the decision request: a glossary, no options table, no recommendation, nothing to paste back
+bad["docs/MyDiary-Decision-Request.md"] = (DR.replace("| Option | What happens | What it costs |\n|---|---|---|\n", "")
+                                           .replace("| **A — an empty list with a line of text** | The screen stays where it is and says nothing was found. | Nothing; it is half a day. |\n", "")
+                                           .replace("| **B — suggestions from near matches** | The screen offers the closest words that do exist. | Two days, and the search gets slower on a big diary. |\n", "")
+                                           .replace("**My recommendation: A** — the diary is one person's, so a near match is usually a typo they can see for themselves.\n", "")
+                                           .replace("```\nMyDiary: decision 1 — go with option A, an empty list and a line of text.\n```\n", "Just tell me which one.\n")
+                                           .replace("## What happened", "## Words this document uses\n\nA **denominator** is the number you divide by.\n\n## What happened"))
+# the feedback file: a Summary that never says what is blocked, an entry with no Blocks answer
+bad["docs/MyDiary-TechieFlow-Feedback.md"] = (FB.replace("1 entry: 0 blocking now, 1 filed and not blocking, 0 fixed upstream.\n\nNothing is blocked.", "One thing came up while building.")
+                                              .replace("- **Blocks:** no — the file is correct, only its date moves; the build carried on\n", "")
+                                              .replace("- **Workaround:** ignore the date\n", ""))
 # a bundled acceptance line (five behaviours, 41 words) in the broken BRD
 bad["docs/MyDiary-BRD.md"] = bad["docs/MyDiary-BRD.md"].replace(
     "*Acceptance:* When the writer types `holiday` in the search box on Entries and presses Enter, then only matching entries are listed.",

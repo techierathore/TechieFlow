@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """tf-misses-md.py — the readable miss list, docs/<App>-Misses.md (Session 5, 2026-09-07; FR-31).
 
-    python3 .tfcore/utils/tf-misses-md.py [--root <repo>] [--app <App>] [--no-html] [--quiet]
+    python3 .tfcore/utils/tf-misses-md.py [--root <repo>] [--app <App>] [--quiet]
 
 Rebuilds docs/<App>-Misses.md from docs/metrics/misses.jsonl: one row per `miss` record, newest first,
 in three tables (open, fixed, will not fix), each row holding the miss id, the owning row, when and
 by whom it was found, whose gap it was (the `sort` field, folded from any miss-amend) and the `what`
-sentence. Then renders the sibling HTML through tf-render-html.py. tf-emit.sh calls this after every
-write to the misses stream, so the file is never older than the record; run it by hand once on a
-project whose stream predates it. The file is derived: never edit it, edit nothing, log a miss.
+sentence. Markdown only — there is no HTML sibling: the miss log is read by agents and by the owner
+in markdown, and tf-render-html.py refuses it (owner, 2026-09-08; an HTML copy nobody opened was
+being re-rendered on every miss in every project). tf-emit.sh calls this after every write to the
+misses stream, so the file is never older than the record; run it by hand once on a project whose
+stream predates it. The file is derived: never edit it, edit nothing, log a miss.
 Exit 0 always (telemetry has no veto); the reason for a skipped write is printed unless --quiet.
 """
 import datetime
@@ -16,7 +18,6 @@ import glob
 import json
 import os
 import re
-import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -183,24 +184,20 @@ def main(argv):
                 old = fh.read()
         except FileNotFoundError:
             pass
+        stale = out[:-3] + ".html"                 # left by a pre-2026-09-08 run, before the miss
+        gone = ""                                  # log was ruled an agent document (owner)
+        if os.path.isfile(stale):
+            os.remove(stale)
+            gone = "; removed the stale HTML copy"
         same = lambda s: re.sub(r"\| Updated \| [0-9-]+ \|", "", s)   # everything but the date must match
-        if old is not None and same(old) == same(text) and os.path.isfile(out[:-3] + ".html"):
+        if old is not None and same(old) == same(text):
             if not quiet:
-                print(f"tf-misses-md: {rel} unchanged ({n} misses)")
+                print(f"tf-misses-md: {rel} unchanged ({n} misses){gone}")
             return 0
         with open(out, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
-        html = "skipped"
-        if "--no-html" not in argv:
-            r = os.path.join(HERE, "tf-render-html.py")
-            if os.path.isfile(r):
-                try:
-                    p = subprocess.run([sys.executable, r, out, "--quiet"], capture_output=True, text=True, timeout=120)
-                    html = "rendered" if p.returncode == 0 else "not rendered (" + (p.stderr or p.stdout).strip().splitlines()[-1:][0][:100] + ")" if (p.stderr or p.stdout).strip() else "not rendered"
-                except Exception as e:
-                    html = f"not rendered ({e})"
         if not quiet:
-            print(f"tf-misses-md: wrote {rel} ({n} misses); HTML {html}")
+            print(f"tf-misses-md: wrote {rel} ({n} misses){gone}")
     except Exception as e:
         if not quiet:
             print(f"tf-misses-md: nothing written ({e})")

@@ -3,16 +3,23 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 125 logged: 35 open, 89 fixed, 1 will not fix |
+| Count | 132 logged: 42 open, 89 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-09-07 |
+| Updated | 2026-09-08 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
-## Open (35)
+## Open (42)
 
 | Miss | Found | Whose gap | What went wrong |
 |---|---|---|---|
+| MISS-TechieFlow-20260908-07 | 2026-09-08 by owner | the framework never said it | The eight BMAD-era yaml templates carry no schema block, so any document those seven commands produce escapes the document checker entirely, although the reset's premise is that every human document has a schema and a budget. |
+| MISS-TechieFlow-20260908-06 | 2026-09-08 by owner | the framework never said it | Seven commands on the analyst and architect work in Claude Code but have no OpenCode registration, including create-project-brief which the framework's own review calls used regularly, so the two harnesses do not behave the same and nothing checks the persona command surface. |
+| MISS-TechieFlow-20260908-05 | 2026-09-08 by owner | said and ignored | The seven-session reset closed with two of the framework's own checklist lines still failing, FR-03 and FR-34, and I later described them to the owner as pre-existing rather than as mine, although I am the only person who has worked on this repository. |
+| MISS-TechieFlow-20260908-04 | 2026-09-08 by owner | said and ignored | I answered a problem with 825 words of new prose and wrote the same rules in three places, although the maintenance contract already says a new rule is a script or a hook and never a paragraph. |
+| MISS-TechieFlow-20260908-03 | 2026-09-08 by owner | the check was too weak | The TfLens handoff document said 'no rate card, ever', which turned a rule about what a stream may store into a ban on what a reader may show, and nothing checked it against the schema it named as its own authority. |
+| MISS-TechieFlow-20260908-02 | 2026-09-08 by owner | the framework never said it | The feedback file had no schema, so an app agent could hand back essay-length entries that never said whether the work was blocked, and the framework had no document at all for asking the owner a decision. |
+| MISS-TechieFlow-20260908-01 | 2026-09-08 by owner | said and ignored | The miss log was rendered to HTML in every project, so 20 copies nobody opens were rebuilt on every miss, although the rendering rule already said only human-readable documents are rendered. |
 | MISS-TechieFlow-20260907-19 | 2026-09-07 by owner | the check was too weak | The database guard reads the whole command line, so it refused a documentation edit and a read-only grep because a migration tool's name appeared in the text being written. |
 | MISS-TechieFlow-20260907-18 | 2026-09-07 by owner | the check was too weak | FR-03 claims no persona or task names a technology, but the analyst and build-phase hardcode routing to the TrBlazeUI and TechieRag library agents, and nothing ever ran the grep that would have said so. |
 | MISS-TechieFlow-20260907-12 | 2026-09-07 by owner | said and ignored | The D-21 rule that hidden framework folders are invisible to search was written down and still cost 58 percent of a folder's true size when OpenCode measured the Playbook with a shell glob. |

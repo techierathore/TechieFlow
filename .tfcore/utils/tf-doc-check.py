@@ -52,12 +52,20 @@ DOC_KINDS = [
     ("-devguide.md", "devguide", "app-devguide-tmpl.md"),
     ("-productguide.md", "productguide", "app-productguide-tmpl.md"),
     ("-phases.md", "phases", "app-phases-tmpl.md"),
+    ("-brief.md", "brief", "app-brief-tmpl.md"),
+    ("-decision-request.md", "decision-request", "app-decision-request-tmpl.md"),
+    ("-feedback.md", "feedback", "app-library-feedback-tmpl.md"),
 ]
 SIZED_DOCS = {"brd", "architecture", "uidesign", "checklist", "usageguide", "devguide", "productguide"}
 # Large projects: these four split by phase. Phase 1 keeps the plain name (App-BRD.md);
 # phase 2 onward are App-P2-BRD.md and so on. docs/TechieFlow-Document-Schemas.md §2.
 PHASED_DOCS = {"brd", "checklist", "uidesign", "devguide"}
 PHASED_SUFFIX = {"brd": "BRD", "checklist": "Checklist", "uidesign": "UIDesign", "devguide": "DevGuide"}
+# A feedback entry's heading opens with its id: TF-016, TR-010, TR-RAG-002.
+ENTRY_ID = re.compile(r"^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+\b")
+# A closed entry carries its resolution banner near the top of its body. The banner is not
+# always first: an entry may open with a renumbering or scope note, so the window is generous.
+FEEDBACK_CLOSED = re.compile(r"(?i)(✅|\bfixed upstream\b|\bwill not fix\b|\bwont-fix\b|is \*\*closed\*\*)")
 DOC_NAME = re.compile(
     r"^(.+?)(?:-P(\d+))?-(BRD|Deployment-Checklist(?:-[\w]+)?|Checklist|UIDesign|DevGuide|Architecture|Coding-Standards|UsageGuide|Usage-Guide|ProductGuide|Phases)\.md$",
     re.I)
@@ -429,6 +437,9 @@ def check_document(path: str, rep: Report, cli_size=None, root=None):
             continue
         if doc == "checklist" and re.search(r"<a id=['\"]d-req-", txt, re.I):
             continue  # a page group holding detail entries
+        if doc == "feedback" and ENTRY_ID.match(h.strip()):
+            continue  # an entry written at ## level: the layout every feedback file shipped
+                      # with before this schema existed. Read as an entry, not a stranger.
         extra = "; bugs and feedback go to the misses stream, not the checklist" if doc == "checklist" else ""
         rep.fail(rel, f'section "{h}" is not in the template{extra}')
 
@@ -438,6 +449,9 @@ def check_document(path: str, rep: Report, cli_size=None, root=None):
         d = schema.declared(key)
         if not d:
             continue
+        if doc == "feedback" and d[1] != "required":
+            continue    # correspondence blocks are appended over time and sit either side
+                        # of the entries; where they land carries no meaning
         idx = order_of[norm_heading(d[0])]
         if idx < last_idx:
             rep.fail(rel, f'section "{h}" comes after "{last_name}"; the template order is the other way round')
@@ -464,7 +478,9 @@ def check_document(path: str, rep: Report, cli_size=None, root=None):
     for key, h, txt in present:
         d = schema.declared(key)
         if d and d[2]:
-            n = word_count(txt)
+            # A `####` block inside a section is detail the reader chooses to open, and is not
+            # counted — the same rule as a feedback entry's `#### Detail` (owner, 2026-09-08).
+            n = word_count(re.split(r"(?m)^####\s", txt)[0])
             if n > d[2]:
                 rep.fail(rel, f'section "{h}" is {n} words; at most {d[2]}')
     if schema.max_lines:
@@ -479,8 +495,14 @@ def check_document(path: str, rep: Report, cli_size=None, root=None):
     if schema.entries:
         sec_txt = section_text(present, schema.entries[0])
         prefix = schema.entries[1]
+        pairs = list(split_sections(sec_txt, 3)) if sec_txt is not None else []
+        if doc == "feedback":
+            # Entries may sit under "Entries" as ###, or stand at ## level as every
+            # feedback file wrote them before this schema. Both are read the same way.
+            pairs += [(h, t) for _k, h, t in present if ENTRY_ID.match(h.strip())]
+            sec_txt = sec_txt if sec_txt is not None else ""
         if sec_txt is not None:
-            for h3, etxt in split_sections(sec_txt, 3):
+            for h3, etxt in pairs:
                 if h3 is None:
                     continue
                 if prefix and not h3.lower().startswith(prefix.lower()):
@@ -489,8 +511,16 @@ def check_document(path: str, rep: Report, cli_size=None, root=None):
                 ename = h3[len(prefix):].strip() if prefix else h3
                 ename = re.sub(r"\s*\(.*$", "", ename).strip("` ").strip()
                 entry_names.append(ename)
+                if doc == "feedback" and FEEDBACK_CLOSED.search(etxt[:2500]):
+                    continue    # a closed entry is the record of what was wrong and why.
+                                # History may be as long as it needs to be; the shape and the
+                                # word cap bind the LIVE ones, which are what the owner reads.
                 if schema.per_entry:
-                    n = word_count(etxt)
+                    # The cap binds the REPORT, not the working-out. Anything under a `####`
+                    # heading inside the entry is detail a reader chooses to open, and is not
+                    # counted: a thorough analysis is worth having, an entry the owner cannot
+                    # read at a glance is not (owner, 2026-09-08).
+                    n = word_count(re.split(r"(?m)^####\s", etxt)[0])
                     if n > schema.per_entry[1]:
                         rep.fail(rel, f'entry "{ename}" is {n} words; maximum {schema.per_entry[1]} (target {schema.per_entry[0]})')
                     elif n > schema.per_entry[0]:
@@ -549,6 +579,29 @@ def check_entry_rule(rule, ename, etxt, rel, root, path, rep):
     elif rule == "entry-expected":
         if not re.search(r"(?im)^\s*[-*]?\s*\**expected", etxt):
             rep.fail(rel, f'entry "{ename}" has no "Expected:" line')
+    elif rule == "entry-feedback-fields":
+        # A feedback entry is a bug report, not an essay. Same eight fields every time,
+        # so the upstream team reads them in one shape and the owner reads "Blocks" first.
+        for field in ("Severity", "Blocks", "Repro", "Expected", "Actual",
+                      "Encountered in", "Workaround", "Suggested fix"):
+            if not re.search(r"(?im)^\s*[-*]?\s*\**%s\**\s*:" % re.escape(field), etxt):
+                rep.fail(rel, f'entry "{ename}" has no "{field}:" line')
+    elif rule == "entry-blocks-line":
+        # The one word that decides whether the run stops. "no" also has to say what was
+        # done instead, because a non-blocking entry is filed and the work carries on.
+        m = re.search(r"(?im)^\s*[-*]?\s*\**Blocks\**\s*:\s*(.+)$", etxt)
+        if m:
+            val = m.group(1).strip().strip("*` ").lower()
+            if not re.match(r"^(yes|no)\b", val):
+                rep.fail(rel, f'entry "{ename}" says "Blocks: {m.group(1).strip()[:40]}"; it must start "yes" or "no"')
+            elif val.startswith("no") and len(val) < 8:
+                rep.fail(rel, f'entry "{ename}" says "Blocks: no" and stops; say what was done instead and that the work carried on')
+    elif rule == "entry-decision-options":
+        if not has_table_with(etxt, "option", "what happens"):
+            rep.fail(rel, f'decision "{ename}" has no options table (Option, What happens, What it costs)')
+    elif rule == "entry-recommendation":
+        if not re.search(r"(?im)^\s*\**My recommendation", etxt):
+            rep.fail(rel, f'decision "{ename}" has no "My recommendation:" line — the owner is owed one, with the reason in a sentence')
 
 
 def check_doc_rule(rule, c, rep):
@@ -781,6 +834,50 @@ def check_doc_rule(rule, c, rep):
         tgt = (c["header"].get("hosting target") or "")
         if re.search(r"\b(and|or)\b|,|/", tgt):
             rep.fail(rel, f'Hosting target "{tgt}" names more than one target; one document per hosting target')
+
+    elif rule == "brief-must-do":
+        txt = section_text(present, "Must do")
+        if txt is None:
+            return
+        n = len(re.findall(r"(?m)^\s*\d+[.)]\s+\S", txt))
+        if n == 0:
+            rep.fail(rel, 'the "Must do" section is not a numbered list; day-1 turns each line into requirements, so one line is one thing the product does')
+        elif n > 25:
+            rep.fail(rel, f'the "Must do" section has {n} lines; a brief that long is a BRD. Keep the page, and let day-1 expand it')
+
+    elif rule == "no-glossary":
+        # A document written for the owner explains itself in plain words or it is
+        # written wrong. A section that defines the document's own vocabulary before it
+        # can ask its question is the tell: the fix is to change the words, never to
+        # teach them (owner, 2026-09-08).
+        for _key, h, _txt in present:
+            if re.search(r"(?i)\b(glossary|terminology|words this document uses|"
+                         r"terms? (used|you)|what these words mean|definitions)\b", h):
+                rep.fail(rel, f'section "{h}" defines this document\'s own vocabulary; '
+                              f'write it in plain English instead — if a word needs a glossary, use a different word')
+
+    elif rule == "feedback-blocking-count":
+        txt = section_text(present, "Summary")
+        if txt is None:
+            return
+        if not re.search(r"(?i)\bblocking\b|\bnothing is blocked\b", txt):
+            rep.fail(rel, 'the Summary must say how many entries are blocking right now, '
+                          'or "Nothing is blocked" — it is the first thing the owner reads')
+
+    elif rule == "paste-back-block":
+        # `present` is built from the prose-only copy, which drops fenced blocks — and a
+        # fenced block is exactly what this rule looks for. Re-split the uncommented source.
+        raw_present = [(norm_heading(h), h, t) for h, t in split_sections(nocomment, 2) if h is not None]
+        txt = section_text(raw_present, "Copy this back to me")
+        if txt is None:
+            return
+        blocks = re.findall(r"^```", txt, re.M)
+        if len(blocks) < 2:
+            rep.fail(rel, 'the "Copy this back to me" section has no fenced block; '
+                          'the owner answers by pasting it, so it must be there to paste')
+        n_dec = len(c.get("entry_names") or [])
+        if n_dec and len(blocks) // 2 < n_dec:
+            rep.fail(rel, f'{n_dec} decisions but {len(blocks) // 2} paste-back block(s); one per decision')
 
     elif rule == "phases-table":
         txt = section_text(present, "Phases")
@@ -1148,7 +1245,7 @@ def check_mockups(root: str, rep: Report):
 # ----------------------------------------------------------------------------
 def app_files(root: str, app: str):
     docs = os.path.join(root, "docs")
-    names = [f"{app}-Phases.md", f"{app}-BRD.md", f"{app}-Architecture.md", f"{app}-UIDesign.md", f"{app}-Checklist.md",
+    names = [f"{app}-Brief.md", f"{app}-Phases.md", f"{app}-BRD.md", f"{app}-Architecture.md", f"{app}-UIDesign.md", f"{app}-Checklist.md",
              f"{app}-Coding-Standards.md", f"{app}-UsageGuide.md", f"{app}-DevGuide.md", f"{app}-ProductGuide.md"]
     # later phases of a Large project: App-P2-BRD.md, App-P2-Checklist.md, … in phase order
     extra = []
@@ -1160,6 +1257,11 @@ def app_files(root: str, app: str):
     names += [f for _p, _o, f in sorted(extra)]
     if os.path.isdir(docs):
         names += sorted(f for f in os.listdir(docs) if re.match(rf"^{re.escape(app)}-Deployment-Checklist(-[\w]+)?\.md$", f))
+        # the two documents written for a reader outside this project: the owner's open
+        # decisions, and whatever this project has reported upstream (one file per upstream)
+        names += sorted(f for f in os.listdir(docs)
+                        if re.match(rf"^{re.escape(app)}-Decision-Request\.md$", f)
+                        or re.match(rf"^{re.escape(app)}-[\w.]+-Feedback\.md$", f))
     out = [os.path.join(docs, n) for n in names if os.path.exists(os.path.join(docs, n))]
     ps = os.path.join(root, "PROJECT-STATUS.md")
     if os.path.exists(ps):

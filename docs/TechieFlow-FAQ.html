@@ -106,7 +106,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout no-toc">
   <main>
     <h1>TechieFlow — Questions and gotchas</h1>
-    <div class="subtitle">Rendered 2026-09-07 &middot; source <code>TechieFlow-FAQ.md</code></div>
+    <div class="subtitle">Rendered 2026-09-08 &middot; source <code>TechieFlow-FAQ.md</code></div>
 
 <table>
 <thead><tr><th></th><th></th></tr></thead>
@@ -129,7 +129,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <p><strong>Q: An agent says a framework file — <code>tf-metrics.sh</code>, a task, a template — is "not present anywhere in this tree". It obviously is. Why?</strong></p>
 <p>Because the framework is invisible to every default file-search tool, and until 2026-08-27 nothing told the agents that. <strong>Two independent filters stack</strong>, and you have to defeat both:</p>
 <ul>
-<li><code>.tfcore/</code>, <code>.claude/</code>, <code>.codex/</code>, <code>.opencode/</code> and <code>.agents/skills/</code> are <strong>hidden dot-directories</strong> — ripgrep (which backs the agents' Grep tool) skips hidden paths by default.
+<li><code>.tfcore/</code>, <code>.claude/</code> and <code>.opencode/</code> are <strong>hidden dot-directories</strong> — ripgrep (which backs the agents' Grep tool) skips hidden paths by default.
 </li>
 <li>They are also in the <strong>managed <code>.gitignore</code> block</strong> the scaffolders write into every app (§3) — and ripgrep honours <code>.gitignore</code> by default too.
 </li>

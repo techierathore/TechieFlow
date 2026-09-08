@@ -13,7 +13,8 @@
 #   5. log-miss: refused without --sort (the four questions printed); the record with the sentence
 #      and the sort, the row demoted with a ⚠ miss remark, the run record; a repeat is reported not
 #      re-logged; --new adds a Not Started row; --fixed closes at once
-#   5b. the readable file (FR-31, Session 5): docs/FxApp-Misses.md and its HTML exist, one row per
+#   5b. the readable file (FR-31, Session 5): docs/FxApp-Misses.md exists and NO HTML sibling is
+#      written (FR-64, owner 2026-09-08 — the miss log is an agent document), one row per
 #      miss record, the sentence and whose gap in the row, a fixed miss under Fixed; a miss emitted
 #      without a sort is sorted later with tf-emit.sh --amend and the file follows; triage misses
 #      carry the default sorts (weak-check for a demoted row, spec for a new row, ignored for the
@@ -99,7 +100,7 @@ check "log-miss --fixed closes at once and leaves the row alone (exit $rc)" "$([
 
 # ---- 5b. the readable file ----------------------------------------------------------------------
 MD="docs/FxApp-Misses.md"
-check "misses file: $MD and its HTML exist" "$([[ -f "$MD" && -f "docs/FxApp-Misses.html" ]]; echo $?)"
+check "misses file: $MD is written and no HTML sibling is (FR-64)" "$([[ -f "$MD" && ! -f "docs/FxApp-Misses.html" ]]; echo $?)"
 nrec="$(grep -c '"kind":"miss"' $M/misses.jsonl)"; nrow="$(grep -c '^| MISS-FxApp-' "$MD")"
 check "misses file: one row per miss record ($nrec records, $nrow rows)" "$([[ "$nrec" == "$nrow" && "$nrec" -gt 0 ]]; echo $?)"
 check "misses file: the sentence, the row and whose gap are in the row" "$(grep -E '^\| MISS-FxApp-[0-9]+-[0-9]+ \(REQ-UI-002\) \| [0-9-]+ by owner \| said and ignored \| The entries list ignores the date filter \|' "$MD" >/dev/null; echo $?)"

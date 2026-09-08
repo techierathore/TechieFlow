@@ -126,10 +126,11 @@ Replace `{App}` with your application name. Claude Code takes the long persona p
 
 ## 5. What it produces
 
-Every per-project document is named after the application: `docs/<App>-BRD.md`, `-Architecture.md`, `-Checklist.md`, `-UIDesign.md`, `-Coding-Standards.md`, `-UsageGuide.md`, `-DevGuide.md`, `-ProductGuide.md`, `-Deployment-Checklist.md`, plus `PROJECT-STATUS.md` and `CLAUDE.md` at the root, mockups under `docs/mockups/`, and screenshots under `docs/screenshots/<App>/`.
+Every per-project document is named after the application: `docs/<App>-Brief.md`, `-BRD.md`, `-Architecture.md`, `-Checklist.md`, `-UIDesign.md`, `-Coding-Standards.md`, `-UsageGuide.md`, `-DevGuide.md`, `-ProductGuide.md`, `-Deployment-Checklist.md`, `-Misses.md`, `-Decision-Request.md`, `-<Upstream>-Feedback.md`, plus `PROJECT-STATUS.md` and `CLAUDE.md` at the root, mockups under `docs/mockups/`, and screenshots under `docs/screenshots/<App>/`.
 
 | Document | Who reads it |
 |---|---|
+| Brief | You, before anything is built. One page: what it is, who for, must do, out of scope. Day-1 reads it. |
 | BRD, Architecture, UIDesign and the mockups | You, at the day-1 review. This is the cheap moment to redirect. |
 | Checklist | Agents only. One table, one row per requirement, the single source of truth. Never rendered to HTML. |
 | Coding Standards | Every implementing agent, and the verifier's standards check. |
@@ -138,9 +139,11 @@ Every per-project document is named after the application: `docs/<App>-BRD.md`, 
 | DevGuide | A developer tracing a bug: every screen to its code, with the line to break on. |
 | ProductGuide | The end user. |
 | Deployment Checklist | Whoever puts it on the host, after UAT. |
-| Library feedback, one file per library | That library's team. |
+| Misses | You and the agents. Rebuilt from the record whenever something is logged as missed. |
+| Decision Request | You. Every choice an agent cannot make: options, what each costs, a recommendation, and a block to paste back. It is never read back by an agent. |
+| Feedback, one file per upstream | That team — each library, and the framework itself. Every entry says in its first word whether it blocks your work. Reporting is never refused; a non-blocking entry never stops a run. |
 
-Each document has a required shape and a size budget for the application's size (Small, Medium or Large), enforced by `bash .tfcore/utils/tf-doc-check.sh --app {App}`. Add `--warn` to get a report instead of a refusal, which is what you want on a project that predates the schemas. Human documents render to HTML by script; the checklist never does.
+Each document has a required shape and a size budget for the application's size (Small, Medium or Large), enforced by `bash .tfcore/utils/tf-doc-check.sh --app {App}`. Add `--warn` to get a report instead of a refusal, which is what you want on a project that predates the schemas. Human documents render to HTML by script; an agent document never does — the checklist and the miss list are refused by name.
 
 ---
 

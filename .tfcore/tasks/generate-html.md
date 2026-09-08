@@ -2,7 +2,7 @@
 
 Convert one or more **human-readable** markdown files to self-contained HTML using the shared shell. Use this when you need to render documents that `*render-workflow-docs` does not cover (the UsageGuide, the DevGuide, library-feedback docs, ad-hoc design notes, legacy/archived docs). Note: suffixed doc variants like `-v2` are banned by the collision policy (day1-brownfield §1.6) — superseded docs live unmodified in `docs/OldDocs/`.
 
-**NEVER render the checklist to HTML.** The `*-Checklist.md` (and its Requirements Status table) is an **AI-agent working document** — agents read it in markdown. An HTML mirror just burns tokens and drifts from the source. If asked to render a `*-Checklist.md`, decline and explain it's an agent doc; if a stale `*-Checklist.html` exists from before this rule, the user may delete it.
+**NEVER render an agent working document to HTML.** Two are banned by name and `tf-render-html.sh` refuses both with exit 2: the **requirements checklist** `*-Checklist.md` (and its Requirements Status table), and the **miss log** `*-Misses.md`. Agents read them in markdown; an HTML mirror burns tokens and drifts from the source. If asked to render either, decline and explain it is an agent document; if a stale `*-Checklist.html` or `*-Misses.html` exists from before this rule, delete it. The test for any other file: **if the only reader is an agent, it stays markdown.**
 
 ## Why this exists
 
@@ -113,3 +113,7 @@ Print one line per rendered file: the absolute output path. End with: `Open each
 - [ ] Mermaid validity pass done (shell §5.5): every non-trivial label double-quoted, no `end` node ids, bare labels fixed not emitted
 - [ ] No agent-facing authoring note (Depth/Mermaid mandate, template how-to) rendered as visible text — leaked ones omitted and reported
 - [ ] Copy buttons present on every `<pre>` (added by JS, no need to inject manually)
+
+## Record the run
+
+First action of this task: `bash .tfcore/utils/tf-phase.sh start generate-html {App}`. Last action: one `runs.jsonl` record carrying `"cmd":"generate-html"`, written as `.tfcore/tasks/_metrics-emit-gate.md` shows. No status gate here — this command advances no phase. Telemetry has no veto: if the write fails, the command still succeeded.

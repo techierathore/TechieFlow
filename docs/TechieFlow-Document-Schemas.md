@@ -4,7 +4,7 @@
 |---|---|
 | Purpose | For each human document the framework produces: which sections it must have, how big it may be, and what every row must contain. A checker script enforces this, so the AI cannot drift from the shape. |
 | Audience | The owner (reviews the section lists, the size limits and the decisions in §7). Agents read the same rules in machine form at the top of each template. |
-| Status | **Built in Session 3 of the reset and closed 2026-09-04.** Nine templates carry a schema block; `tf-doc-check.sh` enforces it; the status gate runs it; day-1 asks the size. §6 holds the real results on fourteen projects. The tenth document, the Deployment Checklist (§3.10), is agreed and is built in Sitting 4b. **Sitting 4b (2026-09-05):** the Large layout (§2) and the eleventh document, Phases (§3.11), agreed and built into the checker, the splitter and the status scripts. |
+| Status | **Built in Session 3 of the reset and closed 2026-09-04.** Fourteen templates carry a schema block; `tf-doc-check.sh` enforces it; the status gate runs it; day-1 asks the size. §6 holds the real results on fourteen projects. **Sitting 4b (2026-09-05):** the Large layout (§2) and the Phases document (§3.11), built into the checker, the splitter and the status scripts. **2026-09-08:** three more documents gained one — the Decision Request (§3.12), the feedback file (§3.13) and the Brief (§3.14). |
 | Companion | `TechieFlow-Reset-Plan-2026-09-04.md` (Session 3), `TechieFlow-Requirements.md` (FR-07 to FR-09, FR-14, FR-15, FR-17), `TechieFlow-How-It-Works.md` §8 (D-1, D-2, D-3, D-20). |
 
 ---
@@ -250,6 +250,63 @@ What it is for: the one place that says which screens and requirements belong to
 | 1 | Phases | One table: phase, name, screens, BRD range, status (planned, building, done). A range is `BRD-a to BRD-b`; an item added to an earlier phase after a later one exists takes the next free id and the row gets a second range, comma-separated (2026-09-06). |
 
 Checks: every screen in the UIDesign files sits in exactly one phase; every phase row has its BRD and checklist files; each phase's BRD ids fall inside that phase's range; no `BRD-N` or `REQ-` id appears in two phases. Budget 300 target, 600 maximum.
+
+### 3.14 Brief — `docs/<App>-Brief.md` (schema added 2026-09-08; the one page day-1 reads)
+
+What it is for: the cheapest place to be wrong. Day-1 turns it into the Architecture, the BRD and the mockups, so an error here is corrected in two minutes and an error found later is corrected in a phase.
+
+It replaced a 221-line inherited template with twelve sections — executive summary, problem statement, goals and metrics, KPIs, post-MVP vision, expansion opportunities — that produced a document nobody read and nothing checked. The framework's own review says what a brief is: *"a one-page brief: product, users, must-do, out of scope."*
+
+| Order | Section | Content rule |
+|---|---|---|
+| 0 | Header table | App, Date |
+| 1 | What it is | What the product does, in plain words, no technology. At most 150 words |
+| 2 | Who it is for | Each role, and what they are trying to get done. At most 150 words |
+| 3 | Must do | A numbered list. One line is one outcome a user gets, and becomes BRD items at day-1 |
+| 4 | Out of scope | What day-1 must not build. At most 150 words |
+| 5 | Open questions | Optional. A decision not yet taken, so day-1 asks instead of assuming |
+
+Checks: "Must do" is a numbered list and not prose, and holds at most 25 lines — longer than that and it is a BRD, not a brief; no glossary; 60 lines target, 120 maximum. Written by `*create-project-brief`, which also renders it, because the owner reads it.
+
+### 3.12 Decision Request — `docs/<App>-Decision-Request.md` (owner, 2026-09-08; FR-65)
+
+What it is for: the one place a command puts a choice only the owner can make. Before this existed, an agent argued the choice out in the terminal, or wrote an unshaped document of its own — the thing that made a question hard to find and filled the context it was competing with.
+
+The rules that matter more than the shape:
+
+- **Plain, simple English.** No coined terms, no framework shorthand, no word the owner would have to look up. A glossary section is refused: a document that has to teach its vocabulary before it can ask its question was written for the wrong reader.
+- **A recommendation, always**, with the reason in one sentence. A choice handed over without one is work pushed back, not a question.
+- **A block to paste back**, one per decision, each complete on its own. That is how the answer travels; the file is never read back by an agent and is never named in `core-config.yaml`.
+- **One line in the terminal**, naming the file and how many decisions it holds. Nothing else — no restatement, no argument.
+- One live file holding every open decision. When answered it moves unchanged to `docs/OldDocs/`.
+
+| Order | Section | Content rule |
+|---|---|---|
+| 0 | Header table | App, Written, Waiting on (how many decisions, and that nothing has changed yet) |
+| 1 | What happened | What was being done and what stopped it. At most 250 words |
+| 2 | What I need you to decide | One `###` per decision: what the choice is, a table of Option / What happens / What it costs, and **My recommendation:** with the reason. 150 words target, 300 maximum per decision |
+| 3 | What I do when you answer | The steps, one line each. At most 200 words |
+| 4 | Copy this back to me | One fenced block per decision |
+
+Checks: every decision has its options table and its recommendation; the paste-back section holds one block per decision; no glossary; 120 lines target, 260 maximum. It is a human document, so it is rendered to HTML — that is what the owner reads.
+
+### 3.13 Feedback — `docs/<App>-<Upstream>-Feedback.md` (shape fixed 2026-09-08; FR-66)
+
+What it is for: reporting a defect in something this project does not own — the framework, or a library. **Reporting is never refused**, whatever the severity, whatever the day; what is fixed is the shape. One file per upstream, never a combined one, because each upstream reads only its own.
+
+- **Every entry answers `Blocks:` in its first word — `yes` or `no`.** That word decides whether the run stops. `yes` names the row that cannot proceed; `no` says what was done instead.
+- **A non-blocking entry is filed and the work carries on.** No stopping, no asking, no page of analysis mid-run — one entry, then continue, and one line about it when the command ends.
+- **250 words for the report of a live entry** — the eight fields and nothing else; evidence in a code block. Working-out worth keeping goes under a `#### Detail` heading inside the entry and is **not counted**, so a thorough analysis costs nothing while an entry nobody can read at a glance is still refused. A **closed** entry keeps its full body and is exempt entirely: it is the record of what was wrong, and the record is the point.
+- A defect goes here; a **question** goes in a Decision Request (§3.12). Never mixed.
+
+| Order | Section | Content rule |
+|---|---|---|
+| 0 | Header table | App, Upstream, Updated |
+| 1 | Summary | Counts, and how many block right now — or "Nothing is blocked". At most 200 words |
+| 2 | Entries | One entry each, with Severity, Blocks, Repro, Expected, Actual, Encountered in, Workaround, Suggested fix |
+| 3 | Replies from / Resolution status | Optional. The upstream team's answers, newest first, kept in full |
+
+Checks: the eight fields on every live entry; `Blocks:` starting `yes` or `no`, and a `no` that says what was done instead; the per-entry cap on live entries; the Summary naming what is blocked; no glossary. An entry may be written as `###` under Entries or, as every file wrote them before this schema, as its own `##` section — both are read the same way.
 
 ---
 

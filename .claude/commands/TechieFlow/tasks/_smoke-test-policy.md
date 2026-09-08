@@ -12,7 +12,7 @@ A screen passes only if all three hold, at a desktop width and a mobile width:
 
 A failure on any of the three is a defect: write it into the row's Remarks (prefix `⚠ visual:` for 2 and 3) and do not report the row done. A smoke earns a row at most `Implemented`; only an executed verify run writes `Verified`.
 
-The evidence of a smoke is the file `bash .tfcore/utils/tf-verify-screens.sh --screen <name>=<route> … --base <url>` writes (`tests/.artifacts/verify/screens.json`, with a screenshot per screen and width); a row is written `Implemented` only after that run, and its Remark names the file. The application is booted with `bash .tfcore/utils/tf-verify-boot.sh start`, which also drives a Blazor Hybrid Windows head; a head the script cannot boot leaves the row below `Implemented` with the reason.
+The evidence of a smoke is the file `bash .tfcore/utils/tf-verify-screens.sh --screen <name>=<route> … --base <url>` writes (`tests/.artifacts/verify/screens.json`, with a screenshot per screen and width); a row is written `Implemented` only after that run, and its Remark names the file. The application is booted with `bash .tfcore/utils/tf-verify-boot.sh start`, which also drives an embedded-browser desktop head Windows head; a head the script cannot boot leaves the row below `Implemented` with the reason.
 
 ## Run it yourself
 

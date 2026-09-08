@@ -99,3 +99,7 @@ User can type `#yolo` to toggle to YOLO mode (process all sections at once).
 - Select options 2-9 from data/elicitation-methods only
 - Provide detailed rationale explaining decisions
 - End with "Select 1-9 or just type your question/feedback:"
+
+## Record the run
+
+First action of this task: `bash .tfcore/utils/tf-phase.sh start create-doc {App}`. Last action: one `runs.jsonl` record carrying `"cmd":"create-doc"`, written as `.tfcore/tasks/_metrics-emit-gate.md` shows. No status gate here — this command advances no phase. Telemetry has no veto: if the write fails, the command still succeeded.

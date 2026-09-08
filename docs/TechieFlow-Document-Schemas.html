@@ -106,7 +106,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout">
   <nav class="side">
     <h1>TechieFlow — Document Schemas</h1>
-    <div class="sub">Last rendered: 2026-09-06</div>
+    <div class="sub">Last rendered: 2026-09-08</div>
     <div class="group">Contents</div>
     <ol>
         <li><a href="#how-a-schema-works">1. How a schema works</a></li>
@@ -123,6 +123,9 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
         <li class="h3"><a href="#productguide-docs-productguide-md">3.9 ProductGuide — docs/&amp;lt;App&amp;gt;-ProductGuide.md</a></li>
         <li class="h3"><a href="#deployment-checklist-docs-deployment-checklist-md-agreed-2026-09-04-template-checker-rules-and-deploy-checklist-built-2026-09-06">3.10 Deployment Checklist — docs/&amp;lt;App&amp;gt;-Deployment-Checklist.md (agreed 2026-09-04; template, checker rules and *deploy-checklist built 2026-09-06)</a></li>
         <li class="h3"><a href="#phases-docs-phases-md-agreed-2026-09-05-sitting-4b-large-projects-only">3.11 Phases — docs/&amp;lt;App&amp;gt;-Phases.md (agreed 2026-09-05, Sitting 4b; Large projects only)</a></li>
+        <li class="h3"><a href="#brief-docs-brief-md-schema-added-2026-09-08-the-one-page-day-1-reads">3.14 Brief — docs/&amp;lt;App&amp;gt;-Brief.md (schema added 2026-09-08; the one page day-1 reads)</a></li>
+        <li class="h3"><a href="#decision-request-docs-decision-request-md-owner-2026-09-08-fr-65">3.12 Decision Request — docs/&amp;lt;App&amp;gt;-Decision-Request.md (owner, 2026-09-08; FR-65)</a></li>
+        <li class="h3"><a href="#feedback-docs-feedback-md-shape-fixed-2026-09-08-fr-66">3.13 Feedback — docs/&amp;lt;App&amp;gt;-&amp;lt;Upstream&amp;gt;-Feedback.md (shape fixed 2026-09-08; FR-66)</a></li>
         <li><a href="#the-checker-as-built">4. The checker, as built</a></li>
         <li><a href="#what-changed-in-the-framework">5. What changed in the framework</a></li>
         <li><a href="#what-the-checker-says-about-existing-documents">6. What the checker says about existing documents</a></li>
@@ -135,7 +138,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
   </nav>
   <main>
     <h1>TechieFlow — Document Schemas</h1>
-    <div class="subtitle">Rendered 2026-09-06 &middot; source <code>TechieFlow-Document-Schemas.md</code></div>
+    <div class="subtitle">Rendered 2026-09-08 &middot; source <code>TechieFlow-Document-Schemas.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
@@ -154,6 +157,9 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
         <li class="h3"><a href="#productguide-docs-productguide-md">3.9 ProductGuide — docs/&amp;lt;App&amp;gt;-ProductGuide.md</a></li>
         <li class="h3"><a href="#deployment-checklist-docs-deployment-checklist-md-agreed-2026-09-04-template-checker-rules-and-deploy-checklist-built-2026-09-06">3.10 Deployment Checklist — docs/&amp;lt;App&amp;gt;-Deployment-Checklist.md (agreed 2026-09-04; template, checker rules and *deploy-checklist built 2026-09-06)</a></li>
         <li class="h3"><a href="#phases-docs-phases-md-agreed-2026-09-05-sitting-4b-large-projects-only">3.11 Phases — docs/&amp;lt;App&amp;gt;-Phases.md (agreed 2026-09-05, Sitting 4b; Large projects only)</a></li>
+        <li class="h3"><a href="#brief-docs-brief-md-schema-added-2026-09-08-the-one-page-day-1-reads">3.14 Brief — docs/&amp;lt;App&amp;gt;-Brief.md (schema added 2026-09-08; the one page day-1 reads)</a></li>
+        <li class="h3"><a href="#decision-request-docs-decision-request-md-owner-2026-09-08-fr-65">3.12 Decision Request — docs/&amp;lt;App&amp;gt;-Decision-Request.md (owner, 2026-09-08; FR-65)</a></li>
+        <li class="h3"><a href="#feedback-docs-feedback-md-shape-fixed-2026-09-08-fr-66">3.13 Feedback — docs/&amp;lt;App&amp;gt;-&amp;lt;Upstream&amp;gt;-Feedback.md (shape fixed 2026-09-08; FR-66)</a></li>
         <li><a href="#the-checker-as-built">4. The checker, as built</a></li>
         <li><a href="#what-changed-in-the-framework">5. What changed in the framework</a></li>
         <li><a href="#what-the-checker-says-about-existing-documents">6. What the checker says about existing documents</a></li>
@@ -169,7 +175,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <tbody>
 <tr><td>Purpose</td><td>For each human document the framework produces: which sections it must have, how big it may be, and what every row must contain. A checker script enforces this, so the AI cannot drift from the shape.</td></tr>
 <tr><td>Audience</td><td>The owner (reviews the section lists, the size limits and the decisions in §7). Agents read the same rules in machine form at the top of each template.</td></tr>
-<tr><td>Status</td><td><strong>Built in Session 3 of the reset and closed 2026-09-04.</strong> Nine templates carry a schema block; <code>tf-doc-check.sh</code> enforces it; the status gate runs it; day-1 asks the size. §6 holds the real results on fourteen projects. The tenth document, the Deployment Checklist (§3.10), is agreed and is built in Sitting 4b. <strong>Sitting 4b (2026-09-05):</strong> the Large layout (§2) and the eleventh document, Phases (§3.11), agreed and built into the checker, the splitter and the status scripts.</td></tr>
+<tr><td>Status</td><td><strong>Built in Session 3 of the reset and closed 2026-09-04.</strong> Fourteen templates carry a schema block; <code>tf-doc-check.sh</code> enforces it; the status gate runs it; day-1 asks the size. §6 holds the real results on fourteen projects. <strong>Sitting 4b (2026-09-05):</strong> the Large layout (§2) and the Phases document (§3.11), built into the checker, the splitter and the status scripts. <strong>2026-09-08:</strong> three more documents gained one — the Decision Request (§3.12), the feedback file (§3.13) and the Brief (§3.14).</td></tr>
 <tr><td>Companion</td><td><code>TechieFlow-Reset-Plan-2026-09-04.md</code> (Session 3), <code>TechieFlow-Requirements.md</code> (FR-07 to FR-09, FR-14, FR-15, FR-17), <code>TechieFlow-How-It-Works.md</code> §8 (D-1, D-2, D-3, D-20).</td></tr>
 </tbody>
 </table>
@@ -299,7 +305,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </li>
 <li>The Details link resolves to an anchor in the same file.
 </li>
-<li>Every detail entry names its <code>BRD-N</code> item, and every <code>BRD-N</code> item in the BRD has at least one row.
+<li>Every detail entry names its <code>BRD-N</code> item, and every <code>BRD-N</code> item in the BRD has at least one row. A row logged from UAT by <code>*triage-issues</code> or <code>*log-miss</code> starts as <code>Not Started</code> with the marker <code>BRD-pending</code>; the checker warns, not fails, until <code>*amend-docs</code> gives it its BRD item (owner, 2026-09-07, Sitting 4c).
 </li>
 <li>Every UI row carries a mockup link to a file that exists.
 </li>
@@ -403,6 +409,69 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </tbody>
 </table>
 <p>Checks: every screen in the UIDesign files sits in exactly one phase; every phase row has its BRD and checklist files; each phase's BRD ids fall inside that phase's range; no <code>BRD-N</code> or <code>REQ-</code> id appears in two phases. Budget 300 target, 600 maximum.</p>
+<h3 id="brief-docs-brief-md-schema-added-2026-09-08-the-one-page-day-1-reads">3.14 Brief — <code>docs/&lt;App&gt;-Brief.md</code> (schema added 2026-09-08; the one page day-1 reads)<a class="anchor-link" href="#brief-docs-brief-md-schema-added-2026-09-08-the-one-page-day-1-reads">#</a></h3>
+<p>What it is for: the cheapest place to be wrong. Day-1 turns it into the Architecture, the BRD and the mockups, so an error here is corrected in two minutes and an error found later is corrected in a phase.</p>
+<p>It replaced a 221-line inherited template with twelve sections — executive summary, problem statement, goals and metrics, KPIs, post-MVP vision, expansion opportunities — that produced a document nobody read and nothing checked. The framework's own review says what a brief is: <em>"a one-page brief: product, users, must-do, out of scope."</em></p>
+<table>
+<thead><tr><th>Order</th><th>Section</th><th>Content rule</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>Header table</td><td>App, Date</td></tr>
+<tr><td>1</td><td>What it is</td><td>What the product does, in plain words, no technology. At most 150 words</td></tr>
+<tr><td>2</td><td>Who it is for</td><td>Each role, and what they are trying to get done. At most 150 words</td></tr>
+<tr><td>3</td><td>Must do</td><td>A numbered list. One line is one outcome a user gets, and becomes BRD items at day-1</td></tr>
+<tr><td>4</td><td>Out of scope</td><td>What day-1 must not build. At most 150 words</td></tr>
+<tr><td>5</td><td>Open questions</td><td>Optional. A decision not yet taken, so day-1 asks instead of assuming</td></tr>
+</tbody>
+</table>
+<p>Checks: "Must do" is a numbered list and not prose, and holds at most 25 lines — longer than that and it is a BRD, not a brief; no glossary; 60 lines target, 120 maximum. Written by <code>*create-project-brief</code>, which also renders it, because the owner reads it.</p>
+<h3 id="decision-request-docs-decision-request-md-owner-2026-09-08-fr-65">3.12 Decision Request — <code>docs/&lt;App&gt;-Decision-Request.md</code> (owner, 2026-09-08; FR-65)<a class="anchor-link" href="#decision-request-docs-decision-request-md-owner-2026-09-08-fr-65">#</a></h3>
+<p>What it is for: the one place a command puts a choice only the owner can make. Before this existed, an agent argued the choice out in the terminal, or wrote an unshaped document of its own — the thing that made a question hard to find and filled the context it was competing with.</p>
+<p>The rules that matter more than the shape:</p>
+<ul>
+<li><strong>Plain, simple English.</strong> No coined terms, no framework shorthand, no word the owner would have to look up. A glossary section is refused: a document that has to teach its vocabulary before it can ask its question was written for the wrong reader.
+</li>
+<li><strong>A recommendation, always</strong>, with the reason in one sentence. A choice handed over without one is work pushed back, not a question.
+</li>
+<li><strong>A block to paste back</strong>, one per decision, each complete on its own. That is how the answer travels; the file is never read back by an agent and is never named in <code>core-config.yaml</code>.
+</li>
+<li><strong>One line in the terminal</strong>, naming the file and how many decisions it holds. Nothing else — no restatement, no argument.
+</li>
+<li>One live file holding every open decision. When answered it moves unchanged to <code>docs/OldDocs/</code>.
+</li>
+</ul>
+<table>
+<thead><tr><th>Order</th><th>Section</th><th>Content rule</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>Header table</td><td>App, Written, Waiting on (how many decisions, and that nothing has changed yet)</td></tr>
+<tr><td>1</td><td>What happened</td><td>What was being done and what stopped it. At most 250 words</td></tr>
+<tr><td>2</td><td>What I need you to decide</td><td>One <code>###</code> per decision: what the choice is, a table of Option / What happens / What it costs, and <strong>My recommendation:</strong> with the reason. 150 words target, 300 maximum per decision</td></tr>
+<tr><td>3</td><td>What I do when you answer</td><td>The steps, one line each. At most 200 words</td></tr>
+<tr><td>4</td><td>Copy this back to me</td><td>One fenced block per decision</td></tr>
+</tbody>
+</table>
+<p>Checks: every decision has its options table and its recommendation; the paste-back section holds one block per decision; no glossary; 120 lines target, 260 maximum. It is a human document, so it is rendered to HTML — that is what the owner reads.</p>
+<h3 id="feedback-docs-feedback-md-shape-fixed-2026-09-08-fr-66">3.13 Feedback — <code>docs/&lt;App&gt;-&lt;Upstream&gt;-Feedback.md</code> (shape fixed 2026-09-08; FR-66)<a class="anchor-link" href="#feedback-docs-feedback-md-shape-fixed-2026-09-08-fr-66">#</a></h3>
+<p>What it is for: reporting a defect in something this project does not own — the framework, or a library. <strong>Reporting is never refused</strong>, whatever the severity, whatever the day; what is fixed is the shape. One file per upstream, never a combined one, because each upstream reads only its own.</p>
+<ul>
+<li><strong>Every entry answers <code>Blocks:</code> in its first word — <code>yes</code> or <code>no</code>.</strong> That word decides whether the run stops. <code>yes</code> names the row that cannot proceed; <code>no</code> says what was done instead.
+</li>
+<li><strong>A non-blocking entry is filed and the work carries on.</strong> No stopping, no asking, no page of analysis mid-run — one entry, then continue, and one line about it when the command ends.
+</li>
+<li><strong>250 words for the report of a live entry</strong> — the eight fields and nothing else; evidence in a code block. Working-out worth keeping goes under a <code>#### Detail</code> heading inside the entry and is <strong>not counted</strong>, so a thorough analysis costs nothing while an entry nobody can read at a glance is still refused. A <strong>closed</strong> entry keeps its full body and is exempt entirely: it is the record of what was wrong, and the record is the point.
+</li>
+<li>A defect goes here; a <strong>question</strong> goes in a Decision Request (§3.12). Never mixed.
+</li>
+</ul>
+<table>
+<thead><tr><th>Order</th><th>Section</th><th>Content rule</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>Header table</td><td>App, Upstream, Updated</td></tr>
+<tr><td>1</td><td>Summary</td><td>Counts, and how many block right now — or "Nothing is blocked". At most 200 words</td></tr>
+<tr><td>2</td><td>Entries</td><td>One entry each, with Severity, Blocks, Repro, Expected, Actual, Encountered in, Workaround, Suggested fix</td></tr>
+<tr><td>3</td><td>Replies from / Resolution status</td><td>Optional. The upstream team's answers, newest first, kept in full</td></tr>
+</tbody>
+</table>
+<p>Checks: the eight fields on every live entry; <code>Blocks:</code> starting <code>yes</code> or <code>no</code>, and a <code>no</code> that says what was done instead; the per-entry cap on live entries; the Summary naming what is blocked; no glossary. An entry may be written as <code>###</code> under Entries or, as every file wrote them before this schema, as its own <code>##</code> section — both are read the same way.</p>
 <hr>
 <h2 id="the-checker-as-built">4. The checker, as built<a class="anchor-link" href="#the-checker-as-built">#</a></h2>
 <p><code>bash .tfcore/utils/tf-doc-check.sh</code> takes document paths, or <code>--app &lt;App&gt;</code> to check every human document of that app plus <code>PROJECT-STATUS.md</code>. For each document it finds the template by file name, reads the schema block, and checks:</p>

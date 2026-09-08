@@ -8,6 +8,53 @@
 
 ---
 
+## 2026-09-08 — what the owner reads
+
+The first task given to a project team after the reset (TfLens, `*amend-docs`) handed back an unshaped 244-line document full of framework shorthand, plus one new low-severity entry in its framework-feedback file. The owner read both and named four things. All four were the framework's, not the project's.
+
+**1. The miss log was being rendered to HTML.** `tf-emit.sh` rebuilt `docs/<App>-Misses.md` after every miss and rendered a sibling HTML nobody opens — **20 of them across the estate**. The rendering rule already said only human-readable documents are rendered; only the checklist was named, so nothing enforced it. `tf-misses-md.py` no longer renders and deletes a stale copy it finds; `tf-render-html.py` refuses a miss log the way it refuses a checklist, identifying the document by content, not by suffix. The 20 files are gone. **FR-64**, checked by `fr_64`.
+
+**2. "No rate card, ever" was wrong.** `TfLens-Metrics-Update-Prompt.md` §6 flattened a producer rule — no stream stores a priced figure — into a ban on what a reader may display, contradicting `Miss-Telemetry-TechieFlow.md`, which blesses TfLens's labelled read-time estimate in as many words. Corrected in place with the correction stated. Nothing in TfLens is struck.
+
+**3. Feedback is never refused; it gets a shape.** The feedback template had no schema block and was never checked, and it did not mention framework feedback at all — which is why an entry could arrive at 481 words without ever saying whether the work was blocked. It now carries a schema: eight fields, **`Blocks: yes|no` as the first answer**, 250 words per live entry, a Summary that says what is blocked. A closed entry is exempt: it is the record. Both layouts are read, so no existing file has to be rewritten. **FR-66**, checked by `fr_66`.
+
+**4. A decision for the owner is a document, not an argument in the terminal.** New document type, `docs/<App>-Decision-Request.md` (Schemas §3.12): plain English, options with their cost, a recommendation with its reason, and one block per decision to paste back. Rendered to HTML — it is written for the owner. Never read back by an agent. The command says one line naming the file and stops. A glossary section is refused, because a document that has to teach its own vocabulary before it can ask its question was written for the wrong reader. **FR-65**, checked by `fr_65`.
+
+The language rule behind 3 and 4 is `.tfcore/tasks/_owner-language.md`, loaded by all four personas: everything the owner reads is plain, simple English — no coined terms, no framework shorthand, no word they would have to look up.
+
+**5. The maintainer answered all of that with 825 words of prose in three files, and the owner caught it.** The maintenance contract already said *"a new rule is a script or a hook, not a paragraph"* — rule 3, stated since the reset, enforced by nothing. Logged as `MISS-TechieFlow-20260908-04`, sorted `ignored`; the four questions prescribe a hook or a script for `ignored`, so:
+
+- The rule file was cut from **825 words to 376**, keeping only what applies when no particular document is being written and what no script can check. Everything about a document's shape moved to the template the writing agent already reads. Shared rules: **1,742 words before today → 2,118**, against the 3,000 cap.
+- **FR-67 and `tests/mirror/dup-check.py`**: any sentence of 12 or more words appearing in two of the framework's live rule files fails `tests/mirror/run.sh`. 26 deliberate duplicates are baselined in `allowed-duplicates.txt` — the two day-1 variants, the personas' shared standing rules, the two library-feedback files; the 27th fails. Proven by planting one sentence in a task, a template and a document: it failed and named all three. A word cap stops one file growing; this stops the rule set rotting into copies that drift.
+- The owner's own words on why a promised discipline is not a fix: *"shouldn't the framework do all these checks and implementation by itself rather than adding prose to the text rules"*. Correct, and it is now the standing answer to any framework change: **the check first, and prose only for what the check cannot reach, in exactly one place.**
+
+The three documents a person reads carry the new rules in the fewest words that say them: two rows and eight words in `TechieFlow-How-It-Works.md` §2 and §4, three table rows in the README's "What it produces", one standing rule in the briefing. No new section anywhere; the duplication check confirms none of it is said twice.
+
+**6. The framework's own checklist had been failing since the reset, and the maintainer called it "pre-existing" rather than his own.** The owner's correction — *"you are the only one working on this repo"* — is the whole of `MISS-TechieFlow-20260908-05`, sorted `ignored`. Both lines are now fixed and green:
+
+- **FR-03, technology neutrality.** 20 lines across 7 files named a technology. The serious one was `handoff-phase.md`, which emitted `dotnet restore`, `dotnet build`, `dotnet run --project …` and `dotnet test` as **literal numbered deployment steps** — so a project on any other stack would have received .NET commands in the runbook handed to whoever deploys it. Those steps now read "the stack's build command", taken from the Architecture's stack table and `tf-build.sh`. The two shipped library sub-agents stay nameable where the name is the routing address; that exception is written into FR-03 rather than left implicit in a regex.
+- **FR-34, every command leaves a record.** Five commands wrote none — `create-doc`, `create-deep-research-prompt`, `facilitate-brainstorming-session`, `generate-html`, `metrics-report` — so their time and tokens appeared in no report. **The check was itself too weak to see the fifth**: it matched the bare words "status gate", which `metrics-report.md` contained in the sentence *"Do not run the status gate"*. It now requires a real call. All five are wired to `_metrics-emit-gate.md`.
+
+Both proven by breaking them again: planting `dotnet build` back into the handoff runbook fails FR-03 and names the line; removing the record step from `generate-html` fails FR-34 and names the file. **The framework's own checklist is 33 of 33 graded lines passing — the first time it has been green.**
+
+**7. An audit for anything else the reset left behind.** Two misses, both `unsaid`, both now fixed:
+
+- **`MISS-TechieFlow-20260908-06` — seven commands existed in one harness only.** Four on the architect (`*create-backend-architecture`, `*create-brownfield-architecture`, `*create-front-end-architecture`, `*create-full-stack-architecture`) and three on the analyst (`*create-project-brief`, `*create-competitor-analysis`, `*perform-market-research`), all BMAD inheritance, all routing through `create-doc` with a YAML template. They passed the mirror check because it reads **task files**, and these had none of their own. **The owner kept `*create-project-brief`** — the framework's own review calls it *"used regularly; the brief is the input to day-1"* — and removed the other six with their six templates. The kept one is now registered for OpenCode.
+- **`MISS-TechieFlow-20260908-07` — those templates carry no schema block**, so anything they produced escaped `tf-doc-check.sh` entirely. Six are gone; `project-brief-tmpl.yaml` and `brainstorming-output-tmpl.yaml` remain and are the two that still need one.
+
+**FR-68 and `tests/mirror/cmd-parity.py`** read all four personas in both command shapes — the analyst and architect's YAML list, the flow-master and verifier's markdown table — and require every command to have its own `techieflow:tasks:<command>` registration, because OpenCode addresses a task by its registered name and cannot alias. **A first, looser version of this check would have passed all seven of them**, since each line named `create-doc` and `create-doc` is registered: the defect was never a missing task, it was a command *name* living in one harness. Tightened, it then found five more aliases OpenCode could not reach — **`*verify` and `*metrics` among them** — now registered, so both harnesses offer identical names. 22 commands checked, all resolving.
+
+Also corrected: the briefing described its own checklist as 63 lines (it is 68) and pointed at a TfLens document that had moved. Three earlier audit "findings" were bugs in the audit script itself, not the framework, and are recorded as such rather than as fixes.
+
+**8. The brief became a checked document, and the leftovers went.** Closing the last two items on the audit list rather than reporting them:
+
+- **`docs/<App>-Brief.md` now has a schema** (Schemas §3.14) and its own command. It replaced a 221-line inherited template whose twelve sections — executive summary, problem statement, goals and metrics, KPIs, post-MVP vision, expansion opportunities — produced a document nobody read and nothing checked, for what this framework's own review calls *"a one-page brief: product, users, must-do, out of scope"*. Five sections, 120 lines maximum, and one rule that matters: **"Must do" is a numbered list, not prose**, because day-1 turns each line into requirements. `*create-project-brief` is now a task of its own rather than an alias for `create-doc` plus a YAML file, so it runs the checker, renders for the owner, and emits a run record. A brief whose "Must do" is a paragraph is refused — proved in the fixture set, good and broken.
+- **Leftovers removed:** `.tfcore/utils/techieflow-doc-template.md` (an 8.7 KB specification in the scripts folder that nothing called), `docs/TechieFlow-Telemetry-Guide.md` (superseded by `Telemetry-Explained.md`, still opening with a Codex banner) and `docs/TechieFlow-Enforcement-Gap.md` (a defect report from 25 August). The two references left dangling by those deletions were repointed at the document that replaced them; git holds the removed files.
+
+Proven: `tests/mirror` 18/18 · `tests/doc-check` 12/12 with all three new document types in the fixtures, good and broken · `tests/bugs` 51/51 · `tests/requirements` 68 lines, 34 of 34 graded lines passing (FR-03 and FR-34 fixed the same day, see 6) · `npm run test:install` 30/31, the one difference a permission bit on a Windows mount. Deployed to all 19 projects and verified there. Misses `MISS-TechieFlow-20260908-01` (`ignored`), `-02` (`unsaid`), `-03` (`weak-check`), `-04` and `-05` (both `ignored`, both the maintainer's own), `-06` and `-07` (both `unsaid`).
+
+---
+
 ## The reset (2026-09-04 to 2026-09-07)
 
 The six sessions that shrank the framework are recorded in their own plan, one Done line each, not repeated here: `docs/TechieFlow-Reset-Plan-2026-09-04.md`. What each session produced:

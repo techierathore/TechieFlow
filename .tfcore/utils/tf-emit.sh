@@ -1256,8 +1256,9 @@ PY
 python3 -c "$TF_PROG" "$MET_DIR" "$STREAM" "$ROOT" 2>"$TF_ERR"
 
 # The readable miss list beside the record (FR-31, Session 5 2026-09-07): after any write to the
-# misses stream, docs/<App>-Misses.md and its HTML are rebuilt from the stream, so the file is
-# never older than the record. Best effort, like everything else here.
+# misses stream, docs/<App>-Misses.md is rebuilt from the stream, so the file is never older than
+# the record. Markdown only — the miss log is an agent document and is never rendered to HTML
+# (owner, 2026-09-08). Best effort, like everything else here.
 if [[ "$STREAM" == "misses" ]]; then
   python3 "$(dirname "${BASH_SOURCE[0]}")/tf-misses-md.py" --root "$ROOT" --quiet 2>"$TF_ERR" || true
 fi
