@@ -19,6 +19,10 @@
 #   tf-emit.sh --amend MISS-App-20260828-01 why_missed missing-checklist-item
 #                                               # fills a field that is still null on a miss already on
 #                                               # the stream (SCHEMA.md §5.5.7). Never overwrites.
+#   tf-emit.sh --void-run build-phase 2026-09-09T11:40:00Z "the start time was guessed, not measured"
+#                                               # marks a WRONG run record as not to be counted: both
+#                                               # records stay, every figure skips it and says how many
+#                                               # and why (SCHEMA.md §2.7). Refuses if no such run.
 #   tf-emit.sh --origin-of REQ-UI-014           # prints "<started> <cmd> <agent>" of the last build or fix
 #                                               # run that touched the row, nothing when there is none
 #   tf-emit.sh --where                          # prints the resolved docs/metrics dir
@@ -450,6 +454,69 @@ PY
             echo "tf-emit: amended $AMID — $AFLD = $AVAL" ;;
     "REFUSED "*) echo "tf-emit: amend refused — ${AREC#REFUSED }" ;;
     *) echo "tf-emit: amend could not be evaluated — nothing written" ;;
+  esac
+  exit 0
+fi
+
+# --- write helper: mark a run record as not to be counted -----------------
+# SCHEMA.md §2.7. The same doctrine as --amend, one stream over: a run record that
+# is WRONG cannot be edited or deleted, because the stream is append-only and the
+# evidence that it happened is worth keeping. So the correction is another record.
+#
+#   tf-emit.sh --void-run <cmd> <started> "<why it is wrong>"
+#
+# It names the run by its own `cmd` and `started` — the pair every run record
+# carries and the key the readers already use — and every figure then skips it,
+# with the count and the reasons printed. A void that names no run on this stream
+# is refused: it would be a claim about nothing. It is deliberately NOT a delete:
+# both records stay, and a reader can see what was corrected and why.
+if [[ "$1" == "--void-run" ]]; then
+  VCMD="$2"; VSTART="$3"; VWHY="$4"
+  if [[ -z "$VCMD" || -z "$VSTART" || -z "$VWHY" ]]; then
+    echo "tf-emit: --void-run needs <cmd> <started> \"<reason>\""
+    exit 0
+  fi
+  VREC="$(python3 - "$MET_DIR/runs.jsonl" "$VCMD" "$VSTART" "$VWHY" 2>"$TF_ERR" <<'PY' || true
+import json, sys
+path, cmd, started, why = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+target, voided, app = None, False, None
+try:
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            if r.get("cmd") == cmd and r.get("started") == started:
+                if r.get("kind") == "run-void":
+                    voided = True
+                elif r.get("kind", "run") == "run":
+                    target = r
+                    app = r.get("app")
+except FileNotFoundError:
+    pass
+
+if target is None:
+    print("REFUSED no run record %s started %s on this stream" % (cmd, started)); raise SystemExit(0)
+if voided:
+    print("REFUSED %s started %s is already voided — one void is enough" % (cmd, started)); raise SystemExit(0)
+if not why.strip():
+    print("REFUSED a void needs a reason a reader can check"); raise SystemExit(0)
+
+print("OK " + json.dumps({"kind": "run-void", "app": app, "cmd": cmd,
+                          "started": started, "reason": why.strip()},
+                         separators=(",", ":"), ensure_ascii=False))
+PY
+)"
+  case "$VREC" in
+    "OK "*) printf '%s' "${VREC#OK }" | bash "${BASH_SOURCE[0]}" runs
+            echo "tf-emit: voided $VCMD started $VSTART — $VWHY"
+            echo "         both records stay on the stream; every figure now skips the run and says so" ;;
+    "REFUSED "*) echo "tf-emit: void refused — ${VREC#REFUSED }" ;;
+    *) echo "tf-emit: void could not be evaluated — nothing written" ;;
   esac
   exit 0
 fi
@@ -1184,6 +1251,11 @@ _ALLOWED = {
                       "routed", "tokens_in", "tokens_out", "tokens_cache_read", "tokens_cache_write",
                       "cost_usd", "tokens_scope", "attempt", "subagent_runs", "tokens_out_subagents",
                       "model_tokens_out", "session_id", "usage_start_event_ts", "usage_end_event_ts"},
+    # A correction, not a deletion: it names a run record that is wrong by the pair every
+    # run carries (`cmd` + `started`) and says why, so every figure can skip it while the
+    # record itself stays where it is. Written by --void-run, which refuses one that names
+    # no run. SCHEMA.md §2.7; tests/regression/run.sh tf_void.
+    ("runs", "run-void"): {"cmd", "started", "reason"},
     ("gates", "gate"): {"run_id", "req_id", "req_class", "attempt", "verdict", "gate", "gates_run",
                         "failure_class", "prior_verdict", "proof", "escaped", "phase", "result", "detail", "at",
                         "tier", "tier_model", "model", "models", "tokens_in", "tokens_out", "tokens_cache_read",

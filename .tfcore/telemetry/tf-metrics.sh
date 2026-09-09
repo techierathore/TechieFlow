@@ -164,6 +164,42 @@ def read_stream(repo, stream):
     return out
 
 
+def apply_voids(runs, app=None):
+    """Drop the run records a `run-void` names, and hand back what was dropped.
+
+    A stream is append-only, so a run record written with a wrong figure can be
+    neither edited nor deleted — and nothing inside the record says it is wrong, so
+    every figure over it is quietly polluted. The correction is therefore another
+    record: `run-void` names a run by the pair every run carries (`cmd` + `started`)
+    and says why (SCHEMA.md §2.7, written by `tf-emit.sh --void-run`).
+
+    Two rules, both the same one this file applies everywhere else. The voided record
+    leaves every figure — it is not clamped, guessed at or half-counted. And the count
+    of what left travels with the figures, because a total offered without its
+    exclusions is just a different wrong number. A void naming no run on this stream
+    is an orphan: it is counted and reported, never silently dropped, exactly as an
+    orphaned miss-amend is. tests/regression/run.sh tf_void."""
+    key = lambda r: (r.get("cmd"), r.get("started"))
+    voids = {}
+    for v in runs:
+        if v.get("kind") == "run-void" and v.get("started"):
+            voids[key(v)] = v
+    kept, dropped, reasons = [], 0, []
+    matched = set()
+    for r in runs:
+        if r.get("kind") == "run-void":
+            continue
+        if key(r) in voids:
+            matched.add(key(r))
+            dropped += 1
+            v = voids[key(r)]
+            reasons.append("%s %s %s — %s" % (app or r.get("app") or "?", r.get("cmd"),
+                                              r.get("started"), v.get("reason") or "no reason recorded"))
+            continue
+        kept.append(r)
+    return kept, dropped, reasons, len(set(voids) - matched)
+
+
 def emit(repo, stream, records, dry_run, quiet=False):
     """Append via tf-emit.sh — the single append primitive. Never write JSONL directly.
 
@@ -1046,9 +1082,13 @@ def analyse(repos):
     per_repo = []
     commit_dupes = 0
     session_dupes = 0
+    voided_runs = 0
+    void_reasons = []
+    void_orphans = 0
     for repo in repos:
         g = read_stream(repo, "gates")
-        r = read_stream(repo, "runs")
+        r, vn, vr, vo = apply_voids(read_stream(repo, "runs"), app_name(repo))
+        voided_runs += vn; void_reasons += vr; void_orphans += vo
         misses += read_stream(repo, "misses")
         # Per repo, not across them (SCHEMA.md §4): the OpenCode plugin
         # appends a cumulative snapshot at every root-session idle.
@@ -1122,6 +1162,10 @@ def analyse(repos):
 
     out = {"per_repo": per_repo, "tainted_reqs": sorted("%s:%s" % x for x in tainted if x[1]),
            "live": {}, "backfilled": {}, "pooled": {},
+           # what a `run-void` took out of every figure above, and why (SCHEMA.md §2.7)
+           "runs_voided_n": voided_runs,
+           "runs_voided": void_reasons,
+           "run_voids_orphaned_n": void_orphans,
            "misses": analyse_misses(misses),
            "phases": analyse_phases(runs)}
 
@@ -1263,6 +1307,20 @@ def print_report(a, repos):
         print("  NOTE: the figures above are deliberately NOT combined. Merging them")
         print("        across project_type or across live/backfilled would produce a")
         print("        number that cannot be defended. See SCHEMA.md §6.")
+        print("")
+    if a.get("runs_voided_n"):
+        print("  %d run record(s) VOIDED — named by a run-void record as wrong, so they are"
+              % a["runs_voided_n"])
+        print("  in no figure above. Both records stay on the stream; nothing was deleted:")
+        for line in a.get("runs_voided", [])[:6]:
+            print("    " + line)
+        if len(a.get("runs_voided", [])) > 6:
+            print("    ... and %d more" % (len(a["runs_voided"]) - 6))
+        print("")
+    if a.get("run_voids_orphaned_n"):
+        print("  %d run-void record(s) name a run that is not on this stream — the void was"
+              % a["run_voids_orphaned_n"])
+        print("  written against a record that never arrived. Nothing was excluded for them.")
         print("")
     if a["tainted_reqs"]:
         print("  %d REQ(s) excluded from the LIVE first-pass rate because they carry"

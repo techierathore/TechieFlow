@@ -147,6 +147,24 @@ Named projects: TfLens's eight build runs took a median of 2 h 16 min and 457,00
 
 ---
 
+## 5b. When a record turns out to be wrong
+
+The five files are append-only: nothing is ever edited and nothing is ever deleted. That is what makes the numbers worth quoting — no one can go back and tidy a figure they did not like. It leaves one real problem, and on 2026-09-09 it happened here: a run record was written with a **guessed** start time, so it claimed five hours for a session that took nineteen minutes. Its own start and end agreed with each other, so no check could catch it, and it could not be corrected.
+
+**The answer is another record, never an edit.** `run-void` names the bad run and says why it is wrong. Both records stay exactly where they are, and every figure then skips the one that was named — and says so:
+
+```
+1 run record(s) VOIDED — named by a run-void record as wrong, so they are
+in no figure above. Both records stay on the stream; nothing was deleted:
+  TechieFlow framework-reset 2026-09-09T11:40:00Z — the start time was guessed, not measured
+```
+
+Three things make this a correction rather than a cover-up. The reason travels with it, so anyone can check whether the record deserved to go. The count travels with the figures, because a smaller total offered without its exclusions is just a different wrong number. And there is no way to *replace* the bad figure with a better one — a duration nobody measured cannot be recovered by asserting one, so the run simply leaves.
+
+**On stage.** "The files can never be edited, so a wrong record can't be quietly fixed. It gets a second record saying it's wrong and why, and every report tells you how many were excluded. You can always see what was thrown out."
+
+---
+
 ## 6. What is not in the numbers yet
 
 - **Owner reviews.** Since 2026-09-06 a review of a phase's output is a record: how many corrections the owner gave, what producing the output cost, what the corrections cost. Two exist (MyDiary day-1). The report prints them; the figure is not yet worth a sentence.

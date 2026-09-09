@@ -8,6 +8,89 @@
 
 ---
 
+## 2026-09-09 (second sitting) — the two the verifier got wrong
+
+TfLens's decision request came back with five tooling entries, `TF-018` to `TF-022`. Three were
+already fixed in the sitting below and were re-proved rather than re-fixed: `TF-018`, `TF-019` and
+`TF-020` each hold under `tests/regression/run.sh` as it stands. The two that were new are both in
+the **verifier**, and both have the same shape — a check that reported a defect where there was
+none, which is the failure that teaches a reader to stop reading the report.
+
+| | Fix |
+|---|---|
+| **TF-022** | `tf-verify-tests.sh` computed `ok = status in ("passed", "expected")`, so a **skipped** browser test took the same path as a failed assertion. `test.skip(!SEEDED, "needs the seeded dataset")` says the state does not exist in the data yet: it is not a pass and it is not a defect. TfLens carried `FAIL` on `REQ-UI-039` and `REQ-UI-034` where nothing was wrong, and under `build-phase` step 7 a `FAIL` re-enters FIX mode for up to five cycles against a clause no code can satisfy. `add()` has a third outcome now; a row whose clauses were **all** skipped is `NOT-TESTED`, which `tf-verify-verdict.py` reads as not measured — no gate record, no `Verified`. The unit path records a skipped test the same way instead of dropping the line, so the row shows its evidence rather than looking untested. `MISS-TechieFlow-20260909-05`. |
+| **TF-021** | `tf-verify-screens.mjs` compared the box an element is **laid out** in, not the box it **paints** in. A table row 1166.9px wide inside a container reporting `clientWidth 492` reached x=1480 while its pixels stopped at x=805, so the card beginning at x=846 — inside the clipped-away region — was reported as overlapped. Every box is now intersected with the clip rectangle of each ancestor whose overflow is not `visible`, and overlap and off-screen are judged on that; zero-size still uses the element's own box, because a control scrolled out of view is not a collapsed one. The second half of the entry was the same tool measuring a Blazor Server screen **before its circuit painted** and reporting every anchored control missing while its own screenshot showed them: `--render-wait` (5000 ms) waits for the first render, and grades what is there when nothing appears. `MISS-TechieFlow-20260909-04`. |
+
+**Both were proved the way the suite requires**: the fixtures were rebuilt from the measurements in
+TfLens's own entries — a 492/1167 scroller with a card at x=846, a screen that paints at 2.5 s, a
+playwright report carrying one passed and two skipped clauses — and each case was run against the
+script as TfLens found it **before** the fix. `tf_021a` and `tf_022` fail there and pass here; a case
+that passes both ways proves nothing and is not kept. Three assertions were added specifically so
+the fixes cannot buy their quiet by going blind: a genuinely overlapping screen, a control that is
+genuinely absent, and a real assertion failure all still fail.
+
+`tf_021` needs a browser, so it runs where playwright resolves — a project has it at its root, and
+`TF_PLAYWRIGHT_DIR` names one otherwise. Where it does not resolve the case prints `skip` and says
+why: a case that could not run must never read as a case that passed.
+
+**A numbering correction.** The guard-metrics defect found here last sitting had been filed in the
+suite as `tf_021`, which collided with TfLens's screens entry. `TF-` numbers belong to the reporting
+project's feedback file; ours is renamed `guard_reads`.
+
+**One record on this repository's own `runs.jsonl` was wrong, and it was this session's — so the
+framework grew the one thing it had no way to do.** The maintenance run record was hand-assembled
+with a **guessed** `started` of `11:40:00`, where the session actually began at `16:31:54`: 18,674
+seconds stored against a real nineteen minutes. Its own timestamps agreed with each other, so no
+check could catch it, and the stream is append-only, so it could be neither edited nor deleted.
+`MISS-TechieFlow-20260909-06`, sorted `ignored` — the rule that telemetry is emitted by script and
+never assembled by hand was written and not followed.
+
+**`kind: "run-void"` is the answer, and it is the §5.5.7 answer one stream over** (SCHEMA **§2.7**,
+**FR-69**). A void names a run by the pair every run carries — `cmd` + `started` — and says why it is
+wrong. Both records stay exactly where they are; every figure skips the named one; the count and the
+reasons are printed beside the figures, because a smaller total offered without its exclusions is
+just a different wrong number. `bash .tfcore/utils/tf-emit.sh --void-run <cmd> <started> "<reason>"`
+refuses a void that names no run and a second void on the same run, and a void whose run never
+arrived is reported as an orphan rather than silently dropped. There is deliberately **no corrected
+figure**: a duration nobody measured cannot be recovered by asserting one, so the run leaves rather
+than improves. The record above is now voided, and this repository's effort figures no longer carry
+its five phantom hours.
+
+**Two more found by the owner's questions about the two fixes above**, which is the argument for
+explaining a change in plain words rather than summarising it.
+
+*"When does the work get built, if the builder and the verifier both skip it?"* — Nothing skips it, and
+the lifecycle is now pinned by a case: a `NOT-TESTED` row keeps its status and its percentage, is
+never `Verified`, is not terminal, and so appears in the build list on every pass. But the status
+document told the owner to run the verifier again, forever, for a row whose tests decline to run —
+a loop that looks like progress. `tf-status-facts` now separates *built, waiting for a verify* from
+*could not be measured here*, and for the second says what it actually needs: create the data,
+change the acceptance line, or mark the row N/A. Only the owner can choose.
+
+**And under that sat a real defect: every project's status document said it had never been
+verified.** `tf-status-facts` read only the LAST LINE of `docs/.last-verify.json` — a reader written
+for an append-per-line ledger no version of the verifier has ever produced. The verifier writes one
+pretty-printed object, so the reader parsed the closing brace, threw, and fell back to `not-run`.
+TfLens, with 69 of 73 rows Verified and an 86-line ledger, reported `last_verified_build: not-run`
+and `last_verified_date: never`. Fixed, pinned by `tf_ledger`, and logged as
+`MISS-TechieFlow-20260909-07` (`weak-check`: nothing exercised the reader against the writer's own
+output).
+
+*"Have you hardcoded a technology again?"* — One line, and it is gone. The render wait had a
+Blazor-specific selector in it; it was also redundant, because the generic condition (a control the
+mockup anchors appeared, or the document has text or a form control) already covers a painted error
+banner. **The pre-existing hardcoding in the same file was generalised while the question was open**:
+`#blazor-error-ui` was the only error banner the render check could see, so the check silently did
+nothing on every other stack. It is now a LIST — `--error-selector` (repeatable), defaulting to that
+id plus a neutral `[data-error-ui]` any project can put on its own banner — proved on three fixtures,
+one per shape. The `--cdp` help no longer names a UI stack either. What remains stack-aware in the
+verifier is detection, not assumption: `.sln`/`.csproj` discovery and the unit-test console
+vocabulary in `tf-verify-tests.sh`, which is the same sanctioned pattern as
+`tf-gitignore-audit.sh` reading the stack from the tree.
+
+The regression suite now runs 43 assertions across thirteen defects and the self-check round trip. No task file, template, hook or
+delivery script changed, so mirror parity and the two delivery routes are untouched.
+
 ## 2026-09-09 — the unhappy path
 
 TfLens's framework-feedback file arrived carrying eight open entries, and the owner asked the

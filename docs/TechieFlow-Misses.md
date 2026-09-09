@@ -3,16 +3,20 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 135 logged: 45 open, 89 fixed, 1 will not fix |
+| Count | 139 logged: 49 open, 89 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
 | Updated | 2026-09-09 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
-## Open (45)
+## Open (49)
 
 | Miss | Found | Whose gap | What went wrong |
 |---|---|---|---|
+| MISS-TechieFlow-20260909-07 | 2026-09-09 by owner | the check was too weak | tf-status-facts read only the last line of docs/.last-verify.json, which the verifier writes as one pretty-printed object, so every project's status document reported last_verified_build not-run and last_verified_date never however many verify runs it had behind it. |
+| MISS-TechieFlow-20260909-06 | 2026-09-09 by owner | said and ignored | The maintenance run record for this sitting was hand-assembled with a guessed start time of 11:40, when the session actually began at 16:31:54, so it stores 18674 seconds against a real 19 minutes; the stream is append-only and the record cannot be corrected. |
+| MISS-TechieFlow-20260909-05 | 2026-09-09 by owner | the check was too weak | tf-verify-tests counted a skipped browser test as a failing one, so a clause guarded on data that does not exist yet was recorded as a defect and sent the row back into FIX mode against a gate no code could clear. |
+| MISS-TechieFlow-20260909-04 | 2026-09-09 by owner | the check was too weak | tf-verify-screens measured an element's laid-out box instead of the box it paints in, so a wide table inside a horizontal scroller was reported as covering the card beside it and a correctly built screen failed the visual check. |
 | MISS-TechieFlow-20260909-03 | 2026-09-09 by owner | the check was too weak | guard-metrics.sh blocked any python or node command naming a stream, so it refused reads as well as writes, contradicting its own header and blocking verification of the fixes it protects. |
 | MISS-TechieFlow-20260909-02 | 2026-09-09 by owner | the check was too weak | SCHEMA 5.5.7's closed-vocabulary rule for amendable fields was written as a second lock on a door the fill-blanks-only rule already locked, so it blocked a legitimate correction of a miss's own sentence and cost TfLens a round trip to report it. |
 | MISS-TechieFlow-20260909-01 | 2026-09-09 by owner | the check was too weak | The reset proved every script on finished projects and clean generated fixtures, so no test ever ran a script against a mid-flight broken project; eight script defects reached TfLens, and tf-build-list, tf-gitignore-audit and the metrics rollup are invoked by no test runner at all. |

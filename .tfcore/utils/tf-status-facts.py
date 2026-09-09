@@ -77,14 +77,44 @@ def ladder_rank(status):
     return LADDER.index(status) if status in LADDER else 0
 
 
+def ledger(root):
+    """docs/.last-verify.json as a dict, or {} when there is none.
+
+    The verifier writes it with `json.dump(..., indent=1)`, so it is ONE pretty-printed
+    object spanning many lines. This reader used to take `splitlines()[-1]` — written for
+    an append-per-line ledger that no version of the verifier has ever produced — so it
+    parsed the closing brace, threw, and every project reported `last_verified_build:
+    not-run` however many verify runs it had behind it (TfLens: 69 of 73 rows Verified and
+    a full ledger, reported as never verified). Whole file first, last line second for a
+    legacy JSONL ledger. tests/regression/run.sh tf_ledger."""
+    path = os.path.join(root, "docs", ".last-verify.json")
+    if not os.path.isfile(path):
+        return {}
+    text = read(path).strip()
+    for candidate in (text, text.splitlines()[-1] if text else ""):
+        try:
+            data = json.loads(candidate)
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            continue
+    return {}
+
+
+def ledger_verdicts(root):
+    """{REQ id: verdict} from the last verify run, or {} when none has run.
+
+    The verifier already writes every row's verdict into the ledger. Reading it here is
+    what lets the status line tell "built, waiting for a verify" apart from "verified as
+    far as it can be, and the rest needs a decision only the owner can make"."""
+    rows = ledger(root).get("rows")
+    return rows if isinstance(rows, dict) else {}
+
+
 def last_verify(root, app):
     """(date, build_result) from docs/.last-verify.json and gates.jsonl; ('', 'not-run') if none."""
-    ledger = os.path.join(root, "docs", ".last-verify.json")
-    if not os.path.isfile(ledger):
-        return "", "not-run"
-    try:
-        data = json.loads(read(ledger).strip().splitlines()[-1])
-    except Exception:
+    data = ledger(root)
+    if not data:
         return "", "not-run"
     date = str(data.get("date", ""))[:10]
     result = "PASS"
@@ -161,8 +191,10 @@ def phase_row(root, app, phase):
     return name, total
 
 
-def next_command(app, rows, log_rows, phase=1):
+def next_command(app, rows, log_rows, phase=1, verdicts=None):
     """Returns (phase, qualifier, cc_line, oc_line, reason)."""
+    verdicts = verdicts or {}
+
     def ids(lst):
         return ", ".join(r["id"] for r in lst[:6]) + (" …" if len(lst) > 6 else "")
 
@@ -187,11 +219,28 @@ def next_command(app, rows, log_rows, phase=1):
                 f"{CC}flow-master *build-phase {app}", f"{OC}flow-master *build-phase {app}",
                 f"{len(unbuilt)} rows are not built yet: {ids(unbuilt)}")
     if built:
-        ui = [r for r in built if r["id"].startswith("REQ-UI")]
-        scope = "ui" if len(ui) == len(built) else ("functional" if not ui else "all")
-        return ("Verify", f"{len(built)} to verify, {q}",
+        # A row the last verify could not MEASURE is not a row waiting for another verify.
+        # Its tests declined — the state they need does not exist in this environment — so
+        # running the verifier again produces the same NOT-TESTED and the project sits in a
+        # loop that looks like progress. Say what it actually needs: data, a changed
+        # acceptance line, or the row marked N/A. Only the owner can choose. FR-69's sibling
+        # case; the verdicts come from the ledger the verifier already writes.
+        unmeasured = [r for r in built if verdicts.get(r["id"]) == "NOT-TESTED"]
+        waiting = [r for r in built if r not in unmeasured]
+        if unmeasured and not waiting:
+            line = (f"(owner) {len(unmeasured)} row(s) cannot be measured here — create the data, "
+                    f"change the acceptance line, or mark the row N/A: {ids(unmeasured)}")
+            return ("Verify", f"{len(unmeasured)} not measurable, {q}", line, line,
+                    f"every test carrying these ids was skipped, so another verify run changes nothing: {ids(unmeasured)}")
+        ui = [r for r in waiting if r["id"].startswith("REQ-UI")]
+        scope = "ui" if len(ui) == len(waiting) else ("functional" if not ui else "all")
+        reason = f"{len(waiting)} rows are built and not verified: {ids(waiting)}"
+        if unmeasured:
+            reason += (f"; {len(unmeasured)} more could not be measured (every test skipped) "
+                       f"and need the owner: {ids(unmeasured)}")
+        return ("Verify", f"{len(waiting)} to verify, {q}",
                 f"{CC}verifier *verify {scope} {app}", f"{OC}flow-verifier *verify {scope} {app}",
-                f"{len(built)} rows are built and not verified: {ids(built)}")
+                reason)
     if owner:
         if handoff_ran(log_rows):
             line = f"(owner-run) docs/{app}-UsageGuide.md — {ids(owner)}"
@@ -234,7 +283,7 @@ def main(argv):
     st_text = read(st_path) if os.path.isfile(st_path) else ""
     log_rows = existing_log_rows(st_text)
     vdate, vresult = last_verify(root, app)
-    phase, qual, cc, oc, reason = next_command(app, rows, log_rows, phase_n)
+    phase, qual, cc, oc, reason = next_command(app, rows, log_rows, phase_n, ledger_verdicts(root))
     pname, ptotal = phase_row(root, app, phase_n)
     if ptotal or phase_n > 1:
         tag = f"Phase {phase_n} of {ptotal or '?'}" + (f" ({pname})" if pname else "")

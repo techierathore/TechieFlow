@@ -19,7 +19,8 @@ For each row, the seven checks in order, and the first that fails is the verdict
   (standards has no script yet and is never listed as run)
 
 Verdicts: PASS · FAIL (acceptance) · BUILD-FAIL · RENDER-FAIL · ASSET-FAIL · VISUAL-FAIL · MOCKUP-FAIL ·
-PERF-FAIL · NOT-TESTED (no test carried the id; the screen checks passed or did not run) ·
+PERF-FAIL · NOT-TESTED (no test carried the id, or every test carrying it was skipped; the screen
+checks passed or did not run) ·
 NOT-OBSERVABLE (an NFR row with no budget and no unit test) · NOT-DRIVEN (its screen was never driven:
 the head could not be booted, or has no driver). A row is Verified only on PASS. NOT-* rows keep their
 status and get a Remark saying so; nothing is ever written as a static-only pass.
@@ -114,6 +115,13 @@ def main(argv):
         scr = scr_by_name.get(r.get("screen") or "")
         driven = bool(scr) and scr.get("render") != "UNREACHABLE"
         t = tests.get(rid)
+        # A row whose every clause was SKIPPED is NOT-TESTED: the acceptance gate did not run on
+        # it. It is neither a pass nor a defect, so it grades exactly like a row with no test at
+        # all — never Verified, no gate record (TF-022). `t` is kept for the note.
+        skipped_only = bool(t) and t.get("result") == "NOT-TESTED"
+        if skipped_only:
+            notes.append(f"acceptance not measured ({len(t.get('skipped') or [])} test(s) skipped, none ran)")
+            t = None
         # every check on its own: (name, ran, failed, verdict, class, detail, evidence); the first failure wins
         checks = []
 
@@ -188,7 +196,8 @@ def main(argv):
                           else f"screen {r['screen']} was not driven in this run")
             elif not t:
                 verdict = "NOT-TESTED"
-                detail = f"no test named {rid} ran" + (f"; screen {r['screen']} renders and looks right" if driven else "")
+                detail = (f"every test named {rid} was skipped" if skipped_only else f"no test named {rid} ran") \
+                    + (f"; screen {r['screen']} renders and looks right" if driven else "")
             elif r.get("screen") and not driven and not booted:
                 verdict = "NOT-DRIVEN"
                 detail = f"test passed but {boot.get('head', 'the app')} was not driven: {boot.get('reason')}"

@@ -147,6 +147,26 @@ Added so the question *"what did each phase cost — in time, in tokens, on whic
 
 **These do not create per-feature timing.** The unit stays **the run**; §0's non-goal is unchanged. `cmd` is the phase, and a phase figure is an aggregate over runs of that `cmd` — never a per-ticket cycle time.
 
+### 2.7 `kind: "run-void"` — taking a wrong run out of the figures without deleting it (added 2026-09-09)
+
+The stream is append-only, so a run record that turns out to be **wrong** can be neither edited nor deleted — and nothing inside such a record says it is wrong, so every figure built over it is quietly polluted. §5.5.7 solved the same problem on the misses stream by adding a record kind rather than an edit. This is that answer for runs.
+
+A `run-void` names one run record and says why it should not be counted:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `kind` | `"run-void"` | the record kind |
+| `app` | string | filled by the emitter from the run it names |
+| `cmd` | string | the named run's `cmd` |
+| `started` | ISO-8601 | the named run's `started` — `cmd` + `started` is the pair the readers already key on |
+| `reason` | string | free text, required: why the record is wrong, in a sentence a reader can check |
+
+**Written only by `bash .tfcore/utils/tf-emit.sh --void-run <cmd> <started> "<reason>"`**, which refuses one that names no run on the stream (a void about nothing is a claim about nothing) and refuses a second void on the same run. Like an amend, it exits 0 either way: telemetry has no veto (§10).
+
+**What the readers must do, and `tf-metrics.sh` does:** the named record leaves **every** figure — it is never clamped, halved or guessed at — and the count of what left travels with the figures, as `runs_voided_n` with the reasons in `runs_voided`. A total offered without its exclusions is just a different wrong number (the §5.5.8 rule, one stream over). A void naming a run that is not on this stream is an **orphan**: counted as `run_voids_orphaned_n` and reported, never silently dropped, exactly as an orphaned `miss-amend` is.
+
+**What it is not.** It is not a delete and not an edit: both records stay, in order, and a reader can always see what was corrected and why. It cannot be used to remove a run whose figures are merely unflattering — the reason is on the record and a reader can check it, which is the whole protection. It is not a way to fix a number: there is no "corrected duration" field, because a figure nobody measured is not recoverable by asserting one.
+
 ## 3. `docs/metrics/gates.jsonl` — one record per REQ verdict per verify run
 
 **This is the primary stream.** If only one stream survives, it is this one.

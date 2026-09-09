@@ -396,29 +396,275 @@ PY
   fi
 }
 
-# --- TF-021: the append-only guard refused reads as well as writes ------------------------
-# Found while verifying the fixes above. Checking a stream with a python one-liner was
-# blocked outright, though guard-metrics.sh's own header says "Reading them is fine." A
-# guard that refuses legitimate work teaches people to route around the guard, so it now
-# needs a write in the command as well as the path. MISS-TechieFlow-20260909-03.
-tf_021() {
+# --- guard_reads: the append-only guard refused reads as well as writes -------------------
+# Found HERE while verifying the fixes above, not by a consuming project, so it carries no
+# TF- number: those belong to the reporting project's feedback file and TF-021 is TfLens's
+# screens defect below. Checking a stream with a python one-liner was blocked outright,
+# though guard-metrics.sh's own header says "Reading them is fine." A guard that refuses
+# legitimate work teaches people to route around the guard, so it now needs a write in the
+# command as well as the path. MISS-TechieFlow-20260909-03.
+guard_reads() {
   local h="$ROOT/.tfcore/hooks/guard-metrics.sh"
   _guard() {   # _guard <command string> -> the hook's exit status
     python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$1" \
       | CLAUDE_PROJECT_DIR="$ROOT" bash "$h" >/dev/null 2>&1
   }
   _guard 'python3 tools/check.py docs/metrics/runs.jsonl' \
-    && ok tf_021a "reading a stream with python is allowed" \
-    || bad tf_021a "a read of docs/metrics/runs.jsonl was blocked"
+    && ok gm_a "reading a stream with python is allowed" \
+    || bad gm_a "a read of docs/metrics/runs.jsonl was blocked"
   _guard 'python3 -c open(docs/metrics/runs.jsonl, w).write(x)' \
-    && bad tf_021b "a python WRITE onto a stream was allowed" \
-    || ok tf_021b "writing a stream with python is still blocked"
+    && bad gm_b "a python WRITE onto a stream was allowed" \
+    || ok gm_b "writing a stream with python is still blocked"
   _guard 'echo x >> docs/metrics/runs.jsonl' \
-    && bad tf_021c "a redirect onto a stream was allowed" \
-    || ok tf_021c "redirection onto a stream is still blocked"
+    && bad gm_c "a redirect onto a stream was allowed" \
+    || ok gm_c "redirection onto a stream is still blocked"
   _guard 'cp /tmp/x docs/metrics/misses.jsonl' \
-    && bad tf_021d "a copy onto a stream was allowed" \
-    || ok tf_021d "copying onto a stream is still blocked"
+    && bad gm_d "a copy onto a stream was allowed" \
+    || ok gm_d "copying onto a stream is still blocked"
+}
+
+# --- TF-021: a screen that scrolls sideways inside a box, and one that paints late --------
+# Two defects in one tool. It measured the box an element is LAID OUT in rather than the box
+# it PAINTS in, so a 1167px table inside a 492px scroller "overlapped" the card beside it; and
+# it read the page before a circuit-rendered screen had painted, so every anchored control was
+# reported missing while its own screenshot showed them. TfLens /misses and /effort, 2026-09-09.
+#
+# It needs a real browser, so it runs only where playwright resolves: a project has it at its
+# root, and TF_PLAYWRIGHT_DIR names one otherwise. Where it does not, the case says so and the
+# suite carries on — a case that cannot run must never read as a case that passed.
+_pw_dir() {
+  local c
+  for c in "${TF_PLAYWRIGHT_DIR:-}" "$ROOT"; do
+    [[ -n "$c" && -d "$c/node_modules/playwright" ]] && { printf '%s' "$c"; return; }
+  done
+}
+tf_021() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip tf_021 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/screens"; mkdir -p "$d/docs/mockups"
+  # a wide row inside a horizontal scroller, and a card beside the scroller it never covers
+  cat > "$d/misses.html" <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"><title>Misses</title><style>
+ body{margin:0;font-family:system-ui,sans-serif}.r{display:flex;align-items:flex-start}
+ .sx{width:492px;overflow-x:auto}.wide{width:1167px;height:60px;background:#eef}
+ .card{width:400px;height:100px;margin-left:40px;background:#efe}h1{font-size:16px;margin:0 0 4px}
+</style></head><body><h1 data-testid="page-title">Misses</h1><div class="r">
+ <div class="sx"><div class="wide" data-testid="miss-origin">a wide row that scrolls sideways inside its own container</div></div>
+ <div class="card" data-testid="miss-whymissed">why it was missed — missing checklist item</div>
+</div><p>Ten misses are open here and none of them overlap anything.</p></body></html>
+HTML
+  # a screen that paints after the settle wait, the way a circuit-rendered one does
+  cat > "$d/late.html" <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"><title>Effort</title><style>
+ body{margin:0;font-family:system-ui,sans-serif}.sb{width:200px;height:300px;background:#eee}
+</style></head><body><div id="app">loading the circuit…</div><script>
+ setTimeout(function(){document.getElementById('app').innerHTML=
+  '<div class="sb" data-testid="app-sidebar">Effort · Misses</div><h1 data-testid="page-title">Effort</h1><p>Phase effort.</p>';},2500);
+</script></body></html>
+HTML
+  # and one that really is broken, so the fix cannot buy its quiet by going blind
+  cat > "$d/broken.html" <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"><title>Broken</title><style>
+ body{margin:0;font-family:system-ui,sans-serif;position:relative}
+ .a{position:absolute;left:0;top:0;width:400px;height:100px;background:#fee}
+ .b{position:absolute;left:200px;top:0;width:400px;height:100px;background:#eef}
+</style></head><body><div class="a" data-testid="kpi-left">a card drawn under another one</div>
+<div class="b" data-testid="kpi-right">the card that covers it</div><p>Genuinely broken.</p></body></html>
+HTML
+  cp "$d/misses.html" "$d/docs/mockups/misses.html"
+  cp "$d/broken.html" "$d/docs/mockups/broken.html"
+  printf '<html><body><div data-testid="app-sidebar">s</div><h1 data-testid="page-title">Effort</h1></body></html>\n' \
+    > "$d/docs/mockups/late.html"
+  # the shipped script, run where playwright resolves; the bytes are the shipped ones
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  ( cd "$d" && python3 -m http.server "$port" --bind 127.0.0.1 >/dev/null 2>&1 & echo $! > "$d/srv.pid" )
+  sleep 1
+  local out
+  out="$( cd "$d" && node screens.mjs --base "http://127.0.0.1:$port" \
+          --screen misses=/misses.html --screen late=/late.html --screen broken=/broken.html \
+          --widths 1280 --json-out "$d/screens.json" 2>&1 )"
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+  grep -q '^OK   misses' <<<"$out" \
+    && ok tf_021a "a wide row inside a scroller does not overlap the card beside it" \
+    || { bad tf_021a "the unclipped box is still measured"; note "$(grep misses <<<"$out" | head -1)"; }
+  grep -q '^OK   late' <<<"$out" \
+    && ok tf_021b "a screen that paints late is measured after it has painted" \
+    || { bad tf_021b "the page was read before its first render"; note "$(grep late <<<"$out" | head -1)"; }
+  grep -q 'kpi-left overlaps kpi-right' <<<"$out" \
+    && ok tf_021c "a real overlap is still reported" \
+    || bad tf_021c "the clip fix went blind to a genuine overlap"
+}
+
+# --- TF-022: a skipped clause was counted as a failing one --------------------------------
+# `test.skip(!SEEDED, "needs the seeded dataset")` says the state does not exist in the data.
+# That is not a pass and not a defect, and counting it as a failure put FAIL on rows no code
+# could clear, then sent build-phase back into FIX mode against them. TfLens REQ-UI-039 and
+# REQ-UI-034, 2026-09-09. The mapping is the shipped python, lifted out of tf-verify-tests.sh
+# verbatim, so the case needs a playwright REPORT rather than a browser.
+tf_022() {
+  local d="$SCRATCH/tests22"; mkdir -p "$d"
+  awk "/<<'PY'/{f=1;next} /^PY\$/{f=0} f" "$UTILS/tf-verify-tests.sh" > "$d/map.py"
+  cat > "$d/pw.json" <<'JS'
+{"suites":[{"title":"rows.spec.js","specs":[
+ {"title":"REQ-UI-039 the misses page lists a miss","tests":[{"status":"expected","results":[{"status":"passed"}]}]},
+ {"title":"REQ-UI-039 the seeded rework figure","tests":[{"status":"skipped","annotations":[{"type":"skip","description":"needs the seeded dataset"}],"results":[{"status":"skipped"}]}]},
+ {"title":"REQ-UI-034 coverage reads events.ndjson","tests":[{"status":"skipped","annotations":[{"type":"skip","description":"no repository emits events.ndjson"}],"results":[{"status":"skipped"}]}]},
+ {"title":"REQ-UI-050 a control that really is missing","tests":[{"status":"unexpected","results":[{"status":"failed","error":{"message":"expect(locator).toBeVisible() failed"}}]}]}
+]}]}
+JS
+  TF_PWJSON="$d/pw.json" TF_UNITLOG="" TF_UNITLINE="" TF_OUT="$d/tests.json" python3 "$d/map.py" >/dev/null 2>&1
+  local v; v="$(python3 - "$d/tests.json" <<'PY'
+import json, sys
+try:
+    r = json.load(open(sys.argv[1]))["reqs"]
+except Exception:
+    print("unreadable"); raise SystemExit
+print("%s|%s|%s" % (r.get("REQ-UI-039", {}).get("result"), r.get("REQ-UI-034", {}).get("result"),
+                    r.get("REQ-UI-050", {}).get("result")))
+PY
+)"
+  case "$v" in
+    "PASS|NOT-TESTED|FAIL")
+      ok tf_022a "a skipped clause is neither a pass nor a defect"
+      ok tf_022b "a row whose every clause was skipped is NOT-TESTED, and a real failure still FAILs" ;;
+    *) bad tf_022 "REQ-UI-039/034/050 graded $v, expected PASS|NOT-TESTED|FAIL" ;;
+  esac
+  # and the verdict script must never let NOT-TESTED become Verified
+  local e="$SCRATCH/verdict22"; mkdir -p "$e/docs" "$e/tests/.artifacts/verify"
+  cp "$d/tests.json" "$e/tests/.artifacts/verify/tests.json"
+  cat > "$e/tests/.artifacts/verify/list.json" <<'JS'
+{"app":"Fx","scope":"all","phase":1,"kind":"app","checklist":"docs/Fx-Checklist.md","screens":[],"unresolved":[],
+ "rows":[{"id":"REQ-UI-034","class":"UI","title":"Coverage","screen":"","route":"","status_raw":"Implemented"},
+         {"id":"REQ-UI-039","class":"UI","title":"Misses","screen":"","route":"","status_raw":"Implemented"}]}
+JS
+  printf '{"mode":"served","reason":"","reason_kind":"","head":"web","rung":"run","url":"http://127.0.0.1:1"}\n' \
+    > "$e/tests/.artifacts/verify/boot.json"
+  local vout; vout="$( cd "$e" && python3 "$UTILS/tf-verify-verdict.py" Fx --dir tests/.artifacts/verify 2>&1 )"
+  if grep -q 'REQ-UI-034 | NOT-TESTED' <<<"$vout" && ! grep -q 'REQ-UI-034 |.*Verified' <<<"$vout"; then
+    ok tf_022c "the verdict script reads it as not measured, never Verified"
+  else
+    bad tf_022c "a row whose tests were all skipped was graded on them"; note "$(grep REQ-UI-034 <<<"$vout" | head -1)"
+  fi
+}
+
+# --- run-void: a wrong run record leaves the figures without leaving the stream -----------
+# This maintainer wrote a run record with a GUESSED start time (2026-09-09), so it stored
+# 18,674 s against a real nineteen minutes. Its own timestamps agreed with each other, so no
+# reader could detect it, and the stream is append-only, so it could not be corrected. The
+# answer is the §5.5.7 answer one stream over: another record. MISS-TechieFlow-20260909-06.
+tf_void() {
+  local d; d="$(_metrics_fx voidfx)"
+  cat > "$d/docs/metrics/runs.jsonl" <<'JS'
+{"kind":"run","cmd":"build-phase","app":"Fx","started":"2026-09-09T09:00:00Z","ended":"2026-09-09T10:00:00Z","duration_s":3600,"ts":"2026-09-09T10:00:00Z"}
+{"kind":"run","cmd":"fix-issues","app":"Fx","started":"2026-09-09T11:40:00Z","ended":"2026-09-09T16:51:14Z","duration_s":18674,"ts":"2026-09-09T16:51:14Z"}
+JS
+  local out
+  # a void that names nothing is refused, and writes nothing
+  out="$( cd "$d" && bash "$UTILS/tf-emit.sh" --void-run build-phase 2020-01-01T00:00:00Z "no such run" 2>&1 )"
+  if grep -qi 'refus' <<<"$out" && [[ "$(wc -l < "$d/docs/metrics/runs.jsonl")" == "2" ]]; then
+    ok tf_void_a "a void that names no run is refused and appends nothing"
+  else
+    bad tf_void_a "a void about nothing was written"; note "$out"
+  fi
+  # the real one
+  out="$( cd "$d" && bash "$UTILS/tf-emit.sh" --void-run fix-issues 2026-09-09T11:40:00Z "the start time was guessed, not measured" 2>&1 )"
+  grep -q 'voided' <<<"$out" && ok tf_void_b "a wrong run can be voided" \
+                             || { bad tf_void_b "the run could not be voided"; note "$out"; }
+  # nothing was deleted: both records are still there
+  [[ "$(grep -c '"kind":"run"' "$d/docs/metrics/runs.jsonl")" == "2" ]] \
+    && ok tf_void_c "both records stay on the stream — a void is not a delete" \
+    || bad tf_void_c "a record left the append-only stream"
+  # and the reader drops it from every figure, and says how many it dropped
+  bash "$TELEM/tf-metrics.sh" --rollup "$d" --json > "$d/out.json" 2>/dev/null
+  local v; v="$(python3 - "$d/out.json" <<'PY'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    print("unparsable"); raise SystemExit
+ph = (d.get("phases") or {}).get("fix-issues")
+print("%s|%s|%s" % (d.get("runs_voided_n"), "gone" if not ph else ph.get("runs"),
+                    bool(d.get("runs_voided"))))
+PY
+)"
+  [[ "$v" == "1|gone|True" ]] \
+    && ok tf_void_d "the voided run is in no figure, and the count and reason are published" \
+    || bad tf_void_d "the voided run still reaches the figures ($v)"
+  # a second void on the same run is refused: one is enough
+  out="$( cd "$d" && bash "$UTILS/tf-emit.sh" --void-run fix-issues 2026-09-09T11:40:00Z "again" 2>&1 )"
+  grep -qi 'already voided' <<<"$out" && ok tf_void_e "a second void on the same run is refused" \
+                                     || bad tf_void_e "a run can be voided twice"
+  # an orphan void — one that arrived without its run — is counted, never silently ignored
+  python3 - "$d/docs/metrics/runs.jsonl" <<'PY'
+import sys
+with open(sys.argv[1], "a", encoding="utf-8") as fh:
+    fh.write('{"kind":"run-void","app":"Fx","cmd":"verify-phase","started":"2026-09-09T20:00:00Z",'
+             '"reason":"written on another machine, its run never arrived"}\n')
+PY
+  bash "$TELEM/tf-metrics.sh" --rollup "$d" --json > "$d/out2.json" 2>/dev/null
+  local o; o="$(python3 -c "
+import json,sys
+try: print(json.load(open(sys.argv[1])).get('run_voids_orphaned_n'))
+except Exception: print('unparsable')" "$d/out2.json")"
+  [[ "$o" == "1" ]] && ok tf_void_f "a void whose run never arrived is reported as an orphan" \
+                    || bad tf_void_f "an orphaned void was silently ignored ($o)"
+}
+
+# --- the ledger the status document stands on --------------------------------------------
+# Two things, found together while answering the owner's question "when does a row whose test
+# was skipped ever get built?". (1) tf-status-facts read only the LAST LINE of
+# docs/.last-verify.json, which the verifier writes as one pretty-printed object, so it
+# parsed the closing brace and every project reported `not-run` / `never` however many verify
+# runs it had behind it. (2) A row the verifier could not MEASURE was reported as a row
+# waiting for another verify run, which is a loop: the next run produces the same verdict.
+# MISS-TechieFlow-20260909-07.
+tf_ledger() {
+  local d="$SCRATCH/ledger"; mkdir -p "$d/docs" "$d/.tfcore"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Requirements Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Detail |
+|---|---|---|---|---|---|
+| REQ-UI-034 | Coverage page | Implemented | 60% | built, smoke passed | [view](#d-req-ui-034) |
+| REQ-UI-039 | Misses page | Verified | 100% | — | [view](#d-req-ui-039) |
+
+## Coverage
+
+- <a id="d-req-ui-034"></a>**REQ-UI-034** — Coverage page
+  - Acceptance: When a user opens Coverage on Coverage, then the event count shows.
+- <a id="d-req-ui-039"></a>**REQ-UI-039** — Misses page
+  - Acceptance: When a user opens Misses on Misses, then the page renders.
+MD
+  # exactly what tf-verify-verdict.py writes: one object, indent=1, many lines
+  python3 - "$d/docs/.last-verify.json" <<'PY'
+import json, sys
+json.dump({"date": "2026-09-09", "app": "Fx", "scope": "all", "booted": True,
+           "checks": ["build", "acceptance"], "evidence": "tests/.artifacts/verify",
+           "rows": {"REQ-UI-034": "NOT-TESTED", "REQ-UI-039": "PASS"}},
+          open(sys.argv[1], "w", encoding="utf-8"), indent=1)
+PY
+  local out; out="$( cd "$d" && bash "$UTILS/tf-status-facts.sh" Fx 2>&1 )"
+  grep -q 'last_verified_date: 2026-09-09' <<<"$out" \
+    && ok tf_ledger_a "a pretty-printed ledger is read, so the status names the real verify date" \
+    || { bad tf_ledger_a "the ledger was not read; the status says never verified"
+         note "$(grep last_verified <<<"$out" | head -2)"; }
+  grep -q 'not measurable' <<<"$out" \
+    && ok tf_ledger_b "a row the verifier could not measure is not reported as one more verify away" \
+    || { bad tf_ledger_b "an unmeasurable row still points at another verify run"
+         note "$(grep -i 'current_phase\|Why:' <<<"$out" | head -2)"; }
+  # and it must NOT hide the row: it is still open work, and still in the build list
+  local bl; bl="$( cd "$d" && bash "$UTILS/tf-build-list.sh" Fx 2>&1 )"
+  grep -q 'REQ-UI-034' <<<"$bl" \
+    && ok tf_ledger_c "the row is still open work — not verified, not terminal, still listed" \
+    || bad tf_ledger_c "an unmeasurable row fell out of the build list"
 }
 
 # --- tf-selfcheck: the round trip itself -------------------------------------------------
@@ -489,7 +735,7 @@ tf_selfcheck() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_void tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done
