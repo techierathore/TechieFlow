@@ -85,7 +85,12 @@ def ledger(text):
     lines = text.splitlines()
     i = 0
     while i < len(lines):
-        m = re.match(r"^\s*[-*]\s*\*\*(BRD-\d+)\*\*\s*[—:-]+\s*(.*)$", lines[i])
+        # The anchor is not decoration: a BRD's §9 screen inventory links to each item as
+        # [BRD-21](#brd-21), markdown generates no id for bold text inside a list item, and
+        # tf-doc-check refuses a broken link -- so a real BRD carries `<a id="brd-N"></a>`
+        # here and this regex matched NONE of TfLens's 179 items. tests/regression tf_017.
+        m = re.match(r"^\s*[-*]\s*(?:<a id=[\"\']?[^\"\'>]*[\"\']?\s*>\s*</a>\s*)?"
+                     r"\*\*(BRD-\d+)\*\*\s*[—:-]+\s*(.*)$", lines[i])
         if m and m.group(1) not in nfr_ids:
             rid, rest = m.group(1), m.group(2)
             title = re.split(r"\s*(?:\.\s+\*|\s\*Screen|\s·\s\*|\s\*Mockup)", rest, 1)[0].strip().rstrip(".")

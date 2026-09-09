@@ -53,12 +53,77 @@ LATE_GATES = {"perf": "2026-08-10", "assets": "2026-08-31", "mockup-parity": "20
 # fill, so counting it as "not assessed" understates the practice being measured.
 # It leaves that field's denominator and is reported separately. SCHEMA.md §5.5.6 /
 # §3.5. Keep this table in sync when an optional field is added to any stream.
-FIELD_SINCE = {"why_missed": "2026-08-28", "sort": "2026-09-07"}
+FIELD_SINCE = {"why_missed": "2026-08-28", "sort": "2026-09-07", "what": "2026-09-07"}
+
+
+def _span(r):
+    """Seconds between a run's own `started` and `ended`, or None if they cannot be read."""
+    a, b = r.get("started"), r.get("ended")
+    if not isinstance(a, str) or not isinstance(b, str):
+        return None
+    try:
+        fmt = "%Y-%m-%dT%H:%M:%SZ"
+        return int((datetime.strptime(b, fmt) - datetime.strptime(a, fmt)).total_seconds())
+    except Exception:
+        return None
+
+
+def _dur(r):
+    """A run's duration in seconds, or None when the record does not carry a real one.
+
+    THE TIMESTAMPS WIN. A record stores a start, an end and a duration, and on a stream
+    written before the emitter checked them the third can contradict the first two:
+    TechieBlog holds 14 such records, one storing -166 and thirteen storing a plausible
+    round number (3600, 2700, 1800, 900, 600) that bears no relation to their own clocks
+    -- `refresh-status` started 20:05:00, ended 17:59:39, stored 600. Only the one that
+    stored the negative was ever detectable by reading the number alone.
+
+    So the duration is taken from the timestamps whenever they can be read, and a record
+    whose timestamps are themselves impossible carries NO duration rather than a
+    plausible one. The count of both is published (`duration_excluded_n`,
+    `duration_recomputed_n`) and printed, because "32 records, correct" is only honest
+    when the reader is also told that 14 were dropped. Every consumer goes through this
+    one function, so the two readers of a stream cannot disagree about the same record.
+    tests/regression/run.sh tf_015."""
+    span = _span(r)
+    if span is not None:
+        return span if span > 0 else None
+    d = r.get("duration_s")
+    return d if isinstance(d, (int, float)) and d > 0 else None
+
+
+def _dur_quality(records):
+    """(impossible, absent, recomputed) -- what _dur changed, split so the report can be
+    accurate rather than merely alarming.
+
+    "Its start is after its end" and "it never carried a duration" are different facts and
+    were briefly reported as one, which made this repo look like it held 30 corrupt records
+    when it holds 30 records that simply record no elapsed time (`started` == `ended`, no
+    `duration_s`). Neither reached a figure before or after -- but a reader told the wrong
+    reason chases the wrong thing."""
+    impossible = absent = recomputed = 0
+    for r in records:
+        span, stored = _span(r), r.get("duration_s")
+        has_stored = isinstance(stored, (int, float)) and stored > 0
+        if span is not None and span < 0:
+            impossible += 1
+        elif span is not None and span == 0:
+            absent += 1
+        elif span is None and not has_stored:
+            absent += 1
+        elif span is not None and has_stored and abs(span - stored) > 1:
+            recomputed += 1
+    return impossible, absent, recomputed
 
 # Fields a `miss-amend` record may complete, and their closed vocabularies.
 # Kept identical to tf-emit.sh's `_AMENDABLE`; the emitter enforces it on write and
 # this enforces it again on read, because a merged stream can carry records this
 # machine's emitter never saw. SCHEMA.md §5.5.7 states the rule for extending it.
+# `what` is the miss's own sentence: free text, not a vocabulary. Kept amendable
+# because the never-overwrite rule -- not the vocabulary -- is what stops an amend
+# altering a fact. MISS-TechieFlow-20260909-02; tests/regression/run.sh tf_018.
+AMENDABLE_TEXT_FIELDS = ("what",)
+
 AMENDABLE_FIELDS = {
     "why_missed": ("missing-checklist-item", "insufficient-verify-method",
                    "code-audit-limitation", "ambiguous-acceptance",
@@ -227,11 +292,14 @@ def analyse_misses(misses):
     for a in sorted(amends, key=lambda r: r.get("ts") or ""):
         parent = opened_by_id.get(a.get("miss_id"))
         fld = a.get("field")
-        if parent is None or fld not in AMENDABLE_FIELDS:
+        if parent is None or (fld not in AMENDABLE_FIELDS and fld not in AMENDABLE_TEXT_FIELDS):
             orphan_amends += 1
             continue
-        if parent.get(fld) is None and a.get("value") in AMENDABLE_FIELDS[fld]:
-            parent[fld] = a["value"]
+        val = a.get("value")
+        ok = (isinstance(val, str) and val.strip()) if fld in AMENDABLE_TEXT_FIELDS \
+             else (val in AMENDABLE_FIELDS.get(fld, ()))
+        if parent.get(fld) is None and ok:
+            parent[fld] = val
             amended += 1
 
     # ---- eligibility floor for optional fields added mid-stream (SCHEMA.md §3.5,
@@ -512,9 +580,16 @@ def analyse_phases(runs):
         except Exception:
             return None
 
+    # A stored duration of zero or less is not a measurement: it is an impossible record
+    # (`ended` before `started`) that reached the stream before the emitter refused those.
+    # Treat it as absent so it is re-derived here, and -- when the timestamps are just as
+    # impossible -- excluded from every figure below rather than admitted by a truthiness
+    # test. tests/regression/run.sh tf_015.
     derived_n = 0
+    negative_durations = sum(1 for r in live
+                             if isinstance(r.get("duration_s"), (int, float)) and r["duration_s"] < 0)
     for r in live:
-        if r.get("duration_s") or not r.get("started"):
+        if _dur(r) is not None or not r.get("started"):
             continue
         end = r.get("ended") or r.get("ts")
         if not end:
@@ -542,13 +617,13 @@ def analyse_phases(runs):
         return scope_of(r) == "tree" and r.get("subagent_runs") is not None
 
     grand_out = sum(r.get("tokens_out") or 0 for r in live if has_tokens(r))
-    grand_dur = sum(r.get("duration_s") or 0 for r in live if r.get("duration_s"))
+    grand_dur = sum(_dur(r) or 0 for r in live if _dur(r) is not None)
 
     phases = OrderedDict()
     for cmd in sorted({r.get("cmd") or "?" for r in live}):
         rs = [r for r in live if (r.get("cmd") or "?") == cmd]
         priced = [r for r in rs if has_tokens(r)]
-        durs = [r["duration_s"] for r in rs if r.get("duration_s")]
+        durs = [_dur(r) for r in rs if _dur(r) is not None]
         fan = [r for r in rs if sees_subagents(r)]
 
         models = defaultdict(lambda: {"runs": 0, "tokens_out": 0})
@@ -621,7 +696,7 @@ def analyse_phases(runs):
             "by_mode": OrderedDict(
                 (mode, {
                     "runs": len([r for r in rs if (r.get("mode") or "—") == mode]),
-                    "duration_s": sum(r.get("duration_s") or 0
+                    "duration_s": sum(_dur(r) or 0
                                       for r in rs if (r.get("mode") or "—") == mode),
                     "tokens_out": sum(r.get("tokens_out") or 0
                                       for r in rs if (r.get("mode") or "—") == mode and has_tokens(r)),
@@ -673,6 +748,12 @@ def analyse_phases(runs):
         "scope_coverage": OrderedDict(sorted(scope_cov.items())),
         "tokens_out_total": grand_out,
         "duration_s_total": grand_dur,
+        # What the duration figures are actually built on. A total is only honest when the
+        # reader is told what it left out: TechieBlog's 46 run records yield 32 usable ones.
+        "duration_measured_n": len([r for r in live if _dur(r) is not None]),
+        "duration_impossible_n": _dur_quality(live)[0],
+        "duration_absent_n": _dur_quality(live)[1],
+        "duration_recomputed_n": _dur_quality(live)[2],
         "phases": phases,
         "note": ("Per-phase effort over LIVE run records, aggregated by `cmd`. Token "
                  "figures exclude runs whose window could not be computed; fan-out "
@@ -996,9 +1077,19 @@ def analyse(repos):
                          "commit_hook": has_commit_hook(repo)})
 
     def seg(records):
+        # An `FR` verdict grades a framework requirement line, not an application's
+        # screen: it is written by a runner over a document the framework controls, so
+        # it passes far more often than a REQ verified against a running app. Pooled
+        # into an application segment it raises that segment's first-pass rate and
+        # dilutes its escape rate, with nothing on the output to show it happened.
+        # SCHEMA.md §3 states the rule -- "it never pools with the others" -- and this
+        # is where it is applied. Tested by tests/regression/run.sh tf_020.
         d = defaultdict(list)
         for r in records:
-            key = "unclassified" if r.get("project_type_inferred") else r.get("project_type", "app")
+            if r.get("req_class") == "FR":
+                key = "framework-requirement"
+            else:
+                key = "unclassified" if r.get("project_type_inferred") else r.get("project_type", "app")
             d[key].append(r)
         return d
 
@@ -1069,8 +1160,8 @@ def analyse(repos):
     # ---- poolable metrics: runs, cadence, tokens. Exempt from both separations.
     build_runs = [r for r in runs if r.get("cmd") == "build-phase"]
     fix_runs = [r for r in runs if r.get("mode") == "fix"]
-    throughput = [float(r["reqs_count"]) / r["duration_s"]
-                  for r in runs if r.get("duration_s") and r.get("reqs_count")]
+    throughput = [float(r["reqs_count"]) / _dur(r)
+                  for r in runs if _dur(r) is not None and r.get("reqs_count")]
     batch = [r["reqs_count"] for r in build_runs if r.get("reqs_count") is not None]
     verified_transitions = sum(1 for g in gates if g.get("verdict") == "Verified")
     tok = sum((s.get("input_tokens") or 0) + (s.get("output_tokens") or 0) for s in sessions)
@@ -1243,6 +1334,15 @@ def print_phases(p, W):
     print("-" * W)
     print("  %d live run record(s). Token-window coverage: %s"
           % (p["runs_live"], "  ".join("%s=%d" % kv for kv in p["scope_coverage"].items())))
+    if any(p.get(k) for k in ("duration_impossible_n", "duration_absent_n", "duration_recomputed_n")):
+        print("  duration: %d of %d record(s) usable"
+              % (p.get("duration_measured_n", 0), p["runs_live"])
+              + (", %d impossible (start after end, discarded)" % p["duration_impossible_n"]
+                 if p.get("duration_impossible_n") else "")
+              + (", %d record no elapsed time" % p["duration_absent_n"]
+                 if p.get("duration_absent_n") else "")
+              + (", %d taken from the timestamps over a stored figure that disagreed"
+                 % p["duration_recomputed_n"] if p.get("duration_recomputed_n") else ""))
     print("  A window is only as good as its scope: 'tree' saw the subagents, 'main'")
     print("  did not look, 'none'/absent measured nothing at all and is excluded from")
     print("  every token figure below rather than averaged in as a zero.")

@@ -261,6 +261,10 @@ if [[ ! -f .claude/settings.json ]]; then
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-build.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-verify-deps.sh\""
           }
         ]
       },

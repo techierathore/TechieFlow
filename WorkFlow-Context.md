@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-09-08. |
+| Last updated | 2026-09-09. |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -53,6 +53,7 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 
 ## 3. Conventions an agent must honour
 
+- **Every command opens with a framework self-check.** `tf-phase.sh start` runs `tf-selfcheck.sh`, which points the framework's own scripts at this project's real files. A FAIL is the framework's, never the project's: log it in the project's framework-feedback file and carry on. It never blocks, writes nothing and grades nothing. `--report` prints the entry to paste; `TF_SKIP_SELFCHECK=1` skips it.
 - **Agents never run git.** Writes are denied in every mode; reads are allowed only in YOLO. Status comes from the checklist, the files on disk and a fresh build, never from commit history.
 - **One checklist per application**, `docs/<App>-Checklist.md`, one table, the single source of truth. Never rendered to HTML. Never a dated `docs/qa/` or `docs/verify/` file, never a `-v2` copy.
 - **Every command ends at the status gate**: PROJECT-STATUS rewritten in its fixed shape, the documents it wrote checked by `tf-doc-check.sh`, the HTML re-rendered, one run record appended. A hook refuses to end the turn while any of that is undone.
@@ -84,14 +85,14 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 | `.tfcore/tasks/` | One file per command, plus the three shared rule files every command loads (`_status-update-gate`, `_smoke-test-policy`, `_metrics-emit-gate`) and `_yolo-mode`. |
 | `.tfcore/templates/v4custom/` | Twenty-two templates, fourteen carrying a schema block. Each human document's template opens with its own. |
 | `.tfcore/standards/` | The technology-neutral coding standards and the .NET set. |
-| `.tfcore/hooks/` | Eleven shell hooks. Eight refuse an action; three do housekeeping. |
+| `.tfcore/hooks/` | Twelve shell hooks. Nine refuse an action; three do housekeeping. |
 | `.tfcore/utils/` | The scripts, `tf-*`. Every mechanical step of every task is one of these. |
 | `.tfcore/telemetry/` | `SCHEMA.md` (read before emitting), `install-metrics.sh`, `tf-metrics.sh`, the `pre-commit` template the owner installs. |
 | `.tfcore/core-config.yaml` | Per-project settings: application name, size, kind, phase, which documents load. |
 | `.tfcore/routing.yaml` | Which model tier runs which command, per harness. Per project, owner-tuned. |
 | `.claude/commands/TechieFlow/` | The Claude Code mirror of the personas and tasks. Byte-identical to `.tfcore/`. |
 | `opencode.jsonc`, `.opencode/` | OpenCode's registrations and its guard-bridge plugin. There is no OpenCode mirror; it reads `.tfcore/` through file references. |
-| `tests/` | The self-tests: `mirror`, `doc-check`, `bugs`, `verify`, `goal`. |
+| `tests/` | The self-tests: `mirror`, `doc-check`, `bugs`, `verify`, `goal`, `requirements`, and `regression` — one case per defect a real project found in a shipped script, each required to fail against the script as that project found it. |
 | `scaffold-*.sh`, `update-framework.sh` | Deploy the framework into a project, or refresh it. |
 
 ---
@@ -108,16 +109,18 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 |---|---|
 | **Distribution**: the framework is an npm package with a validation workflow, merged from `main` on 2026-09-07. Publishing it is the remaining step (FR-48 to FR-52). | Owner action |
 | Three requirements name a **script that has not been written**: FR-58 (refuse `done complete` while rows are unfinished), FR-60 (refuse a banned head name in a brief), FR-61 (grade a row not observable when the environment lacks the data). The idea-stage commands still emit no run record (FR-34, FR-60). | Maintainer |
-| **Open misses** are listed with their outcome in `docs/TechieFlow-Misses.md`; the one this maintainer owes a fix for is 12 of 2026-09-07, that a hidden framework folder is invisible to search and nothing enforces the rule. | Maintainer |
+| **Open misses** are listed with their outcome in `docs/TechieFlow-Misses.md` — 46 of 135 open. The one this maintainer owes a fix for is 12 of 2026-09-07, that a hidden framework folder is invisible to search and nothing enforces the rule. | Maintainer |
 | **TrStudio is not on this machine.** It is a named fixture and could not be refreshed here. | Owner action |
 | **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` (that repository, not this one) and waiting on the owner's go-ahead. | Separate repo |
-| **`*amend-docs` has no step that closes a miss it fixed**, so a document miss stays open forever. `tf-fix-close.sh` works and `fix_cmd: "amend-docs"` is already legal; only the wiring is missing. 121 of 360 misses are open, 25 of them for this reason. TfLens `TF-016`, Low, nothing blocked, no figure wrong. | Maintainer |
+| **TfLens is one version behind.** The 2026-09-09 framework was deployed to the other 18 repositories on this machine; TfLens was skipped because an agent was working in it. Until `update-framework.sh` runs there, it keeps the old scripts — and its parity gate will disagree with the reference on duration, because the reference now derives duration from a record's own timestamps and discards a record whose timestamps are impossible. | Owner action |
 | **286 misses predate the `sort` field** (2026-09-07). Nothing is backfilled and no stream is edited: a reader derives what it can from the `why_missed` already on the record and labels it derived, and the field-start date reports the rest as predating the question, never as unanswered. No action, by anyone. | Closed |
 | **TrSetup has thousands of tracked build-output files.** Its ignore rules are correct and inert until the index entries go. `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the commands. Agents never run version control. | Owner action |
 | **Both library packages need republishing** so the persona fixes reach consumers (TR-002, TR-RAG-002). | Owner action |
 | **TechieRag holds two products in one repository**, which the one-checklist assumption cannot resolve: split the repo, or teach telemetry about it. | Owner decision |
 | **Mockup parity needs anchored mockups.** A project whose mockups carry no `data-testid` is reported ungradeable, never passed. Per-project work. | Per project |
 | Two owner-owned HTML documents still name the pre-2026 layout; the updater reports them and never edits them. | Owner action |
+
+| **Impossible run records on three streams cannot be repaired**, and no longer need to be. TechieBlog holds 13 whose `started` is after their `ended`, TfLens 1, and TechieRag 1 record no elapsed time. The emitter refuses new ones, the reader discards them and prints how many (`duration_measured_n` / `duration_impossible_n` / `duration_absent_n` / `duration_recomputed_n`), and the streams are append-only, so nothing is deleted. TechieBlog reads 72.9 hours over 33 usable records where it used to read 79.0 over 45. | Closed |
 
 The last five are carried from the pre-reset list and were not re-checked during the reset.
 

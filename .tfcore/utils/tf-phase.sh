@@ -51,6 +51,24 @@ case "${1:-}" in
         ( cd "$ROOT" && bash .tfcore/utils/tf-doc-check.sh --root "$ROOT" --baseline-write "${docs[@]}" 2>/dev/null | tail -1 >&2 ) || true
       fi
     fi
+    # The framework's own scripts, against THIS project's real files, before the command
+    # does anything (2026-09-09). Nine framework defects reached TfLens by being met
+    # mid-build, and each cost a switch to the framework repo and back. Step 0 is the one
+    # place every command already passes through, so the check lives here and no task file
+    # has to mention it -- including commands added later.
+    #
+    # It NEVER blocks: a framework defect is reported and the command carries on, exactly
+    # as a library gap does. Set TF_SKIP_SELFCHECK=1 to skip it (the self-tests do).
+    if [[ "${TF_SKIP_SELFCHECK:-0}" != "1" && -f "$ROOT/.tfcore/utils/tf-selfcheck.sh" ]]; then
+      sc="$(cd "$ROOT" && bash .tfcore/utils/tf-selfcheck.sh 2>/dev/null)" || true
+      if grep -q '^FAIL' <<<"$sc"; then
+        echo "tf-phase: the framework is broken on this project — log these in the feedback file and carry on:" >&2
+        grep '^FAIL' <<<"$sc" >&2
+        echo "tf-phase: entries to paste: bash .tfcore/utils/tf-selfcheck.sh --report" >&2
+      else
+        echo "tf-phase: framework self-check clean" >&2
+      fi
+    fi
     ;;
   goal)
     # written by tf-goal.sh at the start of a run's first cycle; claimed by the first `start`

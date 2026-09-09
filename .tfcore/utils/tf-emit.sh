@@ -270,6 +270,61 @@ fi
 # patience rather than quality. Open = no miss-fix, or the latest miss-fix
 # closed with a verdict_after other than "Verified". Prints "<miss_id>
 # <miss_class>" for the most recent open miss, or nothing at all.
+# --- list the open misses whose deficient artifact is a document ----------
+# `*amend-docs` is the command that edits a BRD, an Architecture or a mockup, so it is
+# the only command that can close a miss whose artifact is one of those -- and it had no
+# way to find them. Every other close path works off a checklist row the verifier touched,
+# which a BRD edit never is, so a document miss stayed open forever (TF-016: twelve
+# finished TfLens items showed as outstanding for up to two weeks).
+#
+#   tf-emit.sh --open-misses <App> [--artifact-class doc]
+#
+# Prints one line per open miss: "<miss_id> <artifact> <what>". Open means no miss-fix
+# carries verdict_after Verified, the same test --open-miss applies.
+if [[ "$1" == "--open-misses" ]]; then
+  OMAPP="${2:-}"; OMCLASS=""
+  [[ "${3:-}" == "--artifact-class" ]] && OMCLASS="${4:-}"
+  TF_OMAPP="$OMAPP" TF_OMCLASS="$OMCLASS" python3 - "$MET_DIR/misses.jsonl" 2>"$TF_ERR" <<'PY2' || true
+import json, os, sys
+DOC = {"brd", "architecture", "uidesign", "checklist", "devguide"}
+app, klass = os.environ.get("TF_OMAPP") or "", os.environ.get("TF_OMCLASS") or ""
+opened, fixes = [], {}
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            if r.get("kind") == "miss":
+                opened.append(r)
+            elif r.get("kind") == "miss-fix":
+                mid = r.get("miss_id")
+                if mid:
+                    prev = fixes.get(mid)
+                    if prev is None or (r.get("ts") or "") >= (prev.get("ts") or ""):
+                        fixes[mid] = r
+except FileNotFoundError:
+    pass
+for r in opened:
+    if app and r.get("app") and r.get("app") != app:
+        continue
+    art = r.get("artifact") or ""
+    if klass == "doc" and art not in DOC:
+        continue
+    if klass and klass != "doc" and art != klass:
+        continue
+    fix = fixes.get(r.get("miss_id"))
+    if fix is not None and fix.get("verdict_after") == "Verified":
+        continue
+    print("%s %s %s" % (r.get("miss_id"), art or "-", (r.get("what") or "")[:110]))
+PY2
+  exit 0
+fi
+
 if [[ "$1" == "--open-miss" ]]; then
   REQ="$2"
   [[ -n "$REQ" ]] || exit 0
@@ -344,9 +399,19 @@ AMENDABLE = {
     # still make later, so a miss logged before the field existed can be sorted now.
     "sort": ("spec", "unsaid", "weak-check", "ignored"),
 }
-if fld not in AMENDABLE:
+    # `what` is the miss's own sentence, and it is FREE TEXT -- the one field here that
+    # is not a closed vocabulary. It is allowed because the protection was never the
+    # vocabulary: an amend may only fill a field that is still null and can never
+    # overwrite one that is set (below), so free text cannot rewrite a fact, only
+    # supply one that was missing. Validated as non-empty text instead.
+    # MISS-TechieFlow-20260909-02; tests/regression/run.sh tf_018.
+AMENDABLE_TEXT = ("what",)
+if fld not in AMENDABLE and fld not in AMENDABLE_TEXT:
     print("REFUSED %s is not an amendable field (SCHEMA.md §5.5.7)" % fld); raise SystemExit(0)
-if val not in AMENDABLE[fld]:
+if fld in AMENDABLE_TEXT:
+    if not isinstance(val, str) or not val.strip():
+        print("REFUSED %s must be a non-empty sentence" % fld); raise SystemExit(0)
+elif val not in AMENDABLE[fld]:
     print("REFUSED %r is not in the closed vocabulary for %s" % (val, fld)); raise SystemExit(0)
 
 parent, current = None, None
@@ -597,15 +662,41 @@ def enrich(rec):
     if rec.get("kind") == "run" and isinstance(rec.get("ended"), str):
         t_end, t_now = _iso_ms(rec["ended"]), _iso_ms(NOW)
         t_start = _iso_ms(rec["started"]) if isinstance(rec.get("started"), str) else None
-        if t_end is not None and t_now is not None and (t_end > t_now + 60_000 or (t_start is not None and t_end < t_start)):
-            sys.stdout.write("tf-emit: ended %s is not a measurement (it lies %s); set to now, %s\n"
-                             % (rec["ended"], "in the future" if t_end > t_now else "before started", NOW))
+        # Two different faults, and they must not share a remedy.
+        #
+        # (a) `ended` a little in the future: `started` is still trustworthy, so clamp to
+        #     now and re-derive (MISS-TechieFlow-20260905-11, a day-1 run wrote 17:05 at 16:40).
+        # (b) `ended` BEFORE `started`: the record contradicts itself and there is no way to
+        #     tell which of the two is wrong, so it carries NO duration at all. Deriving one
+        #     from the surviving timestamp invents a figure -- a TechieBlog record started
+        #     2026-08-22 would have been "measured" at 1,515,038 seconds on the day it was
+        #     re-emitted. An honest gap beats a plausible number: SCHEMA §2.5.
+        if t_end is not None and t_now is not None and t_start is not None and t_end < t_start:
+            sys.stdout.write("tf-emit: ended %s precedes started %s; the record contradicts "
+                             "itself, so no duration is stored\n" % (rec["ended"], rec["started"]))
+            rec["ended"] = NOW
+            rec.pop("duration_s", None)
+            rec["duration_unmeasured"] = "ended-before-started"
+        elif t_end is not None and t_now is not None and t_end > t_now + 60_000:
+            sys.stdout.write("tf-emit: ended %s is not a measurement (it lies in the future); "
+                             "set to now, %s\n" % (rec["ended"], NOW))
             rec["ended"] = NOW
             if t_start is not None and "duration_s" in rec:
                 rec["duration_s"] = max(0, (t_now - t_start) // 1000)
+        elif t_end is not None and t_start is not None and isinstance(rec.get("duration_s"), (int, float)):
+            # A supplied duration that bears no relation to its own timestamps. Thirteen of
+            # TechieBlog's fourteen impossible records hid here, storing a plausible round
+            # number (3600, 2700, 1800, 900, 600) that nothing downstream could question --
+            # only the ONE record that stored the negative arithmetic was ever detectable.
+            span = (t_end - t_start) // 1000
+            if abs(span - rec["duration_s"]) > 1:
+                sys.stdout.write("tf-emit: duration_s %s disagrees with started/ended (%ss); "
+                                 "using the timestamps\n" % (rec["duration_s"], span))
+                rec["duration_s"] = span
     # A run record that omits duration_s gets it from started and ended (the devguide and
     # refresh-status records of 2026-09-06 had none; MISS-TechieFlow-20260906-10).
-    if rec.get("kind") == "run" and "duration_s" not in rec and rec.get("started") and rec.get("ended"):
+    if rec.get("kind") == "run" and "duration_s" not in rec and rec.get("started") and rec.get("ended") \
+            and not rec.get("duration_unmeasured"):
         try:
             rec["duration_s"] = max(0, (_iso_ms(rec["ended"]) - _iso_ms(rec["started"])) // 1000)
         except Exception:
@@ -982,13 +1073,21 @@ _AMENDABLE = {
                    "dependency-not-declared", "instruction-ignored", "other"),
     "sort": ("spec", "unsaid", "weak-check", "ignored"),
 }
+_AMENDABLE_TEXT = ("what",)   # free text, guarded by the never-overwrite rule (see --amend)
 
 def _amend_ok(rec):
     """True when this miss-amend may be appended. Returning False DROPS it —
     an invalid amend writes nothing rather than landing as a record the reader
     then has to defend itself against."""
     mid, fld, val = rec.get("miss_id"), rec.get("field"), rec.get("value")
-    if fld not in _AMENDABLE or val not in _AMENDABLE[fld] or not mid:
+    if not mid:
+        warn("amend refused — no miss_id")
+        return False
+    if fld in _AMENDABLE_TEXT:
+        if not isinstance(val, str) or not val.strip():
+            warn("amend refused — %s must be a non-empty sentence" % fld)
+            return False
+    elif fld not in _AMENDABLE or val not in _AMENDABLE[fld]:
         warn("amend refused — %r/%r outside the §5.5.7 allowlist" % (fld, val))
         return False
     parent, current = None, None

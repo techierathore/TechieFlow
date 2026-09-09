@@ -4,8 +4,10 @@
     bash .tfcore/utils/tf-build-list.sh <App> [--phase N] [--prompts]
 
 Reads the phase's checklist (appPhase in core-config.yaml, or --phase) and prints:
-  - the mode: FIX (rows FAIL / PARTIAL / In Progress / Needs re-verify exist), FRESH
-    (every open row), or NOTHING (every row terminal or Blocked)
+  - the mode: FIX (rows FAIL / PARTIAL / In Progress / Needs re-verify exist, and they
+    come FIRST in the list), FRESH (nothing failing), or NOTHING (every row terminal or
+    Blocked). The working list is every open row in both FIX and FRESH: the mode says
+    what to build first, never what to leave out.
   - the working list, grouped into clusters by the checklist's page section, each
     naming its builder from the row prefix: REQ-UI -> trblazeui, REQ-RAG -> techierag,
     REQ-FN / REQ-NFR -> builder
@@ -113,8 +115,17 @@ def main(argv):
 
     fix_rows = [r for r in rows if r["status"] in FIX]
     open_rows = [r for r in rows if r["status"] not in TERMINAL | BLOCKED]
+    # Repair before new work, but never INSTEAD of it. A row can sit at `Needs re-verify`
+    # permanently -- TfLens REQ-FN-067 and -070 need a repository that emits events.ndjson
+    # and none exists, so every honest verify run re-confirms that gate rather than clearing
+    # it. FIX used to win outright, which pinned the mode forever: the twelve rows a later
+    # *amend-docs added were never once printed, and a pass that trusted the working list
+    # would have met build-phase's ending condition with twelve requirements at 0%.
+    # So the working list is every open row, and FIX only says which ones come first.
+    # tests/regression/run.sh tf_019.
     if fix_rows:
-        mode, work = "FIX", fix_rows
+        rest = [r for r in open_rows if r not in fix_rows]
+        mode, work = "FIX", fix_rows + rest
     elif open_rows:
         mode, work = "FRESH", open_rows
     else:
@@ -124,6 +135,15 @@ def main(argv):
     print(f"# tf-build-list — {app} — {cl} — phase {phase}")
     print(f"Mode: {mode} — {len(work)} row(s) to build; {terminal} terminal, {len(blocked)} Blocked, {len(rows)} total"
           + (f" — {', '.join(r['id'] for r in work[:8])}{' …' if len(work) > 8 else ''}" if work else ""))
+    # Every row is in exactly one of the four counts, and the arithmetic is printed so a
+    # reader can check it rather than trust it. A row missing from all of them is the
+    # failure this line exists to make impossible.
+    if len(work) + terminal + len(blocked) != len(rows):
+        print(f"⚠ {len(rows) - len(work) - terminal - len(blocked)} row(s) are in no category — "
+              "the checklist carries a status this script does not know; fix the row or the script")
+    if fix_rows and len(work) > len(fix_rows):
+        print(f"Order: {len(fix_rows)} failing row(s) first ({', '.join(r['id'] for r in fix_rows)}), "
+              f"then {len(work) - len(fix_rows)} not yet started")
     if blocked:
         print("Blocked (library gaps, pass through unless the feedback entry is resolved): " + ", ".join(r["id"] for r in blocked))
     if not work:

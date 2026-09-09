@@ -74,7 +74,7 @@ DRY  = os.environ["TF_DRY"] == "1"
 # ones this audit exists to catch. The file system is the fact.
 STACKS = [
     ("dotnet", (".csproj", ".fsproj", ".vbproj", ".sln", ".slnx"),
-     ["bin/", "obj/", "*.user", "TestResults/"]),
+     ["bin/", "obj/", "*.user", "TestResults/", ".vs/"]),
     ("node",   ("package.json",),        ["dist/", "build/", ".next/", ".nuxt/", ".turbo/"]),
     ("python", ("pyproject.toml", "setup.py", "requirements.txt"),
      ["__pycache__/", "*.py[cod]", ".venv/", "venv/", ".pytest_cache/", "*.egg-info/"]),
@@ -82,6 +82,14 @@ STACKS = [
     ("rust",   ("Cargo.toml",),          ["target/"]),
     ("java",   ("pom.xml", "build.gradle", "build.gradle.kts"), ["target/", "build/", ".gradle/"]),
 ]
+
+# Per-developer IDE state, wanted whatever the stack is. It is not build output, but it is
+# the same harm and this tool is the only thing looking: TfLens tracked three .bin files
+# under .vs/ProjectEvaluation/, one carrying 246 absolute paths out of one developer's
+# machine, while the audit ran on that repo every week and said nothing. `.vscode/` is NOT
+# here -- a team often commits it deliberately, and a rule that fights the owner gets
+# switched off. tests/regression/run.sh tf_014.
+IDE_STATE = [".vs/", ".idea/"]
 
 # `package.json` alone does NOT make a repo a Node project, and this exception is
 # load-bearing rather than fussy: verify-phase §1 runs `npm init -y` in EVERY repo
@@ -114,14 +122,19 @@ def _is_real_node(root, files):
     # `npm init -y` writes exactly one script: a `test` stub that echoes and exits 1.
     return any(k in scripts for k in ("build", "dist", "bundle", "compile"))
 
+# A NAME list, never a blanket dot-rule. `not d.startswith(".")` used to prune every
+# dot-directory from the walk -- .vs/, .idea/, .gradle/, .terraform/, .pytest_cache/ --
+# which is close to a complete list of the per-developer state a gitignore audit is FOR.
+# The tool cannot report a folder it never visits, and its silence read exactly like a pass.
 SKIP_DIRS = {".git", "node_modules", ".tfcore", "bin", "obj", "target", "dist",
-             "build", ".venv", "venv", "__pycache__", ".next"}
+             "build", ".venv", "venv", "__pycache__", ".next", ".claude", ".opencode",
+             ".vscode", ".github", ".husky", ".yarn"}
 
 
 def detect():
     found = set()
     for root, dirs, files in os.walk(REPO):
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
         if root.count(os.sep) - REPO.count(os.sep) > 3:
             dirs[:] = []
         for name, markers, _ in STACKS:
@@ -152,6 +165,24 @@ def covered(rule, lines):
         if c == core or c == rule.strip("/") or c.rstrip("/") == core:
             return True
     return False
+
+
+def child_only_rules(rule, lines):
+    """Rules that ignore something INSIDE `rule` while `rule` itself stays open.
+
+    This shape is more dangerous than no rule at all, because it looks deliberate:
+    TfLens carried `/.vs/App.slnx`, which covers the solution-named subfolder and
+    leaves `.vs/ProjectEvaluation/` tracked. The next folder the IDE creates is not
+    covered either, and nobody re-reads a line that already mentions the directory."""
+    core = rule.strip("/*").rstrip("/")
+    out = []
+    for l in lines:
+        if not l or l.startswith("#"):
+            continue
+        c = l.lstrip("!").strip().replace("**/", "").strip("/")
+        if c != core and (c.startswith(core + "/") or c.startswith(core + "\\")):
+            out.append(l.strip())
+    return out
 
 
 def tracked_paths():
@@ -210,8 +241,18 @@ wanted = []
 for name, _, rules in STACKS:
     if name in stacks:
         wanted += [(name, r) for r in rules]
+if stacks:
+    wanted += [("ide", r) for r in IDE_STATE if not any(r == w for _n, w in wanted)]
 
 missing = [(s, r) for s, r in wanted if not covered(r, lines)]
+# A rule naming a child of a directory that is itself unignored: report it separately,
+# because "MISSING .vs/" reads like nobody thought about it when in fact somebody did
+# and got it half right, which is the harder thing to spot in a review.
+half_done = []
+for _s, r in missing:
+    kids = child_only_rules(r, lines)
+    if kids:
+        half_done.append((r, kids))
 
 tracked = tracked_paths()
 offenders = {}
@@ -243,6 +284,12 @@ else:
     else:
         print("    ⚠ MISSING build-output rules: %s" % names)
         print("      add them with: bash .tfcore/utils/tf-gitignore-audit.sh . --fix")
+
+for r, kids in half_done:
+    rc |= 1
+    print("    ⚠ %s is not ignored, but %s covers a child of it — the parent is open"
+          % (r, ", ".join(kids)))
+    print("      a rule on a child looks deliberate and leaves every sibling tracked")
 
 if tracked is None:
     print("    tracked-file check skipped (no readable .git/index) — rules alone do not")

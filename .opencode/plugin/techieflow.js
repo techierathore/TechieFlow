@@ -18,7 +18,7 @@
 // auto-approves the permission map's rm/rmdir/sudo asks and TF_YOLO=1 is
 // exported to tool shells so block-git.sh allows read-only git. Writes to
 // git never reach this hook — they are `deny` in the map.
-//   bash  {command}                        -> Bash  {command}            -> block-git.sh + guard-artifacts.sh
+//   bash  {command}                        -> Bash  {command}            -> block-git.sh + guard-artifacts.sh + guard-verify-deps.sh
 //   edit  {filePath,oldString,newString}   -> Edit  {file_path,old_string,new_string}
 //   write {filePath,content}               -> Write {file_path,content}  -> guard-status.sh + guard-verify.sh
 //   session.idle (root session)            -> Stop  {stop_hook_active}   -> guard-status-html.sh
@@ -234,7 +234,7 @@ export const TechieFlowPlugin = async ({ directory, client }) => {
       let scripts = []
       if (input.tool === "bash") {
         payload = { tool_name: "Bash", tool_input: { command: String(args.command || ""), run_in_background: !!(args.background || args.run_in_background) } }
-        scripts = ["block-git.sh", "guard-artifacts.sh", "guard-status.sh", "guard-metrics.sh", "guard-db.sh", "guard-build.sh"]
+        scripts = ["block-git.sh", "guard-artifacts.sh", "guard-status.sh", "guard-metrics.sh", "guard-db.sh", "guard-build.sh", "guard-verify-deps.sh"]
       } else if (input.tool === "edit") {
         payload = {
           tool_name: "Edit",

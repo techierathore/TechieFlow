@@ -8,6 +8,151 @@
 
 ---
 
+## 2026-09-09 — the unhappy path
+
+TfLens's framework-feedback file arrived carrying eight open entries, and the owner asked the
+right question about them: the reset had run its scripts on real projects — TechieBlog, Xpenser,
+MyDiary — so how did eight script defects still reach a consumer?
+
+**The answer is that the reset proved the happy path.** The fixtures were freshly generated and
+the real projects were finished, and every one of these eight defects needs a project that is
+mid-flight and slightly broken: a checklist with a row that can never clear, a BRD that has been
+amended once, a database that is down, a repo with IDE state in it, a metrics file with the
+framework's own verdicts mixed into an application's. Testing on a completed app proves the app
+is done; it does not prove the tool. Three of the eight scripts — `tf-build-list`,
+`tf-gitignore-audit` and the metrics rollup — were invoked by **no test runner at all**.
+
+**`tests/regression/` is the answer to that, and is the point of this entry.** One case per defect
+a real project found, each built from the reporting project's own input, each required to fail
+against the script as TfLens found it. 22 assertions. `MISS-TechieFlow-20260909-01`.
+
+**The eight, all fixed and all proved by a case that failed first:**
+
+| | Fix |
+|---|---|
+| **TF-013** | New hook `guard-verify-deps.sh`: a verify run may START a service the project defines, never CREATE one, and never repoint the app at another instance. TfLens ran a bare `docker compose up` through a `\|\|` fallback and then reported *"689/689 pass"* against a database nobody chose. A rule, not a paragraph (contract 3). |
+| **TF-014** | `tf-gitignore-audit.sh` pruned every dot-directory from its walk — which is where per-developer state lives — and no stack listed `.vs/`. `SKIP_DIRS` is a name list again, `.vs/` and `.idea/` are audited whatever the stack, and a rule covering a *child* of an open parent (`/.vs/App.slnx`) is now reported, because that shape looks deliberate and is worse than no rule. |
+| **TF-015** | `tf-emit.sh` now separates two faults that had shared a remedy: an `ended` slightly in the future is clamped and re-derived, but an `ended` that precedes its `started` contradicts itself, so the record carries **no duration at all** (`duration_unmeasured`) rather than an invented one — the old clamp would have "measured" a TechieBlog record at 1,515,038s. A supplied `duration_s` that disagrees with its own timestamps is replaced by them: that is where 13 of TechieBlog's 14 impossible records hid, behind plausible round numbers. On the read side every consumer of `duration_s` now goes through one `_dur()`, so the two readers of a stream cannot disagree about the same record. |
+| **TF-016** | `*amend-docs` had no closing step, so a miss whose artifact is a document stayed open forever — 12 finished TfLens items showed as outstanding for up to two weeks. The step exists now, and so do the two doors it names: `tf-emit.sh --open-misses <App> --artifact-class doc` and `tf-fix-close.sh <App> --misses … --fix-cmd amend-docs`. **The first draft of that step named flags that did not exist**, which is the TF-006 defect exactly; it was caught by checking, which is why the case tests the door and not the sentence. |
+| **TF-017** | `tf-split-brd.py`'s ledger regex required `**BRD-N**` immediately after the bullet, so it matched **0** of TfLens's 179 items — a real BRD carries `<a id="brd-N"></a>` there because §9 cross-links need it and `tf-doc-check` refuses a broken link. One optional group. TfLens also reported `tf-doc-check.py` as sharing the blind spot; **it does not** — it looks for the bold id anywhere on the line. Pinned by a case anyway, so the two can never be "aligned" in the wrong direction. |
+| **TF-018** | A miss's own sentence (`what`) can be filled in later. The closed-vocabulary rule was a second lock on a door the never-overwrite rule already locked, and it blocked a legitimate correction. `FIELD_SINCE` gains its floor. `MISS-TechieFlow-20260909-02`. |
+| **TF-019** | **The worst of the eight.** `tf-build-list` returned FIX over the failing rows alone, and a row can sit at `Needs re-verify` permanently — TfLens's `REQ-FN-067` and `-070` need a repository that emits `events.ndjson` and none exists — so the mode was pinned and the twelve rows a later `*amend-docs` added were never once printed. A pass trusting the working list would have met `build-phase`'s ending condition with twelve requirements at 0%. The list is now every open row, with the failing ones first, and the counts line asserts its own arithmetic. On TfLens's real phase-3 checklist: **22 rows, 51 terminal, 0 blocked, 73 total** — it balances; before, 14 rows were in no category a reader could see. |
+| **TF-020** | `seg()` never read `req_class`, so the framework's own `FR` verdicts pooled into whichever application segment their records carried, raising its first-pass rate and diluting its escape rate with nothing on the output to show it. SCHEMA §3 had stated the rule; the rollup did not apply it. On this repo's own metrics the 41 FR records now sit in `framework-requirement` at **93% first pass** — which is the size of the flattery. |
+
+**A ninth, found while verifying the other eight.** `guard-metrics.sh` blocked any `python`/`node`
+command naming a stream, so it refused **reads** as well as writes, contradicting its own header
+("Reading them is fine") and blocking verification of the fixes it protects. A guard that refuses
+legitimate work teaches people to route around the guard. It now needs a write in the command as
+well as the path; redirection, `tee`, `cp`/`mv` and an explicit write mode are all still refused.
+`MISS-TechieFlow-20260909-03`.
+
+**And the round trip itself — `tf-selfcheck.sh`.** Every one of the nine was found mid-build,
+in an application's repository, and could only be fixed here: a switch between repos, a feedback
+entry, a maintenance sitting, a re-deploy, each time. So the framework's own scripts now run
+against a project's real files, on demand and at the top of `*build-phase`, and name the ones that
+are broken **there**. A FAIL is a framework defect, never the project's — nothing in it grades the
+application, and it writes nothing. `--report` prints the feedback entry ready to paste, because
+the paperwork is half the trip.
+
+It costs no delivery wiring (`.tfcore/utils/` is copied wholesale by both routes), no new command,
+no new task file and no template. The only prose added anywhere is inside `build-phase.md` step 1,
+which needed correcting regardless: it still said *"FIX means the verifier or a smoke failed rows:
+build only those"* — the sentence TF-019 blamed, and wrong as of this session.
+
+**It found two false alarms of its own before it found anything real**, which is the part worth
+recording. Pointed at TfLens it reported the BRD reader as missing items; both were struck-through
+requirements the ledger is right to skip. Pointed at TechieBlog it reported more, because it was
+comparing bold *mentions* against *unique* items. Both were defects in the checker, not the
+framework — fixed before it shipped, because a check that cries wolf is the one that gets skimmed,
+which is what TF-012 cost. Across six deployed projects it now reports two findings, and both are
+the same real thing: run records that end before they start, whose true start times are gone.
+
+**The timestamps now win over a stored duration that contradicts them.** The emit-side half
+of TF-015 stopped new impossible records; this is the read side, and it is what makes the
+existing ones harmless. A run record carries a start, an end and a duration, and on a stream
+written before the emitter checked them the third can disagree with the first two -- TechieBlog's
+`refresh-status` started 20:05:00, ended 17:59:39, stored 600. Reading the stored number could
+never catch that; only one of its fourteen bad records stored the negative that gave it away.
+
+The duration is now derived from the record's own clocks whenever they can be read, and a record
+whose clocks are impossible carries none at all. **What was dropped is published and printed**
+(`duration_measured_n`, `duration_impossible_n`, `duration_absent_n`, `duration_recomputed_n`),
+because a smaller total offered without its exclusions is just a different wrong number. On
+TechieBlog: **33 of 46 records usable, 13 impossible, 4 recomputed** — 72.9 hours where the old
+reading gave 79.0, and a median run of 41.6 minutes rather than 40.0.
+
+**One correction caught before it shipped.** The first version reported all 30 of this repo's
+own unusable records as "start after end". They are nothing of the kind: `started` equals `ended`
+and no duration was ever written, which is a run that records no elapsed time. Neither reached a
+figure before or after — but a reader given the wrong reason chases the wrong thing, so the two
+are counted and worded apart.
+
+**And the round trip is closed at step 0, not in five task files.** `tf-selfcheck.sh` was first
+wired into `*build-phase`; the owner asked why only there, since defects had surfaced in
+`*amend-docs` and `*verify` too. Every command already begins with `tf-phase.sh start`, so the
+check moved into that one script: it now runs at the head of all 21 commands, and any command
+added later, with **no task file mentioning it at all**. The line added to `build-phase.md` was
+removed again — that file is now 50 words shorter than before this session. It never blocks; a
+framework defect is reported and the command carries on, exactly as a library gap does.
+`TF_SKIP_SELFCHECK=1` skips it, which is what the self-tests use.
+
+**Deployed to 18 repositories** on 2026-09-09, every one on the machine that carries the
+framework except TfLens (an agent was working there) and this repository. All 18 refreshed
+without error and all 18 report a clean self-check afterwards.
+
+**One thing the deployment itself showed.** TechieBlog's thirteen impossible run records made
+the new check print a FAIL at the head of every command — permanently, because an append-only
+stream cannot give them up. But by the check's own definition that is not a failure: no
+framework script is broken there, the emitter refuses new ones and the reader already discards
+them and prints how many. It is now reported as history on an information line, and the case
+that used it as a "broken framework" fixture was retargeted onto an orphaned amendment, which is
+a real defect and one that can still be put right. A warning that can never be cleared is how a
+check earns being skimmed, which is exactly what TF-012 cost.
+
+**Documents.** `TechieFlow-How-It-Works.md` gains **§4.0 Step 0**, and its "what surrounds every
+command" diagram gains the node — the check is now the first thing that happens in every command, so
+a document that described three wrapping mechanisms described the wrong shape. `WorkFlow-Context.md`
+carries the date, twelve hooks rather than eleven, `regression` and `requirements` in the self-test
+list, the self-check as a convention, and an open-items table with the `*amend-docs` row removed
+(fixed) and two rows added: TfLens being one version behind, and the impossible records that cannot
+be repaired and no longer need to be. §8 of How It Works was left exactly as it stands — those are
+the pre-reset figures and they are the record, not a status.
+
+**The streams were not edited, and the owner asked whether they could be.** They cannot: SCHEMA.md
+§1 says append-only, never rewritten, never compacted, and §6 says a correction is applied at read
+time. Nor is there anything to gain — the 13 records are already out of every figure, which is what
+the read-time rule is for. Deleting them would break the one guarantee every consumer is built on,
+and would erase the evidence that the defect happened, which is the opposite of what the miss log
+exists to do.
+
+**Two documents for the owner, neither of them an agent document.**
+`docs/How-To-Save-A-Claude-Conversation.md` — the terminal is a repainted screen, so selecting from
+it copies whatever is painted and long answers arrive with pieces missing and fragments fused
+(`figuto`, `fouTfLens`). Claude Code also writes each conversation to disk exactly, so
+`~/claude-export.sh` reads that and writes markdown into the project's `docs/chat-history/`. Its
+`--list` prints the last thing the owner said in each conversation, which is how two windows open on
+the same folder are told apart; `! bash ~/claude-export.sh` inside a window needs no telling apart at
+all. The exporter is deliberately NOT in `.tfcore/` — it is a personal utility, no framework rule
+depends on it, and it is not deployed anywhere.
+
+`docs/Decision-TfLens-Duration-Parity-2026-09-09.md` — the reference now derives duration from a
+record's own timestamps, and TfLens reproduces the old reading under a zero-tolerance parity gate, so
+the change is automatically a change to what TfLens must do. The document states both honest
+positions (follow, or diverge and declare it as `D-012` did), recommends following because a duration
+taken from a number its own clocks contradict cannot be defended, names the five files and the two
+commands in order — `*amend-docs` with the analyst first, because `BRD-179`/`REQ-FN-112` state the
+old rule in their own words, then `*build-phase` with the flow-master — and carries a paste-ready
+prompt with the reference's current figures as the acceptance test. Every file path, key name and
+requirement id in it was checked against the TfLens tree before it was written.
+
+**Proved, not asserted.** regression 22/22 · mirror 18/18 · doc-check all · bugs 51/51 ·
+requirements 34 graded, 34 passed. `npm run test:install` reports 30 of 31, its one failure being
+the documented Windows-mount false difference — verified here as identical content (same sha256)
+and a differing mode bit only, 644 against 777. TF-019 and TF-020 were additionally run against
+the real TfLens and TechieFlow trees, not only fixtures.
+
+---
+
 ## 2026-09-08 — what the owner reads
 
 The first task given to a project team after the reset (TfLens, `*amend-docs`) handed back an unshaped 244-line document full of framework shorthand, plus one new low-severity entry in its framework-feedback file. The owner read both and named four things. All four were the framework's, not the project's.

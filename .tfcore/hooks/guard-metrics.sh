@@ -27,6 +27,12 @@ except Exception:
 
 ti = data.get("tool_input") or {}
 STREAM = r"docs/metrics/[\w.-]+\.jsonl"
+# What makes a python/node command a WRITE rather than a read: an explicit write mode,
+# something that emits, or a move onto the path. A read names none of these.
+WRITEY = (r"(?:['\"][wax]b?\+?['\"]|\.write\b|\.writelines\b|json\.dump\b|"
+          r"\btruncate\b|\bos\.rename\b|\bos\.replace\b|\bshutil\.(?:copy|move)\b|"
+          r"createWriteStream|writeFileSync|appendFileSync)")
+
 MSG = ("BLOCKED by TechieFlow policy: docs/metrics/*.jsonl are append-only telemetry "
        "streams written only through bash .tfcore/utils/tf-emit.sh <stream> (stdin JSON). "
        "Never Write, Edit, redirect or copy onto them. A wrong record is corrected by a "
@@ -44,7 +50,13 @@ if isinstance(cmd, str) and re.search(STREAM, cmd, re.I):
         r"|(\btee\b[^|;&]*" + STREAM + r")"
         r"|(\b(cp|mv|install)\b[^|;&]*" + STREAM + r")"
         r"|(\b(sed|perl)\b[^|;&]*\s-[a-zA-Z]*i[a-zA-Z]*\b[^|;&]*" + STREAM + r")"
-        r"|(\b(python3?|node)\b[^|;&]*" + STREAM + r")"
+        # A python/node command NAMING a stream used to be blocked outright, which also
+        # refused every READ -- and this file's own header says reading is fine. Checking
+        # a stream with a one-liner is a normal, frequent thing to do, and a guard that
+        # blocks it teaches people to route around the guard. So the clause now needs a
+        # write in the command as well as the path. MISS-TechieFlow-20260909-03.
+        r"|(\b(python3?|node)\b[^|;&]*" + STREAM + r"[^|;&]*" + WRITEY + r")"
+        r"|(\b(python3?|node)\b[^|;&]*" + WRITEY + r"[^|;&]*" + STREAM + r")"
         r"|(\b(truncate|dd)\b[^|;&]*" + STREAM + r")",
         cmd, re.I,
     ):

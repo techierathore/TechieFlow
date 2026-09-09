@@ -3,6 +3,15 @@
 #
 #   bash .tfcore/utils/tf-fix-close.sh <App> [--started <ISO>] [--reqs REQ-UI-009,REQ-FN-014]
 #                                            [--subagents trblazeui,builder] [--build pass|fail|not-run] [--files N]
+#   bash .tfcore/utils/tf-fix-close.sh <App> --misses MISS-App-20260901-06,MISS-App-20260830-03 \
+#                                            --fix-cmd amend-docs [--verdict Verified]
+#
+# The second form closes misses DIRECTLY, by id, with no checklist row and no verify ledger.
+# It exists because a miss whose deficient artifact is a document is fixed by *amend-docs
+# editing the BRD -- never by the verifier touching a row -- so the row-driven form above can
+# never reach it, and the miss stayed open forever (TF-016). It writes NO run record: the
+# amending command emits its own through the status gate. `fix_cmd: "amend-docs"` was already
+# legal in SCHEMA §5.5.2; only this door was missing.
 #
 # Emits, in this order, through tf-emit.sh only:
 #   1. the fix-issues run record (cmd fix-issues, mode fix, the rows touched) — first, because the
@@ -17,7 +26,7 @@ set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [[ $# -ge 1 && "$1" != "-h" && "$1" != "--help" ]] || { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 3; }
 APP="$1"; shift
-STARTED=""; REQS=""; SUBS=""; BUILD="pass"; FILES=""
+STARTED=""; REQS=""; SUBS=""; BUILD="pass"; FILES=""; MISSES=""; FIXCMD="fix-issues"; VERDICT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --started) STARTED="${2:-}"; shift 2 ;;
@@ -25,11 +34,15 @@ while [[ $# -gt 0 ]]; do
     --subagents) SUBS="${2:-}"; shift 2 ;;
     --build) BUILD="${2:-}"; shift 2 ;;
     --files) FILES="${2:-}"; shift 2 ;;
+    --misses) MISSES="${2:-}"; shift 2 ;;
+    --fix-cmd) FIXCMD="${2:-}"; shift 2 ;;
+    --verdict) VERDICT="${2:-}"; shift 2 ;;
     *) echo "tf-fix-close: unknown argument $1" >&2; exit 3 ;;
   esac
 done
 [[ -z "$STARTED" ]] && STARTED="$(bash "$HERE/tf-phase.sh" show 2>/dev/null | sed -n 's/.*"started":"\([^"]*\)".*/\1/p')"
-TF_APP="$APP" TF_STARTED="$STARTED" TF_REQS="$REQS" TF_SUBS="$SUBS" TF_BUILD="$BUILD" TF_FILES="$FILES" TF_EMIT="$HERE/tf-emit.sh" python3 - <<'PY'
+TF_APP="$APP" TF_STARTED="$STARTED" TF_REQS="$REQS" TF_SUBS="$SUBS" TF_BUILD="$BUILD" TF_FILES="$FILES" \
+TF_MISSES="$MISSES" TF_FIXCMD="$FIXCMD" TF_VERDICT="$VERDICT" TF_EMIT="$HERE/tf-emit.sh" python3 - <<'PY'
 import datetime, json, os, subprocess
 EMIT = os.environ["TF_EMIT"]; app = os.environ["TF_APP"]; started = os.environ["TF_STARTED"]
 now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -39,6 +52,25 @@ def emit(stream, rec):
     msg = (p.stdout + p.stderr).strip(); ok = p.returncode == 0 and "refus" not in msg.lower() and "error" not in msg.lower()
     if not ok: print(f"  {stream}: not written — {msg.splitlines()[0][:160] if msg else 'no reason printed'}")
     return ok
+# --- close by miss id (the *amend-docs door) -------------------------------------------
+direct = [m.strip() for m in (os.environ.get("TF_MISSES") or "").split(",") if m.strip()]
+if direct:
+    fix_cmd = os.environ.get("TF_FIXCMD") or "amend-docs"
+    verdict = os.environ.get("TF_VERDICT") or "Verified"
+    closed = 0
+    for mid in direct:
+        fa = q("--next-fix-attempt", mid) or "1"
+        rec = {"kind": "miss-fix", "miss_id": mid, "fix_cmd": fix_cmd,
+               "fix_attempt": int(fa) if fa.isdigit() else 1,
+               "verdict_after": verdict, "reopened": False}
+        if started:
+            rec["fix_run_id"] = started
+        if emit("misses", rec):
+            closed += 1
+    print("%s: %d of %d miss-fix record(s) written (no run record — the amending command emits its own)"
+          % (fix_cmd, closed, len(direct)))
+    raise SystemExit(0)
+
 ledger = {}
 try:
     ledger = json.load(open(os.path.join("docs", ".last-verify.json"), encoding="utf-8"))

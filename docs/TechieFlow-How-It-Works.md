@@ -195,11 +195,12 @@ Examples from the reset's own test runs (2026-09-05): `bash .tfcore/utils/tf-goa
 
 ## 4. What surrounds every command
 
-Every command is wrapped by the same three mechanisms: shared rules read before the work, hooks watching during the work, and the status gate closing the work.
+Every command is wrapped by the same four mechanisms: a self-check before anything else, shared rules read before the work, hooks watching during the work, and the status gate closing the work.
 
 ```mermaid
 flowchart TD
-    A["Command typed"] --> B["Persona file loads"]
+    A["Command typed"] --> S["Step 0<br/>framework self-check against this project's own files"]
+    S --> B["Persona file loads"]
     B --> C["Shared rules load<br/>status gate · smoke-test policy · telemetry rule"]
     C --> D["Task file loads"]
     D --> E["The work<br/>read documents · write code or documents · run the application · test"]
@@ -211,6 +212,20 @@ flowchart TD
     F --> G["Telemetry<br/>one line appended to runs.jsonl"]
     G --> Z["Next command printed"]
 ```
+
+### 4.0 Step 0 — is the framework itself working here?
+
+Every command begins with `bash .tfcore/utils/tf-phase.sh start <command> <App>`, which marks the run and, since 2026-09-09, runs `tf-selfcheck.sh` first.
+
+The check points the framework's own scripts at **this project's real files** and reports which of them are broken here. It exists because nine framework defects reached TfLens in three weeks, every one met in the middle of a build: the checklist row that could never clear, the BRD carrying the anchors its own link checker demands, the metrics file holding the framework's own verdicts. None was exotic. They had simply never been run against a real project before the project ran them.
+
+It checks seven things: every framework script still parses; the checklist rows add up; the project's BRD can be read; its run records are not impossible; the framework's own verdicts are not pooled into the application's; miss amendments still attach to a parent; and the document checks run at all.
+
+**A FAIL is always the framework's, never the project's.** Nothing in it grades the application, and it writes nothing. It never blocks: the defect is logged in the project's framework-feedback file and the command carries on, exactly as a library gap does. `bash .tfcore/utils/tf-selfcheck.sh --report` prints the entry ready to paste, because the paperwork is half the round trip.
+
+Two things it deliberately does not do. It does not report **history** as breakage: a stream that carries impossible records written before the emitter refused them cannot be repaired — the streams are append-only — and the reader already discards them and prints how many, so it is stated as a fact and not as a failure. And it is not a verdict of any kind: it can license nothing, least of all `Verified`.
+
+Run it by hand at any time, in any project. `TF_SKIP_SELFCHECK=1` skips it; the self-tests use that.
 
 ### 4.1 Example: a document-producing command, `*day1-greenfield TechieDesk`
 
