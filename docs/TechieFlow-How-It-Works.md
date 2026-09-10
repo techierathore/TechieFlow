@@ -41,7 +41,7 @@ The framework runs in two harnesses, Claude Code and OpenCode, and must work ide
 | **Feedback file** | `docs/<App>-<Upstream>-Feedback.md`, one per library and one for the framework. Reporting a defect is never refused; every entry answers `Blocks: yes\|no` first, and a non-blocking entry is filed while the run carries on. | A bug report to another team. |
 | **Status gate** | The rule that every command ends by rewriting `PROJECT-STATUS.md` in a fixed shape. A hook rejects a malformed write. | A mandatory end-of-job report. |
 | **YOLO mode** | Run to completion with no questions and all permissions except git writes. Set by a flag file with a 24-hour expiry. The owner's preferred mode for most commands. | An unattended batch run. |
-| **Model routing** | A YAML file mapping each command to a cost tier (frontier, standard, economy) and each tier to a model per harness. Currently disabled. | Selecting machine size per pipeline stage. |
+| **Model routing** | A YAML file mapping each command to a cost tier (frontier, standard, economy) and each tier to a model per harness — plus the models a tier drops to while its own is limited, and how each harness is paid for. Enabled. | Selecting machine size per pipeline stage. |
 | **Telemetry streams** | The measurement system. Five files under `docs/metrics/`, one line appended per event, never edited: command runs (command, model, time, tokens), verification verdicts (first check that failed), misses (kind, phase, finder, whose gap, the owner's sentence, fix cost; mirrored into a readable `docs/<App>-Misses.md`), chat sessions (tokens in and out), and the owner's git commits. A report reads them into five figures; see section 6. | An append-only event log with a reporting query. |
 
 ---
@@ -363,7 +363,7 @@ The report (`*metrics`) answers five questions.
 
 5. **Effort per phase.** For each command: elapsed time, tokens, model, sub-agent count. It shows what each stage costs and allows a cheap model to be compared with an expensive one on the same kind of work.
 
-Dollar figures exist only for OpenCode runs. Claude Code reports tokens, never dollars, and the report never converts.
+Dollar figures on a *record* exist only for OpenCode runs: Claude Code reports tokens and never a price, and no record ever stores a computed one. Converting tokens to money is the report's job, not the framework's, so `*metrics` prices every run at the published rate when it runs — a **list price**, never called a bill — and keeps three things apart that used to be one column: what a provider actually billed, what a monthly plan's allowance was consumed by, and what a flat fee had already paid for.
 
 ---
 

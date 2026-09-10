@@ -136,6 +136,16 @@ The **session pointer file** `.tfcore/.session/<harness>.json` is written by the
 
 ## 5. Model routing design (Task 4)
 
+> **What shipped since, 2026-09-10.** This section is the 2026-08-19 design and is kept as
+> traceability, not as current truth. Routing has been enabled since 2026-09-05, and
+> `routing.yaml` has since gained three things this design does not describe: a `fallbacks:`
+> chain per tier (the models to try while the tier's own is out of quota), a `billing:` block
+> (how each harness is paid for, so a cost figure knows what it means), and an optional
+> `cooldown_file:`. §5.5's central claim still holds — nothing switches a model mid-turn — and
+> the fallback is applied at launch, which is where this design already put the decision. The
+> current, maintained description is `docs/TechieFlow-Routing-Guide.md`; the field contract is
+> `.tfcore/telemetry/SCHEMA.md` §2.5b.
+
 ### 5.1 Facts that bound the design (Capability-Matrix row b)
 
 - **Both** harnesses bind a model to a *subagent definition* and to a *command definition*. Neither lets the running agent re-route its own next step from inside a turn, and neither exposes a per-tool-call model. A plugin cannot change the model (`chat.params` has no model output; `permission.ask` is dead). **Routing is therefore declared at the harness boundary and observed by telemetry — never enforced mid-turn.**

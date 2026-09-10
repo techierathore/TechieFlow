@@ -155,7 +155,7 @@ The shipped configuration allows every file operation and all of Bash with no pr
 
 Five append-only streams per project under `docs/metrics/`, read with `*metrics {App}`: command runs, verification verdicts, misses, chat sessions, and your own commits. They answer five questions — the first-pass rate, which check caught the failure, the escape rate, what misses cost to fix, and the effort per phase. Definitions, real figures and the sentence to say about each are in [`docs/TechieFlow-Telemetry-Explained.md`](docs/TechieFlow-Telemetry-Explained.md); the field contract is `.tfcore/telemetry/SCHEMA.md`.
 
-Standing rules: provenance never merges, only identifiers and counts are recorded, telemetry has no veto, and an agent never writes what it cannot know. Dollar figures exist only for OpenCode runs; Claude Code reports tokens and no rate card is ever applied.
+Standing rules: provenance never merges, only identifiers and counts are recorded, telemetry has no veto, and an agent never writes what it cannot know. **Tokens are what is recorded; money is worked out when the report runs.** A record stores what the provider itself charged — only a metered provider charges per token — and never a computed price. The report separately prints a **list price**, the published rate applied to the tokens actually measured, which is the one figure that compares a Claude phase with an OpenCode one. A price is never called a bill, and a monthly plan's allowance is counted apart from both.
 
 ## 8. Running phases on cheaper models
 
@@ -167,7 +167,14 @@ bash .tfcore/utils/tf-routing.sh on
 bash .tfcore/utils/tf-routing.sh set-tier verify-phase economy
 ```
 
-Drift is observed, never enforced: a run on the wrong model is recorded as such and nothing blocks. Full guide: [`docs/TechieFlow-Routing-Guide.md`](docs/TechieFlow-Routing-Guide.md).
+Each tier also names the models to try **instead**, while its own is out of quota. When a usage limit is hit, the supervisor parks that model until its stated reset, moves to the next model in the tier's chain, re-binds so the sub-agents move with it, and carries on; only when every model in the chain is limited does it wait. `--no-fallback` restores the old wait-for-reset behaviour.
+
+```bash
+bash .tfcore/utils/tf-model-pick.sh status               # what each tier would run right now
+bash .tfcore/utils/tf-model-pick.sh chain standard opencode   # the order it falls back in
+```
+
+Drift is observed, never enforced: a run on the wrong model is recorded as such and nothing blocks. The step-by-step setup, and what a cost figure means on each kind of plan, are in the full guide: [`docs/TechieFlow-Routing-Guide.md`](docs/TechieFlow-Routing-Guide.md).
 
 ---
 

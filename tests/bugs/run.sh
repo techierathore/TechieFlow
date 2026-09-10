@@ -149,7 +149,9 @@ check "fix-close: the miss-fix carries the fix run" "$(grep '"kind":"miss-fix"' 
 # ---- 7. the emitter and log-miss report honestly (Session 6, 2026-09-07) ---------------------
 # 7a. MISS-TechieFlow-20260907-09: a run record with no `ended` was accepted and could never be
 #     costed. `ended` is when the record is written, so an absent one is filled in.
-echo '{"kind":"run","app":"FxApp","cmd":"devguide","started":"2026-09-07T07:00:00Z"}' | bash $U/tf-emit.sh runs >/dev/null 2>&1
+# `started` is NOW, not a date in the past: a run may not begin before the last one ended
+# (FR-72), and the fix-issues record above ends at the moment this fixture ran.
+echo "{\"kind\":\"run\",\"app\":\"FxApp\",\"cmd\":\"devguide\",\"started\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" | bash $U/tf-emit.sh runs >/dev/null 2>&1
 check "emit: a run record with no ended gets one, and a duration" \
   "$(python3 - "$M/runs.jsonl" <<'PY'
 import json,sys

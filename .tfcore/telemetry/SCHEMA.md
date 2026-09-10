@@ -127,6 +127,34 @@ So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit 
 
 Provenance rule applied once more: **never pool `cost_usd` across harness** — Claude records are `null`, and a sum over mixed records silently under-reports. Tokens may be compared across harness; dollars may not.
 
+### 2.5b How the model was paid for (added 2026-09-10; injected by `tf-emit.sh`, never emitted by an agent)
+
+`cost_usd` alone answers *how much* and never *of what*, and on one machine it is three different quantities at once. The owner found this on 2026-09-10 (MISS-TechieFlow-20260910-02): a `runs.jsonl` here holds OpenCode records on a metered API key where the dollars are real money, OpenCode records on an OAuth subscription where OpenCode records **0.0** because the plan was already paid for, OpenCode records on a model running on this machine where there is no bill at all, and Claude Code records that are permanently `null`. Summing them produces a number that is neither the money spent nor the effort used, and the two zeroes are indistinguishable from a free run.
+
+| Field | Type | Meaning / source |
+|---|---|---|
+| `billing_mode` | string | `subscription` \| `metered` \| `local` \| `mixed` \| `unknown`. Resolved per observed model by `bash .tfcore/utils/tf-model-pick.sh billing <model> <harness>`: OpenCode's own `auth.json` says `oauth` (a plan) or `api` (a key), a provider that runs on this machine is `local`, a provider with no credential is `unknown` and is never assumed to be billable, and `routing.yaml` `billing:` overrides any of it by name. Claude Code is **declared** in `billing.claude` (default `subscription`), because nothing in a transcript says which plan paid for it. `mixed` when one window ran models of more than one mode — which is exactly what a fallback from a subscription to a metered key looks like. |
+| `cost_source` | string | `opencode-db` where a per-message cost was read, `none` where there is no cost source at all. **Never a rate card.** |
+
+`billing_mode` has five values, and the `plan` one is the reason the field is not a boolean:
+
+| Value | What the provider's cost number is |
+|---|---|
+| `subscription` | Nothing, or a recorded `0.0`. A flat fee bought the quota before the run started. |
+| `plan` | **Allowance consumed against a per-model limit, not an invoice.** OpenCode Go is $10/month with a $15–$60 monthly allowance *per model* and 5-hour / weekly / monthly thresholds (<https://opencode.ai/docs/go>), so its dollars are a meter — and they are precisely the numbers that produce the limit `routing.yaml` `fallbacks:` exists for. Detected from the provider name, because an API key alone cannot tell a plan from a per-token bill. |
+| `metered` | Money actually billed, per token. |
+| `local` | No bill at all. |
+| `mixed` / `unknown` | Several modes in one window; or nothing here could tell. `unknown` is never quietly treated as billable. |
+
+**Money is never computed into a record.** Tokens are what the framework measures and stores — per model, main thread and sub-agents apart (§2.5, §2.6) — and turning them into a price is a *reporting* job, done by `tf-metrics.sh` (and by any other reader, TfLens included) from the fields already on the stream. That is §8's existing rule, *derived metrics are computed, never stored*, applied to money; it is why a rate card can change, or a reader disagree with this one, without a single record becoming wrong, and why every run ever recorded is re-priced the moment the rate card is corrected. The shared rate lookup is `bash .tfcore/utils/tf-model-pick.sh rate <model>`, which reads the models.dev catalog and lets a project's own `.tfcore/rate-card.json` win.
+
+Two simplifications in that price, stated rather than hidden: the **base** rate is used, so a provider's long-context surcharge is not applied (nothing records per-message context length, and guessing it would be worse than the small understatement); and a model the rate card does not carry produces no number rather than a zero.
+| `fallback_from` | string | **`runs`/`gates` only.** The tier's own model, named here when the run started while that model was on cooldown for a usage limit. It is what separates *"routing drifted"* from *"the tier model was out of quota and the chain moved on"* — both of which set `routed:false`, and only one of which is a problem. |
+
+**The reporting rule, enforced in `tf-metrics.sh` and not merely stated here:** the report carries **three** money lines and never merges them — *list price*, computed over every record that can be priced and labelled a price rather than a bill; *plan allowance used*, per model, over `billing_mode:"plan"` records, because that is the meter a per-model limit is read against; and *money billed*, over `billing_mode:"metered"` records only. Each prints what it excluded. A window whose models were paid for in different ways contributes real money that cannot be separated from the part a subscription had already covered, so it gets its own line rather than being folded into any of the three. Per-model spend is attributed only where the window ran a single model; splitting one window's dollars across several models by token share is arithmetic, not measurement — the same line §5.5.3 draws between `sole` and `shared`. A record written before 2026-09-10 carries no `billing_mode`; it is admitted on its old terms and counted separately, so this change does not silently rewrite the past.
+
+Tokens remain the unit that works everywhere, and they are what every figure is built from. `cost_usd` is whatever the provider itself reported, and `billing_mode` is what stops a reader mistaking a meter, a flat fee and an invoice for one another.
+
 ### 2.6 Per-phase effort fields (added 2026-08-31; injected by `tf-emit.sh`, never emitted by an agent)
 
 Added so the question *"what did each phase cost — in time, in tokens, on which model, with how much fan-out?"* is answerable from the streams rather than reconstructed by hand. §2 and §2.5 already carried `cmd`, `started`/`ended`/`duration_s`, the four token counters, `model`, `harness`, `tier`/`tier_model`/`routed` and `attempt`. Three things were missing, and each was missing for the same reason: it was either **self-reported** or **not represented at all**.
@@ -166,6 +194,14 @@ A `run-void` names one run record and says why it should not be counted:
 **What the readers must do, and `tf-metrics.sh` does:** the named record leaves **every** figure — it is never clamped, halved or guessed at — and the count of what left travels with the figures, as `runs_voided_n` with the reasons in `runs_voided`. A total offered without its exclusions is just a different wrong number (the §5.5.8 rule, one stream over). A void naming a run that is not on this stream is an **orphan**: counted as `run_voids_orphaned_n` and reported, never silently dropped, exactly as an orphaned `miss-amend` is.
 
 **What it is not.** It is not a delete and not an edit: both records stay, in order, and a reader can always see what was corrected and why. It cannot be used to remove a run whose figures are merely unflattering — the reason is on the record and a reader can check it, which is the whole protection. It is not a way to fix a number: there is no "corrected duration" field, because a figure nobody measured is not recoverable by asserting one.
+
+### 2.7b A run may not start before the last one ended (added 2026-09-10)
+
+§2.7 gave a way to **correct** a start time nobody measured, and nothing refused one — so the same mistake was made twice more on the day the correction shipped, each record beginning before the record before it ended, each quietly adding its overlap to every total that crossed it (MISS-TechieFlow-20260910-04, sorted `ignored`: it was written down and not followed). A correction mechanism with no refusal in front of it is a fix that has to be remembered, which is the definition of a rule that rots.
+
+`tf-emit.sh` now **refuses** a live `run` record for an app whose `started` precedes the latest `ended` of that app's live runs. The refusal names the record it collides with and the timestamp to use instead; nothing is appended. **Voided and backfilled records are excluded from the comparison**, which is what keeps the §2.7 repair path working: void the wrong record, then the corrected one is accepted.
+
+The one real overlap is two machines appending to the same `merge=union` stream (§6). That is declared, with `bash .tfcore/utils/tf-emit.sh runs --allow-overlap`, and never assumed — the mistake this refuses is easy to make and impossible to see afterwards, so the door is a flag rather than a fallback. FR-72; `bash tests/regression/run.sh tf_overlap`.
 
 ## 3. `docs/metrics/gates.jsonl` — one record per REQ verdict per verify run
 
@@ -318,7 +354,7 @@ Written by `.tfcore/hooks/metrics-session.sh`, wired to the **`SessionEnd`** hoo
 | `cache_creation_tokens` | int | Σ `usage.cache_creation_input_tokens`. |
 | `cost_usd` | number \| null | **Almost always `null`.** See the limitation below. |
 
-**Known limitation — cost is not in the transcript.** Claude Code `2.x` transcripts carry token counts but no per-message dollar cost, and this framework runs on a Claude Max subscription where marginal per-token cost is not the real unit anyway. `cost_usd` is therefore emitted as `null` and *never* computed from a rate card — that would be an estimate presented as a measurement. Consequently **"cost per verified REQ" is reported in tokens, not dollars**, unless a real cost source appears. (OpenCode's `opencode stats` *does* report real cost — that is the one thing it can measure which Claude Code cannot. Wiring it in is the obvious way this field stops being `null`.)
+**Known limitation — cost is not in the transcript.** Claude Code `2.x` transcripts carry token counts but no per-message dollar cost, and this framework runs on a Claude Max subscription where marginal per-token cost is not the real unit anyway. `cost_usd` is therefore emitted as `null` and *never* computed from a rate card — that would be an estimate presented as a measurement. (Since 2026-09-10 the report does price a run from a rate card, at read time and never into a record; §2.5b is what keeps the two apart.) Consequently **"cost per verified REQ" is reported in tokens, not dollars**, unless a real cost source appears. (OpenCode's `opencode stats` *does* report real cost — that is the one thing it can measure which Claude Code cannot. Wiring it in is the obvious way this field stops being `null`.) **A caveat added 2026-09-10:** OpenCode's cost is real only where the provider is billed per token. On a provider signed in with OAuth it records `0.0`, which is true of the marginal cost and false of the money, so a session record's cost carries the same warning as a run record's — with the difference that `sessions.jsonl` has no `billing_mode` field, because it is not joinable to `runs.jsonl` on anything but time (§4, below) and would have no report to serve. Read session dollars per provider or not at all.
 
 **Known limitation — session ≠ run.** One session may span several commands, or one command several sessions. `sessions.jsonl` is **not** joinable to `runs.jsonl` on anything but time. Do not attribute a session's tokens to a single run.
 

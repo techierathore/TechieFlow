@@ -8,6 +8,166 @@
 
 ---
 
+## 2026-09-10 — a tier gets a second choice, and a cost gets a meaning
+
+Two questions from the owner, both about routing, both answered by things that did not exist.
+
+**1. "What if the model's limit has been reached?"** Routing named one model per tier and had exactly
+one answer: sleep until the reset. `MISS-TechieFlow-20260910-01`, sorted `unsaid`.
+
+`routing.yaml` gains `fallbacks:` — an ordered list of models per tier per harness, comma-separated
+on one line, the same flat shape as `tiers:`. A new script, `.tfcore/utils/tf-model-pick.sh`, owns
+the question *"which model should this tier run on right now"*: it walks the chain and returns the
+first model that is not on **cooldown**. A cooldown is written when a usage limit is hit and expires
+by itself at the reset time the limit message stated. It lives at
+`.tfcore/.session/model-cooldown.json`, **in the project**, and `cooldown_file:` in `routing.yaml`
+moves it.
+
+That location was the owner's correction to the first cut, which had put it in a per-machine
+`~/.techieflow/` on the reasoning that a usage limit belongs to an account. The reasoning was true
+and the conclusion was wrong: TechieFlow is installed per project through npm/npx and never at
+machine level, and a setting the owner cannot change for one project alone is not configurable at
+all. The account-wide behaviour is still available — point several projects at one `cooldown_file:`
+— and the cost of the default is one wasted cycle per project, each discovering the same limit.
+
+`tf-goal.sh` uses it at both places a run used to stop: the parsed usage limit, and the silent
+OpenCode cycle whose provider refusal only its own log records (the 2026-09-06 incident that exits
+5). Both now park the model, re-bind, and start the next cycle on the next model instead. Only an
+exhausted chain sleeps, or exits 5. `tf-routing-bind.sh` asks the same question when it writes the
+harness bindings, which is what stops the sub-agents failing behind a main agent that already moved
+— the row that was in the guide's "when something is wrong" table with no fix behind it.
+
+Three things are deliberately *not* claimed. Nothing switches a running turn's model; the choice is
+made at launch, as routing always was. On Claude Code the 5-hour and weekly limits belong to the
+account rather than the model, so a Claude-to-Claude fallback usually hits the same wall — the
+supervisor discovers that honestly, parks that model too, and after one wasted cycle behaves exactly
+as it did before. And `--no-fallback`, or a project that has not been refreshed yet, keeps the old
+behaviour entirely.
+
+**2. "How does a cost number differ by provider?"** It differed far more than the schema admitted.
+`MISS-TechieFlow-20260910-02`, sorted `unsaid`. Read directly off this machine: `openai` is signed in
+with **OAuth**, so OpenCode records `cost 0` for 1,614 messages on `gpt-5.6-sol` — true of the
+marginal cost, false of the money, and indistinguishable from free. `opencode-go` is an API key and
+records real dollars. `lmstudio` runs locally and has no bill. Claude Code is `null` throughout. One
+column, four meanings.
+
+Run and gate records now carry **`billing_mode`** (`subscription` | `metered` | `local` | `mixed` |
+`unknown`), **`cost_source`**, and **`fallback_from`** — the last naming the tier model when a run
+started while it was out of quota, so `routed:false` by choice reads differently from `routed:false`
+by drift. All three are injected by `tf-emit.sh` and refused from a caller, like every other derived
+field. The mode is resolved from OpenCode's own `auth.json` and model catalog, with a per-provider
+override available in `routing.yaml` `billing:`; Claude Code is declared, because nothing in a
+transcript says which plan paid for it. SCHEMA.md §2.5b.
+
+**Where pricing belongs: not here.** The owner's second and third corrections, in one. Recording
+*how* a run was paid for still left a subscription run — nearly everything the framework does —
+with no money figure at all, so the first attempt computed one into every record. Wrong layer: the
+framework's job is to record what it measured, and turning tokens into money is the reporting
+tool's job, TfLens's as much as this one's. The stored `cost_list_usd` field was removed and the
+same calculation now happens in `tf-metrics.sh` at report time, from the tokens already on the
+stream, via one shared rate lookup (`tf-model-pick.sh rate`, models.dev catalog, overridable per
+project with `.tfcore/rate-card.json`).
+
+That is SCHEMA.md §8's existing rule — *derived metrics are computed, never stored* — applied to
+money, and it pays immediately: **every run ever recorded is priced retroactively**, because the
+tokens were always there. This repository's own history came out at $1,235 over 52 runs, $31.67 per
+Verified requirement, from records written weeks before any of this existed. Under the stored-field
+design exactly one record would have had a price. Correct a rate card and the whole history
+re-prices, with no record ever having been wrong.
+
+**And OpenCode Go is not a metered API key.** The owner pointed at <https://opencode.ai/docs/go>,
+which settles two things. First, the Go plan reports token usage in full — the premise that a rate
+card was needed to fill a gap there was wrong; `opencode-go/mimo-v2.5` alone had 405,640 output
+tokens on this machine, alongside its cost. Second, Go is **$10/month with a $15–$60 monthly
+allowance per model** and 5-hour / weekly / monthly thresholds, so the dollars it reports are
+**allowance consumed, not an invoice** — and they are precisely the numbers that produce the limit
+the fallback chain exists for. `billing_mode` gained a fifth value, `plan`, detected from the
+provider name because an API key alone cannot tell a plan from a per-token bill, and the report
+lists plan allowance **per model**, which is the level the limit actually applies at.
+
+`tf-metrics.sh` now prints three money lines and never merges them: list price (computed here),
+plan allowance used per model, and money billed over metered runs only — each saying what it
+excluded, plus a separate line for a mixed window whose real dollars cannot be separated from the
+part a subscription had already covered. Per-model figures are attributed only where the window ran
+a single model: splitting one window's dollars by token share is arithmetic, not measurement.
+
+**Rework cost per miss** gains a list-price figure — the first money-shaped number that has ever
+worked on a Claude Code repair — and loses a wrong one: it had been averaging an OpenCode
+subscription's measured `0.0` in as a *free* repair, which is the TF-005 defect of 2026-08-31
+exactly, one column over.
+
+**The fallback chains are filled in** from the Go model list the owner supplied: each tier drops
+first to a different model on the same plan (the allowance is per model, so a sibling is usually
+still there), then to a different provider (for when the whole plan is out). The guide gained a
+step-by-step setup section (§2b), which the owner asked for.
+
+**A third defect, found by running the new test.** `tf-metrics.sh --phases` crashed with
+`UnboundLocalError` on any phase that touched no REQ and wrote no file, because `by_mode` was
+assigned inside a branch and read outside it. That is every `metrics-report` and every render.
+`MISS-TechieFlow-20260910-03`, sorted `weak-check`.
+
+**And then the emitter was taught to refuse it.** Voiding a wrong record is a repair, and a
+repair with nothing in front of it is a rule that has to be remembered — which is exactly how it
+failed. `tf-emit.sh` now REFUSES a live `run` record whose `started` precedes the latest `ended`
+of that app's live runs: the message names the record it collides with and the timestamp to use
+instead, and nothing is appended. Voided and backfilled records are excluded from the comparison,
+so the void-then-re-emit repair path still works — that is a case in the suite, not a hope.
+
+Two traps found while building it, both by running it. A record with no `ended` used to fall back
+to `ts`, which is the WRITE time, so every historical record emitted today would have collided
+with the record written a second ago. And a self-contradicting record has its `ended` replaced by
+the write time and marked with a null `duration_s`; that placeholder is not a measurement, so it
+must not become a boundary or it blocks every later record for that app. Both are now excluded by
+name, and the existing `tf_015` case is what caught the second one.
+
+The one real overlap — two machines appending to one `merge=union` stream — is declared with
+`--allow-overlap`. Deliberately a flag and not a fallback: the mistake it guards is easy to make
+and impossible to see afterwards. FR-72, SCHEMA §2.7b, `tests/regression/run.sh tf_overlap`
+(8 checks). `MISS-TechieFlow-20260910-04` is closed by a `miss-fix` record.
+
+Fixing it also exposed a fixture that described an impossible timeline: `tests/routing/run.sh`
+emitted four runs over one shared window. Four consecutive windows now, which is what a real
+session looks like.
+
+**The readable documents that had gone stale were corrected too.** The README said "no rate card
+is ever applied" and How-It-Works said "the report never converts" — both true when written and
+both untrue once the report started pricing runs; each now states the split between what a
+provider billed, what a plan's allowance covered, and what a flat fee had already paid for. The
+README's routing section gained the fallback chain and the two commands that show it.
+`Adapter-Design.md` §5 is the 2026-08-19 design and is left as traceability, with a note at the
+top naming the three things `routing.yaml` has gained since and pointing at the maintained guide.
+
+**Deployed and proved in place.** `update-framework.sh` ran in all 19 repositories on this
+machine; every one took the new scripts and had `fallbacks:` and `billing:` added to its own
+`routing.yaml` without a existing line being touched. Three have routing enabled and regenerated 22 bindings each; the other sixteen keep their own `enabled:
+false`. `tf-selfcheck` is clean in the ones spot-checked, and `tf-model-pick.sh chain` answers with
+a real four-deep chain in each.
+
+**And this session's own telemetry had to be corrected.** Two of its four run records were written
+with start times the maintainer TYPED rather than measured, so each overlapped the record before
+it — 42 minutes on one, nearly three hours on the other. That is `MISS-TechieFlow-20260909-06`
+happening again, after the mechanism to correct it had been built, so it is sorted `ignored`:
+`MISS-TechieFlow-20260910-04`. Both records were voided by name and re-emitted with a start derived
+from two measured facts (the previous record's `ended`). Three voids now stand on this repository's
+stream, each with its reason, and the report prints all three.
+
+**Proved by running it.** New `tests/routing/run.sh`, 42 checks: the chain in order, a Claude alias
+and a full model id treated as one model, an expired cooldown ignored, an exhausted chain saying so
+instead of guessing, both harnesses' bindings moving, and the cooldown file defaulting into
+`.tfcore` and moving when `routing.yaml` says so. On cost: an API key reads `metered`, OAuth reads
+`subscription`, a monthly plan reads `plan`, a credential-less provider reads `unknown` rather than
+being assumed billable; **no priced field is written to any record**; a caller's self-reported cost
+is discarded; the report's price is checked as arithmetic, not as presence — the expected dollars
+are computed inside the test from the rate card and the token counts and compared exactly — a
+project rate card beats the catalog, an unpriceable model yields nothing rather than a zero, and
+plan dollars are reported as allowance used per model while the money figure counts only the
+metered run. `tests/goal/run.sh` gains three end-to-end cases and now runs 36. FR-70
+and FR-71 added to the requirements, and `tests/requirements/run.sh` knows the new artefact. Guide
+sections 9 and 10, Telemetry-Explained §5a, How-It-Works §2 (the owner's go-ahead, same day: the
+routing cell had said "Currently disabled" since 2026-09-05).
+
+---
+
 ## 2026-09-09 (second sitting) — the two the verifier got wrong
 
 TfLens's decision request came back with five tooling entries, `TF-018` to `TF-022`. Three were

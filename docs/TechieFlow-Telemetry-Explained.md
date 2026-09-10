@@ -22,7 +22,7 @@ bash .tfcore/telemetry/tf-metrics.sh --report <repo>               # one project
 
 Two facts to say before any number:
 
-- **Tokens, not dollars.** Claude Code reports tokens and never a price, so the framework never converts. Dollars appear only on OpenCode runs, where the harness measured them. Every token figure is output tokens, counted from the harness's own transcript inside the run's time window; a run whose window could not be read is left out, never counted as zero.
+- **Tokens are what is recorded; money is worked out when the report runs.** Claude Code reports tokens and never a price, and no record here ever stores a price. A dollar figure on a record is one the provider itself reported, and only OpenCode has those. Since 2026-09-10 the report also prints a **list price** from the tokens and a rate card — labelled a price, never a bill (§5a). Every token figure is output tokens, counted from the harness's own transcript inside the run's time window; a run whose window could not be read is left out, never counted as zero.
 - **The unit is the run, not the feature.** "A build phase costs three hours" is a fact the streams hold. "Requirement 14 took two hours" is not, and nothing here will produce it.
 
 Three caveats that belong beside the figures they touch are marked below with ⚠.
@@ -147,6 +147,26 @@ Named projects: TfLens's eight build runs took a median of 2 h 16 min and 457,00
 
 ---
 
+## 5a. What a cost number means (added 2026-09-10)
+
+**What it means.** Every run is measured in tokens, and tokens are what the whole report is built on. But tokens are hard to talk about, so the report now also puts a price on them — and keeps that price strictly apart from what was actually billed, because those are two different facts:
+
+| The number | What it answers | Where it comes from |
+|---|---|---|
+| **List price** | "What would these tokens cost at the published rate?" | Worked out **when the report runs**, from the tokens already on the record. Every run has one, on both harnesses. A **price, not a bill**. |
+| **Plan allowance used** | "How much of this month's allowance has this model eaten?" | OpenCode Go is $10 a month with a separate allowance per model. Its dollars are a meter, and they are what runs out and sends a phase to its fallback model. |
+| **Money billed** | "What was I actually charged?" | Only a provider that bills per token. A flat monthly plan charges nothing extra, so there is nothing to record. |
+
+The framework itself stores none of these. It stores what it measured — tokens, per model, per run, on both harnesses — and the report turns them into money. That is deliberate: a rate card changes, and when it does, every run ever recorded is re-priced and no record was ever wrong. It also means the numbers below could be produced by TfLens from the same files, without asking the framework for permission.
+
+What changed on 2026-09-10 is that a run now says **how it was paid for**, so the report can tell a flat fee, a monthly allowance and a real invoice apart instead of adding them up. Before that, a subscription run recorded a zero that read exactly like a free one.
+
+Two things the price deliberately does not do: it uses the base rate, so a long-context surcharge is not added; and a model it has no rate for is left out rather than counted as free.
+
+**On stage.** "Every run is priced at the published rate, so I can say what a build phase is worth in money as well as tokens — and separately, what I was actually billed, which on a subscription is nothing. The report never adds those together, and none of it is baked into the files: change the price list and the whole history re-prices."
+
+---
+
 ## 5b. When a record turns out to be wrong
 
 The five files are append-only: nothing is ever edited and nothing is ever deleted. That is what makes the numbers worth quoting — no one can go back and tidy a figure they did not like. It leaves one real problem, and on 2026-09-09 it happened here: a run record was written with a **guessed** start time, so it claimed five hours for a session that took nineteen minutes. Its own start and end agreed with each other, so no check could catch it, and it could not be corrected.
@@ -170,4 +190,4 @@ Three things make this a correction rather than a cover-up. The reason travels w
 - **Owner reviews.** Since 2026-09-06 a review of a phase's output is a record: how many corrections the owner gave, what producing the output cost, what the corrections cost. Two exist (MyDiary day-1). The report prints them; the figure is not yet worth a sentence.
 - **Idea-stage commands** (brainstorm, project brief) write no run record yet, so their cost is unknown.
 - **Runs whose window could not be read** (13 of 23 builds) are outside every token figure. The per-run medians are of the measured ones, and the table says how many that is.
-- **Dollars for Claude Code** will never appear; that is a decision, not a gap.
+- **Dollars actually billed for Claude Code** will never appear; that is a decision, not a gap. Since 2026-09-10 the report does put a **list price** on its runs — the rate card applied to the tokens they measured — which is a different question and is labelled as one (§5a).

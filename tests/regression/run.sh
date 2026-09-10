@@ -615,6 +615,67 @@ except Exception: print('unparsable')" "$d/out2.json")"
                     || bad tf_void_f "an orphaned void was silently ignored ($o)"
 }
 
+# --- a run may not start before the last one finished ------------------------------------
+# `--void-run` gave a way to CORRECT a run record whose start time nobody measured; nothing
+# refused one. So on the day the correction shipped, the same mistake was made twice more —
+# two records starting before the previous record ended, adding 42 minutes and nearly three
+# hours to every total that crossed them, invisibly. MISS-TechieFlow-20260910-04, sorted
+# `ignored`: it was written down and not followed. The emitter refuses it now.
+tf_overlap() {
+  local d; d="$(_metrics_fx overlapfx)"
+  local out n
+  emit() { echo "$1" | ( cd "$d" && bash "$UTILS/tf-emit.sh" runs "${2:-}" ) 2>&1; }
+  n() { grep -c '"kind":"run"' "$d/docs/metrics/runs.jsonl" 2>/dev/null || echo 0; }
+
+  emit '{"kind":"run","app":"Fx","cmd":"build-phase","started":"2026-09-10T09:00:00Z","ended":"2026-09-10T10:00:00Z"}' >/dev/null
+  [[ "$(n)" == "1" ]] && ok tf_overlap_a "a first run is appended" \
+                      || bad tf_overlap_a "the first run was refused"
+
+  out="$(emit '{"kind":"run","app":"Fx","cmd":"verify-phase","started":"2026-09-10T09:30:00Z","ended":"2026-09-10T11:00:00Z"}')"
+  if grep -q 'REFUSED' <<<"$out" && [[ "$(n)" == "1" ]]; then
+    ok tf_overlap_b "a run starting before the last one ended is refused, and nothing is appended"
+  else
+    bad tf_overlap_b "an overlapping run reached the stream"; note "$out"
+  fi
+  grep -q 'previous run for Fx ended at 2026-09-10T10:00:00Z' <<<"$out" \
+    && ok tf_overlap_c "the refusal names the record it collides with and the time to use" \
+    || { bad tf_overlap_c "the refusal does not say what to do"; note "$out"; }
+
+  emit '{"kind":"run","app":"Fx","cmd":"verify-phase","started":"2026-09-10T10:00:00Z","ended":"2026-09-10T11:00:00Z"}' >/dev/null
+  [[ "$(n)" == "2" ]] && ok tf_overlap_d "the same run, started where the last one ended, is appended" \
+                      || bad tf_overlap_d "a correctly-timed run was refused"
+
+  # two machines on one merge=union stream: declared, so allowed
+  emit '{"kind":"run","app":"Fx","cmd":"fix-issues","started":"2026-09-10T10:30:00Z","ended":"2026-09-10T11:30:00Z"}' --allow-overlap >/dev/null
+  [[ "$(n)" == "3" ]] && ok tf_overlap_e "--allow-overlap admits a declared concurrent run" \
+                      || bad tf_overlap_e "--allow-overlap did not work"
+
+  # another app's timeline is its own
+  emit '{"kind":"run","app":"Other","cmd":"build-phase","started":"2026-09-10T09:15:00Z","ended":"2026-09-10T09:45:00Z"}' >/dev/null
+  [[ "$(n)" == "4" ]] && ok tf_overlap_f "the rule is per app, not per stream" \
+                      || bad tf_overlap_f "another app's run was refused"
+
+  # and the repair path still works: void the blocker, then the corrected record goes in
+  emit '{"kind":"run","app":"Blk","cmd":"build-phase","started":"2026-09-10T09:00:00Z","ended":"2026-09-10T14:00:00Z"}' >/dev/null
+  out="$(emit '{"kind":"run","app":"Blk","cmd":"verify-phase","started":"2026-09-10T10:00:00Z","ended":"2026-09-10T11:00:00Z"}')"
+  grep -q 'REFUSED' <<<"$out" \
+    && ok tf_overlap_g "a wrong record blocks the run that follows it — which is the point" \
+    || bad tf_overlap_g "the wrong record did not block, so the repair path below is untested"
+  ( cd "$d" && bash "$UTILS/tf-emit.sh" --void-run build-phase 2026-09-10T09:00:00Z "the end time was typed" ) >/dev/null 2>&1
+  emit '{"kind":"run","app":"Blk","cmd":"verify-phase","started":"2026-09-10T10:00:00Z","ended":"2026-09-10T11:00:00Z"}' >/dev/null
+  grep -q '"cmd":"verify-phase","app":"Blk"\|"app":"Blk","cmd":"verify-phase"' "$d/docs/metrics/runs.jsonl" \
+    || python3 -c "
+import json,sys
+rows=[json.loads(l) for l in open(sys.argv[1])]
+sys.exit(0 if any(r.get('app')=='Blk' and r.get('cmd')=='verify-phase' for r in rows) else 1)" "$d/docs/metrics/runs.jsonl"
+  if [[ $? -eq 0 ]]; then
+    ok tf_overlap_h "voiding the wrong record unblocks the corrected one — the repair path holds"
+  else
+    bad tf_overlap_h "after a void, the corrected record was still refused"
+  fi
+  unset -f emit n
+}
+
 # --- the ledger the status document stands on --------------------------------------------
 # Two things, found together while answering the owner's question "when does a row whose test
 # was skipped ever get built?". (1) tf-status-facts read only the LAST LINE of
@@ -735,7 +796,7 @@ tf_selfcheck() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_void tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

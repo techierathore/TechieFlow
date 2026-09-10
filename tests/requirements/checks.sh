@@ -153,7 +153,9 @@ fr_55() {
   local d; d="$(_emit_fixture ended)"
   ( cd "$d" && echo '{"kind":"run","app":"Fx","cmd":"devguide","started":"2026-09-07T07:00:00Z","ended":"2099-01-01T00:00:00Z"}' \
       | bash "$ROOT/.tfcore/utils/tf-emit.sh" runs >/dev/null 2>&1 )
-  ( cd "$d" && echo '{"kind":"run","app":"Fx","cmd":"mockups","started":"2026-09-07T07:00:00Z"}' \
+  # `started` is now: the record above had its future `ended` clamped to now, and a run may
+  # not begin before the last one ended (FR-72).
+  ( cd "$d" && echo "{\"kind\":\"run\",\"app\":\"Fx\",\"cmd\":\"mockups\",\"started\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" \
       | bash "$ROOT/.tfcore/utils/tf-emit.sh" runs >/dev/null 2>&1 )
   python3 - "$d" <<'PY'
 import json, sys, pathlib

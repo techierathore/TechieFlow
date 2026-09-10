@@ -26,7 +26,7 @@ set -uo pipefail
 
 command -v python3 >/dev/null 2>&1 || { echo "tf-metrics: python3 is required." >&2; exit 1; }
 
-exec python3 - "$@" <<'PYEOF'
+TF_METRICS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" exec python3 - "$@" <<'PYEOF'
 import glob
 import json
 import os
@@ -134,6 +134,72 @@ AMENDABLE_FIELDS = {
 SORT_WORDS = {"spec": "the app's spec did not say it", "unsaid": "the framework never said it",
               "weak-check": "the check was too weak", "ignored": "said and ignored"}
 MIN_N = 3  # fewer supporting records than this -> "insufficient data", never a number
+
+
+# --------------------------------------------------- list price (report time)
+# WHERE PRICING BELONGS (owner, 2026-09-10). The framework's job is to record what it MEASURED:
+# tokens, per model, and whatever cost the provider itself reported. Turning tokens into money is
+# a reporting job — this file's, and TfLens's — so it happens HERE, at report time, from the
+# fields already on the stream. Nothing priced is ever written to a record. That is SCHEMA.md §8's
+# existing rule ("derived metrics are computed, never stored") applied to money, and it is why a
+# rate card can change, or a reader disagree with this one, without a single record being wrong.
+#
+# The rate itself comes from `tf-model-pick.sh rate`, so the rate card is defined once and the
+# project's own `.tfcore/rate-card.json` wins where it exists.
+_RATE_CACHE = {}
+REPO_OF = {}          # id(record) -> the repo it was read from; never written into a record
+
+
+def rate_for(repo, model):
+    key = (repo, model)
+    if key not in _RATE_CACHE:
+        got = None
+        for base in (os.path.join(repo, ".tfcore", "utils"),
+                     os.path.join(os.environ.get("TF_METRICS_DIR", ""), "..", "utils")):
+            script = os.path.join(base, "tf-model-pick.sh")
+            if not os.path.isfile(script):
+                continue
+            try:
+                out = subprocess.run(["bash", script, "rate", model],
+                                     capture_output=True, text=True, timeout=20,
+                                     env=dict(os.environ, TF_PROJECT_DIR=repo))
+                if out.returncode == 0:
+                    parts = (out.stdout or "").strip().split("\t")
+                    if len(parts) >= 4:
+                        got = tuple(float(x) for x in parts[:4])
+                        break
+            except Exception:
+                pass
+        _RATE_CACHE[key] = got
+    return _RATE_CACHE[key]
+
+
+def list_price(repo, rec):
+    """What one run's measured tokens cost at list price, or None when nothing prices its model.
+
+    Output tokens are exact per model (`model_tokens_out`). Input and cache tokens are counted for
+    the window as a whole, so where a window ran several models they are shared out by each
+    model's output share — arithmetic, and the caller is told."""
+    split = rec.get("model_tokens_out")
+    if not isinstance(split, dict) or not split:
+        m = rec.get("model")
+        if not m or rec.get("tokens_out") is None:
+            return None
+        split = {m: rec.get("tokens_out") or 0}
+    total_out = sum(v or 0 for v in split.values())
+    ti = rec.get("tokens_in") or 0
+    tcr = rec.get("tokens_cache_read") or 0
+    tcw = rec.get("tokens_cache_write") or 0
+    usd, priced = 0.0, 0
+    for m, out in split.items():
+        r = rate_for(repo, m)
+        if not r:
+            continue
+        share = (float(out or 0) / total_out) if total_out else 0.0
+        usd += (ti * share * r[0] + (out or 0) * r[1]
+                + tcr * share * r[2] + tcw * share * r[3]) / 1_000_000.0
+        priced += 1
+    return round(usd, 6) if priced else None
 
 
 # ---------------------------------------------------------------- utilities
@@ -464,7 +530,21 @@ def analyse_misses(misses):
     # Dollars exist ONLY where a harness measured them. Claude Code carries
     # cost_usd:null permanently (SCHEMA.md §4) and are never priced from a rate card
     # here — a pooled sum over mixed harnesses would silently under-report.
-    paid = [f for f in sole if f.get("cost_usd") is not None]
+    #
+    # A null was never the only way to have no money figure, though. An OpenCode run on a
+    # subscription records cost_usd 0.0 — a real, measured zero, because the plan was already
+    # paid for — and averaging that in as a FREE repair is the TF-005 defect again, in the
+    # column right beside the one TF-005 was found in. Only a `metered` record is money
+    # (SCHEMA.md §2.5b). A record written before billing_mode existed is admitted on its old
+    # terms, and counted, so the change does not silently rewrite the past.
+    paid = [f for f in sole if f.get("cost_usd") is not None
+            and (f.get("billing_mode") in (None, "metered"))]
+    unpriced_subscription_n = len([f for f in sole if f.get("cost_usd") is not None
+                                   and f.get("billing_mode") not in (None, "metered")])
+    # And the figure that works on every harness: what the repair's tokens cost at list price,
+    # worked out here from the tokens the record carries. It is the only money-shaped number a
+    # Claude Code repair can have, because a Max subscription bills nothing per token.
+    listed = [p for p in (list_price(REPO_OF.get(id(f), ""), f) for f in sole) if p is not None]
     escaped = [m for m in opened if m.get("found_by") in ("owner", "production")]
     design = [m for m in opened if m.get("miss_class") == "unspecified-gap"]
 
@@ -566,6 +646,12 @@ def analyse_misses(misses):
         "cost_usd_per_miss_measured": round(
             sum(f["cost_usd"] for f in paid) / len(paid), 4) if len(paid) >= MIN_N else None,
         "cost_usd_records": len(paid),
+        # Repairs whose dollars were measured and are NOT money: a subscription's zero, a local
+        # model's absent bill. Printed beside the figure, never inside it.
+        "cost_usd_excluded_not_money_n": unpriced_subscription_n,
+        "cost_list_usd_per_miss": round(
+            sum(listed) / len(listed), 4) if len(listed) >= MIN_N else None,
+        "cost_list_usd_records": len(listed),
     }
 
 
@@ -663,6 +749,18 @@ def analyse_phases(runs):
         fan = [r for r in rs if sees_subagents(r)]
 
         models = defaultdict(lambda: {"runs": 0, "tokens_out": 0})
+        # List price, COMPUTED HERE from the tokens the record carries (see list_price above —
+        # pricing is a reporting job, and nothing priced is ever stored). Per model, attributed
+        # only where the window ran ONE model, the same rule the measured dollars follow below.
+        list_of = {}
+        for r in priced:
+            lp = list_price(REPO_OF.get(id(r), ""), r)
+            if lp is None:
+                continue
+            list_of[id(r)] = lp
+            ms = r.get("models") or ([r["model"]] if r.get("model") else [])
+            if len(ms) == 1:
+                models[ms[0]]["list_usd"] = round(models[ms[0]].get("list_usd", 0.0) + lp, 6)
         for r in priced:
             split = r.get("model_tokens_out")
             if isinstance(split, dict) and split:
@@ -689,12 +787,42 @@ def analyse_phases(runs):
         sub_out = sum(r.get("tokens_out_subagents") or 0 for r in fan)
         fan_out_total = sum(r.get("tokens_out") or 0 for r in fan if has_tokens(r))
 
+        # DOLLARS, and what each one means. A harness split was never enough: one OpenCode
+        # machine mixes a flat-fee subscription (whose marginal cost is a true zero), a metered
+        # API key (whose dollars are real money) and a local model (which has no bill at all),
+        # and pooling those three produces a money figure that is neither the money spent nor
+        # the effort used. `billing_mode` is the separation; only `metered` is money.
         cost_by_harness = defaultdict(float)
         cost_n = Counter()
+        cost_by_mode = defaultdict(float)
+        mode_n = Counter()
+        model_usd = defaultdict(float)
+        model_usd_n = Counter()
+        plan_by_model = defaultdict(float)
+        usd_unattributed, usd_unattributed_n = 0.0, 0
         for r in priced:
+            mode = r.get("billing_mode") or "unrecorded"
+            mode_n[mode] += 1
             if r.get("cost_usd") is not None:
                 cost_by_harness[r.get("harness") or "?"] += r["cost_usd"]
                 cost_n[r.get("harness") or "?"] += 1
+                cost_by_mode[mode] += r["cost_usd"]
+                if mode == "plan":
+                    ms = r.get("models") or ([r["model"]] if r.get("model") else [])
+                    if len(ms) == 1:
+                        plan_by_model[ms[0]] += r["cost_usd"]
+                if mode == "metered":
+                    # Per-model spend is attributed ONLY where the window ran one model.
+                    # Splitting one window's dollars across several models by their token
+                    # share is arithmetic, not measurement — the same line §5.5.3 draws
+                    # between `sole` and `shared`, one stream over.
+                    ms = r.get("models") or ([r["model"]] if r.get("model") else [])
+                    if len(ms) == 1:
+                        model_usd[ms[0]] += r["cost_usd"]
+                        model_usd_n[ms[0]] += 1
+                    else:
+                        usd_unattributed += r["cost_usd"]
+                        usd_unattributed_n += 1
 
         tok = lambda k: sum(r.get(k) or 0 for r in priced)
         phases[cmd] = {
@@ -777,6 +905,36 @@ def analyse_phases(runs):
             "cost_usd_by_harness": OrderedDict(
                 (h, {"usd": round(v, 6), "records": cost_n[h]})
                 for h, v in sorted(cost_by_harness.items())),
+            # …and per billing mode, which is the separation that decides whether a number
+            # is money at all (SCHEMA.md §2.5b).
+            "billing_modes": OrderedDict(sorted(mode_n.items())),
+            "cost_usd_by_billing_mode": OrderedDict(
+                (mode, round(v, 6)) for mode, v in sorted(cost_by_mode.items())),
+            "money_usd": round(cost_by_mode.get("metered", 0.0), 6),
+            "money_records": mode_n.get("metered", 0),
+            # A window that mixed a metered model with a subscription one really was billed, but
+            # the bill cannot be separated from the part that was already paid for. Real money,
+            # reported on its own line rather than folded into the headline or dropped.
+            "money_mixed_usd": round(cost_by_mode.get("mixed", 0.0), 6),
+            "money_mixed_records": mode_n.get("mixed", 0),
+            "spend_by_model": OrderedDict(
+                (m, {"usd": round(v, 6), "records": model_usd_n[m]})
+                for m, v in sorted(model_usd.items(), key=lambda kv: (-kv[1], kv[0]))),
+            "spend_unattributed": {"usd": round(usd_unattributed, 6), "records": usd_unattributed_n},
+            # LIST PRICE — what these tokens would cost bought at the published rate. It is the
+            # only figure that compares a subscription phase with a metered one, and it is a
+            # price list applied to a measurement, never a bill. Reported apart from `money_usd`
+            # for exactly that reason, with the unpriced count beside it.
+            "list_usd": round(sum(list_of.values()), 6),
+            "list_usd_records": len(list_of),
+            "list_usd_unpriced_n": len(priced) - len(list_of),
+            # A monthly plan reports dollars too, but they are ALLOWANCE CONSUMED against a
+            # per-model limit, not an invoice — and they are the numbers that produce the limit
+            # the fallback chain exists for, so they are worth their own line.
+            "plan_allowance_usd": round(cost_by_mode.get("plan", 0.0), 6),
+            "plan_allowance_records": mode_n.get("plan", 0),
+            "plan_allowance_by_model": OrderedDict(
+                (m, round(v, 6)) for m, v in sorted(plan_by_model.items(), key=lambda kv: -kv[1])),
         }
 
     return {
@@ -1089,7 +1247,8 @@ def analyse(repos):
         g = read_stream(repo, "gates")
         r, vn, vr, vo = apply_voids(read_stream(repo, "runs"), app_name(repo))
         voided_runs += vn; void_reasons += vr; void_orphans += vo
-        misses += read_stream(repo, "misses")
+        repo_misses = read_stream(repo, "misses")
+        misses += repo_misses
         # Per repo, not across them (SCHEMA.md §4): the OpenCode plugin
         # appends a cumulative snapshot at every root-session idle.
         s, sd = dedupe_sessions(read_stream(repo, "sessions"))
@@ -1097,6 +1256,11 @@ def analyse(repos):
         # Per repo, not across them: two repos may legitimately share a short sha.
         c, d = dedupe_commits(read_stream(repo, "commits"))
         commit_dupes += d
+        # Which repo each record came from, so the report can price it with THAT project's rate
+        # card and routing. Kept beside the records rather than written into them: nothing here
+        # may add a field a record did not have.
+        for _x in r + repo_misses:
+            REPO_OF[id(_x)] = repo
         gates += g; runs += r; sessions += s; commits += c
         per_repo.append({"repo": repo, "app": app_name(repo),
                          "project_type": project_type(repo)[0],
@@ -1208,6 +1372,8 @@ def analyse(repos):
                   for r in runs if _dur(r) is not None and r.get("reqs_count")]
     batch = [r["reqs_count"] for r in build_runs if r.get("reqs_count") is not None]
     verified_transitions = sum(1 for g in gates if g.get("verdict") == "Verified")
+    pooled_list = [p for p in (list_price(REPO_OF.get(id(r), ""), r) for r in runs)
+                   if p is not None]
     tok = sum((s.get("input_tokens") or 0) + (s.get("output_tokens") or 0) for s in sessions)
     days = {c.get("ts", "")[:10] for c in commits if c.get("ts")}
     out["pooled"] = {
@@ -1221,7 +1387,16 @@ def analyse(repos):
         "tokens_total": tok,
         "tokens_per_verified_req": round(float(tok) / verified_transitions, 1)
                                    if verified_transitions >= MIN_N and tok else None,
-        "cost_usd": None,  # never estimated — see SCHEMA.md §4
+        "cost_usd": None,  # what was BILLED is never estimated — see SCHEMA.md §4
+        # What the same work costs at list price. A price, not a bill (SCHEMA.md §2.5b), and the
+        # only money-shaped headline that works on a subscription — which is most of this
+        # framework's runs. Summed over the runs that carry it, with that count published, so a
+        # figure built on half the runs cannot be read as if it covered all of them.
+        "list_usd_total": round(sum(pooled_list), 4),
+        "list_usd_records": len(pooled_list),
+        "list_usd_per_verified_req": (
+            round(sum(pooled_list) / verified_transitions, 4)
+            if verified_transitions >= MIN_N and len(pooled_list) >= MIN_N else None),
         "commits": len(commits),
         "commit_duplicates_collapsed": commit_dupes,
         "session_duplicates_collapsed": session_dupes,
@@ -1342,8 +1517,14 @@ def print_report(a, repos):
     print("  REQ throughput      : %s REQs/hour (median across runs)" %
           (p["throughput_median_reqs_per_hour"] if p["throughput_median_reqs_per_hour"] is not None else "insufficient data"))
     print("  sessions / tokens   : %d sessions, %s total tokens" % (p["sessions"], "{:,}".format(p["tokens_total"])))
-    print("  tokens per Verified : %s   (cost in USD is NEVER estimated — SCHEMA.md §4)" %
+    print("  tokens per Verified : %s   (what you were BILLED is never estimated — SCHEMA.md §4)" %
           (p["tokens_per_verified_req"] if p["tokens_per_verified_req"] is not None else "insufficient data"))
+    if p.get("list_usd_records"):
+        print("  list price          : $%s over %d priced run(s) — the published rate applied to"
+              % (p["list_usd_total"], p["list_usd_records"]))
+        print("                        the tokens actually measured. A price, not a bill.")
+        if p.get("list_usd_per_verified_req") is not None:
+            print("  list $ per Verified : $%s" % p["list_usd_per_verified_req"])
     print("  commit cadence      : %s commits/active day (%d commits over %d days)" %
           (p["commits_per_active_day"] if p["commits_per_active_day"] is not None else "—",
            p["commits"], p["active_days"]))
@@ -1481,8 +1662,57 @@ def print_phases(p, W):
         for h, c in m["cost_usd_by_harness"].items():
             print("     cost (%s)  : $%s over %d record(s) — MEASURED, never pooled "
                   "across harness" % (h, c["usd"], c["records"]))
-        if m["reqs_touched_total"] or m["files_written_total"]:
-            bm = m.get("by_mode") or {}
+        bmodes = m.get("billing_modes") or {}
+        if bmodes:
+            print("     paid for by      : " +
+                  " · ".join("%s %d" % (k, v) for k, v in bmodes.items()))
+            if m.get("list_usd_records"):
+                print("     list price       : $%s over %d run(s) — the published rate applied to"
+                      % (m["list_usd"], m["list_usd_records"]))
+                print("                        the tokens on the record, worked out HERE and never")
+                print("                        stored. A price, not a bill: it is what makes a")
+                print("                        subscription run comparable with a metered one.")
+                if m.get("list_usd_unpriced_n"):
+                    print("                        %d run(s) had no rate for their model and are"
+                          % m["list_usd_unpriced_n"])
+                    print("                        outside it — never priced at zero.")
+            if m.get("money_records"):
+                print("     money billed     : $%s over %d metered run(s). Only a metered run is"
+                      % (m["money_usd"], m["money_records"]))
+                print("                        money billed; a subscription's zero is a flat fee")
+                print("                        already paid, a local model has no bill (§2.5b).")
+            if m.get("plan_allowance_records"):
+                print("     plan allowance   : $%s used over %d run(s) on a monthly plan. This is"
+                      % (m["plan_allowance_usd"], m["plan_allowance_records"]))
+                print("                        the provider's own meter against a PER-MODEL")
+                print("                        allowance, not an invoice — and it is what runs out")
+                print("                        and sends a tier to its fallback.")
+                for mod, v in (m.get("plan_allowance_by_model") or {}).items():
+                    print("         %-30s $%s of allowance" % (mod, v))
+            if m.get("money_mixed_usd"):
+                print("     also billed      : $%s on %d run(s) whose window mixed billing modes —"
+                      % (m["money_mixed_usd"], m["money_mixed_records"]))
+                print("                        real money, but not separable from the part a")
+                print("                        subscription had already paid for.")
+            for mod, c in (m.get("models") or {}).items():
+                bits = []
+                if c.get("list_usd"):
+                    bits.append("list $%s" % c["list_usd"])
+                sp = (m.get("spend_by_model") or {}).get(mod)
+                if sp:
+                    bits.append("billed $%s" % sp["usd"])
+                if bits:
+                    print("         %-30s %s" % (mod, " · ".join(bits)))
+            un = m.get("spend_unattributed") or {}
+            if un.get("records"):
+                print("         %-30s billed $%-8s over %d run(s) — the window ran several"
+                      % ("(not attributed)", un["usd"], un["records"]))
+                print("             models, and one window's dollars are not split by token share.")
+        # `bm` used to be assigned inside `if m["reqs_touched_total"] or m["files_written_total"]:`
+        # and read outside it, so --phases crashed with UnboundLocalError on any phase that
+        # touched no REQ and wrote no file — which is every metrics-report and every render.
+        # MISS-TechieFlow-20260910-03.
+        bm = m.get("by_mode") or {}
         if len(bm) > 1:
             print("     by mode          : (in the order they ran)")
             for mode, v in bm.items():
@@ -1611,6 +1841,15 @@ def print_misses(m, W):
         print("           Claude Code carries cost_usd:null permanently and is NEVER")
         print("           priced from a rate card here (SCHEMA.md §4). Real dollars come from")
         print("           OpenCode runs; token counts are the honest figure everywhere else.")
+    if m.get("cost_list_usd_per_miss") is not None:
+        print("        list price per miss : $%s  (%d record(s)) — the repair's tokens at the"
+              % (m["cost_list_usd_per_miss"], m["cost_list_usd_records"]))
+        print("        published rate. Works on every harness, and is a price, not a bill.")
+    if m.get("cost_usd_excluded_not_money_n"):
+        print("        %d fix record(s) measured a cost that is NOT money — a subscription's"
+              % m["cost_usd_excluded_not_money_n"])
+        print("        zero or a local model's absent bill — and are outside that figure")
+        print("        rather than averaged in as free repairs (SCHEMA.md §2.5b).")
     print("     shared (apportioned): %d fix records — equal division, NOT a measurement"
           % m["cost_shared_n"])
     print("        tokens out per miss : %s   (n=%d priced)" %

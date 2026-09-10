@@ -2,9 +2,9 @@
 # tf-goal.sh — unattended GOAL runner / supervisor for TechieFlow (rule: .tfcore/tasks/_yolo-mode.md)
 #
 # Runs a goal headless in YOLO mode and keeps it running until the agent itself
-# declares the goal done — surviving the subscription 5-hour / weekly usage
-# limits (sleeps until the stated reset + a buffer, then RESUMES THE SAME
-# SESSION), crashes, and "I stopped early to ask you something" turns.
+# declares the goal done — surviving the subscription 5-hour / weekly usage limits (moves to the
+# next model in the tier's fallback chain, or sleeps until the stated reset + a buffer when there
+# is none, then RESUMES THE SAME SESSION), crashes, and "I stopped early to ask you something".
 #
 #   bash .tfcore/utils/tf-goal.sh [options] <app-dir> "<goal text>"
 #   bash .tfcore/utils/tf-goal.sh [options] <app-dir> @goal.md
@@ -12,6 +12,10 @@
 # Options
 #   --harness claude|opencode   default: claude
 #   --model <id>                claude: --model; opencode: -m
+#   --tier <tier>               which routing tier this run belongs to, for the fallback chain
+#                               (default standard) — .tfcore/routing.yaml `fallbacks:`
+#   --no-fallback               never switch model on a usage limit; sleep until the reset instead
+#                               (the behaviour before 2026-09-10)
 #   --buffer-min <n>            minutes added after a stated limit-reset time (default 15)
 #   --probe-min <n>             limit hit but NO reset time parseable → fire a one-turn probe every n
 #                               minutes until the API answers again, then resume (default 15)
@@ -41,6 +45,14 @@
 #   goal.log         everything the harness printed, all cycles, timestamped
 #   goal-done.json   the agent's completion sentinel (tf-yolo.sh done [complete|blocked])
 #
+# WHEN A MODEL RUNS OUT (added 2026-09-10, MISS-TechieFlow-20260910-01). A usage limit used to mean
+# one thing: sleep until the reset. It now means: park that model in the per-machine cooldown file
+# (tf-model-pick.sh), ask the tier for the next model in its `fallbacks:` chain, re-bind so the
+# sub-agents move too, and start the next cycle straight away on that model. Only when the whole
+# chain is parked does the supervisor sleep, exactly as before. If the fallback is limited as well
+# the next cycle parks that one too, so an account-wide limit — every Claude model at once — costs
+# one wasted cycle and then behaves as it always did. `--no-fallback` turns all of it off.
+#
 # How the agent is told to finish: the prompt preamble (below) instructs it to run
 # `bash .tfcore/utils/tf-yolo.sh done complete "<summary>"` when the goal is met,
 # or `... done blocked "<why>"` when only the owner can unblock it. A cycle that
@@ -59,11 +71,14 @@ set -u
 
 HARNESS="claude"; MODEL=""; BUFFER_MIN=15; DEFAULT_WAIT_MIN=60; MAX_CYCLES=60; IDLE_RETRY=30
 PROBE_MIN=15; PROBE_MAX_H=8; STALL_MIN=15
+TIER="standard"; FALLBACK=1
 RESUME=0; FRESH=0; DRY=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --harness) HARNESS="$2"; shift 2 ;;
     --model) MODEL="$2"; shift 2 ;;
+    --tier) TIER="$2"; shift 2 ;;
+    --no-fallback) FALLBACK=0; shift ;;
     --buffer-min) BUFFER_MIN="$2"; shift 2 ;;
     --default-wait-min) DEFAULT_WAIT_MIN="$2"; shift 2 ;;
     --probe-min) PROBE_MIN="$2"; shift 2 ;;
@@ -74,7 +89,7 @@ while [[ $# -gt 0 ]]; do
     --resume) RESUME=1; shift ;;
     --fresh) FRESH=1; shift ;;
     --dry-run) DRY=1; shift ;;
-    -h|--help) sed -n '2,45p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,48p' "$0"; exit 0 ;;
     --) shift; break ;;
     -*) echo "unknown option $1" >&2; exit 2 ;;
     *) break ;;
@@ -88,11 +103,15 @@ fi
 APP_DIR="$(cd "$APP_DIR" 2>/dev/null && pwd)" || { echo "no such dir: $1" >&2; exit 2; }
 [[ -d "$APP_DIR/.tfcore" ]] || { echo "$APP_DIR has no .tfcore/ — scaffold it first" >&2; exit 2; }
 case "$HARNESS" in claude|opencode) ;; *) echo "--harness must be claude|opencode" >&2; exit 2 ;; esac
+case "$TIER" in frontier|standard|economy) ;; *) echo "--tier must be frontier|standard|economy" >&2; exit 2 ;; esac
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required" >&2; exit 2; }
 
 STATE_DIR="$APP_DIR/.tfcore/.session"; mkdir -p "$STATE_DIR"
 STATE="$STATE_DIR/goal.json"; LOG="$STATE_DIR/goal.log"; DONE="$STATE_DIR/goal-done.json"
 YOLO_SH="$APP_DIR/.tfcore/utils/tf-yolo.sh"
+PICK_SH="$APP_DIR/.tfcore/utils/tf-model-pick.sh"
+BIND_SH="$APP_DIR/.tfcore/utils/tf-routing-bind.sh"
+[[ -f "$PICK_SH" ]] || FALLBACK=0   # a project that predates tf-model-pick.sh keeps the old behaviour
 
 if [[ "$GOAL_ARG" == @* ]]; then
   GOAL_FILE="${GOAL_ARG#@}"; [[ -f "$GOAL_FILE" ]] || { echo "goal file not found: $GOAL_FILE" >&2; exit 2; }
@@ -126,6 +145,10 @@ if [[ $RESUME -eq 1 ]]; then
   [[ -f "$STATE" ]] || { echo "--resume: no $STATE" >&2; exit 2; }
   [[ -z "$GOAL" ]] && GOAL="$(state_get goal)"
   HARNESS="$(state_get harness)"; HARNESS="${HARNESS:-claude}"
+  # A resume keeps the model a fallback moved to, and the tier its chain came from; an explicit
+  # --model on the resume command still wins.
+  _t="$(state_get tier)"; [[ -n "$_t" ]] && TIER="$_t"
+  _m="$(state_get model)"; [[ -n "$_m" && -z "$MODEL" ]] && MODEL="$_m"
   CYCLE="$(state_get cycle)"; CYCLE="${CYCLE:-0}"
   SESSION_ID="$(state_get session_id)"
   STALLS="$(state_get stalls)"; STALLS="${STALLS:-0}"
@@ -144,7 +167,7 @@ else
   fi
   CYCLE=0; SESSION_ID=""; STALLS=0
   if [[ $DRY -eq 0 ]]; then   # a dry run touches nothing: no state, no flag, no log line
-    state_set goal "$GOAL" harness "$HARNESS" cycle 0 session_id "" stalls 0 started "$(ts)" last_reason "start"
+    state_set goal "$GOAL" harness "$HARNESS" tier "$TIER" model "$MODEL" cycle 0 session_id "" stalls 0 started "$(ts)" last_reason "start"
     rm -f "$DONE"
   fi
 fi
@@ -346,6 +369,60 @@ print(sid)
 PY
 }
 
+extract_model() { # the model the harness reported for this cycle, from its own output
+  python3 - "$1" <<'PY' 2>/dev/null
+import sys, json, re
+m = ""
+try:
+    for line in open(sys.argv[1], errors="replace"):
+        line = line.strip()
+        if not line.startswith("{") or '"model"' not in line:
+            continue
+        try: d = json.loads(line)
+        except Exception: continue
+        if not isinstance(d, dict): continue
+        if isinstance(d.get("model"), str) and d["model"]:
+            m = d["model"]
+        msg = d.get("message")
+        if isinstance(msg, dict) and isinstance(msg.get("model"), str) and msg["model"]:
+            m = msg["model"]
+except Exception:
+    pass
+print(m)
+PY
+}
+
+# Park the model this cycle ran on and move to the next one in its tier. Prints nothing and
+# returns 1 when there is nowhere to go — the caller then sleeps, which is what it always did.
+#   $1 = epoch the limit is stated to reset at (or empty when it could not be parsed)
+#   $2 = why, for the cooldown record
+try_fallback() {
+  [[ $FALLBACK -eq 1 ]] || return 1
+  local until="${1:-}" why="${2:-usage limit}" cur next
+  cur="$MODEL"
+  [[ -z "$cur" ]] && cur="$(extract_model "$OUT")"
+  if [[ -z "$cur" ]]; then
+    cur="$(TF_PROJECT_DIR="$APP_DIR" bash "$PICK_SH" pick "$TIER" "$HARNESS" 2>/dev/null | tail -1)"
+    [[ "$cur" == inherit ]] && cur=""
+  fi
+  if [[ -z "$cur" ]]; then
+    log "no fallback: nothing here says which model this cycle ran on (no --model, no model id in the output, no routing answer for tier $TIER)"
+    return 1
+  fi
+  [[ -z "$until" ]] && until="probe"
+  TF_PROJECT_DIR="$APP_DIR" bash "$PICK_SH" cooldown "$HARNESS" "$cur" "$until" "$why" >>"$LOG" 2>&1
+  next="$(TF_PROJECT_DIR="$APP_DIR" bash "$PICK_SH" pick "$TIER" "$HARNESS" 2>/dev/null | tail -1)"
+  if [[ -z "$next" || "$next" == "inherit" ]]; then
+    log "no fallback left: every model in the $TIER chain is on cooldown — waiting for the reset instead"
+    return 1
+  fi
+  MODEL="$next"
+  state_set model "$MODEL" fallback_from "$cur" last_reason "fallback:$cur->$MODEL"
+  log "FALLBACK: $cur is limited ($why) — the next cycle runs on $MODEL (tier $TIER). Re-binding so the sub-agents move too."
+  [[ -f "$BIND_SH" ]] && bash "$BIND_SH" "$APP_DIR" 2>&1 | sed 's/^/    /' | tee -a "$LOG" >&2
+  return 0
+}
+
 # Fallback when a limit message carries no parseable reset time: fire a one-turn
 # probe every PROBE_MIN minutes until it comes back clean (exit 0 AND no limit
 # wording in its output). Gives up after PROBE_MAX_H hours and resumes anyway.
@@ -507,7 +584,14 @@ while :; do
     CLASS=IDLE; DETAIL="stalled ${STALL_MIN}m"; HOW=""
     PERR="$(opencode_log_error "$CYCLE_START")"
     if [[ -n "$PERR" ]] && grep -qiE "usage limit|monthly|balance|quota|rate limit|429|insufficient|billing|unauthorized|api key" <<<"$PERR"; then
-      log "the provider refused the model while the harness printed nothing (cycle $CYCLE): $PERR — the owner must act (enable balance, wait for the reset, or pick another model); stopping"
+      log "the provider refused the model while the harness printed nothing (cycle $CYCLE): $PERR"
+      # A monthly limit or an empty balance states no reset time, so the model is parked for the
+      # probe window and the run continues on the next model in the tier. Only when the chain is
+      # exhausted does this stay what it was before 2026-09-10: the owner's problem, exit 5.
+      if try_fallback "" "provider refused the model: ${PERR:0:120}"; then
+        STALLS=0; state_set stalls 0; BACKOFF=120; continue
+      fi
+      log "no other model in the $TIER chain is available — the owner must act (enable balance, wait for the reset, or pick another model); stopping"
       state_set last_reason "provider-limit" ended "$(ts)"
       exit 5
     fi
@@ -525,6 +609,9 @@ while :; do
   fi
   case "$CLASS" in
     LIMIT)
+      # Another model in the same tier beats waiting, when there is one.
+      if [[ "$HOW" == probe ]]; then _FB_UNTIL=""; else _FB_UNTIL="$DETAIL"; fi
+      if try_fallback "$_FB_UNTIL" "usage limit"; then BACKOFF=120; continue; fi
       if [[ "$HOW" == probe ]]; then
         log "USAGE LIMIT hit (cycle $CYCLE) but no reset time could be parsed from the message — probing every ${PROBE_MIN}m until the API answers again (max ${PROBE_MAX_H}h). Tail of the message:"
         tail -c 400 "$OUT" | tr '\n' ' ' | sed 's/^/    /' | tee -a "$LOG" >&2; echo >&2

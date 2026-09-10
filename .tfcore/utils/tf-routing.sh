@@ -210,6 +210,13 @@ sub = ["%s=%s" % (k, v) for k, v in sorted(cfg["subagents"].items())]
 if sub:
     print("Subagents:  " + ", ".join(sub))
 print()
+print("When a model is limited (docs/TechieFlow-Routing-Guide.md §9):")
+print("  what each tier would run right now, and what is parked:")
+print("      bash .tfcore/utils/tf-model-pick.sh status")
+print("  the order a tier falls back in:  ... chain <tier> <claude|opencode>")
+print("  unpark by hand:                  ... clear <harness> [model]")
+print("  The supervisor parks a model by itself on a usage limit; tf-goal.sh --no-fallback stops it.")
+print()
 print("Escalation (ADVISORY — you apply it when you launch; nothing switches a model mid-run):")
 if cfg["escalation"]:
     for ph in sorted(cfg["escalation"]):

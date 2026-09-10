@@ -523,6 +523,12 @@ fi
 
 # --- append path ----------------------------------------------------------
 STREAM="$1"
+# --allow-overlap: this run really did happen while another was still open (a second machine
+# appending to the same merge=union stream is the only case that has ever come up). Without it a
+# run whose `started` precedes the previous run's `ended` is refused — see _overlap_ok below.
+TF_ALLOW_OVERLAP=0
+for _a in "$@"; do [[ "$_a" == "--allow-overlap" ]] && TF_ALLOW_OVERLAP=1; done
+export TF_ALLOW_OVERLAP
 case "$STREAM" in
   runs|gates|sessions|commits|misses) ;;
   *) _warn "unknown stream '${STREAM:-<none>}' — event dropped"; exit 0 ;;
@@ -531,7 +537,7 @@ esac
 # The program is captured into a variable rather than fed on stdin — a heredoc
 # on `python3 -` would REPLACE the caller's piped JSON and silently drop every event.
 TF_PROG="$(cat <<'PY'
-import json, os, sys, datetime, glob, re, time
+import json, os, sys, datetime, glob, re, subprocess, time
 
 met_dir, stream, root = sys.argv[1], sys.argv[2], sys.argv[3]
 dbg = os.environ.get("TF_METRICS_DEBUG")
@@ -821,6 +827,52 @@ def _routing():
 
 ROUTING = _routing()
 
+# --- how a model is paid for (SCHEMA.md §2.5b, added 2026-09-10) -----------
+# One cost column cannot mean three things at once. A run on a flat-fee subscription records
+# zero marginal dollars, a run on a metered API key records real money, and a run on a local
+# model records zero because there is no bill — and until this field existed a reader could
+# not tell those three zeroes apart, so every "what did it cost" figure quietly averaged real
+# spending with free runs. The answer is resolved by tf-model-pick.sh, which reads OpenCode's
+# own auth.json and model catalog, so it is looked up and never declared by an agent — the
+# same rule as `harness` (§1) and `origin_model` (§5.5.1).
+_BILLING_CACHE = {}
+
+
+def _billing(model, harness):
+    key = (model, harness)
+    if key not in _BILLING_CACHE:
+        mode, source = "unknown", "none"
+        pick = os.path.join(root, ".tfcore", "utils", "tf-model-pick.sh")
+        if model and os.path.isfile(pick):
+            try:
+                out = subprocess.run(["bash", pick, "billing", model, harness or "claude"],
+                                     capture_output=True, text=True, timeout=20,
+                                     env=dict(os.environ, TF_PROJECT_DIR=root))
+                parts = (out.stdout or "").strip().split("\t")
+                if parts and parts[0] in ("subscription", "plan", "metered", "local", "unknown"):
+                    mode = parts[0]
+                    source = parts[1] if len(parts) > 1 else "tf-model-pick"
+            except Exception:
+                pass
+        _BILLING_CACHE[key] = (mode, source)
+    return _BILLING_CACHE[key]
+
+
+def _was_limited(model, harness, at_epoch):
+    """Did this run start while the tier's own model was parked? Then it is a deliberate
+    fallback, not routing drift, and `routed:false` should not be read as one."""
+    pick = os.path.join(root, ".tfcore", "utils", "tf-model-pick.sh")
+    if not model or not os.path.isfile(pick) or at_epoch is None:
+        return False
+    try:
+        out = subprocess.run(["bash", pick, "was-limited", harness or "claude", model, str(int(at_epoch))],
+                             capture_output=True, text=True, timeout=20,
+                             env=dict(os.environ, TF_PROJECT_DIR=root))
+        return out.returncode == 0
+    except Exception:
+        return False
+
+
 def _iso_ms(s):
     try:
         return int(datetime.datetime.strptime(
@@ -994,6 +1046,97 @@ def _prior_runs():
             pass
     return _PRIOR_RUNS
 
+# --- a run may not start before the last one finished (FR-72, 2026-09-10) --
+# `--void-run` (§2.7) gave a way to CORRECT a run record written with a start time nobody
+# measured. Nothing refused one, so the same mistake happened twice more the day the correction
+# mechanism shipped — two records whose `started` preceded the previous record's `ended`, one by
+# 42 minutes and one by nearly three hours, each silently adding that overlap to every total
+# (MISS-TechieFlow-20260910-04, sorted `ignored`: it was written down and not followed).
+#
+# A stream is append-only, so the only place to stop it is before the write. The rule: for one
+# app, a live `run` record may not begin before the last live `run` record ended. Voided and
+# backfilled records are ignored, which is what makes the void-then-re-emit flow work. Records
+# with no `started` are untouched.
+#
+# The one legitimate overlap is two machines appending to the same merge=union stream, so
+# `--allow-overlap` exists and the refusal message names it. It is deliberately a flag and not a
+# fallback: the mistake this refuses is easy to make and invisible afterwards.
+_LAST_END = None
+
+
+def _last_live_end(app):
+    global _LAST_END
+    if _LAST_END is None:
+        _LAST_END = {}
+        voided = set()
+        rows = []
+        try:
+            with open(os.path.join(met_dir, "runs.jsonl"), encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        r = json.loads(line)
+                    except Exception:
+                        continue
+                    if r.get("kind") == "run-void":
+                        voided.add((r.get("app"), r.get("cmd"), r.get("started")))
+                    elif r.get("kind", "run") == "run" and not r.get("backfilled"):
+                        rows.append(r)
+        except Exception:
+            pass
+        for r in rows:
+            if (r.get("app"), r.get("cmd"), r.get("started")) in voided:
+                continue
+            # `ended` ONLY. `ts` is when the record was WRITTEN, not when the run finished, so
+            # falling back to it would make every historical record emitted today look like an
+            # overlap with the record written a second ago. A run with no `ended` has no window
+            # and constrains nothing.
+            #
+            # And only a record whose window is COHERENT: a self-contradicting one (ended before
+            # started) has its `ended` replaced with the write time by the check above, and
+            # marked by a null `duration_s`. That placeholder is not a measurement, so it must
+            # not become a boundary — it would block every later record for the same app.
+            if not isinstance(r.get("duration_s"), (int, float)):
+                continue
+            end = r.get("ended")
+            if not end:
+                continue
+            a = r.get("app")
+            if a not in _LAST_END or end > _LAST_END[a][0]:
+                _LAST_END[a] = (end, r.get("cmd"), r.get("started"))
+    return _LAST_END.get(app)
+
+
+def _overlap_ok(rec):
+    """False (and the reason printed) when this run would start before the last one ended."""
+    if stream != "runs" or rec.get("kind", "run") != "run" or rec.get("backfilled"):
+        return True
+    if os.environ.get("TF_ALLOW_OVERLAP") == "1":
+        return True
+    started = rec.get("started")
+    if not started:
+        return True
+    prev = _last_live_end(rec.get("app"))
+    if not prev:
+        return True
+    a, b = _iso_ms(started), _iso_ms(prev[0])
+    if a is not None and b is not None:
+        if a >= b:
+            return True
+    elif started >= prev[0]:        # unparseable timestamp: fall back to the string order
+        return True
+    sys.stdout.write(
+        "tf-emit: REFUSED — this run starts at %s, before the previous run for %s ended at %s "
+        "(%s started %s). The two would overlap and every total over them would be that much too "
+        "big. Use the previous run's `ended` as this one's `started`, or pass --allow-overlap if "
+        "they really did run at the same time (a second machine on the same stream). "
+        "Nothing was appended.\n"
+        % (started, rec.get("app"), prev[0], prev[1], prev[2]))
+    return False
+
+
 def stamp_attempt(rec):
     if stream != "runs" or "attempt" in rec or rec.get("backfilled"):
         return rec
@@ -1059,8 +1202,21 @@ def enrich_run(rec):
                 rec["tokens_out_subagents"] = win.get("sub_out", 0)
                 if rec.get("tier_model") and rec.get("model"):
                     rec["routed"] = rec["model"] == rec["tier_model"]
+                # What a cost figure from this window MEANS. Several models in one window may
+                # be paid for differently — a fallback from a subscription to a metered key is
+                # exactly that case — so a mixed window says so rather than picking a winner.
+                modes = {_billing(m, HARNESS)[0] for m in models} or {_billing(rec.get("model"), HARNESS)[0]}
+                rec["billing_mode"] = modes.pop() if len(modes) == 1 else "mixed"
+                rec["cost_source"] = "opencode-db" if HARNESS == "opencode" else "none"
+                # `routed:false` because the tier model was out of quota is a different fact from
+                # `routed:false` because something drifted. Only the first names a model here.
+                tm = rec.get("tier_model")
+                if tm and rec.get("model") and rec["model"] != tm and _was_limited(tm, HARNESS, t0 / 1000.0):
+                    rec["fallback_from"] = tm
             else:
                 rec["tokens_scope"] = "none"
+                rec["billing_mode"] = _billing(rec.get("tier_model"), HARNESS)[0]
+                rec["cost_source"] = "none"
     except Exception as e:
         warn("run enrichment failed (%s) — record kept unenriched" % e)
     return rec
@@ -1128,7 +1284,7 @@ def _runs_by_start():
     return _RUNS_BY_START
 
 _COST_FIELDS = ("tokens_in", "tokens_out", "tokens_cache_read", "tokens_cache_write",
-                "cost_usd", "tokens_scope", "model")
+                "cost_usd", "tokens_scope", "model", "billing_mode", "cost_source")
 
 # Kept identical to the --amend branch above. Two doors, ONE enforcement: an
 # agent that hand-writes a miss-amend record onto the stream faces the same
@@ -1250,7 +1406,8 @@ _ALLOWED = {
                       "subagents", "files_written", "build_result", "tier", "tier_model", "model", "models",
                       "routed", "tokens_in", "tokens_out", "tokens_cache_read", "tokens_cache_write",
                       "cost_usd", "tokens_scope", "attempt", "subagent_runs", "tokens_out_subagents",
-                      "model_tokens_out", "session_id", "usage_start_event_ts", "usage_end_event_ts"},
+                      "model_tokens_out", "session_id", "usage_start_event_ts", "usage_end_event_ts",
+                      "billing_mode", "cost_source", "fallback_from"},
     # A correction, not a deletion: it names a run record that is wrong by the pair every
     # run carries (`cmd` + `started`) and says why, so every figure can skip it while the
     # record itself stays where it is. Written by --void-run, which refuses one that names
@@ -1260,7 +1417,8 @@ _ALLOWED = {
                         "failure_class", "prior_verdict", "proof", "escaped", "phase", "result", "detail", "at",
                         "tier", "tier_model", "model", "models", "tokens_in", "tokens_out", "tokens_cache_read",
                         "tokens_cache_write", "cost_usd", "tokens_scope", "model_tokens_out", "routed",
-                        "subagent_runs", "tokens_out_subagents", "session_id"},
+                        "subagent_runs", "tokens_out_subagents", "session_id",
+                        "billing_mode", "cost_source", "fallback_from"},
     ("sessions", "session"): {"session_id", "model", "duration_s", "input_tokens", "output_tokens",
                               "cache_read_tokens", "cache_creation_tokens", "cost_usd", "children_sessions"},
     ("commits", "commit"): {"sha", "files", "insertions", "deletions", "subject_prefix", "branch"},
@@ -1270,7 +1428,8 @@ _ALLOWED = {
                          "what", "sort"},
     ("misses", "miss-fix"): {"miss_id", "req_id", "fix_run_id", "fix_cmd", "fix_attempt", "verdict_after",
                              "reopened", "cost_attribution", "tokens_in", "tokens_out", "tokens_cache_read",
-                             "tokens_cache_write", "cost_usd", "tokens_scope", "model"},
+                             "tokens_cache_write", "cost_usd", "tokens_scope", "model",
+                             "billing_mode", "cost_source"},
     ("misses", "miss-amend"): {"miss_id", "field", "value"},
     # an owner review of a phase's output (FR-36, built 2026-09-06): how many corrections were
     # given, what producing the reviewed output cost, what applying the corrections cost. The two
@@ -1282,7 +1441,8 @@ _ALLOWED = {
 # Fields the emitter derives for runs/gates: a caller's value is discarded.
 _DERIVED = ("harness", "tier", "tier_model", "model", "models", "model_tokens_out", "routed",
             "tokens_in", "tokens_out", "tokens_cache_read", "tokens_cache_write", "cost_usd",
-            "tokens_scope", "subagent_runs", "tokens_out_subagents")
+            "tokens_scope", "subagent_runs", "tokens_out_subagents",
+            "billing_mode", "cost_source", "fallback_from")
 
 
 def _shape_ok(rec):
@@ -1402,7 +1562,12 @@ lines = []
 for rec in records:
     if not _shape_ok(rec):
         continue
-    out = enrich_miss(enrich_run(stamp_attempt(enrich(rec))))
+    # enrich() first, because it is what fills `app` when the caller left it out — the overlap
+    # rule is per app and would otherwise compare a named run against an unnamed one.
+    base = enrich(rec)
+    if not _overlap_ok(base):
+        continue
+    out = enrich_miss(enrich_run(stamp_attempt(base)))
     if out is None:                 # a refused miss-amend (§5.5.7) — dropped, never appended
         continue
     line = json.dumps(out, separators=(",", ":"), ensure_ascii=False)

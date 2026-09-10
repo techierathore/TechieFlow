@@ -41,6 +41,63 @@ root = sys.argv[1]
 ryaml = os.path.join(root, ".tfcore", "routing.yaml")
 manifest_path = os.path.join(root, ".tfcore", ".session", "routing-bind.manifest")
 
+# --- migration: a project's routing.yaml is never overwritten -------------
+# `update-framework.sh` leaves a project's own routing.yaml alone on purpose, so a block added to
+# the framework default after the project was scaffolded would never reach it. Both delivery
+# routes run THIS script, so the migration lives here: a missing block is APPENDED, with the
+# Claude aliases filled in (opus/sonnet/haiku exist on every account) and the OpenCode lines left
+# empty, because guessing a model id for a provider this machine may not have would produce a
+# fallback that fails at the moment it is needed. Existing lines are never touched, and a file
+# that already has the block is left exactly as it is.
+MIGRATIONS = [
+    ("fallbacks:", """
+# Which models this tier drops to while its own is limited, in order, comma-separated.
+# Added by tf-routing-bind.sh. The opencode lines are OpenCode Go models
+# (https://opencode.ai/docs/go); change them if this project uses a different provider —
+# `opencode models` prints what this machine can reach.
+# The "limited until <time>" record is kept in this project, at
+# .tfcore/.session/model-cooldown.json. Uncomment to move it (relative to the project root, or
+# absolute); several projects sharing one file learn about a limit from each other.
+# cooldown_file: .tfcore/.session/model-cooldown.json
+# Full explanation: docs/TechieFlow-Routing-Guide.md §9.
+fallbacks:
+  frontier:
+    claude: opus, haiku
+    opencode: opencode-go/glm-5.3, opencode-go/kimi-k3, openai/gpt-5.6-sol
+  standard:
+    claude: haiku
+    opencode: opencode-go/mimo-v2.5, opencode-go/qwen3.8-max, openai/gpt-5.6-luna
+  economy:
+    claude: sonnet
+    opencode: opencode-go/deepseek-v4-flash, opencode-go/glm-5.3-flash, openai/gpt-5.6-luna
+"""),
+    ("billing:", """
+# How each harness is paid for, so a cost figure knows what it means (SCHEMA.md §2.5b).
+# subscription = a flat fee, marginal dollars are zero; metered = an API key, real money;
+# local = no bill; auto = work it out per model from OpenCode's own sign-in file.
+# Add a provider by name here to override the guess, e.g. "  myserver: local".
+billing:
+  claude: subscription
+  opencode: auto
+"""),
+]
+try:
+    _txt = open(ryaml, encoding="utf-8").read()
+    _added = []
+    for key, block in MIGRATIONS:
+        if not re.search(r"^%s\s*$" % re.escape(key), _txt, re.M):
+            if not _txt.endswith("\n"):
+                _txt += "\n"
+            _txt += block
+            _added.append(key.rstrip(":"))
+    if _added:
+        with open(ryaml, "w", encoding="utf-8", newline="\n") as _fh:
+            _fh.write(_txt)
+        print("tf-routing-bind: added %s to .tfcore/routing.yaml (nothing existing was changed)"
+              % " and ".join(_added))
+except FileNotFoundError:
+    pass
+
 # --- parse routing.yaml (flat format — see its header) --------------------
 cfg = {"enabled": False, "phases": {}, "subagents": {}, "tiers": {}, "effort": {}}
 sect = tier = None
@@ -67,8 +124,37 @@ try:
 except FileNotFoundError:
     pass  # no routing.yaml -> treat as disabled
 
+# A tier resolves to its own model UNLESS that model is on cooldown — a usage limit recorded by
+# tf-goal.sh in the per-machine file tf-model-pick.sh owns. Binding the fallback here is what stops
+# the sub-agents failing behind a main agent that already moved (Routing-Guide §8, 2026-09-06).
+_PICK = os.path.join(root, ".tfcore", "utils", "tf-model-pick.sh")
+_picked = {}
+
+
 def model_for(t, harness):
-    return cfg["tiers"].get(t, {}).get(harness)
+    declared = cfg["tiers"].get(t, {}).get(harness)
+    if not declared or t == "inherit":
+        return declared
+    if (t, harness) not in _picked:
+        got = declared
+        if os.path.isfile(_PICK):
+            try:
+                import subprocess
+                out = subprocess.run(["bash", _PICK, "pick", t, harness],
+                                     capture_output=True, text=True, timeout=20)
+                cand = (out.stdout or "").strip().splitlines()
+                cand = cand[-1].strip() if cand else ""
+                if cand and cand != "inherit":
+                    got = cand
+                elif cand == "inherit":
+                    got = None   # every model in the chain is limited: bind nothing, let it wait
+            except Exception:
+                pass
+        if got != declared:
+            print("tf-routing-bind: tier %s (%s) is on %s — %s is on cooldown"
+                  % (t, harness, got or "no model: the whole chain is limited", declared))
+        _picked[(t, harness)] = got
+    return _picked[(t, harness)]
 
 # --- remove previously generated artifacts (manifest-driven) --------------
 removed = 0

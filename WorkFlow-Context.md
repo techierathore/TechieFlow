@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-09-09. |
+| Last updated | 2026-09-10. |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -26,7 +26,7 @@ Alongside the work the framework measures the work: five append-only streams und
 |---|---|
 | `docs/TechieFlow-How-It-Works.md` | What every command does, what surrounds it, what it costs, where the design falls short. |
 | `docs/TechieFlow-Document-Schemas.md` | The required shape, size and row rules of every document the framework produces. |
-| `docs/TechieFlow-Requirements.md` | The framework's own checklist: 68 lines, each with a way to check it, 34 of them proved by a script. Agent document. |
+| `docs/TechieFlow-Requirements.md` | The framework's own checklist: 72 lines, each with a way to check it, 38 of them proved by a script. Agent document. |
 | `docs/TechieFlow-Telemetry-Explained.md` | The five report numbers, with real figures and the sentence to say about each. |
 | `docs/TechieFlow-Reset-Plan-2026-09-04.md` | The seven sessions that shrank the framework, one Done line each. |
 | `README.md` | How a person installs it and drives it. |
@@ -47,7 +47,7 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 7. **Ship.** `*handoff-phase`, then the owner's testing, then `*deploy-checklist <App> <pipeline-document>` after UAT.
 8. **Anytime.** `*amend-docs` for a change, `*refresh-status` after an interrupted run, `*devguide` and `*productguide` for the guides, `*metrics` for the report.
 
-**Unattended runs go through the supervisor**, never a bare harness command: `bash .tfcore/utils/tf-goal.sh [--harness opencode] [--model <id>] <app-folder> "<goal>"`. It waits out a usage limit, retries a crash, and re-prompts an agent that stopped early.
+**Unattended runs go through the supervisor**, never a bare harness command: `bash .tfcore/utils/tf-goal.sh [--harness opencode] [--model <id>] [--tier <tier>] <app-folder> "<goal>"`. It retries a crash, re-prompts an agent that stopped early, and on a usage limit moves to the next model the tier's `fallbacks:` chain names — waiting for the reset only when every model in the chain is limited (`--no-fallback` restores the old always-wait behaviour).
 
 ---
 
@@ -60,7 +60,8 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 - **`Verified` is written only by an executed verify run.** A build's own smoke test cannot go past Implemented.
 - **Every human document has a schema** and a budget for the application's size. The checker blocks the phase on a broken shape and on the maximum budget; `--warn` is report mode for an existing project.
 - **Every acceptance line reads "When `<actor>` `<does what>` on `<screen>`, then `<observable result>`"**, at most 30 words, one behaviour.
-- **Telemetry is emitted by script, never assembled by hand**, and has no veto: a failed write never blocks anything. Never edit a stream. A record that is **wrong** is voided, not edited: `tf-emit.sh --void-run <cmd> <started> "<why>"` leaves both records on the stream and takes the named one out of every figure, with the count and the reason printed (SCHEMA §2.7, FR-69).
+- **Telemetry is emitted by script, never assembled by hand**, and has no veto: a failed write never blocks anything. Never edit a stream. **A run's `started` is measured or taken from the previous run's `ended` — never typed.** The emitter refuses a run that begins before the last one ended and names the timestamp to use (SCHEMA §2.7b, FR-72); `--allow-overlap` is for two machines on one stream, nothing else. A record that is **wrong** is voided, not edited: `tf-emit.sh --void-run <cmd> <started> "<why>"` leaves both records on the stream and takes the named one out of every figure, with the count and the reason printed (SCHEMA §2.7, FR-69).
+- **Records hold tokens; money is worked out by the report.** A run record carries tokens per model and whatever cost the provider itself reported — never a computed price, because pricing is a reporting job (`tf-metrics.sh`, TfLens) and a rate card that changes must not make an old record wrong. It also carries `billing_mode`, resolved from the harness's own credentials by `tf-model-pick.sh` and never declared by an agent, so a flat fee, a monthly plan's allowance and a real invoice are never added together (SCHEMA §2.5b).
 - **Run material lives under `tests/.artifacts/`**, never at the repository root. It is swept after seven days.
 - **A library gap is logged in that library's feedback file and the row is blocked.** Never work around it silently, never merge the two files.
 - **The framework tree is invisible to file search.** `.tfcore/` is hidden and git-ignored, so Grep and Glob return nothing for files that are there. Confirm a file by reading its literal path, and never write "not present" without naming the path tried.
@@ -89,10 +90,10 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 | `.tfcore/utils/` | The scripts, `tf-*`. Every mechanical step of every task is one of these. |
 | `.tfcore/telemetry/` | `SCHEMA.md` (read before emitting), `install-metrics.sh`, `tf-metrics.sh`, the `pre-commit` template the owner installs. |
 | `.tfcore/core-config.yaml` | Per-project settings: application name, size, kind, phase, which documents load. |
-| `.tfcore/routing.yaml` | Which model tier runs which command, per harness. Per project, owner-tuned. |
+| `.tfcore/routing.yaml` | Which model tier runs which command, per harness; the fallback chain each tier drops to when a model is limited; how each harness is paid for. Per project, owner-tuned. `docs/TechieFlow-Routing-Guide.md` is the plain version. |
 | `.claude/commands/TechieFlow/` | The Claude Code mirror of the personas and tasks. Byte-identical to `.tfcore/`. |
 | `opencode.jsonc`, `.opencode/` | OpenCode's registrations and its guard-bridge plugin. There is no OpenCode mirror; it reads `.tfcore/` through file references. |
-| `tests/` | The self-tests: `mirror`, `doc-check`, `bugs`, `verify`, `goal`, `requirements`, and `regression` — one case per defect a real project found in a shipped script, each required to fail against the script as that project found it. |
+| `tests/` | The self-tests: `mirror`, `doc-check`, `bugs`, `verify`, `goal`, `routing`, `requirements`, and `regression` — one case per defect a real project found in a shipped script, each required to fail against the script as that project found it. |
 | `scaffold-*.sh`, `update-framework.sh` | Deploy the framework into a project, or refresh it. |
 
 ---
@@ -109,10 +110,11 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 |---|---|
 | **Distribution**: the framework is an npm package with a validation workflow, merged from `main` on 2026-09-07. Publishing it is the remaining step (FR-48 to FR-52). | Owner action |
 | Three requirements name a **script that has not been written**: FR-58 (refuse `done complete` while rows are unfinished), FR-60 (refuse a banned head name in a brief), FR-61 (grade a row not observable when the environment lacks the data). The idea-stage commands still emit no run record (FR-34, FR-60). | Maintainer |
+| **Model routing is deployed everywhere and enabled in three**: 19 repositories carry `tf-model-pick.sh` and a `routing.yaml` with a `fallbacks:` chain and a `billing:` block (added by the updater, never overwriting a line); three of them have `enabled: true` and generated bindings, the other sixteen keep their own `enabled: false`. Turning one on is `bash .tfcore/utils/tf-routing.sh on` in that project — Routing-Guide §2b. | Owner decision, per project |
 | **Open misses** are listed with their outcome in `docs/TechieFlow-Misses.md` — 48 of 138 open. The one this maintainer owes a fix for is 12 of 2026-09-07, that a hidden framework folder is invisible to search and nothing enforces the rule. | Maintainer |
 | **TrStudio is not on this machine.** It is a named fixture and could not be refreshed here. | Owner action |
 | **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` (that repository, not this one) and waiting on the owner's go-ahead. | Separate repo |
-| **TfLens is current** as of 2026-09-09: `update-framework.sh` ran in all 19 repositories on this machine, TfLens included, and its `tf-selfcheck` is clean. Two things are still open there and both are TfLens's own work, not the framework's: the duration-parity decision (`docs/Decision-TfLens-Duration-Parity-2026-09-09.md`) and, now, the `run-void` record kind its parser has never seen (SCHEMA §2.7). Both are written up in its feedback file. | Separate repo |
+| **TfLens is current** as of 2026-09-10: `update-framework.sh` ran in all 19 repositories on this machine, TfLens included, and its `tf-selfcheck` is clean. Two things are still open there and both are TfLens's own work, not the framework's: the duration-parity decision (`docs/Decision-TfLens-Duration-Parity-2026-09-09.md`) and, now, the `run-void` record kind its parser has never seen (SCHEMA §2.7). Both are written up in its feedback file. | Separate repo |
 | **286 misses predate the `sort` field** (2026-09-07). Nothing is backfilled and no stream is edited: a reader derives what it can from the `why_missed` already on the record and labels it derived, and the field-start date reports the rest as predating the question, never as unanswered. No action, by anyone. | Closed |
 | **TrSetup has thousands of tracked build-output files.** Its ignore rules are correct and inert until the index entries go. `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the commands. Agents never run version control. | Owner action |
 | **Both library packages need republishing** so the persona fixes reach consumers (TR-002, TR-RAG-002). | Owner action |

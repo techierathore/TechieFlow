@@ -46,6 +46,7 @@ artefact_cmd() {
     tests/verify/run.sh)     echo "bash tests/verify/run.sh" ;;
     tests/goal/run.sh)       echo "bash tests/goal/run.sh" ;;
     tests/regression/run.sh) echo "bash tests/regression/run.sh" ;;
+    tests/routing/run.sh)    echo "bash tests/routing/run.sh" ;;
     "npm run test:install")  echo "npm run test:install" ;;
     *)                       echo "" ;;
   esac
@@ -119,7 +120,7 @@ for line in open(sys.argv[1]):
     art = ""
     for cand in ("tests/mirror/run.sh", "tests/doc-check/run.sh", "tests/bugs/run.sh",
                  "tests/verify/run.sh", "tests/goal/run.sh", "tests/regression/run.sh",
-                 "npm run test:install"):
+                 "tests/routing/run.sh", "npm run test:install"):
         if cand in check:
             art = cand; break
     if not art and kind == "script":

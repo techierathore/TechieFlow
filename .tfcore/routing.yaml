@@ -38,6 +38,8 @@
 #      .opencode/opencode.json). Nothing changes until it runs.
 #   4. For one unattended run only, pass --model <id> to tf-goal.sh instead; the main agent uses
 #      it, the sub-agents still use the bindings from step 3.
+#   5. When a model's usage limit is reached, the tier's `fallbacks:` list is the answer — see the
+#      block below. Nothing is automatic until a limit is actually hit.
 enabled: true
 # ---------------------------------------------------------------------------
 # Tier → model id, per harness. STARTING VALUES — the owner tunes these.
@@ -53,6 +55,65 @@ tiers:
   economy:
     claude: haiku
     opencode: openai/gpt-5.6-luna
+
+# ---------------------------------------------------------------------------
+# Tier → the models to try INSTEAD, in order, while the tier model is limited.
+# Comma-separated, one line per harness, same flat two-space shape as `tiers:`.
+#
+# WHAT USES IT. `bash .tfcore/utils/tf-model-pick.sh pick <tier> <harness>` returns the first
+# model in "tier model, then this list" that is NOT on cooldown. tf-goal.sh puts a model on
+# cooldown when a cycle ends in a usage limit, re-binds, and starts the next cycle on the next
+# model; tf-routing-bind.sh reads the same answer, so the sub-agents move with the main agent
+# instead of failing behind it. A cooldown expires by itself at the reset time the limit message
+# stated, and the tier goes back to its own model.
+#
+# WHEN IT DOES NOT HELP, stated plainly: on Claude Code the 5-hour and weekly limits are the
+# ACCOUNT's, not the model's, so a fallback to another Claude model is limited too. The supervisor
+# finds that out the honest way — the next cycle hits the same limit, that model goes on cooldown
+# as well, and once the chain is exhausted it sleeps until the reset exactly as it did before.
+# A per-model limit (Opus exhausted while the account is fine) is where the Claude column earns
+# its keep; a provider outage or a monthly balance is where the OpenCode column does.
+#
+# Empty list = no fallback for that tier; the supervisor sleeps. That is the safe default for
+# anyone who does not want a phase silently running on a different model.
+#
+# WHERE THE "limited until <time>" RECORD IS KEPT. In this project, at
+# .tfcore/.session/model-cooldown.json — the framework is installed per project, so its state is
+# per project too, and one project's setting never reaches another. Uncomment the line below to
+# move it: a path relative to the project root, or an absolute one. Several projects pointed at
+# one file learn about a limit from each other instead of each finding it out for themselves.
+# cooldown_file: .tfcore/.session/model-cooldown.json
+# ---------------------------------------------------------------------------
+# The OpenCode lines below are OpenCode Go models (https://opencode.ai/docs/go — a $10/month plan
+# with a per-model monthly allowance, which is exactly the limit these chains exist for). Each tier
+# falls back to a DIFFERENT model, because the allowance that ran out is per model, and then to a
+# different provider, because a whole plan can run out at once.
+fallbacks:
+  frontier:
+    claude: opus, haiku
+    opencode: opencode-go/glm-5.3, opencode-go/kimi-k3, openai/gpt-5.6-sol
+  standard:
+    claude: haiku
+    opencode: opencode-go/mimo-v2.5, opencode-go/qwen3.8-max, openai/gpt-5.6-luna
+  economy:
+    claude: sonnet
+    opencode: opencode-go/deepseek-v4-flash, opencode-go/glm-5.3-flash, openai/gpt-5.6-luna
+
+# ---------------------------------------------------------------------------
+# How each harness is PAID FOR. This is what stops one `cost_usd` column pooling
+# three different kinds of number (SCHEMA.md §2.5b).
+#   subscription  a flat fee buys a quota. Marginal dollars are zero; the unit that means
+#                 anything is tokens. Claude Max, and any OpenCode provider signed in with OAuth.
+#   metered       an API key billed per token. The dollars are real money and are summed.
+#   local         a model on this machine. No quota, no bill.
+#   auto          work it out per model — OpenCode's own auth.json says oauth or api, and a
+#                 provider it has never heard of that answers locally is local.
+# `auto` is right for OpenCode because one machine mixes all three at once. Claude Code is
+# declared, because nothing in a transcript says which plan paid for it.
+# ---------------------------------------------------------------------------
+billing:
+  claude: subscription
+  opencode: auto
 
 # ---------------------------------------------------------------------------
 # Phase → tier. One line each; values: frontier | standard | economy | inherit.

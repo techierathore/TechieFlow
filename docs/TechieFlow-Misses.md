@@ -3,16 +3,19 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 139 logged: 49 open, 89 fixed, 1 will not fix |
+| Count | 143 logged: 52 open, 90 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-09-09 |
+| Updated | 2026-09-10 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
-## Open (49)
+## Open (52)
 
 | Miss | Found | Whose gap | What went wrong |
 |---|---|---|---|
+| MISS-TechieFlow-20260910-03 | 2026-09-10 by owner | the check was too weak | tf-metrics.sh --phases crashes with UnboundLocalError on any phase that touched no REQ and wrote no file, because by_mode was read outside the branch that assigned it. |
+| MISS-TechieFlow-20260910-02 | 2026-09-10 by owner | the framework never said it | Every model's cost is recorded the same way, so a run on a flat-fee subscription, a run on a metered API key and a run on a local model all land in one cost_usd figure — a zero on a subscription reads as free and money that was really spent cannot be told from money that was not. |
+| MISS-TechieFlow-20260910-01 | 2026-09-10 by owner | the framework never said it | Routing picks one model per tier and has no answer when that model's usage limit is reached — the run stops or sleeps instead of moving to another model in the same tier. |
 | MISS-TechieFlow-20260909-07 | 2026-09-09 by owner | the check was too weak | tf-status-facts read only the last line of docs/.last-verify.json, which the verifier writes as one pretty-printed object, so every project's status document reported last_verified_build not-run and last_verified_date never however many verify runs it had behind it. |
 | MISS-TechieFlow-20260909-06 | 2026-09-09 by owner | said and ignored | The maintenance run record for this sitting was hand-assembled with a guessed start time of 11:40, when the session actually began at 16:31:54, so it stores 18674 seconds against a real 19 minutes; the stream is append-only and the record cannot be corrected. |
 | MISS-TechieFlow-20260909-05 | 2026-09-09 by owner | the check was too weak | tf-verify-tests counted a skipped browser test as a failing one, so a clause guarded on data that does not exist yet was recorded as a defect and sent the row back into FIX mode against a gate no code could clear. |
@@ -63,10 +66,11 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (89)
+## Fixed (90)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260910-04 | 2026-09-10 by owner | 2026-09-10 by fix-issues | said and ignored | Two run records for this session were written with start times the maintainer typed rather than measured, so they overlap the record before them — the same defect as MISS-TechieFlow-20260909-06, after the void mechanism to correct it had already been built. |
 | MISS-TechieFlow-20260907-17 | 2026-09-07 by owner | 2026-09-07 by fix-issues | the check was too weak | The telemetry schema never gained the command values its own tasks were writing, so 27 run records across the estate carried a cmd the schema does not list and nothing noticed for four days. |
 | MISS-TechieFlow-20260907-16 | 2026-09-07 by owner | 2026-09-07 by fix-issues | said and ignored | The framework demanded of every application a verification it never ran on itself: 63 requirement lines with stated checks, not one verdict recorded, and its own metrics reported no first-pass rate as though it had no requirements at all. |
 | MISS-TechieFlow-20260907-15 | 2026-09-07 by owner | 2026-09-07 by fix-issues | the check was too weak | A run record carrying both timestamps but no duration counted as zero time in the report, so the reset's thirteen runs showed 16h49m of work instead of the 55h57m the same records already proved. |

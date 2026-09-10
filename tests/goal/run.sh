@@ -129,5 +129,64 @@ check "done is refused before the gate and accepted after it (exit $rc)" "$([[ $
 check "done is refused again when only another command's run record exists" "$(grep -q 'refused-again-as-expected' "$APP/.tfcore/.session/goal.log" && grep -q 'no run record for build-phase' "$APP/.tfcore/.session/goal.log"; echo $?)"
 check "the accepted sentinel is the complete one" "$(grep -q '"outcome":"complete"' "$APP/.tfcore/.session/goal-done.json"; echo $?)"
 
+# ---- 8. a usage limit moves to the next model in the tier instead of sleeping -------------
+# MISS-TechieFlow-20260910-01. Everything above ran WITHOUT tf-model-pick.sh in the app, which is
+# also the proof that a project scaffolded before 2026-09-10 keeps the old sleep-until-reset
+# behaviour: tf-goal.sh turns the fallback off when the script is not there.
+cp "$ROOT/.tfcore/utils/tf-harness.sh" "$ROOT/.tfcore/utils/tf-model-pick.sh" "$APP/.tfcore/utils/"
+cat > "$APP/.tfcore/routing.yaml" <<'YAML'
+enabled: true
+tiers:
+  standard:
+    claude: sonnet
+fallbacks:
+  standard:
+    claude: haiku
+billing:
+  claude: subscription
+phases:
+  build-phase: standard
+YAML
+export TF_MODEL_HEALTH_FILE="$WORK/cooldown.json"
+limit_fixture() { # $1 = seconds until the stated reset
+  rm -f "$APP/.tfcore/.session/"* "$APP/n" 2>/dev/null
+  local reset=$(( $(date +%s) + ${1:-7200} ))
+  cat > "$WORK/fb.sh" <<EOF
+n=\$(cat "$APP/n" 2>/dev/null || echo 0); n=\$((n+1)); echo \$n > "$APP/n"
+if [[ \$n -eq 1 ]]; then
+  echo '{"type":"system","subtype":"init","session_id":"s1","model":"claude-sonnet-5"}'
+  echo '{"type":"result","subtype":"error","is_error":true,"rate_limit_info":{"status":"rejected","resetsAt":$reset},"session_id":"s1"}'
+  exit 1
+fi
+echo '{"type":"result","subtype":"success","is_error":false,"num_turns":2,"session_id":"s1"}'
+printf '{"outcome":"complete"}' > "$APP/.tfcore/.session/goal-done.json"
+EOF
+}
+rm -f "$TF_MODEL_HEALTH_FILE"; limit_fixture 7200
+TF_GOAL_FAKE_CMD="bash $WORK/fb.sh" TF_GOAL_STALL_TICK=1 \
+  timeout 90 bash "$GOAL_SH" --tier standard --idle-retry-sec 1 --max-cycles 3 "$APP" "fallback test" >"$WORK/fb.log" 2>&1; rc=$?
+check "a usage limit falls back to the next model and finishes (exit $rc)" "$([[ $rc -eq 0 ]]; echo $?)"
+check "the log names the switch" "$(grep -q 'FALLBACK: claude-sonnet-5 is limited' "$APP/.tfcore/.session/goal.log"; echo $?)"
+check "the next cycle is launched with --model haiku" "$(grep -q '"model": "haiku"' "$APP/.tfcore/.session/goal.json"; echo $?)"
+check "the limited model is parked until its stated reset" \
+  "$(python3 -c "import json,sys,time;d=json.load(open(sys.argv[1]));e=d['cooldown'][0];raise SystemExit(0 if e['model']=='claude-sonnet-5' and e['until_epoch']>time.time()+3600 else 1)" "$TF_MODEL_HEALTH_FILE"; echo $?)"
+
+# ---- 9. --no-fallback keeps the old behaviour: sleep until the reset -----------------------
+rm -f "$TF_MODEL_HEALTH_FILE"; limit_fixture 7200
+TF_GOAL_FAKE_CMD="bash $WORK/fb.sh" TF_GOAL_STALL_TICK=1 \
+  timeout 25 bash "$GOAL_SH" --tier standard --no-fallback --max-cycles 3 "$APP" "no fallback" >"$WORK/nofb.log" 2>&1
+check "--no-fallback sleeps instead of switching" \
+  "$(grep -q 'USAGE LIMIT hit' "$APP/.tfcore/.session/goal.log" && ! grep -q 'FALLBACK:' "$APP/.tfcore/.session/goal.log"; echo $?)"
+check "--no-fallback parks nothing" "$([[ ! -f "$TF_MODEL_HEALTH_FILE" ]]; echo $?)"
+
+# ---- 10. every model in the tier limited → sleep, exactly as before ------------------------
+rm -f "$TF_MODEL_HEALTH_FILE"; limit_fixture 7200
+bash "$APP/.tfcore/utils/tf-model-pick.sh" cooldown claude haiku +180 "already limited" >/dev/null
+TF_GOAL_FAKE_CMD="bash $WORK/fb.sh" TF_GOAL_STALL_TICK=1 \
+  timeout 25 bash "$GOAL_SH" --tier standard --max-cycles 3 "$APP" "chain exhausted" >"$WORK/exh.log" 2>&1
+check "an exhausted chain says so and waits" \
+  "$(grep -q 'no fallback left' "$APP/.tfcore/.session/goal.log" && grep -q 'USAGE LIMIT hit' "$APP/.tfcore/.session/goal.log"; echo $?)"
+rm -f "$TF_MODEL_HEALTH_FILE"
+
 echo "tests/goal: $pass passed, $fail failed"
 [[ $fail -eq 0 ]]
