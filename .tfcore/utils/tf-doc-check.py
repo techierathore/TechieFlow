@@ -301,6 +301,12 @@ def detect_kind(path: str):
     name = os.path.basename(path).lower()
     if re.search(r"-deployment-checklist(-[\w]+)?\.md$", name):
         return "deployment-checklist", "app-deployment-checklist-tmpl.md"
+    # phase 2 onward of a Large project: still a BRD to every cross-check, but it carries only
+    # its own screens and requirements and points back at phase 1 for the rest (TF-024)
+    if re.search(r"-p\d+-brd\.md$", name):
+        return "brd", "app-phase-brd-tmpl.md"
+    if re.search(r"-p\d+-uidesign\.md$", name):
+        return "uidesign", "app-phase-uidesign-tmpl.md"
     for suffix, doc, tmpl in DOC_KINDS:
         if name.endswith(suffix):
             return doc, tmpl
@@ -638,6 +644,22 @@ def check_doc_rule(rule, c, rep):
                 elif n_acc > ACC_TARGET:
                     rep.warn(rel, f"BRD-{cur} acceptance line is {n_acc} words; the target is {ACC_TARGET} (maximum {ACC_MAX})")
 
+    elif rule == "phase-pointer":
+        # a phase BRD leaves scope, users, the whole-app non-functionals, constraints and risks to
+        # phase 1, and a phase UIDesign the design system and the click-through flow; this section is
+        # how a reader finds them, so it must actually lead to the phase-1 document of the same kind
+        txt = section_text(present, "Where the rest lives")
+        if txt is None or not c.get("app"):
+            return
+        want = phase_file(c["app"], 1, PHASED_SUFFIX[c["doc"]])
+        hits = [l for l in re.findall(r"\]\(([^)\s]+)\)", txt)
+                if os.path.basename(l.split("#", 1)[0]).lower() == want.lower()]
+        if not hits:
+            rep.fail(rel, f'the "Where the rest lives" section does not link to the phase-1 document ({want}), '
+                          f'where everything the whole application shares lives')
+        elif not any(resolve(root, path, l) for l in hits):
+            rep.fail(rel, f'the "Where the rest lives" link to {hits[0]} points at a file that does not exist')
+
     elif rule == "mockup-links":
         for l in sorted(links_to(clean, "mockups")):
             if not resolve(root, path, l):
@@ -863,6 +885,26 @@ def check_doc_rule(rule, c, rep):
         if not re.search(r"(?i)\bblocking\b|\bnothing is blocked\b", txt):
             rep.fail(rel, 'the Summary must say how many entries are blocking right now, '
                           'or "Nothing is blocked" — it is the first thing the owner reads')
+        # ... and its counts must be the entries' own. TfLens's read "20 entries, 8 open" over 27
+        # entries with 7 fixed upstream, and a TrBlazeUI file "all 28 open, none fixed upstream"
+        # under the library's own reply fixing 24 of them (MISS-TechieFlow-20260911-04).
+        sys.path.insert(0, SELF_DIR)
+        import tf_feedback
+        es = tf_feedback.entries(path)
+        n = {s: [e["id"] for e in es if e["state"] == s] for s in ("open", "fixed", "closed")}
+        truth = (f"{len(es)} entries: {len(n['open'])} open, {len(n['fixed'])} fixed upstream and not yet "
+                 f"re-checked, {len(n['closed'])} closed")
+        head = re.split(r"(?m)^####\s", txt)[0]
+        said_total = re.search(r"(?i)\b(\d+)\s+entries\b", head)
+        said_open = re.search(r"(?i)\b(?:all\s+)?(\d+)\s+(?:filed and\s+)?open\b", head)
+        wrong = ((said_total and int(said_total.group(1)) != len(es))
+                 or (said_open and int(said_open.group(1)) != len(n["open"])))
+        if wrong:
+            rep.fail(rel, f"the Summary's counts are not the entries' — the file holds {truth}; "
+                          f"rewrite it from: bash .tfcore/utils/tf-feedback.sh {os.path.basename(path).split('-')[0]}")
+        elif n["fixed"] and not re.search(r"(?i)fixed upstream|re-?check", head):
+            rep.fail(rel, f"{len(n['fixed'])} entries are fixed upstream and not yet re-checked here "
+                          f"({', '.join(n['fixed'][:5])}{' …' if len(n['fixed']) > 5 else ''}); the Summary must say so")
 
     elif rule == "paste-back-block":
         # `present` is built from the prose-only copy, which drops fenced blocks — and a

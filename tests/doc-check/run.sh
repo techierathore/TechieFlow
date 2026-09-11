@@ -27,7 +27,7 @@ out="$(bash "$CHK" --root "$L" --app BigApp --quiet)"; rc=$?
 if [[ $rc -ne 0 || "$out" != *"0 FAIL, 0 WARN"* ]]; then echo "FAIL large set: exit $rc"; echo "$out"; fail=1; else echo "ok   large set passes clean (two phases)"; fi
 out="$(bash "$CHK" --root "$TF_FIXTURE_DIR/fx-large-bad" --app BigApp --quiet)"; rc=$?
 n="$(echo "$out" | grep -c '^FAIL')"
-want=("in phase 1 and phase 2" "must be planned, building or done" "phase 3 has no BRD" 'needs the header row "Phase | 1 of' "says 1 but the file name says phase 2" "is also in phase 1's BRD" "outside phase 2's range" "REQ-UI-001 is also in phase 1's checklist")
+want=("in phase 1 and phase 2" "must be planned, building or done" "phase 3 has no BRD" 'needs the header row "Phase | 1 of' "says 1 but the file name says phase 2" "is also in phase 1's BRD" "outside phase 2's range" "REQ-UI-001 is also in phase 1's checklist" 'BigApp-P2-BRD.md: section "Scope" is not in the template' "does not link to the phase-1 document (BigApp-BRD.md)" 'BigApp-P2-UIDesign.md: section "Design system" is not in the template' "does not link to the phase-1 document (BigApp-UIDesign.md)")
 miss=0
 for w in "${want[@]}"; do echo "$out" | grep -q -- "$w" || { echo "     missing finding: $w"; miss=1; }; done
 if [[ $rc -ne 1 || $miss -ne 0 ]]; then echo "FAIL large bad set: exit $rc, $n FAIL lines"; echo "$out"; fail=1; else echo "ok   large bad set fails on the phase rules ($n findings)"; fi

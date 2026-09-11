@@ -147,19 +147,13 @@ def handoff_ran(log_rows):
 
 
 def feedback_lines(root, app):
-    out = []
-    for path in sorted(glob.glob(os.path.join(root, "docs", f"{app}-*-Feedback.md"))):
-        lib = re.sub(rf"^{re.escape(app)}-(.+)-Feedback\.md$", r"\1", os.path.basename(path))
-        text = read(path)
-        entries = re.split(r"(?m)^###\s+", text)[1:]
-        open_n = 0
-        for e in entries:
-            closed = re.search(r"(?im)^\s*[-*]\s*\*\*(status|resolved|fixed)[^:]*:\*\*\s*(fixed|resolved|closed|done)", e)
-            if not closed:
-                open_n += 1
-        rel = os.path.relpath(path, root).replace(os.sep, "/")
-        out.append(f"- {lib}: {open_n} open of {len(entries)} — {rel}")
-    return out or ["- None"]
+    # One reader for every script (tf_feedback.py). This function used to count every `###`
+    # heading as an entry and accept only a closing line no file used, so TfLens's status read
+    # "TechieFlow: 62 open of 62" for 27 entries, 19 of them fixed or closed, and the agent told
+    # the owner two fixed problems were open (MISS-TechieFlow-20260911-04).
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import tf_feedback
+    return [tf_feedback.summary_line(p, app) for p in tf_feedback.files(root, app)] or ["- None"]
 
 
 def config_phase(root):

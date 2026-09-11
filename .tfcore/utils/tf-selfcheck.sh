@@ -288,12 +288,45 @@ for name, cmd in (("tf-doc-check", ["bash", os.path.join(UTILS, "tf-doc-check.sh
         first = next((l for l in out.splitlines() if l.strip()), "")
         ok(name, "runs (exit %d)" % rc)
 
+# ---- 8. the upstream feedback files read as they are ------------------------------------
+# 2026-09-11: PROJECT-STATUS counted every ### heading as an entry and nothing as fixed, so
+# TfLens read "62 open of 62" and its agent told the owner two problems fixed two days earlier
+# were open (MISS-TechieFlow-20260911-04). The one reader is run here, on the real files, and
+# whatever an upstream team has fixed and this project has not re-checked is named below.
+waiting = []
+sys.path.insert(0, UTILS)
+try:
+    import tf_feedback
+    fb = tf_feedback.files(REPO)
+    if not fb:
+        skip("tf_feedback", "no upstream feedback files in this project")
+    else:
+        n = 0
+        for f in fb:
+            for e in tf_feedback.entries(f):
+                n += 1
+                if e["state"] == "fixed":
+                    waiting.append((e["id"], e["since"], os.path.basename(f)))
+        ok("tf_feedback", "%d feedback file(s), %d entries read; %d fixed upstream, not yet re-checked"
+           % (len(fb), n, len(waiting)))
+except Exception as e:
+    broken("tf_feedback", "crashed on this project's feedback files", str(e)[:120])
+
 # ---- output -----------------------------------------------------------------------------
 proj = os.path.basename(REPO.rstrip(os.sep))
 print("# tf-selfcheck — %s — the framework's own scripts against this project's real files" % proj)
 for l in lines:
     print(l)
 print()
+if waiting:
+    # Not a defect and not a failure: work this project owes. An upstream fix counts only once it
+    # has been re-checked here; until then it must never be reported to the owner as open.
+    print("Fixed upstream, not yet re-checked here — never report these as open problems:")
+    for rid, since, f in waiting:
+        print("  %-12s fixed %-10s %s" % (rid, since or "", f))
+    print("Re-check each with its entry's \"Verify from here\" step, then close it:")
+    print('  bash .tfcore/utils/tf-feedback.sh <App> --close <ID> "<what you ran and what it showed>"')
+    print()
 if not findings:
     print("Every framework script works on this project. Nothing to file.")
     raise SystemExit(0)

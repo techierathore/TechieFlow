@@ -25,9 +25,11 @@ rule: mockup-links
      Size and requirement cap: Small up to 10 screens, one role, 50 requirements; Medium up to 20 screens,
      100 requirements; Large is split into phases, each phase its own BRD. Every routed page is a screen;
      dialogs, tabs and panels are regions of their page and are listed under it.
-     Large project: one BRD per phase, phase 1 in docs/{App}-BRD.md, phase n in docs/{App}-Pn-BRD.md; the
-     header gains a row "| Phase | n of m |", Size is the phase's own size (Small or Medium), and BRD-N
-     runs on from the previous phase's last id. The phase plan is docs/{App}-Phases.md.
+     Large project: one BRD per phase, phase 1 in docs/{App}-BRD.md from this template, phase n in
+     docs/{App}-Pn-BRD.md from app-phase-brd-tmpl.md, which carries only that phase's screens and
+     requirements; this file keeps the whole application's scope, users, non-functionals, constraints
+     and risks. The header gains a row "| Phase | n of m |", Size is the phase's own size (Small or
+     Medium), and BRD-N runs on from the previous phase's last id. The phase plan is docs/{App}-Phases.md.
      Mermaid: quote every label (A["Order (v2)"]); never use `end` as a node id. -->
 
 # {App} — Business Requirements

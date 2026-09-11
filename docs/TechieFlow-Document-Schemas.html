@@ -106,7 +106,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout">
   <nav class="side">
     <h1>TechieFlow — Document Schemas</h1>
-    <div class="sub">Last rendered: 2026-09-08</div>
+    <div class="sub">Last rendered: 2026-09-11</div>
     <div class="group">Contents</div>
     <ol>
         <li><a href="#how-a-schema-works">1. How a schema works</a></li>
@@ -138,7 +138,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
   </nav>
   <main>
     <h1>TechieFlow — Document Schemas</h1>
-    <div class="subtitle">Rendered 2026-09-08 &middot; source <code>TechieFlow-Document-Schemas.md</code></div>
+    <div class="subtitle">Rendered 2026-09-11 &middot; source <code>TechieFlow-Document-Schemas.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
@@ -257,6 +257,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </table>
 <p>Removed: Business objectives (folded into Summary), Component sketch (the Architecture owns it), Feature catalog (repeated the ledger), Success metrics, Table of Contents (the renderer builds it), the footer.</p>
 <p>Budget: Small 6,000 target, 8,000 maximum. Medium 10,000 target, 15,000 maximum. Large: the Medium figures per phase. Checks: requirement ids unique and within the size cap; every mockup link points at a file that exists; the screens table has the five columns; the set of screens equals the UIDesign's (dialog rows excluded).</p>
+<p><strong>Phase 2 onward of a Large project</strong> (<code>docs/&lt;App&gt;-P&lt;n&gt;-BRD.md</code>, template <code>app-phase-brd-tmpl.md</code>, 2026-09-11, TfLens TF-024). The phase-1 BRD above holds everything that belongs to the whole application; a later phase's BRD holds only its own screens and requirements, because two copies of one fact become two answers the day one is amended. Its sections, in the same order as above: Summary, Screens and flow, Requirements, Non-functional requirements (only when the phase adds its own), Development status, and <strong>Where the rest lives</strong> — a table that must link to the phase-1 BRD. Scope, Users and roles, Context diagram, Constraints and assumptions and Risks are not in it, and the checker calls them strangers if they appear. Same budget and checks as above. Until this template existed every phase BRD was graded against the whole-project one, which asked for the six sections it must not have: 20 findings on TfLens's two phase BRDs, none repairable without copying phase 1.</p>
 <h3 id="architecture-docs-architecture-md">3.2 Architecture — <code>docs/&lt;App&gt;-Architecture.md</code><a class="anchor-link" href="#architecture-docs-architecture-md">#</a></h3>
 <p>What it is for: the technical decisions, once, so no phase re-invents them. Produced at day-1. Read at every build.</p>
 <table>
@@ -290,6 +291,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <p>Removed: How to use, Library gaps (the library feedback file owns them), Table of Contents.</p>
 <p>Budget: 300 words plus the per-screen figures, so a ten-screen Small app is 2,800 words target and 4,300 maximum. Checks: every screen has its mockup, its two tables and its three states; every mockup file in <code>docs/mockups/</code> is linked from a screen (a warning otherwise).</p>
 <p><strong>Mockup rules</strong> (owner, 2026-09-05, Sitting 4a; FR-53). The mockups are one click-through set, not separate pictures: every link and form action opens a mockup that exists; every screen can be reached by clicking from the sign-in page (or the home page when there is none); every screen has a way out; a button that does not navigate shows a message; sign-in needs no credentials, the button alone navigates; and every mockup carries <code>data-testid</code> anchors, because the verifier compares only anchored elements. The checker refuses the set otherwise. <strong>Added 2026-09-06 after the owner found the MiMo MyDiary set broken by hand (miss 15):</strong> navigation is a link (<code>&lt;a href="screen.html"&gt;</code>) or a form action, never a script, because a script dies in any viewer without scripts and the click-through cannot be checked without running one; every menu item leads to its screen; a link is resolved from the mockup folder the way a browser does, not by its file name; every stylesheet a mockup names exists. In a brownfield repository, mockups found outside <code>docs/mockups/</code> are moved there first (<code>tf-mockups-locate.sh</code>), so there is only ever one mockup folder.</p>
+<p><strong>Phase 2 onward of a Large project</strong> (<code>docs/&lt;App&gt;-P&lt;n&gt;-UIDesign.md</code>, template <code>app-phase-uidesign-tmpl.md</code>, owner 2026-09-11). The same split as the phase BRD in §3.1. Phase 1 keeps what every phase shares: the UI library and theme in its header, the Design system, the one Click-through flow across every phase and the Branding guide. A later phase's UIDesign holds only its own <code>### Screen:</code> entries, written and checked exactly as above, and a <strong>Where the rest lives</strong> table that must link to the phase-1 UIDesign. Until this template existed each phase UIDesign was asked for the phase-1 header rows and sections: 10 findings on TfLens's two phase files, none repairable without copying phase 1.</p>
 <h3 id="checklist-docs-checklist-md">3.4 Checklist — <code>docs/&lt;App&gt;-Checklist.md</code><a class="anchor-link" href="#checklist-docs-checklist-md">#</a></h3>
 <p>An agent document. The owner does not review it and it is never rendered. Only the row rules matter.</p>
 <p>Sections, in order: Goal, Requirements Status (the one table), then one section per page or group holding the detail entries. No other sections: a <code>UAT Bugs</code> or <code>Feedback tracker</code> section goes into the misses stream instead.</p>

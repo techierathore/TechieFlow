@@ -223,7 +223,12 @@ def run(app, phase, force, add_missing, in_order=False):
     existing = read(cl_p) if os.path.isfile(cl_p) else ""
     if existing and not force and not add_missing:
         die(f"{cl_p} already exists; use --add-missing to append rows for new BRD items, or --force to rewrite", 1)
-    mapped = set(re.findall(r"\*BRD:\*\s*(BRD-\d+)", existing)) | set(re.findall(r"\((BRD-\d+)\)", existing))
+    # A BRD item already has a row when any row names it: on its `*BRD:*` detail line, or anywhere on
+    # its status-table line. The table form used to be read only as a bracket holding exactly one id,
+    # so "(BRD-76, Phase 3)" and "(BRD-118, BRD-120, Phase 3)" were invisible and --add-missing
+    # appended 44 rows to TfLens phase 3 for 13 new items, 31 of them copies of Verified rows (TF-025).
+    mapped = {b for line in re.findall(r"(?m)^.*\*BRD:\*.*$", existing) for b in re.findall(r"BRD-\d+", line)}
+    mapped |= {b for row in re.findall(r"(?m)^\|\s*REQ-.*$", existing) for b in re.findall(r"BRD-\d+", row)}
     counters = other_phase_counters(app, cl_p, below=phase if in_order else None)
     if add_missing:
         for m in re.finditer(r"REQ-(UI|FN|RAG|NFR)-(\d{3})", existing):

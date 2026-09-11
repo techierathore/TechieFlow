@@ -21,7 +21,7 @@
 //   bash  {command}                        -> Bash  {command}            -> block-git.sh + guard-artifacts.sh + guard-verify-deps.sh
 //   edit  {filePath,oldString,newString}   -> Edit  {file_path,old_string,new_string}
 //   write {filePath,content}               -> Write {file_path,content}  -> guard-status.sh + guard-verify.sh
-//   session.idle (root session)            -> Stop  {stop_hook_active}   -> guard-status-html.sh
+//   session.idle (root session)            -> Stop  {stop_hook_active, last_assistant_message, turn_started} -> guard-status-html.sh
 //   session.created (first root session)   -> SessionStart              -> sweep-artifacts.sh
 // OpenCode has no blocking Stop hook, so the stale-PROJECT-STATUS.html guard
 // (_status-update-gate.md step 4) is bridged as a ONE-SHOT nudge: when the root
@@ -110,8 +110,29 @@ export const TechieFlowPlugin = async ({ directory, client }) => {
   const htmlNudged = Object.create(null) // rootID -> true once the stale-HTML nudge was sent
   let pointerWritten = false
 
+  // What Claude Code hands its Stop hook and OpenCode does not: the closing message, and when
+  // the turn began (the last prompt the owner typed). The guard checks the message the owner
+  // reads at the end of a command (tf-owner-text.sh). Empty on any failure: the check then skips.
+  async function closingTurn(rootID) {
+    try {
+      if (typeof client.session.messages !== "function") return {}
+      const res = await client.session.messages({ path: { id: rootID } })
+      const list = Array.isArray(res) ? res : (res && res.data) || []
+      const text = (m) => (m.parts || []).filter((x) => x.type === "text" && !x.synthetic).map((x) => x.text).join("\n")
+      let message = "", turn = null
+      for (const m of list) {
+        const info = m.info || {}
+        if (info.role === "user" && text(m).trim()) turn = (info.time || {}).created || turn
+        if (info.role === "assistant" && text(m).trim()) message = text(m)
+      }
+      return turn ? { last_assistant_message: message, turn_started: turn } : {}
+    } catch {
+      return {}
+    }
+  }
+
   // Stop-hook analogue for guard-status-html.sh (see header). Never throws.
-  function nudgeStaleStatusHtml(rootID) {
+  async function nudgeStaleStatusHtml(rootID) {
     try {
       if (!client || !client.session || typeof client.session.prompt !== "function") return
       const msg = guardBlocks("guard-status-html.sh", {
@@ -119,6 +140,7 @@ export const TechieFlowPlugin = async ({ directory, client }) => {
         cwd: root,
         session_id: rootID,
         stop_hook_active: htmlNudged[rootID] === true,
+        ...(htmlNudged[rootID] === true ? {} : await closingTurn(rootID)),
       })
       if (!msg) return
       htmlNudged[rootID] = true
@@ -367,7 +389,7 @@ export const TechieFlowPlugin = async ({ directory, client }) => {
           if (!sid) return
           if (rootOf(sid) === sid) {
             emitSession(sid)
-            nudgeStaleStatusHtml(sid)
+            await nudgeStaleStatusHtml(sid)
           }
           return
         }

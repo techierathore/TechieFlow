@@ -71,8 +71,13 @@ if (!screens.length) { console.error('tf-verify-screens: no screens (--list <jso
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const anchorsOf = (mockup) => {
   if (!mockup || !existsSync(mockup)) return null;
-  const html = readFileSync(mockup, 'utf8');
-  const re = new RegExp(`${ATTR}\\s*=\\s*["']([^"']+)["']`, 'g');
+  // Only an attribute ON AN ELEMENT is a control the page must carry. A stylesheet rule such as
+  // [data-testid="source-mode"] .tab{…}, a script string or a comment naming one is not: TfLens's
+  // shared mockup stylesheet made every screen owe a dialog it never draws (TF-026).
+  const html = readFileSync(mockup, 'utf8')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<(style|script)\b[\s\S]*?<\/\1\s*>/gi, '');
+  const re = new RegExp(`<[^>]*?\\b${ATTR}\\s*=\\s*["']([^"']+)["']`, 'g');
   const out = new Set(); let m;
   while ((m = re.exec(html))) out.add(m[1]);
   return [...out];

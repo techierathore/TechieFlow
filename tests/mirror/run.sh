@@ -74,7 +74,7 @@ shared=$(cat "$ROOT/.tfcore/tasks"/_*.md | wc -w)
 # FR-67: the same rule written in two places. A word cap stops a file growing; nothing
 # stopped the SAME rule being copied into a second and a third file, which is how a rule
 # set rots — the copies drift and a reader who finds one never learns there was another.
-# 26 deliberate duplicates are baselined; the 27th fails. MISS-TechieFlow-20260908-04.
+# 32 deliberate duplicates are baselined; the 33rd fails. MISS-TechieFlow-20260908-04.
 # FR-68: a persona command that exists in one harness only. The mirror check above covers
 # TASK FILES; a command with no task file of its own slipped past it for the whole reset --
 # seven did (MISS-TechieFlow-20260908-06). OpenCode cannot alias, so every command name needs

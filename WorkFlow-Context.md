@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-09-10. |
+| Last updated | 2026-09-11. |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -26,7 +26,7 @@ Alongside the work the framework measures the work: five append-only streams und
 |---|---|
 | `docs/TechieFlow-How-It-Works.md` | What every command does, what surrounds it, what it costs, where the design falls short. |
 | `docs/TechieFlow-Document-Schemas.md` | The required shape, size and row rules of every document the framework produces. |
-| `docs/TechieFlow-Requirements.md` | The framework's own checklist: 72 lines, each with a way to check it, 38 of them proved by a script. Agent document. |
+| `docs/TechieFlow-Requirements.md` | The framework's own checklist: 76 lines, each with a way to check it, 42 of them proved by a script. Agent document. |
 | `docs/TechieFlow-Telemetry-Explained.md` | The five report numbers, with real figures and the sentence to say about each. |
 | `docs/TechieFlow-Reset-Plan-2026-09-04.md` | The seven sessions that shrank the framework, one Done line each. |
 | `README.md` | How a person installs it and drives it. |
@@ -67,9 +67,9 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 - **The framework tree is invisible to file search.** `.tfcore/` is hidden and git-ignored, so Grep and Glob return nothing for files that are there. Confirm a file by reading its literal path, and never write "not present" without naming the path tried.
 - **Every miss is logged through `tf-log-miss.sh` with its sort** — whose gap it was: `spec`, `unsaid`, `weak-check` or `ignored`. The maintainer's own misses included.
 - **Owner-reviewed documents change only after the owner says yes.** `TechieFlow-How-It-Works.md`, the Stack documents, the Reset Plan, the README, and any BRD or mockup. Propose in plain words first. **This file is not one of them** — it is the agent's briefing, written by the maintainer for the maintainer, and it is kept current without asking (owner, 2026-09-09: *"it's a document for you"*). The owner reads output, the productivity figures and the readable documents; those are what a change must be worth.
-- **Plain English to the owner; a decision goes in a file, not the conversation; an upstream defect is always filed, `Blocks: yes|no` first, and `no` never stops the run.** `.tfcore/tasks/_owner-language.md`.
+- **Plain English to the owner; a decision goes in a file, not the conversation; an upstream defect is always filed, `Blocks: yes|no` first, and `no` never stops the run.** `.tfcore/tasks/_owner-language.md`. Since 2026-09-11 the closing message of a command, and any free-form document it hands over, is checked by the Stop hook through `tf-owner-text.sh` (FR-74): no word from `.tfcore/standards/owner-words.txt`, every open upstream problem with what it affects and its prompt, none fixed upstream called open, every command still to run as a line to paste, the next prompt in a code block. Add a word to that list when the owner has to ask what one means.
 - **An agent document is never rendered to HTML.** The checklist and the miss list are refused by name; anything else whose only reader is an agent stays markdown.
-- **A rule is a script, and it is written once.** `tests/mirror/run.sh` refuses the same sentence in two rule files (26 deliberate ones baselined) and holds the word caps. When a cap is reached, delete prose a check has replaced; never raise the cap.
+- **A rule is a script, and it is written once.** `tests/mirror/run.sh` refuses the same sentence in two rule files (32 deliberate ones baselined) and holds the word caps. When a cap is reached, delete prose a check has replaced; never raise the cap.
 - **Public documents name only public repositories**: TechieRag, TechieDesk, TrBlazeUI, TfLens, TechieBlog, TrStudio, TrSetup, Xpenser.
 
 ---
@@ -84,7 +84,7 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 | `docs/` | The framework's own documents (the table in §1), plus its telemetry under `docs/metrics/`. |
 | `.tfcore/agents/` | The four personas. |
 | `.tfcore/tasks/` | One file per command, plus the three shared rule files every command loads (`_status-update-gate`, `_smoke-test-policy`, `_metrics-emit-gate`) and `_yolo-mode`. |
-| `.tfcore/templates/v4custom/` | Twenty-two templates, fourteen carrying a schema block. Each human document's template opens with its own. |
+| `.tfcore/templates/v4custom/` | Twenty-four templates, sixteen carrying a schema block. Each human document's template opens with its own; phase 2 onward of a Large project has its own BRD and UIDesign templates (`app-phase-brd-tmpl.md`, `app-phase-uidesign-tmpl.md`). |
 | `.tfcore/standards/` | The technology-neutral coding standards and the .NET set. |
 | `.tfcore/hooks/` | Twelve shell hooks. Nine refuse an action; three do housekeeping. |
 | `.tfcore/utils/` | The scripts, `tf-*`. Every mechanical step of every task is one of these. |
@@ -111,10 +111,11 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | **Distribution**: the framework is an npm package with a validation workflow, merged from `main` on 2026-09-07. Publishing it is the remaining step (FR-48 to FR-52). | Owner action |
 | Three requirements name a **script that has not been written**: FR-58 (refuse `done complete` while rows are unfinished), FR-60 (refuse a banned head name in a brief), FR-61 (grade a row not observable when the environment lacks the data). The idea-stage commands still emit no run record (FR-34, FR-60). | Maintainer |
 | **Model routing is deployed everywhere and enabled in three**: 19 repositories carry `tf-model-pick.sh` and a `routing.yaml` with a `fallbacks:` chain and a `billing:` block (added by the updater, never overwriting a line); three of them have `enabled: true` and generated bindings, the other sixteen keep their own `enabled: false`. Turning one on is `bash .tfcore/utils/tf-routing.sh on` in that project — Routing-Guide §2b. | Owner decision, per project |
-| **Open misses** are listed with their outcome in `docs/TechieFlow-Misses.md` — 48 of 138 open. The one this maintainer owes a fix for is 12 of 2026-09-07, that a hidden framework folder is invisible to search and nothing enforces the rule. | Maintainer |
+| **Open misses** are listed with their outcome in `docs/TechieFlow-Misses.md` — 52 of 152 open (2026-09-11). The one this maintainer owes a fix for is 12 of 2026-09-07, that a hidden framework folder is invisible to search and nothing enforces the rule. | Maintainer |
 | **TrStudio is not on this machine.** It is a named fixture and could not be refreshed here. | Owner action |
 | **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` (that repository, not this one) and waiting on the owner's go-ahead. | Separate repo |
-| **TfLens is current** as of 2026-09-10: `update-framework.sh` ran in all 19 repositories on this machine, TfLens included, and its `tf-selfcheck` is clean. Two things are still open there and both are TfLens's own work, not the framework's: the duration-parity decision (`docs/Decision-TfLens-Duration-Parity-2026-09-09.md`) and, now, the `run-void` record kind its parser has never seen (SCHEMA §2.7). Both are written up in its feedback file. | Separate repo |
+| **The 2026-09-11 changes are deployed in all 19 repositories** (TfLens first, the other 18 at the owner's request the same day); every one's `tf-selfcheck` passes with no findings, and the feedback reader runs on each one's real files. TfLens's feedback file was rewritten here and copied across: 15 entries wait for TfLens to re-check and close them with `tf-feedback.sh --close`; the three prompts that do it were given to the owner. | TfLens (re-check and close) |
+| **Eighteen `.gitignore` files carry repeated framework blocks** left by FR-76's defect: TechieBlog 50 copies, TfLens 30, one private project 10, fifteen others 2. Repeated lines ignore nothing extra, so nothing is wrong, only untidy; the updater no longer adds them, and removes none. | Owner decision |
 | **286 misses predate the `sort` field** (2026-09-07). Nothing is backfilled and no stream is edited: a reader derives what it can from the `why_missed` already on the record and labels it derived, and the field-start date reports the rest as predating the question, never as unanswered. No action, by anyone. | Closed |
 | **TrSetup has thousands of tracked build-output files.** Its ignore rules are correct and inert until the index entries go. `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the commands. Agents never run version control. | Owner action |
 | **Both library packages need republishing** so the persona fixes reach consumers (TR-002, TR-RAG-002). | Owner action |
@@ -138,5 +139,6 @@ When you change the framework, change all of these together.
 3. **A new rule is a script or a hook, not a paragraph.** A rule ignored twice never gets a third paragraph. Task files hold steps only; explanation and history belong in the documents of §1 and in the changelog.
 4. **Prove every script by running it.** A script the maintainer has not run on a real project is not done. Both harnesses.
 5. **Log every gap as a miss** through `tf-log-miss.sh`, with its sort, before proposing the fix.
+5b. **Answer every fix in the project's feedback file.** A problem a project filed is answered by a row in a `## Resolution status (TechieFlow team, <date>)` table in `docs/<App>-TechieFlow-Feedback.md` here, which the owner copies across. `tests/regression/run.sh replies_complete` fails while a problem the suite holds a case for still reads open there. `bash .tfcore/utils/tf-feedback.sh <App>` (run in the project) is the one reading of those files: open, fixed upstream and not yet re-checked, closed.
 6. **Record the work.** A maintenance session ends with one `framework-reset` run record in this repository's own metrics, a dated entry in `docs/CHANGELOG.md`, and this file's open items and date refreshed.
 7. **Session memory is keyed on the repository path**, so it does not follow a move. This file is the durable record.

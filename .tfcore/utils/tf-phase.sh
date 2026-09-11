@@ -68,6 +68,9 @@ case "${1:-}" in
       else
         echo "tf-phase: framework self-check clean" >&2
       fi
+      # upstream fixes this project has not re-checked: passed through whole, because "clean"
+      # alone let an agent report two fixed problems to the owner as open (2026-09-11)
+      sed -n '/^Fixed upstream, not yet re-checked here/,/tf-feedback.sh <App> --close/p' <<<"$sc" | sed 's/^/tf-phase: /' >&2
     fi
     ;;
   goal)

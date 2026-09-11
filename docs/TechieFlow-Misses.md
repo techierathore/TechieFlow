@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 143 logged: 52 open, 90 fixed, 1 will not fix |
+| Count | 152 logged: 52 open, 99 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-09-10 |
+| Updated | 2026-09-11 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -66,10 +66,19 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (90)
+## Fixed (99)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260911-09 | 2026-09-11 by owner | 2026-09-11 by fix-issues | the check was too weak | update-framework.sh and both scaffolds decided whether .gitignore already held the framework block through 'tr \| grep -q' under pipefail, which reports not-found once grep stops early on a large file on the Windows drive, so the block was appended on every update: 50 copies in TechieBlog, 30 in TfLe |
+| MISS-TechieFlow-20260911-08 | 2026-09-11 by owner | 2026-09-11 by fix-issues | the check was too weak | mockup-parity reported an icon missing whenever the app drew it one wrapper deeper, and parsed an oklch() colour as r/g/b numbers so every tile themed by the UI library read as neutral: 136 findings at 1280 px on two TfLens screens, most describing icons and colours plainly on screen (TF-027). |
+| MISS-TechieFlow-20260911-07 | 2026-09-11 by owner | 2026-09-11 by fix-issues | the check was too weak | tf-verify-screens read data-testid anywhere in a mockup file, so a stylesheet rule naming one became a control every page had to carry: 'source-mode is not on the page' on /misses and /effort (TF-026). |
+| MISS-TechieFlow-20260911-06 | 2026-09-11 by owner | 2026-09-11 by fix-issues | the check was too weak | tf-split-brd --add-missing read a checklist row's BRD id only from a bracket holding exactly one id, so rows titled '(BRD-76, Phase 3)' were invisible and it appended 44 rows for 13 new items on TfLens phase 3, 31 of them copies of Verified rows (TF-025). |
+| MISS-TechieFlow-20260911-05 | 2026-09-11 by owner | 2026-09-11 by fix-issues | the framework never said it | The 2026-09-09 session fixed TF-013 to TF-020 but its reply in TfLens's feedback file listed only TF-018 onward, so TF-013 to TF-017 read as open there for two days; nothing checked that every fixed problem is answered in the project's file. |
+| MISS-TechieFlow-20260911-04 | 2026-09-11 by owner | 2026-09-11 by fix-issues | the check was too weak | tf-status-facts counted every ### heading in a feedback file as an entry and accepted only a closing line no file used, so PROJECT-STATUS read 'TechieFlow: 62 open of 62' for 27 entries with 19 fixed or closed, the self-check never read the file, and tf-phase showed the agent only 'clean' — so TfLen |
+| MISS-TechieFlow-20260911-03 | 2026-09-11 by owner | 2026-09-11 by fix-issues | the check was too weak | A free-form document written for the owner (TfLens's session hand-off) was skipped by the document checker as not a TechieFlow document name, and nothing read the final message, so jargon, upstream defects named with no impact, defects already fixed upstream reported as open, and a pending verify wi |
+| MISS-TechieFlow-20260911-02 | 2026-09-11 by owner | 2026-09-11 by fix-issues | said and ignored | The duration-parity decision document told TfLens's agent to add the four new duration counts to the per-phase duration_s key list as well as the top-level one; the maintainer wrote it without reading where tf-metrics.sh emits them, and following it would have failed the parity check on every phase |
+| MISS-TechieFlow-20260911-01 | 2026-09-11 by owner | 2026-09-11 by fix-issues | the framework never said it | The document checker graded a phase-2 or phase-3 BRD against the whole-project BRD template, because the framework never defined what a phase BRD holds; day-1 told agents to write Scope, Users, Non-functional, Context, Constraints and Risks into every phase, which duplicates phase 1 (TfLens TF-024, |
 | MISS-TechieFlow-20260910-04 | 2026-09-10 by owner | 2026-09-10 by fix-issues | said and ignored | Two run records for this session were written with start times the maintainer typed rather than measured, so they overlap the record before them — the same defect as MISS-TechieFlow-20260909-06, after the void mechanism to correct it had already been built. |
 | MISS-TechieFlow-20260907-17 | 2026-09-07 by owner | 2026-09-07 by fix-issues | the check was too weak | The telemetry schema never gained the command values its own tasks were writing, so 27 run records across the estate carried a cmd the schema does not list and nothing noticed for four days. |
 | MISS-TechieFlow-20260907-16 | 2026-09-07 by owner | 2026-09-07 by fix-issues | said and ignored | The framework demanded of every application a verification it never ran on itself: 63 requirement lines with stated checks, not one verdict recorded, and its own metrics reported no first-pass rate as though it had no requirements at all. |

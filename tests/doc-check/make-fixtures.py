@@ -740,7 +740,9 @@ ARCH_L = big(ARCH).replace("| Size | Small |", "| Size | Large |") + """
 | Reports | monthly summaries |
 """
 
-BRD2 = """# BigApp — Business Requirements (phase 2)
+# Phase 2 onward is written from app-phase-brd-tmpl.md: its own screens and requirements, and a
+# pointer back to phase 1 for scope, users, constraints and risks, never a copy of them (TF-024).
+BRD2 = """# BigApp — Business Requirements — Phase 2: Reports
 
 | | |
 |---|---|
@@ -748,7 +750,6 @@ BRD2 = """# BigApp — Business Requirements (phase 2)
 | Kind | app |
 | Size | Small |
 | Phase | 2 of 2 |
-| Stack answer set | dotnet |
 | Status | Draft |
 | Date | 2026-09-05 |
 
@@ -756,21 +757,7 @@ BRD2 = """# BigApp — Business Requirements (phase 2)
 
 Phase 2 adds monthly reports over the entries written in phase 1.
 
-## 2. Scope
-
-**In:**
-- Monthly report screen.
-
-**Out:**
-- Export.
-
-## 3. Users and roles
-
-| Role | Who they are | What they need |
-|---|---|---|
-| Writer | the owner | see how much was written |
-
-## 4. Screens and flow
+## 2. Screens and flow
 
 | Screen | Route | Role | Mockup | Fields |
 |---|---|---|---|---|
@@ -779,27 +766,36 @@ Phase 2 adds monthly reports over the entries written in phase 1.
 **Primary journey:**
 1. The writer opens Reports from the menu and picks a month.
 
-## 5. Requirements
+## 3. Requirements
 
 - **BRD-4** — Monthly report. *Screen:* Reports · *Mockup:* [mockup](mockups/reports.html)
   - *Acceptance:* When the writer picks a month on Reports, then the screen shows the number of entries written that month.
 
-## 6. Non-functional requirements
+## 4. Non-functional requirements
 
 | Id | Area | Requirement | Measure |
 |---|---|---|---|
 | BRD-5 | Performance | Reports open quickly | perf-budget: p95 load <= 2000ms @ concurrency 1 |
 
-## 7. Development status
+## 5. Development status
 
 **Snapshot as of 2026-09-05.**
 
 | Screen | Requirements | Verified | Open | Status |
 |---|---|---|---|---|
 | Reports | 2 | 0 | 2 | Planned |
+
+## 6. Where the rest lives
+
+| What | Where |
+|---|---|
+| Scope, users and roles, constraints and risks | [phase 1 BRD](BigApp-BRD.md) |
+| Every phase and its BRD range | [BigApp-Phases.md](BigApp-Phases.md) |
 """
 
-UI2 = """# BigApp — UI Design (phase 2)
+# Phase 2 onward is written from app-phase-uidesign-tmpl.md: its own screens, and a pointer back to
+# phase 1 for the library, theme, design system and click-through flow (owner, 2026-09-11).
+UI2 = """# BigApp — UI Design — Phase 2: Reports
 
 | | |
 |---|---|
@@ -807,12 +803,6 @@ UI2 = """# BigApp — UI Design (phase 2)
 | Kind | app |
 | Size | Small |
 | Phase | 2 of 2 |
-| UI library | TrBlazeUI 2.0 |
-| Theme | both |
-
-## Design system
-
-Same shell, theme and spacing as phase 1.
 
 ## Screens
 
@@ -832,6 +822,12 @@ Same shell, theme and spacing as phase 1.
 **Dialogs opened here:** none
 
 **States:** empty: "No entries that month" · loading: skeleton card · error: alert
+
+## Where the rest lives
+
+| What | Where |
+|---|---|
+| UI library, theme, design system and the click-through flow | [phase 1 UI design](BigApp-UIDesign.md) |
 """
 
 CL2 = """# BigApp — Checklist (phase 2)
@@ -897,7 +893,13 @@ lbad["docs/BigApp-Phases.md"] = PHASES.replace("| 1 | Core | Login, Entries | BR
 # phase 1 BRD without its Phase row although the project has phases
 lbad["docs/BigApp-BRD.md"] = BRD1.replace("| Phase | 1 of 2 |\n", "")
 # phase 2 BRD: header says phase 1, and it reuses BRD-2 (which is also outside its range)
-lbad["docs/BigApp-P2-BRD.md"] = BRD2.replace("| Phase | 2 of 2 |", "| Phase | 1 of 2 |").replace("**BRD-4**", "**BRD-2**").replace("| Reports | 2 | 0 | 2 | Planned |", "| Reports | 2 | 0 | 2 | Planned |")
+#   and it repeats phase 1's Scope and points at no phase-1 BRD (TF-024)
+lbad["docs/BigApp-P2-BRD.md"] = BRD2.replace("| Phase | 2 of 2 |", "| Phase | 1 of 2 |").replace("**BRD-4**", "**BRD-2**") \
+    .replace("## 2. Screens and flow", "## Scope\n\n**In:**\n- Monthly report screen.\n\n## 2. Screens and flow") \
+    .replace("[phase 1 BRD](BigApp-BRD.md)", "the first phase")
+# phase 2 UIDesign repeats phase 1's design system and points at no phase-1 UIDesign
+lbad["docs/BigApp-P2-UIDesign.md"] = UI2.replace("## Screens", "## Design system\n\nSame shell as phase 1.\n\n## Screens") \
+    .replace("[phase 1 UI design](BigApp-UIDesign.md)", "the first phase")
 # phase 2 checklist reuses REQ-UI-001 from phase 1
 lbad["docs/BigApp-P2-Checklist.md"] = CL2.replace("REQ-UI-002", "REQ-UI-001").replace("d-req-ui-002", "d-req-ui-001").replace("*BRD:* BRD-4", "*BRD:* BRD-2")
 write_set(LARGE_BAD, lbad)

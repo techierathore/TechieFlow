@@ -403,7 +403,7 @@ GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?CLAUDE\.md$' '
 GI_MISSING=()
 for i in "${!GI_LINES[@]}"; do
   # tr strips CR so CRLF .gitignore files (Windows-authored) still match the $-anchor
-  [[ -f .gitignore ]] && tr -d '\r' < .gitignore | grep -qE "${GI_PATS[$i]}" && continue
+  [[ -f .gitignore ]] && grep -qE "${GI_PATS[$i]}" <<<"$(tr -d '\r' < .gitignore)" && continue
   GI_MISSING+=("${GI_LINES[$i]}")
 done
 if [[ ${#GI_MISSING[@]} -gt 0 ]]; then
@@ -432,7 +432,7 @@ GI2_LINES=("node_modules/" "/package.json" "/package-lock.json" "tests/.artifact
 GI2_PATS=('^/?node_modules/?$' '^/?package\.json$' '^/?package-lock\.json$' '^/?tests/\.artifacts/?$' '^/?test-results/?$' '^/?test-results-\*/?$' '^/scripts-\*/?$' '^/?playwright-report/?$' '^/?\.verify/?$' '^/?logs/?$' '^/?docs/\.last-verify\.json$' '^\.DS_Store$')
 GI2_MISSING=()
 for i in "${!GI2_LINES[@]}"; do
-  [[ -f .gitignore ]] && tr -d '\r' < .gitignore | grep -qE "${GI2_PATS[$i]}" && continue
+  [[ -f .gitignore ]] && grep -qE "${GI2_PATS[$i]}" <<<"$(tr -d '\r' < .gitignore)" && continue
   GI2_MISSING+=("${GI2_LINES[$i]}")
 done
 if [[ ${#GI2_MISSING[@]} -gt 0 ]]; then
@@ -507,10 +507,10 @@ GA_PATS=('^\*[[:space:]]+text=auto[[:space:]]+eol=lf$' '^\*\.bat[[:space:]]+text
 GA_LEGACY='^docs/metrics/\*\.jsonl[[:space:]]+merge=union[[:space:]]*$'
 GA_MISSING=()
 for i in "${!GA_LINES[@]}"; do
-  [[ -f .gitattributes ]] && tr -d '\r' < .gitattributes | grep -qE "${GA_PATS[$i]}" && continue
+  [[ -f .gitattributes ]] && grep -qE "${GA_PATS[$i]}" <<<"$(tr -d '\r' < .gitattributes)" && continue
   GA_MISSING+=("${GA_LINES[$i]}")
 done
-if [[ -f .gitattributes ]] && tr -d '\r' < .gitattributes | grep -qE "$GA_LEGACY"; then
+if [[ -f .gitattributes ]] && grep -qE "$GA_LEGACY" <<<"$(tr -d '\r' < .gitattributes)"; then
   awk '!/^docs\/metrics\/\*\.jsonl[[:space:]]+merge=union[[:space:]]*$/ &&
        !/^# TechieFlow telemetry . append-only logs; keep BOTH sides on merge/' .gitattributes > .gitattributes.tf-tmp \
     && mv .gitattributes.tf-tmp .gitattributes \

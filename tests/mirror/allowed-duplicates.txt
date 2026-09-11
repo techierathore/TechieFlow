@@ -12,6 +12,7 @@ f474cb804cb7  .tfcore/agents/flow-master.md,.tfcore/agents/verifier.md  yes|no" 
 34dcdb7ea088  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  one row per phase, each within medium, every screen in exactly one pha
 6b9306bd463b  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  one "how to test" section per screen in navigation order, naming the u
 6e1b2f8966e7  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  if the count would pass the size cap, propose a phase split instead of
+96e418a1dd2d  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  this phase's screens and requirements only, linking back to phase 1 an
 b7922c7d3615  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  bash .tfcore/utils/tf-day1-files.sh {app} --size {s|m|l} --kind {app|l
 f1a21d1f6f5d  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md,docs/TechieFlow-Document-Schemas.md  a dialog is a row under its parent screen with on /route in the route 
 a4c93b38f04e  .tfcore/tasks/fix-issues.md,.tfcore/tasks/triage-and-fix.md,.tfcore/tasks/verify-phase.md  when this run is the last step of a goal, write the sentinel .tfcore/t
@@ -21,7 +22,12 @@ b9c9d9416993  .tfcore/tasks/handoff-phase.md,.tfcore/tasks/productguide.md  reqs
 e4ede6312612  .tfcore/tasks/handoff-phase.md,.tfcore/tasks/productguide.md  telemetry has no veto: if the emit fails, the phase still succeeded;
 39271a11699f  .tfcore/tasks/metrics-report.md,docs/TechieFlow-Telemetry-Runbook.md  first-pass rate — what fraction of reqs reach verified on attempt 1?
 e32a5d8d950c  .tfcore/tasks/metrics-report.md,docs/TechieFlow-Telemetry-Runbook.md  a pooled gate distribution understates the visual gate, because librar
-2a1e3df8a117  docs/TechieFlow-Distribution-Pipeline-Prompt.md,docs/TechieFlow-Library-Persona-Propagation.md,docs/TechieFlow-Routing-Guide.md,docs/TechieFlow-Telemetry-Guide.md  everything below that describes .codex/, .agents/skills/ or a codex co
+7eda1f1e0889  .tfcore/templates/v4custom/app-brd-tmpl.md,.tfcore/templates/v4custom/app-phase-brd-tmpl.md  | {screen} | {n} | {n} | {n} | planned, in progress, partial, done |
+c9e2b1ba9688  .tfcore/templates/v4custom/app-brd-tmpl.md,.tfcore/templates/v4custom/app-phase-brd-tmpl.md  | {screen name} | /route | {role} | mockupmockups/{screen-slug}.html |
+ea1915563b6d  .tfcore/templates/v4custom/app-brd-tmpl.md,.tfcore/templates/v4custom/app-phase-brd-tmpl.md  - acceptance: when {actor} {does what} on {screen}, then {a result a b
+8725474594b8  .tfcore/templates/v4custom/app-phase-brd-tmpl.md,.tfcore/templates/v4custom/app-phase-uidesign-tmpl.md  | size | small or medium this phase on its own |
+2b942bb10708  .tfcore/templates/v4custom/app-phase-uidesign-tmpl.md,.tfcore/templates/v4custom/app-uidesign-tmpl.md  | {title} | text | yes | {1 to 120 characters} |
+2a1e3df8a117  docs/TechieFlow-Distribution-Pipeline-Prompt.md,docs/TechieFlow-Library-Persona-Propagation.md,docs/TechieFlow-Routing-Guide.md  everything below that describes .codex/, .agents/skills/ or a codex co
 1c87de8c4d71  docs/TechieFlow-FAQ.md,docs/TechieFlow-Permissions-And-YOLO.md,docs/TechieFlow-Setup.md  | status | moved out of readme.md on 2026-09-07 session 6 of the reset
 5a6404a46d73  docs/TechieFlow-How-It-Works.md,docs/TechieFlow-Telemetry-Explained.md  it measures how often the agent gets a requirement right without rewor
 ba6c24a3a653  docs/TechieFlow-How-It-Works.md,docs/TechieFlow-Telemetry-Explained.md  a checklist line, a requirement line plus a check, a fixed check, or a

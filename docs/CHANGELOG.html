@@ -103,14 +103,103 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </head>
 <body>
 <button id="themeToggle" class="theme-toggle" title="Toggle light / dark">&#9790; Dark</button>
-<div class="layout no-toc">
+<div class="layout">
+  <nav class="side">
+    <h1>TechieFlow — Changelog</h1>
+    <div class="sub">Last rendered: 2026-09-11</div>
+    <div class="group">Contents</div>
+    <ol>
+        <li><a href="#later-why-tflens-called-fixed-problems-open-and-every-entry-answered">2026-09-11, later — why TfLens called fixed problems open, and every entry answered</a></li>
+        <li><a href="#tflens-s-four-entries-and-a-hand-off-the-owner-could-not-use">2026-09-11 — TfLens&#x27;s four entries, and a hand-off the owner could not use</a></li>
+        <li><a href="#a-tier-gets-a-second-choice-and-a-cost-gets-a-meaning">2026-09-10 — a tier gets a second choice, and a cost gets a meaning</a></li>
+        <li><a href="#second-sitting-the-two-the-verifier-got-wrong">2026-09-09 (second sitting) — the two the verifier got wrong</a></li>
+        <li><a href="#the-unhappy-path">2026-09-09 — the unhappy path</a></li>
+        <li><a href="#what-the-owner-reads">2026-09-08 — what the owner reads</a></li>
+        <li><a href="#the-reset-2026-09-04-to-2026-09-07">The reset (2026-09-04 to 2026-09-07)</a></li>
+        <li><a href="#the-2026-08-28-review-as-it-stood-at-the-top-of-the-old-briefing">The 2026-08-28 review, as it stood at the top of the old briefing</a></li>
+        <li><a href="#maintenance-log-newest-first">Maintenance log (newest first)</a></li>
+        <li class="h3"><a href="#the-checks-built-framework-coverage-from-12-lines-to-29-and-three-defects-it-found-on-the-first-run">2026-09-07 — the checks built: framework coverage from 12 lines to 29, and three defects it found on the first run</a></li>
+        <li class="h3"><a href="#the-framework-graded-against-its-own-checklist-for-the-first-time">2026-09-07 — the framework graded against its own checklist for the first time</a></li>
+        <li class="h3"><a href="#the-reset-measured-docs-metrics-metrics-md-written-and-a-phase-s-time-was-being-under-reported">2026-09-07 — the reset measured: docs/metrics/METRICS.md written, and a phase&#x27;s time was being under-reported</a></li>
+        <li class="h3"><a href="#the-codex-adapter-removed-and-workflow-html-dropped">2026-09-07 — the Codex adapter removed, and WORKFLOW.html dropped</a></li>
+        <li class="h3"><a href="#main-merged-into-dev-the-npm-installer-brought-back-in-step-with-the-shell-scripts">2026-09-07 — main merged into dev: the npm installer brought back in step with the shell scripts</a></li>
+        <li class="h3"><a href="#session-7-the-playbook-review-prompt-version-2-and-the-end-of-the-reset">2026-09-07 — Session 7: the Playbook review prompt, version 2, and the end of the reset</a></li>
+        <li class="h3"><a href="#session-6-the-repository-made-readable-and-the-framework-deployed-to-all-23-projects">2026-09-07 — Session 6: the repository made readable, and the framework deployed to all 23 projects</a></li>
+        <li class="h3"><a href="#3-propagated-to-all-19-repos-and-the-propagation-found-a-4-635-file-instance-of-the-defect-it-was-carrying-the-fix-for">2026-08-31 (3) — propagated to all 19 repos, and the propagation found a 4,635-file instance of the defect it was carrying the fix for</a></li>
+        <li class="h3"><a href="#2-effort-per-phase-the-metrics-answer-what-did-each-phase-cost-and-two-of-the-three-fields-were-already-there">2026-08-31 (2) — effort per phase: the metrics answer &quot;what did each phase cost&quot;, and two of the three fields were already there</a></li>
+        <li class="h3"><a href="#1-tflens-s-seven-open-entries-closed-two-new-gates-a-divisor-rule-and-two-defects-found-in-the-fixing">2026-08-31 (1) — TfLens&#x27;s seven open entries closed: two new gates, a divisor rule, and two defects found in the fixing</a></li>
+        <li class="h3"><a href="#6-claude-side-review-after-the-codex-opencode-passes-a-stale-yolo-flag-had-left-this-repo-unattended-permissive-for-four-days">2026-08-28 (6) — Claude-side review after the Codex + OpenCode passes: a stale YOLO flag had left this repo unattended-permissive for four days</a></li>
+        <li class="h3"><a href="#5-opencode-harness-review-the-loose-generate-html-wrapper-still-taught-the-hand-authoring-path-tf-003-removed">2026-08-28 (5) — OpenCode-harness review: the loose /generate-html wrapper still taught the hand-authoring path TF-003 removed</a></li>
+        <li class="h3"><a href="#4-codex-adapter-review-nested-directory-hooks-and-protected-file-deletion-fixed">2026-08-28 (4) — Codex adapter review: nested-directory hooks and protected-file deletion fixed</a></li>
+        <li class="h3"><a href="#3-tflens-tf-005-the-append-only-rule-named-a-remedy-the-stream-did-not-implement-tf-004">2026-08-28 (3) — TfLens TF-005: the append-only rule named a remedy the stream did not implement (+ TF-004)</a></li>
+        <li class="h3"><a href="#2-rollout-begun-and-the-rollout-found-a-classification-bug-every-greenfield-project-was-born-docs">2026-08-28 (2) — rollout begun, and the rollout found a classification bug: every greenfield project was born docs</a></li>
+        <li class="h3"><a href="#miss-telemetry-a-fifth-stream-that-records-what-an-agent-missed-who-missed-it-and-what-fixing-it-cost">2026-08-28 — MISS TELEMETRY: a fifth stream that records what an agent missed, who missed it, and what fixing it cost</a></li>
+        <li class="h3"><a href="#python3-made-a-hard-prerequisite-and-the-opencode-codex-claims-verified-against-the-real-binaries-one-broken-flag-found">2026-08-27 — python3 made a hard prerequisite, and the OpenCode/Codex claims VERIFIED against the real binaries (one broken flag found)</a></li>
+        <li class="h3"><a href="#tflens-framework-feedback-closed-out-tf-001-002-003-root-opencode-jsonc-finally-refreshes">2026-08-27 — TfLens framework feedback closed out (TF-001/002/003) + root opencode.jsonc finally refreshes</a></li>
+        <li class="h3"><a href="#the-framework-tree-is-invisible-to-agent-file-search-and-nothing-ever-said-so-owner-reported-via-tflens">2026-08-27 — The framework tree is invisible to agent file-search, and nothing ever said so (owner-reported, via TfLens)</a></li>
+        <li class="h3"><a href="#expired-run-material-is-swept-automatically-sweep-artifacts-sh-sessionstart-hook">2026-08-26 — Expired run material is swept automatically (sweep-artifacts.sh SessionStart hook)</a></li>
+        <li class="h3"><a href="#trblazeui-2-0-3-published-the-framework-s-codex-compat-wrapper-would-have-blocked-its-native-agent-in-every-app-fixed-via-the-package-s-ownership-marker">2026-08-25 — TrBlazeUI 2.0.3 published; the framework&#x27;s Codex compat wrapper would have blocked its native agent in every app (fixed via the package&#x27;s ownership marker)</a></li>
+        <li class="h3"><a href="#two-prose-only-rules-made-mechanical-root-artifact-dirs-guard-artifacts-sh-and-stale-project-status-html-guard-status-html-sh-stop-hook">2026-08-25 — Two prose-only rules made mechanical: root artifact dirs (guard-artifacts.sh) and stale PROJECT-STATUS.html (guard-status-html.sh Stop hook)</a></li>
+        <li class="h3"><a href="#the-nuget-persona-shim-could-overwrite-a-fresh-persona-with-a-stale-one-latent-found-auditing-the-library-repos">2026-08-24 — The NuGet persona shim could overwrite a fresh persona with a stale one (latent; found auditing the library repos)</a></li>
+        <li class="h3"><a href="#update-framework-sh-warned-about-opencode-jsonc-on-every-correctly-configured-app-stale-check-owner-reported">2026-08-24 — update-framework.sh warned about opencode.jsonc on every correctly-configured app (stale check, owner-reported)</a></li>
+        <li class="h3"><a href="#routed-library-persona-wrappers-pointed-at-a-path-dotnet-build-stopped-writing-framework-defect-owner-reported">2026-08-24 — Routed library-persona wrappers pointed at a path dotnet build stopped writing (framework defect, owner-reported)</a></li>
+        <li class="h3"><a href="#codex-documentation-and-command-references-synchronized">2026-08-24 — Codex documentation and command references synchronized</a></li>
+        <li class="h3"><a href="#codex-third-harness-adapter-implemented">2026-08-24 — Codex third-harness adapter implemented</a></li>
+        <li class="h3"><a href="#advisory-escalation-policy-added-to-model-routing-ported-from-the-ai-first-playbook">2026-08-21 — Advisory escalation policy added to model routing (ported from the AI-First Playbook)</a></li>
+        <li class="h3"><a href="#opencode-guard-bridge-implemented-agent-permission-hole-fixed-wsl-opencode-verified-live">2026-08-20 — OpenCode guard bridge implemented; agent-permission hole fixed; WSL OpenCode verified live</a></li>
+        <li class="h3"><a href="#fourth-pass-every-remaining-design-requirement-closed-the-harness-adapter-design-is-fully-implemented">2026-08-20 (fourth pass) — every remaining design requirement closed; the harness-adapter design is fully implemented</a></li>
+        <li class="h3"><a href="#third-pass-s-1-vocabulary-fix-routing-yaml-tf-harness-sh-shipped-off-docs-aligned">2026-08-20 (third pass) — S-1 vocabulary fix, routing.yaml + tf-harness.sh shipped (OFF), docs aligned</a></li>
+        <li class="h3"><a href="#second-pass-d-1-propagation-the-opencode-bridge-now-deploys-to-every-app">2026-08-20 (second pass) — D-1 propagation: the OpenCode bridge now deploys to every app</a></li>
+        <li class="h3"><a href="#harness-adapter-design-session-investigation-written-design-only-nothing-implemented">2026-08-19 — Harness-adapter design session (investigation + written design only; nothing implemented)</a></li>
+        <li class="h3"><a href="#opencode-docker-verification-prerequisites-fixed">2026-08-15 — OpenCode Docker verification prerequisites fixed</a></li>
+        <li class="h3"><a href="#opencode-harness-audit-8-gaps-fixed-the-opencode-mirror-is-gone-for-good-mirror-parity-is-now-claude-only">2026-08-13 — OpenCode-harness audit: 8 gaps fixed; the OpenCode mirror is gone for good; mirror parity is now Claude-only</a></li>
+        <li class="h3"><a href="#the-commits-jsonl-design-was-answered-instead-of-fixed-the-hook-now-reconciles-from-pre-commit-and-gitattributes-pins-lf">2026-08-11 — the commits.jsonl design was answered instead of fixed; the hook now reconciles from pre-commit, and .gitattributes pins LF</a></li>
+        <li class="h3"><a href="#3-the-artifact-rule-extended-to-the-harness-scripts-cluster-was-the-same-defect-one-layer-up">2026-08-10 (3) — the artifact rule extended to the harness: scripts-cluster-* was the same defect one layer up</a></li>
+        <li class="h3"><a href="#2-4c-the-performance-gate-speed-becomes-gradeable-but-only-against-a-budget-someone-declared">2026-08-10 (2) — §4c, the performance gate: speed becomes gradeable, but only against a budget someone declared</a></li>
+        <li class="h3"><a href="#test-artifacts-confined-to-tests-artifacts-the-empty-commits-jsonl-explained-the-team-edition-linked">2026-08-10 — Test artifacts confined to tests/.artifacts/; the empty commits.jsonl explained; the team edition linked</a></li>
+        <li class="h3"><a href="#development-telemetry-the-framework-now-keeps-the-evidence-it-was-already-producing">2026-08-08 — Development telemetry: the framework now keeps the evidence it was already producing</a></li>
+        <li class="h3"><a href="#triage-issues-the-analyze-only-bug-front-door-uat-production-bugs-get-logged-not-auto-fixed">2026-07-16 — *triage-issues: the ANALYZE-ONLY bug front door (UAT/production bugs get logged, not auto-fixed)</a></li>
+        <li class="h3"><a href="#windows-side-pull-of-the-mac-commits-crlf-smudged-the-scripts-and-the-guard-hooks-gitattributes-now-pins-eol-lf">2026-07-11 — Windows-side pull of the Mac commits CRLF-smudged the scripts AND the guard hooks; .gitattributes now pins eol=lf</a></li>
+        <li class="h3"><a href="#framework-moved-to-macos-natively-scripts-made-portable-self-locating-template-bsd-safe-realpath-sed-exec-bits">2026-07-11 — Framework moved to macOS natively; scripts made portable (self-locating TEMPLATE, BSD-safe realpath/sed, exec bits)</a></li>
+        <li class="h3"><a href="#verified-verdicts-enforced-mechanically-guard-verify-hook-app-naming-banned-cross-publish-guides-disambiguated">2026-07-10 — Verified verdicts enforced MECHANICALLY (guard-verify hook), &amp;lt;APP&amp;gt;.App naming banned, cross-publish guides disambiguated</a></li>
+        <li class="h3"><a href="#project-status-shape-enforced-mechanically-serilog-file-logging-made-a-standing-net-default-trsetup-simplified-to-a-single-maui-desktop-app">2026-07-09 — PROJECT-STATUS shape enforced MECHANICALLY, Serilog file logging made a standing .NET default, TrSetup simplified to a single MAUI desktop app</a></li>
+        <li class="h3"><a href="#deployed-framework-copies-were-committable-in-app-repos-gitignore-is-now-managed-by-the-scaffold-update-scripts">2026-07-05 — Deployed framework copies were committable in app repos; .gitignore is now managed by the scaffold/update scripts</a></li>
+        <li class="h3"><a href="#template-mandates-leaked-into-rendered-html-fixed-as-comments-render-strip-and-library-persona-files-fixed-at-their-source-repos">2026-07-04 — Template mandates leaked into rendered HTML (fixed as comments + render-strip) and library persona files fixed at their source repos</a></li>
+        <li class="h3"><a href="#two-persistent-behavior-failures-fixed-at-the-root-git-ban-made-mechanical-deny-hook-run-it-yourself-moved-into-always-loaded-surfaces-and-native-head-window-binding-discipline-added">2026-07-02 — Two persistent behavior failures fixed at the ROOT: git ban made mechanical (deny + hook), run-it-yourself moved into always-loaded surfaces, and native-head window-binding discipline added</a></li>
+        <li class="h3"><a href="#removed-13-document-templates-36-of-workflow-html-agent-facing-duplication">2026-06-30 — Removed §13 &quot;Document templates&quot; (~36% of WORKFLOW.html) — agent-facing duplication</a></li>
+        <li class="h3"><a href="#workflow-html-readme-gain-process-at-a-glance-quick-reference-flowcharts">2026-06-30 — WORKFLOW.html + README gain &quot;Process at a glance&quot; quick-reference flowcharts</a></li>
+        <li class="h3"><a href="#library-devguide-mode-generalized-to-two-sub-types-techierag-is-a-service-sdk-lib-not-a-ui-component-lib">2026-06-30 — Library DevGuide mode generalized to TWO sub-types (TechieRag is a service/SDK lib, not a UI-component lib)</a></li>
+        <li class="h3"><a href="#libraries-are-first-class-projects-component-by-component-devguide-mode-the-trblazeui-gap">2026-06-30 — Libraries are first-class projects: component-by-component DevGuide mode (the TrBlazeUI gap)</a></li>
+        <li class="h3"><a href="#project-status-bloat-fix-enforce-a-crisp-fixed-shape-overwrite-not-append-snapshot-git-ban-in-the-status-gate">2026-06-30 — PROJECT-STATUS bloat fix: enforce a CRISP, fixed-shape, OVERWRITE-not-APPEND snapshot (+ git ban in the status gate)</a></li>
+        <li class="h3"><a href="#appium-runtime-bridge-data-visual-gates-now-reach-maui-android-ios-mac-catalyst">2026-06-29 — Appium runtime bridge: data + visual gates now reach MAUI Android / iOS / Mac Catalyst</a></li>
+        <li class="h3"><a href="#major-redesign-one-checklist-dissolved-build-phases-mockups-the-visual-truth-gate-and-fix-issues">2026-06-26 — MAJOR redesign: one checklist, dissolved build phases, mockups, the visual-truth gate, and *fix-issues</a></li>
+        <li class="h3"><a href="#two-project-status-complaints-agents-wrote-technical-to-do-prose-and-updated-only-the-md-not-the-html">2026-06-26 — Two PROJECT-STATUS complaints: agents wrote technical to-do prose, and updated only the .md (not the .html)</a></li>
+        <li class="h3"><a href="#two-devguide-session-complaints-agent-asked-the-owner-to-run-the-app-and-ran-git-diff">2026-06-25 — Two DevGuide-session complaints: agent asked the owner to run the app, and ran git diff</a></li>
+        <li class="h3"><a href="#devguide-now-auto-runs-at-brownfield-day-1-was-handoff-only">2026-06-25 — DevGuide now AUTO-RUNS at brownfield day-1 (was handoff-only)</a></li>
+        <li class="h3"><a href="#multi-part-devguide-clutters-docs-split-guides-now-live-in-a-docs-devguides-subfolder">2026-06-25 — Multi-part DevGuide clutters docs/ → split guides now live in a docs/devguides/ subfolder</a></li>
+        <li class="h3"><a href="#four-owner-reported-challenges-developer-guide-no-html-checklists-theme-toggle-token-efficiency">2026-06-24 — Four owner-reported challenges (Developer Guide, no-HTML-checklists, theme toggle, token efficiency)</a></li>
+        <li class="h3"><a href="#four-owner-reported-issues-persona-rename-mandatory-smoke-testing-test-user-discipline-day-1-usageguide">2026-06-18 — Four owner-reported issues (persona rename, mandatory smoke-testing, test-user discipline, day-1 UsageGuide)</a></li>
+        <li class="h3"><a href="#mermaid-diagrams-still-erroring-real-root-cause-found-the-2026-06-14-fix-was-a-misdiagnosis">2026-06-17 — Mermaid diagrams STILL erroring — real root cause found (the 2026-06-14 fix was a misdiagnosis)</a></li>
+        <li class="h3"><a href="#three-owner-reported-issues-mermaid-brd-dev-status-cross-platform">2026-06-14 — Three owner-reported issues (Mermaid, BRD dev-status, cross-platform)</a></li>
+        <li class="h3"><a href="#refresh-status-de-git-ed-design-bug-fix">2026-06-14 — *refresh-status de-git-ed (design bug fix)</a></li>
+        <li class="h3"><a href="#full-rebrand-to-techieflow">2026-06-13 — Full rebrand to TechieFlow</a></li>
+        <li class="h3"><a href="#two-gaps-the-owner-hit">2026-06-13 — Two gaps the owner hit</a></li>
+        <li class="h3"><a href="#full-framework-audit-37-issues-all-resolved">2026-06-12 — Full framework audit (37 issues, all resolved)</a></li>
+        <li><a href="#audit-appendix-2026-06-12-issue-register">Audit appendix (2026-06-12 issue register)</a></li>
+    </ol>
+  </nav>
   <main>
     <h1>TechieFlow — Changelog</h1>
-    <div class="subtitle">Rendered 2026-09-08 &middot; source <code>CHANGELOG.md</code></div>
+    <div class="subtitle">Rendered 2026-09-11 &middot; source <code>CHANGELOG.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
       <ol>
+        <li><a href="#later-why-tflens-called-fixed-problems-open-and-every-entry-answered">2026-09-11, later — why TfLens called fixed problems open, and every entry answered</a></li>
+        <li><a href="#tflens-s-four-entries-and-a-hand-off-the-owner-could-not-use">2026-09-11 — TfLens&#x27;s four entries, and a hand-off the owner could not use</a></li>
+        <li><a href="#a-tier-gets-a-second-choice-and-a-cost-gets-a-meaning">2026-09-10 — a tier gets a second choice, and a cost gets a meaning</a></li>
+        <li><a href="#second-sitting-the-two-the-verifier-got-wrong">2026-09-09 (second sitting) — the two the verifier got wrong</a></li>
+        <li><a href="#the-unhappy-path">2026-09-09 — the unhappy path</a></li>
         <li><a href="#what-the-owner-reads">2026-09-08 — what the owner reads</a></li>
         <li><a href="#the-reset-2026-09-04-to-2026-09-07">The reset (2026-09-04 to 2026-09-07)</a></li>
         <li><a href="#the-2026-08-28-review-as-it-stood-at-the-top-of-the-old-briefing">The 2026-08-28 review, as it stood at the top of the old briefing</a></li>
@@ -193,6 +282,448 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <tr><td>Companion</td><td><code>WorkFlow-Context.md</code> (the briefing), <code>README.md</code> (how to use it), <code>docs/TechieFlow-Reset-Plan-2026-09-04.md</code> (the reset).</td></tr>
 </tbody>
 </table>
+<hr>
+<h2 id="later-why-tflens-called-fixed-problems-open-and-every-entry-answered">2026-09-11, later — why TfLens called fixed problems open, and every entry answered<a class="anchor-link" href="#later-why-tflens-called-fixed-problems-open-and-every-entry-answered">#</a></h2>
+<p>The owner asked whose mistake it was that TfLens reported TF-019 and TF-022 as open when the owner had
+copied in the reply and updated the framework, and TfLens's agent had run the self-check first.
+<strong>Mostly the framework's</strong>, found by reading what TfLens's agent read:</p>
+<ol>
+<li><code>tf-status-facts.py</code> wrote TfLens's PROJECT-STATUS line "TechieFlow: 62 open of 62". It counted every <code>###</code> heading in a feedback file as an entry and knew one closing format no file used, so it could never report anything fixed — every project's line read "N open of N" (TrBlazeUI "2 open of 2" over 28 entries). <code>MISS-TechieFlow-20260911-04</code>, sorted <code>weak-check</code>.
+</li>
+<li><code>tf-selfcheck.sh</code> never read the feedback file, and <code>tf-phase.sh start</code> showed the agent only "self-check clean".
+</li>
+<li>The reply of 2026-09-09 fixed TF-013 to TF-020 and answered only TF-018 onward, so TF-013 to TF-017 read open in TfLens for two days. <code>MISS-TechieFlow-20260911-05</code>, sorted <code>unsaid</code>.
+</li>
+</ol>
+<p>TfLens's agent then repeated the status line instead of reading the reply at the top of its own file —
+real, and secondary.</p>
+<p><strong>One reader</strong>, <code>.tfcore/utils/tf_feedback.py</code> (CLI <code>tf-feedback.sh</code>): open, fixed upstream and not
+yet re-checked, closed; it reads replies in the three shapes in use (a Resolution status table, the
+TrBlazeUI team's quoted "✅ RESOLVED" block with "everything else is now fixed", ✅ closing lines) and
+runs clean on all 26 feedback files across both workspaces. The status facts, the self-check, the
+closing-message check and the document check all use it. The self-check lists every fix waiting to be
+re-checked and <code>tf-phase.sh start</code> passes that list to the agent. <code>tf-feedback.sh --close &lt;ID&gt;
+"&lt;evidence&gt;"</code> closes an entry (refused without evidence). The feedback rule in <code>tf-doc-check</code> refuses a
+Summary whose counts disagree with the entries. <code>tests/regression</code> gains <code>feedback_state</code> (fails
+against the script TfLens had: "3 open of 3" and "0 open of 0" on its fixture) and <code>replies_complete</code>,
+which fails while a problem the suite holds a case for reads open in a <code>docs/*-TechieFlow-Feedback.md</code>
+copy here. Maintenance contract 5b. FR-75.</p>
+<p><strong>TF-025</strong> — <code>tf-split-brd --add-missing</code> now counts every <code>BRD-N</code> on a status row or <code>*BRD:*</code> line as
+tracked; on TfLens's row shape the old script appended 4 rows for 1 new item. <strong>TF-026</strong> —
+<code>tf-verify-screens</code> reads <code>data-testid</code> only on elements, not in <code>&lt;style&gt;</code>, <code>&lt;script&gt;</code> or comments.
+<strong>TF-027</strong> — the colour findings were not caused by the wrapper, as filed: TrBlazeUI writes colours as
+<code>oklch()</code>, and the tool parsed those numbers as r/g/b, so every library-coloured tile read neutral;
+the browser now converts the colour through a one-pixel canvas. An icon is "missing" only when the
+paired parent carries fewer icons than the mockup's, never more reports than icons short. Cases
+<code>tf_025</code>, <code>tf_026</code>, <code>tf_027</code>, the last two run in a real Chromium (TfLens's Playwright), each failing
+against the old script. <code>MISS-TechieFlow-20260911-06</code> to <code>-08</code>.</p>
+<p><strong>Phase UIDesign</strong> (owner: "yes do that") — <code>app-phase-uidesign-tmpl.md</code>, screens plus "Where the rest
+lives"; the <code>phase-pointer</code> rule now requires the link to the phase-1 document of the same kind. TfLens's
+phase UIDesigns lose their 10 phase-1 findings. Day-1, <code>mockups.md</code>, the UIDesign template's notes,
+Schemas §3.3, FR-73 and case <code>tf_024d</code>.</p>
+<p><strong>Found while deploying</strong> — <code>update-framework.sh</code> and both scaffolds tested "block already present?"
+with <code>tr -d '\r' &lt; .gitignore | grep -qE …</code> under <code>pipefail</code>; once grep stops early on a large file on
+the Windows drive, the pipeline reports failure and the block is appended again. TechieBlog's
+<code>.gitignore</code> holds it 50 times, TfLens's 30, a private project's 10. Reproduced on a copy of TechieBlog's file on
+<code>/mnt/c</code> (old: 50 → 53 in three runs; fixed: 50, 50, 50). Existing duplicates are left for the owner.
+<code>MISS-TechieFlow-20260911-09</code>, FR-76, case <code>gitignore_once</code>.</p>
+<p><strong>TfLens's feedback file</strong> was rebuilt here from TfLens's current copy (keeping TF-025 to TF-027 and
+everything else TfLens wrote), with a new Summary and one Resolution status block answering all fifteen
+fixed entries, and copied over TfLens's copy at the owner's request. Deployed to TfLens, then to the other 18 repositories at the owner's request:
+all 18 updated with exit 0, no <code>.gitignore</code> gained a block (TechieBlog stayed at 50), and every one of the 19
+passes its own <code>tf-selfcheck</code> with no findings.</p>
+<h2 id="tflens-s-four-entries-and-a-hand-off-the-owner-could-not-use">2026-09-11 — TfLens's four entries, and a hand-off the owner could not use<a class="anchor-link" href="#tflens-s-four-entries-and-a-hand-off-the-owner-could-not-use">#</a></h2>
+<p>The owner passed on TfLens's request to fix TF-019, TF-022, TF-023 and TF-024, with TF-022 first, and
+asked whether the three mistakes in TfLens's hand-off could be stopped by a script rather than a
+promise.</p>
+<p><strong>TF-022 and TF-019 were already fixed</strong>, on 2026-09-09, and TfLens's <code>.tfcore/</code> carried both fixes
+byte for byte. Re-run on TfLens's own test results of 2026-09-09, the current parser grades REQ-UI-039
+PASS (6 passed, 2 skipped) and REQ-UI-034 PASS (4 passed, 1 skipped). The FAILs in its checklist came
+from the verify run made before the fix was deployed, and TfLens's verify at 09:24 today graded both
+rows Verified. TfLens's hand-off called both open without reading the reply in its own feedback file,
+which is the fourth mistake the new check below catches.</p>
+<p><strong>TF-023.</strong> <code>docs/Decision-TfLens-Duration-Parity-2026-09-09.md</code> said, in its table and in its
+pasteable prompt, to add the four new duration counts to the per-phase key list as well as the
+top-level one. <code>tf-metrics.sh</code> publishes them once, at the top of the phases block (line 947); each
+phase's own block has exactly five keys (line 830). Both places now name the top-level list only.
+<code>MISS-TechieFlow-20260911-02</code>, sorted <code>ignored</code>: the maintainer wrote it without reading the emitter.</p>
+<p><strong>TF-024.</strong> A phase BRD was graded against the whole-project BRD template, which asked for Scope,
+Users and roles, Non-functional requirements, Context diagram, Constraints and Risks — the six
+sections a later phase must not repeat — and called its pointer back to phase 1 a stranger. Day-1
+itself told agents to write every phase from that template. New <code>app-phase-brd-tmpl.md</code> (Summary,
+Screens and flow, Requirements, optional Non-functional, Development status, Where the rest lives);
+<code>tf-doc-check.py</code> picks it for <code>{App}-P&lt;n&gt;-BRD.md</code> and gains the rule <code>phase-pointer</code> (the last
+section must link to the phase-1 BRD). Day-1 greenfield and brownfield, the BRD template's notes and
+Schemas §3.1 say so. The doc-check fixture's phase-2 BRD was rewritten in the new shape and its broken
+twin now repeats Scope and points nowhere. On TfLens the two phase BRDs go from 20 findings to 6; the 6
+are real (a Feature catalog section the reset removed, and section order). The TfLens "87" counted
+template-shape findings across all its documents; the phase UIDesign files have the same kind of
+problem (10 findings) and were not changed. <code>MISS-TechieFlow-20260911-01</code>, sorted <code>unsaid</code>. FR-73.</p>
+<p><strong>The hand-off check.</strong> TfLens's closing message was written in jargon, named two upstream problems
+without saying what they touch, and said verify was pending with no line to paste; the rewrite still
+called TF-019 and TF-022 open. All of it passed the Stop hook, which checked the status file and never
+what the owner reads, and <code>tf-doc-check.sh</code> skipped the hand-off document as "not a TechieFlow
+document name". New <code>.tfcore/utils/tf-owner-text.py</code> (+ <code>.sh</code>) and <code>.tfcore/standards/owner-words.txt</code>.
+It checks five things: listed words and script-internal names, open upstream problems (a table row
+saying what they affect and whether they block or break anything, plus the fixing prompt in a code
+block), problems recorded as fixed upstream or closed that are described as open, commands still to
+run with no line to paste, and a closing message with no next prompt. <code>guard-status-html.sh</code> check 5
+runs it only on the turn that wrote PROJECT-STATUS — the turn that closed a command — on the closing
+message and on every free-form <code>docs/*.md</code> that message names and this turn wrote. Claude Code hands
+the Stop hook <code>last_assistant_message</code> (version 2.1.268, probed); the OpenCode plugin now fetches the
+session's messages at idle and passes the same two fields.
+Calibrated on TfLens's real texts: the first closing message fails four lines and the rewritten
+document five, all real (one listed word, and the four entries described as open once this session's
+reply recorded them fixed); the good fixture message fails none, and an ordinary later turn is left
+alone. A word in quotation marks is exempt, because quoting a word to name it is not using it — found
+when this maintainer's own closing message was run through the check. Proved in a real
+session in each harness: Claude Code refused the stop and the model rewrote the message with the next
+prompt in a code block; OpenCode sent the same five findings into the session, and the model answered
+them correctly when it got a turn. <strong>Limit:</strong> an unattended <code>opencode run</code> exits at its first idle,
+before the model can answer the nudge — the same limit the existing status nudge has.
+<code>_owner-language.md</code> gains one line pointing at it. <code>MISS-TechieFlow-20260911-03</code>, sorted
+<code>weak-check</code>. FR-74.</p>
+<p><strong>Tests.</strong> <code>tests/regression/run.sh</code> gains <code>tf_024</code> and <code>owner_handoff</code>; each fails against the
+framework as TfLens has it and passes now. The duplicate baseline gains four deliberate copies (the
+phase template's placeholder rows and day-1's parallel sentence): 26 → 30. All suites pass: mirror 18,
+doc-check, regression, bugs 51, verify 67, goal 36, routing 42, installer 31 (on a Linux copy), and the
+framework's own checklist grades 40 of its 74 lines, all passing.</p>
+<p><strong>Not deployed.</strong> Nothing was pushed to any project: TfLens had a session working in it during this one.
+TfLens's feedback file carries the reply (Resolution status 2026-09-11). TF-025 to TF-027, filed there
+the same morning, were not in the request and are untouched.</p>
+<h2 id="a-tier-gets-a-second-choice-and-a-cost-gets-a-meaning">2026-09-10 — a tier gets a second choice, and a cost gets a meaning<a class="anchor-link" href="#a-tier-gets-a-second-choice-and-a-cost-gets-a-meaning">#</a></h2>
+<p>Two questions from the owner, both about routing, both answered by things that did not exist.</p>
+<p><strong>1. "What if the model's limit has been reached?"</strong> Routing named one model per tier and had exactly
+one answer: sleep until the reset. <code>MISS-TechieFlow-20260910-01</code>, sorted <code>unsaid</code>.</p>
+<p><code>routing.yaml</code> gains <code>fallbacks:</code> — an ordered list of models per tier per harness, comma-separated
+on one line, the same flat shape as <code>tiers:</code>. A new script, <code>.tfcore/utils/tf-model-pick.sh</code>, owns
+the question <em>"which model should this tier run on right now"</em>: it walks the chain and returns the
+first model that is not on <strong>cooldown</strong>. A cooldown is written when a usage limit is hit and expires
+by itself at the reset time the limit message stated. It lives at
+<code>.tfcore/.session/model-cooldown.json</code>, <strong>in the project</strong>, and <code>cooldown_file:</code> in <code>routing.yaml</code>
+moves it.</p>
+<p>That location was the owner's correction to the first cut, which had put it in a per-machine
+<code>~/.techieflow/</code> on the reasoning that a usage limit belongs to an account. The reasoning was true
+and the conclusion was wrong: TechieFlow is installed per project through npm/npx and never at
+machine level, and a setting the owner cannot change for one project alone is not configurable at
+all. The account-wide behaviour is still available — point several projects at one <code>cooldown_file:</code>
+— and the cost of the default is one wasted cycle per project, each discovering the same limit.</p>
+<p><code>tf-goal.sh</code> uses it at both places a run used to stop: the parsed usage limit, and the silent
+OpenCode cycle whose provider refusal only its own log records (the 2026-09-06 incident that exits
+5). Both now park the model, re-bind, and start the next cycle on the next model instead. Only an
+exhausted chain sleeps, or exits 5. <code>tf-routing-bind.sh</code> asks the same question when it writes the
+harness bindings, which is what stops the sub-agents failing behind a main agent that already moved
+— the row that was in the guide's "when something is wrong" table with no fix behind it.</p>
+<p>Three things are deliberately <em>not</em> claimed. Nothing switches a running turn's model; the choice is
+made at launch, as routing always was. On Claude Code the 5-hour and weekly limits belong to the
+account rather than the model, so a Claude-to-Claude fallback usually hits the same wall — the
+supervisor discovers that honestly, parks that model too, and after one wasted cycle behaves exactly
+as it did before. And <code>--no-fallback</code>, or a project that has not been refreshed yet, keeps the old
+behaviour entirely.</p>
+<p><strong>2. "How does a cost number differ by provider?"</strong> It differed far more than the schema admitted.
+<code>MISS-TechieFlow-20260910-02</code>, sorted <code>unsaid</code>. Read directly off this machine: <code>openai</code> is signed in
+with <strong>OAuth</strong>, so OpenCode records <code>cost 0</code> for 1,614 messages on <code>gpt-5.6-sol</code> — true of the
+marginal cost, false of the money, and indistinguishable from free. <code>opencode-go</code> is an API key and
+records real dollars. <code>lmstudio</code> runs locally and has no bill. Claude Code is <code>null</code> throughout. One
+column, four meanings.</p>
+<p>Run and gate records now carry <strong><code>billing_mode</code></strong> (<code>subscription</code> | <code>metered</code> | <code>local</code> | <code>mixed</code> |
+<code>unknown</code>), <strong><code>cost_source</code></strong>, and <strong><code>fallback_from</code></strong> — the last naming the tier model when a run
+started while it was out of quota, so <code>routed:false</code> by choice reads differently from <code>routed:false</code>
+by drift. All three are injected by <code>tf-emit.sh</code> and refused from a caller, like every other derived
+field. The mode is resolved from OpenCode's own <code>auth.json</code> and model catalog, with a per-provider
+override available in <code>routing.yaml</code> <code>billing:</code>; Claude Code is declared, because nothing in a
+transcript says which plan paid for it. SCHEMA.md §2.5b.</p>
+<p><strong>Where pricing belongs: not here.</strong> The owner's second and third corrections, in one. Recording
+<em>how</em> a run was paid for still left a subscription run — nearly everything the framework does —
+with no money figure at all, so the first attempt computed one into every record. Wrong layer: the
+framework's job is to record what it measured, and turning tokens into money is the reporting
+tool's job, TfLens's as much as this one's. The stored <code>cost_list_usd</code> field was removed and the
+same calculation now happens in <code>tf-metrics.sh</code> at report time, from the tokens already on the
+stream, via one shared rate lookup (<code>tf-model-pick.sh rate</code>, models.dev catalog, overridable per
+project with <code>.tfcore/rate-card.json</code>).</p>
+<p>That is SCHEMA.md §8's existing rule — <em>derived metrics are computed, never stored</em> — applied to
+money, and it pays immediately: <strong>every run ever recorded is priced retroactively</strong>, because the
+tokens were always there. This repository's own history came out at $1,235 over 52 runs, $31.67 per
+Verified requirement, from records written weeks before any of this existed. Under the stored-field
+design exactly one record would have had a price. Correct a rate card and the whole history
+re-prices, with no record ever having been wrong.</p>
+<p><strong>And OpenCode Go is not a metered API key.</strong> The owner pointed at &lt;https://opencode.ai/docs/go&gt;,
+which settles two things. First, the Go plan reports token usage in full — the premise that a rate
+card was needed to fill a gap there was wrong; <code>opencode-go/mimo-v2.5</code> alone had 405,640 output
+tokens on this machine, alongside its cost. Second, Go is <strong>$10/month with a $15–$60 monthly
+allowance per model</strong> and 5-hour / weekly / monthly thresholds, so the dollars it reports are
+<strong>allowance consumed, not an invoice</strong> — and they are precisely the numbers that produce the limit
+the fallback chain exists for. <code>billing_mode</code> gained a fifth value, <code>plan</code>, detected from the
+provider name because an API key alone cannot tell a plan from a per-token bill, and the report
+lists plan allowance <strong>per model</strong>, which is the level the limit actually applies at.</p>
+<p><code>tf-metrics.sh</code> now prints three money lines and never merges them: list price (computed here),
+plan allowance used per model, and money billed over metered runs only — each saying what it
+excluded, plus a separate line for a mixed window whose real dollars cannot be separated from the
+part a subscription had already covered. Per-model figures are attributed only where the window ran
+a single model: splitting one window's dollars by token share is arithmetic, not measurement.</p>
+<p><strong>Rework cost per miss</strong> gains a list-price figure — the first money-shaped number that has ever
+worked on a Claude Code repair — and loses a wrong one: it had been averaging an OpenCode
+subscription's measured <code>0.0</code> in as a <em>free</em> repair, which is the TF-005 defect of 2026-08-31
+exactly, one column over.</p>
+<p><strong>The fallback chains are filled in</strong> from the Go model list the owner supplied: each tier drops
+first to a different model on the same plan (the allowance is per model, so a sibling is usually
+still there), then to a different provider (for when the whole plan is out). The guide gained a
+step-by-step setup section (§2b), which the owner asked for.</p>
+<p><strong>A third defect, found by running the new test.</strong> <code>tf-metrics.sh --phases</code> crashed with
+<code>UnboundLocalError</code> on any phase that touched no REQ and wrote no file, because <code>by_mode</code> was
+assigned inside a branch and read outside it. That is every <code>metrics-report</code> and every render.
+<code>MISS-TechieFlow-20260910-03</code>, sorted <code>weak-check</code>.</p>
+<p><strong>And then the emitter was taught to refuse it.</strong> Voiding a wrong record is a repair, and a
+repair with nothing in front of it is a rule that has to be remembered — which is exactly how it
+failed. <code>tf-emit.sh</code> now REFUSES a live <code>run</code> record whose <code>started</code> precedes the latest <code>ended</code>
+of that app's live runs: the message names the record it collides with and the timestamp to use
+instead, and nothing is appended. Voided and backfilled records are excluded from the comparison,
+so the void-then-re-emit repair path still works — that is a case in the suite, not a hope.</p>
+<p>Two traps found while building it, both by running it. A record with no <code>ended</code> used to fall back
+to <code>ts</code>, which is the WRITE time, so every historical record emitted today would have collided
+with the record written a second ago. And a self-contradicting record has its <code>ended</code> replaced by
+the write time and marked with a null <code>duration_s</code>; that placeholder is not a measurement, so it
+must not become a boundary or it blocks every later record for that app. Both are now excluded by
+name, and the existing <code>tf_015</code> case is what caught the second one.</p>
+<p>The one real overlap — two machines appending to one <code>merge=union</code> stream — is declared with
+<code>--allow-overlap</code>. Deliberately a flag and not a fallback: the mistake it guards is easy to make
+and impossible to see afterwards. FR-72, SCHEMA §2.7b, <code>tests/regression/run.sh tf_overlap</code>
+(8 checks). <code>MISS-TechieFlow-20260910-04</code> is closed by a <code>miss-fix</code> record.</p>
+<p>Fixing it also exposed a fixture that described an impossible timeline: <code>tests/routing/run.sh</code>
+emitted four runs over one shared window. Four consecutive windows now, which is what a real
+session looks like.</p>
+<p><strong>The readable documents that had gone stale were corrected too.</strong> The README said "no rate card
+is ever applied" and How-It-Works said "the report never converts" — both true when written and
+both untrue once the report started pricing runs; each now states the split between what a
+provider billed, what a plan's allowance covered, and what a flat fee had already paid for. The
+README's routing section gained the fallback chain and the two commands that show it.
+<code>Adapter-Design.md</code> §5 is the 2026-08-19 design and is left as traceability, with a note at the
+top naming the three things <code>routing.yaml</code> has gained since and pointing at the maintained guide.</p>
+<p><strong>Deployed and proved in place.</strong> <code>update-framework.sh</code> ran in all 19 repositories on this
+machine; every one took the new scripts and had <code>fallbacks:</code> and <code>billing:</code> added to its own
+<code>routing.yaml</code> without a existing line being touched. Three have routing enabled and regenerated 22 bindings each; the other sixteen keep their own <code>enabled:
+false</code>. <code>tf-selfcheck</code> is clean in the ones spot-checked, and <code>tf-model-pick.sh chain</code> answers with
+a real four-deep chain in each.</p>
+<p><strong>And this session's own telemetry had to be corrected.</strong> Two of its four run records were written
+with start times the maintainer TYPED rather than measured, so each overlapped the record before
+it — 42 minutes on one, nearly three hours on the other. That is <code>MISS-TechieFlow-20260909-06</code>
+happening again, after the mechanism to correct it had been built, so it is sorted <code>ignored</code>:
+<code>MISS-TechieFlow-20260910-04</code>. Both records were voided by name and re-emitted with a start derived
+from two measured facts (the previous record's <code>ended</code>). Three voids now stand on this repository's
+stream, each with its reason, and the report prints all three.</p>
+<p><strong>Proved by running it.</strong> New <code>tests/routing/run.sh</code>, 42 checks: the chain in order, a Claude alias
+and a full model id treated as one model, an expired cooldown ignored, an exhausted chain saying so
+instead of guessing, both harnesses' bindings moving, and the cooldown file defaulting into
+<code>.tfcore</code> and moving when <code>routing.yaml</code> says so. On cost: an API key reads <code>metered</code>, OAuth reads
+<code>subscription</code>, a monthly plan reads <code>plan</code>, a credential-less provider reads <code>unknown</code> rather than
+being assumed billable; <strong>no priced field is written to any record</strong>; a caller's self-reported cost
+is discarded; the report's price is checked as arithmetic, not as presence — the expected dollars
+are computed inside the test from the rate card and the token counts and compared exactly — a
+project rate card beats the catalog, an unpriceable model yields nothing rather than a zero, and
+plan dollars are reported as allowance used per model while the money figure counts only the
+metered run. <code>tests/goal/run.sh</code> gains three end-to-end cases and now runs 36. FR-70
+and FR-71 added to the requirements, and <code>tests/requirements/run.sh</code> knows the new artefact. Guide
+sections 9 and 10, Telemetry-Explained §5a, How-It-Works §2 (the owner's go-ahead, same day: the
+routing cell had said "Currently disabled" since 2026-09-05).</p>
+<hr>
+<h2 id="second-sitting-the-two-the-verifier-got-wrong">2026-09-09 (second sitting) — the two the verifier got wrong<a class="anchor-link" href="#second-sitting-the-two-the-verifier-got-wrong">#</a></h2>
+<p>TfLens's decision request came back with five tooling entries, <code>TF-018</code> to <code>TF-022</code>. Three were
+already fixed in the sitting below and were re-proved rather than re-fixed: <code>TF-018</code>, <code>TF-019</code> and
+<code>TF-020</code> each hold under <code>tests/regression/run.sh</code> as it stands. The two that were new are both in
+the <strong>verifier</strong>, and both have the same shape — a check that reported a defect where there was
+none, which is the failure that teaches a reader to stop reading the report.</p>
+<table>
+<thead><tr><th></th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td><strong>TF-022</strong></td><td><code>tf-verify-tests.sh</code> computed <code>ok = status in ("passed", "expected")</code>, so a <strong>skipped</strong> browser test took the same path as a failed assertion. <code>test.skip(!SEEDED, "needs the seeded dataset")</code> says the state does not exist in the data yet: it is not a pass and it is not a defect. TfLens carried <code>FAIL</code> on <code>REQ-UI-039</code> and <code>REQ-UI-034</code> where nothing was wrong, and under <code>build-phase</code> step 7 a <code>FAIL</code> re-enters FIX mode for up to five cycles against a clause no code can satisfy. <code>add()</code> has a third outcome now; a row whose clauses were <strong>all</strong> skipped is <code>NOT-TESTED</code>, which <code>tf-verify-verdict.py</code> reads as not measured — no gate record, no <code>Verified</code>. The unit path records a skipped test the same way instead of dropping the line, so the row shows its evidence rather than looking untested. <code>MISS-TechieFlow-20260909-05</code>.</td></tr>
+<tr><td><strong>TF-021</strong></td><td><code>tf-verify-screens.mjs</code> compared the box an element is <strong>laid out</strong> in, not the box it <strong>paints</strong> in. A table row 1166.9px wide inside a container reporting <code>clientWidth 492</code> reached x=1480 while its pixels stopped at x=805, so the card beginning at x=846 — inside the clipped-away region — was reported as overlapped. Every box is now intersected with the clip rectangle of each ancestor whose overflow is not <code>visible</code>, and overlap and off-screen are judged on that; zero-size still uses the element's own box, because a control scrolled out of view is not a collapsed one. The second half of the entry was the same tool measuring a Blazor Server screen <strong>before its circuit painted</strong> and reporting every anchored control missing while its own screenshot showed them: <code>--render-wait</code> (5000 ms) waits for the first render, and grades what is there when nothing appears. <code>MISS-TechieFlow-20260909-04</code>.</td></tr>
+</tbody>
+</table>
+<p><strong>Both were proved the way the suite requires</strong>: the fixtures were rebuilt from the measurements in
+TfLens's own entries — a 492/1167 scroller with a card at x=846, a screen that paints at 2.5 s, a
+playwright report carrying one passed and two skipped clauses — and each case was run against the
+script as TfLens found it <strong>before</strong> the fix. <code>tf_021a</code> and <code>tf_022</code> fail there and pass here; a case
+that passes both ways proves nothing and is not kept. Three assertions were added specifically so
+the fixes cannot buy their quiet by going blind: a genuinely overlapping screen, a control that is
+genuinely absent, and a real assertion failure all still fail.</p>
+<p><code>tf_021</code> needs a browser, so it runs where playwright resolves — a project has it at its root, and
+<code>TF_PLAYWRIGHT_DIR</code> names one otherwise. Where it does not resolve the case prints <code>skip</code> and says
+why: a case that could not run must never read as a case that passed.</p>
+<p><strong>A numbering correction.</strong> The guard-metrics defect found here last sitting had been filed in the
+suite as <code>tf_021</code>, which collided with TfLens's screens entry. <code>TF-</code> numbers belong to the reporting
+project's feedback file; ours is renamed <code>guard_reads</code>.</p>
+<p><strong>One record on this repository's own <code>runs.jsonl</code> was wrong, and it was this session's — so the
+framework grew the one thing it had no way to do.</strong> The maintenance run record was hand-assembled
+with a <strong>guessed</strong> <code>started</code> of <code>11:40:00</code>, where the session actually began at <code>16:31:54</code>: 18,674
+seconds stored against a real nineteen minutes. Its own timestamps agreed with each other, so no
+check could catch it, and the stream is append-only, so it could be neither edited nor deleted.
+<code>MISS-TechieFlow-20260909-06</code>, sorted <code>ignored</code> — the rule that telemetry is emitted by script and
+never assembled by hand was written and not followed.</p>
+<p><strong><code>kind: "run-void"</code> is the answer, and it is the §5.5.7 answer one stream over</strong> (SCHEMA <strong>§2.7</strong>,
+<strong>FR-69</strong>). A void names a run by the pair every run carries — <code>cmd</code> + <code>started</code> — and says why it is
+wrong. Both records stay exactly where they are; every figure skips the named one; the count and the
+reasons are printed beside the figures, because a smaller total offered without its exclusions is
+just a different wrong number. <code>bash .tfcore/utils/tf-emit.sh --void-run &lt;cmd&gt; &lt;started&gt; "&lt;reason&gt;"</code>
+refuses a void that names no run and a second void on the same run, and a void whose run never
+arrived is reported as an orphan rather than silently dropped. There is deliberately <strong>no corrected
+figure</strong>: a duration nobody measured cannot be recovered by asserting one, so the run leaves rather
+than improves. The record above is now voided, and this repository's effort figures no longer carry
+its five phantom hours.</p>
+<p><strong>Two more found by the owner's questions about the two fixes above</strong>, which is the argument for
+explaining a change in plain words rather than summarising it.</p>
+<p><em>"When does the work get built, if the builder and the verifier both skip it?"</em> — Nothing skips it, and
+the lifecycle is now pinned by a case: a <code>NOT-TESTED</code> row keeps its status and its percentage, is
+never <code>Verified</code>, is not terminal, and so appears in the build list on every pass. But the status
+document told the owner to run the verifier again, forever, for a row whose tests decline to run —
+a loop that looks like progress. <code>tf-status-facts</code> now separates <em>built, waiting for a verify</em> from
+<em>could not be measured here</em>, and for the second says what it actually needs: create the data,
+change the acceptance line, or mark the row N/A. Only the owner can choose.</p>
+<p><strong>And under that sat a real defect: every project's status document said it had never been
+verified.</strong> <code>tf-status-facts</code> read only the LAST LINE of <code>docs/.last-verify.json</code> — a reader written
+for an append-per-line ledger no version of the verifier has ever produced. The verifier writes one
+pretty-printed object, so the reader parsed the closing brace, threw, and fell back to <code>not-run</code>.
+TfLens, with 69 of 73 rows Verified and an 86-line ledger, reported <code>last_verified_build: not-run</code>
+and <code>last_verified_date: never</code>. Fixed, pinned by <code>tf_ledger</code>, and logged as
+<code>MISS-TechieFlow-20260909-07</code> (<code>weak-check</code>: nothing exercised the reader against the writer's own
+output).</p>
+<p><em>"Have you hardcoded a technology again?"</em> — One line, and it is gone. The render wait had a
+Blazor-specific selector in it; it was also redundant, because the generic condition (a control the
+mockup anchors appeared, or the document has text or a form control) already covers a painted error
+banner. <strong>The pre-existing hardcoding in the same file was generalised while the question was open</strong>:
+<code>#blazor-error-ui</code> was the only error banner the render check could see, so the check silently did
+nothing on every other stack. It is now a LIST — <code>--error-selector</code> (repeatable), defaulting to that
+id plus a neutral <code>[data-error-ui]</code> any project can put on its own banner — proved on three fixtures,
+one per shape. The <code>--cdp</code> help no longer names a UI stack either. What remains stack-aware in the
+verifier is detection, not assumption: <code>.sln</code>/<code>.csproj</code> discovery and the unit-test console
+vocabulary in <code>tf-verify-tests.sh</code>, which is the same sanctioned pattern as
+<code>tf-gitignore-audit.sh</code> reading the stack from the tree.</p>
+<p>The regression suite now runs 43 assertions across thirteen defects and the self-check round trip. No task file, template, hook or
+delivery script changed, so mirror parity and the two delivery routes are untouched.</p>
+<h2 id="the-unhappy-path">2026-09-09 — the unhappy path<a class="anchor-link" href="#the-unhappy-path">#</a></h2>
+<p>TfLens's framework-feedback file arrived carrying eight open entries, and the owner asked the
+right question about them: the reset had run its scripts on real projects — TechieBlog, Xpenser,
+MyDiary — so how did eight script defects still reach a consumer?</p>
+<p><strong>The answer is that the reset proved the happy path.</strong> The fixtures were freshly generated and
+the real projects were finished, and every one of these eight defects needs a project that is
+mid-flight and slightly broken: a checklist with a row that can never clear, a BRD that has been
+amended once, a database that is down, a repo with IDE state in it, a metrics file with the
+framework's own verdicts mixed into an application's. Testing on a completed app proves the app
+is done; it does not prove the tool. Three of the eight scripts — <code>tf-build-list</code>,
+<code>tf-gitignore-audit</code> and the metrics rollup — were invoked by <strong>no test runner at all</strong>.</p>
+<p><strong><code>tests/regression/</code> is the answer to that, and is the point of this entry.</strong> One case per defect
+a real project found, each built from the reporting project's own input, each required to fail
+against the script as TfLens found it. 22 assertions. <code>MISS-TechieFlow-20260909-01</code>.</p>
+<p><strong>The eight, all fixed and all proved by a case that failed first:</strong></p>
+<table>
+<thead><tr><th></th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td><strong>TF-013</strong></td><td>New hook <code>guard-verify-deps.sh</code>: a verify run may START a service the project defines, never CREATE one, and never repoint the app at another instance. TfLens ran a bare <code>docker compose up</code> through a <code>||</code> fallback and then reported <em>"689/689 pass"</em> against a database nobody chose. A rule, not a paragraph (contract 3).</td></tr>
+<tr><td><strong>TF-014</strong></td><td><code>tf-gitignore-audit.sh</code> pruned every dot-directory from its walk — which is where per-developer state lives — and no stack listed <code>.vs/</code>. <code>SKIP_DIRS</code> is a name list again, <code>.vs/</code> and <code>.idea/</code> are audited whatever the stack, and a rule covering a <em>child</em> of an open parent (<code>/.vs/App.slnx</code>) is now reported, because that shape looks deliberate and is worse than no rule.</td></tr>
+<tr><td><strong>TF-015</strong></td><td><code>tf-emit.sh</code> now separates two faults that had shared a remedy: an <code>ended</code> slightly in the future is clamped and re-derived, but an <code>ended</code> that precedes its <code>started</code> contradicts itself, so the record carries <strong>no duration at all</strong> (<code>duration_unmeasured</code>) rather than an invented one — the old clamp would have "measured" a TechieBlog record at 1,515,038s. A supplied <code>duration_s</code> that disagrees with its own timestamps is replaced by them: that is where 13 of TechieBlog's 14 impossible records hid, behind plausible round numbers. On the read side every consumer of <code>duration_s</code> now goes through one <code>_dur()</code>, so the two readers of a stream cannot disagree about the same record.</td></tr>
+<tr><td><strong>TF-016</strong></td><td><code>*amend-docs</code> had no closing step, so a miss whose artifact is a document stayed open forever — 12 finished TfLens items showed as outstanding for up to two weeks. The step exists now, and so do the two doors it names: <code>tf-emit.sh --open-misses &lt;App&gt; --artifact-class doc</code> and <code>tf-fix-close.sh &lt;App&gt; --misses … --fix-cmd amend-docs</code>. <strong>The first draft of that step named flags that did not exist</strong>, which is the TF-006 defect exactly; it was caught by checking, which is why the case tests the door and not the sentence.</td></tr>
+<tr><td><strong>TF-017</strong></td><td><code>tf-split-brd.py</code>'s ledger regex required <code>**BRD-N**</code> immediately after the bullet, so it matched <strong>0</strong> of TfLens's 179 items — a real BRD carries <code>&lt;a id="brd-N"&gt;&lt;/a&gt;</code> there because §9 cross-links need it and <code>tf-doc-check</code> refuses a broken link. One optional group. TfLens also reported <code>tf-doc-check.py</code> as sharing the blind spot; <strong>it does not</strong> — it looks for the bold id anywhere on the line. Pinned by a case anyway, so the two can never be "aligned" in the wrong direction.</td></tr>
+<tr><td><strong>TF-018</strong></td><td>A miss's own sentence (<code>what</code>) can be filled in later. The closed-vocabulary rule was a second lock on a door the never-overwrite rule already locked, and it blocked a legitimate correction. <code>FIELD_SINCE</code> gains its floor. <code>MISS-TechieFlow-20260909-02</code>.</td></tr>
+<tr><td><strong>TF-019</strong></td><td><strong>The worst of the eight.</strong> <code>tf-build-list</code> returned FIX over the failing rows alone, and a row can sit at <code>Needs re-verify</code> permanently — TfLens's <code>REQ-FN-067</code> and <code>-070</code> need a repository that emits <code>events.ndjson</code> and none exists — so the mode was pinned and the twelve rows a later <code>*amend-docs</code> added were never once printed. A pass trusting the working list would have met <code>build-phase</code>'s ending condition with twelve requirements at 0%. The list is now every open row, with the failing ones first, and the counts line asserts its own arithmetic. On TfLens's real phase-3 checklist: <strong>22 rows, 51 terminal, 0 blocked, 73 total</strong> — it balances; before, 14 rows were in no category a reader could see.</td></tr>
+<tr><td><strong>TF-020</strong></td><td><code>seg()</code> never read <code>req_class</code>, so the framework's own <code>FR</code> verdicts pooled into whichever application segment their records carried, raising its first-pass rate and diluting its escape rate with nothing on the output to show it. SCHEMA §3 had stated the rule; the rollup did not apply it. On this repo's own metrics the 41 FR records now sit in <code>framework-requirement</code> at <strong>93% first pass</strong> — which is the size of the flattery.</td></tr>
+</tbody>
+</table>
+<p><strong>A ninth, found while verifying the other eight.</strong> <code>guard-metrics.sh</code> blocked any <code>python</code>/<code>node</code>
+command naming a stream, so it refused <strong>reads</strong> as well as writes, contradicting its own header
+("Reading them is fine") and blocking verification of the fixes it protects. A guard that refuses
+legitimate work teaches people to route around the guard. It now needs a write in the command as
+well as the path; redirection, <code>tee</code>, <code>cp</code>/<code>mv</code> and an explicit write mode are all still refused.
+<code>MISS-TechieFlow-20260909-03</code>.</p>
+<p><strong>And the round trip itself — <code>tf-selfcheck.sh</code>.</strong> Every one of the nine was found mid-build,
+in an application's repository, and could only be fixed here: a switch between repos, a feedback
+entry, a maintenance sitting, a re-deploy, each time. So the framework's own scripts now run
+against a project's real files, on demand and at the top of <code>*build-phase</code>, and name the ones that
+are broken <strong>there</strong>. A FAIL is a framework defect, never the project's — nothing in it grades the
+application, and it writes nothing. <code>--report</code> prints the feedback entry ready to paste, because
+the paperwork is half the trip.</p>
+<p>It costs no delivery wiring (<code>.tfcore/utils/</code> is copied wholesale by both routes), no new command,
+no new task file and no template. The only prose added anywhere is inside <code>build-phase.md</code> step 1,
+which needed correcting regardless: it still said <em>"FIX means the verifier or a smoke failed rows:
+build only those"</em> — the sentence TF-019 blamed, and wrong as of this session.</p>
+<p><strong>It found two false alarms of its own before it found anything real</strong>, which is the part worth
+recording. Pointed at TfLens it reported the BRD reader as missing items; both were struck-through
+requirements the ledger is right to skip. Pointed at TechieBlog it reported more, because it was
+comparing bold <em>mentions</em> against <em>unique</em> items. Both were defects in the checker, not the
+framework — fixed before it shipped, because a check that cries wolf is the one that gets skimmed,
+which is what TF-012 cost. Across six deployed projects it now reports two findings, and both are
+the same real thing: run records that end before they start, whose true start times are gone.</p>
+<p><strong>The timestamps now win over a stored duration that contradicts them.</strong> The emit-side half
+of TF-015 stopped new impossible records; this is the read side, and it is what makes the
+existing ones harmless. A run record carries a start, an end and a duration, and on a stream
+written before the emitter checked them the third can disagree with the first two -- TechieBlog's
+<code>refresh-status</code> started 20:05:00, ended 17:59:39, stored 600. Reading the stored number could
+never catch that; only one of its fourteen bad records stored the negative that gave it away.</p>
+<p>The duration is now derived from the record's own clocks whenever they can be read, and a record
+whose clocks are impossible carries none at all. <strong>What was dropped is published and printed</strong>
+(<code>duration_measured_n</code>, <code>duration_impossible_n</code>, <code>duration_absent_n</code>, <code>duration_recomputed_n</code>),
+because a smaller total offered without its exclusions is just a different wrong number. On
+TechieBlog: <strong>33 of 46 records usable, 13 impossible, 4 recomputed</strong> — 72.9 hours where the old
+reading gave 79.0, and a median run of 41.6 minutes rather than 40.0.</p>
+<p><strong>One correction caught before it shipped.</strong> The first version reported all 30 of this repo's
+own unusable records as "start after end". They are nothing of the kind: <code>started</code> equals <code>ended</code>
+and no duration was ever written, which is a run that records no elapsed time. Neither reached a
+figure before or after — but a reader given the wrong reason chases the wrong thing, so the two
+are counted and worded apart.</p>
+<p><strong>And the round trip is closed at step 0, not in five task files.</strong> <code>tf-selfcheck.sh</code> was first
+wired into <code>*build-phase</code>; the owner asked why only there, since defects had surfaced in
+<code>*amend-docs</code> and <code>*verify</code> too. Every command already begins with <code>tf-phase.sh start</code>, so the
+check moved into that one script: it now runs at the head of all 21 commands, and any command
+added later, with <strong>no task file mentioning it at all</strong>. The line added to <code>build-phase.md</code> was
+removed again — that file is now 50 words shorter than before this session. It never blocks; a
+framework defect is reported and the command carries on, exactly as a library gap does.
+<code>TF_SKIP_SELFCHECK=1</code> skips it, which is what the self-tests use.</p>
+<p><strong>Deployed to 18 repositories</strong> on 2026-09-09, every one on the machine that carries the
+framework except TfLens (an agent was working there) and this repository. All 18 refreshed
+without error and all 18 report a clean self-check afterwards.</p>
+<p><strong>One thing the deployment itself showed.</strong> TechieBlog's thirteen impossible run records made
+the new check print a FAIL at the head of every command — permanently, because an append-only
+stream cannot give them up. But by the check's own definition that is not a failure: no
+framework script is broken there, the emitter refuses new ones and the reader already discards
+them and prints how many. It is now reported as history on an information line, and the case
+that used it as a "broken framework" fixture was retargeted onto an orphaned amendment, which is
+a real defect and one that can still be put right. A warning that can never be cleared is how a
+check earns being skimmed, which is exactly what TF-012 cost.</p>
+<p><strong>Documents.</strong> <code>TechieFlow-How-It-Works.md</code> gains <strong>§4.0 Step 0</strong>, and its "what surrounds every
+command" diagram gains the node — the check is now the first thing that happens in every command, so
+a document that described three wrapping mechanisms described the wrong shape. <code>WorkFlow-Context.md</code>
+carries the date, twelve hooks rather than eleven, <code>regression</code> and <code>requirements</code> in the self-test
+list, the self-check as a convention, and an open-items table with the <code>*amend-docs</code> row removed
+(fixed) and two rows added: TfLens being one version behind, and the impossible records that cannot
+be repaired and no longer need to be. §8 of How It Works was left exactly as it stands — those are
+the pre-reset figures and they are the record, not a status.</p>
+<p><strong>The streams were not edited, and the owner asked whether they could be.</strong> They cannot: SCHEMA.md
+§1 says append-only, never rewritten, never compacted, and §6 says a correction is applied at read
+time. Nor is there anything to gain — the 13 records are already out of every figure, which is what
+the read-time rule is for. Deleting them would break the one guarantee every consumer is built on,
+and would erase the evidence that the defect happened, which is the opposite of what the miss log
+exists to do.</p>
+<p><strong>Two documents for the owner, neither of them an agent document.</strong>
+<code>docs/How-To-Save-A-Claude-Conversation.md</code> — the terminal is a repainted screen, so selecting from
+it copies whatever is painted and long answers arrive with pieces missing and fragments fused
+(<code>figuto</code>, <code>fouTfLens</code>). Claude Code also writes each conversation to disk exactly, so
+<code>~/claude-export.sh</code> reads that and writes markdown into the project's <code>docs/chat-history/</code>. Its
+<code>--list</code> prints the last thing the owner said in each conversation, which is how two windows open on
+the same folder are told apart; <code>! bash ~/claude-export.sh</code> inside a window needs no telling apart at
+all. The exporter is deliberately NOT in <code>.tfcore/</code> — it is a personal utility, no framework rule
+depends on it, and it is not deployed anywhere.</p>
+<p><code>docs/Decision-TfLens-Duration-Parity-2026-09-09.md</code> — the reference now derives duration from a
+record's own timestamps, and TfLens reproduces the old reading under a zero-tolerance parity gate, so
+the change is automatically a change to what TfLens must do. The document states both honest
+positions (follow, or diverge and declare it as <code>D-012</code> did), recommends following because a duration
+taken from a number its own clocks contradict cannot be defended, names the five files and the two
+commands in order — <code>*amend-docs</code> with the analyst first, because <code>BRD-179</code>/<code>REQ-FN-112</code> state the
+old rule in their own words, then <code>*build-phase</code> with the flow-master — and carries a paste-ready
+prompt with the reference's current figures as the acceptance test. Every file path, key name and
+requirement id in it was checked against the TfLens tree before it was written.</p>
+<p><strong>Proved, not asserted.</strong> regression 22/22 · mirror 18/18 · doc-check all · bugs 51/51 ·
+requirements 34 graded, 34 passed. <code>npm run test:install</code> reports 30 of 31, its one failure being
+the documented Windows-mount false difference — verified here as identical content (same sha256)
+and a differing mode bit only, 644 against 777. TF-019 and TF-020 were additionally run against
+the real TfLens and TechieFlow trees, not only fixtures.</p>
 <hr>
 <h2 id="what-the-owner-reads">2026-09-08 — what the owner reads<a class="anchor-link" href="#what-the-owner-reads">#</a></h2>
 <p>The first task given to a project team after the reset (TfLens, <code>*amend-docs</code>) handed back an unshaped 244-line document full of framework shorthand, plus one new low-severity entry in its framework-feedback file. The owner read both and named four things. All four were the framework's, not the project's.</p>

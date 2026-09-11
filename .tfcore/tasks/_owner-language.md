@@ -9,6 +9,7 @@ Everything the owner reads — a terminal reply, a document, a status line, the 
 - **No coined terms, no shorthand.** "the framework's own script", not "the oracle". "the number you divide by", not "the denominator". If the owner would have to look a word up, it is the wrong word.
 - **Writing a glossary means the words are wrong.** Change the words. `tf-doc-check.sh` refuses a glossary section.
 - First sentence carries the answer. Name the thing, not its id. Short sentences. Never dramatise.
+- **A command's closing message is checked before the turn can end** (`tf-owner-text.sh`, run by the Stop hook on it and on any free-form document it hands over): no word from `.tfcore/standards/owner-words.txt`; each open upstream problem in a table row saying what it affects and whether it blocks or breaks anything, with the prompt that fixes it; one recorded as fixed upstream called fixed; each command still to run given as the line to paste; and the next prompt in a code block.
 
 ## 2. A question for the owner goes in a file, not in the conversation
 

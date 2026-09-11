@@ -794,9 +794,462 @@ tf_selfcheck() {
                               || bad tf_sc_d "the checklist changed under tf-selfcheck"
 }
 
+# --- TF-024: a phase BRD graded against the whole-project BRD template ------------------------
+# A phase-2 BRD carries its own screens and requirements and points back at phase 1 for scope,
+# users, the whole-app non-functionals, constraints and risks. The checker demanded all six and
+# called the pointer section a stranger: 20 findings on TfLens's two phase BRDs, none fixable
+# without copying phase 1 into them. TfLens 2026-09-10.
+tf_024() {
+  local d="$SCRATCH/phasebrd"; mkdir -p "$d/docs/mockups" "$d/.tfcore"
+  printf 'appSize: L\nappKind: app\nappPhase: 2\n' > "$d/.tfcore/core-config.yaml"
+  printf '<html><body data-testid="shell"><a href="reports.html">Reports</a></body></html>' > "$d/docs/mockups/reports.html"
+  cat > "$d/docs/Fx-P2-BRD.md" <<'MD'
+# Fx — Business Requirements — Phase 2: Reports
+
+| | |
+|---|---|
+| App | Fx |
+| Kind | app |
+| Size | Small |
+| Phase | 2 of 2 |
+| Status | Draft |
+| Date | 2026-09-11 |
+
+## 1. Summary
+
+Phase 2 adds monthly reports.
+
+## 2. Screens and flow
+
+| Screen | Route | Role | Mockup | Fields |
+|---|---|---|---|---|
+| Reports | `/reports` | Writer | [mockup](mockups/reports.html) | month |
+
+## 3. Requirements
+
+- **BRD-4** — Monthly report. *Screen:* Reports · *Mockup:* [mockup](mockups/reports.html)
+  - *Acceptance:* When the writer picks a month on Reports, then the entry count for that month shows.
+
+## 5. Development status
+
+| Screen | Requirements | Verified | Open | Status |
+|---|---|---|---|---|
+| Reports | 1 | 0 | 1 | Planned |
+
+## 6. Where the rest lives
+
+| What | Where |
+|---|---|
+| Scope, users, constraints and risks | [phase 1 BRD](Fx-BRD.md) |
+MD
+  printf '# Fx — Business Requirements\n' > "$d/docs/Fx-BRD.md"
+  local out shape
+  out="$(python3 "$UTILS/tf-doc-check.py" --root "$d" --strict "$d/docs/Fx-P2-BRD.md" 2>&1)"
+  shape="$(grep -E '^FAIL.*(is missing|is not in the template|comes after)' <<<"$out")"
+  if [[ -z "$shape" ]]; then
+    ok tf_024a "a phase BRD in its own shape draws no section findings"
+  else
+    bad tf_024a "a correct phase BRD is graded against the whole-project template"; note "$(head -3 <<<"$shape")"
+  fi
+  # the pointer is the only thing standing in for the six sections, so it must lead somewhere
+  sed -i 's/\[phase 1 BRD\](Fx-BRD.md)/the first phase/' "$d/docs/Fx-P2-BRD.md"
+  out="$(python3 "$UTILS/tf-doc-check.py" --root "$d" --strict "$d/docs/Fx-P2-BRD.md" 2>&1)"
+  grep -q 'does not link to the phase-1 document (Fx-BRD.md)' <<<"$out" \
+    && ok tf_024b "a phase BRD that points nowhere is refused" \
+    || { bad tf_024b "a phase BRD with no link to phase 1 passed"; note "$(grep '^FAIL' <<<"$out" | head -2)"; }
+  # not affected: phase 1 is still the whole-project BRD and still owes Scope
+  out="$(python3 "$UTILS/tf-doc-check.py" --root "$d" --strict "$d/docs/Fx-BRD.md" 2>&1)"
+  grep -q 'section "Scope" is missing' <<<"$out" \
+    && ok tf_024c "the phase-1 BRD is still held to the whole-project template" \
+    || { bad tf_024c "the phase-1 BRD escaped the whole-project template"; note "$(grep '^FAIL' <<<"$out" | head -2)"; }
+  # the same for a phase UIDesign: the library, theme, design system and flow belong to phase 1.
+  # TfLens's two phase UIDesigns drew 10 findings for leaving them out (owner, 2026-09-11)
+  cat > "$d/docs/Fx-P2-UIDesign.md" <<'MD'
+# Fx — UI Design — Phase 2: Reports
+
+| | |
+|---|---|
+| App | Fx |
+| Kind | app |
+| Size | Small |
+| Phase | 2 of 2 |
+
+## Screens
+
+### Screen: Reports (`/reports`)
+
+**Mockup:** [mockups/reports.html](mockups/reports.html) · **Roles:** Writer · **BRD:** BRD-4
+
+| Region | Control | Shows or binds |
+|---|---|---|
+| Month picker | Select | month |
+
+| Field | Type | Required | Validation |
+|---|---|---|---|
+| Month | select | yes | a past month |
+
+**States:** empty: no entries · loading: skeleton · error: alert
+
+## Where the rest lives
+
+| What | Where |
+|---|---|
+| Design system and the click-through flow | [phase 1 UI design](Fx-UIDesign.md) |
+MD
+  printf '# Fx — UI Design\n' > "$d/docs/Fx-UIDesign.md"
+  out="$(python3 "$UTILS/tf-doc-check.py" --root "$d" --strict "$d/docs/Fx-P2-UIDesign.md" 2>&1)"
+  shape="$(grep -E '^FAIL.*(is missing|is not in the template|comes after)' <<<"$out")"
+  [[ -z "$shape" ]] && ok tf_024d "a phase UIDesign in its own shape draws no section or header findings" \
+                    || { bad tf_024d "a correct phase UIDesign is graded against the whole-project template"; note "$(head -3 <<<"$shape")"; }
+}
+
+# --- a hand-off the owner could not use ---------------------------------------------------
+# TfLens's closing message of 2026-09-11 was written in jargon, named two upstream problems
+# without saying what they touch, called two problems fixed upstream on 2026-09-09 open, and
+# said verify was pending with no line to paste. The Stop hook let it through: it checked the
+# status file and never what the owner reads (MISS-TechieFlow-20260911-03).
+owner_handoff() {
+  local d="$SCRATCH/handoff"; mkdir -p "$d/docs/metrics" "$d/.tfcore/utils" "$d/.tfcore/standards" "$d/.tfcore/.session"
+  cp "$UTILS"/tf-owner-text.* "$UTILS"/tf_feedback.py "$d/.tfcore/utils/" 2>/dev/null
+  cp "$ROOT/.tfcore/standards/owner-words.txt" "$d/.tfcore/standards/" 2>/dev/null
+  cat > "$d/docs/Fx-TechieFlow-Feedback.md" <<'MD'
+# Fx — TechieFlow framework feedback
+
+## Resolution status (TechieFlow team, 2026-09-09)
+
+| ID | Fix | Verify from here |
+|----|-----|------------------|
+| **TF-022** | a skipped test is no longer a failure | re-run verify |
+
+## TF-022 — a skipped test is counted as a failing one
+
+- **Blocks:** no
+
+## TF-024 — a phase BRD is graded against the whole-project template
+
+- **Blocks:** no
+MD
+  printf '{"session_id":"x"}\n' > "$d/.tfcore/.session/claude-code.json"
+  touch -d '-10 min' "$d/.tfcore/.session/claude-code.json"
+  printf '# Fx — Status\n\n## Next command to run\n\n```\n/TechieFlow:agents:verifier *verify Fx all\n```\n' > "$d/PROJECT-STATUS.md"
+  touch -d '-2 min' "$d/PROJECT-STATUS.md"; printf '<html></html>' > "$d/PROJECT-STATUS.html"
+  printf '{"kind":"run","app":"Fx","cmd":"build-phase","ts":"%s"}\n' "$(date -u +%FT%TZ)" > "$d/docs/metrics/runs.jsonl"
+  local tr="$d/transcript.jsonl"
+  printf '{"type":"user","message":{"role":"user","content":"*build-phase Fx"},"timestamp":"%s.000Z"}\n' "$(date -u -d '-5 min' +%FT%T)" > "$tr"
+  local bad='Done. TF-022 puts wrong FAILs into the checklist and TF-024 is filed too. The denominator now excludes voided runs. *verify has not been run.'
+  local good='Built, and nothing is blocked.
+
+| Problem | What it affects | Does it block or break anything? |
+|---|---|---|
+| TF-024 — the document check uses the wrong template for a phase BRD | Noise in the document check | No |
+
+TF-022 was fixed upstream on 2026-09-09; the verify below re-checks it here.
+
+```
+/TechieFlow:agents:verifier *verify Fx all
+```
+In a TechieFlow window:
+```
+Fix TF-024 from docs/Fx-TechieFlow-Feedback.md in the Fx repo.
+```'
+  _stop() { python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"Stop","stop_hook_active":False,"last_assistant_message":sys.argv[1],"transcript_path":sys.argv[2]}))' "$1" "$tr" \
+            | CLAUDE_PROJECT_DIR="$d" CLAUDECODE=1 bash "$ROOT/.tfcore/hooks/guard-status-html.sh" 2>&1; }
+  local out rc
+  out="$(_stop "$bad")"; rc=$?
+  local miss=""
+  for w in '"denominator"' 'TF-024 is named without saying what it affects' 'TF-022 is written about as an open problem' \
+           '*verify is named, but no code block' 'gives no next prompt'; do
+    grep -qF -- "$w" <<<"$out" || miss="$miss [$w]"
+  done
+  if [[ $rc -eq 2 && -z "$miss" ]]; then
+    ok owner_handoff_a "TfLens's closing message is refused, and every one of its four faults is named"
+  else
+    bad owner_handoff_a "the closing message got through (exit $rc), or a fault went unnamed:$miss"; note "$(head -3 <<<"$out")"
+  fi
+  out="$(_stop "$good")"; rc=$?
+  [[ $rc -eq 0 ]] && ok owner_handoff_b "the same news, written for the owner, ends the turn" \
+                  || { bad owner_handoff_b "a closing message written for the owner was refused"; note "$(sed -n 2,4p <<<"$out")"; }
+  # not affected: a later turn of ordinary conversation is not held to a hand-off's shape
+  printf '{"type":"user","message":{"role":"user","content":"thanks"},"timestamp":"%s.000Z"}\n' "$(date -u -d '+1 min' +%FT%T)" >> "$tr"
+  out="$(_stop "$bad")"; rc=$?
+  [[ $rc -eq 0 ]] && ok owner_handoff_c "a turn that closed no command is left alone" \
+                  || { bad owner_handoff_c "an ordinary reply was held to the hand-off check"; note "$(sed -n 2,3p <<<"$out")"; }
+}
+
+# --- the status file said every upstream problem was open ----------------------------------
+# tf-status-facts counted every ### heading as an entry and accepted only a closing line no file
+# used, so TfLens's PROJECT-STATUS read "TechieFlow: 62 open of 62" for 27 entries, 19 of them
+# fixed or closed, and "TrBlazeUI: 2 open of 2" for 28. The agent reported two problems fixed two
+# days earlier to the owner as open, and its self-check said "clean" (MISS-TechieFlow-20260911-04).
+feedback_state() {
+  local d="$SCRATCH/feedback"; mkdir -p "$d/docs"
+  cat > "$d/docs/Fx-TechieFlow-Feedback.md" <<'MD'
+# Fx — TechieFlow framework feedback
+
+## Summary
+
+**Nothing is blocked.** 3 entries, 3 open.
+
+## Resolution status (TechieFlow team, 2026-09-09)
+
+| ID | Fix | Verify from here |
+|----|-----|------------------|
+| **TF-019** | the list now holds every open row | run tf-build-list |
+
+## TF-001 — the sessions stream is never de-duplicated
+
+> ✅ **Closed 2026-08-28** — re-checked here: totals match.
+
+### Repro
+### Expected
+
+## TF-019 — a gated row pins the build list
+
+- **Blocks:** no
+
+### Detail
+
+## TF-025 — split-brd appends copies
+
+- **Blocks:** no
+MD
+  cat > "$d/docs/Fx-TrBlazeUI-Feedback.md" <<'MD'
+# Fx — TrBlazeUI feedback
+
+> ## ✅ RESOLVED LIBRARY-SIDE 2026-08-31 — ships in the next release
+>
+> | Entry | Reported as | Reality |
+> |---|---|---|
+> | **TR-002** | no responsive variants | present on 2.1.0 |
+>
+> **Everything else is now fixed.**
+>
+> - **TR-003** — confirmed and fixed.
+
+## Summary
+
+- **3 entries, all 3 open.** None is fixed upstream.
+
+## TR-002 — no responsive variants
+## TR-003 — DataTable truncates
+## TR-004 — merged into TR-002 (same defect)
+## TR-009 — Badge wraps mid-phrase
+MD
+  local out
+  out="$(cd "$d" && python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import importlib.util as u
+s = u.spec_from_file_location("sf", sys.argv[1] + "/tf-status-facts.py"); m = u.module_from_spec(s); s.loader.exec_module(m)
+print("\n".join(m.feedback_lines(".", "Fx")))' "$UTILS" 2>&1)"
+  if grep -q "TechieFlow: 1 open · 1 fixed upstream, not yet re-checked (TF-019) · 1 closed" <<<"$out" \
+     && grep -q "TrBlazeUI: 1 open · 2 fixed upstream, not yet re-checked (TR-002, TR-003) · 1 closed" <<<"$out"; then
+    ok feedback_state_a "the status file counts entries, not headings, and names what is fixed upstream"
+  else
+    bad feedback_state_a "the status file miscounts the feedback files"; note "$(head -2 <<<"$out")"
+  fi
+  out="$(bash "$UTILS/tf-selfcheck.sh" "$d" 2>&1)"
+  grep -q "TF-019 .*fixed 2026-09-09" <<<"$out" && grep -q "never report these as open" <<<"$out" \
+    && ok feedback_state_b "the self-check names every fix waiting to be re-checked" \
+    || { bad feedback_state_b "the self-check says nothing about fixes waiting here"; note "$(tail -3 <<<"$out")"; }
+  out="$(cd "$d" && bash "$UTILS/tf-feedback.sh" Fx --close TF-019 "ran tf-build-list; all four rows listed" && bash "$UTILS/tf-feedback.sh" Fx)"
+  grep -q "TechieFlow: 1 open · 2 closed" <<<"$out" \
+    && ok feedback_state_c "a re-checked fix is closed with one command, and counted closed" \
+    || { bad feedback_state_c "closing a re-checked entry did not take"; note "$(head -2 <<<"$out")"; }
+  out="$(python3 "$UTILS/tf-doc-check.py" --root "$d" --strict "$d/docs/Fx-TrBlazeUI-Feedback.md" 2>&1)"
+  grep -q "the Summary's counts are not the entries'" <<<"$out" \
+    && ok feedback_state_d "a Summary that still says every entry is open is refused" \
+    || { bad feedback_state_d "a stale Summary passed the document check"; note "$(grep FAIL <<<"$out" | head -2)"; }
+}
+
+# --- a fix nobody told the project about -------------------------------------------------
+# TF-013 to TF-017 were fixed here on 2026-09-09 with a case each below, and the reply written
+# into TfLens's feedback file listed only TF-018 onward; TfLens's file still showed all five open
+# two days later. A problem this suite holds a case for has been fixed, so the framework's copy
+# of the project's feedback file (docs/<App>-TechieFlow-Feedback.md here, which the owner copies
+# across) must not read it as open (MISS-TechieFlow-20260911-04).
+replies_complete() {
+  local out
+  out="$(python3 - "$ROOT" "$0" <<'PY'
+import glob, os, re, sys
+root, suite = sys.argv[1], open(sys.argv[2], encoding="utf-8").read()
+sys.path.insert(0, os.path.join(root, ".tfcore", "utils"))
+import tf_feedback
+cased = {"TF-%s" % n for n in re.findall(r"(?m)^tf_0?(\d{2,3})\(\)", suite)}
+cased = {("TF-%03d" % int(c[3:])) for c in cased}
+for f in sorted(glob.glob(os.path.join(root, "docs", "*-TechieFlow-Feedback.md"))):
+    for e in tf_feedback.entries(f):
+        if e["id"] in cased and e["state"] == "open":
+            print("%s %s" % (os.path.basename(f), e["id"]))
+PY
+)"
+  [[ -z "$out" ]] && ok replies_complete "every problem fixed here is answered in the project's feedback file" \
+                  || { bad replies_complete "fixed here, still open in the project's file: $(tr '\n' ' ' <<<"$out")"; }
+}
+
+# --- TF-025: --add-missing copies rows it cannot see -------------------------------------
+# A row naming its item inside a longer bracket — "(BRD-76, Phase 3)", "(BRD-118, BRD-120, Phase 3)"
+# — with no *BRD:* detail line was invisible, so one new BRD item made --add-missing append a copy
+# of every such row: 44 rows on TfLens phase 3 for 13 new items, 31 of them copies of Verified rows.
+tf_025() {
+  local d="$SCRATCH/addmissing"; mkdir -p "$d/docs" "$d/.tfcore"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-BRD.md" <<'MD'
+# Fx — Business Requirements
+
+| | |
+|---|---|
+| Size | Small |
+
+## Screens and flow
+
+| Screen | Route | Role | Mockup | Fields |
+|---|---|---|---|---|
+| Coverage | `/coverage` | User | [m](mockups/coverage.html) | x |
+
+## Requirements
+
+- **BRD-76** — Coverage figure. *Screen:* Coverage
+  - *Acceptance:* When a user opens Coverage on Coverage, then the figure shows.
+- **BRD-118** — Coverage filter. *Screen:* Coverage
+  - *Acceptance:* When a user filters on Coverage, then the rows narrow.
+- **BRD-120** — Coverage export. *Screen:* Coverage
+  - *Acceptance:* When a user exports on Coverage, then a file downloads.
+- **BRD-189** — Coverage legend. *Screen:* Coverage
+  - *Acceptance:* When a user opens Coverage on Coverage, then a legend shows.
+MD
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+## Requirements Status
+
+| ID | Requirement | Status | % | Remarks | Details |
+|----|-------------|--------|---|---------|---------|
+| REQ-FN-068 | Coverage figure (BRD-76, Phase 3) | Verified | 100% | — | [view](#d-req-fn-068) |
+| REQ-FN-070 | Coverage filter and export (BRD-118, BRD-120, Phase 3) | Verified | 100% | — | [view](#d-req-fn-070) |
+
+## Page: Coverage
+
+<a id="d-req-fn-068"></a>
+- **REQ-FN-068** — Coverage figure
+  - *Acceptance:* When a user opens Coverage on Coverage, then the figure shows.
+MD
+  local out; out="$(cd "$d" && python3 "$UTILS/tf-split-brd.py" Fx --add-missing 2>&1)"
+  local n; n="$(grep -c '^| REQ-' "$d/docs/Fx-Checklist.md")"
+  if [[ "$n" == "3" ]] && grep -q "Coverage legend" "$d/docs/Fx-Checklist.md"; then
+    ok tf_025 "only the one new item is appended; rows naming items inside a longer bracket are seen"
+  else
+    bad tf_025 "--add-missing appended $((n - 2)) row(s) for 1 new item"; note "$out"
+  fi
+}
+
+# --- TF-026: a stylesheet rule read as a control the page must carry ------------------------
+# TfLens's shared mockup stylesheet styles the Add-source dialog with [data-testid="source-mode"]
+# .tab{…}; the screen check read the whole file and reported "anchored control source-mode is not
+# on the page" on /misses and /effort, which draw no such dialog.
+tf_026() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip tf_026 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/cssanchor"; mkdir -p "$d/docs/mockups"
+  cat > "$d/docs/mockups/misses.html" <<'HTML'
+<!doctype html><html><head><style>[data-testid="source-mode"] .tab{padding:4px}</style>
+<script>var dialog = '[data-testid="source-picker"]';</script></head>
+<body><!-- <div data-testid="old-banner"></div> --><h1 data-testid="page-title">Misses</h1>
+<div data-testid="miss-table">rows</div><div data-testid="miss-legend">legend</div></body></html>
+HTML
+  # the app draws the title and the table, and genuinely lacks the legend
+  cat > "$d/misses.html" <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;font-family:system-ui">
+<h1 data-testid="page-title">Misses</h1><div data-testid="miss-table">rows of misses</div></body></html>
+HTML
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  ( cd "$d" && python3 -m http.server "$port" --bind 127.0.0.1 >/dev/null 2>&1 & echo $! > "$d/srv.pid" )
+  sleep 1
+  local out
+  out="$( cd "$d" && node screens.mjs --base "http://127.0.0.1:$port" --screen "misses=/misses.html" \
+          --widths 1280 --json-out "$d/screens.json" 2>&1 )"
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+  if grep -qE '"(source-mode|source-picker|old-banner)"' <<<"$out"; then
+    bad tf_026a "a name in the mockup's stylesheet, script or a comment was demanded of the page"; note "$(grep -E 'source-|old-banner' <<<"$out" | head -1)"
+  else
+    ok tf_026a "only anchors on the mockup's elements are demanded of the page"
+  fi
+  grep -q '"miss-legend" is not on the page' <<<"$out" \
+    && ok tf_026b "a control the mockup really draws and the page lacks is still reported" \
+    || { bad tf_026b "a genuinely missing control went unreported"; note "$(grep misses <<<"$out" | head -2)"; }
+}
+
+# --- TF-027: an icon one wrapper deeper, and a colour written in oklch() ---------------------
+# mockup-parity pairs elements by position, so an icon the component library wraps in one more
+# element was "missing" on every sidebar group and tile; and a tile themed in oklch() read as
+# neutral because the colour string was parsed as r/g/b numbers — 136 findings at 1280 px on two
+# TfLens screens, most of them describing icons and colours plainly on screen.
+tf_027() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip tf_027 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/parity"; mkdir -p "$d/docs/mockups"
+  local ico='<svg width="16" height="16" viewBox="0 0 16 16"><rect width="16" height="16"/></svg>'
+  cat > "$d/docs/mockups/effort.html" <<HTML
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font-family:system-ui}
+.tile{width:200px;height:60px;background:rgb(239,68,68);color:#fff}nav a{display:block;height:24px}</style></head>
+<body><nav data-testid="app-sidebar"><div><a href="#">${ico}Misses</a><a href="#">${ico}Effort</a></div></nav>
+<div data-testid="kpi-rework" class="tile">Rework 12</div></body></html>
+HTML
+  # the app: the library wraps the links in one more element; the first keeps its icon, the second
+  # has really lost it, and the tile is red in oklch()
+  cat > "$d/effort.html" <<HTML
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font-family:system-ui}
+.tile{width:200px;height:60px;background:oklch(0.637 0.237 25.331);color:#fff}nav a{display:block;height:24px}</style></head>
+<body><nav data-testid="app-sidebar"><div><div class="group"><a href="#">${ico}Misses</a><a href="#">Effort</a></div></div></nav>
+<div data-testid="kpi-rework" class="tile">Rework 12</div></body></html>
+HTML
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  ( cd "$d" && python3 -m http.server "$port" --bind 127.0.0.1 >/dev/null 2>&1 & echo $! > "$d/srv.pid" )
+  sleep 1
+  ( cd "$d" && node parity.mjs --base "http://127.0.0.1:$port" --screen "effort=/effort.html" --widths 1280 \
+      --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+  local out; out="$(python3 -c 'import json,sys
+d=json.load(open(sys.argv[1]))
+for s in d["screens"]:
+    for f in s.get("findings") or []:
+        print(f["class"], f["key"], "|", f["detail"])' "$d/parity.json" 2>&1)"
+  if grep -q "semantic colour differs" <<<"$out"; then
+    bad tf_027a "a tile red in oklch() is read as another colour"; note "$(grep 'semantic colour' <<<"$out" | head -1)"
+  else
+    ok tf_027a "a colour written in oklch() is read as the colour it is"
+  fi
+  local missing; missing="$(grep -c '^missing' <<<"$out")"
+  if [[ "$missing" == "1" ]]; then
+    ok tf_027b "an icon one wrapper deeper is found; the one really gone is still reported"
+  else
+    bad tf_027b "$missing missing-icon finding(s) where exactly one icon is gone"; note "$(grep '^missing' <<<"$out" | head -3)"
+  fi
+}
+
+# --- the ignore file that grew by one block per update -----------------------------------
+# `tr -d '\r' < .gitignore | grep -qE …` under `set -o pipefail`: grep -q stops at the first
+# match, tr dies writing the rest, the pipeline reports failure, and the framework block is
+# appended again. On the Windows drive it happened on every run once the file was large:
+# TechieBlog's .gitignore held the block 50 times, TfLens's 30, a private project's 10. Proved on a copy of
+# TechieBlog's file on /mnt/c: the old updater appended one block per run, the fixed one none.
+# The race needs that drive and a full update to show, so the case pins the shape instead.
+gitignore_once() {
+  local hits; hits="$(grep -nE "< *\.git(ignore|attributes) *\| *grep -q" "$ROOT/update-framework.sh" "$ROOT"/scaffold-*.sh 2>/dev/null)"
+  [[ -z "$hits" ]] && ok gitignore_once "no delivery script decides 'already there' through a pipe that grep -q can cut" \
+                   || { bad gitignore_once "a delivery script can append its block again on every run"; note "$(head -2 <<<"$hits")"; }
+}
+
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

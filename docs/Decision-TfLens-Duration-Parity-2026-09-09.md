@@ -78,7 +78,7 @@ The last three are the point. A smaller total offered without its exclusions is 
 | The rule itself | `src/TfLens.Core/Metrics/RunDuration.cs` — its `Derive` currently returns a record with a duration untouched |
 | The figures | `src/TfLens.Core/Metrics/PhaseMetrics.cs`, `Pooled.cs` |
 | The shape it publishes | `src/TfLens.Core/Contracts/PhaseEffort.cs` |
-| The gate | `tools/parity-compare.py` — `PHASES_TOP_KEYS` and the `duration_s` tuple both need the new keys |
+| The gate | `tools/parity-compare.py` — the four new keys go in `PHASES_TOP_KEYS` only. Each phase's own duration list keeps its five keys; only their values change. *(Fixed 2026-09-11, TF-023: this line first said the per-phase list needed the four keys too, which would have made the check fail on every phase for good.)* |
 | The specification | the BRD item that owns duration derivation (`BRD-179` / `REQ-FN-112`), which states the old rule in its own words |
 
 ---
@@ -163,8 +163,11 @@ Step 2 — flow-master, `*build-phase TfLens`. Expect to touch:
   src/TfLens.Core/Metrics/PhaseMetrics.cs     the figures
   src/TfLens.Core/Metrics/Pooled.cs           the pooled figures
   src/TfLens.Core/Contracts/PhaseEffort.cs    the published shape
-  tools/parity-compare.py                     PHASES_TOP_KEYS and the duration_s tuple
-                                              both need the four new keys
+  tools/parity-compare.py                     the four new keys go in PHASES_TOP_KEYS
+                                              ONLY. Do not add them to the per-phase
+                                              duration_s tuple: each phase's duration_s
+                                              keeps its five keys (total, median, max,
+                                              n, derived_n) and only its values change.
 
 HOW TO KNOW IT WORKED. Run the parity gate. It must reach zero findings against
 bash /mnt/c/3AIGenCode/TechieFlow/.tfcore/telemetry/tf-metrics.sh --rollup <repo> --json

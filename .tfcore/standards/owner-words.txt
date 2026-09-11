@@ -1,0 +1,23 @@
+# Words the owner should never have to look up, and what to say instead.
+# Read by .tfcore/utils/tf-owner-text.py. One per line:  word | say instead
+# A line is added when the owner has had to ask what a word meant, or when the framework's own
+# rules name it (_owner-language.md). Adding a word is cheap; a word the owner knows is a false alarm,
+# so do not add ordinary English or the owner's own vocabulary (parity, checklist, verify, phase).
+oracle | the framework's own script
+denominator | the number you divide by
+numerator | the number being divided
+idempotent | safe to run twice
+invariant | a rule that always holds
+orthogonal | unrelated
+heuristic | a rule of thumb
+canonical | the standard one
+provenance | where the number came from
+cardinality | how many
+semantics | meaning
+deterministic | gives the same answer every time
+tuple | list
+enum | fixed list of values
+rollup | the combined report
+taint | marked unreliable
+short-circuit | stops early
+payload | the data sent

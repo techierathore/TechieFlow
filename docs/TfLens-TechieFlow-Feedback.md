@@ -4,7 +4,7 @@
 |---|---|
 | App | TfLens |
 | Upstream | TechieFlow |
-| Updated | 2026-09-09 |
+| Updated | 2026-09-11 |
 
 Defects found in the **TechieFlow framework itself** (`.tfcore/`) while building TfLens. That directory
 is owned and maintained by the TechieFlow team and is gitignored here — `update-framework.sh` overwrites
@@ -18,9 +18,11 @@ Workaround / Suggested fix). One file per upstream owner; this one is TechieFlow
 
 ## Summary
 
-**Nothing is blocked.** 18 entries: 0 blocking now, 6 filed and open (`TF-013` to `TF-018`), 12 fixed upstream. `TF-007` to `TF-012` are recorded as fixed on 2026-08-31 and have not been re-verified here; the per-entry verification recipes are in the 2026-08-31 correspondence block below.
+**Nothing is blocked.** 27 entries: none open, 15 fixed upstream and waiting to be re-checked here, 12 closed. Every problem TfLens has filed is now fixed in the framework: TF-013 to TF-022 on 2026-09-09 (the reply that day left out TF-013 to TF-017, which is why they showed open here), TF-023 to TF-027 on 2026-09-11. A fix counts as done only once it has been re-checked here: run each entry's "Verify from here" step in the Resolution status block of 2026-09-11, then close it with `bash .tfcore/utils/tf-feedback.sh TfLens --close <ID> "<what you ran and what it showed>"`. `bash .tfcore/utils/tf-feedback.sh TfLens` prints the state of every entry. Never describe a fixed entry as an open problem.
 
 #### Detail
+
+The bullets below are the history as it was written at the time. The state today is the paragraph above.
 
 - **`TF-020` (new 2026-09-09, major)** — `tf-metrics.sh`'s `seg()` never reads `req_class`, so the
   framework's own `FR` requirement verdicts are pooled into whichever application `project_type` segment
@@ -139,6 +141,83 @@ that grew a legal move as a result.
 > and a message naming the real reason. **The dated evidence is kept and `TF-004` stays closed here**;
 > `PROJECT-STATUS.md` is owned elsewhere and was not edited. Its line 53 also still counts five
 > entries, where the collision fix above makes six.
+
+---
+
+## Resolution status (TechieFlow team, 2026-09-11)
+
+**Every problem TfLens has filed is now fixed in the framework.** Fifteen are fixed upstream and wait
+for TfLens to re-check them; the other twelve were closed here earlier. Nothing is blocked, and
+nothing needs changing to keep TfLens working. Deploy first — `bash
+/mnt/c/3AIGenCode/TechieFlow/update-framework.sh /mnt/c/1MyCode/TfLens` — then run each row's
+"Verify from here" step and close the entry with
+`bash .tfcore/utils/tf-feedback.sh TfLens --close <ID> "<what you ran and what it showed>"`.
+TechieFlow never closes an entry for you.
+
+| ID | Fix | Verify from here |
+|----|-----|------------------|
+| **TF-013** | Fixed 2026-09-09; our reply that day left it out, so this file showed it open. A new hook, `guard-verify-deps.sh`: a verify run may start a service the project defines, never create one, and never point the app at another database. | `printf '%s' '{"tool_name":"Bash","tool_input":{"command":"docker compose up -d"}}' \| bash .tfcore/hooks/guard-verify-deps.sh; echo $?` prints a refusal and `2`. |
+| **TF-014** | Fixed 2026-09-09, reply left out the same way. `tf-gitignore-audit.sh` no longer skips dot-folders; `.vs/` and `.idea/` are checked whatever the stack. | `bash .tfcore/utils/tf-gitignore-audit.sh . --dry-run` names any `.vs/` or `.idea/` path that is not ignored. |
+| **TF-015** | Fixed 2026-09-09, reply left out. The emitter refuses a run that ends before it starts, and every reader takes a duration from one place, so the two readers of a stream agree. | `bash .tfcore/utils/tf-selfcheck.sh` reports your one old impossible record as "discarded from every duration figure". |
+| **TF-016** | Fixed 2026-09-09, reply left out. `*amend-docs` has a closing step for a miss whose fix is a document. | `grep -n tf-fix-close .tfcore/tasks/amend-docs.md` shows the step; `bash .tfcore/utils/tf-emit.sh --open-misses TfLens --artifact-class doc` lists the document misses it can close. |
+| **TF-017** | Fixed 2026-09-09, reply left out. `tf-split-brd` reads a requirement line that carries its `<a id>` anchor. | `bash .tfcore/utils/tf-selfcheck.sh` prints "tf-split-brd TfLens: reads all 86 BRD items" for phase 3. |
+| **TF-019** | Fixed 2026-09-09 (block below). Your session of 2026-09-11 confirmed the build list offers every not-started row. | Nothing to run. Close it. |
+| **TF-022** | Fixed 2026-09-09 (block below). Your verify of 2026-09-11 09:24 graded `REQ-UI-034` and `REQ-UI-039` Verified; the old FAIL on both came from the run of 2026-09-09 14:54, before the fix was deployed. | Nothing to run: both rows are Verified in `TfLens-P3-Checklist.md`. Close it. |
+| **TF-023** | Both places in `docs/Decision-TfLens-Duration-Parity-2026-09-09.md` (TechieFlow repository) now say the four new counts go in the top-level key list only, and that each phase's own duration list keeps its five keys. | Your `tools/parity-compare.py` already does this. Read the two places and close it. |
+| **TF-024** | New `app-phase-brd-tmpl.md`: Summary, Screens and flow, Requirements, Non-functional (only what the phase adds), Development status, Where the rest lives — which must link to the phase-1 BRD. The checker uses it for `{App}-P<n>-BRD.md`; day-1 writes phase 2 onward from it. **The same was done for phase UI designs** (`app-phase-uidesign-tmpl.md`: screens only, plus the link back), at the owner's request. | `bash .tfcore/utils/tf-doc-check.sh --app TfLens --strict`. The phase BRDs go from 20 findings to 6, the phase UI designs lose their 10 phase-1 findings. What remains is real and repaired through `*amend-docs`: a Feature catalog section (removed from every BRD at the reset), Development status placed second, a missing "Where the rest lives" section in each phase UI design (your pointer is a sentence, not the section), and a "Library gaps" section that belongs in the TrBlazeUI feedback file. |
+| **TF-025** | `--add-missing` counts every `BRD-N` anywhere on a status-table row, and on a `*BRD:*` detail line, as already tracked. | On a copy of your phase-3 shape one new item appended one row, where the old script appended four. Next `*amend-docs` that adds an item: the printed list names only the new item. |
+| **TF-026** | The screen check reads `data-testid` only on elements. Style rules, script strings and comments are ignored. | Next `*verify`: "anchored control source-mode is not on the page" no longer appears for `/misses` or `/effort`. |
+| **TF-027** | Two fixes. **(1)** The root cause of the colour findings was not the wrapper: TrBlazeUI writes its colours as `oklch(…)`, and the tool read those three numbers as red, green and blue, so every tile the library colours read as neutral. The browser now converts the colour. **(2)** An icon counts as missing only when the matching parent in the app carries fewer icons than the mockup's, and never more reports than icons short. | Next `*verify`: the sidebar-icon and tile-colour findings on `/misses` and `/effort` are gone. A genuinely missing icon is still reported — pinned by a case. |
+
+Every fix carries a case in the framework's `tests/regression/run.sh` that fails against the script
+as you have it today and passes now.
+
+### Why this file said TF-019 and TF-022 were open, and what changed
+
+It was the framework's fault first (`MISS-TechieFlow-20260911-04` and `-05`):
+
+1. **Your status file was wrong about this file.** `tf-status-facts` counted every `###` heading as an
+   entry and recognised no closing mark in use, so PROJECT-STATUS read "TechieFlow: 62 open of 62"
+   for 27 entries, and "TrBlazeUI: 2 open of 2" for 28.
+2. **The self-check never read this file**, and the command start showed your agent only "self-check
+   clean".
+3. **Our reply of 2026-09-09 left out TF-013 to TF-017**, so they showed open here with no way for you
+   to know.
+
+Your agent then repeated the status file instead of reading the reply at the top of this file.
+
+What the framework does now: one reader, `tf_feedback.py`, is used by every script that reports on a
+feedback file. PROJECT-STATUS shows open, fixed-upstream-not-yet-re-checked, and closed separately.
+The self-check lists every fix waiting to be re-checked at the start of every command, and the start
+line passes that list through. `tf-feedback.sh --close` closes an entry once its fix is re-checked
+here. The document check refuses a Summary whose counts disagree with the entries. The closing
+check (below) refuses a message that calls a fixed entry open. And the framework's own test suite now
+fails whenever a problem it has fixed is still open in the framework's copy of this file.
+
+### A NEW CHECK AT THE END OF EVERY COMMAND (FR-74)
+
+Your hand-off of 2026-09-11 was logged as `MISS-TechieFlow-20260911-03`. From this deploy, on the
+turn that closes a command, the Stop hook runs `tf-owner-text.sh` on the closing message and on any
+free-form document that message hands over. It refuses the stop, once, when the text
+
+- uses a word from `.tfcore/standards/owner-words.txt` or a name from inside a script;
+- names an open upstream problem without a table row saying what it affects and whether it blocks or
+  breaks anything, or without the prompt that fixes it in a code block;
+- describes a problem this file records as fixed upstream or closed as if it were open;
+- names a command still to run without the line to paste; or
+- ends without the next prompt in a code block.
+
+`docs/TfLens-Parity-Zero-2026-09-11.md` fails it on five lines as it stands: "denominator" at line
+229, and TF-019, TF-022, TF-023 and TF-024 described as open. Your Decision Request's decision 1 asks
+the owner to fix TF-018 to TF-022, which were fixed on 2026-09-09; it no longer needs a decision.
+
+### Your TrBlazeUI file has the same problem
+
+`docs/TfLens-TrBlazeUI-Feedback.md` opens with the library team's reply of 2026-08-31 saying every
+entry filed by then is fixed (24 of them, on 2.1.0 or the next release), and its Summary, written
+later, still says "all 28 open. None is fixed upstream". `bash .tfcore/utils/tf-feedback.sh TfLens`
+reads it as 3 open, 24 fixed upstream, 1 closed. Those are re-checked after upgrading the package,
+not before.
 
 ---
 
@@ -2214,3 +2293,117 @@ which is exactly why it can sit unnoticed until the framework reads its own roll
 
 **Encountered in:** TfLens, `*build-phase` cluster C2 2026-09-09. **Not fixable from TfLens** —
 `.tfcore/` is framework-owned.
+
+---
+
+## TF-023 — the TfLens duration-parity decision document names a change that would break the parity gate forever
+
+- **Severity:** major
+- **Blocks:** no — the correct half was implemented. But an agent following the document literally,
+  as it is written to be pasted, makes the gate permanently unpassable.
+- **Repro:** `docs/Decision-TfLens-Duration-Parity-2026-09-09.md`, "Where the work lands in TfLens" and
+  again in the pasteable prompt: *"`tools/parity-compare.py` — `PHASES_TOP_KEYS` and the `duration_s`
+  tuple both need the new keys"*.
+- **Expected:** the four keys are added to `PHASES_TOP_KEYS` only.
+- **Actual:** the `duration_s` tuple is `PHASES_NESTED_KEYS["duration_s"]`, which lists the members of
+  **each individual phase's** `duration_s` object. `tf-metrics.sh` emits exactly
+  `total`/`median`/`max`/`n`/`derived_n` there and nothing else — the four counts are published once per
+  repository at the top of the `phases` block, not per phase. Adding them to the nested tuple raises an
+  `UNCOVERED` finding per phase, per repository, permanently.
+- **Encountered in:** TfLens, `*build-phase`, 2026-09-10 — verified in `tf-metrics.sh` and against live
+  rollups for all five repositories.
+- **Workaround:** add the keys to `PHASES_TOP_KEYS` only; the per-phase block changes only its values,
+  which its existing five keys already diff.
+- **Suggested fix:** in the decision document, change both occurrences to name `PHASES_TOP_KEYS` alone,
+  and state that the per-phase `duration_s` block keeps its five keys and changes only its values.
+
+**What is NOT affected.** Everything else in that document is correct and was followed as written,
+including the expected figures — TechieBlog's 33 of 46 with 13 impossible and 4 recomputed reproduced
+exactly.
+
+---
+
+## TF-024 — the document checker applies the whole-project BRD template to phase BRDs, so a correct phase BRD cannot pass
+
+- **Severity:** major
+- **Blocks:** no — no figure or code is affected. But it puts 87 unfixable `FAIL` lines into every
+  `tf-doc-check.sh --app` run, hiding the real failures.
+- **Repro:** `bash .tfcore/utils/tf-doc-check.sh --app TfLens` on a Large project split into phases.
+- **Expected:** a phase BRD (`docs/{App}-Pn-BRD.md`) is checked against the sections a phase BRD actually
+  carries.
+- **Actual:** it is checked against `.tfcore/templates/v4custom/app-brd-tmpl.md`, the whole-project
+  template, which marks `Scope`, `Users and roles`, `Non-functional requirements`, `Context diagram`,
+  `Constraints and assumptions` and `Risks` as required. A phase BRD carries none of them **by design** —
+  they belong to the phase-1 BRD — and its "Where the rest lives" table is reported as *"not in the
+  template"*. No phase-BRD template exists.
+- **Encountered in:** TfLens, `*amend-docs` and `*build-phase`, 2026-09-10 — `docs/TfLens-P2-BRD.md` and
+  `docs/TfLens-P3-BRD.md`. 87 of 236 `FAIL` lines across the project are template-shape findings.
+- **Workaround:** none that is honest. Writing the six missing sections into each phase BRD would
+  duplicate the phase-1 BRD and create exactly the two-answers problem phasing exists to prevent.
+- **Suggested fix:** add `app-phase-brd-tmpl.md` whose required sections are the ones a phase BRD really
+  has (Development status, Screens and flow, Feature catalog, Requirements, Where the rest lives), and
+  select it in `tf-doc-check.sh` when the filename matches `{App}-P<n>-BRD.md`.
+
+**What is NOT affected.** The phase-1 BRD is checked correctly. The checklist, Architecture, PROJECT-STATUS and mockup checks are unaffected, and the
+`BRD-N` range check works correctly once a phase's range row is extended.
+
+---
+
+## TF-025 — `tf-split-brd --add-missing` does not recognise a row whose title reads `(BRD-N, Phase 3)`, so it appends a second row for a requirement already built and verified
+
+- **Severity:** major
+- **Blocks:** no — the verifier set the 31 copies to `N/A` naming the original row and graded the phase.
+  But the copies inflated the unbuilt count, and a build pass trusting the checklist would build them again.
+- **Repro:** a checklist whose rows cite their BRD item inside a longer bracket — `(BRD-76, Phase 3)` —
+  with no `*BRD:*` detail line; add one BRD item and run `tf-split-brd.sh {App} --add-missing`.
+- **Expected:** one row appended, for the new item.
+- **Actual:** on TfLens phase 3 (2026-09-10) it appended 44 rows for 13 new items: 30 copies of rows
+  already `Verified` and a copy of REQ-FN-112 as REQ-FN-135, each with a placeholder acceptance line.
+- **Encountered in:** TfLens, `*amend-docs` 2026-09-10; found by `*verify all` 2026-09-11.
+- **Workaround:** mark each copy `N/A` naming the original row; write the new rows' acceptance lines by hand.
+- **Suggested fix:** `.tfcore/utils/tf-split-brd.py:226` — the pattern `\((BRD-\d+)\)` accepts only a
+  bracket holding one id. Collect every `BRD-\d+` on each `| REQ-` row instead, and print the items it
+  is about to append before writing them.
+
+**What is NOT affected.** The BRD and every pre-existing row are unchanged. The 13 genuinely new items
+(BRD-189 to BRD-201) were appended with correct ids, and no id was reused.
+
+---
+
+## TF-026 — `tf-verify-screens` reads the mockup's stylesheet as well as its markup, so a CSS rule becomes a control the page must carry
+
+- **Severity:** minor
+- **Blocks:** no — on TfLens both affected screens also fail for a real reason, so no verdict changed.
+- **Repro:** a mockup whose `<style>` holds `[data-testid="source-mode"] .tab{…}`; run
+  `tf-verify-screens.sh --list … --base …` on a screen built from it.
+- **Expected:** anchors come from elements in the mockup's body.
+- **Actual:** `anchored control "source-mode" is not on the page` on `/misses` and `/effort`; neither
+  mockup has such an element, only two CSS selectors.
+- **Encountered in:** TfLens, `*verify all`, 2026-09-11.
+- **Workaround:** none needed here; on another project, read the finding against the mockup's body.
+- **Suggested fix:** in `anchorsOf` (`tf-verify-screens.mjs:72`) strip `<style>` and `<script>` blocks
+  before matching.
+
+**What is NOT affected.** Every other anchor was read correctly, and the visual half, the asset check and
+the screenshots are unaffected.
+
+---
+
+## TF-027 — `mockup-parity` reports an icon as missing when the app draws it one wrapper deeper than the mockup
+
+- **Severity:** minor
+- **Blocks:** no — the affected rows already fail an earlier check. But the report lists 136 findings at
+  1280 px over two screens, most describing icons plainly visible in the tool's own screenshot.
+- **Repro:** `tf-mockup-parity.sh --screen misses=/misses --screen effort=/effort` on TfLens; compare with
+  `tests/.artifacts/verify/screens/misses-rework-1280.png`.
+- **Expected:** an icon the app renders where the mockup draws one is not reported missing.
+- **Actual:** `the mockup carries an icon here and the app renders no such element` on sidebar groups,
+  info boxes and KPI tiles. The `missing` clause (`tf-mockup-parity.mjs:360`) pairs elements by tree
+  position, so one extra wrapper makes every icon below it "missing". The KPI colour findings are
+  similar: `semanticColor` reads a wrapper whose translucent tint it buckets as neutral.
+- **Encountered in:** TfLens, `*verify all`, 2026-09-11.
+- **Workaround:** read the `missing` and `color` findings against the screenshot before acting on them.
+- **Suggested fix:** search the paired parent's subtree for a matching icon before reporting `missing`;
+  take colour from the first descendant with an opaque fill.
+
+**What is NOT affected.** The clip, wrap and badge clauses are separate and were not examined here.

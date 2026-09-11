@@ -21,8 +21,10 @@ rule: mockup-links
      already shows. Use only controls that exist in the UI library's catalogue; a missing control goes
      to the library feedback file, not into a workaround. The set of screens must equal the BRD's
      Screens and flow table. For a library, this document is optional.
-     Large project: one UIDesign per phase (docs/{App}-UIDesign.md, docs/{App}-P2-UIDesign.md, …) with a
-     header row "| Phase | n of m |"; its screens are exactly that phase's row in docs/{App}-Phases.md.
+     Large project: one UIDesign per phase with a header row "| Phase | n of m |"; its screens are exactly
+     that phase's row in docs/{App}-Phases.md. Phase 1 is this template and keeps what every phase shares
+     (library, theme, design system, the one click-through flow, branding); phase n is
+     docs/{App}-Pn-UIDesign.md from app-phase-uidesign-tmpl.md, screens only, linking back here.
      The mockup folder stays one click-through set across every phase. -->
 
 # {App} — UI Design

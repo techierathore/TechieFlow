@@ -8,6 +8,131 @@
 
 ---
 
+## 2026-09-11, later — why TfLens called fixed problems open, and every entry answered
+
+The owner asked whose mistake it was that TfLens reported TF-019 and TF-022 as open when the owner had
+copied in the reply and updated the framework, and TfLens's agent had run the self-check first.
+**Mostly the framework's**, found by reading what TfLens's agent read:
+
+1. `tf-status-facts.py` wrote TfLens's PROJECT-STATUS line "TechieFlow: 62 open of 62". It counted
+   every `###` heading in a feedback file as an entry and knew one closing format no file used, so it
+   could never report anything fixed — every project's line read "N open of N" (TrBlazeUI "2 open of
+   2" over 28 entries). `MISS-TechieFlow-20260911-04`, sorted `weak-check`.
+2. `tf-selfcheck.sh` never read the feedback file, and `tf-phase.sh start` showed the agent only
+   "self-check clean".
+3. The reply of 2026-09-09 fixed TF-013 to TF-020 and answered only TF-018 onward, so TF-013 to TF-017
+   read open in TfLens for two days. `MISS-TechieFlow-20260911-05`, sorted `unsaid`.
+
+TfLens's agent then repeated the status line instead of reading the reply at the top of its own file —
+real, and secondary.
+
+**One reader**, `.tfcore/utils/tf_feedback.py` (CLI `tf-feedback.sh`): open, fixed upstream and not
+yet re-checked, closed; it reads replies in the three shapes in use (a Resolution status table, the
+TrBlazeUI team's quoted "✅ RESOLVED" block with "everything else is now fixed", ✅ closing lines) and
+runs clean on all 26 feedback files across both workspaces. The status facts, the self-check, the
+closing-message check and the document check all use it. The self-check lists every fix waiting to be
+re-checked and `tf-phase.sh start` passes that list to the agent. `tf-feedback.sh --close <ID>
+"<evidence>"` closes an entry (refused without evidence). The feedback rule in `tf-doc-check` refuses a
+Summary whose counts disagree with the entries. `tests/regression` gains `feedback_state` (fails
+against the script TfLens had: "3 open of 3" and "0 open of 0" on its fixture) and `replies_complete`,
+which fails while a problem the suite holds a case for reads open in a `docs/*-TechieFlow-Feedback.md`
+copy here. Maintenance contract 5b. FR-75.
+
+**TF-025** — `tf-split-brd --add-missing` now counts every `BRD-N` on a status row or `*BRD:*` line as
+tracked; on TfLens's row shape the old script appended 4 rows for 1 new item. **TF-026** —
+`tf-verify-screens` reads `data-testid` only on elements, not in `<style>`, `<script>` or comments.
+**TF-027** — the colour findings were not caused by the wrapper, as filed: TrBlazeUI writes colours as
+`oklch()`, and the tool parsed those numbers as r/g/b, so every library-coloured tile read neutral;
+the browser now converts the colour through a one-pixel canvas. An icon is "missing" only when the
+paired parent carries fewer icons than the mockup's, never more reports than icons short. Cases
+`tf_025`, `tf_026`, `tf_027`, the last two run in a real Chromium (TfLens's Playwright), each failing
+against the old script. `MISS-TechieFlow-20260911-06` to `-08`.
+
+**Phase UIDesign** (owner: "yes do that") — `app-phase-uidesign-tmpl.md`, screens plus "Where the rest
+lives"; the `phase-pointer` rule now requires the link to the phase-1 document of the same kind. TfLens's
+phase UIDesigns lose their 10 phase-1 findings. Day-1, `mockups.md`, the UIDesign template's notes,
+Schemas §3.3, FR-73 and case `tf_024d`.
+
+**Found while deploying** — `update-framework.sh` and both scaffolds tested "block already present?"
+with `tr -d '\r' < .gitignore | grep -qE …` under `pipefail`; once grep stops early on a large file on
+the Windows drive, the pipeline reports failure and the block is appended again. TechieBlog's
+`.gitignore` holds it 50 times, TfLens's 30, a private project's 10. Reproduced on a copy of TechieBlog's file on
+`/mnt/c` (old: 50 → 53 in three runs; fixed: 50, 50, 50). Existing duplicates are left for the owner.
+`MISS-TechieFlow-20260911-09`, FR-76, case `gitignore_once`.
+
+**TfLens's feedback file** was rebuilt here from TfLens's current copy (keeping TF-025 to TF-027 and
+everything else TfLens wrote), with a new Summary and one Resolution status block answering all fifteen
+fixed entries, and copied over TfLens's copy at the owner's request. Deployed to TfLens, then to the other 18 repositories at the owner's request:
+all 18 updated with exit 0, no `.gitignore` gained a block (TechieBlog stayed at 50), and every one of the 19
+passes its own `tf-selfcheck` with no findings.
+
+## 2026-09-11 — TfLens's four entries, and a hand-off the owner could not use
+
+The owner passed on TfLens's request to fix TF-019, TF-022, TF-023 and TF-024, with TF-022 first, and
+asked whether the three mistakes in TfLens's hand-off could be stopped by a script rather than a
+promise.
+
+**TF-022 and TF-019 were already fixed**, on 2026-09-09, and TfLens's `.tfcore/` carried both fixes
+byte for byte. Re-run on TfLens's own test results of 2026-09-09, the current parser grades REQ-UI-039
+PASS (6 passed, 2 skipped) and REQ-UI-034 PASS (4 passed, 1 skipped). The FAILs in its checklist came
+from the verify run made before the fix was deployed, and TfLens's verify at 09:24 today graded both
+rows Verified. TfLens's hand-off called both open without reading the reply in its own feedback file,
+which is the fourth mistake the new check below catches.
+
+**TF-023.** `docs/Decision-TfLens-Duration-Parity-2026-09-09.md` said, in its table and in its
+pasteable prompt, to add the four new duration counts to the per-phase key list as well as the
+top-level one. `tf-metrics.sh` publishes them once, at the top of the phases block (line 947); each
+phase's own block has exactly five keys (line 830). Both places now name the top-level list only.
+`MISS-TechieFlow-20260911-02`, sorted `ignored`: the maintainer wrote it without reading the emitter.
+
+**TF-024.** A phase BRD was graded against the whole-project BRD template, which asked for Scope,
+Users and roles, Non-functional requirements, Context diagram, Constraints and Risks — the six
+sections a later phase must not repeat — and called its pointer back to phase 1 a stranger. Day-1
+itself told agents to write every phase from that template. New `app-phase-brd-tmpl.md` (Summary,
+Screens and flow, Requirements, optional Non-functional, Development status, Where the rest lives);
+`tf-doc-check.py` picks it for `{App}-P<n>-BRD.md` and gains the rule `phase-pointer` (the last
+section must link to the phase-1 BRD). Day-1 greenfield and brownfield, the BRD template's notes and
+Schemas §3.1 say so. The doc-check fixture's phase-2 BRD was rewritten in the new shape and its broken
+twin now repeats Scope and points nowhere. On TfLens the two phase BRDs go from 20 findings to 6; the 6
+are real (a Feature catalog section the reset removed, and section order). The TfLens "87" counted
+template-shape findings across all its documents; the phase UIDesign files have the same kind of
+problem (10 findings) and were not changed. `MISS-TechieFlow-20260911-01`, sorted `unsaid`. FR-73.
+
+**The hand-off check.** TfLens's closing message was written in jargon, named two upstream problems
+without saying what they touch, and said verify was pending with no line to paste; the rewrite still
+called TF-019 and TF-022 open. All of it passed the Stop hook, which checked the status file and never
+what the owner reads, and `tf-doc-check.sh` skipped the hand-off document as "not a TechieFlow
+document name". New `.tfcore/utils/tf-owner-text.py` (+ `.sh`) and `.tfcore/standards/owner-words.txt`.
+It checks five things: listed words and script-internal names, open upstream problems (a table row
+saying what they affect and whether they block or break anything, plus the fixing prompt in a code
+block), problems recorded as fixed upstream or closed that are described as open, commands still to
+run with no line to paste, and a closing message with no next prompt. `guard-status-html.sh` check 5
+runs it only on the turn that wrote PROJECT-STATUS — the turn that closed a command — on the closing
+message and on every free-form `docs/*.md` that message names and this turn wrote. Claude Code hands
+the Stop hook `last_assistant_message` (version 2.1.268, probed); the OpenCode plugin now fetches the
+session's messages at idle and passes the same two fields.
+Calibrated on TfLens's real texts: the first closing message fails four lines and the rewritten
+document five, all real (one listed word, and the four entries described as open once this session's
+reply recorded them fixed); the good fixture message fails none, and an ordinary later turn is left
+alone. A word in quotation marks is exempt, because quoting a word to name it is not using it — found
+when this maintainer's own closing message was run through the check. Proved in a real
+session in each harness: Claude Code refused the stop and the model rewrote the message with the next
+prompt in a code block; OpenCode sent the same five findings into the session, and the model answered
+them correctly when it got a turn. **Limit:** an unattended `opencode run` exits at its first idle,
+before the model can answer the nudge — the same limit the existing status nudge has.
+`_owner-language.md` gains one line pointing at it. `MISS-TechieFlow-20260911-03`, sorted
+`weak-check`. FR-74.
+
+**Tests.** `tests/regression/run.sh` gains `tf_024` and `owner_handoff`; each fails against the
+framework as TfLens has it and passes now. The duplicate baseline gains four deliberate copies (the
+phase template's placeholder rows and day-1's parallel sentence): 26 → 30. All suites pass: mirror 18,
+doc-check, regression, bugs 51, verify 67, goal 36, routing 42, installer 31 (on a Linux copy), and the
+framework's own checklist grades 40 of its 74 lines, all passing.
+
+**Not deployed.** Nothing was pushed to any project: TfLens had a session working in it during this one.
+TfLens's feedback file carries the reply (Resolution status 2026-09-11). TF-025 to TF-027, filed there
+the same morning, were not in the request and are untouched.
+
 ## 2026-09-10 — a tier gets a second choice, and a cost gets a meaning
 
 Two questions from the owner, both about routing, both answered by things that did not exist.

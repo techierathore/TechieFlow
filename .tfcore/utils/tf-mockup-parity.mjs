@@ -100,11 +100,23 @@ const PROBE = () => {
     return false;
   };
 
+  // --- TF-027: the browser converts the colour, never a regex. getComputedStyle returns a
+  // colour in the syntax it was written in, and a component library themed in oklch() came
+  // back as "oklch(0.971 0.013 17.38)": read as r/g/b those three numbers are near-black, so
+  // every tinted tile, pill and icon in the app bucketed as neutral against a mockup written
+  // in hex — "semantic colour differs — mockup negative, app neutral" on tiles plainly red.
+  // Painting one pixel and reading it back gives sRGB for any syntax the browser accepts.
+  const px = document.createElement('canvas');
+  px.width = px.height = 1;
+  const pctx = px.getContext('2d', { willReadFrequently: true });
   const RGB = (v) => {
-    const m = (v || '').match(/-?[\d.]+/g);
-    if (!m || m.length < 3) return null;
-    const a = m.length > 3 ? parseFloat(m[3]) : 1;
-    return a < 0.05 ? null : { r: +m[0], g: +m[1], b: +m[2] };
+    if (!v || v === 'transparent' || !pctx) return null;
+    pctx.clearRect(0, 0, 1, 1);
+    pctx.fillStyle = 'rgba(0,0,0,0)';
+    pctx.fillStyle = v;                    // an unparseable value leaves it transparent
+    pctx.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = pctx.getImageData(0, 0, 1, 1).data;
+    return a / 255 < 0.05 ? null : { r, g, b };
   };
 
   // Semantic BUCKET, never the literal colour: two designs may legitimately differ
@@ -141,7 +153,11 @@ const PROBE = () => {
     return { style, uniform: new Set(sides).size === 1, visible: w > 0 };
   };
 
-  const hasIcon = (el) => !!el.querySelector('svg, img, i[class*="icon"], span[class*="icon"], [class*="bi-"], [class*="fa-"]');
+  const ICON = 'svg, img, i[class*="icon"], span[class*="icon"], [class*="bi-"], [class*="fa-"]';
+  const hasIcon = (el) => !!el.querySelector(ICON);
+  // how many icons the element carries at any depth: a component library that wraps an icon
+  // one element deeper than the mockup moves it to another path key without removing it (TF-027)
+  const iconCount = (el) => [...el.querySelectorAll(ICON)].filter((i) => !i.parentElement || !i.parentElement.closest('svg')).length;
 
   // "Chrome" = a badge / pill / chip: a small element with its own fill or ring and
   // a rounded edge. The mockup drawing one and the app rendering bare text is the
@@ -233,6 +249,7 @@ const PROBE = () => {
       text: (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 60),
       badge: chrome ? chrome.badge : null,
       icon: hasIcon(el),
+      icons: iconCount(el),
       color: semanticColor(el),
       stroke: strokeOf(el),
       wrap: lineCount(el),
@@ -349,6 +366,7 @@ function diff(mock, app, screen, width) {
   const clauseCoverage = Object.fromEntries(Object.keys(CLAUSES).map((k) => [k, 0]));
   clauseCoverage.missing = 0;
   let compared = 0, contentGraded = 0;
+  const iconsShort = {};   // parent key -> icons the app still owes under it (TF-027)
 
   for (const key of Object.keys(mock.index)) {
     const m = mock.index[key];
@@ -367,7 +385,16 @@ function diff(mock, app, screen, width) {
     if (!a) {
       const parentKey = key.includes(' > ') ? key.slice(0, key.lastIndexOf(' > ')) : null;
       const parentPaired = parentKey ? !!app.index[parentKey] : false;
-      if (parentPaired && (m.badge === true || m.icon === true)) {
+      // an icon is missing only when the paired parent carries fewer icons than the mockup's
+      // does. Pairing is by position, so an icon the app draws one wrapper deeper sits under
+      // another key and was reported missing on every sidebar group and tile (TF-027).
+      // and no more reports under one parent than it is icons short
+      if (m.icon === true && parentPaired && mock.index[parentKey] && !(parentKey in iconsShort)) {
+        iconsShort[parentKey] = Math.max(0, (mock.index[parentKey].icons ?? 0) - (app.index[parentKey].icons ?? 0));
+      }
+      const iconGone = m.icon === true && parentPaired && (iconsShort[parentKey] || 0) > 0;
+      if (iconGone && m.badge !== true) iconsShort[parentKey]--;
+      if (parentPaired && (m.badge === true || iconGone)) {
         clauseCoverage.missing++;
         contentGraded++;
         findings.push({

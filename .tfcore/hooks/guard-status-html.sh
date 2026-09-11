@@ -13,6 +13,9 @@
 #   3. docs/<App>-BRD.md older than docs/<App>-Checklist.md
 #        -> bash .tfcore/utils/tf-brd-status.sh <App>
 #   4. no runs.jsonl record after the status write     -> the run record (_metrics-emit-gate.md)
+#   Only on the turn that wrote PROJECT-STATUS.md (a command's closing turn):
+#   5. tf-owner-text.sh FAILs on the closing message or a free-form document it
+#      hands the owner                                  -> rewrite it for the owner
 #
 # Wired in .claude/settings.json -> hooks.Stop; OpenCode via
 # .opencode/plugin/techieflow.js session.idle (a nudge: OpenCode has no blocking
@@ -28,6 +31,7 @@ import datetime
 import glob
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -133,6 +137,51 @@ if written_this_session:
                 tzinfo=datetime.timezone.utc).timestamp()
         if last_epoch is None or last_epoch < md_mtime - 300:
             problems.append("PROJECT-STATUS.md was written but no run record follows it in docs/metrics/runs.jsonl. Append the run record: .tfcore/tasks/_metrics-emit-gate.md")
+    except Exception:
+        pass
+
+    # 5. what the owner reads when a command ends: the closing message, and every free-form
+    # document it hands over that this turn wrote, through tf-owner-text.sh. TfLens's hand-off of
+    # 2026-09-11 reached the owner in jargon, named upstream problems with no word on what they
+    # touch, called two fixed ones open, and gave no prompt (MISS-TechieFlow-20260911-03). Only on
+    # the turn that closed a command -- PROJECT-STATUS written after this turn's prompt -- so an
+    # ordinary conversation is never held to a hand-off's shape. Claude Code hands the hook the
+    # message; the OpenCode plugin passes the same two fields.
+    try:
+        message = data.get("last_assistant_message") or ""
+        turn = data.get("turn_started")
+        if turn is None and data.get("transcript_path") and os.path.isfile(data["transcript_path"]):
+            with open(data["transcript_path"], encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    try:
+                        r = json.loads(line)
+                    except Exception:
+                        continue
+                    c = (r.get("message") or {}).get("content")
+                    prompt = r.get("type") == "user" and not r.get("isMeta") and (
+                        isinstance(c, str) or (isinstance(c, list) and any(isinstance(x, dict) and x.get("type") == "text" for x in c)))
+                    if prompt and r.get("timestamp"):
+                        turn = r["timestamp"]
+        if isinstance(turn, str):
+            turn = datetime.datetime.strptime(turn[:19], "%Y-%m-%dT%H:%M:%S").replace(
+                tzinfo=datetime.timezone.utc).timestamp()
+        elif isinstance(turn, (int, float)) and turn > 1e12:
+            turn = turn / 1000.0
+        chk = os.path.join(root, ".tfcore", "utils", "tf-owner-text.sh")
+        if message.strip() and turn and md_mtime >= turn - 2 and os.path.isfile(chk):
+            handed = []
+            for m in set(re.findall(r"(?<![\w/.-])((?:docs/)?[\w.-]+\.md)\b", message)):
+                p = os.path.join(root, m if m.startswith("docs/") else os.path.join("docs", m))
+                if os.path.isfile(p) and os.path.getmtime(p) >= turn - 2:
+                    handed.append(os.path.relpath(p, root))
+            res = subprocess.run(["bash", chk, "--root", root, "--final", "--stdin"] + sorted(handed), cwd=root,
+                                 input=message, capture_output=True, text=True, timeout=60)
+            fails = [l for l in res.stdout.splitlines() if l.startswith("FAIL")]
+            if fails:
+                problems.append(f"what you are handing the owner is not written for the owner ({len(fails)} line(s)). "
+                                "Fix each, then write the closing message again — plain words, every upstream problem "
+                                "with what it affects and its prompt, and the next prompt in a code block:")
+                problems.extend("  " + l for l in fails[:8])
     except Exception:
         pass
 
