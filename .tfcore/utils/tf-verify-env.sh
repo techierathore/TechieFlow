@@ -4,7 +4,8 @@
 #   bash .tfcore/utils/tf-verify-env.sh [--check]
 #
 # Ensures, in the current project: package.json; the playwright and @playwright/test packages;
-# the Chromium browser; playwright.config.ts with its output pinned under tests/.artifacts/;
+# the Chromium browser; playwright.config.ts with its output pinned under tests/.artifacts/ and its
+# address read from BASE_URL, which tf-verify-tests.sh --base sets (TF-031);
 # the .gitignore lines for everything this tooling generates. --check reports and changes nothing.
 # Prints one line per item and READY at the end, or NOT-READY with the one command the owner
 # must run once (only when a browser install needs sudo and sudo is unavailable).
@@ -55,7 +56,7 @@ export default defineConfig({
   testDir: '"'"'./tests/verify'"'"',
   outputDir: '"'"'./tests/.artifacts/test-results'"'"',
   reporter: '"'"'line'"'"',
-  use: { headless: true, screenshot: '"'"'only-on-failure'"'"', trace: '"'"'retain-on-failure'"'"' },
+  use: { baseURL: process.env.BASE_URL, headless: true, screenshot: '"'"'only-on-failure'"'"', trace: '"'"'retain-on-failure'"'"' },
 });'
 if [[ ! -f playwright.config.ts ]]; then
   if [[ $CHECK -eq 1 ]]; then say "playwright.config.ts: missing"; ok=0; else printf '%s\n' "$CFG" > playwright.config.ts; say "playwright.config.ts: written"; fi
@@ -70,6 +71,22 @@ elif ! grep -q "tests/.artifacts" playwright.config.ts; then
     say "playwright.config.ts: outputDir pinned under tests/.artifacts"
   fi
 else say "playwright.config.ts: present, output pinned"; fi
+# the address: tf-verify-tests.sh --base passes it as BASE_URL, which Playwright never reads by
+# itself; a config that ignores it tests whatever is on its default port, an older build included
+# (TfLens TF-031, 2026-09-11). A baseURL of the project's own is kept, as the fallback.
+if [[ -f playwright.config.ts ]] && ! grep -q "BASE_URL" playwright.config.ts; then
+  if [[ $CHECK -eq 1 ]]; then say "playwright.config.ts: does not read BASE_URL, so --base is ignored"; ok=0
+  elif grep -qE "baseURL[\"']?[[:space:]]*:" playwright.config.ts; then
+    sed -i -E "s#(baseURL[\"']?[[:space:]]*:[[:space:]]*)#\1process.env.BASE_URL || #" playwright.config.ts
+    say "playwright.config.ts: baseURL now reads BASE_URL first, its own address after"
+  elif grep -qE "use[[:space:]]*:[[:space:]]*\{" playwright.config.ts; then
+    sed -i -E "0,/use[[:space:]]*:[[:space:]]*\{/s##use: { baseURL: process.env.BASE_URL,#" playwright.config.ts
+    say "playwright.config.ts: baseURL added, read from BASE_URL"
+  else
+    sed -i "0,/defineConfig({/s##defineConfig({\n  use: { baseURL: process.env.BASE_URL },#" playwright.config.ts
+    say "playwright.config.ts: baseURL added, read from BASE_URL"
+  fi
+fi
 
 # .gitignore
 missing=()

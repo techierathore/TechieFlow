@@ -10,6 +10,8 @@
 #   Only when PROJECT-STATUS.md was written in this session (newer than the
 #   session pointer .tfcore/.session/<harness>.json):
 #   2. tf-doc-check.sh FAILs on PROJECT-STATUS.md      -> fix the file, re-run the check
+#   2c. a BRD or UI design written this session leaves a screen with no row, UI design
+#       entry or mockup                               -> add it, re-run the check (TF-030)
 #   3. docs/<App>-BRD.md older than docs/<App>-Checklist.md
 #        -> bash .tfcore/utils/tf-brd-status.sh <App>
 #   4. no runs.jsonl record after the status write     -> the run record (_metrics-emit-gate.md)
@@ -105,6 +107,31 @@ if written_this_session:
                 if fails:
                     problems.append(f"{rel} fails the document check ({len(fails)} line(s)). Fix the rows, then run: bash .tfcore/utils/tf-doc-check.sh {rel}")
                     problems.extend("  " + l for l in fails[:5])
+    except Exception:
+        pass
+
+    # 2c. a screen is not finished until it has its row, its UI design entry and its mockup. An
+    # amendment added a Price providers screen inside a requirement with none of the three, the
+    # checker's one finding was on the checklist and passed as old, and the page was built with no
+    # design (TfLens TF-030, 2026-09-11). On a turn that wrote a BRD or a UI design, those findings
+    # block; a BRD's other findings stay with *amend-docs, as before.
+    try:
+        chk = os.path.join(root, ".tfcore", "utils", "tf-doc-check.sh")
+        chain = re.compile(r'names the screen "|has no "### Screen:" entry|is in the UIDesign but not in the BRD'
+                           r'|has no mockup link \(docs/mockups')
+        apps = set()
+        for f in glob.glob(os.path.join(root, "docs", "*.md")):
+            m = re.match(r"^(.+?)-(?:P\d+-)?(?:BRD|UIDesign)\.md$", os.path.basename(f))
+            if m and os.path.getmtime(f) >= start:
+                apps.add(m.group(1))
+        for app in sorted(apps) if os.path.isfile(chk) else ():
+            out = subprocess.run(["bash", chk, "--quiet", "--app", app], cwd=root,
+                                 capture_output=True, text=True, timeout=180).stdout
+            fails = [l for l in out.splitlines() if l.startswith("FAIL") and chain.search(l)]
+            if fails:
+                problems.append(f"a screen in {app}'s documents has no row, UI design entry or mockup ({len(fails)} line(s)). "
+                                f"Add what is missing, then run: bash .tfcore/utils/tf-doc-check.sh --app {app}")
+                problems.extend("  " + l for l in fails[:5])
     except Exception:
         pass
 

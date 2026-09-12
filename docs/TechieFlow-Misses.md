@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 152 logged: 52 open, 99 fixed, 1 will not fix |
+| Count | 161 logged: 52 open, 108 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
 | Updated | 2026-09-11 |
 
@@ -66,10 +66,19 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (99)
+## Fixed (108)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260911-18 | 2026-09-11 by owner | 2026-09-11 by log-miss | the check was too weak | tf-verify-screens measured a wrapped inline element by its bounding box, the union of its line fragments, so two sentences sharing a line on TfLens /effort were reported as overlapping with 0 square pixels in common (TF-036) |
+| MISS-TechieFlow-20260911-17 | 2026-09-11 by owner | 2026-09-11 by log-miss | the check was too weak | tf-build.sh read a locked output file (MSB3021 access denied) as a wrong rung and fell to the Windows rung over the same obj/, whose scoped-stylesheet names no longer matched the dll, so every TfLens page's own styles silently stopped applying after a PASS (TF-035) |
+| MISS-TechieFlow-20260911-16 | 2026-09-11 by owner | 2026-09-11 by log-miss | the framework never said it | tf-verify-boot.sh kept one state file and one log for the whole repository, so TfLens's parallel builders emptied each other's logs and one builder's bare stop killed another builder's app on port 5147 (TF-034) |
+| MISS-TechieFlow-20260911-15 | 2026-09-11 by owner | 2026-09-11 by log-miss | the check was too weak | tf-verify-screens --login-path pressed the first element whose test id contained 'login', which was the email field, so sign-in never submitted and every screen read as redirected to the sign-in page (TF-033) |
+| MISS-TechieFlow-20260911-14 | 2026-09-11 by owner | 2026-09-11 by log-miss | the check was too weak | tf-verify-screens required every anchor in a mockup's markup at every width, so a sidebar the mockup hides below 768px failed /misses and /effort at 390px and TfLens wrote twelve RENDER-FAIL rows and twelve misses from that alone (TF-032) |
+| MISS-TechieFlow-20260911-13 | 2026-09-11 by owner | 2026-09-11 by log-miss | the check was too weak | tf-verify-tests.sh passed --base as BASE_URL, which Playwright never reads, and the config tf-verify-env.sh writes had no baseURL, so TfLens's tests opened the default port 5099 while the app ran on 5014; an older build left on the default port would have passed in the new one's name (TF-031) |
+| MISS-TechieFlow-20260911-12 | 2026-09-11 by owner | 2026-09-11 by log-miss | the check was too weak | tf-doc-check compared only the BRD's Screens and flow table with the UI design, so TfLens's BRD-200 added a Price providers screen inside a requirement with no row, design entry or mockup, the one related finding sat on the checklist as old, and the page was built and verified with no design; amend- |
+| MISS-TechieFlow-20260911-11 | 2026-09-11 by owner | 2026-09-11 by log-miss | the check was too weak | tf-log-miss.sh took its run's start from the command marker whatever command owned it, so a miss logged inside *amend-docs wrote a log-miss run over the amendment's window and TfLens's amendment record was refused until the log-miss one was voided by hand; the overlap rule shipped on 2026-09-10 with |
+| MISS-TechieFlow-20260911-10 | 2026-09-11 by owner | 2026-09-11 by log-miss | the check was too weak | tf-feedback.sh read the line after a bare '## TF-013' heading as its title, so the closing line TfLens wrote under it was never seen and --close reported success while the entry still read fixed; the reader shipped that morning had been run on TfLens's real file, whose listing showed TF-013's title |
 | MISS-TechieFlow-20260911-09 | 2026-09-11 by owner | 2026-09-11 by fix-issues | the check was too weak | update-framework.sh and both scaffolds decided whether .gitignore already held the framework block through 'tr \| grep -q' under pipefail, which reports not-found once grep stops early on a large file on the Windows drive, so the block was appended on every update: 50 copies in TechieBlog, 30 in TfLe |
 | MISS-TechieFlow-20260911-08 | 2026-09-11 by owner | 2026-09-11 by fix-issues | the check was too weak | mockup-parity reported an icon missing whenever the app drew it one wrapper deeper, and parsed an oklch() colour as r/g/b numbers so every tile themed by the UI library read as neutral: 136 findings at 1280 px on two TfLens screens, most describing icons and colours plainly on screen (TF-027). |
 | MISS-TechieFlow-20260911-07 | 2026-09-11 by owner | 2026-09-11 by fix-issues | the check was too weak | tf-verify-screens read data-testid anywhere in a mockup file, so a stylesheet rule naming one became a control every page had to carry: 'source-mode is not on the page' on /misses and /effort (TF-026). |

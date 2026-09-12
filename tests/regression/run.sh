@@ -482,7 +482,7 @@ HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
   cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
-  ( cd "$d" && python3 -m http.server "$port" --bind 127.0.0.1 >/dev/null 2>&1 & echo $! > "$d/srv.pid" )
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
   local out
   out="$( cd "$d" && node screens.mjs --base "http://127.0.0.1:$port" \
@@ -1165,7 +1165,7 @@ HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
   cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
-  ( cd "$d" && python3 -m http.server "$port" --bind 127.0.0.1 >/dev/null 2>&1 & echo $! > "$d/srv.pid" )
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
   local out
   out="$( cd "$d" && node screens.mjs --base "http://127.0.0.1:$port" --screen "misses=/misses.html" \
@@ -1211,7 +1211,7 @@ HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
   cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
-  ( cd "$d" && python3 -m http.server "$port" --bind 127.0.0.1 >/dev/null 2>&1 & echo $! > "$d/srv.pid" )
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
   ( cd "$d" && node parity.mjs --base "http://127.0.0.1:$port" --screen "effort=/effort.html" --widths 1280 \
       --json-out "$d/parity.json" >/dev/null 2>&1 )
@@ -1234,6 +1234,341 @@ for s in d["screens"]:
   fi
 }
 
+# --- TF-028: a closing line under a heading with no title --------------------------------
+# TfLens's `## TF-013` had no title. The reader's heading pattern let `\s` run past the line
+# break and took the next line with text as the title — after --close, the closing line itself —
+# so --close printed "TF-013 closed" and the entry still read fixed (2026-09-11).
+tf_028() {
+  local d="$SCRATCH/tf028"; mkdir -p "$d/docs"
+  cat > "$d/docs/Fx-TechieFlow-Feedback.md" <<'MD'
+# Fx — TechieFlow Feedback
+
+## Resolution status (TechieFlow team, 2026-09-09)
+
+| Entry | Fix |
+|---|---|
+| TF-001 | fixed |
+| TF-002 | fixed |
+
+## TF-001
+
+- **Severity:** major
+- **Blocks:** no
+
+## TF-002 — a titled entry
+
+- **Severity:** minor
+MD
+  local out; out="$(cd "$d" && bash "$UTILS/tf-feedback.sh" Fx)"
+  if grep -qE "^  TF-001 +fixed +2026-09-09 *$" <<<"$out"; then
+    ok tf_028a "a heading with no title has no title, not the line after it"
+  else
+    bad tf_028a "a bare heading took the next line as its title"; note "$(grep 'TF-001' <<<"$out" | tail -1)"
+  fi
+  out="$(cd "$d" && bash "$UTILS/tf-feedback.sh" Fx --close TF-001 "ran the check; it passed" && bash "$UTILS/tf-feedback.sh" Fx)"
+  if grep -q "TechieFlow: 0 open · 1 fixed upstream, not yet re-checked (TF-002) · 1 closed" <<<"$out"; then
+    ok tf_028b "a closing line under a heading with no title is read as closed"
+  else
+    bad tf_028b "--close wrote its line and the entry still does not read closed"; note "$(head -1 <<<"$out")"
+  fi
+}
+
+# --- TF-029: a miss logged inside another command, and a marker left by a dead session ----
+# *amend-docs step 10 logs a miss. tf-log-miss took its run's start from the command marker
+# whatever command owned it, so it wrote a log-miss run over the amendment's own window; the
+# amendment's record was then refused for overlap, and TfLens voided the log-miss one by hand
+# (2026-09-11). It also read a marker of any age, where every other reader ignores one past 24 h.
+tf_029() {
+  local d; d="$(_metrics_fx logmissfx)"
+  mkdir -p "$d/.tfcore/.session"; cp -r "$UTILS" "$d/.tfcore/"
+  local t0; t0="$(date -u -d '-10 minutes' +%Y-%m-%dT%H:%M:%SZ)"
+  printf '{"cmd":"amend-docs","app":"Fx","started":"%s"}\n' "$t0" > "$d/.tfcore/.session/phase.json"
+  lm() { ( cd "$d" && CLAUDE_PROJECT_DIR= TF_METRICS_ROOT="$d" bash .tfcore/utils/tf-log-miss.sh Fx --what "$1" \
+           --sort spec --class unspecified-gap --artifact brd --severity minor --fixed ) 2>&1; }
+  lm "the BRD never said the export names its columns" >/dev/null
+  lm "the BRD never said the filter survives a reload" >/dev/null
+  local runs; runs="$(grep -c '"kind":"run"' "$d/docs/metrics/runs.jsonl")"
+  [[ "$runs" == "0" ]] && ok tf_029a "a miss logged inside *amend-docs writes no run record of its own" \
+                       || { bad tf_029a "$runs log-miss run record(s) written over the amendment's window"; note "$(grep '"kind":"run"' "$d/docs/metrics/runs.jsonl" | head -1 | cut -c1-160)"; }
+  local out; out="$(echo "{\"kind\":\"run\",\"app\":\"Fx\",\"cmd\":\"amend-docs\",\"started\":\"$t0\"}" \
+                   | ( cd "$d" && CLAUDE_PROJECT_DIR= TF_METRICS_ROOT="$d" bash .tfcore/utils/tf-emit.sh runs ) 2>&1)"
+  if ! grep -q REFUSED <<<"$out" && grep -q '"cmd":"amend-docs"' "$d/docs/metrics/runs.jsonl"; then
+    ok tf_029b "the amendment's own run record is accepted afterwards"
+  else
+    bad tf_029b "the amendment's run record was refused"; note "$(grep REFUSED <<<"$out" | head -1 | cut -c1-160)"
+  fi
+  local misses; misses="$(grep -c "\"found_run_id\":\"$t0\"" "$d/docs/metrics/misses.jsonl")"
+  [[ "$misses" == "2" ]] && ok tf_029c "both misses are recorded, each naming the amendment's start" \
+                         || bad tf_029c "$misses of 2 misses carry the amendment's start"
+  # a *log-miss marker three days old: the session died; the run starts now, not three days ago
+  local d2; d2="$(_metrics_fx logmissstale)"
+  mkdir -p "$d2/.tfcore/.session"; cp -r "$UTILS" "$d2/.tfcore/"
+  printf '{"cmd":"log-miss","app":"Fx","started":"%s"}\n' "$(date -u -d '-3 days' +%Y-%m-%dT%H:%M:%SZ)" > "$d2/.tfcore/.session/phase.json"
+  ( cd "$d2" && CLAUDE_PROJECT_DIR= TF_METRICS_ROOT="$d2" bash .tfcore/utils/tf-log-miss.sh Fx --what "the page title is wrong" \
+      --sort spec --severity minor --fixed ) >/dev/null 2>&1
+  local st; st="$(python3 -c "import json,sys
+r=[json.loads(l) for l in open(sys.argv[1]) if '\"kind\":\"run\"' in l]
+print(r[0]['started'] if r else 'none')" "$d2/docs/metrics/runs.jsonl")"
+  if [[ "$st" != "none" && "$st" > "$(date -u -d '-1 hour' +%Y-%m-%dT%H:%M:%SZ)" ]]; then
+    ok tf_029d "a *log-miss run still gets its record, and a marker from a dead session is ignored"
+  else
+    bad tf_029d "the log-miss run started at $st, from a marker three days old"
+  fi
+}
+
+# --- TF-030: a screen named only inside a requirement ------------------------------------
+# TfLens's BRD-200 added "a **Price providers** screen" with no row in the Screens and flow
+# table. The checker compared only that table with the UI design, so it never saw the screen;
+# the one related finding was on the checklist and passed as old. The page was built and
+# verified with no design (2026-09-11).
+tf_030() {
+  local d="$SCRATCH/tf030"; mkdir -p "$d/docs" "$d/.tfcore/.session"
+  cp -r "$UTILS" "$ROOT/.tfcore/templates" "$d/.tfcore/"
+  cat > "$d/docs/Fx-BRD.md" <<'MD'
+# Fx — BRD
+
+## 4. Screens and flow
+
+| Screen | Route | Role | Mockup | Fields |
+|---|---|---|---|---|
+| Repos | `/repos` | User | [mockup](mockups/repos.html) | name |
+
+## 5. Requirements
+
+- **BRD-1** — User can list repos. *Screen:* Repos · *Mockup:* [mockup](mockups/repos.html)
+MD
+  cat > "$d/docs/Fx-P3-BRD.md" <<'MD'
+# Fx — Phase 3 BRD
+
+## 2. Screens and flow
+
+| Screen | Route | Role | Mockup | Fields |
+|---|---|---|---|---|
+| Misses | `/misses` | User | [mockup](mockups/misses.html) | what |
+
+## 3. Requirements
+
+- **BRD-200** — User can see, on a **Price providers** screen, every provider a rate comes from.
+- **BRD-201** — User can change a rate. *Screen:* Settings · *Mockup:* [mockup](mockups/settings.html)
+- **BRD-202** — User can open a repo from the **Repos** screen, which phase 1 owns.
+- **BRD-203** — Every figure on **every** screen shows its denominator.
+MD
+  local out; out="$(python3 "$d/.tfcore/utils/tf-doc-check.py" --root "$d" --strict "$d/docs/Fx-P3-BRD.md" 2>&1)"
+  if grep -q 'BRD-200 names the screen "Price providers"' <<<"$out" && grep -q 'BRD-201 names the screen "Settings"' <<<"$out"; then
+    ok tf_030a "a screen named only inside a requirement, in either form, is refused by name"
+  else
+    bad tf_030a "the checker did not see a screen named only inside a requirement"; note "$(grep FAIL <<<"$out" | head -2)"
+  fi
+  if grep -qE 'names the screen "(Repos|every)"' <<<"$out"; then
+    bad tf_030b "a screen another phase owns, or the word 'every', was reported"; note "$(grep 'names the screen' <<<"$out" | head -2)"
+  else
+    ok tf_030b "a screen another phase's BRD owns is not reported, nor is 'every screen'"
+  fi
+  # the end-of-turn hook: a turn that wrote the BRD cannot end with the screen unfinished
+  printf '{}' > "$d/.tfcore/.session/claude-code.json"; cp "$d/.tfcore/.session/claude-code.json" "$d/.tfcore/.session/opencode.json"
+  touch -d '-10 minutes' "$d/.tfcore/.session/claude-code.json" "$d/.tfcore/.session/opencode.json"
+  printf '# Fx — Project status\n' > "$d/PROJECT-STATUS.md"; cp "$d/PROJECT-STATUS.md" "$d/PROJECT-STATUS.html"; touch "$d/docs/Fx-P3-BRD.md"
+  local rc; out="$(printf '{}' | CLAUDE_PROJECT_DIR="$d" bash "$ROOT/.tfcore/hooks/guard-status-html.sh" 2>&1)"; rc=$?
+  if [[ $rc -eq 2 ]] && grep -q "has no row, UI design entry or mockup" <<<"$out" && grep -q 'Price providers' <<<"$out"; then
+    ok tf_030c "the turn that wrote the BRD cannot end while the screen has no row, design entry or mockup"
+  else
+    bad tf_030c "the end-of-turn hook let the unfinished screen through (exit $rc)"; note "$(grep -i screen <<<"$out" | head -2)"
+  fi
+}
+
+# --- TF-031: --base never reached the browser tests --------------------------------------
+# tf-verify-tests.sh passed --base as BASE_URL, which Playwright never reads by itself, and the
+# config tf-verify-env.sh wrote had no baseURL. TfLens booted on 5014 and every test opened 5099;
+# with an older build still on 5099, its passes would have been recorded for the new one (2026-09-11).
+tf_031() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip tf_031 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  _pwfx() { local d="$SCRATCH/$1"; mkdir -p "$d/tests/verify"; ln -sfn "$pw/node_modules" "$d/node_modules"
+            printf '{"name":"fx","version":"1.0.0"}\n' > "$d/package.json"; printf '%s' "$d"; }
+  local d out
+  d="$(_pwfx tf031a)"; ( cd "$d" && bash "$UTILS/tf-verify-env.sh" ) >/dev/null 2>&1
+  grep -q "baseURL: process.env.BASE_URL" "$d/playwright.config.ts" 2>/dev/null \
+    && ok tf_031a "the config the framework writes opens the address --base gives" \
+    || bad tf_031a "the written config has no baseURL read from BASE_URL"
+  d="$(_pwfx tf031b)"
+  printf "import { defineConfig } from '@playwright/test';\nexport default defineConfig({\n  testDir: './tests/verify',\n  outputDir: './tests/.artifacts/test-results',\n  use: { baseURL: 'http://localhost:5099', headless: true },\n});\n" > "$d/playwright.config.ts"
+  ( cd "$d" && bash "$UTILS/tf-verify-env.sh" ) >/dev/null 2>&1
+  grep -q "baseURL: process.env.BASE_URL || 'http://localhost:5099'" "$d/playwright.config.ts" \
+    && ok tf_031b "a project's own baseURL now reads BASE_URL first and keeps its address as the fallback" \
+    || { bad tf_031b "a config with its own baseURL still ignores --base"; note "$(grep baseURL "$d/playwright.config.ts")"; }
+  # a config nobody repaired: the runner refuses rather than test the default port
+  d="$(_pwfx tf031c)"
+  printf "import { defineConfig } from '@playwright/test';\nexport default defineConfig({ testDir: './tests/verify', use: { baseURL: 'http://127.0.0.1:9' } });\n" > "$d/playwright.config.ts"
+  printf "import { test } from '@playwright/test';\ntest('REQ-UI-001 opens', async ({ page }) => { await page.goto('/'); });\n" > "$d/tests/verify/fx.spec.ts"
+  out="$(cd "$d" && timeout 120 bash "$UTILS/tf-verify-tests.sh" --base http://127.0.0.1:5014 --no-unit 2>&1)"
+  if grep -q "NOT RUN — nothing reads BASE_URL" <<<"$out" && ! grep -q "browser tests: ran" <<<"$out"; then
+    ok tf_031c "a run with --base refuses when nothing reads BASE_URL, instead of testing another address"
+  else
+    bad tf_031c "the tests ran against the config's own address, not --base"; note "$(grep 'browser tests' <<<"$out")"
+  fi
+}
+
+# --- TF-032 and TF-033: a sidebar the mockup hides on a phone, and a sign-in that never submitted -
+# TF-032: every anchor in the mockup's markup was owed at every width, so a sidebar the mockup hides
+# below 768px failed /misses and /effort at 390px — twelve RENDER-FAIL rows on TfLens (2026-09-11).
+# TF-033: the sign-in button was the first test id containing "login", which was the email field.
+tf_032() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip tf_032 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/tf032"; mkdir -p "$d/docs/mockups"
+  cat > "$d/docs/mockups/misses.html" <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font-family:system-ui}
+aside{width:200px;height:300px;background:#eee}@media (max-width:767px){aside{display:none}}
+.dialog{display:none}</style></head><body><aside data-testid="app-sidebar">Misses · Effort</aside>
+<h1 data-testid="page-title">Misses</h1><button data-testid="export-btn">Export</button>
+<div class="dialog" data-testid="confirm-dialog">Sure?</div></body></html>
+HTML
+  # the app: the sidebar is added only on a wide screen (on a phone the menu button opens it); the
+  # export button and the dialog were never built, so both must still be reported
+  cat > "$d/misses.html" <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font-family:system-ui}
+aside{width:200px;height:300px;background:#eee}</style></head><body>
+<script>if (innerWidth >= 768) document.write('<aside data-testid="app-sidebar">Misses · Effort</aside>');</script>
+<h1 data-testid="page-title">Misses</h1><p>Ten misses are open.</p></body></html>
+HTML
+  cat > "$d/login.html" <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:system-ui}</style></head><body>
+<form action="/misses.html" method="get"><input data-testid="login-email" name="u" type="email">
+<input data-testid="login-pass" name="p" type="password"><button data-testid="login-submit" type="submit">Sign in</button></form></body></html>
+HTML
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
+  sleep 1
+  local out
+  out="$( cd "$d" && timeout 180 node screens.mjs --base "http://127.0.0.1:$port" --screen misses=/misses.html \
+          --widths 1280,390 --login-path /login.html --user a@b.c --password x --render-wait 1000 --json-out "$d/screens.json" 2>&1 )"
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+  local w390; w390="$(python3 -c "import json,sys
+r=json.load(open(sys.argv[1]))['screens'][0]
+print(' | '.join(f['detail'] for w in r['widths'] if w['width']==390 for f in w.get('findings',[])))" "$d/screens.json" 2>/dev/null)"
+  if ! grep -q 'app-sidebar' <<<"$w390"; then
+    ok tf_032a "a sidebar the mockup hides on a phone is not owed at 390px"
+  else
+    bad tf_032a "the sidebar the mockup hides on a phone is still required at 390px"; note "$w390"
+  fi
+  if grep -q '"export-btn" is not on the page' <<<"$w390" && grep -q '"confirm-dialog" is not on the page' <<<"$w390"; then
+    ok tf_032b "a control the mockup shows at 390px, and a dialog it hides at every width, are still owed"
+  else
+    bad tf_032b "the width fix excused controls it should not"; note "$w390"
+  fi
+  if ! grep -q 'LOGIN failed' <<<"$out" && python3 -c "import json,sys; sys.exit(0 if json.load(open(sys.argv[1]))['login'].get('ok') else 1)" "$d/screens.json" 2>/dev/null; then
+    ok tf_033 "sign-in presses the submit button, not the first field whose test id says login"
+  else
+    bad tf_033 "sign-in clicked a field and never submitted"; note "$(grep LOGIN <<<"$out")"
+  fi
+}
+
+# --- TF-034: two builders booting side by side --------------------------------------------
+# One state file and one log for the whole repository: the second start emptied the first's log
+# and a bare `stop` killed whichever app was named last — one TfLens builder stopped another's app
+# on port 5147 (2026-09-11). Proved with the static head, which boots in a second.
+tf_034() {
+  local d="$SCRATCH/tf034"; mkdir -p "$d/a" "$d/b"; echo '<p>a</p>' > "$d/a/index.html"; echo '<p>b</p>' > "$d/b/index.html"
+  local p1 p2; p1="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  p2="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  up() { curl -s -o /dev/null -m 2 "http://localhost:$1/" 2>/dev/null; }
+  ( cd "$d" && bash "$UTILS/tf-verify-boot.sh" start --static a --port "$p1" ) >/dev/null 2>&1
+  ( cd "$d" && bash "$UTILS/tf-verify-boot.sh" start --static b --port "$p2" ) >/dev/null 2>&1
+  if [[ -f "$d/tests/.artifacts/verify/boot-$p1.json" && -f "$d/tests/.artifacts/verify/boot-$p2.json" && -s "$d/tests/.artifacts/verify/app-$p1.log" ]]; then
+    ok tf_034a "each app has its own state file and log, and the second start leaves the first's log alone"
+  else
+    bad tf_034a "the second start overwrote the first app's state or emptied its log"
+  fi
+  local out; out="$(cd "$d" && bash "$UTILS/tf-verify-boot.sh" stop 2>&1)"
+  if grep -q "NOT-STOPPED 2 apps are running" <<<"$out" && up "$p1" && up "$p2"; then
+    ok tf_034b "a bare stop while two apps run refuses and names the ports, and stops neither"
+  else
+    bad tf_034b "a bare stop with two apps running stopped one of them"; note "$out"
+  fi
+  ( cd "$d" && bash "$UTILS/tf-verify-boot.sh" stop --port "$p2" ) >/dev/null 2>&1; sleep 1
+  if up "$p1" && ! up "$p2"; then
+    ok tf_034c "stop --port stops that app and leaves the other builder's running"
+  else
+    bad tf_034c "stop --port did not stop only its own app"
+  fi
+  ( cd "$d" && bash "$UTILS/tf-verify-boot.sh" stop --port "$p1"; bash "$UTILS/tf-verify-boot.sh" stop ) >/dev/null 2>&1
+  pkill -f "http.server $p1" 2>/dev/null; pkill -f "http.server $p2" 2>/dev/null; true
+}
+
+# --- TF-035: a locked output file, and a build that changes side over one obj/ --------------
+# MSB3021 "Access to the path … is denied" matched neither the code-error nor the wrong-rung
+# pattern, so the loop fell to the Windows rung, which built in the same obj/; the scoped
+# stylesheets kept the WSL names while the dll carried the Windows ones, and every page's own styles
+# stopped applying on TfLens (2026-09-11). Stand-in dotnet and cmd.exe on PATH; nothing is built.
+tf_035() {
+  local d="$SCRATCH/tf035"; mkdir -p "$d/bin" "$d/home" "$d/p/obj/Debug/net10.0/scopedcss/bundle"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Web"></Project>\n' > "$d/p/Fx.csproj"
+  printf '.b-wsl1{}\n' > "$d/p/obj/Debug/net10.0/scopedcss/bundle/Fx.styles.css"
+  printf '#!/usr/bin/env bash\necho "Fx -> ok"; echo called >> "%s/cmd.calls"; exit 0\n' "$d" > "$d/bin/cmd.exe"
+  printf '#!/usr/bin/env bash\necho "error MSB3021: Unable to copy file \\"obj/Fx.dll\\" to \\"bin/Fx.dll\\". Access to the path '"'"'bin/Fx.dll'"'"' is denied."; exit 1\n' > "$d/bin/dotnet"
+  chmod +x "$d/bin/"*
+  run_b() { ( cd "$d" && HOME="$d/home" PATH="$d/bin:/usr/bin:/bin" TF_BUILD_PLATFORM=wsl TF_BUILD_LOCK_WAIT=0 \
+              bash "$UTILS/tf-build.sh" build p/Fx.csproj ) 2>&1; }
+  local out; out="$(run_b)"
+  if grep -q "^NOT-RUN the build output is held by a running process" <<<"$out" && [[ ! -f "$d/cmd.calls" ]]; then
+    ok tf_035a "a locked output file is reported as a lock, and no other rung builds over the same obj/"
+  else
+    bad tf_035a "a locked output file fell through to the Windows rung"; note "$(tail -1 <<<"$out")"
+  fi
+  # a rung that really is wrong on the WSL side: the Windows rung builds, and first clears what WSL built
+  printf '#!/usr/bin/env bash\necho "error NETSDK1178: workload missing"; exit 1\n' > "$d/bin/dotnet"
+  echo wsl > "$d/p/obj/.tf-build-side"
+  out="$(run_b)"
+  if grep -q "^PASS" <<<"$out" && [[ ! -d "$d/p/obj/Debug/net10.0/scopedcss" ]] && [[ "$(cat "$d/p/obj/.tf-build-side")" == windows ]]; then
+    ok tf_035b "a build that moves to the Windows side first clears the scoped stylesheets the WSL side built"
+  else
+    bad tf_035b "the Windows rung built over scoped stylesheets the WSL side had named"; note "$(head -2 <<<"$out")"
+  fi
+}
+
+# --- TF-036: two wrapped sentences that share a line ----------------------------------------
+# An inline element's bounding box is the union of its line fragments, so two sentences sharing a
+# line "overlapped" across a tile's width on TfLens /effort (2026-09-11) with 0 px² in common.
+tf_036() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip tf_036 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/tf036"; mkdir -p "$d"
+  cat > "$d/effort.html" <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font:16px/20px system-ui}
+.tile{width:220px;margin:10px;padding:4px;background:#eef}</style></head><body>
+<p class="tile"><b data-testid="kpi-derived">72.9 hours from the start and end times on each run record</b> ·
+<span data-testid="kpi-recomputed">79.0 hours when every duration is worked out again from the stream itself</span></p>
+<p class="tile"><span data-testid="note-one">the first note wraps over several lines of this narrow tile here</span></p>
+<p class="tile" style="margin-top:-60px"><span data-testid="note-two">the second note is pulled up so its lines are drawn over the first</span></p>
+</body></html>
+HTML
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
+  sleep 1
+  local out; out="$( cd "$d" && timeout 120 node screens.mjs --base "http://127.0.0.1:$port" --screen effort=/effort.html \
+                     --widths 1280 --render-wait 500 --json-out "$d/screens.json" 2>&1 )"
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+  grep -q 'kpi-derived overlaps kpi-recomputed' <<<"$out" \
+    && { bad tf_036a "two wrapped sentences sharing a line are reported as overlapping"; note "$(grep effort <<<"$out" | head -1)"; } \
+    || ok tf_036a "two wrapped sentences that share a line do not overlap"
+  grep -qE 'note-(one|two) overlaps note-(one|two)' <<<"$out" \
+    && ok tf_036b "two wrapped inline elements drawn over each other are still reported" \
+    || { bad tf_036b "the fragment comparison went blind to a real overlap"; note "$(grep effort <<<"$out" | head -1)"; }
+}
+
 # --- the ignore file that grew by one block per update -----------------------------------
 # `tr -d '\r' < .gitignore | grep -qE …` under `set -o pipefail`: grep -q stops at the first
 # match, tr dies writing the rest, the pipeline reports failure, and the framework block is
@@ -1249,7 +1584,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

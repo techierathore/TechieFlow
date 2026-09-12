@@ -32,7 +32,13 @@ ran_any=0
 
 if [[ $BROWSER -eq 1 ]]; then
   if ls tests/verify/*.spec.* >/dev/null 2>&1 || ls tests/verify/**/*.spec.* >/dev/null 2>&1; then
-    if node -e "require.resolve('@playwright/test')" >/dev/null 2>&1; then
+    # --base reaches the tests only as BASE_URL, which Playwright never reads by itself. When neither
+    # the config nor a spec reads it, every test opens the config's own address, where an older build
+    # may still be running and pass in the new one's name (TfLens TF-031, 2026-09-11): refuse instead.
+    if [[ -n "$BASE" ]] && ! grep -qs "BASE_URL" playwright.config.* tests/verify/*.spec.* tests/verify/**/*.spec.*; then
+      echo "browser tests: NOT RUN — nothing reads BASE_URL, so the tests would open another address than --base $BASE; run bash .tfcore/utils/tf-verify-env.sh, which makes playwright.config.ts read it"
+      rm -f "$PWJSON"
+    elif node -e "require.resolve('@playwright/test')" >/dev/null 2>&1; then
       BASE_URL="$BASE" PLAYWRIGHT_JSON_OUTPUT_NAME="$PWJSON" npx playwright test --reporter=json > "$PWLOG" 2>&1
       echo "browser tests: ran (log $PWLOG)"; ran_any=1
     else

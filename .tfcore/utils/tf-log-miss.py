@@ -16,7 +16,8 @@ re-logged; a null why_missed or sort on it is completed with --amend); the origi
 (tf-emit.sh --origin-of); the miss record with the sentence as `what` and the sort; the checklist line
 (the row demoted to Needs re-verify with "⚠ miss <date>: <sentence>", or a new Not Started row with
 BRD-pending when nothing owns it; nothing when the repo has no checklist); with --fixed, a miss-fix
-record instead of a demotion; then the run record (cmd log-miss). The emitter rewrites the readable
+record instead of a demotion; then the run record (cmd log-miss) — none when another command is
+running, because that command's own record covers the time (TF-029). The emitter rewrites the readable
 docs/<App>-Misses.md. Prints the report block. Exit 0 · 2 could not run.
 """
 import datetime
@@ -91,11 +92,25 @@ def main(argv):
     found_by = opt(argv, "--found-by", "owner")
     fixed = "--fixed" in argv
     started = opt(argv, "--started") or ""
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # The command whose run record covers this time. Called inside another command (*amend-docs
+    # step 10), that command's record covers it, so this script writes none: a log-miss run over
+    # the enclosing command's window made the enclosing record overlap and be refused (TF-029).
+    # A marker older than 24 h belongs to a session that died, and is ignored as every reader does.
+    running = "log-miss"
     if not started:
         mk = subprocess.run(["bash", os.path.join(HERE, "tf-phase.sh"), "show"], capture_output=True, text=True).stdout
         m = re.search(r'"started":"([^"]*)"', mk)
-        started = m.group(1) if m else datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        c = re.search(r'"cmd":"([^"]*)"', mk)
+        try:
+            age = (datetime.datetime.now(datetime.timezone.utc)
+                   - datetime.datetime.strptime(m.group(1), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc))
+            fresh = age < datetime.timedelta(hours=24)
+        except (AttributeError, ValueError):
+            fresh = False
+        started = m.group(1) if fresh else now
+        if fresh and c and c.group(1) not in ("log-miss", "goal"):
+            running = c.group(1)
 
     spec = importlib.util.spec_from_file_location("tf_checklist_edit", os.path.join(HERE, "tf-checklist-edit.py"))
     ce = importlib.util.module_from_spec(spec)
@@ -165,10 +180,14 @@ def main(argv):
         fix_ok, _ = emit("misses", fr)
         fix_line = ("closed in the same run" + (f" against run {fr['fix_run_id']}" if "fix_run_id" in fr else " (fix run unknown: costed none)")) if fix_ok else "miss-fix not written"
 
-    # 5. the run record
-    run = {"kind": "run", "app": app, "cmd": "log-miss", "mode": None, "started": started, "ended": now,
-           "reqs_touched": [req] if req else [], "reqs_count": 1 if req else 0, "subagents": [], "files_written": 1 if has_cl else 0, "build_result": "not-run"}
-    emit("runs", run)
+    # 5. the run record — only when log-miss is the command running
+    if running == "log-miss":
+        run = {"kind": "run", "app": app, "cmd": "log-miss", "mode": None, "started": started, "ended": now,
+               "reqs_touched": [req] if req else [], "reqs_count": 1 if req else 0, "subagents": [], "files_written": 1 if has_cl else 0, "build_result": "not-run"}
+        emit("runs", run)
+        run_line = f"log-miss, {started} to {now}"
+    else:
+        run_line = f"none written — the running *{running}'s own record covers this time"
 
     if not ok:
         print(f"# Miss NOT recorded — {app}")
@@ -189,6 +208,7 @@ def main(argv):
     print(f"Docs       : {doc_line}; docs/{app}-Misses.md rewritten")
     if fix_line:
         print(f"Fix        : {fix_line}")
+    print(f"Run record : {run_line}")
     print(f"Next       : *fix-issues {app}" + (f" {req}" if req and not fixed else ""))
     return 0
 

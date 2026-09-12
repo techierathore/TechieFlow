@@ -2,7 +2,8 @@
 // Run through tf-verify-screens.sh, not directly. Sitting 4c, 2026-09-06.
 //
 // Two of the seven verify checks, over one browser session:
-//   render  every control the mockup anchors (data-testid) is present and shows something; no
+//   render  every control the mockup anchors (data-testid) and shows at that width is present and
+//           shows something (one the mockup hides at that width only is not owed there); no
 //           table with a header and no rows; no blank page; no error banner; no console error.
 //   visual  no two visible controls overlap; no anchored control has zero size or sits off-screen;
 //           no horizontal overflow; the page has a stylesheet. Overlap and off-screen are measured
@@ -83,6 +84,35 @@ const anchorsOf = (mockup) => {
   return [...out];
 };
 
+// The anchors a mockup HIDES at one width and shows at another: a sidebar that becomes a slide-out
+// menu on a phone is not owed at 390px, and asking for it failed every such screen there (TF-032,
+// TfLens 2026-09-11). Worked out by drawing the mockup itself at each width. An anchor the mockup
+// hides at every width -- a closed dialog -- is still owed, as before. None is excused when the
+// mockup cannot be drawn.
+async function hiddenByWidth(b, mockup, anchors) {
+  const out = {};
+  if (!b || !mockup || !existsSync(mockup) || !anchors || !anchors.length) return out;
+  const shown = {};
+  for (const width of WIDTHS) {
+    let ctx;
+    try {
+      ctx = await b.newContext({ viewport: { width, height: width < 600 ? 844 : 800 } });
+      const p = await ctx.newPage();
+      await p.goto('file://' + resolve(mockup), { waitUntil: 'load', timeout: 15000 });
+      shown[width] = await p.evaluate(({ anchors, attr }) => anchors.filter((id) => {
+        const el = document.querySelector(`[${attr}="${CSS.escape(id)}"]`);
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        const seen = el.checkVisibility ? el.checkVisibility({ visibilityProperty: true, opacityProperty: true }) : true;
+        return seen && r.width > 0 && r.height > 0;
+      }), { anchors, attr: ATTR });
+    } catch (e) { return {}; } finally { if (ctx) await ctx.close().catch(() => {}); }
+  }
+  const everShown = new Set(Object.values(shown).flat());
+  for (const width of WIDTHS) out[width] = anchors.filter((id) => everShown.has(id) && !shown[width].includes(id));
+  return out;
+}
+
 // ---------------------------------------------------------------- browser
 let browser, cdpPage = null;
 if (CDP) {
@@ -94,6 +124,8 @@ if (CDP) {
 } else {
   browser = await chromium.launch();
 }
+// mockups are drawn in a browser of our own: an attached desktop head is the app's, not ours
+const mockBrowser = CDP ? await chromium.launch().catch(() => null) : browser;
 
 function writeOut(extra, results = [], login = null) {
   const summary = {
@@ -120,9 +152,18 @@ async function login(page) {
     await page.goto(BASE + LOGIN_PATH, { waitUntil: 'domcontentloaded', timeout: 30000 });
     const user = page.locator(`[${ATTR}*="user" i], [${ATTR}*="email" i], input[type="email"], input[name*="user" i], input[name*="email" i], input[id*="user" i], input[id*="email" i], input[type="text"]`).first();
     const pass = page.locator(`[${ATTR}*="pass" i], input[type="password"]`).first();
-    const btn = page.locator(`[${ATTR}*="login" i], [${ATTR}*="signin" i], [${ATTR}*="submit" i], button[type="submit"], form button, input[type="submit"]`).first();
     await user.fill(USER, { timeout: 10000 });
     await pass.fill(PASS || '', { timeout: 10000 });
+    // The button, never a field: "login-email" and "login-pass" contain "login" too, and taking the
+    // first test id with "login" in it clicked the email box, so sign-in never submitted (TF-033).
+    const BTN = `:is(button, a, [role="button"], input[type="submit"], input[type="button"])`;
+    let btn = null;
+    for (const sel of ['button[type="submit"]', 'input[type="submit"]', `${BTN}[${ATTR}*="submit" i]`, `${BTN}[${ATTR}*="signin" i]`,
+                       `${BTN}[${ATTR}*="sign-in" i]`, `${BTN}[${ATTR}*="login" i]`, 'form button']) {
+      const c = page.locator(sel).first();
+      if (await c.count() && await c.isVisible().catch(() => false)) { btn = c; break; }
+    }
+    if (!btn) return { attempted: true, ok: false, error: 'no sign-in button found (a submit button, or a button whose test id says submit, signin or login)' };
     await Promise.all([page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {}), btn.click({ timeout: 10000 })]);
     await page.waitForTimeout(SETTLE);
     const url = page.url();
@@ -251,8 +292,20 @@ async function inspect(page, anchors, attr, errorSelectors) {
     els.forEach((el, i) => {
       const r = el.getBoundingClientRect();
       const c = clipRect(el);            // what is painted, not what is laid out
+      // An inline element that wraps paints one fragment per line, and its bounding box is the union
+      // of them: two sentences sharing a line then "overlap" across the tile's whole width though no
+      // pixel of one is drawn over the other (TF-036, TfLens /effort 2026-09-11). Keep the fragments,
+      // each cut to the painted rectangle, and compare those.
+      let frags = null;
+      if (getComputedStyle(el).display === 'inline') {
+        const fs = [...el.getClientRects()].map((f) => {
+          const x1 = Math.max(f.left, c.x), x2 = Math.min(f.right, c.x + c.w), y1 = Math.max(f.top, c.y), y2 = Math.min(f.bottom, c.y + c.h);
+          return { x: x1, y: y1, w: Math.max(0, x2 - x1), h: Math.max(0, y2 - y1) };
+        }).filter((f) => f.w > 0 && f.h > 0);
+        if (fs.length > 1) frags = fs;
+      }
       out.boxes.push({ i, id: el.getAttribute(attr) || '', tag: el.tagName.toLowerCase(), text: (el.innerText || el.value || '').trim().slice(0, 40),
-        x: c.x, y: c.y, w: c.w, h: c.h, raw_w: r.width, raw_h: r.height, clipped: c.clipped, anchored: el.hasAttribute(attr) });
+        x: c.x, y: c.y, w: c.w, h: c.h, raw_w: r.width, raw_h: r.height, clipped: c.clipped, anchored: el.hasAttribute(attr), frags });
     });
     // ancestry so a button inside its card is never an "overlap"
     out.rel = [];
@@ -263,7 +316,7 @@ async function inspect(page, anchors, attr, errorSelectors) {
   }, { anchors, attr, errorSelectors });
 }
 
-function grade(info, consoleErrors, width) {
+function grade(info, consoleErrors, width, excused = []) {
   const findings = [];
   if (info.error_banner) findings.push({ check: 'render', class: 'exception', detail: `the application's error banner is showing (${info.error_banner})` });
   // a failed fetch ("Failed to load resource … 404") is the assets check's finding, not a page error
@@ -271,7 +324,7 @@ function grade(info, consoleErrors, width) {
   for (const e of pageErrors.slice(0, 3)) findings.push({ check: 'render', class: 'exception', detail: `console error: ${e.slice(0, 120)}` });
   if (info.text_len < 15 && info.controls === 0 && !info.anchors.some((a) => a.present)) findings.push({ check: 'render', class: 'blank-data', detail: `the page is blank (${info.text_len} characters of text, no control)` });
   for (const a of info.anchors) {
-    if (!a.present) findings.push({ check: 'render', class: 'blank-data', detail: `anchored control "${a.id}" is not on the page` });
+    if (!a.present && !excused.includes(a.id)) findings.push({ check: 'render', class: 'blank-data', detail: `anchored control "${a.id}" is not on the page` });
     else if (a.visible && !a.filled) findings.push({ check: 'render', class: 'blank-data', detail: `anchored control "${a.id}" (${a.tag}) is empty` });
   }
   for (const t of info.tables) {
@@ -296,7 +349,18 @@ function grade(info, consoleErrors, width) {
     const ix = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
     const iy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
     if (ix <= 4 || iy <= 4) continue;
-    const inter = ix * iy, small = Math.min(a.w * a.h, b.w * b.h);
+    let inter = ix * iy, small = Math.min(a.w * a.h, b.w * b.h);
+    if (a.frags || b.frags) {            // a wrapped inline element: what its fragments share (TF-036)
+      const fa = a.frags || [a], fb = b.frags || [b];
+      const area = (fs) => fs.reduce((s, f) => s + f.w * f.h, 0);
+      inter = 0;
+      for (const p of fa) for (const q of fb) {
+        const px = Math.min(p.x + p.w, q.x + q.w) - Math.max(p.x, q.x), py = Math.min(p.y + p.h, q.y + q.h) - Math.max(p.y, q.y);
+        if (px > 4 && py > 4) inter += px * py;
+      }
+      if (inter === 0) continue;
+      small = Math.min(area(fa), area(fb));
+    }
     if (inter / small > 0.9) continue;       // one lies inside the other by design (a badge on a card)
     if (inter / small < 0.25) continue;      // a touch, not an overlap
     overlaps++;
@@ -322,7 +386,11 @@ for (const width of WIDTHS) {
   if (!CDP) { const l = await login(page); if (loginResult === null) loginResult = l; }
   for (const s of screens) {
     let r = results.find((x) => x.name === s.name);
-    if (!r) { r = { name: s.name, route: s.route, mockup: s.mockup, rows: s.rows, anchors: anchorsOf(s.mockup), widths: [] }; results.push(r); }
+    if (!r) {
+      r = { name: s.name, route: s.route, mockup: s.mockup, rows: s.rows, anchors: anchorsOf(s.mockup), widths: [] }; results.push(r);
+      r.hidden_by_width = await hiddenByWidth(mockBrowser, s.mockup, r.anchors);
+    }
+    const excused = (r.hidden_by_width || {})[width] || [];
     consoleErrors.length = 0;
     const nav = await navigate(page, s.route);
     const shot = `${SHOTS}/${slug(s.name)}-${width}.png`;
@@ -333,9 +401,10 @@ for (const width of WIDTHS) {
       entry.findings = [{ check: 'render', class: 'other', detail: nav.status === 0 ? `could not open ${s.route}: ${nav.error || 'no response'}` : redirectedToLogin ? `${s.route} redirected to the sign-in page (not signed in)` : `${s.route} answered HTTP ${nav.status}` }];
       if (nav.status === 0 && results.length === 1 && width === WIDTHS[0]) firstUnreachable = true;
     } else {
-      entry.render_wait_ms = await waitForRender(page, r.anchors || [], ATTR);
+      entry.render_wait_ms = await waitForRender(page, (r.anchors || []).filter((id) => !excused.includes(id)), ATTR);
       const info = await inspect(page, r.anchors || [], ATTR, ERROR_SELECTORS);
-      const g = grade(info, consoleErrors, width);
+      const g = grade(info, consoleErrors, width, excused);
+      if (excused.length) entry.hidden_in_mockup = excused;
       Object.assign(entry, g);
       entry.console_errors = consoleErrors.slice(0, 5);
       entry.anchors_present = (info.anchors || []).filter((a) => a.present).length;
@@ -356,5 +425,6 @@ for (const r of results) {
 const out = writeOut({}, results, loginResult);
 if (loginResult && loginResult.attempted && !loginResult.ok) console.log(`LOGIN failed at ${BASE}${LOGIN_PATH}: ${loginResult.error || 'still on the sign-in page'}`);
 console.log(`screens ${out.summary.screens}: render ${out.summary.render_ok} OK / ${out.summary.render_fail} failed / ${out.summary.unreachable} unreachable; visual ${out.summary.visual_ok} OK / ${out.summary.visual_fail} failed; screenshots ${SHOTS}; JSON ${OUT}`);
+if (CDP && mockBrowser) await mockBrowser.close().catch(() => {});
 if (!CDP) await browser.close(); else await browser.close().catch(() => {});
 process.exit(firstUnreachable && out.summary.unreachable === out.summary.screens ? 2 : (out.summary.render_fail + out.summary.visual_fail + out.summary.unreachable) ? 5 : 0);

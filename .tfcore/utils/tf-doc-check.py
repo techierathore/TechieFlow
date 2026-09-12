@@ -684,6 +684,7 @@ def check_doc_rule(rule, c, rep):
                         continue
                     names.append(r[sc])
         c["brd_screens"] = names
+        check_named_screens(c, rep)
 
     elif rule == "stack-table":
         txt = section_text(present, "Stack decisions")
@@ -1079,6 +1080,48 @@ def check_checklist(c, rep):
 def _screen_key(s):
     s = re.sub(r"\s*[—(].*$", "", s.strip("`* "))   # "Profile (planned)" -> "Profile"
     return re.sub(r"\s+", " ", s).strip().lower()
+
+
+# A requirement names its screen in the template's "*Screen:* <name>" field, or in running text as
+# "**<name>** screen". Either must have a row in some phase's Screens and flow table: the row is what
+# brings the UI design entry and the mockup after it (TF-030).
+SCREEN_FIELD = re.compile(r"\*{1,2}Screen:?\*{1,2}:?\s*([^·*|\n]+)")
+SCREEN_BOLD = re.compile(r"\*\*([^*\n]{2,60})\*\*[ -]screens?\b", re.I)
+NOT_A_NAME = {"every", "any", "each", "one", "this", "that", "the", "a", "new", "same", "other", "whole", "single", "no"}
+
+
+def _table_screen_keys(txt):
+    """Every name in the Screen column of a Screens and flow section, dialogs included."""
+    out = set()
+    for header, rows in tables_in(txt or ""):
+        low = [h.lower() for h in header]
+        if "screen" in low and "route" in low:
+            sc = low.index("screen")
+            out |= {_screen_key(r[sc]) for r in rows if len(r) > sc and r[sc] and not r[sc].startswith("{")}
+    return out
+
+
+def check_named_screens(c, rep):
+    known = _table_screen_keys(section_text(c["present"], "Screens and flow"))
+    if c.get("app"):    # a phase BRD may name a screen another phase's BRD owns
+        for f in sorted(os.listdir(os.path.dirname(c["path"]))):
+            if f != os.path.basename(c["path"]) and re.match(rf"^{re.escape(c['app'])}-(P\d+-)?BRD\.md$", f):
+                with open(os.path.join(os.path.dirname(c["path"]), f), encoding="utf-8") as fh:
+                    other = [(norm_heading(h), h, t) for h, t in split_sections(strip_noise(fh.read()), 2) if h is not None]
+                known |= _table_screen_keys(section_text(other, "Screens and flow"))
+    cur, told = None, set()
+    for line in (section_text(c["present"], "Requirements") or "").splitlines():
+        m = re.search(r"\*\*BRD-(\d+)\*\*", line)
+        if m:
+            cur = m.group(1)
+        for name in [x.group(1) for x in SCREEN_FIELD.finditer(line)] + [x.group(1) for x in SCREEN_BOLD.finditer(line)]:
+            key = _screen_key(name)
+            if not key or name.strip().startswith("{") or key in NOT_A_NAME or key in known or key in told:
+                continue
+            told.add(key)
+            where = f"BRD-{cur}" if cur else "a requirement"
+            rep.fail(c["rel"], f'{where} names the screen "{name.strip()}", which has no row in any Screens and flow table; '
+                               f'add the row, then its UI design entry and its mockup, before it is built')
 
 
 def cross_checks(ctxs: dict, rep: Report, root: str):

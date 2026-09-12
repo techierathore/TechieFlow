@@ -8,6 +8,122 @@
 
 ---
 
+## 2026-09-11, night — TF-030 to TF-036: seven problems TfLens met in one build and verify
+
+The owner pasted TF-030 and, mid-way, said YOLO. TfLens filed TF-031 to TF-036 while the first was
+being fixed, so all seven were fixed in the same pass. Each one has a case in `tests/regression/run.sh`.
+Every case was run against the scripts as TfLens had them (byte-identical in all 19 projects) and
+failed, and it passes now. Misses `MISS-TechieFlow-20260911-12` to `-18`.
+
+- **TF-030, a screen named only inside a requirement** (`weak-check`). TfLens's BRD-200 added "a
+  **Price providers** screen" with no screens-table row, UI design entry or mockup, and the page was
+  built and verified with no design. `*amend-docs` step 4 already said a new screen gets a row, but
+  nothing checked it. `tf-doc-check.py` now reads every screen a requirement names, in the template's
+  `*Screen:*` field or as `**<name>** screen`, and fails when no phase's Screens and flow table has it.
+  The Stop hook (`guard-status-html.sh`, check 2c) refuses to end a turn that wrote a BRD or UI design
+  while a screen lacks its row, its UI design entry or its mockup link. Measured before building it:
+  those findings number zero across all 15 apps today. A broken mockup link was left out of the hook,
+  because three projects carry placeholder links (`{screen}.html`) that would wedge an unrelated
+  amendment. Making the checklist's "UI row without a mockup link" blocking was measured and dropped:
+  412 old rows in ten projects. On TfLens's three BRDs with the Price providers row removed, the old
+  check is silent and the new one names BRD-200. On every project's real documents, old and new agree
+  finding for finding.
+- **TF-031, `--base` never reached the browser tests** (`weak-check`). The config `tf-verify-env.sh`
+  writes reads `BASE_URL`, and an existing config is repaired to read it first. `tf-verify-tests.sh
+  --base` refuses to run the browser tests when nothing reads it, rather than testing whatever is on
+  the default port.
+- **TF-032, a sidebar the mockup hides on a phone** (`weak-check`). `tf-verify-screens` draws each
+  mockup at each width. A control it shows at one width and hides at another is not owed where hidden.
+  One it hides at every width (a closed dialog) is still owed. Proved on TfLens's real `misses.html` and
+  `effort.html`: the sidebar is owed at 1280px, not at 390px.
+- **TF-033, sign-in pressed the email field** (`weak-check`). The submit button first; never a text
+  field.
+- **TF-034, parallel builders stopped each other's apps** (`unsaid`). `tf-verify-boot.sh` writes
+  `boot-<port>.json` and `app-<port>.log` per app, keeps `boot.json` as the latest start for the
+  verdict, stops one app with `stop --port`, refuses a bare `stop` while two run, and stops a timed-out
+  Windows-side start by its port.
+- **TF-035, a locked file sent the build to the Windows side** (`weak-check`). `tf-build.sh` treats
+  MSB3021/MSB3027 and "in use"/"access denied" as a lock: it waits, tries again, then says NOT-RUN. It
+  never falls to another rung. On WSL a build that changes side clears `obj/**/scopedcss` first, with the
+  side recorded in `obj/.tf-build-side`. The full suite caught a flaw in the first version: two builds
+  in one second shared a log, and one read the other's lock. Each attempt now reads only its own lines,
+  and the log name carries the process id.
+- **TF-036, wrapped sentences read as overlapping** (`weak-check`). An inline element is compared by
+  its line fragments. A real overlap between two wrapped inline elements is still reported.
+
+Also fixed: five browser cases in the regression suite recorded a subshell's process id instead of
+the server's, so every run left a web server behind; 22 were running, all from test folders, and were
+stopped. The three browser cases that were skipped all day ran with Playwright borrowed from TfLens.
+The whole suite: 91 pass, none fail, none skipped. The verify self-test: 67 pass, none fail; bugs 51 pass. Deployed to all 19 projects: `tf-doc-check.py`,
+`guard-status-html.sh`, `tf-verify-env.sh`, `tf-verify-tests.sh`, `tf-verify-screens.mjs`,
+`tf-verify-boot.sh`, `tf-build.sh`. Every copy was byte-identical to the old version beforehand, and all
+20 are now the same. Answered in TfLens's feedback file, rows TF-030 to TF-036.
+
+---
+
+## 2026-09-11, evening, later — TF-029: a miss logged inside another command took that command's time
+
+TfLens's analyst logged misses with `tf-log-miss.sh --fixed` at step 10 of `*amend-docs`. The logger
+took its run record's start from the command marker, whatever command had written it. So the first
+call wrote a `log-miss` run over the amendment's whole window and tokens (13:17:38 to 13:36:49). The
+later calls' run records were refused for overlap, and then the amendment's own record was refused too.
+TfLens voided the log-miss record and wrote the amendment's. The overlap rule (FR-72) shipped on
+2026-09-10, and nobody checked it against the scripts that write their own run record in the middle of
+another command. The same lines also read a marker of any age, where every other reader ignores one
+older than 24 hours. `MISS-TechieFlow-20260911-11`, sorted `weak-check`.
+
+- **Fix.** When the marker names any command but `log-miss`, the logger writes no run record, and its
+  report says so: "Run record : none written — the running *<command>'s own record covers this time".
+  A marker older than 24 hours is ignored. The miss and miss-fix records are unchanged.
+- **Case.** `tests/regression/run.sh tf_029`: two misses logged under an `amend-docs` marker, then the
+  amendment's record; and a `*log-miss` run under a three-day-old marker. Run against the old logger
+  (byte-identical to the copy in all 19 projects), three of the four checks failed: a log-miss run over
+  the window, the amendment's record refused, and a run recorded as starting three days earlier. All
+  four pass now. The whole suite: 68 pass, none fail, 3 browser cases skipped.
+- **Proof in a real repository.** This entry's own miss was logged inside a `framework-reset` marker
+  in this repository. The logger wrote the miss and its fix, and no run record. A proof on a copy of
+  TfLens's metrics files was refused by `guard-metrics.sh`, which blocks copying onto any
+  `docs/metrics` path, a scratch copy included. It was not worked around.
+- **Deployed** to all 19 projects; all 20 copies are identical, and TfLens's self-check passes.
+- **Answered** with a TF-029 row in the 2026-09-11 Resolution status table of TfLens's feedback file,
+  which now reads 0 open, 8 fixed upstream, 21 closed. Both copies are identical.
+- **Also found.** The TF-028 edit to `WorkFlow-Context.md` had taken it to 3,024 words, over its 3,000
+  cap, and the mirror self-test was not re-run after that edit. The item was shortened; 2,964 words.
+
+---
+
+## 2026-09-11, evening — TF-028: the feedback reader missed a closing line under a bare heading
+
+TfLens closed eight re-checked entries and found that TF-013 still read "fixed" after `--close`
+printed "TF-013 closed". Its heading was a bare `## TF-013`. The heading pattern in
+`tf_feedback.py`, written this morning, used `\s` where it meant a space, and `\s` also matches a line
+break, so a heading with no title took the next line with text as its title. After the close, that line
+was the closing line itself, and the reader never saw it. This morning's session ran the reader on
+TfLens's real file, and its listing showed TF-013's title as `**Severity:** major`. Nobody read it, and
+the owner had to carry one more problem between the two repositories. `MISS-TechieFlow-20260911-10`,
+sorted `weak-check`.
+
+- **Fix.** Both heading patterns in `tf_feedback.py` now use `[ \t]`, so a heading is one line.
+- **Case.** `tests/regression/run.sh tf_028`: a bare heading has no title, and a closing line under it
+  counts. Both halves failed against the old reader and pass now. The whole suite: 64 pass, none fail,
+  3 skipped (the browser cases; Playwright is not installed on this machine).
+- **Proof on real files.** The old and new readers were run on all 24 feedback files in the 20
+  repositories that carry the script. They agree on every entry except TF-013's title in the framework's
+  stale copy of TfLens's file.
+- **Deployed.** The fixed `tf_feedback.py` was copied into all 19 project repositories. All 19 copies
+  were byte-identical to the old reader beforehand, and all 20 copies are now the same. TfLens's
+  self-check passes with no findings.
+- **Answered.** A TF-028 row in the 2026-09-11 Resolution status table of TfLens's feedback file, with
+  a one-line re-check. The Summary now reads 0 open, 8 fixed upstream, 20 closed. TfLens's file was the
+  complete one (it holds TfLens's eight closings), so it was copied over the framework's stale copy
+  in `docs/`. The two are identical, and the owner has nothing to copy across.
+- **Not proved in OpenCode.** No OpenCode run could finish here. Its default provider was unreachable,
+  the account refused the OpenAI models, and the `opencode-go` models ran past four minutes without
+  answering. The reader is plain Python with nothing specific to a harness, and it was run directly in
+  TfLens.
+
+---
+
 ## 2026-09-11, later — why TfLens called fixed problems open, and every entry answered
 
 The owner asked whose mistake it was that TfLens reported TF-019 and TF-022 as open when the owner had

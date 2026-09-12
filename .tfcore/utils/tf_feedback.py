@@ -27,8 +27,10 @@ import os
 import re
 import sys
 
-ENTRY_HEAD = re.compile(r"(?m)^(#{2,3})\s+`?([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+)\b[`\s—–-]*(.*)$")
-REPLY_HEAD = re.compile(r"(?mi)^([ \t]*>[ \t]*)?#{2,3}\s+[^\n]*\b(?:resolution status|resolved|repl(?:y|ies) from)\b[^\n]*")
+# a heading is one line: [ \t], never \s, which runs past the line break and makes the next line
+# of a bare "## TF-013" its title — its closing line included (TF-028)
+ENTRY_HEAD = re.compile(r"(?m)^(#{2,3})[ \t]+`?([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+)\b[` \t—–-]*(.*)$")
+REPLY_HEAD = re.compile(r"(?mi)^([ \t]*>[ \t]*)?#{2,3}[ \t]+[^\n]*\b(?:resolution status|resolved|repl(?:y|ies) from)\b[^\n]*")
 ANY_ID = re.compile(r"(?<![\w-])([A-Z][A-Z0-9]*(?:-[A-Z]+)*-\d{2,})(?!\d)")
 FIXED_WORDS = re.compile(r"(?i)\b(fixed|resolved|corrected|closes|closed|wired)\b")
 EVERYTHING = re.compile(r"(?i)\beverything else is (?:now )?fixed\b|\ball (?:the )?others? (?:are )?(?:now )?fixed\b")
