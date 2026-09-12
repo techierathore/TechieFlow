@@ -1054,20 +1054,25 @@ def _prior_runs():
 # (MISS-TechieFlow-20260910-04, sorted `ignored`: it was written down and not followed).
 #
 # A stream is append-only, so the only place to stop it is before the write. The rule: for one
-# app, a live `run` record may not begin before the last live `run` record ended. Voided and
-# backfilled records are ignored, which is what makes the void-then-re-emit flow work. Records
-# with no `started` are untouched.
+# app, a live `run` record's window may not OVERLAP another live `run` record's window. It is the
+# windows that are compared, not the order of writing: a command that chains another one inside
+# itself -- *build-phase chaining *verify -- finishes last but did its own first segment before the
+# inner run started, and comparing against the newest record alone meant that segment could never be
+# recorded at all (TfLens TF-040, 80 minutes and five builder clusters on no record). Two windows
+# that merely touch at a boundary do not overlap. Voided and backfilled records are ignored, which
+# is what makes the void-then-re-emit flow work. Records with no `started` are untouched.
 #
 # The one legitimate overlap is two machines appending to the same merge=union stream, so
 # `--allow-overlap` exists and the refusal message names it. It is deliberately a flag and not a
 # fallback: the mistake this refuses is easy to make and invisible afterwards.
-_LAST_END = None
+_LIVE = None
 
 
-def _last_live_end(app):
-    global _LAST_END
-    if _LAST_END is None:
-        _LAST_END = {}
+def _live_windows(app):
+    """[(started, ended, cmd)] of every live run record for this app, oldest first."""
+    global _LIVE
+    if _LIVE is None:
+        _LIVE = {}
         voided = set()
         rows = []
         try:
@@ -1089,6 +1094,9 @@ def _last_live_end(app):
         for r in rows:
             if (r.get("app"), r.get("cmd"), r.get("started")) in voided:
                 continue
+            start = r.get("started")
+            if not start:
+                continue
             # `ended` ONLY. `ts` is when the record was WRITTEN, not when the run finished, so
             # falling back to it would make every historical record emitted today look like an
             # overlap with the record written a second ago. A run with no `ended` has no window
@@ -1103,38 +1111,37 @@ def _last_live_end(app):
             end = r.get("ended")
             if not end:
                 continue
-            a = r.get("app")
-            if a not in _LAST_END or end > _LAST_END[a][0]:
-                _LAST_END[a] = (end, r.get("cmd"), r.get("started"))
-    return _LAST_END.get(app)
+            _LIVE.setdefault(r.get("app"), []).append((start, end, r.get("cmd")))
+    return _LIVE.get(app, [])
 
 
 def _overlap_ok(rec):
-    """False (and the reason printed) when this run would start before the last one ended."""
+    """False (and the reason printed) when this run's window overlaps a live one's."""
     if stream != "runs" or rec.get("kind", "run") != "run" or rec.get("backfilled"):
         return True
     if os.environ.get("TF_ALLOW_OVERLAP") == "1":
         return True
-    started = rec.get("started")
+    started, ended = rec.get("started"), rec.get("ended")
     if not started:
         return True
-    prev = _last_live_end(rec.get("app"))
-    if not prev:
-        return True
-    a, b = _iso_ms(started), _iso_ms(prev[0])
-    if a is not None and b is not None:
-        if a >= b:
-            return True
-    elif started >= prev[0]:        # unparseable timestamp: fall back to the string order
-        return True
-    sys.stdout.write(
-        "tf-emit: REFUSED — this run starts at %s, before the previous run for %s ended at %s "
-        "(%s started %s). The two would overlap and every total over them would be that much too "
-        "big. Use the previous run's `ended` as this one's `started`, or pass --allow-overlap if "
-        "they really did run at the same time (a second machine on the same stream). "
-        "Nothing was appended.\n"
-        % (started, rec.get("app"), prev[0], prev[1], prev[2]))
-    return False
+    def key(v):
+        k = _iso_ms(v)
+        return k if k is not None else v      # unparseable: compare as strings, as before
+    s, e = key(started), key(ended or started)
+    for (ps, pe, pcmd) in _live_windows(rec.get("app")):
+        a, b = key(ps), key(pe)
+        if type(a) is not type(s) or type(b) is not type(e):
+            continue
+        if s < b and a < e:                   # windows that only touch at a boundary are fine
+            sys.stdout.write(
+                "tf-emit: REFUSED — this run (%s to %s) overlaps the %s run of %s already on the "
+                "stream (%s to %s). Every total over the two would be that much too big. Record the "
+                "part that did not overlap -- a command that chained another one records its own "
+                "segment before the inner run started -- or pass --allow-overlap if they really did "
+                "run at the same time (a second machine on the same stream). Nothing was appended.\n"
+                % (started, ended or "now", pcmd, rec.get("app"), ps, pe))
+            return False
+    return True
 
 
 def stamp_attempt(rec):

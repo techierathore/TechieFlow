@@ -156,6 +156,19 @@ else
   ok "FR-47: skipped, no private-name list at $priv_file"
 fi
 
+# 5c2. The framework is technology-neutral WHERE IT SAYS IT IS: no persona, task or shared rule
+#      names a language, database, UI library, browser driver or host. Those belong to a project's
+#      stack answers, never to the instructions every project receives. The scripts are another
+#      matter and are not checked here: tf-build.sh is .NET's and the verify tools are Playwright's,
+#      which is a known limit of this version, recorded in WorkFlow-Context §6.
+stack_words='dotnet|\.NET|blazor|maui|csproj|playwright|chromium|react|angular|vue|postgres|postgresql|mysql|sqlite|mongodb|azure|aws|gcp|kubernetes|django|rails|spring boot'
+hits=0
+while IFS= read -r f; do
+  m="$(grep -oniE "(^|[^[:alnum:].])($stack_words)([^[:alnum:]]|$)" "$f" 2>/dev/null | head -1)"
+  [[ -n "$m" ]] && { bad "a task or persona names a technology: $(realpath --relative-to="$ROOT" "$f"):$m"; hits=$((hits+1)); }
+done < <(find "$ROOT/.tfcore/agents" "$ROOT/.tfcore/tasks" -name '*.md' 2>/dev/null)
+[[ $hits -eq 0 ]] && ok "no persona, task or shared rule names a language, database, UI library, driver or host"
+
 # 5d. FR-42 — the Codex adapter is gone and stays gone (removed 2026-09-07, D-14).
 #     The one allowed mention is the telemetry schema's note that `codex` is a RETIRED harness
 #     value: records written before the removal carry it and a reader must still understand them.

@@ -51,7 +51,9 @@ else rm -f "$PWJSON"; fi
 
 if [[ $UNIT -eq 1 ]]; then
   if [[ -n "$TARGET" ]] || ls *.sln *.slnx >/dev/null 2>&1 || ls tests/*/*.csproj >/dev/null 2>&1; then
-    UNITLINE="$(bash "$HERE/tf-build.sh" test ${TARGET:+"$TARGET"} -- --logger "console;verbosity=normal" 2>&1 | head -1)"
+    # the VERDICT line, not the first line: tf-build.sh may print a note before it, and a note read
+    # as the verdict left 975 passing TfLens tests recorded as never run (TF-037)
+    UNITLINE="$(bash "$HERE/tf-build.sh" test ${TARGET:+"$TARGET"} -- --logger "console;verbosity=normal" 2>&1 | grep -m1 -E '^(PASS|FAIL|NOT-RUN)' || true)"
     UNITLOG="$(sed -n 's/.*log \(tests\/\.artifacts\/build\/[^ ;]*\).*/\1/p' <<<"$UNITLINE" | head -1)"
     echo "unit tests: $UNITLINE"; [[ "$UNITLINE" != NOT-RUN* ]] && ran_any=1
   else

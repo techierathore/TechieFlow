@@ -92,7 +92,7 @@ Per shell §9 checklist, for each rendered file confirm:
 - No external resource references except the two CDN scripts.
 
 **Mermaid validity pass (do this for EVERY diagram — it is the #1 reported bug).** Apply the shell §5.5 self-check to each mermaid block before emitting it:
-- Each node/edge/subgraph label that contains anything other than letters, digits, and spaces (i.e. has `(` `)` `/` `&` `:` `,` `[` `]` `{` `}` `#` `@` `<` `>` `|` `"` etc.) MUST be wrapped in double quotes, with the quotes INSIDE the shape brackets (`API["ASP.NET API (v2)"]`, `DB[("SQL Server")]`).
+- Each node/edge/subgraph label that contains anything other than letters, digits, and spaces (i.e. has `(` `)` `/` `&` `:` `,` `[` `]` `{` `}` `#` `@` `<` `>` `|` `"` etc.) MUST be wrapped in double quotes, with the quotes INSIDE the shape brackets (`API["Orders API (v2)"]`, `DB[("Main database")]`).
 - No node id is a reserved word (lowercase `end`).
 - If you find a bare label in the source MD, **fix it in the emitted HTML** (quote it) rather than copying through a diagram you know will throw "Syntax error" in the browser. Note any such fix in the output summary so the author can also fix the MD source.
 

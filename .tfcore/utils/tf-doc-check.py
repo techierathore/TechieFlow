@@ -1177,9 +1177,19 @@ def cross_phase_checks(ctxs, rep, root, phases):
                 rep.fail(cls[p]["rel"], f"{i} is also in phase {seen[i]}'s checklist; REQ ids run on across phases and are never reused")
             seen.setdefault(i, p)
 
+    if not ph and app:
+        # It may simply not have been named on the command line. Read it from disk for this rule and
+        # throw its own findings away, since they belong to a run that names it: saying "the Phases
+        # document does not exist" about a file that is there invites writing over it (TF-041).
+        disk = os.path.join(root, "docs", f"{app}-Phases.md")
+        if os.path.isfile(disk):
+            try:
+                ph = check_document(disk, Report(False), None, root)
+            except Exception:
+                ph = None
     if not ph:
         if len(phases) > 1 and app:
-            rep.fail(f"docs/{app}-Phases.md", f"phase files exist ({', '.join(f'P{p}' for p in phases if p > 1)}) but the Phases document does not; write it from app-phases-tmpl.md")
+            rep.fail(f"docs/{app}-Phases.md", f"phase files exist ({', '.join(f'P{p}' for p in phases if p > 1)}) but no Phases document is on disk; write it from app-phases-tmpl.md")
         return
     rows = ph.get("phases") or []
     if not rows:

@@ -637,8 +637,8 @@ tf_overlap() {
   else
     bad tf_overlap_b "an overlapping run reached the stream"; note "$out"
   fi
-  grep -q 'previous run for Fx ended at 2026-09-10T10:00:00Z' <<<"$out" \
-    && ok tf_overlap_c "the refusal names the record it collides with and the time to use" \
+  grep -q 'overlaps the build-phase run of Fx already on the stream (2026-09-10T09:00:00Z to 2026-09-10T10:00:00Z)' <<<"$out" \
+    && ok tf_overlap_c "the refusal names the record it collides with and what to do" \
     || { bad tf_overlap_c "the refusal does not say what to do"; note "$out"; }
 
   emit '{"kind":"run","app":"Fx","cmd":"verify-phase","started":"2026-09-10T10:00:00Z","ended":"2026-09-10T11:00:00Z"}' >/dev/null
@@ -1534,6 +1534,192 @@ tf_035() {
   fi
 }
 
+# --- TF-037: a note line read as the build's verdict ---------------------------------------
+# tf-verify-tests kept the FIRST line tf-build.sh printed. Yesterday's TF-035 fix added a note
+# line before the verdict, so 975 passing TfLens unit tests were recorded as never run and 17 rows
+# lost their only test. The same fix counted a log file that does not exist yet, and the shell's
+# error about it became the first line (2026-09-11).
+tf_037() {
+  local d="$SCRATCH/tf037"; mkdir -p "$d/.tfcore" "$d/tests/verify" "$d/tests/.artifacts/build" "$d/tests/Fx.Tests"
+  cp -r "$UTILS" "$d/.tfcore/"
+  printf '<Project Sdk="Microsoft.NET.Sdk"></Project>\n' > "$d/tests/Fx.Tests/Fx.Tests.csproj"
+  cat > "$d/tests/.artifacts/build/unit.log" <<'LOG'
+  Passed REQ-FN-072 reads the stream [12 ms]
+Passed!  - Failed: 0, Passed: 975, Skipped: 0, Total: 975
+LOG
+  cat > "$d/.tfcore/utils/tf-build.sh" <<'SH'
+#!/usr/bin/env bash
+echo "note  the scoped stylesheets were built on the other side of this machine; cleared so the windows build names them itself"
+echo "PASS  test on wsl via cmd.exe /c dotnet (rung 4) — 0 warning line(s); log tests/.artifacts/build/unit.log"
+SH
+  local out; out="$( cd "$d" && bash .tfcore/utils/tf-verify-tests.sh --no-browser --json-out tests/.artifacts/verify/tests.json 2>&1 )"
+  local ran; ran="$(python3 -c "import json,sys
+try: print(json.load(open(sys.argv[1]))['unit'].get('ran'))
+except Exception as e: print('none')" "$d/tests/.artifacts/verify/tests.json")"
+  if [[ "$ran" == "True" ]]; then
+    ok tf_037a "the build's verdict line is read, not a note printed before it"
+  else
+    bad tf_037a "a note line was taken for the verdict, so the unit tests read as never run"; note "$(grep -i unit <<<"$out" | head -1)"
+  fi
+  # and the build script itself says nothing before its verdict when its log is not there yet
+  local e="$SCRATCH/tf037b"; mkdir -p "$e/bin"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Web"></Project>\n' > "$e/Fx.csproj"
+  printf '#!/usr/bin/env bash\necho "Build succeeded."; exit 0\n' > "$e/bin/dotnet"; chmod +x "$e/bin/dotnet"
+  local first; first="$( cd "$e" && PATH="$e/bin:/usr/bin:/bin" HOME="$e" TF_BUILD_PLATFORM=wsl bash "$UTILS/tf-build.sh" build Fx.csproj 2>&1 | head -1 )"
+  if grep -qE '^(PASS|FAIL|NOT-RUN)' <<<"$first"; then
+    ok tf_037b "the build's first line is its verdict, not a shell error about a log not yet written"
+  else
+    bad tf_037b "the build printed something before its verdict"; note "$first"
+  fi
+}
+
+# --- TF-038 and TF-039: a transparent border, and a table scrolling inside its card ----------
+# A `border: 1px solid transparent` counted as a drawn border, so every ghost button read as a
+# badge with a solid ring, and a borderless icon took its colour from a reset's border-color:
+# 13 of 15 findings on TfLens /prices. The clip clause measured descendants unclipped, so a table
+# scrolling inside its wrapper read as a card cut off at 390px (2026-09-11).
+tf_038() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip tf_038 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/tf038"; mkdir -p "$d/docs/mockups"
+  # The mockup: a transparent border reserving space, an icon coloured by `color`, and a wide table
+  # scrolling inside its card. The app draws the same things — no border at all, the same icon
+  # colour, the same scrolling table — but carries a reset that sets border-color on everything and
+  # a screen-reader-only span inside the card, which is what sent the old tool down both wrong paths.
+  cat > "$d/docs/mockups/prices.html" <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"><style>
+ body{margin:0;font-family:system-ui;width:340px}
+ .btn{border:1px solid transparent;height:28px;border-radius:8px;padding:0 8px;background:none}
+ .card{width:340px}.scroller{overflow-x:auto}table{width:900px;border-collapse:collapse}td{padding:4px}
+ .chip{background:#dbeafe;display:inline-block}svg{width:16px;height:16px;color:#2563eb}
+</style></head><body>
+ <button data-testid="btn-ghost" class="btn">Add a provider</button>
+ <span data-testid="chip" class="chip"><svg data-testid="chip-icon" viewBox="0 0 16 16"><path d="M1 1h14v14H1z" fill="currentColor"/></svg></span>
+ <div data-testid="effort-phases" class="card"><div class="scroller"><table><tr><td>one</td><td>two</td><td>three</td><td>four</td><td>five</td></tr></table></div></div>
+</body></html>
+HTML
+  cat > "$d/prices.html" <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"><style>
+ *{border-color:#9ca3af}body{margin:0;font-family:system-ui;width:340px}
+ .btn{border:none;height:28px;border-radius:8px;padding:0 8px;background:none}
+ .card{width:340px}.scroller{overflow-x:auto}table{width:900px;border-collapse:collapse}td{padding:4px}
+ .chip{background:#dbeafe;display:inline-block}svg{width:16px;height:16px;color:#2563eb}
+ .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+</style></head><body>
+ <button data-testid="btn-ghost" class="btn">Add a provider</button>
+ <span data-testid="chip" class="chip"><svg data-testid="chip-icon" viewBox="0 0 16 16"><path d="M1 1h14v14H1z" fill="currentColor"/></svg></span>
+ <div data-testid="effort-phases" class="card"><span class="sr">five rows</span><div class="scroller"><table><tr><td>one</td><td>two</td><td>three</td><td>four</td><td>five</td></tr></table></div></div>
+</body></html>
+HTML
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
+  sleep 1
+  local out; out="$( cd "$d" && timeout 180 node parity.mjs --base "http://127.0.0.1:$port" --screen prices=/prices.html \
+                     --widths 390 --json-out "$d/parity.json" 2>&1 )"
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+  if ! grep -qE 'border style differs|badge/pill' <<<"$out"; then
+    ok tf_038a "a border of transparent pixels is not read as a drawn one"
+  else
+    bad tf_038a "a transparent border still reads as a ring"; note "$(grep -E 'border|badge' <<<"$out" | head -2)"
+  fi
+  if ! grep -q 'semantic colour differs' <<<"$out"; then
+    ok tf_038b "a borderless icon takes its colour from what it draws, not from a reset's border-color"
+  else
+    bad tf_038b "the reset's border colour is still read as the icon's"; note "$(grep 'semantic colour' <<<"$out" | head -1)"
+  fi
+  if ! grep -q 'cut off horizontally' <<<"$out"; then
+    ok tf_039 "a table scrolling inside its own card is not reported as cut off"
+  else
+    bad tf_039 "the clip clause still measures descendants unclipped"; note "$(grep 'cut off' <<<"$out" | head -1)"
+  fi
+}
+
+# --- TF-040: a command that chains another one, and its own first segment -------------------
+# The rule compared a new record against the NEWEST record only, so *build-phase, which chains
+# *verify inside itself and finishes after it, could never record the 80 minutes and five builder
+# clusters it ran BEFORE the verify started (TfLens, 2026-09-11). Windows are compared now.
+tf_040() {
+  local d; d="$(_metrics_fx overlapgap)"
+  emit40() { echo "$1" | ( cd "$d" && bash "$UTILS/tf-emit.sh" runs ) 2>&1; }
+  n40() { grep -c '"kind":"run"' "$d/docs/metrics/runs.jsonl" 2>/dev/null || echo 0; }
+  # the chained verify writes its record first, as it does today
+  emit40 '{"kind":"run","app":"Fx","cmd":"verify-phase","started":"2026-09-11T18:13:36Z","ended":"2026-09-11T21:13:15Z"}' >/dev/null
+  local out; out="$(emit40 '{"kind":"run","app":"Fx","cmd":"build-phase","started":"2026-09-11T16:53:16Z","ended":"2026-09-11T18:13:36Z"}')"
+  if ! grep -q REFUSED <<<"$out" && [[ "$(n40)" == "2" ]]; then
+    ok tf_040a "the outer command records the segment it ran before the run it chained"
+  else
+    bad tf_040a "a record wholly before the newest one was refused"; note "$(head -1 <<<"$out")"
+  fi
+  # and a record that really does overlap an older one is still refused
+  out="$(emit40 '{"kind":"run","app":"Fx","cmd":"fix-issues","started":"2026-09-11T17:30:00Z","ended":"2026-09-11T19:00:00Z"}')"
+  if grep -qE "overlaps the (build-phase|verify-phase) run of Fx" <<<"$out" && [[ "$(n40)" == "2" ]]; then
+    ok tf_040b "a record that overlaps an earlier one is still refused, and says which"
+  else
+    bad tf_040b "an overlapping record reached the stream"; note "$(head -1 <<<"$out")"
+  fi
+}
+
+# --- TF-041: the Phases document is on disk but was not named ------------------------------
+# The cross-phase rule read the documents named on the command line only, so a status gate that
+# named the checklists and not docs/<App>-Phases.md was told to write a file that is there — over
+# the top of the real one (TfLens, 2026-09-11).
+tf_041() {
+  local d="$SCRATCH/tf041"; mkdir -p "$d/docs"
+  cat > "$d/docs/Fx-Phases.md" <<'MD'
+# Fx — Phases
+
+| | |
+|---|---|
+| App | Fx |
+| Kind | app |
+| Size | Large |
+| Date | 2026-09-11 |
+
+## Phases
+
+| Phase | Name | Screens | BRD range | Status |
+|---|---|---|---|---|
+| 1 | Core | Repos | BRD-1 to BRD-50 | done |
+| 2 | Reports | Misses | BRD-51 to BRD-99 | building |
+MD
+  for n in "" "-P2"; do
+    cat > "$d/docs/Fx${n}-Checklist.md" <<'MD'
+# Fx — Requirements Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Detail |
+|---|---|---|---|---|---|
+| REQ-FN-001 | Lists repos | Verified | 100% | — | [view](#d-req-fn-001) |
+
+## Coverage
+
+- <a id="d-req-fn-001"></a>**REQ-FN-001** — Lists repos (BRD-1)
+  - Acceptance: When a user opens Repos on Repos, then the list shows.
+MD
+  done
+  sed -i 's/REQ-FN-001/REQ-FN-002/g; s/req-fn-001/req-fn-002/g' "$d/docs/Fx-P2-Checklist.md"
+  local out
+  out="$(python3 "$UTILS/tf-doc-check.py" --root "$d" --quiet "$d/docs/Fx-Checklist.md" "$d/docs/Fx-P2-Checklist.md" 2>&1)"
+  if ! grep -q "Phases document" <<<"$out"; then
+    ok tf_041a "the Phases document on disk is read, not reported as missing"
+  else
+    bad tf_041a "a Phases document that is there was reported as not existing"; note "$(grep Phases <<<"$out" | head -1)"
+  fi
+  rm -f "$d/docs/Fx-Phases.md"
+  out="$(python3 "$UTILS/tf-doc-check.py" --root "$d" --quiet "$d/docs/Fx-Checklist.md" "$d/docs/Fx-P2-Checklist.md" 2>&1)"
+  if grep -q "no Phases document is on disk" <<<"$out"; then
+    ok tf_041b "a Phases document that really is absent is still reported"
+  else
+    bad tf_041b "a missing Phases document went unreported"; note "$(head -2 <<<"$out")"
+  fi
+}
+
 # --- TF-036: two wrapped sentences that share a line ----------------------------------------
 # An inline element's bounding box is the union of its line fragments, so two sentences sharing a
 # line "overlapped" across a tile's width on TfLens /effort (2026-09-11) with 0 px² in common.
@@ -1584,7 +1770,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

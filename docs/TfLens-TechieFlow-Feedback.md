@@ -18,7 +18,7 @@ Workaround / Suggested fix). One file per upstream owner; this one is TechieFlow
 
 ## Summary
 
-**Nothing is blocked.** 36 entries: none open, 14 fixed upstream and waiting to be re-checked here (TF-018, TF-020, TF-021, TF-025 to TF-028, TF-030 to TF-036), 22 closed. TF-013 to TF-017, TF-019, TF-022 to TF-024 and TF-029 were re-checked and closed here on 2026-09-11. Every problem TfLens has filed is fixed in the framework: TF-013 to TF-022 on 2026-09-09 (the reply that day left out TF-013 to TF-017, which is why they showed open here), TF-023 to TF-036 on 2026-09-11. A fix counts as done only once it has been re-checked here: run each entry's "Verify from here" step in the Resolution status block of 2026-09-11, then close it with `bash .tfcore/utils/tf-feedback.sh TfLens --close <ID> "<what you ran and what it showed>"`. `bash .tfcore/utils/tf-feedback.sh TfLens` prints the state of every entry. Never describe a fixed entry as an open problem.
+**Nothing is blocked.** 41 entries: none open, 16 fixed upstream and waiting to be re-checked here (TF-018, TF-020, TF-021, TF-025 to TF-028, TF-030, TF-033 to TF-035, TF-037 to TF-041), 25 closed. TF-013 to TF-017, TF-019, TF-022 to TF-024, TF-029, TF-031, TF-032 and TF-036 were re-checked and closed here on 2026-09-11. Every problem TfLens filed up to TF-036 is fixed in the framework: TF-013 to TF-022 on 2026-09-09 (the reply that day left out TF-013 to TF-017, which is why they showed open here), TF-023 to TF-036 on 2026-09-11 and TF-037 to TF-041 on 2026-09-12. A fix counts as done only once it has been re-checked here: run each entry's "Verify from here" step in the Resolution status block of 2026-09-11, then close it with `bash .tfcore/utils/tf-feedback.sh TfLens --close <ID> "<what you ran and what it showed>"`. `bash .tfcore/utils/tf-feedback.sh TfLens` prints the state of every entry. Never describe a fixed entry as an open problem.
 
 #### Detail
 
@@ -177,6 +177,11 @@ TechieFlow never closes an entry for you.
 | **TF-034** | Filed and fixed 2026-09-11. Every start writes its own `tests/.artifacts/verify/boot-<port>.json` and `app-<port>.log`, so a second start no longer empties the first one's log. `boot.json` is still written, as a copy of the latest start, for the verdict. `stop --port <n>` stops only that app. A bare `stop` while two or more apps are running refuses and names the ports. The BOOTED line prints the exact stop command. When a Windows-side start times out, whatever listens on that start's port is stopped too, so no stray app keeps holding the build output. | Start two apps on two ports, then `bash .tfcore/utils/tf-verify-boot.sh stop`: it prints NOT-STOPPED with both ports. `stop --port <one>` leaves the other answering. |
 | **TF-035** | Filed and fixed 2026-09-11. **(1)** `MSB3021`, `MSB3027`, "being used by another process" and "Access to the path … is denied" are now a lock. The same rung waits and tries again, twice by default, then prints NOT-RUN "the build output is held by a running process", naming the process to stop. It never falls to the next rung. **(2)** On WSL, a build that changes side over the same `obj/` first clears every `obj/**/scopedcss`, whether the change happens within one run or since the last one. `obj/.tf-build-side` records which side built last. The page and its stylesheets are then named by one side again. | Run `bash .tfcore/utils/tf-build.sh` while an app holds `bin/Debug`: it prints NOT-RUN about the lock, not "PASS … via winrun dotnet (rung 3)". After any Windows-side rung, `obj/.tf-build-side` reads `windows`. |
 | **TF-036** | Filed and fixed 2026-09-11. A control whose `display` is `inline` and that wraps over several lines is now compared by the pieces it draws on each line (`getClientRects()`), each cut to what is visible. Two sentences that share a line no longer overlap. Two wrapped inline elements drawn over each other still do: the test case pulls one paragraph up over another and the overlap is reported. | Next `*verify` of `/effort`: "kpi-wallclock-derived overlaps kpi-wallclock-recomputed" no longer appears. |
+| **TF-037** | Filed and fixed 2026-09-12, and both halves were ours from the day before. `tf-verify-tests.sh` now reads the line that starts `PASS`, `FAIL` or `NOT-RUN`, not the first line, so a note printed before the verdict no longer hides it. The note itself came from the TF-035 fix; it stays, because it says the stylesheets were cleared. `tf-build.sh` no longer counts the lines of a log it has not written yet: the shell error that produced was the first line you saw. | `bash .tfcore/utils/tf-verify-tests.sh --no-browser` after a build that prints a note: the unit line reads `PASS test …` and the rows carrying test names count. `bash .tfcore/utils/tf-build.sh probe` prints no error line. |
+| **TF-038** | Filed and fixed 2026-09-12. A border counts only when it has width **and** a colour that is not transparent. That one rule serves all three places: the border-style class, the badge/pill class, and the colour class, which now skips `border-color` when nothing is drawn and falls through to the element's own colour. Proved on a page with `border: 1px solid transparent` in the mockup, no border in the app, and a reset setting `border-color` everywhere: the old tool reported nine badges and a colour difference, the new one reports neither, and a real border is still read. | Next `*verify`: no "mockup renders this as a badge/pill" or "border style differs — mockup solid, app none" on the ghost and primary buttons, and no "semantic colour differs" on the chip icons. |
+| **TF-039** | Filed and fixed 2026-09-12. In the fallback branch every descendant's rectangle is now cut by each ancestor that scrolls, the same rectangle `tf-verify-screens` has measured since TF-021. A card whose table scrolls inside its own wrapper is no longer read as cut off, and a card that really is cut off still is. | Next `*verify` at 390px: no "content is cut off horizontally" on `effort-phases` or `effort-routing`. |
+| **TF-040** | Filed and fixed 2026-09-12. The emitter compares **windows**, not the order of writing. A record is refused only when its window overlaps a live record's; two that merely touch at a boundary are fine. So a command that chains another one inside itself can record the segment it ran before the inner run started. The refusal now names the record it collides with. `--allow-overlap` is unchanged. | Emit the build's first segment (its marker time to the verify's `started`) after the verify's record: it is appended. A record that really overlaps is still refused, naming the run it overlaps. |
+| **TF-041** | Filed and fixed 2026-09-12. When the Phases document is not named on the command line, the checker reads it from disk for the cross-phase rules and throws away findings about the document itself, which belong to a run that names it. The message now says "no Phases document is on disk", so it can only appear when the file is really absent. Run on your real checklists without naming it: the old checker reported it missing, the new one reports nothing and the phase rules still run. | `bash .tfcore/utils/tf-doc-check.sh docs/TfLens-Checklist.md docs/TfLens-P2-Checklist.md docs/TfLens-P3-Checklist.md`: no "Phases document" line. |
 
 Every fix carries a case in the framework's `tests/regression/run.sh` that fails against the script
 as you have it today and passes now.
@@ -2509,6 +2514,8 @@ against its UI design entry as before, and the mockup link check on existing UI 
 
 ## TF-031 — `tf-verify-tests.sh --base` sets `BASE_URL`, which no Playwright config reads, so the tests run against whatever is on the default port
 
+> ✅ **Closed 2026-09-11** — re-checked here: 2026-09-11 build-phase verify: the app booted on 5014 and tf-verify-tests.sh --base http://localhost:5014 ran 207 browser tests against it; a targeted fix (the routing delta) showed up in the run, so the tests hit the booted build
+
 - **Severity:** major
 - **Blocks:** no. The project's `playwright.config.ts` now reads `BASE_URL` first, and the run carried on.
 - **Repro:** boot the app on any port but the one `playwright.config.ts` names, then run
@@ -2532,6 +2539,8 @@ address as their own argument and drive it directly. Earlier TfLens runs booted 
 config's default, so their results were taken against the right build.
 
 ## TF-032 — `tf-verify-screens` asks for every mockup control at every width, so a sidebar the mockup hides on a phone fails the render check
+
+> ✅ **Closed 2026-09-11** — re-checked here: 2026-09-11 build-phase verify: tf-verify-screens --list over /misses, /effort, /prices at 1280 and 390 with the sidebar off the page on a phone — render OK at both widths, no app-sidebar finding (tests/.artifacts/verify/screens.json)
 
 - **Severity:** major
 - **Blocks:** no. The verdicts were written as the checker graded them, and each affected row's Remark says the finding is this fault.
@@ -2585,30 +2594,28 @@ clipping checks passed on all three screens at both widths.
 ## TF-035 — `tf-build.sh` answers a locked output file by rebuilding on the Windows side in the same `obj/`, and the app it passes serves stylesheets that match nothing
 
 - **Severity:** major
-- **Blocks:** no. The stale files were rewritten by hand and the smoke ran on its own configuration; see Workaround.
-- **Repro:** on WSL, keep one app running with `dotnet run` from `bin/Debug` (it holds `TrBlazeUI.Components.dll`), then
-  `bash .tfcore/utils/tf-build.sh`. Rung 2 (`~/.dotnet/dotnet`) fails with
-  `error MSB3021: Unable to copy file … Access to the path '…/bin/Debug/net10.0/TrBlazeUI.Components.dll' is denied`.
-- **Expected:** a locked output file is reported as a lock (wait and retry, or NOT-RUN "output is held by a running process"), because the code is fine and the rung is right.
-- **Actual:** `MSB3021 … is denied` matches neither the code-error pattern nor `WRONG_RUNG` (lines 103 and 128), so the loop "tries the next
-  rung": `winrun dotnet` (rung 3) builds the same project in the same `obj/` from the Windows side and prints
-  `PASS build on wsl via winrun dotnet (rung 3)`. A Blazor build names each component's scoped stylesheet by a hash of its path, and the
-  Windows and WSL paths hash differently. The SDK's `_ProcessScopedCssFiles` target is incremental on file timestamps only, so the
-  `.rz.scp.css` files and `TfLens.styles.css` keep the WSL names while `TfLens.dll` carries the Windows ones. Measured in TfLens on
-  2026-09-11 after the rung-3 PASS: 29 scope names in the dll, 27 in the bundle, **none in common**. Every page's own stylesheet
-  silently stopped applying: `/effort` drew its five KPI tiles one per row at 1280, and the page looked broken for a reason that is not in its code.
-  An earlier fall-through had left the same mismatch on `Effort.razor.css` and `StatTile.razor.css` alone (`b-ba2vancesw` in the page, `b-rrwc1bouo3` in the served bundle).
-- **Encountered in:** TfLens `*build-phase`, five clusters in parallel, 2026-09-11. The locks came from the other clusters' own apps (see TF-034).
-- **Workaround:** touch the affected `.razor.css` files so the next build rewrites them (their content is unchanged), and smoke on a
-  configuration of its own (`tf-verify-boot.sh start --port <n> --config <name>`), which gets a fresh `obj/<name>` built by one rung only.
-- **Suggested fix:** treat `MSB3021`, `MSB3027` and "being used by another process" / "Access to the path … is denied" as a lock, never as
-  a wrong rung. And never fall from a WSL rung to a Windows rung over the same `obj/`: when it has to cross, give that rung its own
-  `BaseIntermediateOutputPath`, or remove `obj/*/scopedcss` first.
+- **Blocks:** no. Stale files were rewritten by hand; the smoke ran on its own configuration.
+- **Repro:** on WSL, hold `bin/Debug` with a running app, then `bash .tfcore/utils/tf-build.sh`; rung 2 fails
+  `MSB3021 … Access to the path '…/TrBlazeUI.Components.dll' is denied`.
+- **Expected:** a locked output file reads as a lock (retry, or NOT-RUN).
+- **Actual:** `MSB3021` matches neither the code-error pattern nor `WRONG_RUNG` (lines 103, 128), so rung 3 (`winrun dotnet`) rebuilds the
+  same `obj/` from Windows and prints PASS. Blazor hashes scoped-stylesheet names from the path and `_ProcessScopedCssFiles` is
+  timestamp-incremental, so `.rz.scp.css`/`TfLens.styles.css` keep WSL names while `TfLens.dll` carries Windows ones: 29 scope names in
+  the dll, 27 in the bundle, **none in common**. `/effort` drew five KPI tiles one per row at 1280; an earlier fall-through mismatched
+  `Effort.razor.css`/`StatTile.razor.css` (`b-ba2vancesw` vs `b-rrwc1bouo3`).
+- **Encountered in:** TfLens `*build-phase`, five parallel clusters, 2026-09-11; locks from the other clusters' apps (TF-034).
+- **Workaround:** touch the affected `.razor.css` files; smoke via `tf-verify-boot.sh start --port <n> --config <name>`, a fresh
+  `obj/<name>` built by one rung.
+- **Suggested fix:** treat `MSB3021`, `MSB3027`, "being used by another process" and "Access to the path … is denied" as a lock, not a
+  wrong rung; never cross WSL→Windows rungs over one `obj/` without a separate `BaseIntermediateOutputPath` or clearing
+  `obj/*/scopedcss`.
 
-**What is NOT affected.** Compile errors are still reported as FAIL. A build that passes on its first rung is consistent, and so is any
-build whose every rung runs on one side (macOS, native Linux, native Windows, the Docker image). Unit and guardrail tests don't read scoped CSS.
+**What is NOT affected.** Compile errors still FAIL; builds whose rungs stay on one side (macOS, Linux, Windows, Docker) are consistent;
+unit and guardrail tests don't read scoped CSS.
 
 ## TF-036 — `tf-verify-screens` measures an inline element that wraps across lines by its bounding box, so two sentences on shared lines "overlap"
+
+> ✅ **Closed 2026-09-11** — re-checked here: 2026-09-11 build-phase verify: /effort at 1280 carries the wrapping wall-clock sentences (kpi-wallclock-derived, kpi-wallclock-recomputed) and tf-verify-screens reports visual OK with no overlap finding (tests/.artifacts/verify/screens.json)
 
 - **Severity:** major
 - **Blocks:** no. The finding is adjudicated in the affected rows' Remarks with the fragment measurement below.
@@ -2625,3 +2632,100 @@ build whose every rung runs on one side (macOS, native Linux, native Windows, th
 
 **What is NOT affected.** Block and inline-block controls, which are the overwhelming majority, and the render check. A genuine overlap between
 two inline elements is still found by the fragment comparison.
+
+## TF-037 — `tf-verify-tests.sh` keeps only the first line `tf-build.sh test` prints, so a note line before the result makes every unit test read as not run
+
+- **Severity:** major
+- **Blocks:** no. The unit tests were re-run without the note and the verdict read the real results.
+- **Repro:** build from the Windows side of a WSL machine (or let `tf-build.sh` fall to a Windows rung), then
+  `tf-verify-tests.sh --base <url>` from WSL.
+- **Expected:** the unit-test line reads `PASS test on wsl …` and tests with a row id count for that row.
+- **Actual:** `tf-build.sh` prints `note  the scoped stylesheets were built on the other side …` before its PASS line;
+  `tf-verify-tests.sh` line 54 takes `| head -1`, records the note, finds no log path and writes `"unit": {"ran": false}`. On 2026-09-11
+  all 975 TfLens unit tests passed, yet 17 rows (REQ-FN-072–076, 106–111, 113, 114; REQ-NFR-013, 014, 022, 023) lost their only test and
+  would have read "not verified". Same day: line 141 runs `wc -l < "$LOG" 2>/dev/null` on a `…-test-<pid>.log` not yet created, the `<`
+  fails before `2>/dev/null` applies, and that shell error becomes the first line.
+- **Encountered in:** TfLens `*build-phase` chaining `*verify all`, 2026-09-11.
+- **Workaround:** ran `tf-build.sh test -- --logger "console;verbosity=normal"` alone, then fed its PASS line and log, with the Playwright
+  report, to the mapping step.
+- **Suggested fix:** take the line starting `PASS`, `FAIL` or `NOT-RUN` (`grep -m1 -E '^(PASS|FAIL|NOT-RUN)'`), not the first line.
+
+**What is NOT affected.** The browser tests, read from the Playwright report, and `tf-build.sh`, whose result line is right.
+
+## TF-038 — `tf-mockup-parity` counts a transparent border as a visible one, and reads an icon's colour from a border it does not draw
+
+- **Severity:** major
+- **Blocks:** no. Every finding was checked by eye against the mockup and recorded as the tool's error.
+- **Repro:** a mockup button `.btn.ghost.sm` with `border:1px solid transparent`, an app ghost Button with no border, and a Lucide icon in
+  a coloured chip on a page whose reset sets `border-color` everywhere, then `tf-mockup-parity.sh --screen prices=/prices`.
+- **Expected:** two borderless buttons match; an icon drawn blue in both matches.
+- **Actual:** `strokeOf()` sets `style` from border width alone (line 152) and `chromeOn()` calls an element "ringed" when
+  `borderTopWidth > 0` (line 172), so a transparent 1px border reads as a solid ring — "mockup renders this as a badge/pill" and "border
+  style differs — mockup solid, app none" on every ghost and primary button. `semanticColor()` reads `borderTopColor` before `color`
+  (line 137) without checking width, so a borderless svg takes the reset's grey: "semantic colour differs — mockup accent, app neutral".
+  On `/prices` 13 of 15 findings are these two causes; same on `/misses` and `/effort`.
+- **Encountered in:** TfLens `*build-phase` fix cycle 1, 2026-09-11.
+- **Workaround:** none in the tool; every finding is adjudicated in `tests/.artifacts/verify/*-fix/findings-verdict.md`.
+- **Suggested fix:** treat a border as present only when its width **and** its colour's alpha are above zero, in both `strokeOf()` and
+  `chromeOn()`; in `semanticColor()` skip `borderTopColor` when `borderTopWidth` is 0.
+
+**What is NOT affected.** Fills, real borders, text colours on elements that carry no border, and the other five parity classes.
+
+---
+
+## TF-039 — `tf-mockup-parity`'s `clip` clause measures descendants unclipped, so a table that scrolls inside its own container is reported as cut off
+
+- **Severity:** minor
+- **Blocks:** no. The three findings were checked against screenshots and adjudicated in the verdicts file.
+- **Repro:** a card holding a wide table in an `overflow-x: auto` wrapper (BRD-144's rule) **and** any sub-2px element — an icon `path`,
+  a collapsed `CollapsibleContent` — then `tf-mockup-parity.sh --screen effort=/effort --widths 390`.
+- **Expected:** no `clip` finding: the card does not overflow (`scrollWidth == clientWidth == 340`) and the mockup scrolls the same table
+  at 390 (`docs/mockups/effort.html:176`).
+- **Actual:** `content is cut off horizontally; the mockup is not clipped` on `effort-phases`, `effort-routing` and their grid at 390.
+  `clipOf()` (`tf-mockup-parity.mjs:225`) uses `scrollWidth - clientWidth` only while the subtree holds no hidden element; TF-012's
+  sr-only guard also catches any box under 2px, so the fallback takes the right-most `getBoundingClientRect()` of every visible
+  descendant, unclipped by ancestor scrollers — columns scrolled out of view count as card overflow. The mockup, with no such element,
+  keeps the `scrollWidth` branch.
+- **Encountered in:** TfLens `*build-phase` fix cycle 1, `/effort`, 2026-09-11
+  (`tests/.artifacts/verify/effort-fix/parity-full.json`, verdict 8).
+- **Workaround:** none in the tool; read every 390px `clip` finding against the screenshot.
+- **Suggested fix:** in the fallback branch, intersect each descendant's rectangle with the clip rectangle of every ancestor whose
+  `overflow-x` is not `visible`, as TF-021 fixed `tf-verify-screens`. Raising the 2px floor would not help — a real sr-only span flips
+  the branch too.
+
+**What is NOT affected.** Vertical clipping, the `scrollWidth` branch, the other six classes, and genuinely clipped cards, which either
+branch still reports.
+
+## TF-040 — a command that chains the verifier can never record its own first segment: the emitter refuses any run that starts before the last record ends
+
+- **Severity:** major
+- **Blocks:** no. The segment after the chained verify was recorded, and the run record the status gate demands exists.
+- **Repro:** `*build-phase`, whose task file says to start with `tf-phase.sh start` (marker 16:53:16Z), chain `*verify` inline at step 6
+  (which writes its own run record, 18:13:36Z to 21:13:15Z), then append the build's own run record at step 8 with that marker as `started`.
+- **Expected:** `build-phase` records the work it did before the verify.
+- **Actual:** `tf-emit.sh runs` answers `REFUSED — this run starts at 2026-09-11T16:53:16Z, before the previous run for TfLens ended at
+  2026-09-11T21:13:15Z`, and refuses a back-dated record even when its `ended` (18:13:36Z) precedes the later run's `started`: the check
+  compares against the last record on the stream, not against the interval. The first 80 minutes of the build — five builder clusters, 18 rows —
+  are on no run record, so effort and token totals for `build-phase` are that much too small.
+- **Encountered in:** TfLens `*build-phase` with a chained `*verify`, 2026-09-11.
+- **Workaround:** the build recorded one run from the verify's `ended` to the end of the pass, carrying `"mode":"fix"`.
+- **Suggested fix:** accept a record whose whole interval lies before the last record's `started`, or let a nested run be declared
+  (`--nested-of <started>`) so the outer command records its own span with the inner one subtracted.
+
+**What is NOT affected.** A command that chains nothing, and the chained verify's own record, which is written correctly.
+
+## TF-041 — `tf-doc-check` says the Phases document does not exist when it exists but was not named on the command line
+
+- **Severity:** minor
+- **Blocks:** no. The status gate passed once the file was named in the same command.
+- **Repro:** a project with `docs/<App>-P2-Checklist.md` and `-P3-Checklist.md` present and `docs/<App>-Phases.md` on disk, then
+  `bash .tfcore/utils/tf-doc-check.sh PROJECT-STATUS.md docs/<App>-P3-Checklist.md docs/<App>-Checklist.md docs/<App>-P2-Checklist.md`.
+- **Expected:** either the file is read from disk, or the message says it was not checked.
+- **Actual:** `FAIL docs/TfLens-Phases.md: phase files exist (P2, P3) but the Phases document does not; write it from app-phases-tmpl.md`
+  (tf-doc-check.py line 1182), although the file is there and 3.6 KB. The rule tests the parsed document set, which holds only the arguments.
+  An agent reading that line would write a document that already exists, over the top of the real one.
+- **Encountered in:** TfLens `*build-phase` status gate, 2026-09-11.
+- **Workaround:** name `docs/<App>-Phases.md` in the same `tf-doc-check.sh` call; the FAIL then disappears.
+- **Suggested fix:** load the Phases document from disk for this cross-document rule, or word it as "was not checked in this run".
+
+**What is NOT affected.** Every rule over documents actually named on the command line.

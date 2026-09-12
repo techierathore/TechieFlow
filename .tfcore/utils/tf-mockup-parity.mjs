@@ -132,9 +132,15 @@ const PROBE = () => {
     return 'neutral';
   };
 
+  // A border nobody draws carries no colour. `border: 1px solid transparent` is how a mockup
+  // reserves space, and a page reset that sets border-color everywhere leaves the property set on
+  // elements with no border at all: reading it gave a borderless icon the reset's grey and called
+  // it a colour difference (TF-038).
+  const drawnBorder = (cs) => (parseFloat(cs.borderTopWidth) || 0) > 0 && !!RGB(cs.borderTopColor);
+
   const semanticColor = (el) => {
     const cs = getComputedStyle(el);
-    return bucket(RGB(cs.backgroundColor)) || bucket(RGB(cs.borderTopColor)) || bucket(RGB(cs.color));
+    return bucket(RGB(cs.backgroundColor)) || (drawnBorder(cs) ? bucket(RGB(cs.borderTopColor)) : null) || bucket(RGB(cs.color));
   };
 
   // --- TF-009: the seventh class. A mockup says "provisional / estimated /
@@ -148,9 +154,9 @@ const PROBE = () => {
     const q = (s) => (s === 'none' || s === 'hidden' ? 'none'
       : s === 'dashed' || s === 'dotted' ? 'dashed' : 'solid');
     const sides = ['borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle'].map((k) => q(cs[k]));
-    const w = parseFloat(cs.borderTopWidth) || 0;
-    const style = w === 0 ? 'none' : sides[0];
-    return { style, uniform: new Set(sides).size === 1, visible: w > 0 };
+    const drawn = drawnBorder(cs);       // width AND a colour: transparent draws nothing (TF-038)
+    const style = drawn ? sides[0] : 'none';
+    return { style, uniform: new Set(sides).size === 1, visible: drawn };
   };
 
   const ICON = 'svg, img, i[class*="icon"], span[class*="icon"], [class*="bi-"], [class*="fa-"]';
@@ -169,7 +175,7 @@ const PROBE = () => {
     const cs = getComputedStyle(el);
     const radius = parseFloat(cs.borderTopLeftRadius) || 0;
     const filled = !!RGB(cs.backgroundColor);
-    const ringed = (parseFloat(cs.borderTopWidth) || 0) > 0;
+    const ringed = drawnBorder(cs);      // a transparent ring is not a ring (TF-038)
     return { badge: (filled || ringed) && radius >= 6, filled, ringed, radius: Math.round(radius) };
   };
 
@@ -222,6 +228,23 @@ const PROBE = () => {
   // --- TF-012 again, on the measuring side. scrollWidth includes the phantom
   // extent of an sr-only descendant, so the ancestor is measured from the right
   // edge of its VISIBLE descendants instead whenever a hidden one is present.
+  // A descendant inside a scroller is painted only as far as that scroller's edge, so its own box
+  // must be cut by every ancestor that clips before it can count as the card overflowing. Without
+  // that, a table scrolling inside its wrapper — the layout the BRD asks for — read as a card cut
+  // off at 390px (TF-039). The same rectangle tf-verify-screens measures since TF-021.
+  const paintedRight = (c, stop) => {
+    const r = c.getBoundingClientRect();
+    let x1 = r.left, x2 = r.right;
+    for (let a = c.parentElement; a; a = a.parentElement) {
+      if (getComputedStyle(a).overflowX !== 'visible') {
+        const ar = a.getBoundingClientRect();
+        x1 = Math.max(x1, ar.left); x2 = Math.min(x2, ar.right);
+      }
+      if (a === stop) break;
+    }
+    return x2 > x1 ? x2 : null;
+  };
+
   const clipOf = (el) => {
     const hiddenKids = [...el.querySelectorAll('*')].filter(isHidden);
     let overX;
@@ -233,7 +256,10 @@ const PROBE = () => {
       for (const c of el.querySelectorAll('*')) {
         if (isHidden(c)) continue;
         const r = c.getBoundingClientRect();
-        if (r.width > 0) right = Math.max(right, r.right);
+        if (r.width > 0) {
+          const painted = paintedRight(c, el);
+          if (painted !== null) right = Math.max(right, painted);
+        }
       }
       overX = Math.max(0, Math.round(right - (box.left + el.clientWidth)));
     }

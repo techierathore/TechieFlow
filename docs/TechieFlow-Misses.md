@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 161 logged: 52 open, 108 fixed, 1 will not fix |
+| Count | 167 logged: 52 open, 114 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-09-11 |
+| Updated | 2026-09-12 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -66,10 +66,16 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (108)
+## Fixed (114)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260912-06 | 2026-09-12 by owner | 2026-09-12 by log-miss | the framework never said it | the framework calls itself technology-neutral, and its personas and tasks are, but tf-build.sh is .NET's and the verify tools are Playwright's with no stack question behind them, and nothing checked either half; the owner asked and the answer was not written down anywhere |
+| MISS-TechieFlow-20260912-05 | 2026-09-12 by owner | 2026-09-12 by log-miss | the check was too weak | tf-doc-check told TfLens to write a Phases document that was on disk, because the cross-phase rule read only the documents named on the command line, and an agent following it would have written over the real one (TF-041) |
+| MISS-TechieFlow-20260912-04 | 2026-09-12 by owner | 2026-09-12 by log-miss | the check was too weak | the emitter compared a new run record against the newest record only, so build-phase, which chains verify inside itself and finishes after it, could never record the 80 minutes and five builder clusters it ran before the verify started (TF-040) |
+| MISS-TechieFlow-20260912-03 | 2026-09-12 by owner | 2026-09-12 by log-miss | the check was too weak | tf-mockup-parity's clip clause measured descendants unclipped whenever a hidden element was in the subtree, so a table scrolling inside its own wrapper read as a card cut off at 390px on TfLens /effort (TF-039) |
+| MISS-TechieFlow-20260912-02 | 2026-09-12 by owner | 2026-09-12 by log-miss | the check was too weak | tf-mockup-parity read a border of transparent pixels as a drawn one, so every ghost button was a badge with a solid ring, and it took an icon's colour from a border-color a page reset sets on elements with no border: 13 of 15 findings on TfLens /prices (TF-038) |
+| MISS-TechieFlow-20260912-01 | 2026-09-12 by owner | 2026-09-12 by log-miss | the check was too weak | tf-verify-tests kept the first line tf-build.sh printed, and yesterday's TF-035 fix added a note line before the verdict, so 975 passing TfLens unit tests were recorded as never run and 17 rows lost their only test; the same fix counted lines of a log not yet written and the shell's error became the |
 | MISS-TechieFlow-20260911-18 | 2026-09-11 by owner | 2026-09-11 by log-miss | the check was too weak | tf-verify-screens measured a wrapped inline element by its bounding box, the union of its line fragments, so two sentences sharing a line on TfLens /effort were reported as overlapping with 0 square pixels in common (TF-036) |
 | MISS-TechieFlow-20260911-17 | 2026-09-11 by owner | 2026-09-11 by log-miss | the check was too weak | tf-build.sh read a locked output file (MSB3021 access denied) as a wrong rung and fell to the Windows rung over the same obj/, whose scoped-stylesheet names no longer matched the dll, so every TfLens page's own styles silently stopped applying after a PASS (TF-035) |
 | MISS-TechieFlow-20260911-16 | 2026-09-11 by owner | 2026-09-11 by log-miss | the framework never said it | tf-verify-boot.sh kept one state file and one log for the whole repository, so TfLens's parallel builders emptied each other's logs and one builder's bare stop killed another builder's app on port 5147 (TF-034) |

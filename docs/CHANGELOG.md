@@ -8,6 +8,55 @@
 
 ---
 
+## 2026-09-12 — TF-037 to TF-041, and what the framework is actually neutral about
+
+Five more from TfLens's build and verify of 2026-09-11, fixed in one pass under YOLO. Each has a case
+in `tests/regression/run.sh` that fails against the scripts TfLens has and passes now. Misses
+`MISS-TechieFlow-20260912-01` to `-06`.
+
+- **TF-037, a note read as the build's verdict** (`weak-check`). **Both halves were ours, made the day
+  before.** The TF-035 fix prints a note when it clears scoped stylesheets, and `tf-verify-tests.sh`
+  kept the FIRST line `tf-build.sh` printed: 975 passing TfLens unit tests were recorded as never run
+  and 17 rows lost their only test. The same fix counted the lines of a log not yet written, and the
+  shell's error about it became that first line. The reader now takes the line starting `PASS`, `FAIL`
+  or `NOT-RUN`, and the line count is guarded by the file existing.
+- **TF-038, a transparent border read as a drawn one** (`weak-check`). One rule now serves the three
+  places that asked about borders: a border counts only with width **and** a colour that is not
+  transparent. So `border: 1px solid transparent` is not a ring, not a badge, and never the source of
+  an element's colour — which is how a page reset's `border-color` became a borderless icon's colour.
+  13 of 15 findings on TfLens `/prices` came from these two.
+- **TF-039, a table scrolling inside its card** (`weak-check`). The clip clause's fallback branch cuts
+  each descendant by every ancestor that scrolls, the rectangle `tf-verify-screens` has used since
+  TF-021.
+- **TF-040, a chained run left the outer command unrecordable** (`weak-check`). The emitter compared a
+  new record against the newest record only, so `*build-phase`, which chains `*verify` inside itself
+  and finishes after it, could never record the 80 minutes it ran first. It now compares windows: a
+  record is refused only when its window overlaps a live one's, and touching at a boundary is fine.
+  The refusal names the record it collides with, and `tests/regression/run.sh tf_overlap` was updated
+  to that wording.
+- **TF-041, a document reported missing while on disk** (`weak-check`). The cross-phase rule reads
+  `docs/<App>-Phases.md` from disk when it was not named on the command line, discarding findings
+  about the document itself; the message now says "no Phases document is on disk". An agent following
+  the old line would have written over the real file.
+
+**The owner asked whether these fixes are prose or scripts, and whether they are tool-independent.**
+Every one is a change to a script or a hook plus a case, never a paragraph; no task file gained a rule.
+On neutrality, the answer has two halves and only one was good. The personas, tasks and shared rules
+name no technology — now checked by `tests/mirror/run.sh`, which fails when a task names a language,
+database, UI library, browser driver or host (one example naming .NET in `generate-html.md` was
+neutralised). The scripts are another matter: `tf-build.sh` is .NET's, and the whole browser layer —
+`tf-verify-env.sh`, `tf-verify-tests.sh`, `tf-verify-screens.mjs`, `tf-mockup-parity.mjs` — is
+Playwright's, with no stack question behind either. That is a real limit of this version, now recorded
+as an open item and as `MISS-TechieFlow-20260912-06` (`unsaid`).
+
+Suites: regression 100 pass, verify 67, bugs 51, routing 42, goal 36, document check 12, mirror 19,
+requirements 44 of 44 graded lines. Deployed to all 19 projects: `tf-build.sh`, `tf-verify-tests.sh`,
+`tf-doc-check.py`, `tf-emit.sh`, `tf-mockup-parity.mjs` and the `generate-html` task with its mirror.
+Answered in TfLens's feedback file, rows TF-037 to TF-041; it reads 0 open, 16 waiting to be
+re-checked, 25 closed.
+
+---
+
 ## 2026-09-11, night — TF-030 to TF-036: seven problems TfLens met in one build and verify
 
 The owner pasted TF-030 and, mid-way, said YOLO. TfLens filed TF-031 to TF-036 while the first was

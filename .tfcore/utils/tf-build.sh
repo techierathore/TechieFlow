@@ -138,7 +138,7 @@ for r in "${rungs[@]}"; do
   tried+=("$label")
   [[ "$PLATFORM" == "wsl" ]] && cross_side "$(side_of "$r")"
   for attempt in $(seq 0 "${TF_BUILD_LOCK_RETRIES:-2}"); do
-    from=$(( $(wc -l < "$LOG" 2>/dev/null || echo 0) + 1 ))
+    from=1; [[ -f "$LOG" ]] && from=$(( $(wc -l < "$LOG") + 1 ))   # the redirection itself fails on a log not yet written (TF-037)
     { echo "### rung $n: ${cmd[*]}"; "${cmd[@]}" 2>&1; echo "### exit $?"; } >> "$LOG" 2>&1
     rc="$(tail -1 "$LOG" | sed 's/### exit //')"
     seg="$(tail -n +"$from" "$LOG")"      # this attempt's lines only
