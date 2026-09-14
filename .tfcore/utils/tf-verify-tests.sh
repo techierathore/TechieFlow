@@ -2,7 +2,8 @@
 # tf-verify-tests.sh — run the acceptance tests and map them to rows (Sitting 4c, 2026-09-06).
 #
 #   bash .tfcore/utils/tf-verify-tests.sh [--base URL] [--target <sln|csproj>] [--no-browser] [--no-unit]
-#                                         [--json-out tests/.artifacts/verify/tests.json]
+#                                         [--shard N/M] [--spec <file or glob>]… [--json-out tests/.artifacts/verify/tests.json]
+#   bash .tfcore/utils/tf-verify-tests.sh --merge <tests-a.json> <tests-b.json>… [--json-out tests/.artifacts/verify/tests.json]
 #
 # Browser tests: `npx playwright test` over tests/verify/ (the JSON reporter). Unit tests:
 # `tf-build.sh test` with normal console verbosity. A test belongs to a row when its name contains
@@ -11,23 +12,84 @@
 # NOT-TESTED when every test carrying its id was SKIPPED, and absent when no test carries its id.
 # A skipped clause is a third outcome, never a failure: `test.skip(!SEEDED, …)` says the state does
 # not exist in the data, which is not a defect (TF-022). Writes tests/.artifacts/verify/tests.json.
+# A suite too long for one command runs in parts (AppManager TF-013): `--shard N/M` runs Playwright's
+# shard N of M (browser only; run the unit tests once with --no-browser), `--spec` names files, and
+# each part writes its own playwright-<part>.json and tests-<part>.json. `--merge` then combines the
+# parts' rows (FAIL wins, counts add) and totals into one tests.json.
 # Exit 0 ran (whatever the results) · 2 nothing could run.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE=""; TARGET=""; BROWSER=1; UNIT=1; OUT="tests/.artifacts/verify/tests.json"
+BASE=""; TARGET=""; BROWSER=1; UNIT=1; OUT=""; SHARD=""; SPECS=(); MERGE=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base) BASE="${2:-}"; shift 2 ;;
     --target) TARGET="${2:-}"; shift 2 ;;
     --no-browser) BROWSER=0; shift ;;
     --no-unit) UNIT=0; shift ;;
+    --shard) SHARD="${2:-}"; UNIT=0; shift 2 ;;
+    --spec) SPECS+=("${2:-}"); shift 2 ;;
+    --merge) shift; while [[ $# -gt 0 && "$1" != --* ]]; do MERGE+=("$1"); shift; done ;;
     --json-out) OUT="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "tf-verify-tests: unknown argument $1" >&2; exit 2 ;;
   esac
 done
+PART=""
+if [[ -n "$SHARD" ]]; then
+  [[ "$SHARD" =~ ^([1-9][0-9]*)/([1-9][0-9]*)$ ]] || { echo "tf-verify-tests: --shard takes N/M, such as 2/4" >&2; exit 2; }
+  PART="${BASH_REMATCH[1]}of${BASH_REMATCH[2]}"
+fi
+[[ -n "$OUT" ]] || OUT="tests/.artifacts/verify/tests${PART:+-$PART}.json"
 mkdir -p "$(dirname "$OUT")" tests/.artifacts/verify
-PWJSON="tests/.artifacts/verify/playwright.json"; PWLOG="tests/.artifacts/verify/playwright.log"; UNITLOG=""; UNITLINE=""
+
+# ---- --merge: the parts into one tests.json, no test run ------------------------------------------
+if [[ ${#MERGE[@]} -gt 0 ]]; then
+  TF_OUT="$OUT" python3 - "${MERGE[@]}" <<'PY'
+import json, os, sys
+reqs, browser, unit, parts = {}, {"ran": False, "passed": 0, "failed": 0, "skipped": 0, "tests": 0}, {"ran": False, "line": ""}, []
+for p in sys.argv[1:]:
+    try:
+        d = json.load(open(p, encoding="utf-8"))
+    except Exception as e:
+        print(f"merge: {p} unreadable ({str(e)[:80]}); skipped"); continue
+    parts.append(p)
+    for rid, r in d.get("reqs", {}).items():
+        m = reqs.setdefault(rid, {"result": "NOT-TESTED", "source": r.get("source", ""), "tests": [], "skipped": [],
+                                  "passed": 0, "failed": 0, "reason": "", "screenshot": ""})
+        m["tests"] += [t for t in r.get("tests", []) if t not in m["tests"]]
+        m["skipped"] += [t for t in r.get("skipped", []) if t not in m["skipped"]]
+        m["passed"] += r.get("passed", 0); m["failed"] += r.get("failed", 0)
+        if r.get("result") == "FAIL" and m["result"] != "FAIL":          # the first failure owns the reason
+            m["result"], m["reason"], m["screenshot"] = "FAIL", r.get("reason", ""), r.get("screenshot", "")
+        elif r.get("result") == "PASS" and m["result"] == "NOT-TESTED":
+            m["result"], m["reason"] = "PASS", ""
+        elif m["result"] == "NOT-TESTED" and not m["reason"]:
+            m["reason"] = r.get("reason", "")
+        if m["source"] != r.get("source", m["source"]):
+            m["source"] = "browser+unit"
+    b = d.get("browser", {})
+    if b.get("ran"):
+        browser["ran"] = True
+        for k in ("passed", "failed", "skipped", "tests"):
+            browser[k] += b.get(k, 0)
+    u = d.get("unit", {})
+    if u.get("ran") and not unit["ran"]:
+        unit = u
+json.dump({"reqs": reqs, "browser": browser, "unit": unit, "merged_from": parts}, open(os.environ["TF_OUT"], "w"), indent=1)
+p = sum(1 for r in reqs.values() if r["result"] == "PASS"); f = sum(1 for r in reqs.values() if r["result"] == "FAIL")
+ns = sum(1 for r in reqs.values() if r["result"] == "NOT-TESTED")
+print(f"merged {len(parts)} part(s): rows with a test: {len(reqs)} — {p} PASS, {f} FAIL, {ns} NOT-TESTED (every clause skipped)"
+      + (f" (browser {browser['passed']}/{browser['tests']} tests passed, {browser['skipped']} skipped)" if browser["ran"] else ""))
+for rid, r in sorted(reqs.items()):
+    if r["result"] == "FAIL":
+        print(f"  FAIL {rid} — {r['reason']}" + (f" — {r['screenshot']}" if r["screenshot"] else ""))
+print(f"JSON: {os.environ['TF_OUT']}")
+PY
+  exit 0
+fi
+
+source "$HERE/tf-lock.sh"; tf_take_lock "verify-tests${PART:+ $PART}"   # one browser check at a time (TF-048)
+PWJSON="tests/.artifacts/verify/playwright${PART:+-$PART}.json"; PWLOG="tests/.artifacts/verify/playwright${PART:+-$PART}.log"; UNITLOG=""; UNITLINE=""
 ran_any=0
 
 if [[ $BROWSER -eq 1 ]]; then
@@ -39,8 +101,9 @@ if [[ $BROWSER -eq 1 ]]; then
       echo "browser tests: NOT RUN — nothing reads BASE_URL, so the tests would open another address than --base $BASE; run bash .tfcore/utils/tf-verify-env.sh, which makes playwright.config.ts read it"
       rm -f "$PWJSON"
     elif node -e "require.resolve('@playwright/test')" >/dev/null 2>&1; then
-      BASE_URL="$BASE" PLAYWRIGHT_JSON_OUTPUT_NAME="$PWJSON" npx playwright test --reporter=json > "$PWLOG" 2>&1
-      echo "browser tests: ran (log $PWLOG)"; ran_any=1
+      PWARGS=(--reporter=json); [[ -n "$SHARD" ]] && PWARGS+=("--shard=$SHARD")
+      BASE_URL="$BASE" PLAYWRIGHT_JSON_OUTPUT_NAME="$PWJSON" npx playwright test "${PWARGS[@]}" "${SPECS[@]}" > "$PWLOG" 2>&1
+      echo "browser tests: ran${SHARD:+ shard $SHARD}${SPECS:+ (${#SPECS[@]} spec argument(s))} (log $PWLOG)"; ran_any=1
     else
       echo "browser tests: @playwright/test is not installed here (bash .tfcore/utils/tf-verify-env.sh); skipped"; rm -f "$PWJSON"
     fi

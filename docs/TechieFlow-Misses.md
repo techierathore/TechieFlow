@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 182 logged: 52 open, 129 fixed, 1 will not fix |
+| Count | 191 logged: 52 open, 138 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
 | Updated | 2026-09-14 |
 
@@ -66,10 +66,19 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (129)
+## Fixed (138)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260914-13 | 2026-09-14 by owner | 2026-09-14 by fix-issues | the check was too weak | tf-devguide-list.py read path: in a Playwright spec as a page route and searched tests/ although SAMPLE_DIRS names it, so two screenshot files were listed as pages with no UIDesign screen (TfLens TF-050) |
+| MISS-TechieFlow-20260914-12 | 2026-09-14 by owner | 2026-09-14 by fix-issues | the check was too weak | handoff-phase.md told the agent to run tf-build.sh --print, an option the script never had, so it read --print as a target and printed NOT-RUN (TfLens TF-049) |
+| MISS-TechieFlow-20260914-11 | 2026-09-14 by owner | 2026-09-14 by fix-issues | the check was too weak | tf-mockup-parity reported document-scroll on every page whose document scrolls, including an app whose document is its only scroller: a 6600 px report on AppManager read as having escaped a shell scroll container it does not have (AppManager TF-014) |
+| MISS-TechieFlow-20260914-10 (FR-73) | 2026-09-14 by owner | 2026-09-14 by fix-issues | the framework never said it | nothing said a verify runs its browser checks one at a time; tf-verify-tests, tf-verify-screens and tf-mockup-parity ran side by side on one signed-in user, and the tests changed that user's settings and window under a parity run: 11 false findings on TfLens (TfLens TF-048) |
+| MISS-TechieFlow-20260914-09 | 2026-09-14 by owner | 2026-09-14 by fix-issues | the check was too weak | tf-verify-tests.sh ran the whole browser suite in one command with no shard, file or merge option, and every run overwrote playwright.json and tests.json, so a suite longer than the foreground limit could not be run in parts through the script (AppManager TF-013) |
+| MISS-TechieFlow-20260914-08 | 2026-09-14 by owner | 2026-09-14 by fix-issues | the check was too weak | tf-verify-screens read any visible password field as the sign-in page, so AppManager's signed-in Create user form was graded UNREACHABLE while its own screenshot showed the form (AppManager TF-012) |
+| MISS-TechieFlow-20260914-07 | 2026-09-14 by owner | 2026-09-14 by fix-issues | the check was too weak | tf-assets.sh and tf-mockup-parity.sh took only --cookie, so on an app whose sign-in lives in the page and sets no cookie every path answered 401 and neither check could grade anything (AppManager TF-011) |
+| MISS-TechieFlow-20260914-06 | 2026-09-14 by owner | 2026-09-14 by fix-issues | the check was too weak | tf-verify-boot.sh start took the first web project in sorted order, so AppManager's external API, which has no screens, was booted in front of its admin site (AppManager TF-010) |
+| MISS-TechieFlow-20260914-05 | 2026-09-14 by owner | 2026-09-14 by fix-issues | the check was too weak | tf-verify-list.py and tf-devguide-list.py looked only for {App}-UsageGuide.md, a Test users heading at ## and the template's numbered table, so AppManager's two test users in {App}-Usage-Guide.md read as none in the UsageGuide (AppManager TF-009) |
 | MISS-TechieFlow-20260914-04 | 2026-09-14 by owner | 2026-09-14 by fix-issues | the check was too weak | tf-mockup-parity graded a badge or border on the element the mockup styles when the app draws it one element away (the active link inside its li, the ring on the InputGroup around the input), paired icon containers by position across one extra wrapper so a moved icon read as extra, and graded wrap on texts that read differently: 15 findings on 13 correct TfLens rows (TfLens TF-047) |
 | MISS-TechieFlow-20260914-03 | 2026-09-14 by owner | 2026-09-14 by fix-issues | the check was too weak | tf-mockup-parity reported one extra icon at the element carrying it and again at every element above it, so 14 of the 26 icon findings on TfLens /misses, /effort and /prices were repeats of one chevron (TfLens TF-046) |
 | MISS-TechieFlow-20260914-02 | 2026-09-14 by owner | 2026-09-14 by log-miss | the check was too weak | tf-build-list labelled every UI cluster trblazeui, so AppManager, which does not use TrBlazeUI, had its UI rows addressed to the trblazeui sub-agent; the label now comes from a TrBlazeUI reference in the project's own files (AppManager TF-008) |

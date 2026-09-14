@@ -131,17 +131,47 @@ def dialogs_of_brd(path):
     return out
 
 
+def usage_guide(app):
+    """docs/{App}-UsageGuide.md, or docs/{App}-Usage-Guide.md: the two spellings tf-doc-check.py
+    accepts. Only the first was looked for, so AppManager's guide read as having no test users
+    (AppManager TF-009)."""
+    for name in (f"{app}-UsageGuide.md", f"{app}-Usage-Guide.md"):
+        p = os.path.join("docs", name)
+        if os.path.isfile(p):
+            return p
+    return os.path.join("docs", f"{app}-UsageGuide.md")
+
+
 def test_users(path):
+    """The rows of the guide's Test users table. The heading may sit at ## or ### (a guide that
+    numbers its chapters nests it one level down), and the table may be the template's
+    `| # | User | Password source | Role |` or any table whose header names a user or email column
+    and a role column, read by those names (AppManager TF-009)."""
     users = []
     if not os.path.isfile(path):
         return users
-    m = re.search(r"(?ms)^##\s+(?:\d+[.)]\s*)?Test users[^\n]*\n(.*?)(?=^## |\Z)", read(path))
+    m = re.search(r"(?ms)^#{2,3}\s+(?:\d+[.)]\s*)?Test users[^\n]*\n(.*?)(?=^#{1,3} |\Z)", read(path))
     if not m:
         return users
+    cols = None
     for line in m.group(1).splitlines():
+        if not line.strip().startswith("|"):
+            continue
         c = [x.strip().strip("`* ") for x in line.strip().strip("|").split("|")]
-        if len(c) >= 4 and c[0].isdigit():
-            users.append({"user": c[1], "password_source": c[2], "role": c[3]})
+        if cols is None:
+            low = [x.lower() for x in c]
+            def col(*names):
+                return next((i for i, h in enumerate(low) if any(n in h for n in names)), None)
+            cols = {"user": col("user", "email", "login", "account"), "pw": col("password", "secret"), "role": col("role")}
+            if cols["user"] is None or cols["role"] is None:
+                cols = {"user": 1, "pw": 2, "role": 3}      # the template's numbered shape
+            continue
+        if set("".join(c)) <= set("-: "):
+            continue                                        # the header rule
+        if len(c) > max(cols["user"], cols["role"]) and c[cols["user"]] and not c[cols["user"]].isdigit():
+            users.append({"user": c[cols["user"]],
+                          "password_source": c[cols["pw"]] if cols["pw"] is not None and len(c) > cols["pw"] else "",
+                          "role": c[cols["role"]]})
     return users
 
 
@@ -188,7 +218,7 @@ def main(argv):
     ent = entries_of(text)
     screens = screens_of_uidesign(os.path.join("docs", f"{pfx}UIDesign.md"))
     dialogs = dialogs_of_brd(os.path.join("docs", f"{pfx}BRD.md"))
-    users = test_users(os.path.join("docs", f"{app}-UsageGuide.md"))
+    users = test_users(usage_guide(app))
     by_name = {norm_name(s["name"]): s for s in screens}
     by_mock = {s["mockup"]: s for s in screens if s["mockup"]}
     by_route = {s["route"].lower(): s for s in screens}

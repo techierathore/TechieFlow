@@ -3,6 +3,10 @@
 #
 #   bash .tfcore/utils/tf-assets.sh --base http://localhost:5099 \
 #        --paths "/,/login,/export" --cookie 'AuthCookie=<value>'
+#   An app whose sign-in lives in the page and sets no cookie (AppManager TF-011):
+#        --login-path /login --user <u> --password <p>   (or --storage-state <file>)
+#   opens each path in a browser that signed in through the form and grades the
+#   document it drew; `pages[].reached` says how a 401 page was reached.
 #
 # WHAT IT ASKS, and it is the only question no other gate asks:
 #
@@ -50,8 +54,10 @@
 
 set -uo pipefail
 
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE=""; PATHS="/"; TIMEOUT=20; LABEL=""; OUT=""; EXTERNAL=0; MINBYTES=1
 HDRS=""   # newline-separated "K: V" pairs (--header, repeatable; --cookie is sugar)
+COOKIE=""; LOGIN_PATH=""; USER=""; PASS=""; STORAGE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base)             BASE="${2:-}"; shift 2 ;;
@@ -62,7 +68,13 @@ while [[ $# -gt 0 ]]; do
     --min-bytes)        MINBYTES="${2:-}"; shift 2 ;;
     --include-external) EXTERNAL=1; shift ;;
     --header)           HDRS="${HDRS}${2:-}"$'\n'; shift 2 ;;
-    --cookie)           HDRS="${HDRS}Cookie: ${2:-}"$'\n'; shift 2 ;;
+    --cookie)           HDRS="${HDRS}Cookie: ${2:-}"$'\n'; COOKIE="${2:-}"; shift 2 ;;
+    # a sign-in the page keeps for itself sets no cookie (AppManager TF-011): the pages are then
+    # opened in a browser that signed in through the form, the same options tf-verify-screens takes
+    --login-path)       LOGIN_PATH="${2:-}"; shift 2 ;;
+    --user)             USER="${2:-}"; shift 2 ;;
+    --password)         PASS="${2:-}"; shift 2 ;;
+    --storage-state)    STORAGE="${2:-}"; shift 2 ;;
     -h|--help)          sed -n '2,48p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 3 ;;
   esac
@@ -70,10 +82,23 @@ done
 
 [[ -n "$BASE" ]] || { printf '%s\n' \
   "usage: tf-assets.sh --base URL [--paths /,/login] [--cookie 'k=v'] [--include-external]" \
+  "                    [--login-path /login --user U --password P] [--storage-state file]" \
   "                    [--json-out tests/.artifacts/assets/REQ-NFR-015.json]" >&2; exit 3; }
 command -v python3 >/dev/null 2>&1 || { echo '{"status":"no-python3"}'; exit 3; }
 
-TF_BASE="$BASE" TF_PATHS="$PATHS" TF_TIMEOUT="$TIMEOUT" TF_LABEL="$LABEL" TF_OUT="$OUT" \
+# ---- the documents, through a signed-in browser when a sign-in is given (TF-011) --------------
+DOCS=""
+if [[ -n "$LOGIN_PATH" || -n "$STORAGE" ]]; then
+  if ! command -v node >/dev/null 2>&1 || ! node -e "import('playwright').then(()=>process.exit(0)).catch(()=>process.exit(1))" 2>/dev/null; then
+    echo '{"status":"no-playwright","note":"--login-path needs node and playwright (verify-phase §1 installs the verify environment)"}'; exit 3
+  fi
+  DOCS="$(mktemp --suffix .json)"
+  node "$HERE/tf-assets-browser.mjs" --base "$BASE" --paths "$PATHS" --json-out "$DOCS" \
+       ${LOGIN_PATH:+--login-path "$LOGIN_PATH"} ${USER:+--user "$USER"} ${PASS:+--password "$PASS"} \
+       ${STORAGE:+--storage-state "$STORAGE"} ${COOKIE:+--cookie "$COOKIE"} >&2 || { echo '{"status":"browser-failed"}'; rm -f "$DOCS"; exit 3; }
+fi
+
+TF_BASE="$BASE" TF_PATHS="$PATHS" TF_TIMEOUT="$TIMEOUT" TF_LABEL="$LABEL" TF_OUT="$OUT" TF_DOCS="$DOCS" \
 TF_HEADERS="$HDRS" TF_EXTERNAL="$EXTERNAL" TF_MINBYTES="$MINBYTES" python3 - <<'PY'
 import html.parser, json, os, ssl, sys, urllib.error, urllib.request
 from urllib.parse import urljoin, urlsplit
@@ -85,6 +110,19 @@ LABEL    = os.environ.get("TF_LABEL") or None
 OUT      = os.environ.get("TF_OUT") or None
 EXTERNAL = os.environ.get("TF_EXTERNAL") == "1"
 MINBYTES = int(os.environ.get("TF_MINBYTES") or 1)
+# the documents a signed-in browser fetched, by path (TF-011); empty when none was asked for
+DOCS = {}
+LOGIN = None
+if os.environ.get("TF_DOCS"):
+    try:
+        _d = json.load(open(os.environ["TF_DOCS"], encoding="utf-8"))
+        DOCS, LOGIN = _d.get("pages", {}), _d.get("login")
+    except Exception:
+        DOCS = {}
+    try:
+        os.remove(os.environ["TF_DOCS"])
+    except Exception:
+        pass
 
 HEADERS = []
 for line in (os.environ.get("TF_HEADERS") or "").splitlines():
@@ -207,7 +245,23 @@ graded_assets = 0
 
 for p in PATHS:
     page_url = BASE + (p if p.startswith("/") else "/" + p)
-    status, body, err = fetch_page(page_url)
+    extra = {}
+    doc = DOCS.get(p if p.startswith("/") else "/" + p)
+    if doc is not None:
+        # the document as the signed-in browser drew it (TF-011). A page that stayed signed out is
+        # an auth wall: nothing of it is graded, like a redirect to the sign-in page.
+        if doc.get("signed_out"):
+            redirected += 1
+            pages.append({"path": p, "status": doc.get("document_status"), "assets": [], "declared": 0,
+                          "graded": 0, "failed": 0, "redirected": True, "auth_wall": True, "url": doc.get("url")})
+            continue
+        status, body, err = (doc.get("status") or None), (doc.get("html") or "").encode("utf-8"), (doc.get("error") or None)
+        if status and status < 400 and body:
+            status = 200
+        if doc.get("reached"):
+            extra = {"document_status": doc.get("document_status"), "reached": doc["reached"]}
+    else:
+        status, body, err = fetch_page(page_url)
     if status is None:
         pages.append({"path": p, "status": None, "error": err, "assets": [],
                       "declared": 0, "graded": 0, "failed": 0})
@@ -269,16 +323,16 @@ for p in PATHS:
 
     pages.append({"path": p, "status": status, "declared": len(rows),
                   "graded": sum(1 for r in rows if r.get("graded")),
-                  "failed": failed, "assets": rows})
+                  "failed": failed, "assets": rows, **extra})
 
 # Every path turned away = nothing was graded. Reporting "0 findings" there would be
 # a PASS on a screen the harness never saw — the same false green tf-perf.sh's exit 4
 # exists to prevent, and the same shape as TF-011's ungradeable-looks-clean failure.
 if PATHS and redirected == len(PATHS):
-    out = {"status": "redirected", "base": BASE, "label": LABEL, "pages": pages,
-           "findings": [], "note": "every path answered 3xx — nothing was graded. "
-           "Present a session with --cookie / --header and re-run. Grade the REQ "
-           "ASSETS-UNMEASURED (auth wall); never record this as a pass."}
+    out = {"status": "redirected", "base": BASE, "label": LABEL, "pages": pages, "login": LOGIN,
+           "findings": [], "note": "every path answered 3xx or stayed signed out — nothing was graded. "
+           "Present a session with --cookie / --header, or --login-path/--user/--password, and re-run. "
+           "Grade the REQ ASSETS-UNMEASURED (auth wall); never record this as a pass."}
     print(json.dumps(out, indent=2))
     if OUT:
         os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
@@ -294,6 +348,7 @@ out = {
     "findings_n": len(findings),
     "findings": findings,
     "pages": pages,
+    "login": LOGIN,
     "include_external": EXTERNAL,
     # An assets run that graded nothing is UNGRADEABLE, not clean. Said out loud in
     # the payload so a consumer cannot read `findings_n: 0` as coverage.

@@ -18,7 +18,7 @@ Workaround / Suggested fix). One file per upstream owner; this one is TechieFlow
 
 ## Summary
 
-**Nothing is blocked.** 47 entries: none open, 15 fixed upstream and waiting to be re-checked here (TF-018, TF-020, TF-021, TF-025 to TF-028, TF-030, TF-033 to TF-035, TF-042 to TF-044, TF-047), 32 closed. TF-045 and TF-046 were re-checked and closed here on 2026-09-14, and TF-047, filed the same day, is fixed in the framework the same day. TF-013 to TF-017, TF-019, TF-022 to TF-024, TF-029, TF-031, TF-032 and TF-036 were re-checked and closed here on 2026-09-11, and TF-037 to TF-041 on 2026-09-12 (the account is in `docs/TfLens-Feedback-Recheck-2026-09-12.md`). Every problem TfLens filed up to TF-047 is fixed in the framework: TF-013 to TF-022 on 2026-09-09 (the reply that day left out TF-013 to TF-017, which is why they showed open here), TF-023 to TF-036 on 2026-09-11, TF-037 to TF-041 on 2026-09-12, TF-042 to TF-045 on 2026-09-13 and TF-046 and TF-047 on 2026-09-14. A fix counts as done only once it has been re-checked here: run each entry's "Verify from here" step in its Resolution status block, then close it with `bash .tfcore/utils/tf-feedback.sh TfLens --close <ID> "<what you ran and what it showed>"`. `bash .tfcore/utils/tf-feedback.sh TfLens` prints the state of every entry. Never describe a fixed entry as an open problem.
+**Nothing is blocked.** 50 entries: none open, 16 fixed upstream and waiting to be re-checked here (TF-018, TF-020, TF-021, TF-025 to TF-028, TF-030, TF-033 to TF-035, TF-042 to TF-044, TF-049, TF-050), 34 closed. TF-049 and TF-050, filed at the handoff, are fixed the same day. TF-045 to TF-048 were re-checked and closed here on 2026-09-14. TF-013 to TF-017, TF-019, TF-022 to TF-024, TF-029, TF-031, TF-032 and TF-036 were re-checked and closed here on 2026-09-11, and TF-037 to TF-041 on 2026-09-12 (the account is in `docs/TfLens-Feedback-Recheck-2026-09-12.md`). Every problem TfLens filed up to TF-050 is fixed in the framework: TF-013 to TF-022 on 2026-09-09 (the reply that day left out TF-013 to TF-017, which is why they showed open here), TF-023 to TF-036 on 2026-09-11, TF-037 to TF-041 on 2026-09-12, TF-042 to TF-045 on 2026-09-13 and TF-046 to TF-050 on 2026-09-14. A fix counts as done only once it has been re-checked here: run each entry's "Verify from here" step in its Resolution status block, then close it with `bash .tfcore/utils/tf-feedback.sh TfLens --close <ID> "<what you ran and what it showed>"`. `bash .tfcore/utils/tf-feedback.sh TfLens` prints the state of every entry. Never describe a fixed entry as an open problem.
 
 #### Detail
 
@@ -69,7 +69,7 @@ The bullets below are the history as it was written at the time. The state today
      of the 2026-08-31 block with the one-line fix. **The `sole` recount defect WAS present in TfLens** —
      it reported `cost_sole_n` 10 against the reference's 7, putting three multi-miss windows into the
      measured column — and was fixed on 2026-09-02 (`REQ-FN-079`). The warning was accurate.
-- Last consolidated: **2026-09-02** (handoff); appended 2026-08-30 (`TF-009`–`TF-012`), 2026-09-02 (`TF-015`).
+- Last consolidated: **2026-09-14** (Phase 3 handoff); before that 2026-09-02 (handoff).
 
 **Severity words used in the entries map to those counts as:** `High` = blocker · `Medium` = major ·
 `Low` = minor. Nothing here is filed nice-to-have. Entry bodies keep their original `High`/`Medium`/`Low`
@@ -141,6 +141,27 @@ that grew a legal move as a result.
 > and a message naming the real reason. **The dated evidence is kept and `TF-004` stays closed here**;
 > `PROJECT-STATUS.md` is owned elsewhere and was not edited. Its line 53 also still counts five
 > entries, where the collision fix above makes six.
+
+---
+
+## Resolution status (TechieFlow team, 2026-09-14, fourth reply)
+
+**TF-049 and TF-050 are fixed in the framework and deployed to this repository.** Cases `tf_049` and `tf_050` in `tests/regression/run.sh`; misses `MISS-TechieFlow-20260914-12` and `-13`. Close each with `bash .tfcore/utils/tf-feedback.sh TfLens --close <ID> "<what you ran and what it showed>"`.
+
+| ID | Fix | Verify from here |
+|----|-----|------------------|
+| **TF-049** | `tf-build.sh --print` (and `test --print`) resolves the target and prints the command, nothing else, exit 0; it takes no lock. On this repository it prints `dotnet build TfLens.slnx`. | `bash .tfcore/utils/tf-build.sh --print` prints `dotnet build TfLens.slnx`, exit 0. |
+| **TF-050** | The route scan skips the sample and test folders and any `*.spec.*` or `*.test.*` file, so a test's screenshot `path:` is not a route; `@page` and a client route list still are. On this repository the two `.png` lines are gone and 19 routes remain. | `bash .tfcore/utils/tf-devguide-list.sh TfLens`: no `.png` under "Pages in code with no UIDesign screen". |
+
+---
+
+## Resolution status (TechieFlow team, 2026-09-14, third reply)
+
+**TF-048 is fixed in the framework and deployed to this repository.** Case `tf_048` in `tests/regression/run.sh`; requirement FR-73; miss `MISS-TechieFlow-20260914-10`. Close it with `bash .tfcore/utils/tf-feedback.sh TfLens --close TF-048 "<what you ran and what it showed>"`.
+
+| ID | Fix | Verify from here |
+|----|-----|------------------|
+| **TF-048** | The lock `tf-build.sh` takes now lives in `tf-lock.sh`, and `tf-verify-tests.sh`, `tf-verify-screens.sh` and `tf-mockup-parity.sh` take it too, so a second one prints `wait  another build or browser check is running in this repository (…)` and starts when the first finishes. A script the holder starts shares it, so the tests runner's own `tf-build.sh test` does not wait on itself. FR-73 says it in one line. | Start `tf-verify-tests.sh --base <url>` and, while it runs, `tf-mockup-parity.sh --base <url> --screen misses=/misses --cookie …`: the second prints the `wait` line and runs after the first; parity then reports what it reports alone. |
 
 ---
 
@@ -3154,6 +3175,8 @@ one you meant. And `--screen`/`--cookie`/`--widths`, all of which work.
 
 ## TF-047 — `tf-mockup-parity` grades a treatment one element away from where the app draws it, and grades wrapping on different text
 
+> ✅ **Closed 2026-09-14** — re-checked here: Re-checked 2026-09-14 against the installed .tfcore/utils/tf-mockup-parity.mjs (updated 12:46, carries the TF-047 changes). Booted the published app with tf-verify-boot.sh on http://localhost:5014, signed in through /login as the demo user from tests/verify/_helpers.ts (tflensdemo@techierathore.com), and ran tf-mockup-parity.sh --screen misses=/misses --screen effort=/effort --screen prices=/prices --cookie <session> at 1280 and 390: exit 0, status measured, three PASS verdicts, 0 findings, 0 ungradeable, 0 without a mockup. Not an empty pass: misses compared 127 and 115 elements, effort 130 and 118, prices 117 and 105. The 15 findings this entry recorded (sidebar badge 3, filter badge and stroke 4, header icons 4, wrap on differing text 4) are all gone. Output tests/.artifacts/fix-parity/parity-tf047.json.
+
 - **Severity:** major
 - **Blocks:** no. Rows stay `Needs re-verify`. Major because, with the mockups updated on 2026-09-14,
   these are the **only** findings left on 13 TfLens rows.
@@ -3176,3 +3199,65 @@ one you meant. And `--screen`/`--cookie`/`--widths`, all of which work.
 
 **What is NOT affected.** The `missing` class, `clip`, `color`, `token`, the verdict script, and every
 finding on text that matches.
+
+---
+
+## TF-048 — `verify-phase` never says its browser checks must not share a signed-in user while they run
+
+> ✅ **Closed 2026-09-14** — re-checked here: Re-checked 2026-09-14 against the installed tf-lock.sh, tf-verify-tests.sh, tf-verify-screens.sh and tf-mockup-parity.sh (15:06, each takes the shared lock). Booted the app with tf-verify-boot.sh on http://localhost:5014 and signed in as the demo user. At 16:56:19 started tf-verify-tests.sh --base http://localhost:5014 (scoped with TF_VERIFY_GREP to REQ-UI-072, 14 tests, so the pair fits in one run) and, while it ran, tf-mockup-parity.sh --screen misses=/misses --cookie <session>. Parity printed at 16:56:23: 'wait  another build or browser check is running in this repository (148937 LAPTOP-IBNQ33KO verify-tests 2026-09-14T16:56:19Z); this one starts when it finishes'. The tests finished at 17:01:24 (14/14 passed); parity produced its result only after that, at 17:01:38: exit 0, misses PASS, 0 findings, 242 elements compared, the same as parity run alone earlier today. Logs in tests/.artifacts/fix-parity/tf048/.
+
+- **Severity:** minor
+- **Blocks:** no. The false findings were caught and re-run before any verdict was written.
+- **Repro:** in `*verify`, run `tf-verify-tests.sh` and `tf-mockup-parity.sh` (or `tf-verify-screens.sh`)
+  at the same time against one app, signed in as the same test user.
+- **Expected:** each check reads the page the design describes, whatever else is running.
+- **Actual:** the acceptance tests change that user's saved settings (the header's framework switch)
+  and the window size. A parity run beside them on 2026-09-14 reported 11 false `missing` findings at
+  390 on `/misses` and `/effort`, with `/effort` comparing 192 elements instead of 248. The same run
+  alone minutes later: exit 0, 3 PASS, 0 findings. Logged as `MISS-TfLens-20260914-01`.
+- **Encountered in:** TfLens `*verify ui`, 2026-09-14, `tests/.artifacts/fix-parity/parity-concurrent.json`.
+- **Workaround:** run the test groups first, then screens and parity one at a time.
+- **Suggested fix:** one requirement line, "a verify runs its browser checks one at a time", with a
+  check: `tf-verify-tests.sh`, `tf-verify-screens.sh` and `tf-mockup-parity.sh` take the same lock
+  `tf-build.sh` already uses, so a second one waits.
+
+**What is NOT affected.** Each check run on its own, the verdict script, and every verdict written on
+2026-09-14.
+
+---
+
+## TF-049 — `handoff-phase.md` tells the agent to run `tf-build.sh --print`, which `tf-build.sh` does not have
+
+- **Severity:** minor
+- **Blocks:** no. The build and run commands were taken from the Architecture stack table and the
+  Coding Standards, which the same paragraph also names.
+- **Repro:** `bash .tfcore/utils/tf-build.sh --print`
+- **Expected:** it prints the build command this repository uses, as `handoff-phase.md` §1 says.
+- **Actual:** `--print` is not an option (the script takes `build|test|run|publish|probe`), so it is
+  read as a target: `dirname: unrecognized option '--print'`, then `NOT-RUN no rung could build on wsl`.
+  `probe` prints the platform and the rungs, but no command.
+- **Encountered in:** TfLens `*handoff-phase`, 2026-09-14.
+- **Workaround:** read the commands from the Architecture and Coding Standards documents.
+- **Suggested fix:** add `--print` (resolve the command, print it, exit 0), or name `probe` in the task
+  and make `probe` print the resolved command.
+
+**What is NOT affected.** `tf-build.sh build`, `test`, `run`, `publish` and `probe`.
+
+---
+
+## TF-050 — `tf-devguide-list.py` reads `path:` in a Playwright spec as a page route, so screenshot files are listed as pages
+
+- **Severity:** minor
+- **Blocks:** no. The two false lines were read past.
+- **Repro:** `bash .tfcore/utils/tf-devguide-list.sh TfLens --update`
+- **Expected:** only pages routed in the application's own code.
+- **Actual:** under "Pages in code with no UIDesign screen" it lists
+  `tests/.artifacts/parity/export-banner.png` and `export-surface.png`, both from
+  `tests/verify/parity-gate-smoke.spec.ts`. The `.ts` route pattern (`tf-devguide-list.py:26`) matches
+  `page.screenshot({ path: '…' })` at lines 52 and 75 of that spec, and `routes_in_code()` (`:89`) calls
+  `walk()` without `skip_samples=True`, so `tests/` is searched although `SAMPLE_DIRS` names it.
+- **Encountered in:** TfLens `*handoff-phase`, 2026-09-14.
+- **Workaround:** none needed.
+- **Suggested fix:** pass `skip_samples=True` in `routes_in_code()`, or skip `*.spec.*` and `*.test.*`.
+
+**What is NOT affected.** The work list (Misses, Effort, Prices) and `@page` detection in `.razor` files.

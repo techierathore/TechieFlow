@@ -480,7 +480,7 @@ HTML
     > "$d/docs/mockups/late.html"
   # the shipped script, run where playwright resolves; the bytes are the shipped ones
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1166,7 +1166,7 @@ HTML
 <h1 data-testid="page-title">Misses</h1><div data-testid="miss-table">rows of misses</div></body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1212,7 +1212,7 @@ HTML
 <div data-testid="kpi-rework" class="tile">Rework 12</div></body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1446,7 +1446,7 @@ HTML
 <input data-testid="login-pass" name="p" type="password"><button data-testid="login-submit" type="submit">Sign in</button></form></body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1618,7 +1618,7 @@ HTML
 </body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1759,7 +1759,7 @@ HTML
 </body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1898,7 +1898,7 @@ HTML
 </body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1958,7 +1958,7 @@ tf_045() {
     printf '<div class="tile" data-testid="tile-warn" style="background:#b45309">3 open</div></body></html>\n'
   } > "$d/misses.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2014,7 +2014,7 @@ tf_046() {
     printf '</body></html>\n'
   } > "$d/misses.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2090,7 +2090,7 @@ tf_047() {
     printf '</body></html>\n'
   } > "$d/misses.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2119,6 +2119,55 @@ for x in s.get('findings',[]): print(x['class'], x['key'])" "$d/parity.json")"
   fi
 }
 
+# --- TF-048: browser checks side by side share one signed-in user ---------------------------
+# The acceptance tests changed the user's settings and window under a parity run: 11 false findings.
+# The three verify wrappers now take tf-build.sh's repository lock (tf-lock.sh).
+tf_048() {
+  local d="$SCRATCH/tf048" out; mkdir -p "$d"
+  for s in tf-verify-screens.sh tf-mockup-parity.sh tf-verify-tests.sh tf-build.sh; do
+    grep -q 'tf_take_lock' "$UTILS/$s" || { bad tf_048a "$s does not take the repository lock"; return; }
+  done
+  ok tf_048a "tf-verify-tests.sh, tf-verify-screens.sh, tf-mockup-parity.sh and tf-build.sh take one lock"
+  out="$(cd "$d" && bash -c 'source "$0"/tf-lock.sh; tf_take_lock outer; bash -c "source $0/tf-lock.sh; TF_BUILD_LOCK_MAX=3 tf_take_lock inner && echo nested-ok"' "$UTILS" 2>&1)"
+  [[ "$out" == "nested-ok" ]] && ok tf_048b "a script the holder starts (tf-verify-tests running tf-build) shares the lock" \
+    || { bad tf_048b "a script started by the lock's holder waits on its own lock"; note "$out"; }
+  ( cd "$d" && bash -c 'source "$0"/tf-lock.sh; tf_take_lock holder; sleep 8' "$UTILS" & ); sleep 1
+  out="$(cd "$d" && TF_BUILD_LOCK_MAX=3 bash -c 'source "$0"/tf-lock.sh; tf_take_lock second; echo took-it' "$UTILS" 2>&1)"
+  grep -q '^wait  another build or browser check' <<<"$out" && grep -q '^NOT-RUN' <<<"$out" && ! grep -q took-it <<<"$out" \
+    && ok tf_048c "a second check waits on the held lock and says so, and gives up at the limit" \
+    || { bad tf_048c "a second check ran beside the holder"; note "$out"; }
+  sleep 8
+}
+
+# --- TF-049: handoff-phase names `tf-build.sh --print`, which did not exist -------------------
+tf_049() {
+  local d="$SCRATCH/tf049" out; mkdir -p "$d"
+  printf '<Project Sdk="Microsoft.NET.Sdk"></Project>\n' > "$d/Fx.csproj"
+  out="$(cd "$d" && bash "$UTILS/tf-build.sh" --print 2>&1)"; local rc=$?
+  [[ "$out" == "dotnet build Fx.csproj" && $rc -eq 0 && ! -d "$d/tests/.artifacts/build/.lock" ]] \
+    && ok tf_049a "--print prints the build command this repository uses and runs nothing" \
+    || { bad tf_049a "--print does not print the command"; note "$out (exit $rc)"; }
+  out="$(cd "$d" && bash "$UTILS/tf-build.sh" test --print 2>&1)"
+  [[ "$out" == "dotnet test Fx.csproj" ]] && ok tf_049b "--print after a mode prints that mode's command" \
+    || { bad tf_049b "test --print is wrong"; note "$out"; }
+  grep -q 'tf-build.sh --print' "$ROOT/.tfcore/tasks/handoff-phase.md" && ok tf_049c "handoff-phase names the option that now exists" \
+    || bad tf_049c "handoff-phase no longer names --print"
+}
+
+# --- TF-050: a Playwright spec's `path:` read as a page route -------------------------------
+tf_050() {
+  local d="$SCRATCH/tf050" out; mkdir -p "$d/src/Fx/Pages" "$d/tests/verify" "$d/src/Fx/ClientApp"
+  printf '@page "/misses"\n<h1>Misses</h1>\n' > "$d/src/Fx/Pages/Misses.razor"
+  printf "await page.screenshot({ path: 'tests/.artifacts/parity/export-banner.png' });\n" > "$d/tests/verify/parity-gate-smoke.spec.ts"
+  printf "const routes = [{ path: '/prices', component: Prices }];\n" > "$d/src/Fx/ClientApp/routes.ts"
+  out="$(cd "$d" && python3 -c "
+import importlib.util
+s=importlib.util.spec_from_file_location('dl','$UTILS/tf-devguide-list.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)
+print(' '.join(sorted(r for r, _f, _w in m.routes_in_code())))" 2>&1)"
+  [[ "$out" == "/misses /prices" ]] && ok tf_050 "a spec's screenshot path is not a route; @page and a client route list still are" \
+    || { bad tf_050 "routes in code still include a test's screenshot path, or lost a real route"; note "$out"; }
+}
+
 # --- TF-036: two wrapped sentences that share a line ----------------------------------------
 # An inline element's bounding box is the union of its line fragments, so two sentences sharing a
 # line "overlapped" across a tile's width on TfLens /effort (2026-09-11) with 0 px² in common.
@@ -2139,7 +2188,7 @@ tf_036() {
 </body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2395,7 +2444,7 @@ class H(http.server.BaseHTTPRequestHandler):
 http.server.ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 PY
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 "$d/server.py" "$port" "$d/app.html" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2489,6 +2538,235 @@ MD
     || { bad am_008c "a first build of a TrBlazeUI project lost the trblazeui label"; note "$(grep -m1 '^Cluster' <<<"$out")"; }
 }
 
+# --- AppManager TF-009: the usage guide named {App}-Usage-Guide.md, Test users at ### --------------
+# Only {App}-UsageGuide.md was looked for, the heading only at ##, and only the template's numbered
+# table was read, so AppManager's two test users read as "none in the UsageGuide".
+am_009() {
+  local d="$SCRATCH/am009" out
+  mkdir -p "$d/docs"
+  cat > "$d/docs/Fx-Usage-Guide.md" <<'MD'
+# Fx Usage Guide
+
+## 4. Default Login Credentials
+
+### Test users
+
+| Role | Email | Password | Scope |
+|------|-------|----------|-------|
+| Admin | `admin@fx.local` | `Admin@123!` | All |
+| Manager | `tester@fx.local` | `Tester@123!` | One application |
+
+## 5. Authentication
+MD
+  out="$(cd "$d" && python3 -c "
+import importlib.util
+s=importlib.util.spec_from_file_location('vl','$UTILS/tf-verify-list.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)
+print(' '.join(u['user']+'/'+u['role'] for u in m.test_users(m.usage_guide('Fx'))))" 2>&1)"
+  [[ "$out" == "admin@fx.local/Admin tester@fx.local/Manager" ]] \
+    && ok am_009a "a guide named {App}-Usage-Guide.md with Test users at ### and a Role/Email table is read" \
+    || { bad am_009a "the test users of a {App}-Usage-Guide.md were not read"; note "$out"; }
+  cat > "$d/docs/Fy-UsageGuide.md" <<'MD'
+# Fy
+
+## Test users
+
+| # | User | Password source | Role | Exists |
+|---|---|---|---|---|
+| 1 | admin@fy.test | user secrets | Admin | yes |
+MD
+  out="$(cd "$d" && python3 -c "
+import importlib.util
+s=importlib.util.spec_from_file_location('vl','$UTILS/tf-verify-list.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)
+print(' '.join(u['user']+'/'+u['password_source']+'/'+u['role'] for u in m.test_users(m.usage_guide('Fy'))))" 2>&1)"
+  [[ "$out" == "admin@fy.test/user secrets/Admin" ]] \
+    && ok am_009b "the template's numbered Test users table still reads as before" \
+    || { bad am_009b "the template's numbered table no longer reads"; note "$out"; }
+  out="$(cd "$d" && python3 -c "
+import importlib.util
+s=importlib.util.spec_from_file_location('dl','$UTILS/tf-devguide-list.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)
+print('roles: ' + ', '.join(sorted({r for _u, r in m.roles_from_usageguide('Fx')})))" 2>&1)"
+  [[ "$out" == "roles: Admin, Manager" ]] \
+    && ok am_009c "tf-devguide-list reads the same guide for its roles" \
+    || { bad am_009c "tf-devguide-list still finds no roles in a {App}-Usage-Guide.md"; note "$out"; }
+}
+
+# --- AppManager TF-010: two web projects, the first in sorted order booted -----------------------
+# AppManagerApi sorts before AppManagerWeb and has no screens; the admin site was never booted.
+am_010() {
+  local d="$SCRATCH/am010" out
+  mkdir -p "$d/src/FxApi" "$d/src/FxWeb/Components/Pages" "$d/src/FxUi" "$d/tests/.artifacts/verify"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Web"></Project>\n' > "$d/src/FxApi/FxApi.csproj"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Web"><ItemGroup><ProjectReference Include="..\\FxUi\\FxUi.csproj" /></ItemGroup></Project>\n' > "$d/src/FxWeb/FxWeb.csproj"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Razor"></Project>\n' > "$d/src/FxUi/FxUi.csproj"
+  printf '@page "/"\n<h1>Home</h1>\n' > "$d/src/FxWeb/Components/Pages/Home.razor"
+  out="$(cd "$d" && bash "$UTILS/tf-verify-boot.sh" start --dry-run 2>&1 | tail -1)"
+  [[ "$out" == "PICK head=web project=src/FxWeb/FxWeb.csproj" ]] \
+    && ok am_010a "with two web projects the one that serves screens is booted" \
+    || { bad am_010a "the first web project in sorted order is still booted"; note "$out"; }
+  rm -rf "$d/src/FxWeb/Components"; sed -i 's#<ItemGroup>.*</ItemGroup>##' "$d/src/FxWeb/FxWeb.csproj"
+  out="$(cd "$d" && bash "$UTILS/tf-verify-boot.sh" start --dry-run 2>&1 | tail -1)"
+  [[ "$out" == NONE*"2 web projects"*"name one with --project"* ]] \
+    && ok am_010b "two web projects and none serving screens stops with the candidates named" \
+    || { bad am_010b "a guess was made between two web projects"; note "$out"; }
+  out="$(cd "$d" && bash "$UTILS/tf-verify-boot.sh" start --dry-run --project src/FxApi/FxApi.csproj 2>&1 | tail -1)"
+  [[ "$out" == "PICK head=web project=src/FxApi/FxApi.csproj" ]] \
+    && ok am_010c "--project still names the project" \
+    || { bad am_010c "--project no longer decides"; note "$out"; }
+}
+
+# --- AppManager TF-011 and TF-012: a sign-in the page keeps for itself ---------------------------
+# The document of every signed-in screen answers 401 and the app sets no cookie. tf-assets and
+# tf-mockup-parity took only --cookie, so neither could grade anything; and tf-verify-screens read a
+# signed-in form with a password field (Create user) as the sign-in page and graded it unreachable.
+_inpage_server() { # dir port -> starts the fixture app, pid in $dir/srv.pid
+  cat > "$1/server.py" <<'PY'
+import http.server, sys
+PORT = int(sys.argv[1])
+CSS = "body{margin:0;font:14px/20px system-ui} .badge{display:inline-block;border-radius:8px;background:#2563eb;color:#fff;padding:2px 8px;height:20px}"
+APP = """<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/missing.css"><script src="/app.js"></script></head>
+<body><div id="root"></div><script>
+function draw(){var p=location.pathname,r=document.getElementById('root');
+ if(!sessionStorage.getItem('fx')){r.innerHTML='<form data-testid="login-form"><input data-testid="login-email" type="email"><input data-testid="login-pass" type="password"><button type="submit">Sign in</button></form>';return;}
+ if(p==='/users/create'){r.innerHTML='<h1 data-testid="page-title">Create user</h1><form data-testid="user-form"><label>Email <input data-testid="user-email" type="email"></label><label>Password <input data-testid="user-password" type="password"></label><button data-testid="user-save" type="button">Create</button></form>';return;}
+ r.innerHTML='<div data-testid="dash-header"><h1>Dashboard</h1><span class="badge">3 open</span></div><table data-testid="dash-table"><tr><th>Name</th><th>Count</th></tr><tr><td>Alpha</td><td>12</td></tr></table>';}
+window.addEventListener('popstate',draw);draw();
+</script></body></html>"""
+LOGIN = """<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/app.css"></head><body>
+<form data-testid="login-form" onsubmit="sessionStorage.setItem('fx','1');location.href='/dashboard';return false">
+<input data-testid="login-email" type="email"><input data-testid="login-pass" type="password"><button type="submit">Sign in</button></form></body></html>"""
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def send(self, code, body, ctype="text/html; charset=utf-8"):
+        b = body.encode("utf-8"); self.send_response(code); self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+    def do_GET(self):
+        p = self.path.split("?")[0]
+        if p == "/login": self.send(200, LOGIN)
+        elif p == "/app.css": self.send(200, CSS, "text/css")
+        elif p == "/app.js": self.send(200, "window.fxLoaded=1;", "text/javascript")
+        elif p == "/missing.css": self.send(404, "not here", "text/plain")
+        else: self.send(401, APP)
+http.server.ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
+PY
+  python3 "$1/server.py" "$2" >/dev/null 2>&1 & echo $! > "$1/srv.pid"
+  sleep 1
+}
+am_011() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip am_011 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/am011"; mkdir -p "$d/docs/mockups"
+  printf '<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font:14px/20px system-ui} .badge{display:inline-block;border-radius:8px;background:#2563eb;color:#fff;padding:2px 8px;height:20px}</style></head><body><div data-testid="dash-header"><h1>Dashboard</h1><span class="badge">3 open</span></div><table data-testid="dash-table"><tr><th>Name</th><th>Count</th></tr><tr><td>Alpha</td><td>12</td></tr></table></body></html>\n' > "$d/docs/mockups/dashboard.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-assets-browser.mjs" "$UTILS/tf-assets.sh" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  _inpage_server "$d" "$port"
+  local out
+  out="$( cd "$d" && timeout 120 bash ./tf-assets.sh --base "http://127.0.0.1:$port" --paths /dashboard --login-path /login --user a@b.c --password x --json-out "$d/assets.json" >/dev/null 2>&1; python3 -c "
+import json; d=json.load(open('$d/assets.json')); p=d['pages'][0]
+print(d['status'], p['status'], p.get('document_status'), p['declared'], p['graded'], ' '.join(f['problem'] for f in d['findings']))" 2>&1 )"
+  [[ "$out" == "failed 200 401 3 3 status-404" ]] \
+    && ok am_011a "tf-assets signs in through the form, grades the signed-in page's assets and still sees the 404" \
+    || { bad am_011a "tf-assets could not get past an in-page sign-in"; note "$out"; }
+  out="$( cd "$d" && timeout 120 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen dashboard=/dashboard --widths 1280 --login-path /login --user a@b.c --password x --json-out "$d/parity.json" >/dev/null 2>&1; python3 -c "
+import json; s=json.load(open('$d/parity.json'))['screens'][0]; w=s['widths'][0]
+print(s['verdict'], w['compared'] > 0, w.get('reached','')[:23])" 2>&1 )"
+  [[ "$out" == "PASS True answered HTTP 401, then" ]] \
+    && ok am_011b "tf-mockup-parity signs in the same way, grades the screen and records how it was reached" \
+    || { bad am_011b "tf-mockup-parity still stops at HTTP 401"; note "$out"; }
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+}
+am_012() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip am_012 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/am012"; mkdir -p "$d/tests/.artifacts/verify"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  _inpage_server "$d" "$port"
+  local out
+  out="$( cd "$d" && timeout 120 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --screen user-create=/users/create --screen dash=/dashboard \
+           --login-path /login --user a@b.c --password x --widths 1280 --json-out "$d/screens.json" --shots-dir "$d/shots" 2>&1 | grep -E '^(OK|FAIL) ' )"
+  grep -q '^OK   user-create' <<<"$out" \
+    && ok am_012a "a signed-in form with a password field for the new account is graded, not read as the sign-in page" \
+    || { bad am_012a "a signed-in form with a password field is still unreachable"; note "$(head -2 <<<"$out")"; }
+  grep -q '^OK   dash' <<<"$out" \
+    && ok am_012b "a screen behind the in-page sign-in is still reached (TF-006 holds)" \
+    || { bad am_012b "the in-page sign-in screen is no longer reached"; note "$(grep dash <<<"$out")"; }
+  # signed OUT: the same tab without the sign-in draws the sign-in form at the screen's own address
+  out="$( cd "$d" && timeout 120 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --screen dash=/dashboard \
+           --login-path /login --user nobody --password x --widths 1280 --json-out "$d/screens2.json" --shots-dir "$d/shots" 2>&1 | grep -E '^(OK|FAIL) ' )"
+  grep -q '^FAIL dash' <<<"$out" \
+    && ok am_012c "a sign-in form drawn at the screen's own address still reads as signed out" \
+    || { bad am_012c "a page showing the sign-in form was graded as the screen"; note "$out"; }
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+}
+
+# --- AppManager TF-013: the whole browser suite in one command ---------------------------------
+# No shard or file option, every run overwrote playwright.json and tests.json, so parts could not be
+# combined through the script. --shard N/M and --spec run parts, --merge combines them.
+am_013() {
+  local d="$SCRATCH/am013" out
+  mkdir -p "$d/tests/.artifacts/verify"
+  cat > "$d/a.json" <<'J'
+{"reqs":{"REQ-UI-001":{"result":"PASS","source":"browser","tests":["REQ-UI-001 opens"],"skipped":[],"passed":1,"failed":0,"reason":"","screenshot":""},"REQ-UI-002":{"result":"NOT-TESTED","source":"browser","tests":[],"skipped":["REQ-UI-002 seeded"],"passed":0,"failed":0,"reason":"skipped: needs seed","screenshot":""}},"browser":{"ran":true,"passed":1,"failed":0,"skipped":1,"tests":2},"unit":{"ran":false,"line":""}}
+J
+  cat > "$d/b.json" <<'J'
+{"reqs":{"REQ-UI-001":{"result":"FAIL","source":"browser","tests":["REQ-UI-001 saves"],"skipped":[],"passed":0,"failed":1,"reason":"expected 1 got 0","screenshot":"tests/x.png"},"REQ-UI-002":{"result":"PASS","source":"browser","tests":["REQ-UI-002 lists"],"skipped":[],"passed":1,"failed":0,"reason":"","screenshot":""},"REQ-NFR-007":{"result":"PASS","source":"unit","tests":["REQ-NFR-007 unit"],"skipped":[],"passed":3,"failed":0,"reason":"","screenshot":""}},"browser":{"ran":true,"passed":1,"failed":1,"skipped":0,"tests":2},"unit":{"ran":true,"line":"PASS unit"}}
+J
+  out="$(cd "$d" && bash "$UTILS/tf-verify-tests.sh" --merge a.json b.json --json-out merged.json 2>&1 | head -1)"
+  local rows; rows="$(python3 -c "
+import json; d=json.load(open('$d/merged.json')); r=d['reqs']
+print(r['REQ-UI-001']['result'], r['REQ-UI-001']['failed'], len(r['REQ-UI-001']['tests']), r['REQ-UI-002']['result'], r['REQ-NFR-007']['result'], d['browser']['tests'], d['unit']['ran'])" 2>&1)"
+  [[ "$rows" == "FAIL 1 2 PASS PASS 4 True" ]] \
+    && ok am_013a "--merge combines the parts' rows (FAIL wins, PASS over NOT-TESTED, counts add) and the totals" \
+    || { bad am_013a "--merge does not combine the parts"; note "$rows"; }
+  out="$(cd "$d" && bash "$UTILS/tf-verify-tests.sh" --shard 2/4 2>&1 | tail -1)"
+  [[ "$out" == "JSON: tests/.artifacts/verify/tests-2of4.json" && -f "$d/tests/.artifacts/verify/tests-2of4.json" ]] \
+    && ok am_013b "--shard N/M writes its own tests-NofM.json, so parts do not overwrite each other" \
+    || { bad am_013b "a shard run still writes tests.json"; note "$out"; }
+  out="$(cd "$d" && bash "$UTILS/tf-verify-tests.sh" --shard 2 2>&1 | head -1)"
+  [[ "$out" == *"--shard takes N/M"* ]] \
+    && ok am_013c "a malformed --shard is refused with the shape named" \
+    || { bad am_013c "a malformed --shard was accepted"; note "$out"; }
+}
+
+# --- AppManager TF-014: "escaped the shell's scroll container" on an app whose document scrolls ---
+am_014() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip am_014 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/am014"; mkdir -p "$d/docs/mockups"
+  local page='<div data-testid="report-title"><h1>Adoption</h1></div><div data-testid="report-rows">'"$(printf '<p>row %s</p>' $(seq 1 120))"'</div>'
+  printf '<!doctype html><html><head><meta charset="utf-8"></head><body>%s</body></html>\n' "$page" > "$d/docs/mockups/report.html"
+  # the document is the only scroller: a long report, nothing escaped
+  printf '<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0}</style></head><body><nav style="width:200px;height:300px;overflow-y:auto">menu</nav>%s</body></html>\n' "$page" > "$d/report.html"
+  # a shell with a content scroll container, and the document scrolling as well
+  printf '<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0}</style></head><body><main style="height:600px;overflow-y:auto">%s</main><div style="height:900px"></div></body></html>\n' "$page" > "$d/escaped.html"
+  cp "$d/docs/mockups/report.html" "$d/docs/mockups/escaped.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
+  sleep 1
+  ( cd "$d" && timeout 180 node parity.mjs --base "http://127.0.0.1:$port" --screen report=/report.html --screen escaped=/escaped.html \
+      --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+  local f; f="$(python3 -c "import json
+for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], ' '.join(x['class'] for x in s['findings']))" 2>&1)"
+  grep -qx 'report ' <<<"$f" && ok am_014a "a document that is the app's only scroller gives no document-scroll finding" \
+    || { bad am_014a "a long page whose document scrolls is still reported as escaped"; note "$f"; }
+  grep -q '^escaped .*document-scroll' <<<"$f" && ok am_014b "a document scrolling beside a content scroll container is still reported" \
+    || { bad am_014b "a page that escaped its scroll container went unreported"; note "$f"; }
+}
+
 # --- the ignore file that grew by one block per update -----------------------------------
 # `tr -d '\r' < .gitignore | grep -qE …` under `set -o pipefail`: grep -q stops at the first
 # match, tr dies writing the rest, the pipeline reports failure, and the framework block is
@@ -2504,7 +2782,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

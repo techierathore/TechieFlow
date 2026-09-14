@@ -64,16 +64,14 @@ def walk(root, exts, skip_samples=False):
 
 
 def roles_from_usageguide(app):
-    p = os.path.join("docs", f"{app}-UsageGuide.md")
-    roles = []
-    if os.path.isfile(p):
-        m = re.search(r"(?ms)^##\s+(?:\d+[.)]\s*)?Test users[^\n]*\n(.*?)(?=^## |\Z)", read(p))
-        if m:
-            for line in m.group(1).splitlines():
-                c = [x.strip() for x in line.strip().strip("|").split("|")]
-                if len(c) >= 4 and c[0].strip("`* ").isdigit():
-                    roles.append((c[1].strip("`* "), c[3].strip("`* ")))
-    return roles
+    # the guide may be {App}-UsageGuide.md or {App}-Usage-Guide.md, its heading ## or ###, and its
+    # table the template's numbered shape or one read by its header names (AppManager TF-009):
+    # the same reader tf-verify-list.py uses
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("tf_verify_list", os.path.join(os.path.dirname(os.path.abspath(__file__)), "tf-verify-list.py"))
+    vl = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(vl)
+    return [(u["user"], u["role"]) for u in vl.test_users(vl.usage_guide(app))]
 
 
 def screens_from_uidesign(app, phase):
@@ -88,9 +86,9 @@ def screens_from_uidesign(app, phase):
 
 def routes_in_code():
     found = []
-    for f in walk(".", (".razor", ".cshtml", ".cs", ".ts", ".tsx", ".js", ".jsx", ".vue")):
-        if "/" not in f:
-            continue   # a top-level file is never a page
+    for f in walk(".", (".razor", ".cshtml", ".cs", ".ts", ".tsx", ".js", ".jsx", ".vue"), skip_samples=True):
+        if "/" not in f or re.search(r"\.(spec|test)\.\w+$", f):
+            continue   # a top-level file is never a page; a test's `path:` is a screenshot, not a route (TfLens TF-050)
         txt = read(f)
         for ext_re, pat, what in ROUTE_PATTERNS:
             if re.search(ext_re, f, re.I):

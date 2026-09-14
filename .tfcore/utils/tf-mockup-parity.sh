@@ -5,6 +5,10 @@
 #        --screen login=/login --screen harness=/harness --screen export=/export \
 #        --cookie 'AuthCookie=<value from your Playwright login>' \
 #        --json-out tests/.artifacts/mockup-parity/run.json
+#   A sign-in the page keeps for itself sets no cookie (AppManager TF-011): give it
+#        --login-path /login --user <u> --password <p>   (or --storage-state <file>)
+#   and each screen is opened in a tab that signed in through the form, the way
+#   tf-verify-screens.sh does; `widths[].reached` in the JSON says how a 401 screen was reached.
 #
 # WHAT IT ASKS: "does the built screen carry the structure its approved mockup
 # draws?" — at the same viewports, comparing STRUCTURE, never pixels. Pixel diffing
@@ -62,4 +66,5 @@ node -e "import('playwright').then(()=>process.exit(0)).catch(()=>process.exit(1
   exit 4
 }
 
-exec node "$HERE/tf-mockup-parity.mjs" "$@"
+source "$HERE/tf-lock.sh"; tf_take_lock mockup-parity   # one browser check at a time (TF-048)
+node "$HERE/tf-mockup-parity.mjs" "$@"

@@ -28,4 +28,5 @@ esac
 command -v node >/dev/null 2>&1 || { echo "tf-verify-screens: node is required (bash .tfcore/utils/tf-verify-env.sh)" >&2; exit 4; }
 node -e "import('playwright').then(()=>process.exit(0)).catch(()=>process.exit(1))" 2>/dev/null || {
   echo "tf-verify-screens: the 'playwright' package is not resolvable from this folder; run bash .tfcore/utils/tf-verify-env.sh" >&2; exit 4; }
-exec node "$HERE/tf-verify-screens.mjs" "$@"
+source "$HERE/tf-lock.sh"; tf_take_lock verify-screens   # one browser check at a time (TF-048)
+node "$HERE/tf-verify-screens.mjs" "$@"

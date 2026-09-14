@@ -8,6 +8,82 @@
 
 ---
 
+## 2026-09-14, night — TfLens's TF-049 and TF-050
+
+`tf-build.sh --print` (and `test --print`) now prints the resolved command and runs nothing, as
+`handoff-phase.md` has said since the reset. `tf-devguide-list.py` skips the sample and test folders
+and any `*.spec.*` or `*.test.*` file when reading routes, so a test's screenshot `path:` is not a
+page. Cases `tf_049` and `tf_050`; misses `MISS-TechieFlow-20260914-12` and `-13`. Proved on TfLens
+(`dotnet build TfLens.slnx`; the two `.png` lines gone, 19 routes kept) and AppManager. Deployed to
+all 19 projects. Suite 156 checks.
+
+## 2026-09-14, night — AppManager's TF-014
+
+`tf-mockup-parity` reported `document-scroll` on every page whose document scrolls, including an app
+whose document is its only scroller. It is raised only when the shell has a content scroll container
+(a box at least half the viewport each way that scrolls inside itself) and the document scrolls too.
+Case `am_014`; miss `MISS-TechieFlow-20260914-11`. Proved on AppManager's adoption report, 6600 px,
+signed in: no finding. Deployed to all 19 projects. Suite 152 checks.
+
+## 2026-09-14, night — TfLens's TF-048
+
+Browser checks run side by side share one signed-in user, and the acceptance tests change that user's
+settings and window: 11 false parity findings on TfLens. The lock `tf-build.sh` takes moved to
+`tf-lock.sh`, and `tf-verify-tests.sh`, `tf-verify-screens.sh` and `tf-mockup-parity.sh` take it too;
+a script the holder starts shares it. FR-73 says it. Case `tf_048`; miss `MISS-TechieFlow-20260914-10`,
+`unsaid`. Deployed to all 19 projects, every copy matching. Suite 150 checks.
+
+## 2026-09-14, evening — AppManager's TF-009 to TF-013
+
+All five found by AppManager's `*build-phase` and its chained verify the same day. Cases `am_009` to
+`am_013` in `tests/regression/run.sh`, each failing against the scripts as AppManager had them and
+passing now. Misses `MISS-TechieFlow-20260914-05` to `-09`, `weak-check`, closed in the same run.
+The reply is in AppManager's own file and copied here byte for byte; `tf-feedback.sh` reads all five
+as fixed and waiting for a re-check. **Deployed:** `update-framework.sh` ran in all 19 projects, every
+one exit 0, and every copy of the changed files matches this repository byte for byte. The whole
+regression suite holds, 147 checks. Every proof below ran on AppManager's own admin site, booted from
+its copy on port 5041 and signed in as its usage guide's admin user, old and new script on the same
+data; the results are in AppManager's `tests/.artifacts/fix-parity/tf011/`.
+
+- **TF-009, no test users from a guide named `{App}-Usage-Guide.md`** (`tf-verify-list.py`,
+  `tf-devguide-list.py`). Only `{App}-UsageGuide.md` was looked for, the heading only at `##`, and
+  only the template's numbered table read. Both spellings are tried, the heading may sit at `##` or
+  `###`, and a table is read by its header names (user or email, role); the numbered shape reads as
+  before, and the devguide list uses the same reader. AppManager's two users are listed; TfLens's
+  guide reads exactly as before.
+- **TF-010, the first web project in sorted order booted** (`tf-verify-boot.sh`). AppManager's API
+  sorts before its admin site and has no screens. Among several web projects the one that serves
+  screens is booted — its folder holds `.razor` or `.cshtml` pages, or it references a Razor SDK
+  project — one such is taken and the choice printed; several or none stop with the candidates named.
+  `start --dry-run` prints the pick without booting. On AppManager, a bare `start` now boots the admin
+  site and says why.
+- **TF-011, no way past a sign-in the page keeps for itself** (`tf-mockup-parity.mjs`, `tf-assets.sh`,
+  new `tf-login.mjs` and `tf-assets-browser.mjs`). Both tools took only `--cookie`; AppManager sets
+  none, so every path answered 401 and nothing was graded. The sign-in recipe (TF-033, TF-044) and the
+  way a 401 screen is reached (TF-006) moved out of `tf-verify-screens.mjs` into `tf-login.mjs`, which
+  all three checks now share; parity and assets take `--login-path`, `--user`, `--password` and
+  `--storage-state`. Parity keeps one signed-in tab per width on the app and a separate tab for the
+  mockups. Assets opens each path in a signed-in browser, takes the document it drew, and still
+  fetches each declared asset itself, so a 404 stays visible. On AppManager: assets from `declared 0`
+  on both paths to 11 graded on each, none failing; parity from `app returned HTTP 401` to the screen
+  reached at both widths — where it is UNGRADEABLE because AppManager's mockup carries no test ids,
+  and reports the page's 6600 px document height, both AppManager's to judge.
+- **TF-012, a password field read as the sign-in page** (`tf-login.mjs`, used by
+  `tf-verify-screens.mjs`). AppManager's signed-in "Create user" form has one for the new account.
+  Signed out now means: on the sign-in address, or a password field with a button beside it that says
+  sign in or log in. On AppManager, `/users/create` from UNREACHABLE at both widths to render OK at
+  both; a sign-in form drawn at a screen's own address still reads as signed out.
+- **TF-013, the whole browser suite in one command** (`tf-verify-tests.sh`). `--shard N/M` and
+  `--spec` run parts, each writing its own `playwright-<NofM>.json` and `tests-<NofM>.json`;
+  `--merge` combines the parts' rows (FAIL wins, PASS over NOT-TESTED, counts add) and totals into
+  one `tests.json`. Shard 1/30 of AppManager's own suite ran through it against the booted site:
+  11 of 11 tests passed, one row mapped.
+- **A slip of ours, caught by the suite before it shipped.** Moving the sign-in recipe into
+  `tf-login.mjs` broke every regression case that copied `tf-verify-screens.mjs` or
+  `tf-mockup-parity.mjs` alone into its fixture (22 checks). The cases now copy the module beside
+  the script; a project gets the whole `utils/` folder from `update-framework.sh`, so no project was
+  affected.
+
 ## 2026-09-14, afternoon — TfLens's TF-047
 
 Found by TfLens's `*fix-issues` the same day: with its mockups updated, these were the only findings

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tf-verify-boot.sh — start the application for a verify, reach it, and stop it (Sitting 4c, 2026-09-06).
 #
-#   bash .tfcore/utils/tf-verify-boot.sh start [--head web|windows|static] [--project <csproj>]
+#   bash .tfcore/utils/tf-verify-boot.sh start [--head web|windows|static] [--project <csproj>] [--dry-run]
 #                                              [--port N] [--config Release] [--static <dir>] [--probe-path /healthz]
 #   bash .tfcore/utils/tf-verify-boot.sh stop [--port N]
 #   bash .tfcore/utils/tf-verify-boot.sh status [--port N]
@@ -182,10 +182,11 @@ PY
   *) sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 3 ;;
 esac
 
-HEAD=""; PROJECT=""; PORT=""; CONFIG=""; STATIC=""; PROBE="/"
+HEAD=""; PROJECT=""; PORT=""; CONFIG=""; STATIC=""; PROBE="/"; DRYRUN=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --probe-path) PROBE="${2:-/}"; [[ "$PROBE" == /* ]] || PROBE="/$PROBE"; shift 2 ;;
+    --dry-run) DRYRUN=1; shift ;;   # print which project and head would boot, and stop (TF-010)
     --head) HEAD="${2:-}"; shift 2 ;;
     --project) PROJECT="${2:-}"; shift 2 ;;
     --port) PORT="${2:-}"; shift 2 ;;
@@ -217,15 +218,43 @@ fi
 mapfile -t ALL < <(find_projects)
 WEB=(); WIN=()
 for p in "${ALL[@]}"; do is_web "$p" && WEB+=("$p"); is_maui_win "$p" && WIN+=("$p"); done
+# Several web projects: the one that serves screens. The first in sorted order booted AppManager's
+# external API, which has no screens, in front of its admin site (AppManager TF-010). A project
+# serves screens when its own folder holds .razor or .cshtml pages, or it references a project
+# built with the Razor SDK. One such project is taken and said so; several, or none, stop with the
+# candidates named, because a guess between them grades the wrong app.
+serves_screens() { # csproj -> 0 when it draws pages
+  local d; d="$(dirname "$1")"
+  find "$d" -maxdepth 3 \( -name '*.razor' -o -name '*.cshtml' \) -not -path '*/bin/*' -not -path '*/obj/*' -print -quit 2>/dev/null | grep -q . && return 0
+  local ref
+  while read -r ref; do
+    ref="$(sed 's#\\#/#g' <<<"$ref")"
+    [[ -f "$d/$ref" ]] && grep -qE 'Microsoft\.NET\.Sdk\.Razor' "$d/$ref" && return 0
+  done < <(grep -oE '<ProjectReference[^>]*Include="[^"]+"' "$1" 2>/dev/null | sed -E 's/.*Include="([^"]+)".*/\1/')
+  return 1
+}
+pick_web() { # sets PROJECT from WEB, or prints NONE and exits
+  if [[ ${#WEB[@]} -le 1 ]]; then PROJECT="${WEB[0]:-}"; return; fi
+  local ui=()
+  for p in "${WEB[@]}"; do serves_screens "$p" && ui+=("$p"); done
+  if [[ ${#ui[@]} -eq 1 ]]; then
+    PROJECT="${ui[0]}"
+    echo "tf-verify-boot: ${#WEB[@]} web projects; $PROJECT serves screens (.razor/.cshtml pages or a Razor SDK reference), the other(s) do not — booting it; --project names another"
+  else
+    write_state web none "" "" "" "" "${#WEB[@]} web projects and no single one serving screens" host "$PLATFORM"
+    echo "NONE head=web reason=${#WEB[@]} web projects (${WEB[*]}) and ${#ui[@]} of them serve screens${ui[*]:+ (${ui[*]})}; name one with --project"; exit 2
+  fi
+}
 if [[ -n "$PROJECT" ]]; then
   [[ -f "$PROJECT" ]] || { echo "NONE reason=--project $PROJECT does not exist"; exit 3; }
   if [[ -z "$HEAD" ]]; then is_web "$PROJECT" && HEAD=web; [[ -z "$HEAD" ]] && is_maui_win "$PROJECT" && HEAD=windows; fi
 elif [[ -z "$HEAD" ]]; then
-  if [[ ${#WEB[@]} -gt 0 ]]; then HEAD=web; PROJECT="${WEB[0]}"
+  if [[ ${#WEB[@]} -gt 0 ]]; then HEAD=web; pick_web
   elif [[ ${#WIN[@]} -gt 0 ]]; then HEAD=windows; PROJECT="${WIN[0]}"; fi
 else
-  case "$HEAD" in web) PROJECT="${WEB[0]:-}" ;; windows) PROJECT="${WIN[0]:-}" ;; esac
+  case "$HEAD" in web) pick_web ;; windows) PROJECT="${WIN[0]:-}" ;; esac
 fi
+if [[ $DRYRUN -eq 1 ]]; then echo "PICK head=${HEAD:-none} project=${PROJECT:-none}"; exit 0; fi
 case "$HEAD" in
   android|ios|maccatalyst)
     write_state "$HEAD" none "" "" "" "${PROJECT:-}" "no driver for the $HEAD head ships in this framework version" no-driver "$PLATFORM"

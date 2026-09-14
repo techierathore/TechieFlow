@@ -43,6 +43,7 @@ import { chromium } from 'playwright';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { signIn, reach } from './tf-login.mjs';
 
 // ---------------------------------------------------------------- arguments
 const argv = process.argv.slice(2);
@@ -57,6 +58,12 @@ const MOCKUPS = arg('--mockups', 'docs/mockups');
 const WIDTHS = (arg('--widths', '1280,390') || '').split(',').map((w) => parseInt(w.trim(), 10)).filter(Boolean);
 const JSON_OUT = arg('--json-out');
 const COOKIE = arg('--cookie');
+// A sign-in the page keeps for itself sets no cookie, so --cookie could not reach AppManager's screens
+// at all: "app returned HTTP 401" at both widths (AppManager TF-011). The same --login-path, --user,
+// --password and --storage-state tf-verify-screens takes, through the shared recipe in tf-login.mjs.
+const LOGIN_PATH = arg('--login-path'); const USER = arg('--user'); const PASS = arg('--password');
+const STORAGE = arg('--storage-state');
+const LOGIN_OPTS = { base: BASE, loginPath: LOGIN_PATH, user: USER, password: PASS, settle: 1500, renderWait: 5000 };
 const HEADERS = [];
 for (let i = 0; i < argv.length; i++) if (argv[i] === '--header' && argv[i + 1]) HEADERS.push(argv[i + 1]);
 const SCREENS = [];
@@ -419,6 +426,17 @@ const PROBE = (wanted = []) => {
   }
 
   const de = document.documentElement;
+  // the shell's content scroll container, when it has one: a box that scrolls inside itself, no
+  // taller than the viewport (a table wrapper that grows with its rows is not one), at least 60% of
+  // its width and half its height, and across the viewport's centre (a side menu, or a drawer parked
+  // off screen, is not one). Without one the document is the app's scroller (AppManager TF-014).
+  const scroller = [...document.querySelectorAll('body *')].find((el) => {
+    const o = getComputedStyle(el).overflowY;
+    if (o !== 'auto' && o !== 'scroll') return false;
+    const r = el.getBoundingClientRect(), cx = de.clientWidth / 2;
+    return r.height <= de.clientHeight + 2 && r.width >= de.clientWidth * 0.6 && r.height >= de.clientHeight / 2
+      && r.left <= cx && r.right >= cx;
+  });
   return {
     index,
     pool,
@@ -429,6 +447,7 @@ const PROBE = (wanted = []) => {
       clientHeight: de.clientHeight,
       scrollWidth: de.scrollWidth,
       clientWidth: de.clientWidth,
+      scroller: scroller ? `${scroller.tagName.toLowerCase()}${scroller.id ? '#' + scroller.id : ''}${scroller.className ? '.' + String(scroller.className).trim().split(/\s+/)[0] : ''}` : null,
     },
   };
 };
@@ -625,7 +644,9 @@ const results = [];
 let hardFail = false;
 
 const browser = await chromium.launch();
-const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
+const ctxOpts = { ignoreHTTPSErrors: true };
+if (STORAGE && existsSync(STORAGE)) ctxOpts.storageState = STORAGE;
+const ctx = await browser.newContext(ctxOpts);
 if (COOKIE) {
   const u = new URL(BASE);
   for (const pair of COOKIE.split(';')) {
@@ -639,6 +660,20 @@ if (HEADERS.length) {
   await ctx.setExtraHTTPHeaders(h);
 }
 
+// One app tab per width, signed in once and kept on the app, and one tab for the mockups. A sign-in
+// the page keeps for itself lives in that tab: a fresh tab per screen would be signed out every time
+// (AppManager TF-011). The mockup tab never touches the app, so the app tab never leaves it.
+const tabs = {};
+let loginResult = null;
+for (const width of WIDTHS) {
+  const size = { width, height: width < 700 ? 844 : 800 };
+  const app = await ctx.newPage(); await app.setViewportSize(size);
+  const mock = await ctx.newPage(); await mock.setViewportSize(size);
+  if (LOGIN_PATH && USER) { const l = await signIn(app, LOGIN_OPTS); if (loginResult === null) loginResult = l; }
+  tabs[width] = { app, mock };
+}
+if (loginResult && loginResult.attempted && !loginResult.ok) console.error(`tf-mockup-parity: LOGIN failed at ${BASE}${LOGIN_PATH}: ${loginResult.error || 'still on the sign-in page'}`);
+
 for (const s of SCREENS) {
   const mockPath = resolve(MOCKUPS, `${s.name}.html`);
   // TF-008 §3: a screen with no mockup is reported, never silently passed — the
@@ -651,18 +686,23 @@ for (const s of SCREENS) {
 
   const perWidth = [];
   for (const width of WIDTHS) {
-    const page = await ctx.newPage();
-    await page.setViewportSize({ width, height: width < 700 ? 844 : 800 });
-    let mock, app, docFindings = [];
+    const { app: page, mock: mockPage } = tabs[width];
+    let mock, app, docFindings = [], reached = '';
     try {
-      await page.goto(pathToFileURL(mockPath).href, { waitUntil: 'load' });
-      mock = await page.evaluate(PROBE);
-      const resp = await page.goto(BASE + s.route, { waitUntil: 'networkidle' });
-      if (resp && resp.status() >= 400) {
-        perWidth.push({ width, error: `app returned HTTP ${resp.status()}` });
-        await page.close();
+      await mockPage.goto(pathToFileURL(mockPath).href, { waitUntil: 'load' });
+      mock = await mockPage.evaluate(PROBE);
+      // The document may answer 401 and still draw the screen signed in (AppManager TF-006/TF-011):
+      // reach() judges by what the page draws, signs in again from inside the page when it must, and
+      // returns 200 only when the screen was really drawn signed in.
+      const nav = await reach(page, LOGIN_OPTS, s.route);
+      if (nav.status === 0 || nav.status >= 400 || nav.signedOut) {
+        perWidth.push({ width, error: nav.status === 0 ? `could not open ${s.route}: ${nav.error || 'no response'}`
+          : nav.signedOut ? `app returned HTTP ${nav.document_status ?? nav.status} and stayed signed out (sign-in ${LOGIN_PATH && USER ? 'did not hold' : 'not given: --login-path/--user/--password or --cookie'})`
+          : `app returned HTTP ${nav.status}` });
         continue;
       }
+      reached = nav.reached || '';
+      await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
       const wanted = [...new Set(Object.values(mock.index).filter((x) => x.badge === true && x.text).map((x) => x.text))];
       app = await page.evaluate(PROBE, wanted);
 
@@ -671,22 +711,22 @@ for (const s of SCREENS) {
       // 900px viewport, ~1700px of it blank, with the app shell repainted at the
       // bottom because the page had escaped the shell's scroll container. No gate
       // looked at document height, so that passed too.
-      if (app.doc.scrollHeight > app.doc.clientHeight + 2) {
+      // Only when the shell has a content scroll container: an app whose document is its only
+      // scroller (a long report page) has escaped nothing (AppManager TF-014).
+      if (app.doc.scroller && app.doc.scrollHeight > app.doc.clientHeight + 2) {
         docFindings.push({
           screen: s.name, width, class: 'document-scroll', key: 'document',
-          detail: `document.scrollHeight ${app.doc.scrollHeight} exceeds clientHeight ${app.doc.clientHeight} — the page has escaped the app shell's scroll container`,
+          detail: `document.scrollHeight ${app.doc.scrollHeight} exceeds clientHeight ${app.doc.clientHeight} — the page has escaped the app shell's scroll container (${app.doc.scroller})`,
         });
       }
     } catch (e) {
       perWidth.push({ width, error: String(e).slice(0, 200) });
-      await page.close();
       continue;
     }
     const d = diff(mock, app, s.name, width);
     d.findings.push(...docFindings);
     perWidth.push({ width, ...d, mockAnchors: mock.anchors, appAnchors: app.anchors,
-      appTestIds: app.testids, mockTestIds: mock.testids });
-    await page.close();
+      appTestIds: app.testids, mockTestIds: mock.testids, ...(reached ? { reached } : {}) });
   }
 
   const ok = perWidth.filter((w) => !w.error);
@@ -748,7 +788,8 @@ for (const s of SCREENS) {
       add_data_testid_to_mockup: unanchored.slice(0, 30),
     },
     widths: perWidth.map((w) => ({ width: w.width, error: w.error || null,
-      compared: w.compared || 0, content_graded: w.contentGraded || 0, findings: (w.findings || []).length })),
+      compared: w.compared || 0, content_graded: w.contentGraded || 0, findings: (w.findings || []).length,
+      ...(w.reached ? { reached: w.reached } : {}) })),   // how a 401 screen was reached signed in (TF-011)
   });
 }
 

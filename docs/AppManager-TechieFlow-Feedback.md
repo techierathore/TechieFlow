@@ -8,9 +8,9 @@
 
 ## Summary
 
-8 entries: 0 blocking now, 2 fixed upstream and waiting to be re-checked here (TF-007, TF-008), 6 closed here after a re-check on 2026-09-13 (TF-001 to TF-006).
+14 entries: 0 blocking now, 0 open, 1 fixed upstream on 2026-09-14 and waiting to be re-checked here (TF-014, filed the same day), 13 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-013 on 2026-09-14.
 
-Nothing is blocked.
+Nothing is blocked. TF-014 is a wrong finding from the mockup comparison that was judged and set aside.
 
 ## Entries
 
@@ -118,6 +118,8 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 
 ### TF-007 — `tf-verify-tests.sh` finds no test project when the solution is `.slnx` only and the tests sit two folders under `tests/`
 
+> ✅ **Closed 2026-09-14** — re-checked here: Ran bash .tfcore/utils/tf-verify-tests.sh --no-browser with no --target: unit tests PASS on rung 1 (cmd.exe /c dotnet), one TRX report read from tests/unit/AppManager.UnitTests, REQ-NFR-007 mapped as PASS (source unit, 1 passed, 0 failed) in tests/.artifacts/verify/tests.json. The .slnx-only root and the two-deep test project are now found.
+
 - **Severity:** minor
 - **Blocks:** no — passing `--target tests/unit/AppManager.UnitTests/AppManager.UnitTests.csproj` ran the unit tests and mapped REQ-NFR-007; the re-check of TF-005 carried on.
 - **Repro:** `bash .tfcore/utils/tf-verify-tests.sh --no-browser` in AppManager, whose root holds `AppManager.slnx` and no `.sln`, with the test project at `tests/unit/AppManager.UnitTests/`.
@@ -129,6 +131,8 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 
 ### TF-008 — `tf-build-list.sh` sends UI rows to the `trblazeui` sub-agent in a project that does not use that library
 
+> ✅ **Closed 2026-09-14** — re-checked here: Ran bash .tfcore/utils/tf-build-list.sh AppManager: printed 'UI rows go to: builder — none of the 7 .csproj/.props file(s) references TrBlazeUI', then 'Cluster A [builder]: REQ-UI-001, REQ-UI-003, REQ-UI-006, REQ-UI-007, REQ-UI-022, REQ-UI-024 (UI / Pages)'. No cluster is labelled trblazeui.
+
 - **Severity:** minor
 - **Blocks:** no — the list of rows is correct; UI rows here are built by flow-master, as AGENTS.md says, whatever the label.
 - **Repro:** `bash .tfcore/utils/tf-build-list.sh AppManager`
@@ -138,9 +142,189 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 - **Workaround:** none needed yet; the next `*build-phase` must route that cluster to flow-master and ignore the label.
 - **Suggested fix:** label a UI cluster `trblazeui` only when the project references TrBlazeUI (a package or project reference, or a setting in `core-config.yaml`); otherwise label it `builder`.
 
+### TF-009 — `tf-verify-list.py` finds no test users when the guide is named `{App}-Usage-Guide.md`
+
+> ✅ **Closed 2026-09-14** — re-checked here: Ran tf-verify-list.sh AppManager all: under Test users (UsageGuide) it listed admin@appmanager.local — Admin and appmanager-yolo-tester@appmanager.local — Manager, read from docs/AppManager-Usage-Guide.md.
+
+- **Severity:** minor
+- **Blocks:** no — the two test users are in the guide and were used by hand; the verify run carried on.
+- **Repro:** `bash .tfcore/utils/tf-verify-list.sh AppManager all` in AppManager, whose guide is `docs/AppManager-Usage-Guide.md` with a `### Test users` table.
+- **Expected:** the Admin and Manager test users listed under "Test users (UsageGuide)".
+- **Actual:** `- none in the UsageGuide: the smoke policy says what to do`.
+- **Encountered in:** `*build-phase AppManager`, chained verify, step 1.
+- **Workaround:** read the users from the guide directly.
+- **Suggested fix:** at `tf-verify-list.py:191` (and `tf-devguide-list.py:67`) try `{app}-UsageGuide.md` then `{app}-Usage-Guide.md`, the two spellings `tf-doc-check.py` already accepts. The heading pattern at line 138 also needs `#{2,3}`, since this guide nests Test users one level down.
+
+### TF-010 — `tf-verify-boot.sh start --head web` boots the external API instead of the admin site
+
+> ✅ **Closed 2026-09-14** — re-checked here: Ran tf-verify-boot.sh start --dry-run: printed '2 web projects; src/AppManagerWeb/AppManagerWeb.csproj serves screens … booting it' and 'PICK head=web project=src/AppManagerWeb/AppManagerWeb.csproj'. Then tf-verify-boot.sh start with no --project printed the same choice and BOOTED the admin site at http://localhost:5041 from its copy.
+
+- **Severity:** minor
+- **Blocks:** no — `--project src/AppManagerWeb/AppManagerWeb.csproj` booted the admin site; the verify run carried on.
+- **Repro:** `bash .tfcore/utils/tf-verify-boot.sh start --head web` in AppManager, which has two `Microsoft.NET.Sdk.Web` projects: `AppManagerApi` and `AppManagerWeb`.
+- **Expected:** the project that serves the screens (the one referencing the Razor component library), or `NONE` asking for `--project`, because there are several.
+- **Actual:** `BOOTED head=web … project=src/AppManagerApi/AppManagerApi.csproj` — the first match in sorted order, which has no screens.
+- **Encountered in:** `*build-phase AppManager`, chained verify, step 3.
+- **Workaround:** always pass `--project`.
+- **Suggested fix:** in the project search around `tf-verify-boot.sh:67`, when more than one web project is found, prefer one that references a `Microsoft.NET.Sdk.Razor` project or has `Components/`/`Pages/` with `.razor` files; otherwise stop with `NONE` naming the candidates.
+
+### TF-011 — `tf-assets.sh` and `tf-mockup-parity.sh` cannot get past a Blazor Server sign-in that sets no cookie
+
+> ✅ **Closed 2026-09-14** — re-checked here: Booted the admin site with tf-verify-boot.sh start and ran tf-assets.sh --base http://localhost:5041 --paths /dashboard,/reports/device-adoption --login-path /login --user admin@appmanager.local: status measured, 11 assets declared and graded on each path, 0 failed, each reached 'answered HTTP 401, then drew the screen signed in'. tf-mockup-parity.sh --screen device-adoption-report=/reports/device-adoption with the same sign-in: no HTTP 401 error, reached at 1280 and 390. Its FAIL verdict is the mockup's missing data-testid anchors (19 named, repaired here through *amend-docs) and a document-scroll finding filed as TF-014.
+
+- **Severity:** minor
+- **Blocks:** no — the assets and mockup checks are recorded as not measured; every other check ran.
+- **Repro:** `bash .tfcore/utils/tf-assets.sh --base http://localhost:5041 --paths "/dashboard,/reports/device-adoption" --json-out tests/.artifacts/verify/assets.json`, and `bash .tfcore/utils/tf-mockup-parity.sh --base http://localhost:5041 --screen device-adoption-report=/reports/device-adoption`, in AppManager, whose admin site signs in inside the live page connection and sets no auth cookie.
+- **Expected:** a way to sign in, as `tf-verify-screens.sh` does with `--login-path --user --password` or `--storage-state`.
+- **Actual:** every path answers `401`; assets `declared 0 graded 0`; parity `app returned HTTP 401` at both widths. Both tools take only `--cookie`, and this app has no cookie to give.
+- **Encountered in:** `*build-phase AppManager`, chained verify, step 5.
+- **Workaround:** none; the two checks are left as not measured.
+- **Suggested fix:** give both tools the same `--login-path/--user/--password` and `--storage-state` options `tf-verify-screens.sh` has (the TF-006 fix), and drive the page through the browser rather than a bare HTTP request.
+
+### TF-012 — `tf-verify-screens.sh` reports a signed-in form with a password field as unreachable
+
+> ✅ **Closed 2026-09-14** — re-checked here: Booted the admin site with tf-verify-boot.sh start and ran tf-verify-screens.sh --base http://localhost:5041 --login-path /login --user admin@appmanager.local --screen user-create=/users/create: render OK and visual OK at 1280 and 390, reached 'answered HTTP 401, then drew the screen signed in'.
+
+- **Severity:** minor
+- **Blocks:** no — the screenshot the tool itself saved shows the form rendered correctly; the row was graded on its test.
+- **Repro:** `bash .tfcore/utils/tf-verify-screens.sh --base http://localhost:5041 --login-path /login --user admin@appmanager.local --password '…' --screen user-create=/users/create`.
+- **Expected:** `render OK` — the page is the signed-in "Create User" form, with a Password field for the new account.
+- **Actual:** `FAIL user-create (/users/create) — render UNREACHABLE … answered HTTP 401`, while `tests/.artifacts/verify/screens/user-create-390.png` shows the full form.
+- **Encountered in:** `*build-phase AppManager`, chained verify, step 5.
+- **Workaround:** read the saved screenshot and grade the row on its test.
+- **Suggested fix:** decide "this is the sign-in page" from the URL having returned to `--login-path`, not from a password input being present.
+
+### TF-013 — `tf-verify-tests.sh` runs the whole browser suite in one command, which the foreground limit cannot hold
+
+> ✅ **Closed 2026-09-14** — re-checked here: Ran tf-verify-tests.sh --base http://localhost:5041 --shard 1/4 to 4/4 against the admin site: each wrote its own playwright-NofM.json and tests-NofM.json. --no-browser --json-out tests-unit.json ran the unit tests (PASS, 12 rows). --merge of those five files wrote one tests.json with merged_from naming all five, 51 rows (the union of the parts), browser totals adding to 134 tests, unit totals carried, every FAIL kept with its reason. Two notes for TechieFlow: shards 2 to 4 each ran past ten minutes, so 1/4 is too coarse for this suite in one foreground command; and the line's literal glob tests-*.json also swept in two older files from the TF-007 re-check (tests-tf007.json, tests-tf007-deployed.json), while a --no-browser run left at its default writes tests.json, which the glob misses. The 6 FAIL rows are email tests that found no captured mail, because the site was booted with a plain start and no test mail settings.
+
+- **Severity:** minor
+- **Blocks:** no — the suite was run in groups through `PW_FILES`, one results file per group, merged by row before the verdict.
+- **Repro:** `bash .tfcore/utils/tf-verify-tests.sh --base <url>` in AppManager (34 spec files; one keyboard test alone may run past ten minutes). The YOLO guard refuses a background run, and a foreground command is stopped at ten minutes.
+- **Expected:** a way to run the suite in parts and have `tests.json` cover them all.
+- **Actual:** no shard or file option; every run overwrites `playwright.json` and `tests.json`, and `--no-browser` deletes `playwright.json`, so parts cannot be combined through the script.
+- **Encountered in:** `*build-phase AppManager`, chained verify, step 5.
+- **Workaround:** set `PW_FILES` per group, write each to its own `--json-out`, and merge the `reqs` maps (FAIL wins, counts add).
+- **Suggested fix:** add `--shard N/M` (passed to Playwright) and `--merge <tests-*.json…>` that combines `reqs` and the `browser`/`unit` totals into `tests.json`.
+
+### TF-014 — `tf-mockup-parity.sh` reports "escaped the app shell's scroll container" on an app whose document is meant to scroll
+
+- **Severity:** minor
+- **Blocks:** no — the finding was judged against the app's own layout and set aside; the comparison is ungradeable anyway until the mockup carries anchors.
+- **Repro:** `bash .tfcore/utils/tf-mockup-parity.sh --base http://localhost:5041 --screen device-adoption-report=/reports/device-adoption --login-path /login --user admin@appmanager.local --password '…'` in AppManager.
+- **Expected:** no scroll finding, because this app has no content scroll container: the page body scrolls, and only the side menu scrolls inside itself.
+- **Actual:** `document-scroll` — "document.scrollHeight 6600 exceeds clientHeight 800 — the page has escaped the app shell's scroll container" at 1280, and 9701 against 844 at 390.
+- **Encountered in:** re-checking TF-011.
+- **Workaround:** measured five signed-in pages at 1280×800 in a browser. On every one `body` has `overflow-y: auto`, the document is the scroller, and the only inner scroll area is `div.main-sidebar`. Document heights: `/dashboard` 2375, `/applications` 1066, `/users` 978, `/reports` 1588, `/reports/device-adoption` 6600. The adoption report is long because it lists every application, not because it broke out of a container.
+- **Suggested fix:** raise `document-scroll` only when the shell actually has a content scroll container (an element around the page body with `overflow-y: auto|scroll` and a fixed height) and the document scrolls as well. Where the document is the app's only scroller, say nothing, or compare against the same measure on a sibling screen of the same shell.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### TF-014 — fixed 2026-09-14
+
+- **Fix.** `document-scroll` is raised only when the shell has a content scroll container — a box at
+  least half the viewport each way with `overflow-y: auto` or `scroll` — and the document scrolls as
+  well; the finding names that box. Where the document is the app's only scroller, nothing is said.
+  Case `am_014` in TechieFlow's `tests/regression/run.sh`; miss `MISS-TechieFlow-20260914-11`.
+- **Verify from here.** The TF-011 parity command on `/reports/device-adoption`: no `document-scroll`
+  finding at either width.
+
+TF-009 to TF-013 are fixed in the framework on 2026-09-14 and deployed to this repository. Nothing is
+blocked. Re-check each with its "Verify from here" line and close it as before with
+`bash .tfcore/utils/tf-feedback.sh AppManager --close <ID> "<what you ran and what it showed>"`.
+Their cases in TechieFlow's `tests/regression/run.sh` are `am_009` to `am_013`: each fails against the
+scripts as you had them and passes now. They are logged as `MISS-TechieFlow-20260914-05` to `-09`.
+The proofs below were run on this repository's own admin site, booted from its copy on port 5041 and
+signed in as the usage guide's admin user; the before-and-after results are in
+`tests/.artifacts/fix-parity/tf011/`.
+
+### TF-009 — fixed 2026-09-14
+
+- **What was wrong.** Only `{App}-UsageGuide.md` was looked for, the Test users heading only at `##`,
+  and only the template's numbered table (`| # | User | Password source | Role |`) was read. Your
+  guide fails all three: `AppManager-Usage-Guide.md`, `### Test users`, a `| Role | Email | Password |`
+  table.
+- **Fix.** Both spellings are tried, the heading may sit at `##` or `###`, and a table is read by its
+  header names (a user or email column and a role column); the template's numbered shape still reads
+  as before. `tf-devguide-list.py` reads its roles through the same reader.
+- **Proof.** `tf-verify-list.py AppManager all` now lists both users under "Test users (UsageGuide)":
+  `admin@appmanager.local — Admin` and `appmanager-yolo-tester@appmanager.local — Manager`; the
+  devguide list reads `roles: Admin, Manager`. TfLens's guide, in the other spelling, reads exactly as
+  before.
+- **Verify from here.** `bash .tfcore/utils/tf-verify-list.sh AppManager all`: the two users are listed.
+
+### TF-010 — fixed 2026-09-14
+
+- **What was wrong.** With several web projects, `start` took the first in sorted order.
+  `AppManagerApi` sorts before `AppManagerWeb` and has no screens.
+- **Fix.** Among several web projects the one that serves screens is booted: its own folder holds
+  `.razor` or `.cshtml` pages, or it references a project built with the Razor SDK. One such project is
+  taken and the choice printed; several, or none, stop with `NONE` naming the candidates, so nothing is
+  guessed. `--project` still decides. `start --dry-run` prints the pick and stops, for a check without
+  a boot.
+- **Proof.** On this repository, `start --port 5041` with no `--project` printed "2 web projects;
+  src/AppManagerWeb/AppManagerWeb.csproj serves screens … booting it" and booted the admin site from
+  its copy. `--dry-run --project src/AppManagerApi/AppManagerApi.csproj` still picks the API.
+- **Verify from here.** `bash .tfcore/utils/tf-verify-boot.sh start --dry-run`: `PICK head=web
+  project=src/AppManagerWeb/AppManagerWeb.csproj`.
+
+### TF-011 — fixed 2026-09-14
+
+- **What was wrong.** Both tools took only `--cookie`, and this app has no cookie to give; `tf-assets`
+  fetched each page with a bare request and read the 401 as "nothing to grade".
+- **Fix.** `tf-mockup-parity.sh` and `tf-assets.sh` take the same `--login-path`, `--user`,
+  `--password` and `--storage-state` as `tf-verify-screens.sh`. The sign-in recipe and the way a 401
+  screen is reached (TF-006) now live in one shared file, `tf-login.mjs`, used by all three. Parity
+  keeps one signed-in tab per width on the app and a separate tab for the mockups; assets opens each
+  path in a signed-in browser, takes the document it drew, and still fetches every declared asset one
+  by one, so a 404 stays visible. Both record how a 401 page was reached (`reached`).
+- **Proof.** Assets on `/dashboard` and `/reports/device-adoption`: with the tool you had, both
+  answered 401, `declared 0 graded 0`; with the fix, 11 assets declared and graded on each, none
+  failing, each page recorded as "answered HTTP 401, then drew the screen signed in". Parity on
+  `device-adoption-report`: from `app returned HTTP 401` at both widths to the screen reached and
+  probed at both widths. Two things on your side there: `docs/mockups/device-adoption-report.html`
+  carries no `data-testid` at all (19 to add are named in `anchor_deficit`), so the comparison is
+  UNGRADEABLE until it does; and the page's document scrolls to 6600 px against an 800 px viewport,
+  which the tool reports as the page escaping the shell's scroll container — yours to judge.
+- **Verify from here.** `bash .tfcore/utils/tf-assets.sh --base <url> --paths "/dashboard,/reports/device-adoption" --login-path /login --user <admin> --password <p>`:
+  `status: measured`, assets graded on both paths. `bash .tfcore/utils/tf-mockup-parity.sh --base <url> --screen device-adoption-report=/reports/device-adoption --login-path /login --user <admin> --password <p>`:
+  no `HTTP 401` error, `reached` on both widths.
+
+### TF-012 — fixed 2026-09-14
+
+- **What was wrong.** Any visible password field read as "this is the sign-in page".
+- **Fix.** The page is signed out when it sits on `--login-path`, or when it draws a sign-in form: a
+  password field with a button beside it that says sign in or log in, or whose test id does. A
+  password field with a "Create" button is a form, and the screen is graded.
+- **Proof.** `/users/create`, signed in as the admin user: with the tool you had, render UNREACHABLE at
+  1280 and 390; with the fix, render OK and visual OK at both, `reached: answered HTTP 401, then drew
+  the screen signed in`. A page that draws the sign-in form at a screen's own address still reads as
+  signed out (case `am_012c`).
+- **Verify from here.** `bash .tfcore/utils/tf-verify-screens.sh --base <url> --login-path /login --user <admin> --password <p> --screen user-create=/users/create`:
+  render OK.
+
+### TF-013 — fixed 2026-09-14
+
+- **What was wrong.** One command ran the whole suite; every run overwrote `playwright.json` and
+  `tests.json`, so parts could not be combined through the script.
+- **Fix.** `--shard N/M` runs Playwright's shard N of M (browser only; run the unit tests once with
+  `--no-browser`), `--spec <file>` names spec files, and each part writes its own
+  `playwright-<NofM>.json` and `tests-<NofM>.json`. `--merge <tests-a.json> <tests-b.json>…` combines
+  the parts' rows (FAIL wins, PASS over NOT-TESTED, counts add, test names kept) and the browser and
+  unit totals into one `tests.json`, with `merged_from` naming the parts. `PW_FILES` is no longer
+  needed.
+- **Proof.** A merge of two hand-written parts: a row PASS in one and FAIL in the other reads FAIL with
+  both tests and the failure's reason; a row NOT-TESTED in one and PASS in the other reads PASS; the
+  unit row and totals carry over. `--shard 2/4` writes `tests-2of4.json`; `--shard 2` is refused with
+  the shape named. Shard 1/30 of this repository's own suite ran through the new runner against the
+  booted admin site: 11 of 11 tests passed, one row mapped, written to
+  `tests/.artifacts/fix-parity/tf011/tests-1of30.json` beside its own `playwright-1of30.json`.
+- **Verify from here.** `bash .tfcore/utils/tf-verify-tests.sh --base <url> --shard 1/4`, then
+  `2/4` … `4/4`, `--no-browser` once for the unit tests, then
+  `bash .tfcore/utils/tf-verify-tests.sh --merge tests/.artifacts/verify/tests-*.json`: one
+  `tests.json` covering them all.
 
 TF-007 and TF-008 are fixed in the framework on 2026-09-14 and deployed to this repository. Nothing is
 blocked. Re-check each with its "Verify from here" line and close it as before. Their cases in

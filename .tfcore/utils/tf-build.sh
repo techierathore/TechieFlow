@@ -8,6 +8,7 @@
 #   bash .tfcore/utils/tf-build.sh run   <project>  [-- <extra dotnet args>]
 #   bash .tfcore/utils/tf-build.sh publish <project> -- -o <dir> [-c <config>]   # tf-verify-boot.sh's
 #   bash .tfcore/utils/tf-build.sh probe                 # print the platform and the rungs, run nothing
+#   bash .tfcore/utils/tf-build.sh --print [build|test]  # print the command this repository uses, run nothing
 #
 # <target> is a .sln, .slnx or .csproj relative to the current folder (default: the one
 # solution or project found here). Output goes to tests/.artifacts/build/<UTC time>.log.
@@ -40,12 +41,14 @@
 # dll older than its own source (TF-043). A lock whose process has gone is taken over.
 set -u
 
-MODE="build"; TARGET=""; EXTRA=()
+MODE="build"; TARGET=""; EXTRA=(); PRINT=0
+[[ "${1:-}" == "--print" ]] && { PRINT=1; shift; }   # print the resolved command, run nothing (TfLens TF-049)
 case "${1:-}" in
   build|test|run|publish|probe) MODE="$1"; shift ;;
 esac
 while [[ $# -gt 0 ]]; do
   if [[ "$1" == "--" ]]; then shift; EXTRA=("$@"); break; fi
+  if [[ "$1" == "--print" ]]; then PRINT=1; shift; continue; fi
   TARGET="$1"; shift
 done
 
@@ -109,36 +112,15 @@ args=("$verb")
 [[ -n "$TARGET" ]] && args+=("$TARGET")
 [[ "$MODE" == "run" ]] && args=("run" "--project" "$TARGET")
 args+=("${EXTRA[@]}")
+[[ $PRINT -eq 1 ]] && { echo "dotnet ${args[*]}"; exit 0; }
 
 mkdir -p tests/.artifacts/build
 LOG="tests/.artifacts/build/$(date -u +%Y%m%dT%H%M%SZ)-$MODE-$$.log"   # two builds in one second never share a log
 
-# ---- one build at a time (TF-043) -------------------------------------------------------
-# A directory, because mkdir is atomic on every drive this runs on, the Windows one included.
-# `run` does not take it: it holds the terminal for as long as the app runs.
-LOCK="tests/.artifacts/build/.lock"
-release_lock() { [[ "$(cut -d' ' -f1 "$LOCK/owner" 2>/dev/null)" == "$$" ]] && rm -rf "$LOCK"; }
-take_lock() {
-  local waited=0 max="${TF_BUILD_LOCK_MAX:-1800}" said=0 owner opid ohost
-  while ! mkdir "$LOCK" 2>/dev/null; do
-    owner="$(cat "$LOCK/owner" 2>/dev/null)"; opid="$(cut -d' ' -f1 <<<"$owner")"; ohost="$(cut -d' ' -f2 <<<"$owner")"
-    if [[ -z "$owner" ]]; then
-      # taken a moment ago and not yet named, or its taker died in that moment
-      [[ -n "$(find "$LOCK" -maxdepth 0 -mmin +1 2>/dev/null)" ]] && { rm -rf "$LOCK"; continue; }
-    elif [[ "$ohost" == "$(hostname)" ]] && ! kill -0 "$opid" 2>/dev/null; then
-      rm -rf "$LOCK"; continue                     # its build died without letting go
-    fi
-    [[ $said -eq 0 ]] && { echo "wait  another build is running in this repository (${owner:-starting}); this one starts when it finishes" >&2; said=1; }
-    if [[ $waited -ge $max ]]; then
-      echo "NOT-RUN another build held this repository for $((max / 60)) minutes ($owner). If nothing is building, remove $LOCK and build again. Not a code error"
-      exit 2
-    fi
-    sleep 3; waited=$((waited + 3))
-  done
-  echo "$$ $(hostname) $MODE $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$LOCK/owner"
-  trap release_lock EXIT
-}
-[[ "$MODE" != "run" ]] && take_lock
+# ---- one build or browser check at a time (TF-043, TF-048): tf-lock.sh. `run` does not take it.
+source "$(dirname "${BASH_SOURCE[0]}")/tf-lock.sh"
+LOCK="$TF_LOCK"
+[[ "$MODE" != "run" ]] && tf_take_lock "$MODE"
 LOCKED='error MSB302[17]|being used by another process|Access to the path .* is denied'
 # which side of a WSL machine a rung builds on, and the project folders whose obj/ it writes
 side_of() { case "$1" in winrun|cmd.exe|powershell.exe) echo windows ;; *) echo wsl ;; esac; }
