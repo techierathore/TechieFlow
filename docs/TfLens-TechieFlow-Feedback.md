@@ -4,7 +4,7 @@
 |---|---|
 | App | TfLens |
 | Upstream | TechieFlow |
-| Updated | 2026-09-13 |
+| Updated | 2026-09-14 |
 
 Defects found in the **TechieFlow framework itself** (`.tfcore/`) while building TfLens. That directory
 is owned and maintained by the TechieFlow team and is gitignored here — `update-framework.sh` overwrites
@@ -18,7 +18,7 @@ Workaround / Suggested fix). One file per upstream owner; this one is TechieFlow
 
 ## Summary
 
-**Nothing is blocked.** 45 entries: none open, 15 fixed upstream and waiting to be re-checked here (TF-018, TF-020, TF-021, TF-025 to TF-028, TF-030, TF-033 to TF-035, TF-042 to TF-045), 30 closed. TF-013 to TF-017, TF-019, TF-022 to TF-024, TF-029, TF-031, TF-032 and TF-036 were re-checked and closed here on 2026-09-11, and TF-037 to TF-041 on 2026-09-12 (the account of that run is in `docs/TfLens-Feedback-Recheck-2026-09-12.md`). Every problem TfLens filed up to TF-045 is fixed in the framework: TF-013 to TF-022 on 2026-09-09 (the reply that day left out TF-013 to TF-017, which is why they showed open here), TF-023 to TF-036 on 2026-09-11, TF-037 to TF-041 on 2026-09-12 and TF-042 to TF-045 on 2026-09-13. A fix counts as done only once it has been re-checked here: run each entry's "Verify from here" step in its Resolution status block, then close it with `bash .tfcore/utils/tf-feedback.sh TfLens --close <ID> "<what you ran and what it showed>"`. `bash .tfcore/utils/tf-feedback.sh TfLens` prints the state of every entry. Never describe a fixed entry as an open problem.
+**Nothing is blocked.** 47 entries: none open, 15 fixed upstream and waiting to be re-checked here (TF-018, TF-020, TF-021, TF-025 to TF-028, TF-030, TF-033 to TF-035, TF-042 to TF-044, TF-047), 32 closed. TF-045 and TF-046 were re-checked and closed here on 2026-09-14, and TF-047, filed the same day, is fixed in the framework the same day. TF-013 to TF-017, TF-019, TF-022 to TF-024, TF-029, TF-031, TF-032 and TF-036 were re-checked and closed here on 2026-09-11, and TF-037 to TF-041 on 2026-09-12 (the account is in `docs/TfLens-Feedback-Recheck-2026-09-12.md`). Every problem TfLens filed up to TF-047 is fixed in the framework: TF-013 to TF-022 on 2026-09-09 (the reply that day left out TF-013 to TF-017, which is why they showed open here), TF-023 to TF-036 on 2026-09-11, TF-037 to TF-041 on 2026-09-12, TF-042 to TF-045 on 2026-09-13 and TF-046 and TF-047 on 2026-09-14. A fix counts as done only once it has been re-checked here: run each entry's "Verify from here" step in its Resolution status block, then close it with `bash .tfcore/utils/tf-feedback.sh TfLens --close <ID> "<what you ran and what it showed>"`. `bash .tfcore/utils/tf-feedback.sh TfLens` prints the state of every entry. Never describe a fixed entry as an open problem.
 
 #### Detail
 
@@ -141,6 +141,34 @@ that grew a legal move as a result.
 > and a message naming the real reason. **The dated evidence is kept and `TF-004` stays closed here**;
 > `PROJECT-STATUS.md` is owned elsewhere and was not edited. Its line 53 also still counts five
 > entries, where the collision fix above makes six.
+
+---
+
+## Resolution status (TechieFlow team, 2026-09-14, second reply)
+
+**TF-047 is fixed in the framework and deployed to this repository.** Nothing is blocked. Run the
+row's "Verify from here" step, then close the entry with
+`bash .tfcore/utils/tf-feedback.sh TfLens --close TF-047 "<what you ran and what it showed>"`.
+TechieFlow never closes an entry for you. The fix carries case `tf_047` in `tests/regression/run.sh`,
+which fails against the script you had and passes now; it is logged as `MISS-TechieFlow-20260914-04`.
+
+| ID | Fix | Verify from here |
+|----|-----|------------------|
+| **TF-047** | Three changes, one per finding kind. **(1)** A badge or border is accepted one element away. When one side draws the fill or the ring and the other does not, the plain side is read at the box around it, when that box is the same row and its other children carry no text (an icon, or the box a library wraps one in), or at its only child. So the active link inside its `<li>` and the ring on the `InputGroup` around the filter input count as the same treatment. Two plain elements still agree as before, and a dashed rule against a solid one is still reported. **(2)** An `icon` finding is dropped when the parent or the grandparent is paired and holds the same number of icons on both sides, up to four: the icon is under the same header, in another child. A header that really gains or loses an icon is still reported. **(3)** `wrap` is graded only when the two texts match with digits folded; on different text it is not applicable and not counted as graded. The same text in a narrower box is still reported. Proved on this repository's app, signed in as the demo user from `tests/verify/_helpers.ts`, on `/misses`, `/effort` and `/prices` at 1280 and 390, old and new script run together on the same data: your 15 findings became 0 and all three screens PASS; the comparison counts (242, 248, 222) are unchanged, and `wrap` on `/misses` is graded on 18 pairs instead of 26. | `bash .tfcore/utils/tf-mockup-parity.sh --base <url> --screen misses=/misses --screen effort=/effort --screen prices=/prices --cookie …`: exit 0, three PASS verdicts, `findings_n` 0. The before-and-after JSON from our run is in `tests/.artifacts/fix-parity/tf047/` (`old-2.json`, `new-2.json`). |
+
+---
+
+## Resolution status (TechieFlow team, 2026-09-14)
+
+**TF-046 is fixed in the framework and deployed to this repository.** Nothing is blocked. Run the
+row's "Verify from here" step, then close the entry with
+`bash .tfcore/utils/tf-feedback.sh TfLens --close TF-046 "<what you ran and what it showed>"`.
+TechieFlow never closes an entry for you. The fix carries case `tf_046` in `tests/regression/run.sh`,
+which fails against the script you had and passes now; it is logged as `MISS-TechieFlow-20260914-03`.
+
+| ID | Fix | Verify from here |
+|----|-----|------------------|
+| **TF-046** | The page probe numbers every icon on the page and records which icons each element holds. An `icon` finding is dropped when every icon it holds is already reported on a deeper element, so one icon gives one finding, on the innermost element that carries it. A container that holds an extra icon of its own is still reported, and the same rule applies the other way round, to an icon the mockup draws and the app lost. Proved on this repository's app, signed in, on `/misses`, `/effort` and `/prices` at 1280 and 390, with the old and the new script run against the same data at the same time: 26 `icon` findings became 12, each of the 14 removed was an element containing one that was kept, and the 16 other findings and the three FAIL verdicts did not change. | `bash .tfcore/utils/tf-mockup-parity.sh --base <url> --screen misses=/misses --screen effort=/effort --screen prices=/prices --cookie …`: 12 `icon` findings; none keyed `misses-page > div[0]`, `effort-page > div[0]` or `effort-routing`; `misses-period` and `effort-period` reported once per width. |
 
 ---
 
@@ -3022,6 +3050,8 @@ app with no sign-in page or on a server-rendered app that hydrates nothing. `--c
 
 ## TF-045 — `tf-mockup-parity` addresses elements by tag-and-index, so a component library that adds one wrapper makes every anchored child "missing" — and buries the real findings
 
+> ✅ **Closed 2026-09-14** — re-checked here: Re-checked in *verify ui TfLens on 2026-09-14: tf-mockup-parity over /misses, /effort and /prices at 1280 and 390 with a signed-in session produced 0 findings of the missing class (the gate compared that clause 10, 10 and 2 times) and re-keyed 9, 1 and 1 relocated elements, where the 2026-09-13 runs failed the same 13 rows on tag-and-index missing findings. The 42 findings left are icon, wrap, badge and stroke findings on elements both sides carry, so the wrapper no longer makes anchored children read as missing.
+
 - **Severity:** major
 - **Blocks:** no. The rows are written `Needs re-verify` carrying the findings, never falsely
   `Verified`, and the run finishes. It is major because the gate reports **correct screens as broken**,
@@ -3094,3 +3124,55 @@ app with no sign-in page or on a server-rendered app that hydrates nothing. `--c
 (TF-008). Findings keyed on an element the tool did locate — the `wrap`, `clip` and `stroke` classes
 compare measurements on a found element and are trustworthy once you have checked the element is the
 one you meant. And `--screen`/`--cookie`/`--widths`, all of which work.
+
+---
+
+## TF-046 — `tf-mockup-parity` reports one extra icon once for every anchored ancestor that contains it
+
+> ✅ **Closed 2026-09-14** — re-checked here: Re-checked 2026-09-14 11:4x against the installed .tfcore/utils/tf-mockup-parity.mjs (byte-identical to tests/.artifacts/verify/tf046/parity-after.mjs). Booted the published app on http://localhost:5014, signed in as the demo user, ran tf-mockup-parity.sh --screen misses=/misses --screen effort=/effort --screen prices=/prices --cookie <session>: 28 findings, 12 of them icon (was 26 of 42 on the 09:45 run), misses-period and effort-period each once per width at 1280 and 390, and no icon finding keyed on an ancestor of another; badge 5, wrap 9 and stroke 2 unchanged. Output tests/.artifacts/verify/parity.json.
+
+- **Severity:** minor
+- **Blocks:** no. No verdict changes: every row it touched also fails on `wrap` or `badge` findings,
+  and a row is never written `Verified` on the strength of it.
+- **Repro:** `bash .tfcore/utils/tf-mockup-parity.sh --base <url> --screen misses=/misses --cookie …`
+  on a screen where the app draws one icon the mockup does not — here the chevron of a `Select`, where
+  the mockup draws a native `<select>`.
+- **Expected:** one `icon` finding, keyed on the innermost element that carries the icon.
+- **Actual:** one finding per containing element: `misses-page > div[0]`, `misses-page > div[0] > div[1]`
+  and `misses-period`, all *"app carries an icon the mockup does not"*, all for the same chevron. Across
+  `/misses`, `/effort` and `/prices` at 1280 and 390, **14 of the 26 `icon` findings** are an ancestor
+  repeating a finding already made on a descendant.
+- **Encountered in:** TfLens `*verify ui`, 2026-09-14, `tests/.artifacts/verify/parity.json`.
+- **Workaround:** none taken. The duplicates are read past.
+- **Suggested fix:** before emitting an `icon` finding on an element, drop it when a descendant of that
+  element already carries the same icon finding at the same width.
+
+**What is NOT affected.** The `missing` class (TF-045's fix holds: 0 such findings), `wrap`, `badge`,
+`stroke`, the verdict script, and the 12 `icon` findings that are not repeats.
+
+---
+
+## TF-047 — `tf-mockup-parity` grades a treatment one element away from where the app draws it, and grades wrapping on different text
+
+- **Severity:** major
+- **Blocks:** no. Rows stay `Needs re-verify`. Major because, with the mockups updated on 2026-09-14,
+  these are the **only** findings left on 13 TfLens rows.
+- **Repro:** `tf-mockup-parity.sh --base <url> --screen misses=/misses --screen effort=/effort --screen prices=/prices --cookie …`
+- **Expected:** a correct screen gives no finding.
+- **Actual:** 15 findings, each checked in the browser against both sides:
+  1. **Sidebar, 3.** "badge on `nav > a[4]`, app plain": the app's active `<a>` has radius 8px and the accent
+     background, as the mockup's does; the tool paired it with the `<li>` around it.
+  2. **Filter, 4** (`badge` + `stroke` on `prices-filter-openrouter`): the app draws the 1px border and 8px
+     radius on the `InputGroup` around the anchored input.
+  3. **Header icons, 4** (`miss-detail > div[0] > div[0] > div[1]`, `prices-provider-openrouter > …`): each
+     side has exactly one icon in that header; one extra wrapper pairs a description with a toolbar.
+  4. **Wrap, 4** (`miss-what`, `miss-taint-count`, `miss-sort-predates`): the wrap clause
+     (`tf-mockup-parity.mjs:436`) compares row counts without checking the texts match; each pair differs.
+- **Encountered in:** TfLens `*fix-issues`, 2026-09-14, `tests/.artifacts/fix-parity/`.
+- **Workaround:** none; copying library wrappers into mockups would defeat the gate.
+- **Suggested fix:** for `badge`/`stroke`, also accept the treatment on the anchor's nearest single-child
+  ancestor or descendant; pair icon containers by content, as TF-045 did for badges; skip `wrap` when
+  the digit-folded texts differ.
+
+**What is NOT affected.** The `missing` class, `clip`, `color`, `token`, the verdict script, and every
+finding on text that matches.

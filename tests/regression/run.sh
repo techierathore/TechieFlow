@@ -1986,6 +1986,139 @@ for x in s.get('findings',[]): print(x['key'].split(' > ')[0], x['class'], x['de
   fi
 }
 
+# --- TF-046: one extra icon, reported at every element that contains it ----------------------
+# The icon clause asks "is there an icon anywhere inside?", so the chevron of a Select the mockup draws
+# as a native <select> was reported on the anchor and on each wrapper above it: 14 of 26 icon findings
+# on TfLens /misses, /effort and /prices (2026-09-14) were an ancestor repeating a descendant.
+tf_046() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip tf_046 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/tf046"; mkdir -p "$d/docs/mockups"
+  local ico='<svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 4l4 4 4-4"/></svg>'
+  local css='body{margin:0;font-family:system-ui;width:900px} div{padding:4px} select{width:160px}'
+  # app: a chevron inside fx-period only; fx-card has one icon of its own beside a nested one;
+  # fx-legend lost the icon the mockup draws two levels down
+  { printf '<!doctype html><html><head><meta charset="utf-8"><style>%s</style></head><body>\n' "$css"
+    printf '<div data-testid="fx-page"><div><h1>Misses</h1><div><div data-testid="fx-period"><select><option>All history</option></select></div></div></div></div>\n'
+    printf '<div data-testid="fx-card"><div><span>Every miss</span><div><span>41 records</span></div></div></div>\n'
+    printf '<div data-testid="fx-legend"><div><div>%s<span>key</span></div></div></div>\n' "$ico"
+    printf '</body></html>\n'
+  } > "$d/docs/mockups/misses.html"
+  { printf '<!doctype html><html><head><meta charset="utf-8"><style>%s</style></head><body>\n' "$css"
+    printf '<div data-testid="fx-page"><div><h1>Misses</h1><div><div data-testid="fx-period"><span>All history</span>%s</div></div></div></div>\n' "$ico"
+    printf '<div data-testid="fx-card"><div>%s<span>Every miss</span><div>%s<span>133 records</span></div></div></div>\n' "$ico" "$ico"
+    printf '<div data-testid="fx-legend"><div><div><span>key</span></div></div></div>\n'
+    printf '</body></html>\n'
+  } > "$d/misses.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
+  sleep 1
+  ( cd "$d" && timeout 180 node parity.mjs --base "http://127.0.0.1:$port" --screen misses=/misses.html \
+      --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+  local f; f="$(python3 -c "import json,sys
+try: s=json.load(open(sys.argv[1]))['screens'][0]
+except Exception: print('no-output'); sys.exit()
+print('\n'.join(sorted(x['key'] for x in s.get('findings',[]) if x['class']=='icon')))" "$d/parity.json")"
+  has() { grep -qFx "$1" <<<"$f"; }
+  local seen; seen="$(tr '\n' ',' <<<"$f")"
+  if has "fx-period" && ! grep -q '^fx-page' <<<"$f"; then
+    ok tf_046a "an extra icon is reported once, on the innermost element that carries it"
+  else
+    bad tf_046a "an extra icon is still reported at the elements that contain it"; note "icon findings: $seen"
+  fi
+  if has "fx-card > div[0]" && has "fx-card > div[0] > div[0]" && ! has "fx-card"; then
+    ok tf_046b "a container holding a second extra icon of its own is still reported"
+  else
+    bad tf_046b "a container's own extra icon was dropped, or its anchor still repeats it"; note "icon findings: $seen"
+  fi
+  if has "fx-legend > div[0] > div[0]" && ! has "fx-legend" && ! has "fx-legend > div[0]"; then
+    ok tf_046c "an icon the app lost is reported once, on the innermost element the mockup draws it in"
+  else
+    bad tf_046c "an icon the app lost is still reported at every element above it"; note "icon findings: $f"
+  fi
+}
+
+# --- TF-047: the treatment one element away, the icon in another child, wrap on other text -----
+# Keys pair by position. TfLens's library draws the active link's fill on the <a> inside a <li>, and
+# the filter's ring on the InputGroup around the input; its card header has one more wrapper, so the
+# mockup's description paired with the app's toolbar and its icon read as extra; and `wrap` compared
+# row counts of texts that read differently. 15 findings on 13 correct rows (2026-09-14).
+tf_047() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip tf_047 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/tf047"; mkdir -p "$d/docs/mockups"
+  local ico='<svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 4l4 4 4-4"/></svg>'
+  local css='body{margin:0;font:14px/20px system-ui;width:1000px;background:#000;color:#eee}
+.nav a{display:flex;height:36px;align-items:center;gap:6px;padding:0 10px;border-radius:8px;color:#eee;text-decoration:none} .nav a.on{background:#1f1f1f}
+.nav ul{list-style:none;margin:0;padding:0} .nav li{margin:0;padding:0}
+.inwrap{position:relative;width:280px} .inwrap svg{position:absolute;left:10px;top:12px}
+.input{box-sizing:border-box;width:280px;height:36px;border:1px solid #888;border-radius:8px;padding:0 12px 0 36px;background:#0a0a0a;color:#eee}
+.group{display:flex;align-items:center;box-sizing:border-box;width:280px;height:36px;border:1px solid #888;border-radius:8px;background:#0a0a0a} .group svg{margin-left:10px}
+.group input{box-sizing:border-box;border:0;background:transparent;height:36px;flex:1;padding:8px 12px 8px 4px;color:#eee}
+.h{display:flex;justify-content:space-between;padding:8px} .h .h{padding:0;flex:1}
+.note{width:300px;padding:4px;margin:8px 0} .narrow{width:200px}'
+  # mockup: the active link is the badge; the filter input carries the ring; the one icon in the
+  # card header sits beside the description; notes with sample text
+  { printf '<!doctype html><html><head><meta charset="utf-8"><style>%s</style></head><body>\n' "$css"
+    printf '<div data-testid="fx-sidebar"><nav class="nav"><a class="on" href="#">%s<span>Misses</span></a><a href="#">%s<span>Effort</span></a></nav></div>\n' "$ico" "$ico"
+    printf '<div data-testid="fx-card"><div class="h"><div><div>Every miss</div><div>41 records · each row carries one sentence</div></div><div><div class="inwrap">%s<input class="input" placeholder="Filter"></div></div></div></div>\n' "$ico"
+    printf '<div data-testid="fx-plain"><div class="h"><div><div>Phase effort</div><div>22 phases</div></div><div><button>Export</button></div></div></div>\n'
+    printf '<div class="inwrap">%s<input class="input" data-testid="fx-filter" placeholder="Filter models"></div>\n' "$ico"
+    printf '<p class="note" data-testid="fx-note">The coverage page counted an imported source as stale from its newest record.</p>\n'
+    printf '<p class="note" data-testid="fx-same">5 of 41 misses excluded from every per-origin figure because their origin is not linked.</p>\n'
+    printf '</body></html>\n'
+  } > "$d/docs/mockups/misses.html"
+  # app: the link sits in a <li> with its own test id, the ring is on the group around the input,
+  # the header has one more wrapper with the icon in the toolbar; fx-plain really adds an icon;
+  # fx-note reads differently; fx-same reads the same in a narrower box
+  { printf '<!doctype html><html><head><meta charset="utf-8"><style>%s</style></head><body>\n' "$css"
+    printf '<div data-testid="fx-sidebar"><div class="nav"><ul><li><a class="on" data-testid="nav-misses" href="#">%s<span>Misses</span></a></li><li><a data-testid="nav-effort" href="#">%s<span>Effort</span></a></li></ul></div></div>\n' "$ico" "$ico"
+    printf '<div data-testid="fx-card"><div class="h"><div class="h"><div><div>Every miss</div><div>133 records · each row carries one sentence</div></div><div><div class="group">%s<input placeholder="Filter"></div></div></div></div></div>\n' "$ico"
+    printf '<div data-testid="fx-plain"><div class="h"><div class="h"><div><div>Phase effort</div><div>80 phases</div></div><div><button>%s Export</button></div></div></div></div>\n' "$ico"
+    printf '<div class="group">%s<input data-testid="fx-filter" placeholder="Filter models"></div>\n' "$ico"
+    printf '<p class="note" data-testid="fx-note">The mockups were drawn without the sidebar rail, so every screen was wider than the app draws it and the header wrapped to two rows.</p>\n'
+    printf '<p class="note narrow" data-testid="fx-same">41 of 133 misses excluded from every per-origin figure because their origin is not linked.</p>\n'
+    printf '</body></html>\n'
+  } > "$d/misses.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
+  sleep 1
+  ( cd "$d" && timeout 180 node parity.mjs --base "http://127.0.0.1:$port" --screen misses=/misses.html \
+      --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+  local f; f="$(python3 -c "import json,sys
+try: s=json.load(open(sys.argv[1]))['screens'][0]
+except Exception: print('no-output'); sys.exit()
+for x in s.get('findings',[]): print(x['class'], x['key'])" "$d/parity.json")"
+  local seen; seen="$(tr '\n' ',' <<<"$f")"
+  if [[ "$f" != "no-output" ]] && ! grep -qE '^badge fx-sidebar' <<<"$f" && ! grep -qE '^(badge|stroke) fx-filter$' <<<"$f"; then
+    ok tf_047a "a fill or ring drawn on the box around the control, or on the one inside it, is the same treatment"
+  else
+    bad tf_047a "a treatment one element away is still reported as missing"; note "findings: $seen"
+  fi
+  if ! grep -qE '^icon fx-card' <<<"$f" && grep -qFx 'icon fx-plain > div[0] > div[0] > div[1]' <<<"$f"; then
+    ok tf_047b "an icon under the same header, in another child, is not reported; a header that really gains one still is"
+  else
+    bad tf_047b "an icon moved by one wrapper is still reported, or a real extra icon was dropped"; note "findings: $seen"
+  fi
+  if ! grep -qFx 'wrap fx-note' <<<"$f" && grep -qFx 'wrap fx-same' <<<"$f"; then
+    ok tf_047c "wrap is graded only on text that reads the same; the same text in a narrower box is still reported"
+  else
+    bad tf_047c "wrap still compares row counts of different texts, or lost the finding on the same text"; note "findings: $seen"
+  fi
+}
+
 # --- TF-036: two wrapped sentences that share a line ----------------------------------------
 # An inline element's bounding box is the union of its line fragments, so two sentences sharing a
 # line "overlapped" across a tile's width on TfLens /effort (2026-09-11) with 0 px² in common.
@@ -2371,7 +2504,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

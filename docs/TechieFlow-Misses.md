@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 180 logged: 52 open, 127 fixed, 1 will not fix |
+| Count | 182 logged: 52 open, 129 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
 | Updated | 2026-09-14 |
 
@@ -66,10 +66,12 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (127)
+## Fixed (129)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260914-04 | 2026-09-14 by owner | 2026-09-14 by fix-issues | the check was too weak | tf-mockup-parity graded a badge or border on the element the mockup styles when the app draws it one element away (the active link inside its li, the ring on the InputGroup around the input), paired icon containers by position across one extra wrapper so a moved icon read as extra, and graded wrap on texts that read differently: 15 findings on 13 correct TfLens rows (TfLens TF-047) |
+| MISS-TechieFlow-20260914-03 | 2026-09-14 by owner | 2026-09-14 by fix-issues | the check was too weak | tf-mockup-parity reported one extra icon at the element carrying it and again at every element above it, so 14 of the 26 icon findings on TfLens /misses, /effort and /prices were repeats of one chevron (TfLens TF-046) |
 | MISS-TechieFlow-20260914-02 | 2026-09-14 by owner | 2026-09-14 by log-miss | the check was too weak | tf-build-list labelled every UI cluster trblazeui, so AppManager, which does not use TrBlazeUI, had its UI rows addressed to the trblazeui sub-agent; the label now comes from a TrBlazeUI reference in the project's own files (AppManager TF-008) |
 | MISS-TechieFlow-20260914-01 | 2026-09-14 by owner | 2026-09-14 by log-miss | the check was too weak | tf-verify-tests ran no unit test in AppManager, whose root holds only AppManager.slnx and whose test project sits at tests/unit/AppManager.UnitTests, because it looked for a .sln and a .slnx in one ls and for test projects only one folder under tests (AppManager TF-007) |
 | MISS-TechieFlow-20260913-11 | 2026-09-13 by owner | 2026-09-13 by log-miss | the check was too weak | tf-verify-screens graded a screen unreachable when its page answered 401, although AppManager's Blazor app then drew it signed in, so no signed-in screen of that app could be graded (AppManager TF-006) |

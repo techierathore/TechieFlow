@@ -171,6 +171,12 @@ const PROBE = (wanted = []) => {
   // how many icons the element carries at any depth: a component library that wraps an icon
   // one element deeper than the mockup moves it to another path key without removing it (TF-027)
   const iconCount = (el) => [...el.querySelectorAll(ICON)].filter((i) => !i.parentElement || !i.parentElement.closest('svg')).length;
+  // Every icon on the page by number, so the node side can tell that an anchor and the wrappers
+  // above it hold the same icon as the element it sits in: the icon clause asks "any icon inside?",
+  // and one Select chevron was reported at four levels of TfLens /misses (TF-046).
+  const iconNo = new Map([...document.querySelectorAll(ICON)].map((i, n) => [i, n]));
+  const iconIds = (el) => [...el.querySelectorAll(ICON)].map((i) => iconNo.get(i));
+  const depthOf = (el) => { let n = 0; for (let p = el.parentElement; p; p = p.parentElement) n++; return n; };
 
   // "Chrome" = a badge / pill / chip: a small element with its own fill or ring and
   // a rounded edge. The mockup drawing one and the app rendering bare text is the
@@ -184,6 +190,26 @@ const PROBE = (wanted = []) => {
     const filled = !!RGB(cs.backgroundColor);
     const ringed = drawnBorder(cs);      // a transparent ring is not a ring (TF-038)
     return { badge: (filled || ringed) && radius >= 6, filled, ringed, radius: Math.round(radius) };
+  };
+
+  // --- TF-047: the treatment one element away. A component library draws the ring and the radius on
+  // the box AROUND the control the mockup styles (an InputGroup around a filter input, a nav <li>
+  // around the active link), and a mockup does the reverse. Keys pair by position, so the badge and
+  // stroke clauses compared the control with the plain box beside the one that carries the treatment:
+  // "badge on nav > a[4], app plain" on TfLens's sidebar, on every screen. The element's neighbours
+  // one step away are kept here — the parent when it is the same row (same height, its other
+  // children carrying no text: an icon, or the box a library wraps one in) and the only child when
+  // it is — so a clause can accept the treatment there.
+  const nearOf = (el) => {
+    const out = [];
+    const h = el.getBoundingClientRect().height;
+    const sameRow = (x) => Math.abs(x.getBoundingClientRect().height - h) <= 8;
+    const p = el.parentElement;
+    if (p && p !== document.body && sameRow(p)
+        && [...p.children].every((s) => s === el || isHidden(s) || !(s.textContent || '').trim())) out.push(p);
+    const kids = [...el.children].filter((c) => !isHidden(c));
+    if (kids.length === 1 && sameRow(kids[0])) out.push(kids[0]);
+    return out;
   };
 
   // Only text that is genuinely a single inline run can be graded for wrapping or
@@ -293,13 +319,21 @@ const PROBE = (wanted = []) => {
   const sigOf = (el) => {
     const r = el.getBoundingClientRect();
     const chrome = chromeOn(el);
+    const near = nearOf(el);
     return {
+      // the badge and the visible border one element away, for the clauses to accept (TF-047)
+      near: {
+        badge: near.some((n) => chromeOn(n)?.badge === true),
+        stroke: near.map(strokeOf).find((s) => s.visible) || null,
+      },
       tag: el.tagName.toLowerCase(),
       text: (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 60),
       badge: chrome ? chrome.badge : null,
       full: (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 400),
       icon: hasIcon(el),
       icons: iconCount(el),
+      icon_ids: iconIds(el),   // which icons, so a finding repeated at a container can be told apart (TF-046)
+      depth: depthOf(el),
       // badges drawn anywhere inside, so a badge one wrapper deeper still counts under its parent (TF-045)
       badges: [...el.querySelectorAll('*')].filter((c) => !isHidden(c) && chromeOn(c)?.badge).length,
       color: semanticColor(el),
@@ -403,11 +437,18 @@ const PROBE = (wanted = []) => {
 // A clause returns a finding, `null` (not applicable — do NOT count it as graded),
 // or `false` (applicable and agreeing). The three are kept distinct because
 // conflating "agreed" with "not asked" is precisely how TF-011 happened.
+// The same folding the page-side probe uses: spacing and digits (TF-045).
+const norm = (t) => (t || '').replace(/\d[\d,.]*/g, '#').replace(/\s+/g, ' ').trim();
+
 const CLAUSES = {
-  badge: (m, a) => (m.badge === null || a.badge === null ? null
-    : m.badge !== a.badge
-      ? `mockup renders this as a ${m.badge ? 'badge/pill' : 'plain element'}, app renders it as a ${a.badge ? 'badge/pill' : 'plain element'}`
-      : false),
+  badge: (m, a) => {
+    if (m.badge === null || a.badge === null) return null;
+    if (m.badge === a.badge) return false;
+    // TF-047: the side without the treatment carries it one element away — the same control, drawn
+    // by a library on the box around it or the box inside it. That is agreement, not drift.
+    if ((m.badge ? a : m).near?.badge) return false;
+    return `mockup renders this as a ${m.badge ? 'badge/pill' : 'plain element'}, app renders it as a ${a.badge ? 'badge/pill' : 'plain element'}`;
+  },
   icon: (m, a) => (m.icon === a.icon ? false
     : m.icon && !a.icon ? 'mockup carries an icon here; the app does not'
       : 'app carries an icon the mockup does not'),
@@ -416,16 +457,26 @@ const CLAUSES = {
   // TF-009
   stroke: (m, a) => {
     if (!m.stroke || !a.stroke) return null;
-    if (m.stroke.style !== a.stroke.style) {
-      return `border style differs — mockup ${m.stroke.style}, app ${a.stroke.style}`
-        + (m.stroke.style === 'dashed' ? ' (a dashed rule is how a mockup says "estimate / provisional"; losing it makes an estimate look measured)' : '');
+    let ms = m.stroke, as = a.stroke;
+    // TF-047: a side that draws no border of its own is read at the border one element away, and
+    // only when the sides disagree — two plain elements inside a ringed box still agree as before.
+    if (ms.style !== as.style || ms.visible !== as.visible) {
+      if (!ms.visible && m.near?.stroke) ms = m.near.stroke;
+      if (!as.visible && a.near?.stroke) as = a.near.stroke;
     }
-    if (m.stroke.visible !== a.stroke.visible) {
-      return `border presence differs — mockup ${m.stroke.visible ? 'has a visible rule' : 'has none'}, app ${a.stroke.visible ? 'has one' : 'has none'}`;
+    if (ms.style !== as.style) {
+      return `border style differs — mockup ${ms.style}, app ${as.style}`
+        + (ms.style === 'dashed' ? ' (a dashed rule is how a mockup says "estimate / provisional"; losing it makes an estimate look measured)' : '');
+    }
+    if (ms.visible !== as.visible) {
+      return `border presence differs — mockup ${ms.visible ? 'has a visible rule' : 'has none'}, app ${as.visible ? 'has one' : 'has none'}`;
     }
     return false;
   },
-  wrap: (m, a) => (m.wrap === null || a.wrap === null ? null
+  // TF-047: a row count says something only about the same text. Live data that reads differently
+  // from the mockup's sample wraps differently for that reason alone, so the clause is not applicable
+  // (null, never counted as graded) unless the digit-folded texts match.
+  wrap: (m, a) => (m.wrap === null || a.wrap === null || norm(m.full) !== norm(a.full) ? null
     : a.wrap > m.wrap ? `wraps to ${a.wrap} rows where the mockup keeps it on ${m.wrap}` : false),
   clip: (m, a) => (!m.clip || !a.clip ? null
     : (a.clip.x && !m.clip.x) ? 'content is cut off horizontally; the mockup is not clipped'
@@ -442,9 +493,6 @@ const CLAUSES = {
 // as coverage is what let a screen the gate never really looked at read as clean.
 const CONTENT_CLAUSES = new Set(['badge', 'icon', 'wrap', 'token']);
 
-// The same folding the page-side probe uses: spacing and digits (TF-045).
-const norm = (t) => (t || '').replace(/\d[\d,.]*/g, '#').replace(/\s+/g, ' ').trim();
-
 function diff(mock, app, screen, width) {
   const findings = [];
   const clauseCoverage = Object.fromEntries(Object.keys(CLAUSES).map((k) => [k, 0]));
@@ -453,6 +501,27 @@ function diff(mock, app, screen, width) {
   const iconsShort = {};   // parent key -> icons the app still owes under it (TF-027)
   const badgesShort = {};  // parent key -> badges the app still owes under it (TF-045)
   const usedApp = new Set();
+  const iconSeen = [];     // icon findings with the side that holds the icons (TF-046)
+
+  // --- TF-047: the same icon in another child. Pairing is by position, so a card header that a
+  // library wraps in one more <div> pairs the mockup's description with the app's toolbar, and the
+  // toolbar's icon reads as one "the mockup does not" carry — while the header holds exactly one
+  // icon on both sides. The rule the `missing` clause has followed since TF-027, one wrapper further:
+  // an icon finding is dropped when the parent or the grandparent is paired and carries the same
+  // number of icons on both sides. Bounded to a few icons, so a coincidence across a whole page
+  // (one lost, one added) stays reported.
+  const iconMoved = (key) => {
+    let k = key;
+    for (let up = 0; up < 2; up++) {
+      if (!k.includes(' > ')) return false;
+      k = k.slice(0, k.lastIndexOf(' > '));
+      const pm = mock.index[k], pa = app.index[k];
+      if (!pm || !pa) return false;
+      const n = pm.icons ?? 0;
+      if (n > 0 && n <= 4 && n === (pa.icons ?? 0)) return true;
+    }
+    return false;
+  };
 
   for (const key of Object.keys(mock.index)) {
     const m = mock.index[key];
@@ -527,10 +596,28 @@ function diff(mock, app, screen, width) {
       if (r === null) continue;
       clauseCoverage[name]++;
       if (CONTENT_CLAUSES.has(name)) contentGraded++;
-      if (r) findings.push({ screen, width, class: name, key, ...(appKey !== key ? { app_key: appKey } : {}), detail: r, mockup_text: m.text, app_text: a.text });
+      if (r) {
+        if (name === 'icon' && iconMoved(key)) continue;   // the same icon, another child (TF-047)
+        const f = { screen, width, class: name, key, ...(appKey !== key ? { app_key: appKey } : {}), detail: r, mockup_text: m.text, app_text: a.text };
+        findings.push(f);
+        if (name === 'icon') iconSeen.push({ f, side: m.icon ? m : a });
+      }
     }
   }
-  return { findings, compared, contentGraded, clauseCoverage, relocated };
+
+  // --- TF-046: one icon, one finding. "Is there an icon inside?" is true of the element that carries
+  // the icon and of every element above it, so each container repeated the finding. A finding is
+  // dropped when every icon it holds is already reported on a deeper element, on the side that has
+  // the icons; a container holding an extra icon of its own is still reported.
+  const repeat = new Set();
+  for (const x of iconSeen) {
+    const ids = x.side.icon_ids || [];
+    const below = new Set(iconSeen
+      .filter((y) => y !== x && y.f.detail === x.f.detail && (y.side.depth ?? 0) > (x.side.depth ?? 0))
+      .flatMap((y) => y.side.icon_ids || []));
+    if (ids.length && ids.every((i) => below.has(i))) repeat.add(x.f);
+  }
+  return { findings: findings.filter((f) => !repeat.has(f)), compared, contentGraded, clauseCoverage, relocated };
 }
 
 // ---------------------------------------------------------------------- main

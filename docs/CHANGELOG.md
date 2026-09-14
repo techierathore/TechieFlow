@@ -8,6 +8,53 @@
 
 ---
 
+## 2026-09-14, afternoon — TfLens's TF-047
+
+Found by TfLens's `*fix-issues` the same day: with its mockups updated, these were the only findings
+left on 13 of its rows. Case `tf_047` in `tests/regression/run.sh`, failing against the script as
+TfLens had it and passing now. Miss `MISS-TechieFlow-20260914-04`, `weak-check`, closed in the same
+run. The reply is in TfLens's own file and copied here byte for byte; `tf-feedback.sh` reads TF-047
+as fixed and waiting for a re-check. **Deployed:** `update-framework.sh` ran in all 19 projects, every
+one exit 0, and all 19 copies of `tf-mockup-parity.mjs` match this repository byte for byte. The whole
+regression suite holds, 133 checks.
+
+- **TF-047, a treatment one element away, an icon in another child, wrap on other text**
+  (`tf-mockup-parity.mjs`). Keys pair by position, and a component library draws the active link's
+  fill on the `<a>` inside a `<li>` and the filter's ring on the `InputGroup` around the input, so the
+  badge and stroke clauses compared the control with the plain box beside the one carrying the
+  treatment. Now the probe keeps each element's neighbours one step away — the parent when it is the
+  same row and its other children carry no text, and the only child — and when the sides disagree the
+  plain side is read there. The card header a library wraps once more paired the mockup's description
+  with the app's toolbar, so the toolbar's icon read as one the mockup lacks while the header held one
+  icon on both sides: an `icon` finding is dropped when the parent or grandparent is paired with the
+  same number of icons on both sides (up to four), the rule `missing` has followed since TF-027. And
+  `wrap` compared row counts of texts that read differently; it is now not applicable unless the
+  digit-folded texts match. Proved on TfLens's own app, signed in as its demo user, `/misses`,
+  `/effort` and `/prices` at 1280 and 390, old and new script run together on the same data: 15
+  findings became 0, all three screens PASS, the comparison counts (242, 248, 222) unchanged, and
+  `wrap` on `/misses` graded on 18 pairs instead of 26. A first, cold run of the old script showed six
+  extra `missing` findings at 390 on `/misses` that neither TfLens's own run nor the warm run had;
+  that clause is untouched.
+
+## 2026-09-14, later — TfLens's TF-046
+
+Found by TfLens's `*verify ui` the same morning. Case `tf_046` in `tests/regression/run.sh`, failing
+against the script as TfLens had it and passing now. Miss `MISS-TechieFlow-20260914-03`, `weak-check`,
+closed in the same run. The reply is in TfLens's own file and copied here byte for byte;
+`tf-feedback.sh` reads TF-046 as fixed and waiting for a re-check, and TF-045 as closed by TfLens.
+**Deployed:** `update-framework.sh` ran in all 19 projects, every one exit 0, and all 19 copies of
+`tf-mockup-parity.mjs` match this repository byte for byte. The whole regression suite holds, 130 checks.
+
+- **TF-046, one extra icon reported at every element that contains it** (`tf-mockup-parity.mjs`). The
+  icon clause asks "is there an icon anywhere inside?", which is true of the element holding the icon
+  and of each wrapper and anchor above it. The probe now numbers every icon on the page and records
+  which icons each element holds and how deep it sits; an `icon` finding is dropped when all its icons
+  are already reported on a deeper element in the same direction. A container with an extra icon of
+  its own is still reported, and so is an icon the app lost, once. Proved on TfLens's own app, signed
+  in, `/misses`, `/effort` and `/prices` at 1280 and 390, old and new script run together on the same
+  data: 42 findings became 28, 26 `icon` findings became 12, the 14 removed were each an element
+  containing one kept, and the 16 other findings and the three FAIL verdicts were identical.
+
 ## 2026-09-14 — AppManager's TF-007 and TF-008
 
 Both found by AppManager while re-checking TF-005 and TF-003. Cases `am_007` and `am_008` in
