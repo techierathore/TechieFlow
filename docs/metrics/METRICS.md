@@ -3,160 +3,232 @@
 <!-- Written by .tfcore/tasks/metrics-report.md (`*metrics`). Regenerated on demand,
      never hand-edited. Source: docs/metrics/*.jsonl (append-only) — schema at
      .tfcore/telemetry/SCHEMA.md. Every figure below comes from
-     `bash .tfcore/telemetry/tf-metrics.sh --report .`; nothing here was computed by hand. -->
+     `bash .tfcore/telemetry/tf-metrics.sh --report . --json` and
+     `bash .tfcore/telemetry/tf-metrics.sh --phases .`; nothing here was worked out by hand.
+     The date spans in the first table are the first and last `ts` read from each file. -->
 
-**Snapshot as of 2026-09-07** · project_type `framework` · schema v1
+**Snapshot as of 2026-09-13** · project type: framework · schema v1
 
-This repository is the framework itself, not an application. It **does** have a checklist of its own — `docs/TechieFlow-Requirements.md`, 63 numbered lines each with a stated way to prove it — and since 2026-09-07 it is graded against them by `tests/requirements/run.sh` like any other project. What it has no data for is a *screen* verdict: it has no application to boot, so the gate catch distribution and escape rate below stay empty for a reason that is about screens, not about requirements. Alongside that it measures **the cost of maintaining the framework**, which in this snapshot is almost entirely the seven-session reset of 2026-09-04 to 2026-09-07.
+This repository is the framework itself, not an application. Its own checklist is `docs/TechieFlow-Requirements.md`, whose numbered lines (FR-nn) are graded by `tests/requirements/run.sh`. It has no screens, so the gate and escape figures stay thin for a reason that is about screens, not about requirements. What it does measure well is **the cost of keeping the framework working**: the seven-session reset of 2026-09-04 to 2026-09-07, and since then a run of fixes driven mostly by TfLens feedback.
 
 | Stream | Records | Span |
 |---|---|---|
-| `runs.jsonl` | 42 | 2026-08-28 → 2026-09-07 |
-| `gates.jsonl` | 41 | 2026-09-07 (two grading passes over the framework's own requirement lines) |
-| `sessions.jsonl` | 29 | 2026-08-20 → 2026-09-07 |
-| `commits.jsonl` | 52 | 2026-06-25 → 2026-09-07 |
-| `misses.jsonl` | 121 miss + 88 miss-fix + 53 miss-amend | 2026-08-28 → 2026-09-07 |
+| `runs.jsonl` | 93 counted (3 more marked wrong and left out, §6) | 2026-08-28 → 2026-09-12 |
+| `gates.jsonl` | 41 (0 backfilled) | 2026-09-07 only (two grading passes over the framework's own requirement lines) |
+| `sessions.jsonl` | 35 (3 repeat snapshots of one session merged, normal for OpenCode) | 2026-08-20 → 2026-09-12 |
+| `commits.jsonl` | 66 (0 duplicates) | 2026-06-25 → 2026-09-12 |
+| `misses.jsonl` | 172 miss + 120 miss-fix + 53 miss-amend | 2026-08-28 → 2026-09-13 |
+
+All records are live: none were rebuilt after the fact, so there is no backfilled column anywhere on this page.
 
 ---
 
 ## 1. First-pass rate — the framework's own requirements
 
-**93%: 27 of the 29 lines that can be graded passed on their first recorded verdict.** Two failed, and both failures are real.
+**93%: 27 of the 29 requirement lines scored passed on their first recorded verdict.** Live records only, project type `framework`. No line was left out for carrying rebuilt history, because none has any.
 
-| | |
-|---|---|
-| Requirement lines in `docs/TechieFlow-Requirements.md` | 63 |
-| Graded by a check that runs today | 29 |
-| Passed | 27 |
-| Failed | 2 |
-| Ungraded | 34 |
+| Where the records came from | Kind of line | Lines scored | Passed first time | Rate |
+|---|---|---|---|---|
+| **Live** | framework requirement (FR) | 29 | 27 | 93% |
 
-**The two failures**, neither of them new, both invisible until a check existed to say so:
+**The two failures**, both caught by the `acceptance` check on 2026-09-07:
 
-- **FR-03, technology neutrality.** The line says no persona or task names a language, database, UI library or host. The analyst and `build-phase` hardcode routing to the TrBlazeUI and TechieRag library agents, and `day1-brownfield` names the `dotnet` answer set. Either library routing is a legitimate exception and the line must say so, or the tasks must route by requirement prefix to whatever library agents a project has. That is the owner's call (`MISS-TechieFlow-20260907-18`).
-- **FR-34, a run record for every command.** Four tasks wire none: `create-doc`, `generate-html`, `facilitate-brainstorming-session` and `create-deep-research-prompt`. This is the idea-stage gap D-13 named in Session 1 and FR-60 still carries; the check now states it in a number rather than in prose.
+- **FR-03**, technology neutrality.
+- **FR-34**, a run record for every command.
 
-**Why 29 and not 63.** A line is graded only when something runnable proves it, and that artefact is run for the verdict. The other 34: **14 need a fixture run** (a real command on a real project, which no automated pass stands in for), **5 need a review** by a person, **3 are script candidates nobody built**, **1 needs a filesystem this machine cannot provide** (`FR-63`, which a Windows mount cannot grade honestly), and **11 still describe a script in prose with nothing behind it**.
+**This figure has not moved since the last report, and that is the point to read first.** The gates stream ends on 2026-09-07. No grading pass has been recorded since, so work done after that date, including the neutrality check run on 2026-09-12, has no verdict on this page. Whether FR-03 or FR-34 now pass is not something these records can say.
 
-On 2026-09-07 that last group was 28. Checks were built for 10 of them, five more were repointed at the self-test whose planted defect already proved them, and three at the installer test. **Coverage went from 12 lines to 29 in one pass**, and it immediately found the two failures above plus a third defect: the telemetry schema had never listed `framework-reset` or four other command values its own tasks were writing (`MISS-TechieFlow-20260907-17`).
-
-**What this figure is not.** These lines were graded for the first time at the end of the reset, not as each was built. "Passed on the first recorded verdict" is literally true and it is not evidence that the framework got things right first time. The honest measure of that is its miss stream: **126 misses logged** (§5). Read the two together or neither.
-
-Until 2026-09-07 this section read "no data", on the reasoning that the framework had no checklist to verify. That was wrong: it has had 63 requirement lines since Session 2, named in every session restart prompt. Logged as `MISS-TechieFlow-20260907-16`.
+**What this figure is not.** These lines were graded for the first time at the end of the reset, not as each was built. "Passed on the first recorded verdict" is true, and it is not evidence that the framework got things right first time. The better measure of that is the miss stream: **172 misses logged** (§5). Read the two together or neither.
 
 ## 2. Gate catch distribution
 
-**No data**, and here the original reasoning does hold: a gate distribution answers "which of the seven checks caught the failure", and those checks — build, acceptance, data, visual, assets, speed, standards — are applied to a running application's screens. This repository has none. All 12 framework verdicts passed, so there is no failure to attribute in any case.
+**insufficient data (n=2).** Both failures above were caught by `acceptance`, and two records cannot support a share. The three gates added later (`perf` since 2026-08-10, `assets` and `mockup-parity` since 2026-08-31) ran on **0** records here, because they check a running app's screens and this repository has none.
 
-Nothing is inferred from the miss stream to fill the gap: the two are computed from different records by different definitions, and presenting one as the other would make the word meaningless.
+Nothing is borrowed from the miss stream to fill the gap: the two are counted from different records in different ways, and printing one as the other would make the word meaningless.
 
 ## 3. Escape rate
 
-**No data** from `gates.jsonl`: an escape is a defect that got past every gate to a person, and with no screens to gate there is nothing for one to escape. The miss stream's own "found by a human" share — **41%** — is reported in §5 **beside** this, never merged into it. For the framework that share is the meaningful number, and it says the owner found two of every five framework defects.
+**insufficient data (n=2)** from `gates.jsonl`. An escape is a defect that got past every gate to a person, and with no screens to gate there is almost nothing for one to escape.
 
-## 4. Throughput and rework — poolable
+The miss stream's own "found by a human" share, **59%**, is reported in §5 **beside** this, never merged into it. For the framework it is the more telling number: the owner found more of its defects than any check did.
+
+## 4. Throughput and rework — these may be pooled
 
 | Figure | Value | Note |
 |---|---|---|
-| Runs recorded | 42 | `framework-reset` 14 · `log-miss` 22 · `fix-issues` 6 |
-| Rework ratio | insufficient data | no `build-phase` runs in this repository |
+| Runs recorded | 93 | `log-miss` 56 · `framework-reset` 31 · `fix-issues` 6 |
+| Rework ratio | insufficient data (n=0 build-phase runs) | this repository has no `build-phase` runs |
 | Batch size | insufficient data | same reason |
-| REQ throughput | 1.83 REQ/hour | median across runs; here a "REQ" is a framework requirement line (FR-nn) touched by a maintenance run |
-| Sessions and tokens | 29 sessions · 10,415,290 tokens | 3 duplicate session ids collapsed, normal for OpenCode |
-| Commit cadence | 2.17 commits per active day | 52 commits over 24 active days |
-| Tokens per Verified | insufficient data | nothing is verified in this repository |
+| REQ throughput | 1.67 REQ/hour | middle value across runs; here a "REQ" is a framework line (FR-nn) touched by a maintenance run |
+| Sessions and tokens | 35 sessions · 14,210,531 tokens | 3 repeat snapshots merged |
+| Tokens per Verified line | 364,372.6 | every session's tokens divided by the lines marked Verified; most of those tokens went on work that was not grading |
+| Commit cadence | 2.28 commits per active day | 66 commits over 29 active days; the commit hook is installed on this clone, so the count is complete |
+
+**No dollar figure is reported here.** Claude Code records carry no cost (their cost field is always empty), and turning tokens into dollars with a price list would be a guess dressed as a measurement. The only money a harness actually measured in this repository is **$0.230819, on one OpenCode `log-miss` run**, and it is never added to anything else.
 
 ## 5. Misses — what was missed, who missed it, what the fix cost
 
-121 misses logged: **33 open, 87 resolved, 1 will-not-fix**, with 88 fix records. Will-not-fix is a decision, not a backlog item, so it is not counted as open.
+**172 misses logged: 52 open, 119 resolved, 1 will-not-fix**, with 120 fix records. Will-not-fix is a decision, not a backlog item, so it is not counted as open. 53 empty fields have been filled in by `miss-amend` records; no fix record or amend points at a miss that does not exist.
+
+At the last report (2026-09-07) the stream held 121 misses, 33 of them open.
+
+### Today's five misses (2026-09-13)
+
+`MISS-TechieFlow-20260913-01` to `-05` were logged while fixing TfLens feedback TF-042, TF-043 and TF-044, all three fixed in the framework on 2026-09-13. Four are checks that reported defects that were not there, or missed ones that were: `tf-mockup-parity` twice, `tf-verify-boot` once and `tf-verify-screens` once. The fifth is a slip in the earlier TF-039 fix (that entry is closed), which let a card hide content that really was cut off; that slip is fixed too. The three TfLens fixes are not yet re-checked here: that happens by running each entry's "Verify from here" step in `docs/TfLens-TechieFlow-Feedback.md`. The records agree on four points:
+
+- all five were **found by the owner**;
+- all five are sorted **"the check was too weak"**, with the reason **`insufficient-verify-method`**;
+- each names `build-phase` as its origin, but no run record backs that, so **none enters the attribution figures in §5a**;
+- all five were closed the same day, by fix records with **no token window**, so their repair cost is in the "not costed" row of §5b.
+
+### What was missed, why, and whose gap it was
 
 | Cut | Distribution |
 |---|---|
-| Class | wrong-behaviour 64 (53%) · unspecified-gap 26 (21%) · partial-implementation 17 (14%) · scope-creep 6 (5%) · other 3 · spec-contradiction 3 · missed-requirement 2 |
-| Why it was missed (118 of 121 assessed) | insufficient-verify-method 46 (39%) · missing-checklist-item 40 (34%) · instruction-ignored 26 (22%) · ambiguous-acceptance 5 (4%) · other 1 |
-| Whose gap (66 of 66 sorted) | weak-check 33 (50%) · unsaid 18 (27%) · ignored 15 (23%) |
-| Found by | agent-review 52 · owner 50 · library-feedback 11 · gate 8 |
+| Class (all 172) | wrong-behaviour 102 (59%) · unspecified-gap 35 (20%) · partial-implementation 17 (10%) · scope-creep 6 (3%) · spec-contradiction 4 (2%) · other 3 (2%) · missed-requirement 2 (1%) · standards-violation 2 (1%) · regression 1 (1%) |
+| Why it was missed (133 of 172 assessed; 0 written before the field existed) | insufficient-verify-method 57 (43%) · missing-checklist-item 40 (30%) · instruction-ignored 30 (23%) · ambiguous-acceptance 5 (4%) · other 1 (1%) |
+| Whose gap (117 of 117 sorted; 55 more were written before the field existed and are outside these shares) | weak-check 68 (58%) · unsaid 27 (23%) · ignored 22 (19%) |
+| Found by | owner 101 · agent-review 52 · library-feedback 11 · gate 8 |
 
-- **Design-miss share: 21%** — one miss in five was the specification's fault, not the build's.
-- **Found by a human: 41%.** Reported beside the gate-derived escape rate of §3, never merged into it.
-- **55 misses predate the `sort` field** (added 2026-09-07) and are outside the "whose gap" percentages. 53 fields have been completed by `miss-amend` records.
-- **One escape carries no `why_missed`.** Something got past every gate and nothing recorded why; that is the most valuable record in the stream and it is still incomplete.
+- **Design-miss share: 20%.** One miss in five was the specification's fault, not the build's.
+- **Found by a human: 59%.** Reported beside the gate escape rate of §3, never merged into it. At the last report it was 41%.
+- **37 escapes have no reason recorded for why they were missed.** At the last report there was one. Each is something that got past every check with nothing written down about why, which makes it the most useful kind of record in the stream. Fill them in one at a time with the line below (the miss's ID, then one of the reasons in the table), never by editing the file:
 
-The headline finding of the "whose gap" cut: **half of what the framework got wrong was a check that was too weak, not a rule nobody had written.** That is why the reset's method was to turn prose into scripts rather than to add prose.
+```
+bash .tfcore/utils/tf-emit.sh --amend <miss-id> why_missed <reason>
+```
+
+**The main finding has grown stronger.** At the last report half of the sorted misses were a check that was too weak (50%). Now it is **58%**, and today's five all landed there. The framework's defects are mostly checks that exist and do not catch enough, not rules nobody wrote.
 
 ### 5a. Attribution — `linked` records only
 
-**5 of 121 records (116 excluded as inferred or unknown.)** An excluded record named a phase that no run record backs, so its model is unknown, and a per-model rate computed from guesses is a routing decision made on invented evidence.
+**5 of 172 misses are attributed; 167 are left out**, because they name a phase that no run record backs, so the model that produced them is unknown.
 
-- by origin phase: log-miss 3 · fix-issues 2
-- by origin agent: flow-master 3 · general 2
-- by origin model: gpt-5.6-sol 3 · unknown 1 · claude-opus-5 1
+| By | Counts (5 records) |
+|---|---|
+| Origin phase | log-miss 3 · fix-issues 2 |
+| Origin agent | flow-master 3 · general 2 |
+| Origin model | gpt-5.6-sol 3 · unknown 1 · claude-opus-5 1 |
 
-At n=5 this supports no per-model conclusion and none is drawn. **A per-model miss rate is observational, not causal:** which model gets the hard work is not random.
+Five records support no per-model or per-phase rate, and none is drawn. **These counts show what happened, not what caused it:** which model gets the hard work is not random, so a model near the top may be doing the hardest work rather than the worst.
 
-### 5b. Rework cost — measured and apportioned never combine
+### 5b. Rework cost — measured and shared costs never combine
 
-| Attribution | Fix records | Tokens out per miss |
+| How the cost is known | Fix records | Tokens out per miss |
 |---|---|---|
-| `sole` — measured | 4 | 289,563 (n=4 priced) |
-| `shared` — apportioned by equal division, **not a measurement** | 63 | 81,140 (n=63) |
-| unattributable — no usable token window | 20 | not costed |
+| **Measured** (`sole`: the run fixed only this miss) | 5 | 240,750.8 (all 5 carry tokens; 0 left out) |
+| Shared (`shared:n`: one run's tokens split equally across the misses it fixed, **not a measurement**) | 65 | 81,246.6 (all 65 carry tokens; 0 left out) |
+| Not costed (`none`: no usable token window) | 50 | — |
 
-Four further records stored as `none` do have a measured window; the divisor is recomputed at read time from the misses each run actually closed. **No dollar figure exists**: Claude Code carries `cost_usd: null` permanently and is never priced from a rate card. The only measured money in this repository is $0.230819 across one OpenCode `log-miss` run.
+4 fix records stored as `none` do have a measured window; the script works out their share again from the misses each run actually closed, and they sit in the shared row.
+
+**Dollars:** no fix record carries a measured dollar amount (0 records). Claude Code never records cost, and no price list is applied here.
+
+A miss fixed inside a longer run, with no separate run record, cannot be costed at all. It still counts as a miss and adds nothing to the cost, which is why the "not costed" row is printed rather than dropped.
 
 ## 6. Effort per phase — time, tokens, model, fan-out
 
-42 live run records. Token-window coverage: `main` 28 · `none` 7 · `conversation` 3 · `tree` 1 · absent 1. A window is only as good as its scope, and a run whose window could not be computed is excluded from every token figure rather than averaged in as a zero.
+**93 live run records**, grouped by command. A phase figure describes runs of one command, never one feature or one requirement.
 
-| Phase | Runs | Wall clock | Tokens out | Tokens in | % out | % time |
-|---|---|---|---|---|---|---|
-| `framework-reset` | 14 | 56h 30m | 7.9M | 60.8k | 95% | 94% |
-| `fix-issues` | 6 | 3h 05m | 418.7k | 6.6M | 5% | 5% |
-| `log-miss` | 22 | 29m 45s | 30.4k | 2.9M | 0% | 1% |
+**3 run records are marked wrong and left out of every figure** (both they and the notes marking them stay in the stream):
+
+- `framework-reset` started 2026-09-09T11:40:00Z: the start time was guessed; the session began at 16:31:54, so the stored time overstates it by about five hours (`MISS-TechieFlow-20260909-06`).
+- `framework-reset` started 2026-09-10T10:18:17Z: the start time was typed, and it overlaps the record before it by 42 minutes (`MISS-TechieFlow-20260910-04`).
+- `framework-reset` started 2026-09-10T11:38:31Z: the start time was typed, and it overlaps the record before it by nearly three hours (`MISS-TechieFlow-20260910-04`).
+
+**Token windows:** `main` 61 · `none` 27 · `conversation` 3 · `tree` 1 · missing 1. A run whose window could not be worked out is left out of every token figure, never counted as zero.
+**Time:** 45 of the 93 records carry a stored time; 48 carry none, so their time was read from the record's own start and end; 3 stored times disagreed with those timestamps, and the timestamps were used.
+
+| Phase | Runs | Wall clock (total / middle) | Tokens out | Tokens in | Share of all output | Share of all time | Tokens measured on |
+|---|---|---|---|---|---|---|---|
+| `framework-reset` | 31 | 99h47m / 1h35m | 9.9M | 65.2k | 96% | 97% | 30 of 31 runs |
+| `fix-issues` | 6 | 3h05m / 26m45s | 418.7k | 6.6M | 4% | 3% | 6 of 6 runs |
+| `log-miss` | 56 | 25m46s / 0m55s | 35.2k | 2.9M | 0% | 0% | 29 of 56 runs |
+
+Time was stored on all 31 `framework-reset` runs except 1, and on 8 of the 56 `log-miss` runs; the other 48 `log-miss` times come from the records' own timestamps.
 
 `framework-reset` costing more than `log-miss` is a fact about what those phases are, not a finding about either.
 
-### 6a. The reset, session by session
+### 6a. Framework maintenance, piece by piece
 
-The framework's own maintenance, in the order it ran. Time on six of these fourteen records was computed from the record's own two timestamps, because they predate the `duration_s` field; that is arithmetic on recorded facts, and it is flagged here rather than left to assume.
+The `framework-reset` runs, in the order they ran, as labelled by each run's `mode`.
 
-| Session | Runs | Wall clock | Tokens out | Files written |
+| Piece of work | Runs | Wall clock | Tokens out | Files written |
 |---|---|---|---|---|
-| Sessions 1 to 3 (before the `mode` field) | 3 | 10h 56m | 1.7M | 48 |
-| Sitting 4a | 1 | 9h 55m | 1.0M | 2 |
-| Sitting 4b | 3 | 24h 38m | 2.6M | 104 |
-| Sitting 4c | 1 | 8h 21m | 1.4M | 42 |
-| Session 5 | 1 | 53m 53s | 989.5k | 24 |
-| Session 6 | 1 | 30m 19s | **unmeasured** | 34 |
-| Session 7 | 1 | 20m 37s | 100.7k | 4 |
-| Session 7, merge fix | 1 | 18m 24s | 39.4k | 5 |
-| Codex removal | 1 | 2m 35s | 4.5k | 41 |
-| This metrics pass | 1 | 32m 51s | 45.5k | 4 |
-| **Total** | **14** | **56h 30m** | **7.9M over 13 records** | **308** |
+| Sessions 1 to 3 (before the `mode` field) | 3 | 10h56m | 1.7M | 48 |
+| `sitting-4a` | 1 | 9h55m | 1.0M | 2 |
+| `sitting-4b` | 3 | 24h38m | 2.6M | 104 |
+| `sitting-4c` | 1 | 8h21m | 1.4M | 42 |
+| `session-5` | 1 | 53m53s | 989.5k | 24 |
+| `session-6` | 1 | 30m19s | **not measured** | 34 |
+| `session-7` | 1 | 20m37s | 100.7k | 4 |
+| `session-7-merge-fix` | 1 | 18m24s | 39.4k | 5 |
+| `codex-removal` | 1 | 2m35s | 4.5k | 41 |
+| `metrics` | 1 | 32m51s | 45.5k | 4 |
+| `requirement-checks` | 1 | 51m12s | 169.2k | 6 |
+| `owner-language` | 1 | 9h30m | 192.9k | 18 |
+| `fix` | 1 | 11h26m | 184.6k | 14 |
+| `routing-fallback-and-billing` | 1 | 1h35m | 178.5k | 16 |
+| `routing-fallback-and-billing-corrections` | 1 | 2h15m | 80.9k | 12 |
+| `routing-pricing-layer-correction` | 1 | 3h28m | 68.3k | 11 |
+| `routing-deploy-19-repos` | 1 | 18m05s | 26.6k | 21 |
+| `emit-refuses-overlap` | 1 | 1h40m | 47.8k | 9 |
+| `deploy-and-doc-refresh` | 1 | 10m19s | 17.5k | 5 |
+| `tflens-feedback-investigate` | 1 | 10m13s | 104.5k | 2 |
+| `tflens-tf023-tf024-owner-text` | 1 | 2h22m | 305.3k | 28 |
+| `feedback-reader-tf025-027-phase-uidesign` | 1 | 9m34s | 23.1k | 31 |
+| `deploy-18-repos` | 1 | 32m45s | 46.1k | 2 |
+| `tf028-bare-heading-reader` | 1 | 20m20s | 61.8k | 7 |
+| `tf029-log-miss-run-record` | 1 | 7m00s | 59.6k | 7 |
+| `tf030-036-tflens-build-verify` | 1 | 5h10m | 316.6k | 14 |
+| `tf037-041-and-neutrality-check` | 1 | 3h07m | 134.7k | 11 |
+| **All `framework-reset` runs** | **31** | **99h47m** | **9.9M over 30 measured runs** | **522** |
 
-Session 6's own record carries no token window and is excluded from every token figure above rather than counted as zero. That gap is itself a recorded defect (`MISS-TechieFlow-20260907-09`): the emitter accepted a run record with no `ended`, so the run could never be costed. It is fixed, and the fix is what makes the other twelve rows complete.
+The `session-6` run has no token window and is left out of the token figures rather than counted as zero (`MISS-TechieFlow-20260907-09`).
 
-Reading the shape: **the four Session 4 sittings account for 43 of the 56.5 hours and 5.0M of the 7.9M output tokens.** That was the work of shrinking every task file, and it cost roughly three quarters of the whole reset. The five sessions that followed — the miss protocol, the readability split, the Playbook prompt, the merge fix and the Codex removal — took two hours and five minutes between them.
+**Reading the shape.** The reset sittings are still the biggest rows: `sitting-4b` alone took 24h38m and 2.6M output tokens. Since the reset closed, the work has been a long line of smaller fixes, most of them answers to TfLens feedback TF-023 to TF-041, all of which are now fixed in the framework. None of those rows passed 320k output tokens. The two longest, `fix` (11h26m) and `owner-language` (9h30m), are long in wall clock but light in tokens; the records do not say why.
 
 ### 6b. Which model did the work
 
-| Model | Tokens out | Runs | Share |
-|---|---|---|---|
-| claude-fable-5-1 | 7.7M | 9 | 98% |
-| claude-opus-5 | 190.1k | 4 | 2% |
-| synthetic (no model recorded) | 0 | 2 | 0% |
+| Phase | Model | Tokens out | Share of the phase | Runs |
+|---|---|---|---|---|
+| `framework-reset` | `claude-fable-5-1` | 7.7M | 78% | 9 |
+| `framework-reset` | `claude-opus-5` | 2.2M | 22% | 21 |
+| `framework-reset` | synthetic (no model recorded) | 0 | 0% | 3 |
+| `fix-issues` | `claude-opus-5` | 396.3k | 95% | 4 |
+| `fix-issues` | `gpt-5.6-sol` | 22.4k | 5% | 2 |
+| `log-miss` | `claude-opus-5` | 26.9k | 76% | 27 |
+| `log-miss` | `gpt-5.6-sol` | 7.5k | 21% | 1 |
+| `log-miss` | `opencode-go/glm-5.3` | 890 | 3% | 1 |
 
-Harness: `claude-code` on all 14 reset runs. Model routing across the whole repository was observed as on-tier 0 · drifted 10 · unknown 12 — observed, never enforced.
+**Harness:** `framework-reset` claude-code 31 · `fix-issues` claude-code 4, codex 2 · `log-miss` claude-code 52, codex 3, opencode 1. (Codex was retired on 2026-09-07; its older records stay valid.)
+**Routing, observed and never enforced:** `log-miss` on the planned model 0 · drifted 24 · unknown 32; `framework-reset` unknown 31; `fix-issues` unknown 6.
+**How the model was paid for:** `framework-reset` subscription 14 · not recorded 16; `log-miss` subscription 2 · not recorded 27; `fix-issues` not recorded 6. Records written before 2026-09-10 carry no payment field.
 
-### 6c. Subagent fan-out — measured, on its own denominator
+**This ranking shows what happened, not what caused it.** Which model gets the hard phases is not random, so a difference here is at least as much about what each model was asked to do as about the models.
 
-**Not observed on any of the 14 reset runs.** Every one carried a `main`-scope window, which never reads the subagent transcripts, so a zero here means *not looked at*, not *none ran*. Three runs declared an `explore` subagent in their own emit; the declared figure is kept beside the measured one and never merged with it.
+### 6c. Subagent fan-out — measured, on its own count
+
+**Not observed on any run: 0 of 93.**
+
+| Phase | Runs observed | Why the rest are left out |
+|---|---|---|
+| `framework-reset` | 0 of 31 | 31: the token window did not read subagent transcripts (not `tree` scope) |
+| `fix-issues` | 0 of 6 | 6: not `tree` scope |
+| `log-miss` | 0 of 56 | 55: not `tree` scope · 1: written before the fan-out count existed (2026-08-31) |
+
+A zero on a run that never looked at subagent transcripts means *not looked at*, not *none ran*. `framework-reset` runs **declared** an `explore` subagent 3 times in their own records. The measured count is the one to trust when the two disagree, but here nothing was measured, so the declared figure can be neither confirmed nor ruled out. It is kept beside the measured one and never merged with it.
 
 ## 7. What is missing
 
-- **34 of the framework's 63 requirement lines are ungraded** — 14 need a fixture run, 11 still describe a script nobody built, 5 need a review, 3 are unbuilt candidates and 1 needs a filesystem this machine cannot provide. That is the largest gap on this page, and it is a gap in the framework's own verification, not in its telemetry.
-- **No gate catch distribution or escape rate**, because both describe a running application's screens and this repository has none.
-- **One run record has no token window** (Session 6), and one miss has no `why_missed`. Both are named above rather than filled in.
-- **55 misses predate the `sort` field** and are outside the "whose gap" percentages. They can be completed one at a time with `tf-emit.sh --amend <miss_id> sort <value>`.
-- **Attribution covers 5 of 121 misses.** Until more misses carry a linked run, no per-model or per-phase miss rate can be published from this repository.
-- **Sessions 1 to 3 share one row** because the `mode` field arrived with Sitting 4a; their three records are individually intact in the stream.
+- **First-pass rate is frozen at 2026-09-07.** No grading pass has been recorded since, so nothing done in the six days after has a verdict here. A fresh run of `tests/requirements/run.sh` is what would move it. These two scripts do not report how many requirement lines have no check at all, so that count is not repeated on this page.
+- **Gate catch distribution and escape rate:** insufficient data (n=2). Both describe a running app's screens, and this repository has none.
+- **Rework ratio and batch size:** insufficient data (n=0 build-phase runs).
+- **37 escapes have no reason recorded for why they were missed**, up from 1. These are the records most worth completing; the line to fill one in is in §5.
+- **55 misses were written before the "whose gap" field existed** and sit outside those shares. The same fill-in line completes them, with `sort` in place of the reason field and one of spec, unsaid, weak-check or ignored as the value.
+- **Attribution covers 5 of 172 misses.** Until more misses name a run that exists, no per-model or per-phase miss rate can be published. Today's five did not change that.
+- **50 fix records have no token window**, today's five among them, so their repair cost is unknown.
+- **27 of the 56 `log-miss` runs and 1 `framework-reset` run (Session 6) have no token window**, and 48 `log-miss` runs stored no time.
+- **Fan-out was never observed** on any run (§6c).
+- **Dollars:** the only measured money is $0.230819 on one OpenCode run. The script also prints a price worked out from a published price list; this report's rules do not allow price-list figures on the page, so it is left out.
+- **3 run records are marked wrong** and left out of every figure, with the reasons in §6.

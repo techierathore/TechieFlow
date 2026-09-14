@@ -6,6 +6,7 @@
 #   bash .tfcore/utils/tf-build.sh [build] [<target>] [-- <extra dotnet args>]
 #   bash .tfcore/utils/tf-build.sh test  [<target>] [-- <extra dotnet args>]
 #   bash .tfcore/utils/tf-build.sh run   <project>  [-- <extra dotnet args>]
+#   bash .tfcore/utils/tf-build.sh publish <project> -- -o <dir> [-c <config>]   # tf-verify-boot.sh's
 #   bash .tfcore/utils/tf-build.sh probe                 # print the platform and the rungs, run nothing
 #
 # <target> is a .sln, .slnx or .csproj relative to the current folder (default: the one
@@ -33,11 +34,15 @@
 # in this run or since the last -- first clears obj/**/scopedcss: a Blazor build names each scoped
 # stylesheet by a hash of the path, the two sides hash differently, and the incremental target
 # kept the old names, so every page's own styles stopped applying (TfLens, 2026-09-11).
+# One build, test or publish at a time per repository: a second one waits for the first
+# (tests/.artifacts/build/.lock names who holds it). Builders side by side each rebuilt the same
+# obj/ under the others: a running app lost its stylesheet or its process, and a publish carried a
+# dll older than its own source (TF-043). A lock whose process has gone is taken over.
 set -u
 
 MODE="build"; TARGET=""; EXTRA=()
 case "${1:-}" in
-  build|test|run|probe) MODE="$1"; shift ;;
+  build|test|run|publish|probe) MODE="$1"; shift ;;
 esac
 while [[ $# -gt 0 ]]; do
   if [[ "$1" == "--" ]]; then shift; EXTRA=("$@"); break; fi
@@ -107,20 +112,69 @@ args+=("${EXTRA[@]}")
 
 mkdir -p tests/.artifacts/build
 LOG="tests/.artifacts/build/$(date -u +%Y%m%dT%H%M%SZ)-$MODE-$$.log"   # two builds in one second never share a log
+
+# ---- one build at a time (TF-043) -------------------------------------------------------
+# A directory, because mkdir is atomic on every drive this runs on, the Windows one included.
+# `run` does not take it: it holds the terminal for as long as the app runs.
+LOCK="tests/.artifacts/build/.lock"
+release_lock() { [[ "$(cut -d' ' -f1 "$LOCK/owner" 2>/dev/null)" == "$$" ]] && rm -rf "$LOCK"; }
+take_lock() {
+  local waited=0 max="${TF_BUILD_LOCK_MAX:-1800}" said=0 owner opid ohost
+  while ! mkdir "$LOCK" 2>/dev/null; do
+    owner="$(cat "$LOCK/owner" 2>/dev/null)"; opid="$(cut -d' ' -f1 <<<"$owner")"; ohost="$(cut -d' ' -f2 <<<"$owner")"
+    if [[ -z "$owner" ]]; then
+      # taken a moment ago and not yet named, or its taker died in that moment
+      [[ -n "$(find "$LOCK" -maxdepth 0 -mmin +1 2>/dev/null)" ]] && { rm -rf "$LOCK"; continue; }
+    elif [[ "$ohost" == "$(hostname)" ]] && ! kill -0 "$opid" 2>/dev/null; then
+      rm -rf "$LOCK"; continue                     # its build died without letting go
+    fi
+    [[ $said -eq 0 ]] && { echo "wait  another build is running in this repository (${owner:-starting}); this one starts when it finishes" >&2; said=1; }
+    if [[ $waited -ge $max ]]; then
+      echo "NOT-RUN another build held this repository for $((max / 60)) minutes ($owner). If nothing is building, remove $LOCK and build again. Not a code error"
+      exit 2
+    fi
+    sleep 3; waited=$((waited + 3))
+  done
+  echo "$$ $(hostname) $MODE $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$LOCK/owner"
+  trap release_lock EXIT
+}
+[[ "$MODE" != "run" ]] && take_lock
 LOCKED='error MSB302[17]|being used by another process|Access to the path .* is denied'
 # which side of a WSL machine a rung builds on, and the project folders whose obj/ it writes
 side_of() { case "$1" in winrun|cmd.exe|powershell.exe) echo windows ;; *) echo wsl ;; esac; }
-pdirs=(); for p in "${projects[@]}"; do f="$p"; [[ -f "$f" ]] || f="${base:-.}/$p"; [[ -f "$f" ]] && pdirs+=("$(dirname "$f")"); done
-cross_side() { # side: clear the scoped-css outputs another side built, then mark this side
+# the projects the target builds, and every project they reference: a web head's static assets come
+# from the library it references, whose obj/ the other side may have written (AppManager TF-004)
+mapfile -t pdirs < <(python3 - "${base:-.}" "${projects[@]}" <<'PY'
+import os, re, sys
+base, todo, seen = sys.argv[1], [], []
+for p in sys.argv[2:]:
+    todo.append(p if os.path.isfile(p) else os.path.join(base, p))
+while todo:
+    f = os.path.normpath(todo.pop())
+    if not os.path.isfile(f) or os.path.dirname(f) in seen:
+        continue
+    seen.append(os.path.dirname(f) or ".")
+    for ref in re.findall(r'<ProjectReference\s+Include="([^"]+)"', open(f, encoding="utf-8", errors="replace").read()):
+        todo.append(os.path.join(os.path.dirname(f), ref.replace("\\", "/")))
+print("\n".join(seen))
+PY
+)
+cross_side() { # side: clear what another side built with its own paths in it, then mark this side
   local d cleared=0
   for d in "${pdirs[@]}"; do
     [[ -d "$d/obj" ]] || continue
-    if [[ "$(cat "$d/obj/.tf-build-side" 2>/dev/null)" != "$1" ]] && [[ -n "$(find "$d/obj" -type d -name scopedcss -print -quit 2>/dev/null)" ]]; then
-      find "$d/obj" -type d -name scopedcss -prune -exec rm -rf {} + 2>/dev/null; cleared=1
+    if [[ "$(cat "$d/obj/.tf-build-side" 2>/dev/null)" != "$1" ]]; then
+      # the scoped stylesheets (TF-035) and the static web asset lists: each side writes its own absolute
+      # paths into those, and a Windows-written one (461 C:\ paths in AppManagerUI's) stopped the WSL
+      # host at startup with "The path must be absolute (Parameter 'root')" (AppManager TF-004)
+      if [[ -n "$(find "$d/obj" -type d -name scopedcss -print -quit 2>/dev/null)" || -n "$(find "$d/obj" "$d/bin" -name '*staticwebassets*.json' -print -quit 2>/dev/null)" ]]; then
+        find "$d/obj" -type d -name scopedcss -prune -exec rm -rf {} + 2>/dev/null
+        find "$d/obj" "$d/bin" -name '*staticwebassets*.json' -delete 2>/dev/null; cleared=1
+      fi
     fi
     echo "$1" > "$d/obj/.tf-build-side"
   done
-  [[ $cleared -eq 1 ]] && echo "note  the scoped stylesheets were built on the other side of this machine; cleared so the $1 build names them itself"
+  [[ $cleared -eq 1 ]] && echo "note  the scoped stylesheets and static asset lists were built on the other side of this machine; cleared so the $1 build writes them itself"
 }
 WRONG_RUNG='NETSDK1178|Microsoft\.(iOS|Android|MacCatalyst|tvOS)\.Sdk|Workload ID|not recognized|WindowsAppSDK|command not found|No such file or directory|is not recognized as an internal or external command|The term .* is not recognized|workload.*not installed|Inadequate permissions'
 

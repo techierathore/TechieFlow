@@ -50,19 +50,61 @@ if [[ $BROWSER -eq 1 ]]; then
 else rm -f "$PWJSON"; fi
 
 if [[ $UNIT -eq 1 ]]; then
-  if [[ -n "$TARGET" ]] || ls *.sln *.slnx >/dev/null 2>&1 || ls tests/*/*.csproj >/dev/null 2>&1; then
+  # Each pattern on its own: `ls *.sln *.slnx` fails when either matches nothing, so a .slnx-only
+  # solution read as none; and a test project may sit at any depth under tests/, not one folder down
+  # (AppManager TF-007: tests/unit/AppManager.UnitTests/). tf-build.sh finds a root solution itself;
+  # without one it is handed the only test project, and several are named rather than guessed between.
+  ROOTSLN="$(compgen -G '*.sln'; compgen -G '*.slnx'; compgen -G '*.csproj')"
+  mapfile -t TESTPROJ < <(find tests -name '*.csproj' -not -path 'tests/.artifacts/*' -not -path '*/bin/*' -not -path '*/obj/*' -not -path '*/node_modules/*' 2>/dev/null | sort)
+  [[ -z "$TARGET" && -z "$ROOTSLN" && ${#TESTPROJ[@]} -eq 1 ]] && TARGET="${TESTPROJ[0]}"
+  if [[ -z "$TARGET" && -z "$ROOTSLN" && ${#TESTPROJ[@]} -gt 1 ]]; then
+    echo "unit tests: NOT RUN — no solution here and ${#TESTPROJ[@]} test projects under tests/ (${TESTPROJ[*]}); name one with --target"
+  elif [[ -n "$TARGET" || -n "$ROOTSLN" ]]; then
     # the VERDICT line, not the first line: tf-build.sh may print a note before it, and a note read
     # as the verdict left 975 passing TfLens tests recorded as never run (TF-037)
-    UNITLINE="$(bash "$HERE/tf-build.sh" test ${TARGET:+"$TARGET"} -- --logger "console;verbosity=normal" 2>&1 | grep -m1 -E '^(PASS|FAIL|NOT-RUN)' || true)"
+    # A test project on Microsoft.Testing.Platform ignores --logger and prints no line per test, so no
+    # unit test ever reached a row (AppManager TF-005, xunit.v3, 286 tests). Such a project is asked for
+    # a TRX report, the per-test record both platforms write, through the property `dotnet test` passes
+    # to it. One switch serves every project or none is passed: an unknown switch stops a test app.
+    MTP="$(python3 - <<'PY'
+import os, re
+flags, mtp = set(), 0
+for root, dirs, files in os.walk("."):
+    dirs[:] = [d for d in dirs if d not in ("bin", "obj", "node_modules", ".git") and not (root == "./tests" and d == ".artifacts")]
+    for fn in files:
+        if not fn.endswith(".csproj"):
+            continue
+        t = open(os.path.join(root, fn), encoding="utf-8", errors="replace").read()
+        if not re.search(r"<(TestingPlatformDotnetTestSupport|UseMicrosoftTestingPlatformRunner|EnableMSTestRunner|EnableNUnitRunner)>\s*true", t, re.I) and 'Sdk="MSTest.Sdk' not in t:
+            continue
+        mtp += 1
+        if re.search(r'Include="xunit\.v3"', t, re.I):
+            flags.add("--report-xunit-trx")
+        elif re.search(r'Include="Microsoft\.Testing\.Extensions\.TrxReport"|Sdk="MSTest\.Sdk', t, re.I):
+            flags.add("--report-trx")
+        else:
+            flags.add("?")
+print(next(iter(flags)) if mtp and len(flags) == 1 and "?" not in flags else ("mixed" if mtp else ""))
+PY
+)"
+    UARGS=(--logger "console;verbosity=normal")
+    case "$MTP" in
+      --report-*) UARGS+=("-p:TestingPlatformCommandLineArguments=$MTP") ;;
+      mixed) echo "unit tests: note  the Testing Platform projects here take different report switches, so none was passed; their tests are not mapped to rows" ;;
+    esac
+    STAMP="$(mktemp)"
+    UNITLINE="$(bash "$HERE/tf-build.sh" test ${TARGET:+"$TARGET"} -- "${UARGS[@]}" 2>&1 | grep -m1 -E '^(PASS|FAIL|NOT-RUN)' || true)"
     UNITLOG="$(sed -n 's/.*log \(tests\/\.artifacts\/build\/[^ ;]*\).*/\1/p' <<<"$UNITLINE" | head -1)"
+    TRX="$(find . -name '*.trx' -newer "$STAMP" -not -path '*/node_modules/*' 2>/dev/null)"; rm -f "$STAMP"
     echo "unit tests: $UNITLINE"; [[ "$UNITLINE" != NOT-RUN* ]] && ran_any=1
   else
     echo "unit tests: no solution or test project found; skipped"
   fi
 fi
 
-TF_PWJSON="$PWJSON" TF_UNITLOG="$UNITLOG" TF_UNITLINE="$UNITLINE" TF_OUT="$OUT" python3 - <<'PY'
+TF_PWJSON="$PWJSON" TF_UNITLOG="$UNITLOG" TF_UNITLINE="$UNITLINE" TF_TRX="${TRX:-}" TF_OUT="$OUT" python3 - <<'PY'
 import json, os, re
+import xml.etree.ElementTree as ET
 ID = re.compile(r"(REQ-(?:UI|FN|NFR|RAG)-\d{3})", re.I)
 reqs = {}
 browser = {"ran": False, "passed": 0, "failed": 0, "skipped": 0, "tests": 0}
@@ -140,17 +182,45 @@ if pw and os.path.isfile(pw):
     except Exception as e:
         browser["error"] = str(e)
 
+seen = set()   # one test read from both a TRX report and the console is counted once
+for trx in [p for p in os.environ.get("TF_TRX", "").splitlines() if p.strip()]:
+    try:
+        tree = ET.parse(trx).getroot()
+    except Exception as e:
+        unit.setdefault("trx_unreadable", []).append(f"{trx}: {str(e)[:80]}")
+        continue
+    unit["ran"] = True
+    unit.setdefault("trx", []).append(trx)
+    for el in tree.iter():
+        if not el.tag.endswith("UnitTestResult"):
+            continue
+        name = (el.get("testName") or "").strip()
+        oc = (el.get("outcome") or "").lower()          # Passed / Failed / NotExecuted …, any case (TF-005)
+        outcome = "pass" if oc == "passed" else "skip" if oc in ("notexecuted", "inconclusive", "pending", "notrunnable", "disconnected") else "fail"
+        if (name, outcome) in seen:
+            continue
+        seen.add((name, outcome))
+        msg = next(((m.text or "").strip() for m in el.iter() if m.tag.endswith("Message") and (m.text or "").strip()), "")
+        for rid in set(ID.findall(name)):
+            add(rid, outcome, name, "unit",
+                ("unit test failed: " + (msg.splitlines()[0] if msg else name))[:200] if outcome == "fail"
+                else ("unit test skipped: " + name[:120]) if outcome == "skip" else "")
+
 ul = os.environ.get("TF_UNITLOG", "")
 if ul and os.path.isfile(ul):
     unit["ran"] = True
     for line in open(ul, encoding="utf-8", errors="replace"):
-        m = re.match(r"\s*(Passed|Failed|Skipped)\s+(\S.*?)\s*(\[[^\]]*\])?\s*$", line)
+        # any case, and a "(133ms)" tail: the Testing Platform's own log writes "failed REQ-NFR-007 … (133ms)" (TF-005)
+        m = re.match(r"\s*(passed|failed|skipped)\s+(\S.*?)\s*(?:\[[^\]]*\]|\(\d+(?:\.\d+)?\s*m?s\))?\s*$", line, re.I)
         if not m:
             continue
         # a skipped unit test is recorded as skipped, not dropped: the row then reads
         # NOT-TESTED with the evidence, rather than looking as if no test exists (TF-022)
-        outcome = {"Passed": "pass", "Failed": "fail", "Skipped": "skip"}[m.group(1)]
+        outcome = {"passed": "pass", "failed": "fail", "skipped": "skip"}[m.group(1).lower()]
         name = m.group(2).strip()
+        if (name, outcome) in seen:
+            continue
+        seen.add((name, outcome))
         for rid in set(ID.findall(name)):
             add(rid, outcome, name, "unit",
                 ("unit test failed: " if outcome == "fail" else "unit test skipped: ") + name[:120])

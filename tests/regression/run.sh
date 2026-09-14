@@ -1074,9 +1074,12 @@ sys.path.insert(0, os.path.join(root, ".tfcore", "utils"))
 import tf_feedback
 cased = {"TF-%s" % n for n in re.findall(r"(?m)^tf_0?(\d{2,3})\(\)", suite)}
 cased = {("TF-%03d" % int(c[3:])) for c in cased}
+# a project whose own numbering overlaps TfLens's has its cases under its own prefix
+own = {"AppManager": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^am_0?(\d{2,3})\(\)", suite)}}
 for f in sorted(glob.glob(os.path.join(root, "docs", "*-TechieFlow-Feedback.md"))):
+    app = os.path.basename(f).split("-")[0]
     for e in tf_feedback.entries(f):
-        if e["id"] in cased and e["state"] == "open":
+        if e["id"] in own.get(app, cased) and e["state"] == "open":
             print("%s %s" % (os.path.basename(f), e["id"]))
 PY
 )"
@@ -1720,6 +1723,269 @@ MD
   fi
 }
 
+# --- TF-042: overflow that nothing clips ---------------------------------------------------
+# The clip clause read scrollWidth alone, so a sidebar whose rail handle straddles its edge by 8px
+# was "cut off" on every TfLens screen with nothing clipped up to <html> (2026-09-12). And from
+# TF-039 until this fix a card that really clips, holding screen-reader text, cut its own content
+# before measuring it, so it read as holding everything.
+tf_042() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip tf_042 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/tf042"; mkdir -p "$d/docs/mockups"
+  cat > "$d/docs/mockups/shell.html" <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"><style>
+ body{margin:0;font-family:system-ui}
+ aside{width:255px;height:200px;overflow-x:hidden;background:#f4f4f5;position:relative}
+ .card{width:200px;height:60px;margin:8px;background:#eef}
+</style></head><body>
+ <aside data-testid="app-sidebar"><nav>Misses · Effort</nav></aside>
+ <div data-testid="kpi-card" class="card"><div>Rework</div></div>
+</body></html>
+HTML
+  cat > "$d/shell.html" <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"><style>
+ body{margin:0;font-family:system-ui}
+ aside{width:255px;height:200px;overflow-x:visible;background:#f4f4f5;position:relative}
+ .rail{position:absolute;top:80px;right:-8px;width:16px;height:30px;border:0;background:#ccc}
+ .card{width:200px;height:60px;margin:8px;background:#eef;overflow:hidden}
+ .wide{width:420px;height:20px}
+ .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+</style></head><body>
+ <aside data-testid="app-sidebar"><nav>Misses · Effort</nav><button class="rail" aria-label="Toggle sidebar"></button></aside>
+ <div data-testid="kpi-card" class="card"><span class="sr">rework in dollars</span><div class="wide">Rework</div></div>
+</body></html>
+HTML
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
+  sleep 1
+  ( cd "$d" && timeout 180 node parity.mjs --base "http://127.0.0.1:$port" --screen shell=/shell.html \
+      --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+  local clips; clips="$(python3 -c "import json,sys
+try: s=json.load(open(sys.argv[1]))['screens'][0]
+except Exception: print('no-output'); sys.exit()
+print(' '.join(f['key'] for f in s.get('findings',[]) if f['class']=='clip'))" "$d/parity.json")"
+  if [[ "$clips" != "no-output" ]] && ! grep -qw 'app-sidebar' <<<"$clips"; then
+    ok tf_042a "a control straddling an edge that clips nothing is not reported as cut off"
+  else
+    bad tf_042a "overflow nothing clips is still reported as cut off"; note "clip findings: ${clips:-none}"
+  fi
+  if grep -qw 'kpi-card' <<<"$clips"; then
+    ok tf_042b "a card that clips its content is reported, screen-reader text inside it or not"
+  else
+    bad tf_042b "a card that really clips read as holding everything"; note "clip findings: ${clips:-none}"
+  fi
+}
+
+# --- TF-043: builders side by side, one shared build output --------------------------------
+# Every start ran `dotnet run` over the same bin/ and obj/, which the next builder rewrote under the
+# running app: on TfLens (2026-09-12) one app served its stylesheet as 200 with 0 bytes, one answered
+# 500, one ran a dll older than its source. Builds overlapped freely, and an app whose starter died
+# could not be stopped. Stand-in dotnet on PATH; nothing is built.
+_tf043_fx() {
+  local d="$SCRATCH/$1"; mkdir -p "$d/bin" "$d/home" "$d/p/Properties"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Web"></Project>\n' > "$d/p/Fx.csproj"
+  cat > "$d/bin/dotnet" <<'SH'
+#!/usr/bin/env bash
+log="__D__/calls"
+urlport() { local u=""; while [[ $# -gt 0 ]]; do [[ "$1" == "--urls" ]] && u="$2"; shift; done; echo "${u##*:}"; }
+case "$1" in
+  publish)
+    out=""; for ((i=1; i<=$#; i++)); do [[ "${!i}" == "-o" ]] && { j=$((i+1)); out="${!j}"; }; done
+    echo "start $(date +%s.%N) publish" >> "$log"; sleep 1; mkdir -p "$out"; echo dll > "$out/Fx.dll"
+    echo "end $(date +%s.%N) publish" >> "$log"; echo "Fx -> $out"; exit 0 ;;
+  build)
+    echo "start $(date +%s.%N) build" >> "$log"; sleep 1; echo "end $(date +%s.%N) build" >> "$log"; echo "Build succeeded."; exit 0 ;;
+  run)
+    echo "run-shared $*" >> "$log"; exec python3 -m http.server "$(urlport "$@")" --bind 127.0.0.1 ;;
+  *.dll)
+    echo "run-copy $1" >> "$log"; exec python3 -m http.server "$(urlport "$@")" --bind 127.0.0.1 --directory "$(dirname "$1")/" ;;
+esac
+SH
+  sed -i "s#__D__#$d#" "$d/bin/dotnet"; chmod +x "$d/bin/dotnet"
+  printf '%s' "$d"
+}
+tf_043() {
+  local d; d="$(_tf043_fx tf043)"
+  local p1 p2; p1="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  p2="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  boot() { ( cd "$d" && HOME="$d/home" PATH="$d/bin:/usr/bin:/bin" bash "$UTILS/tf-verify-boot.sh" "$@" ) 2>&1; }
+  up() { curl -s -o /dev/null -m 2 "http://localhost:$1/" 2>/dev/null; }
+  # read through a pipe, as an agent's shell reads it: a started app left holding the script's output
+  # made the caller wait for ever (the first TF-043 fix did exactly that, caught on a real app)
+  local o1 o2 rc1 rc2
+  o1="$(timeout 60 cat < <(boot start --project p/Fx.csproj --port "$p1"))"; rc1=$?
+  o2="$(timeout 60 cat < <(boot start --project p/Fx.csproj --port "$p2"))"; rc2=$?
+  if [[ $rc1 -eq 0 && $rc2 -eq 0 ]] && grep -q '^BOOTED' <<<"$o1" && grep -q '^BOOTED' <<<"$o2"; then
+    ok tf_043e "start returns its BOOTED line and lets go of its output, so a caller reading it is not held"
+  else
+    bad tf_043e "start kept its output open after the app came up, so a caller reading it waited for ever"; note "exit $rc1/$rc2: $(head -1 <<<"$o1")"
+  fi
+  if grep -q "run-copy $d/tests/.artifacts/verify/run-$p1/Fx.dll" "$d/calls" 2>/dev/null \
+     && grep -q "run-copy $d/tests/.artifacts/verify/run-$p2/Fx.dll" "$d/calls" && ! grep -q run-shared "$d/calls" && up "$p1" && up "$p2"; then
+    ok tf_043a "each app runs from a published copy of its own, never from the build output the next builder rewrites"
+  else
+    bad tf_043a "two apps were started over the same build output"; note "$(grep run- "$d/calls" 2>/dev/null | head -2)"
+  fi
+  # an app whose starter died: its pid is gone from the state file, and stop still finds it by its copy
+  python3 -c "import json,sys; p=sys.argv[1]; s=json.load(open(p)); s['pids']=[999999]; json.dump(s,open(p,'w'))" "$d/tests/.artifacts/verify/boot-$p1.json" 2>/dev/null
+  boot stop --port "$p1" >/dev/null; sleep 1
+  if ! up "$p1" && up "$p2"; then
+    ok tf_043b "stop --port stops an app whose starter died, found by the copy it runs from, and leaves the other"
+  else
+    bad tf_043b "an app nobody's child any more kept its port after stop"
+  fi
+  boot stop --port "$p2" >/dev/null
+  pkill -f "http.server $p1" 2>/dev/null; pkill -f "http.server $p2" 2>/dev/null
+  # two builds at once in one repository: the second waits for the first
+  local e; e="$(_tf043_fx tf043c)"
+  ( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" bash "$UTILS/tf-build.sh" build p/Fx.csproj >/dev/null 2>&1 ) &
+  local b1=$!
+  ( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" bash "$UTILS/tf-build.sh" build p/Fx.csproj >/dev/null 2>&1 ) &
+  wait "$b1" $!
+  local order; order="$(cut -d' ' -f1 "$e/calls" 2>/dev/null | tr '\n' ' ')"
+  if [[ "$order" == "start end start end " ]]; then
+    ok tf_043c "two builds started together run one after the other"
+  else
+    bad tf_043c "two builds wrote the same output at the same time"; note "order: $order"
+  fi
+  # a lock left by a build that died is taken over, not waited on for half an hour
+  : > "$e/calls"; mkdir -p "$e/tests/.artifacts/build/.lock"
+  echo "999999 $(hostname) build 2026-09-12T00:00:00Z" > "$e/tests/.artifacts/build/.lock/owner"
+  local out; out="$( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" TF_BUILD_LOCK_MAX=20 timeout 60 bash "$UTILS/tf-build.sh" build p/Fx.csproj 2>/dev/null )"
+  if grep -q '^PASS' <<<"$out" && [[ ! -d "$e/tests/.artifacts/build/.lock" ]]; then
+    ok tf_043d "a lock whose build has died is taken over, and let go when the build ends"
+  else
+    bad tf_043d "a dead build's lock stopped the next build"; note "$(tail -1 <<<"$out")"
+  fi
+}
+
+# --- TF-044: a sign-in page that becomes interactive after it is drawn ----------------------
+# The tool typed the moment the page's markup arrived and pressed at once: the page's first
+# interactive render replaced the fields, the email was gone, and every screen of TfLens graded
+# UNREACHABLE (2026-09-12). And the user field was the first match in page order, so a search box
+# before the email field took the email.
+tf_044() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip tf_044 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/tf044"; mkdir -p "$d"
+  printf '<!doctype html><html><body><h1 data-testid="page-title">Home</h1><p>Signed in.</p></body></html>\n' > "$d/home.html"
+  # drawn first, interactive 1.5 s later: a press before then does nothing, and becoming interactive redraws the fields
+  cat > "$d/login-race.html" <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"></head><body>
+<form id="f"><input data-testid="login-email" type="text"><input data-testid="login-pass" type="password">
+<button data-testid="login-submit" type="submit">Sign in</button></form>
+<script>
+ let live = false; const f = document.getElementById('f');
+ f.addEventListener('submit', (e) => { e.preventDefault(); if (live && f.querySelector('[data-testid="login-email"]').value) location.href = '/home.html'; });
+ setTimeout(() => { f.innerHTML = f.innerHTML; live = true; }, 1500);
+</script></body></html>
+HTML
+  cat > "$d/login-search.html" <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"></head><body>
+<header><input type="text" placeholder="Search"></header>
+<form id="f"><input name="email" type="text"><input name="password" type="password"><button type="submit">Sign in</button></form>
+<script>const f = document.getElementById('f');
+ f.addEventListener('submit', (e) => { e.preventDefault(); if (f.email.value) location.href = '/home.html'; });</script>
+</body></html>
+HTML
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
+  sleep 1
+  signed() { # login page -> "ok" or the tool's error
+    ( cd "$d" && timeout 180 node screens.mjs --base "http://127.0.0.1:$port" --screen home=/home.html --widths 1280 \
+        --login-path "/$1" --user a@b.c --password x --render-wait 300 --json-out "$d/$1.json" >/dev/null 2>&1 )
+    python3 -c "import json,sys
+try: l=json.load(open(sys.argv[1])).get('login') or {}
+except Exception: l={'error':'no output'}
+print('ok' if l.get('ok') else (l.get('error') or 'still on the sign-in page'))" "$d/$1.json"
+  }
+  local r
+  r="$(signed login-race.html)"
+  [[ "$r" == ok ]] && ok tf_044a "sign-in types again when the page redraws its fields, and presses once the values stay" \
+                   || { bad tf_044a "sign-in lost to a page that becomes interactive after it is drawn"; note "$r"; }
+  r="$(signed login-search.html)"
+  [[ "$r" == ok ]] && ok tf_044b "the email goes into the email field, not a search box standing before it" \
+                   || { bad tf_044b "the first text box in the page took the email"; note "$r"; }
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+}
+
+# --- TF-045: the same badge one wrapper deeper ---------------------------------------------
+# Elements were paired by tag and position, so a component library that wraps a card header's
+# contents in one more <div> made every badge in it "missing — flattened into plain text" while the
+# page drew it: 32 findings on three TfLens screens (2026-09-13). A deep amber also read as
+# "negative" beside a light one reading "warning".
+tf_045() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip tf_045 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/tf045"; mkdir -p "$d/docs/mockups"
+  local css='body{margin:0;font-family:system-ui;width:900px}
+.card{border:1px solid #e4e4e7;border-radius:12px;margin:8px;padding:8px}
+.card-h{display:flex;justify-content:space-between;align-items:flex-start}
+.badge{display:inline-block;border:1px solid #d4d4d8;border-radius:9999px;padding:2px 8px;font-size:12px;line-height:16px}
+.tile{width:120px;height:60px}'
+  card() { # testid title badge-markup wrapper(0|1)
+    if [[ "$4" == 1 ]]; then printf '<div class="card" data-testid="%s"><div class="card-h"><div class="flex"><div><div>%s</div></div>%s</div></div></div>\n' "$1" "$2" "$3"
+    else printf '<div class="card" data-testid="%s"><div class="card-h"><div><div>%s</div></div>%s</div></div>\n' "$1" "$2" "$3"; fi
+  }
+  { printf '<!doctype html><html><head><meta charset="utf-8"><style>%s</style></head><body>\n' "$css"
+    card miss-origin "Origin phase" '<span class="badge">linked only</span>' 0
+    card miss-whymissed "Why it was missed" '<span class="badge">39 of 41 misses assessed</span>' 0
+    card miss-review-cost "Review cost" '<span class="badge">copied · never computed</span>' 0
+    card miss-estimate "Estimate" '<span class="badge">estimate</span>' 0
+    card miss-draft "Draft notes" '<span class="badge">draft</span>' 0
+    printf '<div class="tile" data-testid="tile-warn" style="background:#f59e0b">3 open</div></body></html>\n'
+  } > "$d/docs/mockups/misses.html"
+  { printf '<!doctype html><html><head><meta charset="utf-8"><style>%s</style></head><body>\n' "$css"
+    card miss-origin "Origin phase" '<span class="badge">linked only</span>' 1
+    card miss-whymissed "Why it was missed" '<span class="badge">87 of 91 misses assessed</span>' 1
+    card miss-review-cost "Review cost" '<span class="badge">copied</span>' 1
+    card miss-estimate "Estimate" '' 1
+    card miss-draft "Draft notes" '<span>draft</span>' 1
+    printf '<div class="tile" data-testid="tile-warn" style="background:#b45309">3 open</div></body></html>\n'
+  } > "$d/misses.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
+  sleep 1
+  ( cd "$d" && timeout 180 node parity.mjs --base "http://127.0.0.1:$port" --screen misses=/misses.html \
+      --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+  local f; f="$(python3 -c "import json,sys
+try: s=json.load(open(sys.argv[1]))['screens'][0]
+except Exception: print('no-output'); sys.exit()
+for x in s.get('findings',[]): print(x['key'].split(' > ')[0], x['class'], x['detail'])" "$d/parity.json")"
+  if [[ "$f" != "no-output" ]] && ! grep -qE '^miss-(origin|whymissed|review-cost) ' <<<"$f"; then
+    ok tf_045a "a badge drawn one wrapper deeper is found, by its text or by the parent's count, and not reported missing"
+  else
+    bad tf_045a "badges one wrapper deeper are still reported missing"; note "$(grep -E '^miss-(origin|whymissed|review-cost) ' <<<"$f" | head -2)"
+  fi
+  if grep -qE '^miss-estimate missing .*could not be located' <<<"$f" && grep -qE '^miss-draft (badge|missing) ' <<<"$f"; then
+    ok tf_045b "a badge the app does not draw is still reported, and says it could not be located rather than naming a cause"
+  else
+    bad tf_045b "a missing or flattened badge went unreported, or the message still guesses a cause"; note "$(grep -E '^miss-(estimate|draft) ' <<<"$f" | head -2)"
+  fi
+  if ! grep -qE '^tile-warn color ' <<<"$f"; then
+    ok tf_045c "a deep amber and a light amber are the same warning colour"
+  else
+    bad tf_045c "a deep amber still reads as a different colour from a light one"; note "$(grep '^tile-warn' <<<"$f")"
+  fi
+}
+
 # --- TF-036: two wrapped sentences that share a line ----------------------------------------
 # An inline element's bounding box is the union of its line fragments, so two sentences sharing a
 # line "overlapped" across a tile's width on TfLens /effort (2026-09-11) with 0 px² in common.
@@ -1755,6 +2021,341 @@ HTML
     || { bad tf_036b "the fragment comparison went blind to a real overlap"; note "$(grep effort <<<"$out" | head -1)"; }
 }
 
+# === AppManager's feedback file (docs/AppManager-TechieFlow-Feedback.md, 2026-09-13) =========
+# AppManager numbers its entries TF-001 to TF-006 as well, so its cases are am_NNN.
+
+# --- AppManager TF-001: --add-missing could not see a migrated checklist's BRD ids -------------
+# A checklist migrated from an older plan names its items on the requirement line, "(BRD-1, BRD-2)"
+# or "*(BRD-84, BRD-85)*", with no *BRD:* line and no id in the status table: one run appended a row
+# for all 88 BRD items.
+am_001() {
+  local d="$SCRATCH/am001"; mkdir -p "$d/docs" "$d/.tfcore"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-BRD.md" <<'MD'
+# Fx — Business Requirements
+
+| | |
+|---|---|
+| Size | Small |
+
+## Requirements
+
+- **BRD-1** — Applications can be created. *Screen:* Applications
+- **BRD-2** — Applications can be edited. *Screen:* Applications
+- **BRD-3** — Users can be listed. *Screen:* Users
+- **BRD-4** — Devices can be blocked. *Screen:* Devices
+MD
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+## Requirements Status
+
+| ID | Requirement | Status | % | Remarks | Details |
+|----|-------------|--------|---|---------|---------|
+| REQ-FN-001 | Application create and edit (P1) | Done (pre-existing) | 100% | — | [view](#d-req-fn-001) |
+| REQ-UI-001 | Users list (P1) | Done (pre-existing) | 100% | — | [view](#d-req-ui-001) |
+
+## Functional
+
+<a id="d-req-fn-001"></a>
+- **REQ-FN-001** — Application create and edit with a testable connection. (BRD-1, BRD-2)
+
+<a id="d-req-ui-001"></a>
+### Page: Users (`/users`)
+- **REQ-UI-001** — Users list with search. *(BRD-3)*
+MD
+  local out; out="$(cd "$d" && python3 "$UTILS/tf-split-brd.py" Fx --add-missing 2>&1)"
+  local n; n="$(grep -c '^| REQ-' "$d/docs/Fx-Checklist.md")"
+  if [[ "$n" == "3" ]] && grep -q "Devices can be blocked" "$d/docs/Fx-Checklist.md"; then
+    ok am_001 "a migrated checklist's ids on the requirement line are seen; only the one new item is appended"
+  else
+    bad am_001 "--add-missing appended $((n - 2)) row(s) for 1 new item"; note "$(head -c 200 <<<"$out")"
+  fi
+}
+
+# --- AppManager TF-002: a "### Page:" heading under the anchor cut the entry off ----------------
+am_002() {
+  local d="$SCRATCH/am002"; mkdir -p "$d/docs/mockups"
+  echo '<p>users</p>' > "$d/docs/mockups/users.html"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Requirements Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Detail |
+|---|---|---|---|---|---|
+| REQ-UI-001 | Users list | Verified | 100% | — | [view](#d-req-ui-001) |
+| REQ-FN-002 | Users export | Verified | 100% | — | [view](#d-req-fn-002) |
+
+## Coverage
+
+<a id="d-req-ui-001"></a>
+### Page: Users (`/users`)
+- **REQ-UI-001** — Users list (BRD-1)
+  - Acceptance: When a user opens Users on Users, then the list shows.
+  - *Mockup:* [mockups/users.html](mockups/users.html)
+
+<a id="d-req-fn-002"></a>
+- **REQ-FN-002** — Users export
+  - Acceptance: When a user exports on Users, then a file downloads.
+MD
+  local out; out="$(python3 "$UTILS/tf-doc-check.py" --root "$d" --quiet "$d/docs/Fx-Checklist.md" 2>&1)"
+  # REQ-FN-002 really names no BRD item: that finding proves the entries were read at all, and that
+  # REQ-UI-001's reading stopped where REQ-FN-002 begins
+  if grep -q 'REQ-FN-002 detail entry does not name its BRD-N item' <<<"$out" \
+     && ! grep -qE 'REQ-UI-001 (must have exactly one acceptance line|detail entry does not name|is a UI row without a mockup link)' <<<"$out"; then
+    ok am_002 "an entry with its page heading under the anchor is read whole, and the next entry still ends it"
+  else
+    bad am_002 "the entry was cut at its own heading"; note "$(grep -E 'REQ-(UI-001|FN-002)' <<<"$out" | head -2)"
+  fi
+}
+
+# --- AppManager TF-003: Done (pre-existing) rows on the working list ---------------------------
+am_003() {
+  local d="$SCRATCH/am003"; mkdir -p "$d/docs" "$d/.tfcore"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+## Requirements Status
+
+| ID | Requirement | Status | % | Remarks | Details |
+|----|-------------|--------|---|---------|---------|
+| REQ-FN-005 | Account lockout (P1) | Done (pre-existing) | 100% | — | [view](#d-req-fn-005) |
+| REQ-FN-006 | Password reset | Not Started | 0% | — | [view](#d-req-fn-006) |
+
+## Functional
+
+<a id="d-req-fn-005"></a>
+- **REQ-FN-005** — Account lockout (BRD-5)
+<a id="d-req-fn-006"></a>
+- **REQ-FN-006** — Password reset (BRD-6)
+  - *Acceptance:* When a user asks for a reset on Sign-in, then an email is sent.
+MD
+  local out; out="$(cd "$d" && python3 "$UTILS/tf-build-list.py" Fx 2>&1)"
+  if grep -q '1 row(s) to build; 1 terminal' <<<"$out" && ! grep -q 'REQ-FN-005 \[' <<<"$out"; then
+    ok am_003 "a Done (pre-existing) row is finished: it is not on the working list and is not asked for an acceptance line"
+  else
+    bad am_003 "a Done (pre-existing) row was put on the working list"; note "$(grep -E '^Mode|REQ-FN-005' <<<"$out" | head -2)"
+  fi
+}
+
+# --- AppManager TF-004: a Web API answers 404 at /, and the other side's asset lists -------------
+am_004() {
+  local d; d="$(_tf043_fx am004)"
+  # the app answers every request with 404, as a Web API with nothing at / does
+  cat > "$d/bin/dotnet" <<'SH'
+#!/usr/bin/env bash
+urlport() { local u=""; while [[ $# -gt 0 ]]; do [[ "$1" == "--urls" ]] && u="$2"; shift; done; echo "${u##*:}"; }
+case "$1" in
+  publish) out=""; for ((i=1; i<=$#; i++)); do [[ "${!i}" == "-o" ]] && { j=$((i+1)); out="${!j}"; }; done
+           mkdir -p "$out"; echo dll > "$out/Fx.dll"; echo "Fx -> $out"; exit 0 ;;
+  build) echo "Build succeeded."; exit 0 ;;
+  *.dll) exec python3 -c 'import http.server,sys
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self): self.send_response(404); self.send_header("Content-Length","0"); self.end_headers()
+    def log_message(self,*a): pass
+http.server.HTTPServer(("127.0.0.1",int(sys.argv[1])),H).serve_forever()' "$(urlport "$@")" "$1" ;;
+esac
+SH
+  chmod +x "$d/bin/dotnet"
+  local p; p="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  local out; out="$(timeout 200 cat < <(cd "$d" && HOME="$d/home" PATH="$d/bin:/usr/bin:/bin" bash "$UTILS/tf-verify-boot.sh" start --project p/Fx.csproj --port "$p" 2>&1))"
+  if grep -q '^BOOTED' <<<"$out"; then
+    ok am_004a "an app that answers 404 at / is up: any HTTP answer counts"
+  else
+    bad am_004a "an app answering 404 was reported as not brought up"; note "$(grep -E '^(BOOTED|NONE)' <<<"$out" | cut -c1-160)"
+  fi
+  ( cd "$d" && HOME="$d/home" PATH="$d/bin:/usr/bin:/bin" bash "$UTILS/tf-verify-boot.sh" stop --port "$p" ) >/dev/null 2>&1
+  pkill -f "Fx.dll" 2>/dev/null
+  # a web head whose referenced library was last built on the Windows side, with Windows paths in its asset list
+  local e="$SCRATCH/am004b"; mkdir -p "$e/bin" "$e/home" "$e/p" "$e/lib/obj/Debug/net10.0"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Web"><ItemGroup><ProjectReference Include="..\\lib\\Lib.csproj" /></ItemGroup></Project>\n' > "$e/p/Fx.csproj"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Razor"></Project>\n' > "$e/lib/Lib.csproj"
+  printf '{"ContentRoot":"C:\\\\1MyCode\\\\Fx\\\\lib\\\\wwwroot\\\\"}\n' > "$e/lib/obj/Debug/net10.0/staticwebassets.publish.json"
+  echo windows > "$e/lib/obj/.tf-build-side"
+  printf '#!/usr/bin/env bash\necho "Build succeeded."; exit 0\n' > "$e/bin/dotnet"; chmod +x "$e/bin/dotnet"
+  ( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" TF_BUILD_PLATFORM=wsl bash "$UTILS/tf-build.sh" build p/Fx.csproj ) >/dev/null 2>&1
+  if [[ ! -f "$e/lib/obj/Debug/net10.0/staticwebassets.publish.json" && "$(cat "$e/lib/obj/.tf-build-side" 2>/dev/null)" == wsl ]]; then
+    ok am_004b "a build that changes side clears the referenced library's asset lists the other side wrote"
+  else
+    bad am_004b "a Windows-written asset list in a referenced library survived a WSL build"
+  fi
+}
+
+# --- AppManager TF-005: a Testing Platform project prints no line per test ----------------------
+am_005() {
+  local d="$SCRATCH/am005"; mkdir -p "$d/.tfcore" "$d/tests/Fx.Tests"
+  cp -r "$UTILS" "$d/.tfcore/"
+  printf '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport></PropertyGroup><ItemGroup><PackageReference Include="xunit.v3" Version="3.2.2" /></ItemGroup></Project>\n' > "$d/tests/Fx.Tests/Fx.Tests.csproj"
+  cat > "$d/.tfcore/utils/tf-build.sh" <<'SH'
+#!/usr/bin/env bash
+echo "$*" > __D__/build.args
+sleep 1
+mkdir -p __D__/tests/Fx.Tests/bin/Debug/net10.0/TestResults __D__/tests/.artifacts/build
+cat > __D__/tests/Fx.Tests/bin/Debug/net10.0/TestResults/fx.trx <<'X'
+<?xml version="1.0" encoding="utf-8"?>
+<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><Results>
+<UnitTestResult testName="REQ-NFR-007 the whole suite finishes" outcome="Passed" />
+<UnitTestResult testName="REQ-FN-003 an invite answers 201" outcome="Failed"><Output><ErrorInfo><Message>expected 201, got 500</Message></ErrorInfo></Output></UnitTestResult>
+</Results></TestRun>
+X
+echo "Passed! - Failed: 1, Passed: 1, Skipped: 0, Total: 2" > __D__/tests/.artifacts/build/unit.log
+echo "FAIL  tests failed on wsl via dotnet (rung 1); log tests/.artifacts/build/unit.log"
+SH
+  sed -i "s#__D__#$d#g" "$d/.tfcore/utils/tf-build.sh"
+  ( cd "$d" && bash .tfcore/utils/tf-verify-tests.sh --no-browser --json-out tests/.artifacts/verify/tests.json ) >/dev/null 2>&1
+  local got; got="$(python3 -c "import json,sys
+try: r=json.load(open(sys.argv[1]))['reqs']
+except Exception: print('no-output'); sys.exit()
+print(r.get('REQ-NFR-007',{}).get('result'), r.get('REQ-FN-003',{}).get('result'), r.get('REQ-FN-003',{}).get('reason',''))" "$d/tests/.artifacts/verify/tests.json")"
+  if grep -q -- '-p:TestingPlatformCommandLineArguments=--report-xunit-trx' "$d/build.args" 2>/dev/null; then
+    ok am_005a "a Testing Platform project on xunit.v3 is asked for a TRX report"
+  else
+    bad am_005a "no report switch reached the Testing Platform project"; note "$(cat "$d/build.args" 2>/dev/null)"
+  fi
+  if [[ "$got" == "PASS FAIL unit test failed: expected 201, got 500" ]]; then
+    ok am_005b "unit tests are mapped to rows from the TRX report, failures with their message"
+  else
+    bad am_005b "the TRX report was not read into the rows"; note "$got"
+  fi
+}
+
+# --- AppManager TF-006: a signed-in screen whose document answers 401 -------------------------
+# The sign-in lives in the page, not in a cookie: the document answers 401, then the page draws the
+# screen from the session it keeps in the tab, or only once opened from inside the page.
+am_006() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip am_006 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/am006"; mkdir -p "$d"
+  cat > "$d/app.html" <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"><title>Fx</title></head><body><main id="root"></main>
+<script>
+ let live = false;                                   // a sign-in held only by this page
+ const root = document.getElementById('root');
+ function draw() {
+   const p = location.pathname, kept = sessionStorage.getItem('signed') === '1';
+   if (p.startsWith('/login')) {
+     root.innerHTML = '<form id="f"><input name="email" type="email"><input name="password" type="password"><button type="submit">Sign in</button></form>';
+     document.getElementById('f').addEventListener('submit', (e) => { e.preventDefault(); live = true; sessionStorage.setItem('signed', '1'); history.pushState({}, '', '/'); draw(); });
+     return;
+   }
+   const ok = p.startsWith('/vault') ? live : (live || kept);
+   root.innerHTML = ok ? `<h1>${p}</h1><p>Signed in, showing ${p} with its rows and figures.</p>` : '<p>Please sign in.</p><form><input type="password"></form>';
+ }
+ addEventListener('popstate', draw);
+ setTimeout(draw, 600);                              // the page's live connection attaches a moment later
+</script></body></html>
+HTML
+  cat > "$d/server.py" <<'PY'
+import http.server, sys
+APP = open(sys.argv[2], "rb").read()
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(401 if self.path.startswith(("/users", "/vault")) else 200)
+        self.send_header("Content-Type", "text/html; charset=utf-8"); self.send_header("Content-Length", str(len(APP))); self.end_headers()
+        self.wfile.write(APP)
+    def log_message(self, *a): pass
+http.server.ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+PY
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 "$d/server.py" "$port" "$d/app.html" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
+  sleep 1
+  ( cd "$d" && timeout 240 node screens.mjs --base "http://127.0.0.1:$port" --screen user-devices=/users/66 --screen vault=/vault \
+      --widths 1280 --login-path /login --user a@b.c --password x --render-wait 2000 --json-out "$d/screens.json" >/dev/null 2>&1 )
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+  local r; r="$(python3 -c "import json,sys
+try: s=json.load(open(sys.argv[1]))['screens']
+except Exception: print('no-output'); sys.exit()
+print(' '.join(x['name']+'='+x['render'] for x in s))" "$d/screens.json")"
+  grep -q 'user-devices=OK' <<<"$r" && ok am_006a "a screen whose document answers 401 and then draws signed in is graded, not unreachable" \
+                                    || { bad am_006a "a 401 document was graded unreachable though the page drew the screen"; note "$r"; }
+  grep -q 'vault=OK' <<<"$r" && ok am_006b "a screen whose sign-in lives only in the page is opened from inside the page after signing in" \
+                             || { bad am_006b "a sign-in held by the page was lost to a fresh page load"; note "$r"; }
+}
+
+# --- AppManager TF-007: a .slnx-only solution, and a test project two folders under tests/ ------
+# `ls *.sln *.slnx` failed whenever there was no .sln, and `tests/*/*.csproj` looked one folder deep,
+# so AppManager (AppManager.slnx, tests/unit/AppManager.UnitTests/) ran no unit test at all.
+_am007_fx() {   # $1 folder: the utils, with tf-build.sh replaced by one that records its arguments
+  mkdir -p "$1/.tfcore" "$1/tests/unit/Fx.UnitTests"
+  cp -r "$UTILS" "$1/.tfcore/"
+  printf '<Project Sdk="Microsoft.NET.Sdk"></Project>\n' > "$1/tests/unit/Fx.UnitTests/Fx.UnitTests.csproj"
+  cat > "$1/.tfcore/utils/tf-build.sh" <<SH
+#!/usr/bin/env bash
+echo "\$*" > $1/build.args
+mkdir -p $1/tests/.artifacts/build
+echo "  Passed REQ-NFR-007 the whole suite finishes [12 ms]" > $1/tests/.artifacts/build/unit.log
+echo "PASS  tests passed on wsl via dotnet (rung 1); log tests/.artifacts/build/unit.log"
+SH
+}
+am_007() {
+  local d="$SCRATCH/am007" got out
+  _am007_fx "$d/a"; : > "$d/a/Fx.slnx"
+  ( cd "$d/a" && bash .tfcore/utils/tf-verify-tests.sh --no-browser ) >/dev/null 2>&1
+  got="$(python3 -c "import json,sys
+try: print(json.load(open(sys.argv[1]))['reqs'].get('REQ-NFR-007',{}).get('result'))
+except Exception: print('no-output')" "$d/a/tests/.artifacts/verify/tests.json")"
+  [[ "$got" == PASS ]] && ok am_007a "a root holding only a .slnx runs the unit tests and maps them to rows" \
+                       || { bad am_007a "a .slnx-only solution was read as no solution"; note "REQ-NFR-007: $got"; }
+  _am007_fx "$d/b"
+  ( cd "$d/b" && bash .tfcore/utils/tf-verify-tests.sh --no-browser ) >/dev/null 2>&1
+  grep -q 'test tests/unit/Fx.UnitTests/Fx.UnitTests.csproj' "$d/b/build.args" 2>/dev/null \
+    && ok am_007b "with no solution, the only test project two folders under tests/ is the target" \
+    || { bad am_007b "a test project two folders under tests/ was not found"; note "$(cat "$d/b/build.args" 2>/dev/null || echo 'tf-build.sh never called')"; }
+  _am007_fx "$d/c"; mkdir -p "$d/c/tests/integration/Fx.IntTests"
+  printf '<Project Sdk="Microsoft.NET.Sdk"></Project>\n' > "$d/c/tests/integration/Fx.IntTests/Fx.IntTests.csproj"
+  out="$( cd "$d/c" && bash .tfcore/utils/tf-verify-tests.sh --no-browser 2>&1 )"
+  if grep -q 'NOT RUN — no solution here and 2 test projects' <<<"$out" && [[ ! -f "$d/c/build.args" ]]; then
+    ok am_007c "two test projects and no solution: both are named and none is guessed"
+  else
+    bad am_007c "several test projects without a solution were not named"; note "$(grep -m1 'unit tests' <<<"$out")"
+  fi
+}
+
+# --- AppManager TF-008: UI rows sent to trblazeui in a project that does not use TrBlazeUI ------
+# Every project is given .trblazeui/ by the framework, so the label must come from the project's files.
+am_008() {
+  local d="$SCRATCH/am008" out
+  mkdir -p "$d/docs" "$d/.tfcore" "$d/.trblazeui" "$d/src/Fx"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+## Requirements Status
+
+| ID | Requirement | Status | % | Remarks | Details |
+|----|-------------|--------|---|---------|---------|
+| REQ-UI-001 | Sign-in page | Not Started | 0% | — | [view](#d-req-ui-001) |
+
+## Page: Sign-in
+
+<a id="d-req-ui-001"></a>
+- **REQ-UI-001** — Sign-in page (BRD-1)
+  - *Acceptance:* When a user submits the form on Sign-in, then the dashboard opens.
+MD
+  printf '<Project Sdk="Microsoft.NET.Sdk.Web"><ItemGroup><PackageReference Include="Dapper" Version="2.1.66" /></ItemGroup></Project>\n' > "$d/src/Fx/Fx.csproj"
+  out="$(cd "$d" && python3 "$UTILS/tf-build-list.py" Fx 2>&1)"
+  grep -q 'Cluster A \[builder\]: REQ-UI-001' <<<"$out" \
+    && ok am_008a "a project with no TrBlazeUI reference has its UI cluster labelled builder" \
+    || { bad am_008a "a UI cluster was sent to trblazeui in a project that does not use it"; note "$(grep -m1 '^Cluster' <<<"$out")"; }
+  printf '<Project Sdk="Microsoft.NET.Sdk.Web"><ItemGroup><PackageReference Include="TrBlazeUI.Components" Version="2.0.3" /></ItemGroup></Project>\n' > "$d/src/Fx/Fx.csproj"
+  out="$(cd "$d" && python3 "$UTILS/tf-build-list.py" Fx 2>&1)"
+  grep -q 'Cluster A \[trblazeui\]: REQ-UI-001' <<<"$out" \
+    && ok am_008b "a project referencing TrBlazeUI keeps its UI cluster on trblazeui" \
+    || { bad am_008b "a TrBlazeUI project lost the trblazeui label"; note "$(grep -m1 '^Cluster' <<<"$out")"; }
+  rm -rf "$d/src"; printf '# Fx — Architecture\n\nUI library: TrBlazeUI.\n' > "$d/docs/Fx-Architecture.md"
+  out="$(cd "$d" && python3 "$UTILS/tf-build-list.py" Fx 2>&1)"
+  grep -q 'Cluster A \[trblazeui\]: REQ-UI-001' <<<"$out" \
+    && ok am_008c "before any project file exists, the Architecture document naming TrBlazeUI decides" \
+    || { bad am_008c "a first build of a TrBlazeUI project lost the trblazeui label"; note "$(grep -m1 '^Cluster' <<<"$out")"; }
+}
+
 # --- the ignore file that grew by one block per update -----------------------------------
 # `tr -d '\r' < .gitignore | grep -qE …` under `set -o pipefail`: grep -q stops at the first
 # match, tr dies writing the rest, the pipeline reports failure, and the framework block is
@@ -1770,7 +2371,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

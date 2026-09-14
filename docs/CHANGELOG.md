@@ -8,6 +8,106 @@
 
 ---
 
+## 2026-09-14 — AppManager's TF-007 and TF-008
+
+Both found by AppManager while re-checking TF-005 and TF-003. Cases `am_007` and `am_008` in
+`tests/regression/run.sh`, each failing against the scripts as AppManager had them and passing now.
+Misses `MISS-TechieFlow-20260914-01` and `-02`, both `weak-check`, fixed in the same run. The replies
+are in `docs/AppManager-TechieFlow-Feedback.md` and copied into AppManager's own file, where
+`tf-feedback.sh` reads both as fixed and waiting for a re-check. **Deployed:** `update-framework.sh` ran
+in all 19 projects, every one exit 0, and all 19 copies of the three changed scripts match this
+repository byte for byte. Both re-checks were run in AppManager with its deployed scripts:
+`tf-build-list.sh` labels the UI cluster `[builder]`, and `tf-verify-tests.sh --no-browser` with no
+`--target` ran the unit tests, PASS, `REQ-NFR-007` mapped.
+
+- **TF-007, no unit test run for a `.slnx`-only solution** (`tf-verify-tests.sh`). `ls *.sln *.slnx`
+  fails when either pattern matches nothing, and `tests/*/*.csproj` looked one folder deep. Each
+  pattern is tested on its own now, and a test project is found at any depth under `tests/`. With no
+  solution, the only test project becomes the target; several are named, never guessed between. On
+  AppManager with no `--target`: unit tests PASS, one TRX report, `REQ-NFR-007` PASS, 160 s. Before:
+  skipped.
+- **TF-008, UI clusters always labelled `trblazeui`** (`tf-build-list.py`). The framework copies
+  `.trblazeui/` into every project, so that folder is no evidence. The label now comes from a TrBlazeUI
+  package or project reference in a `.csproj` or `.props` file, or, before any project file exists,
+  from the Architecture document naming it. A printed line says which and why. AppManager: `[builder]`.
+  TfLens and TechieBlog: still `[trblazeui]`. The framework self-check still reads the list (87 rows,
+  all accounted for).
+
+## 2026-09-13, later — AppManager's TF-001 to TF-006
+
+AppManager's first feedback file, filed while building it. AppManager numbers its entries from
+TF-001, which TfLens's numbers also use, so its cases are `am_001` to `am_006` in
+`tests/regression/run.sh`, and `replies_complete` reads them against AppManager's file only. Each
+fails against the scripts AppManager has and passes now. Misses `MISS-TechieFlow-20260913-06` to `-11`.
+
+- **TF-001, `--add-missing` blind to a migrated checklist** (`weak-check`). BRD ids were read only
+  from a `*BRD:*` line or the status table; a checklist migrated from an older plan names them on the
+  requirement line, so all 88 items were appended. The requirement line and the lines under it are
+  read now. On a copy of AppManager's files: nothing to add. `</content>` and `</invoke>` in the report
+  were the editing tool's text, not the script's.
+- **TF-002, an entry cut at its own heading** (`weak-check`). A `### Page:` heading straight under an
+  anchor ended the entry before its content. On AppManager's checklist, 106 false findings became 67
+  real ones, from 24 UI entries never checked before.
+- **TF-003, `Done (pre-existing)` read as open** (`weak-check`). `norm()` drops a bracketed tail, so
+  the status arrived as `done`; `tf-build-list.py` and `tf-brd-status.py` both listed only the
+  bracketed spelling. AppManager: 32 rows to build became 14; the BRD table's 55 of 87 became 73.
+- **TF-004, a Web API never booted** (`weak-check`). `poll_http` accepted only 2xx/3xx at `/`; any HTTP
+  answer counts now, `--probe-path` exists, and a NONE says when the log shows the app listening.
+  `tf-build.sh` follows `ProjectReference`s and, on a side change, clears the other side's
+  `*staticwebassets*.json` as well as `scopedcss`. AppManagerApi: NONE after 151 s before, BOOTED in
+  9 s now; AppManagerUI's 461 Windows paths cleared, and AppManagerWeb booted.
+- **TF-005, Testing Platform unit tests never mapped** (`weak-check`). When every such project agrees,
+  the runner passes `-p:TestingPlatformCommandLineArguments=--report-xunit-trx` (or `--report-trx`)
+  and reads the TRX; console lines match in any case. On a copy of AppManager's 286 tests: 0 rows
+  mapped before, `REQ-NFR-007` PASS now.
+- **TF-006, a 401 page graded unreachable** (`weak-check`). With `--login-path`, a 401 or 403 is judged
+  by what the page draws; still signed out, the tool signs in again and opens the screen from inside
+  the page, counting it only when the page changed. On AppManagerWeb's Devices screen: UNREACHABLE
+  before, render and visual OK now.
+
+---
+
+## 2026-09-13 — TF-042 to TF-045: builders side by side, sign-in, and badges one wrapper deeper
+
+Four from TfLens's build and verify of 2026-09-12, fixed in one `*triage-and-fix` pass under YOLO.
+Each has a case in `tests/regression/run.sh` that fails against the scripts TfLens has and passes
+now. Misses `MISS-TechieFlow-20260913-01` to `-05`.
+
+- **TF-042, overflow read as clipping** (`weak-check`). The clip clause took `scrollWidth` alone, so a
+  sidebar whose rail handle straddles its edge by 8px failed every screen with nothing clipped. An
+  element whose overflow is visible is now cut off only where a clipping ancestor ends first. **A slip
+  of ours from TF-039 was found on the way** (`-02`, `regression`): `paintedRight()` cut a descendant
+  by the measured element itself, so a card that really clips, holding screen-reader text, read as
+  holding everything.
+- **TF-043, one build output for every builder** (`weak-check`, blocker). TF-034 isolated the state
+  files and not the build: every start ran `dotnet run` over the shared `bin/` and `obj/`, and TfLens
+  apps served a 0-byte or foreign stylesheet with a 200, or a dll older than its source. `start` now
+  publishes Debug into `tests/.artifacts/verify/run-<port>/` through the new `tf-build.sh publish`
+  and runs that copy with the project folder as its content root; `tf-build.sh` holds a per-repository
+  lock (`tests/.artifacts/build/.lock`) for build, test and publish, taken over when its holder died;
+  `stop --port` also finds an orphaned copy by its path. Proved on a real Blazor Server app, where the
+  old script let a sibling build change a running app's stylesheet and the new one did not. **Two
+  mistakes of the first version were caught on that app before shipping:** the start line left a
+  waiting group holding the caller's output, so an agent reading `start` would have waited forever
+  (now a case, `tf_043e`), and `dotnet publish` defaults to Release, which is not what `dotnet run`
+  runs. The Windows-side run of the copy was not exercised.
+- **TF-044, sign-in before the page was interactive** (`weak-check`, blocker). `login()` now types,
+  reads both values back, presses, and types again while the page stays on the sign-in address, up to
+  four times; fields and buttons are picked by selector order, not page order. On the real app the
+  old sign-in failed one run in three and the new one none.
+- **TF-045, positional pairing** (`weak-check`). A mockup badge is found in the app by its text under
+  the same anchor at any depth, digits folded, and then compared normally; a badge found by neither is
+  missing only while the parent is short of badges; the message says "could not be located" unless the
+  text is really there; colour buckets go by hue. Extra app icons, live-data wraps and the
+  `InputGroup` border are left as findings, and the reply says why.
+
+Suites: regression, verify, bugs, routing, goal, document check, mirror and requirements, run after
+the last change. Deployed to all 19 projects: `tf-build.sh`, `tf-verify-boot.sh`,
+`tf-verify-screens.mjs`, `tf-mockup-parity.mjs`. Answered in TfLens's feedback file; it reads 0
+open, 15 waiting to be re-checked, 30 closed.
+
+---
+
 ## 2026-09-12 — TF-037 to TF-041, and what the framework is actually neutral about
 
 Five more from TfLens's build and verify of 2026-09-11, fixed in one pass under YOLO. Each has a case

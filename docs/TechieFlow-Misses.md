@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 167 logged: 52 open, 114 fixed, 1 will not fix |
+| Count | 180 logged: 52 open, 127 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-09-12 |
+| Updated | 2026-09-14 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -66,10 +66,23 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (114)
+## Fixed (127)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260914-02 | 2026-09-14 by owner | 2026-09-14 by log-miss | the check was too weak | tf-build-list labelled every UI cluster trblazeui, so AppManager, which does not use TrBlazeUI, had its UI rows addressed to the trblazeui sub-agent; the label now comes from a TrBlazeUI reference in the project's own files (AppManager TF-008) |
+| MISS-TechieFlow-20260914-01 | 2026-09-14 by owner | 2026-09-14 by log-miss | the check was too weak | tf-verify-tests ran no unit test in AppManager, whose root holds only AppManager.slnx and whose test project sits at tests/unit/AppManager.UnitTests, because it looked for a .sln and a .slnx in one ls and for test projects only one folder under tests (AppManager TF-007) |
+| MISS-TechieFlow-20260913-11 | 2026-09-13 by owner | 2026-09-13 by log-miss | the check was too weak | tf-verify-screens graded a screen unreachable when its page answered 401, although AppManager's Blazor app then drew it signed in, so no signed-in screen of that app could be graded (AppManager TF-006) |
+| MISS-TechieFlow-20260913-10 | 2026-09-13 by owner | 2026-09-13 by log-miss | the check was too weak | tf-verify-tests asked for console lines per test, which Microsoft.Testing.Platform never prints, so none of AppManager's 286 xunit.v3 unit tests could ever reach a row (AppManager TF-005) |
+| MISS-TechieFlow-20260913-09 | 2026-09-13 by owner | 2026-09-13 by log-miss | the check was too weak | tf-verify-boot accepted only a 2xx or 3xx answer from /, so AppManager's Web API, answering 404 there, was called not brought up after 120 seconds and stopped while its log said it had started (AppManager TF-004) |
+| MISS-TechieFlow-20260913-08 | 2026-09-13 by owner | 2026-09-13 by log-miss | the check was too weak | tf-build-list and tf-brd-status trimmed the bracket from Done (pre-existing) before comparing, so AppManager's 18 finished rows went on the working list asking for acceptance lines and counted as open (AppManager TF-003) |
+| MISS-TechieFlow-20260913-07 | 2026-09-13 by owner | 2026-09-13 by log-miss | the check was too weak | tf-doc-check cut a checklist entry at the ### Page: heading written straight under its anchor, so it reported three false failures per entry and never really checked 24 AppManager UI entries (AppManager TF-002) |
+| MISS-TechieFlow-20260913-06 | 2026-09-13 by owner | 2026-09-13 by log-miss | the check was too weak | tf-split-brd --add-missing read BRD ids only from a *BRD:* line or the status table, so on AppManager's checklist, migrated from an older plan with its ids on the requirement line, it appended a row for all 88 BRD items (AppManager TF-001) |
+| MISS-TechieFlow-20260913-05 | 2026-09-13 by owner | 2026-09-13 by log-miss | the check was too weak | tf-mockup-parity paired elements by tag and position, so a badge a component library draws one wrapper deeper was reported missing and flattened into plain text while the page showed it, and a deep amber read as a different colour from a light one: about 60 of 69 findings on three TfLens screens wer |
+| MISS-TechieFlow-20260913-04 | 2026-09-13 by owner | 2026-09-13 by log-miss | the check was too weak | tf-verify-screens typed the sign-in details the moment the page arrived and pressed at once, so a page that becomes interactive a moment later wiped the email and every TfLens screen graded unreachable; it also took the first text box in the page as the email field (TF-044) |
+| MISS-TechieFlow-20260913-03 | 2026-09-13 by owner | 2026-09-13 by log-miss | the check was too weak | tf-verify-boot started every builder's app with dotnet run over one shared build output, and builds ran on top of each other, so TfLens apps served an empty or foreign stylesheet with a 200 and one ran a dll older than its source, and builders measured and filed defects that did not exist (TF-043) |
+| MISS-TechieFlow-20260913-02 | 2026-09-13 by owner | 2026-09-13 by log-miss | the check was too weak | our TF-039 fix let a card cut its own content before measuring it, so a card that really clips, holding screen-reader text, read as holding everything and its cut-off content went unreported (found while fixing TF-042) |
+| MISS-TechieFlow-20260913-01 | 2026-09-13 by owner | 2026-09-13 by log-miss | the check was too weak | tf-mockup-parity called a sidebar cut off because its rail handle straddles its edge by 8px, although nothing clips it up to the page, so every TfLens screen failed the clip check and 13 rows could not be verified (TF-042) |
 | MISS-TechieFlow-20260912-06 | 2026-09-12 by owner | 2026-09-12 by log-miss | the framework never said it | the framework calls itself technology-neutral, and its personas and tasks are, but tf-build.sh is .NET's and the verify tools are Playwright's with no stack question behind them, and nothing checked either half; the owner asked and the answer was not written down anywhere |
 | MISS-TechieFlow-20260912-05 | 2026-09-12 by owner | 2026-09-12 by log-miss | the check was too weak | tf-doc-check told TfLens to write a Phases document that was on disk, because the cross-phase rule read only the documents named on the command line, and an agent following it would have written over the real one (TF-041) |
 | MISS-TechieFlow-20260912-04 | 2026-09-12 by owner | 2026-09-12 by log-miss | the check was too weak | the emitter compared a new run record against the newest record only, so build-phase, which chains verify inside itself and finishes after it, could never record the 80 minutes and five builder clusters it ran before the verify started (TF-040) |

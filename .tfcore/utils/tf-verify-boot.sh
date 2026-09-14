@@ -2,14 +2,16 @@
 # tf-verify-boot.sh — start the application for a verify, reach it, and stop it (Sitting 4c, 2026-09-06).
 #
 #   bash .tfcore/utils/tf-verify-boot.sh start [--head web|windows|static] [--project <csproj>]
-#                                              [--port N] [--config Release] [--static <dir>]
+#                                              [--port N] [--config Release] [--static <dir>] [--probe-path /healthz]
 #   bash .tfcore/utils/tf-verify-boot.sh stop [--port N]
 #   bash .tfcore/utils/tf-verify-boot.sh status [--port N]
 #
 # Heads:
-#   web      a project on Microsoft.NET.Sdk.Web: started with `dotnet run --urls`, first through
-#            the rungs tf-build.sh knows (dotnet, ~/.dotnet/dotnet, then Windows-side cmd.exe on
-#            WSL), polled until it answers. Prints BOOTED mode=base url=http://localhost:PORT.
+#   web      a project on Microsoft.NET.Sdk.Web: published by `tf-build.sh publish` (its rungs, one
+#            build at a time) into tests/.artifacts/verify/run-<port>/, and that copy is run on the
+#            side that built it, reading its settings from the project folder as `dotnet run` does.
+#            Builders side by side never serve each other's half-written build (TF-043). A standalone
+#            WebAssembly project is still started with `dotnet run`. Prints BOOTED mode=base url=….
 #   windows  a MAUI Blazor Hybrid head (UseMaui + a net*-windows target): started Windows-side with
 #            WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222, the DevTools port
 #            relayed to every interface by tf-cdp-relay.ps1, and reached from WSL over CDP. Prints
@@ -72,7 +74,10 @@ poll_http() { # url seconds pid-to-watch(optional) -> 0 when it answers
   local url="$1" secs="$2" pid="${3:-}" i=0 code
   while [[ $i -lt $secs ]]; do
     code="$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$url" 2>/dev/null || true)"
-    [[ "$code" =~ ^[23] ]] && return 0
+    # Any HTTP answer means the app is serving; this asks whether it is up, not whether the page is
+    # right. A Web API with nothing at / answers 404, and was polled for 120 s, called "not brought up"
+    # and stopped while its log said "Application started" (AppManager TF-004).
+    [[ "$code" =~ ^[1-5][0-9][0-9]$ ]] && return 0
     if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then return 1; fi
     sleep 2; i=$((i+2))
   done
@@ -138,10 +143,29 @@ if image:
 if s.get("win_port"):
     ps = f"Get-NetTCPConnection -LocalPort {s['win_port']} -State Listen -ErrorAction SilentlyContinue | ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}"
     subprocess.run(["powershell.exe", "-NoProfile", "-Command", ps], capture_output=True)
+# An app whose starter died is nobody's child any more, so the kills above miss it and it keeps its
+# port and its files. The published copy names it: stop whatever runs from run-<port>/ (TF-043).
+m = re.search(r":(\d+)$", s.get("url") or "")
+run_port = port or (m.group(1) if m else "")
+if run_port:
+    mark = os.path.join(os.getcwd(), d, f"run-{run_port}") + os.sep
+    try:
+        procs = [p for p in os.listdir("/proc") if p.isdigit()]
+    except Exception:
+        procs = []
+    for p in procs:
+        try:
+            cmd = open(f"/proc/{p}/cmdline", "rb").read().replace(b"\0", b" ").decode(errors="replace")
+        except Exception:
+            continue
+        if mark in cmd and int(p) != os.getpid():
+            try:
+                os.kill(int(p), signal.SIGKILL)
+            except Exception:
+                pass
 s["stopped"] = True
 json.dump(s, open(path, "w"), indent=1)
 # the same app under its other name: boot.json and its own boot-<port>.json
-m = re.search(r":(\d+)$", s.get("url") or "")
 twins = [main] if port else ([os.path.join(d, f"boot-{m.group(1)}.json")] if m else [])
 for f in twins:
     try:
@@ -155,12 +179,13 @@ print(f"STOPPED head={s.get('head')} mode={s.get('mode')} pids={s.get('pids')}")
 PY
     exit 0 ;;
   start) ;;
-  *) sed -n '2,27p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 3 ;;
+  *) sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 3 ;;
 esac
 
-HEAD=""; PROJECT=""; PORT=""; CONFIG=""; STATIC=""
+HEAD=""; PROJECT=""; PORT=""; CONFIG=""; STATIC=""; PROBE="/"
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --probe-path) PROBE="${2:-/}"; [[ "$PROBE" == /* ]] || PROBE="/$PROBE"; shift 2 ;;
     --head) HEAD="${2:-}"; shift 2 ;;
     --project) PROJECT="${2:-}"; shift 2 ;;
     --port) PORT="${2:-}"; shift 2 ;;
@@ -227,6 +252,79 @@ if [[ "$HEAD" == "web" ]]; then
   fi
   URL="http://localhost:$PORT"
   keyed "$PORT"
+  # TF-043. `dotnet run` served the shared bin/ and obj/, which the next builder rewrites under a
+  # running app: on TfLens, 2026-09-12, four apps side by side, one sent its stylesheet as 200 with
+  # 0 bytes, one answered 500, and one ran a dll older than its own source. Each looked healthy and
+  # every measurement taken on it was wrong. So the app runs from a copy of its own, published by
+  # tf-build.sh, which lets one build run at a time; settings, secrets and files beside the project
+  # are read from the project folder, as `dotnet run` reads them.
+  if ! grep -q 'Microsoft\.NET\.Sdk\.BlazorWebAssembly' "$PROJECT"; then
+    ROOTDIR="$PWD"; RUN="$DIR/run-$PORT"
+    rm -rf "$RUN"
+    echo "### publish $PROJECT into $RUN" >> "$LOG"
+    # Debug unless --config says otherwise: `dotnet publish` alone builds Release, which is not the app
+    # `dotnet run` ran, and a Release publish over a Debug-built tree stamped the pages with one scope
+    # and the stylesheet with another (TfLens cluster E, in TF-043)
+    pub="$(bash "$HERE/tf-build.sh" publish "$PROJECT" -- -o "$RUN" -c "${CONFIG:-Debug}" 2>&1)"; prc=$?
+    printf '%s\n' "$pub" >> "$LOG"
+    verdict="$(grep -E '^(PASS|FAIL|NOT-RUN)' <<<"$pub" | tail -1)"
+    if [[ $prc -eq 1 ]]; then
+      first="$(grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$pub" | head -1 | sed 's/^\s*//' | cut -c1-160)"
+      write_state web none "" "" "tf-build.sh publish" "$PROJECT" "build error: ${first:-$verdict}" build-error "$PLATFORM"
+      echo "NONE head=web kind=build-error reason=the code does not build: ${first:-$verdict} (log $LOG)"; exit 2
+    elif [[ $prc -ne 0 || ! -f "$RUN/$ASM.dll" ]]; then
+      reason="${verdict:-the publish wrote no $ASM.dll into $RUN}"
+      write_state web none "" "" "tf-build.sh publish" "$PROJECT" "$reason" host "$PLATFORM"
+      echo "NONE head=web kind=host reason=$reason (log $LOG)"; exit 2
+    fi
+    # what `dotnet run` sets from the launch profile; the environment above all, which picks the
+    # settings file and whether the secrets are read
+    mapfile -t LSENV < <(python3 - "$PDIR/Properties/launchSettings.json" <<'PY'
+import json, os, sys
+try:
+    profiles = json.load(open(sys.argv[1], encoding="utf-8-sig")).get("profiles", {})
+except Exception:
+    profiles = {}
+env = next((dict(p.get("environmentVariables") or {}) for p in profiles.values() if p.get("commandName") == "Project"), {})
+env.setdefault("ASPNETCORE_ENVIRONMENT", "Development")
+if os.environ.get("ASPNETCORE_ENVIRONMENT"):
+    env["ASPNETCORE_ENVIRONMENT"] = os.environ["ASPNETCORE_ENVIRONMENT"]
+for k, v in env.items():
+    print(f"{k}={v}")
+PY
+)
+    WIN=""
+    case "$verdict" in
+      *"via cmd.exe"*|*"via winrun"*|*"via powershell.exe"*)
+        WIN=1; WPD="$(winarg "$(wslpath -w "$PDIR")")"; WDLL="$(winarg "$(wslpath -w "$RUN/$ASM.dll")")"
+        WWEB=""; [[ -d "$RUN/wwwroot" ]] && WWEB="--webroot $(winarg "$(wslpath -w "$RUN/wwwroot")")"
+        sets=""; for kv in "${LSENV[@]}"; do sets+="set $kv&& "; done
+        nohup cmd.exe /c "cd /d $WPD && ${sets}dotnet $WDLL --urls $URL --contentRoot $WPD $WWEB" >> "$LOG" 2>&1 < /dev/null &
+        PID=$!; label="cmd.exe /c dotnet" ;;
+      *)
+        runner="dotnet"; [[ "$verdict" == *"via ~/.dotnet/dotnet"* ]] && runner="$HOME/.dotnet/dotnet"
+        WEBR=(); [[ -d "$RUN/wwwroot" ]] && WEBR=(--webroot "$ROOTDIR/$RUN/wwwroot")
+        # the redirections belong to the whole background group and the group becomes the app: a group
+        # left waiting on its app kept this script's output open, so a caller reading it waited for ever
+        ( cd "$PDIR" || exit 1; exec env "${LSENV[@]}" nohup "$runner" "$ROOTDIR/$RUN/$ASM.dll" --urls "$URL" --contentRoot "$PWD" "${WEBR[@]}" ) \
+            >> "$ROOTDIR/$LOG" 2>&1 < /dev/null &
+        PID=$!; label="$([[ "$runner" == dotnet ]] && echo dotnet || echo '~/.dotnet/dotnet')" ;;
+    esac
+    if poll_http "$URL$PROBE" 120 "$PID"; then
+      write_state web base "$URL" "$PID" "$label (published copy)" "$PROJECT" "" "" "$PLATFORM"
+      set_state run_dir "$(json_escape "$RUN")"
+      [[ -n "$WIN" ]] && set_state win_port "$PORT"
+      echo "BOOTED head=web mode=base url=$URL rung=$label project=$PROJECT copy=$RUN pid=$PID log=$LOG stop=\"bash .tfcore/utils/tf-verify-boot.sh stop --port $PORT\""; exit 0
+    fi
+    pkill -P "$PID" 2>/dev/null; kill "$PID" 2>/dev/null
+    [[ -n "$WIN" ]] && powershell.exe -NoProfile -Command "Get-NetTCPConnection -LocalPort $PORT -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" >/dev/null 2>&1
+    last="$(grep -vE '^\s*$' "$LOG" | tail -3 | tr '\n' ' ' | cut -c1-240)"
+    # say what the log says: "no rung brought it up" sent a reader to the build when the app had started
+    said=""; grep -q 'Now listening on' "$LOG" && said=" although its log says it is listening"
+    write_state web none "" "" "$label (published copy)" "$PROJECT" "the published copy did not answer on $URL$PROBE within 120 s$said" host "$PLATFORM"
+    echo "NONE head=web kind=host reason=the published copy of $PROJECT did not answer on $URL$PROBE within 120 s$said; last lines: $last (log $LOG)"; exit 2
+  fi
+  # a standalone WebAssembly project has no server of its own to publish: `dotnet run` serves it
   rungs=()
   case "$PLATFORM" in
     wsl) command -v dotnet >/dev/null 2>&1 && rungs+=("dotnet"); [[ -x "$HOME/.dotnet/dotnet" ]] && rungs+=("$HOME/.dotnet/dotnet"); command -v cmd.exe >/dev/null 2>&1 && rungs+=("cmd.exe") ;;
@@ -246,7 +344,7 @@ if [[ "$HEAD" == "web" ]]; then
         PID=$!; label="$r" ;;
     esac
     tried+=("$label")
-    if poll_http "$URL/" 120 "$PID"; then
+    if poll_http "$URL$PROBE" 120 "$PID"; then
       WP_PORT=""; [[ "$r" == "cmd.exe" ]] && WP_PORT="$PORT"
       write_state web base "$URL" "$PID" "$label" "$PROJECT" "" "" "$PLATFORM"
       [[ -n "$WP_PORT" ]] && set_state win_port "$WP_PORT"

@@ -1039,8 +1039,15 @@ def check_checklist(c, rep):
         if not m:
             continue  # reported above through the Details link
         pos = m.start()
-        nxt = re.search(r"\n\s*(?:[-*]\s*)?<a id=|\n## |\n### ", body[pos + 1:])   # an entry is a list item: the dash precedes the anchor (miss 21)
-        entry = body[pos: pos + 1 + nxt.start()] if nxt else body[pos:]
+        # A "### Page: …" heading written straight under the entry's own anchor belongs to the entry.
+        # Stopping at the first "### " cut such an entry off before its content: three false failures
+        # each, and 24 AppManager entries never really checked (TF-002). The next one still ends it.
+        start = pos + 1
+        own = re.match(r"<a id=[^>]*>\s*</a>[^\n]*\n(?:[ \t]*\n)*[ \t]*### [^\n]*", body[pos:])
+        if own:
+            start = pos + own.end()
+        nxt = re.search(r"\n\s*(?:[-*]\s*)?<a id=|\n## |\n### ", body[start:])   # an entry is a list item: the dash precedes the anchor (miss 21)
+        entry = body[pos: start + nxt.start()] if nxt else body[pos:]
         acc = [l for l in entry.splitlines() if ACCEPT_LINE.search(l)]
         if len(acc) != 1:
             rep.fail(rel, f"{rid} must have exactly one acceptance line; found {len(acc)}")

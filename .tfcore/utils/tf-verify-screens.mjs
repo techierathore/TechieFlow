@@ -146,29 +146,70 @@ function writeOut(extra, results = [], login = null) {
   return summary;
 }
 
+// The first visible, usable match, trying the selectors IN ORDER. `.first()` over one selector list
+// takes whichever match comes first in the page, so `input[type="text"]` at the end of the list
+// picked a header search box standing before the email field (TF-044).
+async function pick(scope, selectors) {
+  for (const sel of selectors) {
+    const c = scope.locator(sel).first();
+    if (await c.count() && await c.isVisible().catch(() => false)) return c;
+  }
+  return null;
+}
+
+const LOGIN_ATTEMPTS = 4;
 async function login(page) {
   if (!LOGIN_PATH || !USER) return { attempted: false };
+  const onLogin = () => page.url().startsWith(BASE + LOGIN_PATH);
   try {
     await page.goto(BASE + LOGIN_PATH, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    const user = page.locator(`[${ATTR}*="user" i], [${ATTR}*="email" i], input[type="email"], input[name*="user" i], input[name*="email" i], input[id*="user" i], input[id*="email" i], input[type="text"]`).first();
-    const pass = page.locator(`[${ATTR}*="pass" i], input[type="password"]`).first();
-    await user.fill(USER, { timeout: 10000 });
-    await pass.fill(PASS || '', { timeout: 10000 });
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+    // a page that draws its form a moment after it arrives has no field to pick yet
+    await page.waitForSelector('input', { state: 'visible', timeout: 15000 }).catch(() => {});
+    const INPUT = ':is(input, textarea)';
+    const USER_FIELD = [`${INPUT}[${ATTR}*="email" i]`, `${INPUT}[${ATTR}*="user" i]`, 'input[type="email"]', 'input[autocomplete="username"]',
+                        'input[name*="email" i]', 'input[name*="user" i]', 'input[id*="email" i]', 'input[id*="user" i]', 'form input[type="text"]'];
+    const PASS_FIELD = ['input[type="password"]', `${INPUT}[${ATTR}*="pass" i]`];
     // The button, never a field: "login-email" and "login-pass" contain "login" too, and taking the
     // first test id with "login" in it clicked the email box, so sign-in never submitted (TF-033).
     const BTN = `:is(button, a, [role="button"], input[type="submit"], input[type="button"])`;
-    let btn = null;
-    for (const sel of ['button[type="submit"]', 'input[type="submit"]', `${BTN}[${ATTR}*="submit" i]`, `${BTN}[${ATTR}*="signin" i]`,
-                       `${BTN}[${ATTR}*="sign-in" i]`, `${BTN}[${ATTR}*="login" i]`, 'form button']) {
-      const c = page.locator(sel).first();
-      if (await c.count() && await c.isVisible().catch(() => false)) { btn = c; break; }
+    const BUTTON = ['button[type="submit"]', 'input[type="submit"]', `${BTN}[${ATTR}*="submit" i]`, `${BTN}[${ATTR}*="signin" i]`,
+                    `${BTN}[${ATTR}*="sign-in" i]`, `${BTN}[${ATTR}*="login" i]`, 'button'];
+    // A page drawn on the server first and made interactive a moment later replaces its fields when
+    // it becomes interactive: what was typed before that is gone, and a press before it does nothing.
+    // Waiting for the network proves neither, and every stack takes its own time. So the test is the
+    // result: the typed values are still in the fields when the button is pressed, and the page then
+    // leaves the sign-in address. Otherwise type again and press again. TfLens, 2026-09-12: the email
+    // read back empty the instant after it was typed, and the second attempt signed in (TF-044).
+    let why = 'the typed values did not stay in the fields';
+    for (let attempt = 1; attempt <= LOGIN_ATTEMPTS; attempt++) {
+      if (!onLogin()) break;
+      const user = await pick(page, USER_FIELD);
+      if (!user) return { attempted: true, ok: false, error: 'no user or email field found on the sign-in page' };
+      const pass = await pick(page, PASS_FIELD);
+      try {
+        await user.fill(USER, { timeout: 10000 });
+        if (pass) await pass.fill(PASS || '', { timeout: 10000 });
+        await page.waitForTimeout(400);
+        const kept = (await user.inputValue()) === USER && (!pass || (await pass.inputValue()) === (PASS || ''));
+        if (!kept) { why = 'the typed values did not stay in the fields'; continue; }
+        const form = user.locator('xpath=ancestor::form[1]');
+        const btn = (await form.count() ? await pick(form, BUTTON) : null) || await pick(page, BUTTON);
+        if (!btn) return { attempted: true, ok: false, error: 'no sign-in button found (a submit button, or a button whose test id says submit, signin or login)' };
+        await btn.click({ timeout: 10000 });
+        await page.waitForURL((u) => !u.href.startsWith(BASE + LOGIN_PATH), { timeout: 6000 }).catch(() => {});
+        why = 'the form was submitted with the values in place and the page stayed on the sign-in address';
+      } catch (e) {
+        if (onLogin()) why = e.message.split('\n')[0];
+      }
+      if (!onLogin()) {
+        await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+        await page.waitForTimeout(SETTLE);
+        return { attempted: true, ok: true, url: page.url(), attempts: attempt };
+      }
     }
-    if (!btn) return { attempted: true, ok: false, error: 'no sign-in button found (a submit button, or a button whose test id says submit, signin or login)' };
-    await Promise.all([page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {}), btn.click({ timeout: 10000 })]);
-    await page.waitForTimeout(SETTLE);
-    const url = page.url();
-    const still = url.startsWith(BASE + LOGIN_PATH);
-    return { attempted: true, ok: !still, url };
+    if (!onLogin()) return { attempted: true, ok: true, url: page.url(), attempts: 1 };
+    return { attempted: true, ok: false, url: page.url(), attempts: LOGIN_ATTEMPTS, error: `still on the sign-in page after ${LOGIN_ATTEMPTS} attempts: ${why}` };
   } catch (e) {
     return { attempted: true, ok: false, error: e.message.split('\n')[0] };
   }
@@ -201,6 +242,28 @@ async function navigate(page, route) {
     await page.waitForTimeout(SETTLE);
     return { status: resp ? resp.status() : 0, url: page.url() };
   } catch (e) { return { status: 0, error: e.message.split('\n')[0] }; }
+}
+
+// On the sign-in address, or showing a password field: the page is signed out (TF-006).
+async function signedOut(page) {
+  try {
+    if (new URL(page.url()).pathname.startsWith(LOGIN_PATH)) return true;
+    return await page.locator('input[type="password"]').first().isVisible().catch(() => false);
+  } catch (e) { return true; }
+}
+
+// Open a route from inside the page, the way its own links do, so a sign-in held by the page survives.
+// It counts only when the page drew something different: a server-drawn page has no router to answer
+// the event, and grading the page it was already on under another screen's name would be a false pass.
+async function navigateInApp(page, route) {
+  try {
+    const before = await page.evaluate(() => document.body ? document.body.innerText : '');
+    await page.evaluate((r) => { history.pushState({}, '', r); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); }, route);
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(SETTLE);
+    const after = await page.evaluate(() => document.body ? document.body.innerText : '');
+    return after !== before;
+  } catch (e) { return false; }
 }
 
 // Wait for the screen's first render before measuring anything. Returns the milliseconds waited.
@@ -392,9 +455,24 @@ for (const width of WIDTHS) {
     }
     const excused = (r.hidden_by_width || {})[width] || [];
     consoleErrors.length = 0;
-    const nav = await navigate(page, s.route);
+    let nav = await navigate(page, s.route);
     const shot = `${SHOTS}/${slug(s.name)}-${width}.png`;
     const entry = { width, url: nav.url || '', status: nav.status, screenshot: shot, console_errors: [] };
+    // --- AppManager TF-006: a sign-in the page keeps for itself, not in a cookie. The document for a
+    // signed-in screen answers 401 because the server cannot see the sign-in; the page then draws the
+    // screen once its live connection reads the session in the tab, or never, when the sign-in lives
+    // only in that connection. So a 401 or 403 is judged by what the page draws: signed in, the screen
+    // is graded; still signed out, the tool signs in again and opens the screen from inside the page.
+    if (!CDP && LOGIN_PATH && USER && (nav.status === 401 || nav.status === 403)) {
+      await waitForRender(page, [], ATTR);
+      let how = `answered HTTP ${nav.status}, then drew the screen signed in`;
+      if (await signedOut(page)) {
+        how = '';
+        const again = await login(page);
+        if (again.ok && await navigateInApp(page, s.route) && !(await signedOut(page))) how = `answered HTTP ${nav.status}; opened from inside the page after signing in`;
+      }
+      if (how) { entry.reached = how; nav = { status: 200, url: page.url() }; entry.url = nav.url; }
+    }
     const redirectedToLogin = LOGIN_PATH && nav.url && new URL(nav.url).pathname.startsWith(LOGIN_PATH) && !s.route.startsWith(LOGIN_PATH);
     if (nav.status === 0 || nav.status >= 400 || redirectedToLogin) {
       entry.render = 'UNREACHABLE'; entry.visual = 'n/a';

@@ -229,6 +229,11 @@ def run(app, phase, force, add_missing, in_order=False):
     # appended 44 rows to TfLens phase 3 for 13 new items, 31 of them copies of Verified rows (TF-025).
     mapped = {b for line in re.findall(r"(?m)^.*\*BRD:\*.*$", existing) for b in re.findall(r"BRD-\d+", line)}
     mapped |= {b for row in re.findall(r"(?m)^\|\s*REQ-.*$", existing) for b in re.findall(r"BRD-\d+", row)}
+    # ...and on the requirement's own line in its detail entry, with the lines indented under it. A
+    # checklist migrated from an older plan names its items there, as "(BRD-1, BRD-2)" or
+    # "*(BRD-84, BRD-85)*", with no *BRD:* line: AppManager's run appended a row for all 88 items (TF-001).
+    for block in re.findall(r"(?m)^\s*[-*]\s*(?:<a id=[^>]*>\s*</a>\s*)?\*\*REQ-[A-Z]+-\d{3}\*\*.*(?:\n[ \t]+\S.*)*", existing):
+        mapped |= set(re.findall(r"BRD-\d+", block))
     counters = other_phase_counters(app, cl_p, below=phase if in_order else None)
     if add_missing:
         for m in re.finditer(r"REQ-(UI|FN|RAG|NFR)-(\d{3})", existing):

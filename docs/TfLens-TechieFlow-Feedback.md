@@ -4,7 +4,7 @@
 |---|---|
 | App | TfLens |
 | Upstream | TechieFlow |
-| Updated | 2026-09-11 |
+| Updated | 2026-09-13 |
 
 Defects found in the **TechieFlow framework itself** (`.tfcore/`) while building TfLens. That directory
 is owned and maintained by the TechieFlow team and is gitignored here — `update-framework.sh` overwrites
@@ -18,7 +18,7 @@ Workaround / Suggested fix). One file per upstream owner; this one is TechieFlow
 
 ## Summary
 
-**Nothing is blocked.** 41 entries: none open, 16 fixed upstream and waiting to be re-checked here (TF-018, TF-020, TF-021, TF-025 to TF-028, TF-030, TF-033 to TF-035, TF-037 to TF-041), 25 closed. TF-013 to TF-017, TF-019, TF-022 to TF-024, TF-029, TF-031, TF-032 and TF-036 were re-checked and closed here on 2026-09-11. Every problem TfLens filed up to TF-036 is fixed in the framework: TF-013 to TF-022 on 2026-09-09 (the reply that day left out TF-013 to TF-017, which is why they showed open here), TF-023 to TF-036 on 2026-09-11 and TF-037 to TF-041 on 2026-09-12. A fix counts as done only once it has been re-checked here: run each entry's "Verify from here" step in the Resolution status block of 2026-09-11, then close it with `bash .tfcore/utils/tf-feedback.sh TfLens --close <ID> "<what you ran and what it showed>"`. `bash .tfcore/utils/tf-feedback.sh TfLens` prints the state of every entry. Never describe a fixed entry as an open problem.
+**Nothing is blocked.** 45 entries: none open, 15 fixed upstream and waiting to be re-checked here (TF-018, TF-020, TF-021, TF-025 to TF-028, TF-030, TF-033 to TF-035, TF-042 to TF-045), 30 closed. TF-013 to TF-017, TF-019, TF-022 to TF-024, TF-029, TF-031, TF-032 and TF-036 were re-checked and closed here on 2026-09-11, and TF-037 to TF-041 on 2026-09-12 (the account of that run is in `docs/TfLens-Feedback-Recheck-2026-09-12.md`). Every problem TfLens filed up to TF-045 is fixed in the framework: TF-013 to TF-022 on 2026-09-09 (the reply that day left out TF-013 to TF-017, which is why they showed open here), TF-023 to TF-036 on 2026-09-11, TF-037 to TF-041 on 2026-09-12 and TF-042 to TF-045 on 2026-09-13. A fix counts as done only once it has been re-checked here: run each entry's "Verify from here" step in its Resolution status block, then close it with `bash .tfcore/utils/tf-feedback.sh TfLens --close <ID> "<what you ran and what it showed>"`. `bash .tfcore/utils/tf-feedback.sh TfLens` prints the state of every entry. Never describe a fixed entry as an open problem.
 
 #### Detail
 
@@ -141,6 +141,30 @@ that grew a legal move as a result.
 > and a message naming the real reason. **The dated evidence is kept and `TF-004` stays closed here**;
 > `PROJECT-STATUS.md` is owned elsewhere and was not edited. Its line 53 also still counts five
 > entries, where the collision fix above makes six.
+
+---
+
+## Resolution status (TechieFlow team, 2026-09-13)
+
+**All four problems filed on 2026-09-12 and 2026-09-13 are fixed in the framework and deployed to
+this repository.** Nothing is blocked. Run each row's "Verify from here" step, then close the entry
+with `bash .tfcore/utils/tf-feedback.sh TfLens --close <ID> "<what you ran and what it showed>"`.
+TechieFlow never closes an entry for you. Every fix carries a case in `tests/regression/run.sh` that
+fails against the scripts you have and passes now; they are logged as `MISS-TechieFlow-20260913-01`
+to `-05`.
+
+| ID | Fix | Verify from here |
+|----|-----|------------------|
+| **TF-042** | The clip check now asks whether anything really cuts the content off. An element whose overflow is visible draws what spills past its edge in full, so it is reported only when an ancestor that clips ends first. While fixing it we found a slip of ours from TF-039: a card that really clips, holding screen-reader text, cut its own content before measuring it and read as holding everything. That is fixed too (`MISS-TechieFlow-20260913-02`). | `bash .tfcore/utils/tf-mockup-parity.sh --base <url> --screen effort=/effort --widths 1280`: no `clip` finding keyed `app-sidebar`. Next `*verify ui`: the 13 rows it held back can reach Verified on this check. |
+| **TF-043** | Three changes. **(1)** `tf-verify-boot.sh start` no longer runs `dotnet run` over the shared `bin/` and `obj/`. It publishes the project in Debug into `tests/.artifacts/verify/run-<port>/` and runs that copy, reading settings, user secrets and files beside the project from the project folder, as `dotnet run` does. The copy sits inside the repository, so your search for `database/001-schema.sql` upward from the binary still finds it. **(2)** `tf-build.sh` runs one build, test or publish at a time per repository: a second one waits and prints `wait  another build is running`, and a lock left by a build that died is taken over. **(3)** `stop --port <n>` also stops an app whose starter died, found by the copy it runs from. Proved on a real Blazor Server app: under the old script a sibling build changed the stylesheet the running app served; under the new one the running app kept serving its own copy byte for byte while the shared build folder carried the change, and every scope stamp on the page matched a rule in its stylesheet. Not exercised here: the Windows-side run of the copy (`cmd.exe`), which is used only when the WSL rungs cannot publish. | Start two apps during a build: `bash .tfcore/utils/tf-verify-boot.sh start --port 5361` and `--port 5371`. Each BOOTED line names `copy=tests/.artifacts/verify/run-<port>`. Run `bash .tfcore/utils/tf-build.sh` in another shell, then `assertScopedCssLoaded` passes on both ports. The hand-published copies are no longer needed. |
+| **TF-044** | Sign-in waits for the page to settle, types, checks that the typed values are still in both fields, and only then presses the button. When the page stays on the sign-in address it types and presses again, up to four times. The user field is chosen by the best-matching rule first, never the first text box in the page, so a search box before the email field is not typed into. Proved on a real Blazor Server sign-in page that becomes interactive after it is drawn: the old sign-in failed one run in three, landing on `/login?`; the new one signed in three runs of three. | `bash .tfcore/utils/tf-verify-screens.sh --list … --base <url> --login-path /login --user <u> --password <p>`: no `LOGIN failed` line, and `screens.json` shows `login.ok: true` with the attempts it took. `--storage-state` is no longer needed. |
+| **TF-045** | Four changes. **(1)** A badge the mockup draws is looked for in the app by its text under the same anchor, at any depth, with numbers allowed to differ, so live "87 of 91 misses assessed" matches the mockup's "39 of 41". Once found it is compared like any paired element: a wrong colour or ring is still reported, and so is a badge turned into plain text. **(2)** A badge found neither by text nor by position is missing only while the app draws fewer badges under that parent than the mockup does, the rule icons have followed since TF-027. **(3)** A reported badge says what was seen: "flattened into plain text" only when the app shows that text, otherwise "could not be located". **(4)** Colours are grouped by hue, so a deep amber and a light amber are both warning. **Not changed:** an icon the app carries and the mockup does not is still reported, because the mockup is the design and should settle it; a wrap caused by longer live data is still reported; and a border drawn on an `InputGroup` rather than its input still compares by position. | Next `*verify` on `/misses`, `/effort` and `/prices`: no `missing` finding on `miss-origin`, `miss-whymissed` or `miss-review-cost`; `coverage.relocated` in the JSON counts the badges found by text; the `bg-alert-warning-bg` tile has no colour finding. |
+
+**One thing on your side of this file.** `bash .tfcore/utils/tf-doc-check.sh docs/TfLens-TechieFlow-Feedback.md`
+fails on your entries TF-043, TF-044 and TF-045: each is longer than the 250-word maximum, and TF-045
+writes `**Repro.**`, `**Expected.**` and `**Actual.**` where the check reads `Repro:`, `Expected:` and
+`Actual:`. The detail is useful; move what goes past the limit into a note of your own and link it
+when you close the entries.
 
 ---
 
@@ -2635,6 +2659,8 @@ two inline elements is still found by the fragment comparison.
 
 ## TF-037 — `tf-verify-tests.sh` keeps only the first line `tf-build.sh test` prints, so a note line before the result makes every unit test read as not run
 
+> ✅ **Closed 2026-09-12** — re-checked here: Forced the note condition (set src/TfLens/obj/.tf-build-side to windows with scopedcss present) and ran tf-build.sh build: the note is the first line, the PASS verdict is the second, so the old head -1 would still have taken the note. tf-verify-tests.sh --no-browser over the same condition printed 'unit tests: PASS  test on wsl via ~/.dotnet/dotnet (rung 2)' and tests.json records unit.ran true with 19 rows PASS, 0 FAIL. tf-build.sh probe printed two clean lines (platform/target and the rung order) and no error line, exit 0.
+
 - **Severity:** major
 - **Blocks:** no. The unit tests were re-run without the note and the verdict read the real results.
 - **Repro:** build from the Windows side of a WSL machine (or let `tf-build.sh` fall to a Windows rung), then
@@ -2653,6 +2679,8 @@ two inline elements is still found by the fragment comparison.
 **What is NOT affected.** The browser tests, read from the Playwright report, and `tf-build.sh`, whose result line is right.
 
 ## TF-038 — `tf-mockup-parity` counts a transparent border as a visible one, and reads an icon's colour from a border it does not draw
+
+> ✅ **Closed 2026-09-12** — re-checked here: Ran tf-mockup-parity.sh over /effort, /misses and /prices at 1280 and 390. On /prices the findings fell from 15 to 6: every ghost and primary button pair is gone (prices-remove-anthropic, -openai, -opencode-go, -openrouter, prices-add, prices-save-rate) and the chip-icon finding 'semantic colour differs - mockup accent, app neutral' on prices-standing-note is gone. No 'semantic colour differs' finding appears on any of the three screens now. The one badge/stroke pair left, on prices-filter-openrouter, is a real difference, not the old false positive: a computed-style probe reads border-top 1px solid rgb(38,38,38) in the mockup and 0px in the app, so a drawn border is still read. That difference is an app-side gap, logged separately.
 
 - **Severity:** major
 - **Blocks:** no. Every finding was checked by eye against the mockup and recorded as the tool's error.
@@ -2674,6 +2702,8 @@ two inline elements is still found by the fragment comparison.
 ---
 
 ## TF-039 — `tf-mockup-parity`'s `clip` clause measures descendants unclipped, so a table that scrolls inside its own container is reported as cut off
+
+> ✅ **Closed 2026-09-12** — re-checked here: Ran tf-mockup-parity.sh --screen effort=/effort --widths 1280,390. At 390px there is no 'content is cut off horizontally' finding at all: effort-phases, effort-routing and effort-page > div[7], all three reported clipped at 390 in the pre-fix run (tests/.artifacts/verify/effort-fix/parity-full.json), are clean. The only clip finding left is app-sidebar at 1280, which is on the same two pre-fix runs as well, so it predates this fix and is a separate matter.
 
 - **Severity:** minor
 - **Blocks:** no. The three findings were checked against screenshots and adjudicated in the verdicts file.
@@ -2698,6 +2728,8 @@ branch still reports.
 
 ## TF-040 — a command that chains the verifier can never record its own first segment: the emitter refuses any run that starts before the last record ends
 
+> ✅ **Closed 2026-09-12** — re-checked here: Reproduced TF-040's exact shape on a sandbox stream (TF_METRICS_ROOT to a scratch dir, so the real runs.jsonl was untouched). Wrote the chained verify's record first (2026-09-11T18:13:36Z to 21:13:15Z), then emitted the build's own first segment (16:53:16Z to 18:13:36Z) after it: appended, the stream went to two records. A run that really overlaps (17:30:00Z to 19:00:00Z) was still refused, and the refusal named the record it collides with - 'overlaps the verify-phase run of TfLens already on the stream (2026-09-11T18:13:36Z to 2026-09-11T21:13:15Z)' - and appended nothing.
+
 - **Severity:** major
 - **Blocks:** no. The segment after the chained verify was recorded, and the run record the status gate demands exists.
 - **Repro:** `*build-phase`, whose task file says to start with `tf-phase.sh start` (marker 16:53:16Z), chain `*verify` inline at step 6
@@ -2716,6 +2748,8 @@ branch still reports.
 
 ## TF-041 — `tf-doc-check` says the Phases document does not exist when it exists but was not named on the command line
 
+> ✅ **Closed 2026-09-12** — re-checked here: Ran bash .tfcore/utils/tf-doc-check.sh docs/TfLens-Checklist.md docs/TfLens-P2-Checklist.md docs/TfLens-P3-Checklist.md, without naming docs/TfLens-Phases.md. No 'Phases document' line appears anywhere in the output (grep count 0) and the run ends 0 FAIL, 179 WARN over 3 documents, with the 50 old findings carried as OLD. The cross-phase rules still ran.
+
 - **Severity:** minor
 - **Blocks:** no. The status gate passed once the file was named in the same command.
 - **Repro:** a project with `docs/<App>-P2-Checklist.md` and `-P3-Checklist.md` present and `docs/<App>-Phases.md` on disk, then
@@ -2729,3 +2763,334 @@ branch still reports.
 - **Suggested fix:** load the Phases document from disk for this cross-document rule, or word it as "was not checked in this run".
 
 **What is NOT affected.** Every rule over documents actually named on the command line.
+
+---
+
+## TF-042 — `tf-mockup-parity`'s `clip` clause calls content cut off when nothing clips it, so one control straddling its container's edge fails every screen
+
+- **Severity:** major
+- **Blocks:** no. The rows are written `Needs re-verify` carrying the finding, never falsely `Verified`, and the run finished.
+- **Repro:** a shell sidebar carrying a shadcn-style rail handle — a 16px button centred on the sidebar's right edge with
+  `-translate-x-1/2` — inside a sidebar whose `overflow-x` is `visible`, then `tf-mockup-parity.sh --screen effort=/effort`.
+- **Expected:** no `clip` finding. With `overflow-x: visible` and no clipping ancestor, the button is painted in full; nothing is cut off.
+- **Actual:** `content is cut off horizontally; the mockup is not clipped` on `app-sidebar` at 1280 on every screen graded.
+  `clipOf()` (`tf-mockup-parity.mjs:248`) takes `scrollWidth - clientWidth` without asking whether the element clips.
+  Measured: app `scrollWidth` 263, `clientWidth` 255, own `overflow-x` `visible`, every ancestor to `html` also `visible`,
+  the rail drawn whole. The mockup's sidebar is 255/255 with `overflow-x: hidden`, so the sentence is backwards too. First
+  failing check on all 13 rows of this verify, across three screens.
+- **Encountered in:** TfLens `*verify ui`, 2026-09-12.
+- **Workaround:** none in the tool; read every `clip` finding against that element's own `overflow-x` before believing it.
+- **Suggested fix:** in `clipOf()`, report no horizontal overflow when the element's own `overflow-x` is `visible` and no
+  ancestor up to the compared root clips — `paintedRight()` already walks exactly that chain.
+
+**What is NOT affected.** Vertical clipping, an element that really does clip (`overflow-x` `auto`, `hidden` or `scroll`), the
+TF-039 fallback branch, and the other six comparison classes.
+
+---
+
+## TF-043 — `tf-verify-boot.sh` boots every concurrent builder against one shared `obj/`, so a running app serves an empty scoped-CSS bundle with a 200 and every geometry measurement silently becomes meaningless
+
+- **Severity:** blocker
+- **Blocks:** no — the pass completed. But it is filed blocker because a run that hits it produces
+  *confident wrong measurements* rather than a failure: the smoke reports geometry it never measured,
+  and a builder acting on it will "fix" a screen that was never broken and delete a rule that was
+  doing its job. Nothing downstream can tell the difference afterwards.
+- **Repro:** run `*build-phase` with more than one cluster, as this framework's own `build-phase.md`
+  step 2 instructs ("Spawn every cluster in one turn"). Each cluster calls
+  `bash .tfcore/utils/tf-verify-boot.sh start web --port <n>`, which runs
+  `dotnet run --project src/TfLens/TfLens.csproj --urls http://localhost:<n>` — the **same project and
+  the same `obj/`** for every port. Then, from any of them, fetch the Blazor scoped-CSS bundle twice:
+
+  ```
+  curl -s -o /dev/null -w '%{http_code} %{size_download}\n' -H 'Accept-Encoding: gzip'     .../TfLens.<fp>.styles.css
+  curl -s -o /dev/null -w '%{http_code} %{size_download}\n' -H 'Accept-Encoding: identity' .../TfLens.<fp>.styles.css
+  ```
+
+- **Expected:** both return the same stylesheet. A browser, which always sends `Accept-Encoding: gzip`,
+  gets the app's scoped CSS.
+- **Actual:** measured on this machine on 2026-09-12 with four instances up, all on one `obj/`:
+
+  | port | `Accept-Encoding: gzip` | `Accept-Encoding: identity` |
+  |---|---|---|
+  | 5093 | 200 · 131,738 B · `content-encoding: gzip` | 200 · 131,685 B |
+  | **5361** | **200 · 0 B · no content-encoding** | 200 · 131,685 B |
+  | **5371** | **500 · `ArgumentOutOfRangeException`** | 200 · 127,584 B |
+  | 5401 | 200 · 128,548 B · `content-encoding: gzip` | 200 · 128,500 B |
+
+  Two of four were broken; **one of the two returned 200 OK with a zero-length body**. The 500 names
+  the mechanism exactly:
+
+  ```
+  System.ArgumentOutOfRangeException:  (Parameter 'count')  Actual value was 36757.
+     at Microsoft.AspNetCore.Http.SendFileFallback.SendFileAsync(Stream, String filePath, Int64 offset, Nullable`1 count, …)
+     at Microsoft.AspNetCore.StaticAssets.StaticAssetsInvoker.SendAsync(StaticAssetInvocationContext)
+  ```
+
+  `Microsoft.AspNetCore.StaticAssets` serves a pre-compressed asset by `(offset, count)` taken from the
+  manifest it read **at startup**, out of `obj/Debug/net10.0/compressed/*.gz`. A sibling builder's
+  `dotnet run` rewrites those files, the length on disk no longer matches the length in the running
+  app's manifest, and `SendFileAsync` either throws (500) or sends nothing (200, zero bytes).
+
+  The consequence for a builder is the part that matters: with the bundle empty the browser parses
+  **zero** scoped-CSS rules, so every `::deep` rule is inert, every page-scoped rule is absent, and the
+  page still renders and still returns 200 everywhere. Measured on the affected instance, the app shell
+  header came out **105px instead of 64px** and the framework switch **40px instead of 34px** — which is
+  exactly the shape of a real layout regression. This pass had six clusters each deleting `::deep`
+  workarounds and measuring whether the library's own fix had taken over; on a poisoned instance every
+  one of those measurements would have read "the workaround is gone and the fix works" whether or not
+  it did.
+
+- **Encountered in:** TfLens `*build-phase`, 2026-09-12, seven clusters. Found by cluster D, which
+  noticed the header measuring 105px, checked per-encoding with `curl` rather than believing the
+  screenshot, and switched to a published copy. Reproduced independently by the orchestrator against
+  the live instances above.
+- **Three further symptoms of the same shared `bin/`+`obj/`, from cluster C in the same run.** These
+  are loud rather than silent, so they cost time instead of correctness — but they have the same cause
+  and the same fix, and they show the corruption is not confined to the compressed-asset manifest:
+  1. an app killed mid-run by a sibling's build (`Application is shutting down`);
+  2. `BadImageFormatException` at startup, from a WSL rung and a Windows rung writing the same `bin/`
+     — the ladder already clears `obj/**/scopedcss` when a build changes side (TF-035's note), but that
+     guard is per-build, and here two *different* builders are on the two sides at once;
+  3. an orphaned Windows-side `TfLens.exe` (PID 18848) holding `bin/` open after its parent was killed,
+     which no later rung could get past until it was killed by hand.
+- **Workaround:** do not smoke `dotnet run` out of the shared tree while another builder is building.
+  `dotnet publish -o <a directory of the builder's own under tests/.artifacts/>` (copying
+  `database/001-schema.sql` beside the DLL) and running that published copy is isolated and works.
+  Before trusting any geometry, fetch the scoped-CSS bundle with `Accept-Encoding: gzip` and confirm the
+  length is not 0 — an empty stylesheet is a 200, so nothing else reveals it.
+- **Suggested fix:** `tf-verify-boot.sh` already isolates the state file and the log per port and its
+  own comment claims "builders booting side by side never empty or stop each other's" (TF-034) — but
+  that isolation stops at the state file. The build output is shared, and for a Blazor app the build
+  output *is* the stylesheet. Give each port its own output: pass
+  `--property:BaseOutputPath=tests/.artifacts/verify/build-<port>/ --property:BaseIntermediateOutputPath=tests/.artifacts/verify/obj-<port>/`
+  on the `dotnet run` rung, or publish once per port and serve that. Failing that, have `start` refuse a
+  second concurrent boot of the same project unless the caller has asked for an isolated output, so the
+  hazard is loud instead of silent. The framework should not hand a builder a poisoned instance and let
+  it write measurements into a checklist.
+
+**What is NOT affected.** Anything that is a DOM fact rather than a painted one: element presence, text
+content, row counts, `data-testid` uniqueness, tab switching, binding, Escape and click behaviour, and
+the compiler. A single-instance run is unaffected — the corruption needs a concurrent build. The
+identity encoding always returned the correct bytes, so a tool that fetches without `Accept-Encoding:
+gzip` sees nothing wrong, which is part of why this survived to be found by eye.
+
+**A guard worth adopting, from cluster C in the same run.** Rather than only checking the bundle by
+hand before measuring, it made the check part of the suite: `tests/verify/ui-prices.spec.ts` asserts
+three known scoped-CSS rules are live in the page (`flush padding 0px`, `foot border-top 1px`,
+`message-idle display none`) **before** it measures anything else, so the spec fails loudly instead of
+blessing a page that loaded no scoped CSS at all. Any screen suite whose findings depend on `::deep`
+rules should open the same way. It costs three assertions and it closes the hole on that screen
+permanently, whatever the framework decides to do about the boot.
+
+**Two further variants found later the same day — both defeat the byte-count check this entry first
+suggested, and each was caught only because a cluster asserted a rule instead of a size.**
+
+1. **The fingerprinted URL and the unfingerprinted one do not fail together (cluster D).** Curling
+   `/TfLens.styles.css` returns a healthy body while `/TfLens.<fingerprint>.styles.css` — the URL the
+   page actually links — serves empty. Cluster D "verified" the bundle against the unfingerprinted
+   path, measured a 105px header, and only then realised the check had been meaningless. **Only the
+   fingerprinted path is a valid check.**
+2. **A correct-sized bundle whose scope ids do not match the DOM (cluster E).** On a Release publish
+   the bundle was a healthy 125,625 bytes and every page-scoped rule still missed:
+
+   ```
+   DOM stamp on /repos elements ....... b-gf5ckms75x     (Debug scope)
+   rule in the served bundle .......... .tflens-repos-filter[b-viw4vvlnt2] { max-width: 240px }   (Release scope)
+   computed max-width on that element . none
+   ```
+
+   Blazor derives a **different scope id per configuration** for the same file, and the shared
+   `src/TfLens/obj|bin` produced a publish carrying Debug-stamped Razor against a Release CSS bundle.
+   Identical consequence to the empty bundle — every scoped and `::deep` rule inert — and **invisible
+   to any size check**. Note also that a private `-p:BaseIntermediateOutputPath` is *not* a way out: it
+   collides with the in-tree `obj/` on duplicate `AssemblyInfo.cs` (`CS0579`). Publishing **Debug**,
+   whose tree is self-consistent, is what worked.
+
+**So the workaround above is upgraded.** Do not check the bundle's size. Assert a **real computed
+value** for two or three rules you know are live on the screen — which also catches the scope
+mismatch, the empty body and the wrong URL in one step. `tests/verify/_helpers.ts` now carries
+`assertScopedCssLoaded(page, rules)` for exactly this, and clusters B, C, D, E and F each guard their
+own suite with it. Cluster E's version additionally requires the `b-<scope>` attribute on pages that
+own a `.razor.css`, and passes `ownsScopedCss: false` for the two that legitimately have none.
+
+**This strengthens the suggested fix rather than changing it.** Per-port build output would prevent
+all three variants at once, because all three come from two builders sharing one tree.
+
+**A fourth face, and the worst of them: a stale binary (cluster D, same run).** Every variant above
+corrupts the *stylesheet*. This one corrupts the *application*. Cluster D published from the shared
+`src/TfLens/obj/` while other clusters were building, and the resulting `TfLens.dll` **predated its
+own source edit** — so the app faithfully rendered the previous markup. The page loaded, the
+stylesheet was healthy, no request failed and nothing errored. On the strength of two probe runs
+against that app it filed a library defect ("`Badge.Truncate` does not truncate") that does not exist,
+and restored a CSS workaround to compensate for it. The finding was withdrawn only after the shipped
+assembly was probed directly and the measurement repeated on a fresh build.
+
+**A scoped-CSS liveness gate does not catch this**, because the CSS is fine. Nor does a byte count,
+a fingerprint check, or a scope-id check. The rule that does catch it is the general one this whole
+entry keeps arriving at: **on a contended tree, a measurement is evidence only if the artefact
+measured is known to be newer than the change it is supposed to demonstrate.** Cheap ways to know:
+publish to a directory of your own and check the DLL's mtime against the source file you edited, or
+assert something in the page that only your change could produce before you measure anything else.
+
+Three of the four faces here cost a cluster time. This one cost a **wrong entry in an upstream
+feedback file**, which is the kind of error that outlives the run — an upstream team could have spent
+a day looking for a bug that was never there. That is the case for fixing the isolation rather than
+documenting the workaround.
+
+**A consequence of the workaround, for whoever implements the fix.** Once clusters follow the advice
+above — publish your own copy, run it on your own port — `tf-verify-boot.sh` can no longer stop them,
+because it only knows about apps it started itself. After this run two orphaned instances were still
+listening (ports 5371 and 5426) from clusters killed mid-flight by a session rate limit;
+`tf-verify-boot.sh stop --port 5371` answered `STOPPED nothing was started on port 5371`, and they had
+to be identified from `/proc/<pid>/cmdline` and killed by hand. They were inert — not rebuilding — but
+they still held the shared `bin/`, which is the lock that produces `MSB3021` on the next build.
+
+This is not a separate defect; it is the same one seen from the other end. **Per-port build output
+would let the tool own every instance again**, so builders would have no reason to boot outside it and
+nothing would be left un-stoppable. If instead the workaround is blessed as the supported path, then
+`stop` needs to be able to stop an app it did not start — matching on the port's listening process
+rather than on its own state file — and `status` should list what is listening, not only what it
+remembers.
+
+---
+
+## TF-044 — `tf-verify-screens.mjs` fills the sign-in form before the Blazor circuit attaches, so the email is blanked by the first interactive render and every screen grades UNREACHABLE
+
+- **Severity:** blocker
+- **Blocks:** no — `--storage-state` is an escape hatch and the run completed through it. It is filed
+  blocker because without that hatch the render and visual gates cannot grade a single screen of an
+  authenticated app, and the failure is reported as **the application's** fault ("redirected to the
+  sign-in page"), not the tool's.
+- **Repro:** any Blazor Server app with a sign-in page, then
+  `bash .tfcore/utils/tf-verify-screens.sh --list … --base <url> --login-path /login --user <u> --password <p>`.
+- **Expected:** the tool signs in and grades the screens.
+- **Actual:**
+
+  ```
+  FAIL Misses & rework (/misses) — render UNREACHABLE, visual n/a, 29 anchors — /misses redirected to the sign-in page (not signed in)
+  FAIL Phase effort (/effort)    — render UNREACHABLE, visual n/a, 21 anchors — /effort redirected to the sign-in page (not signed in)
+  FAIL Price providers (/prices) — render UNREACHABLE, visual n/a, 47 anchors — /prices redirected to the sign-in page (not signed in)
+  LOGIN failed at http://localhost:5500/login: still on the sign-in page
+  screens 3: render 0 OK / 0 failed / 3 unreachable; visual 0 OK / 0 failed
+  ```
+
+- **Root cause, measured — not inferred.** `login()` at `.tfcore/utils/tf-verify-screens.mjs:149`
+  navigates with `waitUntil: 'domcontentloaded'`, which returns as soon as the **static SSR HTML**
+  parses, and fills immediately. The Blazor circuit then attaches and its first interactive render
+  replaces the input nodes, discarding what was typed. A probe reproducing the tool's exact sequence
+  and reading the values straight back:
+
+  ```
+  A — tool sequence (domcontentloaded + immediate fill)
+     right after fill : {"user":"","pass":13}
+     after hydration  : {"user":"","pass":13}
+     VALUES SURVIVED  : false
+
+  B — fill, read back, retry
+     signed in after 2 fill attempt(s) -> /
+  ```
+
+  The **email reads back empty the instant after `fill()` returns**; the password survives only
+  because it is typed a moment later, on the far side of the same re-render. The form therefore
+  submits with an empty email and the app correctly refuses it. **One retry is enough** — B signed in
+  on its second attempt.
+
+  Two facts rule out the app being at fault: the Playwright acceptance suite signed in against **the
+  same app, the same credentials and the same running instance minutes earlier** (39/39 passed), and
+  it does so because `tests/verify/_helpers.ts` was given exactly this settle-and-retry after cluster
+  E hit the identical race there during this build.
+
+- **Encountered in:** TfLens `*build-phase` → chained `*verify`, 2026-09-12, on `/misses`, `/effort`
+  and `/prices`.
+- **Workaround:** sign in with Playwright, write a storage state, and pass `--storage-state` instead
+  of `--login-path/--user/--password`. With it the same three screens graded
+  **render 3 OK / visual 3 OK / 0 unreachable, 97 anchors** on the very next run. The probe and the
+  state-writer are kept at `tests/.artifacts/verify/login-race-probe.mjs`.
+- **Suggested fix:** in `login()`, after filling, read both fields back and re-fill until the values
+  stick before clicking submit — the loop is four lines and is already proven in this repo's
+  `_helpers.ts`. `waitUntil: 'networkidle'` alone is **not** sufficient and neither is a fixed
+  `waitForTimeout`: the correct test is that the typed value is still in the field. While there, note
+  that the first-match user locator ends in `input[type="text"]`, which on a form whose email box is
+  `type="text"` can select a different field entirely — the same family as TF-033.
+
+**What is NOT affected.** Every other gate: the acceptance tests (they own their own sign-in), the
+assets gate, mockup parity and perf when given a cookie or a storage state, and the whole tool on an
+app with no sign-in page or on a server-rendered app that hydrates nothing. `--cookie` and
+`--storage-state` both work. Only `--login-path` driving an interactive Blazor form is broken.
+
+---
+
+## TF-045 — `tf-mockup-parity` addresses elements by tag-and-index, so a component library that adds one wrapper makes every anchored child "missing" — and buries the real findings
+
+- **Severity:** major
+- **Blocks:** no. The rows are written `Needs re-verify` carrying the findings, never falsely
+  `Verified`, and the run finishes. It is major because the gate reports **correct screens as broken**,
+  and because the false findings outnumber the true ones roughly ten to one, which is how a gate stops
+  being read.
+- **Repro.** Any screen whose mockup is hand-written HTML and whose app is composed from a component
+  library that emits its own wrapper elements — which is every screen in this project, and the normal
+  case for shadcn-style libraries. Then
+  `bash .tfcore/utils/tf-mockup-parity.sh --base <url> --screen misses=/misses`.
+- **Expected.** An element the mockup anchors is compared with the element the app anchors. Where both
+  carry the same content and the same treatment, no finding.
+- **Actual.** Findings of the form:
+
+  ```
+  class : missing
+  key   : miss-origin > div[0] > span[0]
+  detail: the mockup draws a badge/pill here ("linked only") and the app renders no such element
+          — the value is flattened into plain text
+  app_text: null
+  ```
+
+  **The app renders it, as a badge, with the right text.** Measured on the live page, the same
+  `<span>` carrying the same content:
+
+  | anchor | mockup | app |
+  |---|---|---|
+  | `miss-origin` → "linked only" | depth 2, `<span>` | **depth 3**, `<span>` |
+  | `miss-whymissed` → "…assessed" | depth 2, `<span>` | **depth 3**, `<span>` |
+  | `miss-review-cost` → "copied · never computed" | depth 2, `<span>` | **depth 3**, `<span>` |
+
+  One extra wrapper, every time, in the same direction. `CardHeader` composes it; the consumer never
+  wrote it and cannot remove it. The gate walks `parent > div[0] > span[0]`, finds a `div` where it
+  expected the `span`, and reports the value as absent — then adds *"the value is flattened into plain
+  text"*, which is a specific and wrong diagnosis rather than "I could not locate it".
+
+  Confirmed against the rendered DOM: `miss-whymissed` carries
+  `<span class="inline-flex items-center rounded-full border px-2.5 py-0.5 …">87 of 91 misses
+  assessed</span>` — a real `Badge`, correct content, correct pill treatment.
+
+- **The scale of it, on three screens.** 69 findings, of which:
+
+  | class | n | what they actually are |
+  |---|---|---|
+  | `missing` | 32 | the element exists one wrapper deeper — verified by hand on six of them |
+  | `icon` | 24 | mostly *the app carries an icon the mockup does not* |
+  | `wrap` | 7 | live data is longer than the mockup's sample (91 records against 41) |
+  | `color` | 2 | the app computes `bg-alert-warning-bg` — amber, exactly as the mockup specifies — and is binned as "negative" |
+  | `badge` / `stroke` | 4 | an `InputGroup` puts the border on the group, not the input |
+
+  **Roughly four are worth a developer's time.** One of those four was real and is now fixed (a missing
+  search magnifier). Finding it took reading all 69 by hand.
+
+- **Encountered in:** TfLens `*build-phase` → chained `*verify`, 2026-09-12/13, on `/misses`, `/effort`
+  and `/prices`. Thirteen rows cannot reach `Verified` on this gate although they pass build,
+  acceptance (13/13), render, assets and visual.
+- **Workaround:** none. The app cannot be restructured to match, because the extra wrapper belongs to
+  the library, not to the consumer. Regenerating the mockups from the built DOM would trade a real
+  design document for a snapshot of the implementation, which removes the gate's whole point — it
+  could then never disagree with the app.
+- **Suggested fix:** address elements by **`data-testid`**, not by tag-and-index. The framework already
+  requires every comparable element to carry one — `mockups.md` §6: *"Anchor every element the build
+  must match with `data-testid` … The verifier compares only anchored elements"* — so the identity is
+  already there and the positional walk is redundant. Compare anchor-to-anchor and let the wrapper
+  depth differ. Where a mockup anchors something the app does not, that is a genuine finding and
+  survives. Failing that: when the positional walk misses, **search the subtree for the text before
+  declaring it absent**, and say "could not locate" rather than "flattened into plain text" — a wrong
+  cause in a finding costs more than a vague one.
+
+**What is NOT affected.** The gate's premise, which is sound and has caught real drift before
+(TF-008). Findings keyed on an element the tool did locate — the `wrap`, `clip` and `stroke` classes
+compare measurements on a found element and are trustworthy once you have checked the element is the
+one you meant. And `--screen`/`--cookie`/`--widths`, all of which work.

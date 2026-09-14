@@ -9,8 +9,8 @@ Reads the phase's checklist (appPhase in core-config.yaml, or --phase) and print
     Blocked). The working list is every open row in both FIX and FRESH: the mode says
     what to build first, never what to leave out.
   - the working list, grouped into clusters by the checklist's page section, each
-    naming its builder from the row prefix: REQ-UI -> trblazeui, REQ-RAG -> techierag,
-    REQ-FN / REQ-NFR -> builder
+    naming its builder from the row prefix: REQ-UI -> trblazeui when the project uses
+    TrBlazeUI (else builder), REQ-RAG -> techierag, REQ-FN / REQ-NFR -> builder
   - with --prompts, one ready sub-agent prompt per cluster, filled from
     .tfcore/templates/v4custom/build-subagent-prompt.md with the rows, their acceptance
     lines, their mockups and the two standing rules.
@@ -20,7 +20,9 @@ import os
 import re
 import sys
 
-TERMINAL = {"verified", "done (pre-existing)", "n/a"}
+# norm() drops a bracketed tail ("Verified (2026-09-01)"), so "Done (pre-existing)" arrives as "done":
+# only the bracketed spelling was listed, and AppManager's 18 finished rows went on the working list (TF-003)
+TERMINAL = {"verified", "done", "done (pre-existing)", "n/a"}
 FIX = {"fail", "partial", "in progress", "needs re-verify"}
 BLOCKED = {"blocked"}
 BUILDER = {"UI": "trblazeui", "RAG": "techierag", "FN": "builder", "NFR": "builder"}
@@ -49,6 +51,34 @@ def config_phase():
 def norm(s):
     s = s.strip().strip("`* ").lower()
     return re.sub(r"\s*\(.*$", "", s).strip()
+
+
+def ui_builder(app):
+    """-> (builder, why) for the UI clusters: trblazeui only when the project uses TrBlazeUI.
+
+    The framework gives every project `.trblazeui/`, whether it uses the library or not, so that
+    folder says nothing: AppManager, which does not use it, had its UI rows sent to the trblazeui
+    sub-agent (TF-008). The project's own files decide: a TrBlazeUI package or project reference in
+    a .csproj or .props. Before any such file exists (a first build), the Architecture document
+    naming it decides. tests/regression/run.sh am_008."""
+    skip = {"bin", "obj", "node_modules", ".git", ".tfcore", ".claude", ".opencode", ".trblazeui",
+            ".techierag", ".artifacts"}
+    seen = 0
+    for root, dirs, files in os.walk("."):
+        dirs[:] = sorted(d for d in dirs if d not in skip)
+        for fn in sorted(files):
+            if not fn.endswith((".csproj", ".props")):
+                continue
+            seen += 1
+            p = os.path.join(root, fn)
+            if re.search(r'Include="[^"]*\bTrBlazeUI[\w.]*(?:\.csproj)?"', read(p), re.I):
+                return "trblazeui", f"{os.path.relpath(p)} references TrBlazeUI"
+    if seen:
+        return "builder", f"none of the {seen} .csproj/.props file(s) references TrBlazeUI"
+    arch = os.path.join("docs", f"{app}-Architecture.md")
+    if os.path.isfile(arch) and re.search(r"\bTrBlazeUI\b", read(arch)):
+        return "trblazeui", f"no project file yet; {arch} names TrBlazeUI"
+    return "builder", "no project file yet, and the Architecture document does not name TrBlazeUI"
 
 
 def rows_of(text):
@@ -151,10 +181,14 @@ def main(argv):
         return 0
 
     clusters = {}
+    builder = dict(BUILDER)
+    if any(r["id"].upper().startswith("REQ-UI-") for r in work):
+        builder["UI"], why = ui_builder(app)
+        print(f"UI rows go to: {builder['UI']} — {why}")
     for r in work:
         sec, acc, mock, brd = ent.get(r["id"].upper(), ("Other", "", "", ""))
         cls = re.match(r"REQ-(UI|FN|RAG|NFR)-", r["id"]).group(1)
-        key = ("Non-functional" if cls == "NFR" else "RAG" if cls == "RAG" else sec, BUILDER[cls])
+        key = ("Non-functional" if cls == "NFR" else "RAG" if cls == "RAG" else sec, builder[cls])
         clusters.setdefault(key, []).append((r, acc, mock, brd))
     print()
     print("## Clusters (one sub-agent each; spawn them all in one turn)")

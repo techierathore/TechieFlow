@@ -78,7 +78,9 @@ if (!BASE || SCREENS.length === 0) {
 // Everything below runs INSIDE the browser, on both the mockup and the app, and
 // returns one flat index keyed by a stable path key. It is deliberately one
 // evaluate() call: two passes over the same DOM can disagree after a re-layout.
-const PROBE = () => {
+// `wanted` names the texts of the mockup's badges, so the app's side can find each one at whatever
+// depth the app drew it (TF-045); the mockup's own probe is called without it.
+const PROBE = (wanted = []) => {
   const MAX_DEPTH = 4;        // descend this far below an anchor
   const MAX_PER_ANCHOR = 60;  // and no further; a huge subtree is noise, not signal
 
@@ -126,10 +128,15 @@ const PROBE = () => {
     const { r, g, b } = c;
     const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
     if (mx - mn < 28) return 'neutral';
-    if (r > g && r > b) return g > 120 ? 'warning' : 'negative';
-    if (g > r && g > b) return 'positive';
-    if (b > r && b > g) return 'accent';
-    return 'neutral';
+    // By hue, never by one channel. "Red is highest, so green above 120 is a warning" put a deep
+    // amber (180, 83, 9) in `negative` beside a light amber in `warning` — one warning tone on two
+    // sides of the line, reported as a colour difference on TfLens /misses (TF-045).
+    const d = mx - mn;
+    const h = ((mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60 + 360) % 360;
+    if (h < 15 || h >= 330) return 'negative';
+    if (h < 70) return 'warning';
+    if (h < 185) return 'positive';
+    return 'accent';
   };
 
   // A border nobody draws carries no colour. `border: 1px solid transparent` is how a mockup
@@ -232,27 +239,41 @@ const PROBE = () => {
   // must be cut by every ancestor that clips before it can count as the card overflowing. Without
   // that, a table scrolling inside its wrapper — the layout the BRD asks for — read as a card cut
   // off at 390px (TF-039). The same rectangle tf-verify-screens measures since TF-021.
+  // The cut stops BELOW `stop`: the element being measured must not cut its own content, or a card
+  // that really clips would read as holding everything (it did, from TF-039 until TF-042).
   const paintedRight = (c, stop) => {
     const r = c.getBoundingClientRect();
     let x1 = r.left, x2 = r.right;
-    for (let a = c.parentElement; a; a = a.parentElement) {
+    for (let a = c.parentElement; a && a !== stop; a = a.parentElement) {
       if (getComputedStyle(a).overflowX !== 'visible') {
         const ar = a.getBoundingClientRect();
         x1 = Math.max(x1, ar.left); x2 = Math.min(x2, ar.right);
       }
-      if (a === stop) break;
     }
     return x2 > x1 ? x2 : null;
   };
 
+  // --- TF-042: overflow is not clipping. An element whose overflow-x is `visible` draws what spills
+  // past its edge in full, so it is cut off only where an ancestor that clips ends first. Reading
+  // scrollWidth alone called a sidebar "cut off" because its rail handle straddles its edge by 8px,
+  // on every TfLens screen, with nothing clipped anywhere up to <html> (2026-09-12).
+  const cutAbove = (el, right) => {
+    for (let a = el.parentElement; a; a = a.parentElement) {
+      if (getComputedStyle(a).overflowX === 'visible') continue;
+      if (right > a.getBoundingClientRect().left + a.clientLeft + a.clientWidth + 2) return true;
+    }
+    return false;
+  };
+
   const clipOf = (el) => {
     const hiddenKids = [...el.querySelectorAll('*')].filter(isHidden);
-    let overX;
+    const box = el.getBoundingClientRect();
+    let overX, right;
     if (hiddenKids.length === 0) {
       overX = el.scrollWidth - el.clientWidth;
+      right = box.left + el.clientLeft + el.scrollWidth;
     } else {
-      const box = el.getBoundingClientRect();
-      let right = box.left;
+      right = box.left;
       for (const c of el.querySelectorAll('*')) {
         if (isHidden(c)) continue;
         const r = c.getBoundingClientRect();
@@ -263,8 +284,10 @@ const PROBE = () => {
       }
       overX = Math.max(0, Math.round(right - (box.left + el.clientWidth)));
     }
+    let x = overX > 2;
+    if (x && getComputedStyle(el).overflowX === 'visible') x = cutAbove(el, right);
     const overY = el.scrollHeight - el.clientHeight;
-    return { x: overX > 2, y: overY > 2, sr_excluded: hiddenKids.length };
+    return { x, y: overY > 2, sr_excluded: hiddenKids.length };
   };
 
   const sigOf = (el) => {
@@ -274,8 +297,11 @@ const PROBE = () => {
       tag: el.tagName.toLowerCase(),
       text: (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 60),
       badge: chrome ? chrome.badge : null,
+      full: (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 400),
       icon: hasIcon(el),
       icons: iconCount(el),
+      // badges drawn anywhere inside, so a badge one wrapper deeper still counts under its parent (TF-045)
+      badges: [...el.querySelectorAll('*')].filter((c) => !isHidden(c) && chromeOn(c)?.badge).length,
       color: semanticColor(el),
       stroke: strokeOf(el),
       wrap: lineCount(el),
@@ -305,6 +331,17 @@ const PROBE = () => {
     return `${parentKey} > ${tag}[${n}]`;
   };
 
+  // --- TF-045: the same badge, one wrapper deeper. Keys are positional, so a component library that
+  // wraps a card header's contents in one more <div> moves every badge in it to a key the mockup
+  // never has: 32 "missing" findings on three TfLens screens, each drawn on the page with the right
+  // text. For every text a mockup badge carries, the elements under the same anchor that carry it
+  // are kept here at any depth, so the node side can find the badge where the app put it. Digits
+  // are folded, because live data is not the mockup's sample: "87 of 91" is "39 of 41". Case is
+  // kept: a card titled "Draft" is not its badge "draft".
+  const norm = (t) => (t || '').replace(/\d[\d,.]*/g, '#').replace(/\s+/g, ' ').trim();
+  const want = new Set((wanted || []).map(norm).filter(Boolean));
+  const pool = {};
+
   const index = {};
   const anchors = [...document.querySelectorAll('[data-testid]')];
   const allTestIds = anchors.map((a) => a.getAttribute('data-testid'));
@@ -328,11 +365,29 @@ const PROBE = () => {
       }
     };
     walk(a, id, 1);
+    if (want.size) {
+      const found = [];
+      const queue = [[a, id, 0]];
+      let seen = 0;
+      while (queue.length && seen < 800 && found.length < 30) {
+        const [el, key, depth] = queue.shift();
+        if (depth >= 12) continue;
+        for (const c of el.children) {
+          if (c.hasAttribute('data-testid') || isHidden(c)) continue;
+          seen++;
+          const k = keyOf(c, key);
+          if (want.has(norm((c.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 60)))) found.push({ key: k, ...sigOf(c) });
+          queue.push([c, k, depth + 1]);
+        }
+      }
+      pool[id] = found;
+    }
   }
 
   const de = document.documentElement;
   return {
     index,
+    pool,
     anchors: anchors.length,
     testids: allTestIds,
     doc: {
@@ -387,16 +442,35 @@ const CLAUSES = {
 // as coverage is what let a screen the gate never really looked at read as clean.
 const CONTENT_CLAUSES = new Set(['badge', 'icon', 'wrap', 'token']);
 
+// The same folding the page-side probe uses: spacing and digits (TF-045).
+const norm = (t) => (t || '').replace(/\d[\d,.]*/g, '#').replace(/\s+/g, ' ').trim();
+
 function diff(mock, app, screen, width) {
   const findings = [];
   const clauseCoverage = Object.fromEntries(Object.keys(CLAUSES).map((k) => [k, 0]));
   clauseCoverage.missing = 0;
-  let compared = 0, contentGraded = 0;
+  let compared = 0, contentGraded = 0, relocated = 0;
   const iconsShort = {};   // parent key -> icons the app still owes under it (TF-027)
+  const badgesShort = {};  // parent key -> badges the app still owes under it (TF-045)
+  const usedApp = new Set();
 
   for (const key of Object.keys(mock.index)) {
     const m = mock.index[key];
-    const a = app.index[key];
+    let a = app.index[key];
+    let appKey = key;
+
+    // --- TF-045: a badge the app draws at another depth is the same badge. Found by its text under
+    // the same anchor, it is compared like any paired element, so a badge whose colour or ring really
+    // differs is still reported, and so is one the app turned into plain text.
+    if (!a && m.badge === true && m.text) {
+      const root = key.split(' > ')[0];
+      const cands = ((app.pool || {})[root] || []).filter((c) => !usedApp.has(c.key) && norm(c.text) === norm(m.text));
+      // a badge first, then the same kind of element, then one no mockup key already pairs with;
+      // among equals the shallowest, which is the order the probe found them in
+      const score = (c) => (c.badge === true ? 4 : 0) + (c.tag === m.tag ? 2 : 0) + (c.key in mock.index ? 0 : 1);
+      const pick = cands.reduce((best, c) => (!best || score(c) > score(best) ? c : best), null);
+      if (pick) { a = pick; appKey = pick.key; usedApp.add(pick.key); relocated++; }
+    }
 
     // --- the `missing` clause. Key-pairing alone cannot see an element that is
     // NOT THERE, and "a control the mockup draws as a badge rendered as plain text"
@@ -420,14 +494,28 @@ function diff(mock, app, screen, width) {
       }
       const iconGone = m.icon === true && parentPaired && (iconsShort[parentKey] || 0) > 0;
       if (iconGone && m.badge !== true) iconsShort[parentKey]--;
+      // A badge not found by its text (live data reads otherwise) is missing only while the paired
+      // parent draws fewer badges than the mockup's does, the rule icons follow since TF-027 (TF-045).
+      if (m.badge === true && parentPaired && mock.index[parentKey] && !(parentKey in badgesShort)) {
+        badgesShort[parentKey] = Math.max(0, (mock.index[parentKey].badges ?? 0) - (app.index[parentKey].badges ?? 0));
+      }
+      const badgeGone = m.badge === true && parentPaired && (badgesShort[parentKey] || 0) > 0;
+      if (badgeGone) badgesShort[parentKey]--;
       if (parentPaired && (m.badge === true || iconGone)) {
         clauseCoverage.missing++;
         contentGraded++;
+      }
+      if (parentPaired && (m.badge === true ? badgeGone : iconGone)) {
+        // Say what was seen. "Flattened into plain text" is true only when the app shows the text;
+        // said of a badge the tool had merely failed to find, it sent a reader after a wrong cause.
+        const shown = m.text && norm(app.index[parentKey].full).includes(norm(m.text));
         findings.push({
           screen, width, class: 'missing', key,
-          detail: m.badge
-            ? `the mockup draws a badge/pill here ("${m.text}") and the app renders no such element — the value is flattened into plain text`
-            : `the mockup carries an icon here and the app renders no such element`,
+          detail: m.badge !== true
+            ? `the mockup carries an icon here and the app renders no such element`
+            : shown
+              ? `the mockup draws a badge/pill here ("${m.text}"); the app shows that text with no badge/pill around it — the value is flattened into plain text`
+              : `the mockup draws a badge/pill here ("${m.text}"); it could not be located in the app — no element under this parent carries that text, and the app draws ${app.index[parentKey].badges ?? 0} badge(s) there where the mockup draws ${mock.index[parentKey].badges ?? 0}`,
           mockup_text: m.text, app_text: null,
         });
       }
@@ -439,10 +527,10 @@ function diff(mock, app, screen, width) {
       if (r === null) continue;
       clauseCoverage[name]++;
       if (CONTENT_CLAUSES.has(name)) contentGraded++;
-      if (r) findings.push({ screen, width, class: name, key, detail: r, mockup_text: m.text, app_text: a.text });
+      if (r) findings.push({ screen, width, class: name, key, ...(appKey !== key ? { app_key: appKey } : {}), detail: r, mockup_text: m.text, app_text: a.text });
     }
   }
-  return { findings, compared, contentGraded, clauseCoverage };
+  return { findings, compared, contentGraded, clauseCoverage, relocated };
 }
 
 // ---------------------------------------------------------------------- main
@@ -488,7 +576,8 @@ for (const s of SCREENS) {
         await page.close();
         continue;
       }
-      app = await page.evaluate(PROBE);
+      const wanted = [...new Set(Object.values(mock.index).filter((x) => x.badge === true && x.text).map((x) => x.text))];
+      app = await page.evaluate(PROBE, wanted);
 
       // TF-008 §2. Cheap, no false positives in a shell-scrolled app, and it would
       // have caught the /routing void on its own: 2607px of document against a
@@ -554,6 +643,8 @@ for (const s of SCREENS) {
     screen: s.name, route: s.route, verdict,
     coverage: {
       compared, content_graded: contentGraded, ungradeable,
+      // badges found by their text at another depth than the mockup's (TF-045)
+      relocated: ok.reduce((n, w) => n + (w.relocated || 0), 0),
       app_controls: appAnchors, mockup_anchors: mockAnchors,
       ratio: appAnchors ? +(compared / appAnchors).toFixed(2) : null,
       thin: appAnchors > 0 && compared / appAnchors < THIN_RATIO,

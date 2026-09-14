@@ -27,7 +27,8 @@ import re
 import subprocess
 import sys
 
-TERMINAL = {"verified", "done (pre-existing)", "n/a"}
+# norm() drops a bracketed tail, so "Done (pre-existing)" arrives as "done" and was counted open (AppManager TF-003)
+TERMINAL = {"verified", "done", "done (pre-existing)", "n/a"}
 NOT_STARTED = {"not started"}
 
 
