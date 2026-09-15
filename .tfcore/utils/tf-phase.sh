@@ -38,7 +38,18 @@ case "${1:-}" in
       NOW="$(sed -n 's/.*"started":"\([^"]*\)".*/\1/p' "$FILE")"
       echo "tf-phase: started taken from the supervisor's marker ($NOW)" >&2
     fi
-    printf '{"cmd":"%s","app":"%s","started":"%s"}\n' "$CMD" "$APP" "$NOW" > "$FILE"
+    # A command started inside another one (*fix-issues and *build-phase run *verify inline) keeps
+    # the outer command as "outer", written FIRST so a greedy `.*"started":"…"` read still takes this
+    # command's own start. tf-verify-emit.sh and tf-fix-close.sh read it to tell the two starts
+    # apart (TF-052: the inline verify took the fix's start and its record swallowed the fix's).
+    OUTER=""
+    if [[ -f "$FILE" && -z "$(find "$FILE" -mmin +1440 2>/dev/null)" ]]; then
+      OC="$(sed -n 's/.*"cmd":"\([^"]*\)".*/\1/p' "$FILE")"; OA="$(sed -n 's/.*"app":"\([^"]*\)".*/\1/p' "$FILE")"
+      OS="$(sed -n 's/.*"started":"\([^"]*\)".*/\1/p' "$FILE")"
+      [[ -n "$OC" && -n "$OS" && "$OC" != "$CMD" && "$OC" != "goal" && "$OS" != "$NOW" ]] \
+        && OUTER="\"outer\":{\"cmd\":\"$OC\",\"app\":\"$OA\",\"started\":\"$OS\"},"
+    fi
+    printf '{%s"cmd":"%s","app":"%s","started":"%s"}\n' "$OUTER" "$CMD" "$APP" "$NOW" > "$FILE"
     echo "$NOW"
     echo "tf-phase: $CMD${APP:+ $APP} started $NOW (marker .tfcore/.session/phase.json)" >&2
     # The document-check baseline (Sitting 4c, 2026-09-06): the findings the checklists and the

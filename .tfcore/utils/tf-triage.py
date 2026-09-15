@@ -8,6 +8,9 @@
     bash .tfcore/utils/tf-triage.sh <App> note <REQ> "<could not reproduce: what was tried>"
     bash .tfcore/utils/tf-triage.sh <App> close [--started <ISO>] [--verify-ran] [--cmd triage-issues|fix-issues]
 
+demote, new and note take --phase N for another phase's checklist; without it demote and note find the
+row in whichever docs/<App>-Checklist.md or docs/<App>-P<N>-Checklist.md holds it.
+
 demote  the row goes to Needs re-verify (% capped at 75) with a dated Remark holding the symptom in the
         reporter's words, the evidence path and the kind.
 new     a defect no row covers: the next free id in the prefix, a Not Started row, a detail entry with the
@@ -58,12 +61,36 @@ def cfg_phase():
     return 1
 
 
-def checklist(app):
-    ph = cfg_phase()
-    p = os.path.join("docs", f"{app}-Checklist.md" if ph <= 1 else f"{app}-P{ph}-Checklist.md")
-    if not os.path.isfile(p):
-        die(f"{p} does not exist")
-    return p
+def phase_checklist(app, ph):
+    return os.path.join("docs", f"{app}-Checklist.md" if ph <= 1 else f"{app}-P{ph}-Checklist.md")
+
+
+def checklist(app, argv, ce, rid=None):
+    """--phase N names the checklist, as tf-verify-list.py takes it. Without it: the appPhase
+    checklist, or, for a row that is not there, the one earlier-phase checklist that holds it —
+    a Phase 3 verify finds Phase 1 rows failing, and demote could not reach them (TF-051)."""
+    if "--phase" in argv:
+        v = opt(argv, "--phase", "")
+        if not v.isdigit():
+            die("--phase needs a number")
+        p = phase_checklist(app, int(v))
+        if not os.path.isfile(p):
+            die(f"{p} does not exist")
+        return p
+    p = phase_checklist(app, cfg_phase())
+    if rid is None or (os.path.isfile(p) and rid in ce.rows(ce.read(p))):
+        if not os.path.isfile(p):
+            die(f"{p} does not exist")
+        return p
+    import glob
+    every = sorted(set(glob.glob(os.path.join("docs", f"{app}-Checklist.md")) + glob.glob(os.path.join("docs", f"{app}-P*-Checklist.md"))))
+    hits = [c for c in every if rid in ce.rows(ce.read(c))]
+    if len(hits) == 1:
+        print(f"note: {rid} is a row of {hits[0]}, not of {p}; written there")
+        return hits[0]
+    if len(hits) > 1:
+        die(f"{rid} is a row of {', '.join(hits)}; name one with --phase N")
+    die(f"{rid} is not a row of {', '.join(every) or p}")
 
 
 def log_load():
@@ -112,7 +139,6 @@ def main(argv):
         return 0 if len(argv) > 1 else 2
     app, verb = argv[1], argv[2]
     ce = mod()
-    cl = checklist(app)
     log = log_load()
     log.setdefault("app", app)
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -121,6 +147,7 @@ def main(argv):
         if len(argv) < 5:
             die("demote needs <REQ> \"<symptom>\"")
         rid, symptom = argv[3].upper(), argv[4]
+        cl = checklist(app, argv, ce, rid)
         kind = opt(argv, "--kind"); ev = opt(argv, "--evidence"); src = opt(argv, "--source", "owner")
         prior = ce.demote(cl, rid, symptom, kind=kind, evidence=ev, source=src, prefix="⚠ prod bug" if src == "production" else "⚠ UAT bug")
         if prior is None:
@@ -136,6 +163,7 @@ def main(argv):
         if len(argv) < 5:
             die("new needs \"<title>\" \"<acceptance>\"")
         title, acc = argv[3], argv[4]
+        cl = checklist(app, argv, ce)
         prefix = opt(argv, "--prefix", "FN").upper(); section = opt(argv, "--section"); ev = opt(argv, "--evidence")
         src = opt(argv, "--source", "owner"); mockup = opt(argv, "--mockup")
         if prefix == "UI" and not mockup:
@@ -152,6 +180,7 @@ def main(argv):
         if len(argv) < 5:
             die("note needs <REQ> \"<text>\"")
         rid = argv[3].upper()
+        cl = checklist(app, argv, ce, rid)
         if ce.note(cl, rid, argv[4]) is None:
             die(f"{rid} is not a row of {cl}")
         log["actions"].append({"verb": "note", "req_id": rid, "symptom": argv[4], "ts": now})

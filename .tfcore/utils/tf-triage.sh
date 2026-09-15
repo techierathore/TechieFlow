@@ -6,6 +6,8 @@
 #   bash .tfcore/utils/tf-triage.sh <App> note <REQ> "<could not reproduce: what was tried>"
 #   bash .tfcore/utils/tf-triage.sh <App> close [--started <ISO>] [--cmd triage-issues|fix-issues]
 #
+# demote, new and note take --phase N; without it a row of an earlier phase's checklist is found (TF-051).
+#
 # demote: Needs re-verify with a dated Remark in the reporter's words. new: a Not Started row with its
 # acceptance line and BRD-pending. note: a remark, no status change. close: the escaped gate records,
 # one miss per row (found by the owner, the symptom as `what`, duplicates collapsed), the run record,

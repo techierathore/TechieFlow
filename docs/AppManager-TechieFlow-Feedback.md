@@ -4,13 +4,13 @@
 |---|---|
 | App | AppManager |
 | Upstream | TechieFlow |
-| Updated | 2026-09-14 |
+| Updated | 2026-09-15 |
 
 ## Summary
 
-14 entries: 0 blocking now, 0 open, 1 fixed upstream on 2026-09-14 and waiting to be re-checked here (TF-014, filed the same day), 13 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-013 on 2026-09-14.
+15 entries: 0 blocking now, 0 open, 1 fixed upstream and waiting to be re-checked here (TF-015, fixed 2026-09-15), 14 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-014 on 2026-09-14.
 
-Nothing is blocked. TF-014 is a wrong finding from the mockup comparison that was judged and set aside.
+Nothing is blocked. Once TF-015 is re-checked, REQ-UI-027's mockup check can pass: the wrap it reported is no longer counted.
 
 ## Entries
 
@@ -209,6 +209,8 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 
 ### TF-014 — `tf-mockup-parity.sh` reports "escaped the app shell's scroll container" on an app whose document is meant to scroll
 
+> ✅ **Closed 2026-09-14** — re-checked here: Booted the admin site with tf-verify-boot.sh start (it picked src/AppManagerWeb/AppManagerWeb.csproj) and ran tf-mockup-parity.sh --base http://localhost:5041 --screen device-adoption-report=/reports/device-adoption --login-path /login --user admin@appmanager.local: reached the screen signed in at 1280 and 390, findings 0, no document-scroll finding at either width. Verdict UNGRADEABLE only because the mockup has no data-testid anchors (19 named in anchor_deficit), repaired here through *amend-docs.
+
 - **Severity:** minor
 - **Blocks:** no — the finding was judged against the app's own layout and set aside; the comparison is ungradeable anyway until the mockup carries anchors.
 - **Repro:** `bash .tfcore/utils/tf-mockup-parity.sh --base http://localhost:5041 --screen device-adoption-report=/reports/device-adoption --login-path /login --user admin@appmanager.local --password '…'` in AppManager.
@@ -218,9 +220,36 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 - **Workaround:** measured five signed-in pages at 1280×800 in a browser. On every one `body` has `overflow-y: auto`, the document is the scroller, and the only inner scroll area is `div.main-sidebar`. Document heights: `/dashboard` 2375, `/applications` 1066, `/users` 978, `/reports` 1588, `/reports/device-adoption` 6600. The adoption report is long because it lists every application, not because it broke out of a container.
 - **Suggested fix:** raise `document-scroll` only when the shell actually has a content scroll container (an element around the page body with `overflow-y: auto|scroll` and a fixed height) and the document scrolls as well. Where the document is the app's only scroller, say nothing, or compare against the same measure on a sibling screen of the same shell.
 
+### TF-015 — `tf-mockup-parity.sh` reports a one-line padded badge as wrapping to two rows
+
+- **Severity:** minor
+- **Blocks:** no — the screen was measured by hand and is correct; only REQ-UI-027's return to `Verified` waits, because its mockup check would fail on this finding alone.
+- **Repro:** `bash .tfcore/utils/tf-mockup-parity.sh --base http://localhost:5041 --screen device-adoption-report=/reports/device-adoption --login-path /login --user admin@appmanager.local --password '…'` in AppManager, against `docs/mockups/device-adoption-report.html` as redrawn on 2026-09-15.
+- **Expected:** no finding, because every status badge sits on one line.
+- **Actual:** `wrap | adoption-status-badge > span[0] | wraps to 2 rows where the mockup keeps it on 1` at 1280 and at 390; the only finding left on the screen. Measured in the same signed-in page: the badge `<span class="badge bg-danger-transparent rounded-pill">Not adopted</span>` has 1 client rect, `white-space: nowrap`, `line-height` 9.756px (the theme sets `line-height: 1`), and height 18px — the line plus 4px padding top and bottom.
+- **Encountered in:** `*fix-issues AppManager tests/.artifacts/mockup-parity`, reproducing the finding before fixing it.
+- **Workaround:** none in the tool; the finding is recorded against REQ-UI-027 as not reproducible, with the measurements in `tests/.artifacts/fix-issues/adoption-badge/`.
+- **Suggested fix:** in `lineCount` (`tf-mockup-parity.mjs`, around line 233), `Math.round(h / lh)` divides the border-box height by the line height, so vertical padding and borders count as text rows: 18 / 9.756 = 1.85 rounds to 2. Subtract `paddingTop + paddingBottom + borderTopWidth + borderBottomWidth` from `h` first, or count distinct line tops from a `Range` over the element's text (`range.getClientRects()`), which ignores padding entirely.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### TF-015 — fixed 2026-09-15
+
+- **What was wrong.** `lineCount` divided the element's whole height by its line height, so the
+  badge's 4px padding top and bottom counted as text: 18 / 9.756 = 1.85, rounded to 2 rows.
+- **Fix.** Vertical padding and borders are taken off the height before dividing, so the badge
+  reads 10 / 9.756, one row. Text that really wraps inside a padded box is still reported. Deployed to
+  this repository. Case `am_015` in TechieFlow's `tests/regression/run.sh`, which fails against the
+  script you had; miss `MISS-TechieFlow-20260915-03`.
+- **Proof.** On this repository's admin site, booted on port 5041 and signed in as the usage guide's
+  admin, `/reports/device-adoption` at 1280 and 390: the old script gave FAIL with your two `wrap`
+  findings on `adoption-status-badge > span[0]`; the new one gives PASS with no findings. The results
+  are in `tests/.artifacts/fix-parity/tf015/` (`old.json`, `new.json`).
+- **Verify from here.** `bash .tfcore/utils/tf-mockup-parity.sh --base http://localhost:5041 --screen device-adoption-report=/reports/device-adoption --login-path /login --user admin@appmanager.local --password '…'`
+  with the site booted: PASS, and no `wrap` finding at either width. Then close it with
+  `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-015 "<what you ran and what it showed>"`.
 
 ### TF-014 — fixed 2026-09-14
 

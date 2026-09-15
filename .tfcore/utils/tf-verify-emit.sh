@@ -39,6 +39,26 @@ v = json.load(open(os.path.join(d, "verdicts.json"), encoding="utf-8"))
 run_id = started or v.get("started") or ""
 now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
+# A verify chained inside another command is handed that command's start as "the step-0 time", and
+# its record then covered the caller's whole window, so the caller's own record was refused (TF-052).
+# This run's start is its own marker's; with no verify-phase marker (step 0 skipped), when the list
+# was written.
+mk = {}
+try:
+    pj = os.path.join(".tfcore", ".session", "phase.json")
+    if datetime.datetime.now().timestamp() - os.path.getmtime(pj) < 24 * 3600:
+        mk = json.load(open(pj, encoding="utf-8")) or {}
+except Exception:
+    pass
+own, caller = "", (mk.get("outer") or {}).get("cmd") or "an earlier command"
+if mk.get("cmd") == "verify-phase":
+    own = mk.get("started") or ""
+elif mk.get("started") and mk.get("started") == run_id and os.path.isfile(os.path.join(d, "list.json")):
+    own, caller = datetime.datetime.fromtimestamp(os.path.getmtime(os.path.join(d, "list.json")), datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), mk.get("cmd")
+if own and run_id and own > run_id:
+    print(f"tf-verify-emit: {run_id} is when {caller} started; this verify started {own} and is recorded from then")
+    run_id = own
+
 def emit(stream, rec):
     p = subprocess.run(["bash", EMIT, stream], input=json.dumps(rec), capture_output=True, text=True)
     msg = (p.stdout + p.stderr).strip()

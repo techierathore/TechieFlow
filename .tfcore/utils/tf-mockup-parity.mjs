@@ -235,8 +235,11 @@ const PROBE = (wanted = []) => {
     const cs = getComputedStyle(el);
     let lh = parseFloat(cs.lineHeight);
     if (!lh || Number.isNaN(lh)) lh = (parseFloat(cs.fontSize) || 16) * 1.2;
-    const h = el.getBoundingClientRect().height;
-    if (!h || !lh) return null;
+    // the text's height only: padding and borders are not rows. A badge with 4px padding and
+    // `line-height: 1` read 18 / 9.756 = 1.85, rounded to 2 rows (AppManager TF-015).
+    const h = el.getBoundingClientRect().height
+      - ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth'].reduce((s, k) => s + (parseFloat(cs[k]) || 0), 0);
+    if (!(h > 0) || !lh) return null;
     return Math.max(1, Math.round(h / lh));
   };
 

@@ -8,6 +8,33 @@
 
 ---
 
+## 2026-09-15, evening — AppManager's TF-015
+
+`tf-mockup-parity.mjs` `lineCount` divided an element's full height by its line height, so a
+one-line badge with 4px padding and `line-height: 1` read 18 / 9.756 = 1.85, rounded to 2 rows, and
+was reported as wrapping. Vertical padding and borders are now taken off the height first. Case
+`am_015` (a padded badge on one line is not reported; text that really wraps in a padded box still
+is), failing against the old script; miss `MISS-TechieFlow-20260915-03`. Proved on AppManager's own
+admin site, booted on 5041 and signed in as the usage guide's admin, on `/reports/device-adoption`:
+the old script FAIL with the two `wrap` findings AppManager filed, the new one PASS with none.
+Deployed to all 19 projects, every copy matching.
+
+## 2026-09-15 — TfLens's TF-051 and TF-052
+
+`tf-triage.sh` `demote`, `new` and `note` take `--phase N`, and without it find a row in an earlier
+phase's checklist, so a Phase 1 row a Phase 3 verify fails can be demoted. Inside `*fix-issues` the
+inline verify took the fix's start, so its run record covered the fix and `tf-fix-close.sh` was
+refused; and the close read one ledger, so rows of an earlier scoped verify got `Needs re-verify`.
+Now `tf-phase.sh start` keeps the calling command as `outer` in the marker, `tf-verify-emit.sh`
+records the verify from its own start, and `tf-fix-close.sh` records the fix around any run it
+chained and takes verdicts from the gate records of every verify since the fix started, the ledger
+only when it belongs to the fix. One sentence added to `fix-issues.md` step 4. `tests/regression/run.sh`
+takes `TF_REGRESSION_UTILS` so a project can run a case against its own deployed copy. Cases
+`tf_051` and `tf_052`, both failing against the old scripts; misses `MISS-TechieFlow-20260915-01`
+and `-02`. Proved on copies of TfLens's checklists and stream (REQ-NFR-003 demoted in the Phase 1
+checklist; MISS-TfLens-20260911-39 closed `Verified` where the old close wrote `Needs re-verify`).
+Deployed to all 19 projects, every copy matching. `WorkFlow-Context.md` trimmed back under its cap.
+
 ## 2026-09-14, night — TfLens's TF-049 and TF-050
 
 `tf-build.sh --print` (and `test --print`) now prints the resolved command and runs nothing, as

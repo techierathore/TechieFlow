@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 191 logged: 52 open, 138 fixed, 1 will not fix |
+| Count | 194 logged: 52 open, 141 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-09-14 |
+| Updated | 2026-09-15 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -66,10 +66,13 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (138)
+## Fixed (141)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260915-03 | 2026-09-15 by owner | 2026-09-15 by log-miss | the check was too weak | tf-mockup-parity.mjs lineCount divided an element's border-box height by its line height, so a one-line badge with vertical padding and line-height 1 read as two rows and was reported as wrapping (AppManager TF-015) |
+| MISS-TechieFlow-20260915-02 | 2026-09-15 by owner | 2026-09-15 by log-miss | the check was too weak | inside *fix-issues the inline verify took the fix's start so its run record swallowed the fix's, and tf-fix-close read one ledger so rows of an earlier scoped verify got Needs re-verify (TfLens TF-052) |
+| MISS-TechieFlow-20260915-01 | 2026-09-15 by owner | 2026-09-15 by log-miss | the check was too weak | tf-triage.py resolved only the appPhase checklist and had no --phase, so with appPhase 3 a Phase 1 row the Phase 3 verify found failing could not be demoted (TfLens TF-051) |
 | MISS-TechieFlow-20260914-13 | 2026-09-14 by owner | 2026-09-14 by fix-issues | the check was too weak | tf-devguide-list.py read path: in a Playwright spec as a page route and searched tests/ although SAMPLE_DIRS names it, so two screenshot files were listed as pages with no UIDesign screen (TfLens TF-050) |
 | MISS-TechieFlow-20260914-12 | 2026-09-14 by owner | 2026-09-14 by fix-issues | the check was too weak | handoff-phase.md told the agent to run tf-build.sh --print, an option the script never had, so it read --print as a target and printed NOT-RUN (TfLens TF-049) |
 | MISS-TechieFlow-20260914-11 | 2026-09-14 by owner | 2026-09-14 by fix-issues | the check was too weak | tf-mockup-parity reported document-scroll on every page whose document scrolls, including an app whose document is its only scroller: a 6600 px report on AppManager read as having escaped a shell scroll container it does not have (AppManager TF-014) |

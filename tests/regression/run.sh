@@ -13,11 +13,13 @@
 #
 #   bash tests/regression/run.sh            # all
 #   bash tests/regression/run.sh tf_019     # one
+#   TF_REGRESSION_UTILS=<project>/.tfcore/utils bash tests/regression/run.sh tf_052
+#                                           # one, against the copy a project has deployed
 #
 # Exit 0 all held, 1 a case failed. Python 3 standard library only. Never runs git.
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-UTILS="$ROOT/.tfcore/utils"
+UTILS="${TF_REGRESSION_UTILS:-$ROOT/.tfcore/utils}"
 TELEM="$ROOT/.tfcore/telemetry"
 SCRATCH="$ROOT/tests/.artifacts/regression.$$"
 mkdir -p "$SCRATCH"
@@ -2168,6 +2170,103 @@ print(' '.join(sorted(r for r, _f, _w in m.routes_in_code())))" 2>&1)"
     || { bad tf_050 "routes in code still include a test's screenshot path, or lost a real route"; note "$out"; }
 }
 
+# --- TF-051: demote a row of an earlier phase's checklist ------------------------------------
+# tf-triage.py read only the appPhase checklist, so with appPhase 3 a Phase 1 row the Phase 3
+# verify found failing could not be demoted: "REQ-NFR-003 is not a row of docs/TfLens-P3-Checklist.md"
+# (TfLens *fix-issues, 2026-09-15). tf-verify-list already took --phase.
+tf_051() {
+  local d="$SCRATCH/tf051" out rc; mkdir -p "$d/docs" "$d/.tfcore"
+  printf 'appPhase: 3\n' > "$d/.tfcore/core-config.yaml"
+  printf '%s\n' '# Fx — Requirements Checklist' '' '## Requirements Status' '' \
+    '| ID | Title | Status | % | Remarks | Detail |' '|---|---|---|---|---|---|' \
+    '| REQ-NFR-003 | Secret hygiene | Verified | 100% | — | [view](#d-req-nfr-003) |' '' '## Security' '' \
+    '- <a id="d-req-nfr-003"></a>**REQ-NFR-003** — Secret hygiene' '  - Acceptance: When a build runs on Repos, then no secret is in the output.' > "$d/docs/Fx-Checklist.md"
+  printf '%s\n' '# Fx — Phase 3 Checklist' '' '## Requirements Status' '' \
+    '| ID | Title | Status | % | Remarks | Detail |' '|---|---|---|---|---|---|' \
+    '| REQ-UI-100 | Prices page | Verified | 100% | — | [view](#d-req-ui-100) |' '' '## Prices' '' \
+    '- <a id="d-req-ui-100"></a>**REQ-UI-100** — Prices page' '  - Acceptance: When a user opens Prices on Prices, then the rates show.' > "$d/docs/Fx-P3-Checklist.md"
+  tri() { ( cd "$d" && bash "$UTILS/tf-triage.sh" Fx "$@" ) 2>&1; }
+  out="$(tri demote REQ-NFR-003 "the secret-hygiene test fails" --kind data-logic)"; rc=$?
+  if [[ $rc -eq 0 ]] && grep -q '^| REQ-NFR-003 | Secret hygiene | Needs re-verify |' "$d/docs/Fx-Checklist.md" \
+     && out2="$(tri demote REQ-UI-100 "the rates are blank")" && grep -q '^| REQ-UI-100 | Prices page | Needs re-verify |' "$d/docs/Fx-P3-Checklist.md"; then
+    ok tf_051a "demote reaches a Phase 1 row with appPhase 3, and a Phase 3 row as before"
+  else
+    bad tf_051a "a row of an earlier phase's checklist cannot be demoted"; note "$(head -1 <<<"$out")"
+  fi
+  tri note REQ-NFR-003 "could not reproduce on a clean build" --phase 1 >/dev/null
+  tri new "Stale cache" "When a user reloads Repos on Repos, then the new count shows." --prefix NFR --phase 1 >/dev/null
+  if grep -q 'triage: could not reproduce' "$d/docs/Fx-Checklist.md" && grep -q '^| REQ-NFR-004 | Stale cache |' "$d/docs/Fx-Checklist.md" \
+     && ! grep -q 'Stale cache' "$d/docs/Fx-P3-Checklist.md"; then
+    ok tf_051b "note and new take --phase 1 and write to that phase's checklist"
+  else
+    bad tf_051b "--phase is ignored: note or new wrote to the appPhase checklist"
+  fi
+  out="$(tri demote REQ-FN-999 "nothing")"; rc=$?
+  [[ $rc -eq 2 ]] && grep -q 'Fx-Checklist.md' <<<"$out" && grep -q 'Fx-P3-Checklist.md' <<<"$out" \
+    && ok tf_051c "an id in no checklist is refused, naming every checklist searched" \
+    || { bad tf_051c "an unknown id was not refused with the checklists named"; note "$out (exit $rc)"; }
+}
+
+# --- TF-052: the verify a fix chains, and the fix's own run record --------------------------
+# *fix-issues runs *verify inline; the verify was handed the fix's start as "the step-0 time", so its
+# record covered the fix's whole window and tf-fix-close's record was refused for overlap. And the
+# ledger holds one scoped verify, so after a Phase 3 verify then a --phase 1 verify the Phase 3 rows
+# read as absent and their open misses got "Needs re-verify" (TfLens, 2026-09-15).
+tf_052() {
+  local d; d="$(_metrics_fx tf052)"; mkdir -p "$d/.tfcore/.session" "$d/tests/.artifacts/verify"; cp -r "$UTILS" "$d/.tfcore/"
+  local t1 t2 t3 t4 t5; t1="$(date -u -d '-50 minutes' +%Y-%m-%dT%H:%M:%SZ)"; t2="$(date -u -d '-40 minutes' +%Y-%m-%dT%H:%M:%SZ)"
+  t3="$(date -u -d '-30 minutes' +%Y-%m-%dT%H:%M:%SZ)"; t4="$(date -u -d '-20 minutes' +%Y-%m-%dT%H:%M:%SZ)"; t5="$(date -u -d '-10 minutes' +%Y-%m-%dT%H:%M:%SZ)"
+  in52() { ( cd "$d" && CLAUDE_PROJECT_DIR= TF_METRICS_ROOT="$d" TF_SKIP_SELFCHECK=1 "$@" ) 2>&1; }
+  # the verify's step 0 inside the fix keeps the fix as "outer", and a greedy read still takes the verify's start
+  printf '{"cmd":"fix-issues","app":"Fx","started":"%s"}\n' "$t1" > "$d/.tfcore/.session/phase.json"
+  local own; own="$(in52 bash .tfcore/utils/tf-phase.sh start verify-phase Fx | head -1)"
+  if python3 -c "import json,sys; m=json.load(open(sys.argv[1])); sys.exit(0 if m['cmd']=='verify-phase' and m['started']==sys.argv[3] and m.get('outer',{}).get('started')==sys.argv[2] else 1)" \
+       "$d/.tfcore/.session/phase.json" "$t1" "$own" && [[ "$(sed -n 's/.*"started":"\([^"]*\)".*/\1/p' "$d/.tfcore/.session/phase.json")" == "$own" ]]; then
+    ok tf_052a "a verify started inside a fix keeps the fix as outer; its own start is what every reader takes"
+  else
+    bad tf_052a "the verify's marker lost the fix's start, or a reader takes the wrong one"; note "$(cat "$d/.tfcore/.session/phase.json")"
+  fi
+  # tf-verify-emit handed the fix's start records the verify from its own
+  printf '{"outer":{"cmd":"fix-issues","app":"Fx","started":"%s"},"cmd":"verify-phase","app":"Fx","started":"%s"}\n' "$t1" "$t4" > "$d/.tfcore/.session/phase.json"
+  python3 - "$d/tests/.artifacts/verify/verdicts.json" <<'PY'
+import json, sys
+json.dump({"app": "Fx", "scope": "REQ-UI-100", "build_result": "pass", "rows": [{"id": "REQ-UI-100", "class": "UI", "verdict": "PASS",
+           "gate": None, "gates_run": ["build", "acceptance"], "failure_class": None, "prior_verdict": "Needs re-verify",
+           "status": "Verified", "emit_gate": True}]}, open(sys.argv[1], "w"))
+PY
+  in52 bash .tfcore/utils/tf-verify-emit.sh Fx --started "$t1" >/dev/null
+  grep -q "\"cmd\":\"verify-phase\".*\"started\":\"$t4\"\|\"started\":\"$t4\".*\"cmd\":\"verify-phase\"" "$d/docs/metrics/runs.jsonl" \
+    && ok tf_052b "the chained verify's run record starts at the verify's own start, not the fix's" \
+    || { bad tf_052b "the chained verify's record took the fix's start"; note "$(grep verify-phase "$d/docs/metrics/runs.jsonl" | cut -c1-160)"; }
+  # the close: two chained verifies on the stream, a Phase 3 one then a --phase 1 one; the ledger holds the second
+  local d2; d2="$(_metrics_fx tf052close)"; mkdir -p "$d2/.tfcore/.session"; cp -r "$UTILS" "$d2/.tfcore/"
+  for w in "$t2 $t3" "$t4 $t5"; do set -- $w
+    echo "{\"kind\":\"run\",\"app\":\"Fx\",\"cmd\":\"verify-phase\",\"started\":\"$1\",\"ended\":\"$2\"}" \
+      | ( cd "$d2" && CLAUDE_PROJECT_DIR= TF_METRICS_ROOT="$d2" bash .tfcore/utils/tf-emit.sh runs ) >/dev/null 2>&1
+  done
+  printf '%s\n' "{\"kind\":\"gate\",\"app\":\"Fx\",\"run_id\":\"$t1\",\"req_id\":\"REQ-UI-100\",\"verdict\":\"Needs re-verify\",\"gate\":\"escaped\"}" \
+    "{\"kind\":\"gate\",\"app\":\"Fx\",\"run_id\":\"$t2\",\"req_id\":\"REQ-UI-100\",\"verdict\":\"Verified\",\"gate\":null}" \
+    "{\"kind\":\"gate\",\"app\":\"Fx\",\"run_id\":\"$t4\",\"req_id\":\"REQ-NFR-003\",\"verdict\":\"FAIL\",\"gate\":\"acceptance\"}" >> "$d2/docs/metrics/gates.jsonl"
+  printf '%s\n' '{"kind":"miss","miss_id":"MISS-Fx-20260911-39","app":"Fx","req_id":"REQ-UI-100","miss_class":"wrong-behaviour","artifact":"src","severity":"minor","found_by":"owner","ts":"2026-09-11T10:00:00Z"}' \
+    '{"kind":"miss","miss_id":"MISS-Fx-20260915-01","app":"Fx","req_id":"REQ-NFR-003","miss_class":"wrong-behaviour","artifact":"src","severity":"minor","found_by":"owner","ts":"2026-09-15T10:00:00Z"}' >> "$d2/docs/metrics/misses.jsonl"
+  printf '{"date":"2026-09-15","app":"Fx","scope":"REQ-NFR-003","run_id":"%s","rows":{"REQ-NFR-003":"FAIL"}}\n' "$t4" > "$d2/docs/.last-verify.json"
+  printf '{"outer":{"cmd":"fix-issues","app":"Fx","started":"%s"},"cmd":"verify-phase","app":"Fx","started":"%s"}\n' "$t1" "$t4" > "$d2/.tfcore/.session/phase.json"
+  local out; out="$(cd "$d2" && CLAUDE_PROJECT_DIR= TF_METRICS_ROOT="$d2" bash .tfcore/utils/tf-fix-close.sh Fx --started "$t1" --reqs REQ-UI-100,REQ-NFR-003 --build pass 2>&1)"
+  local segs; segs="$(python3 -c "import json,sys
+r=[json.loads(l) for l in open(sys.argv[1]) if '\"fix-issues\"' in l]
+print(' '.join('%s-%s:%d' % (x['started'], x['ended'], len(x['reqs_touched'])) for x in r))" "$d2/docs/metrics/runs.jsonl")"
+  if ! grep -q 'not written' <<<"$out" && [[ "$segs" == "$t1-$t2:2 $t3-$t4:0 $t5-"* && "$(wc -w <<<"$segs")" == "3" ]]; then
+    ok tf_052c "the fix is recorded around both chained verifies, rows on its first segment, nothing refused"
+  else
+    bad tf_052c "the fix's run record was refused or covers a chained verify"; note "$(grep -m1 'not written' <<<"$out" | cut -c1-160)"; note "segments: $segs"
+  fi
+  local v; v="$(python3 -c "import json,sys
+print(' '.join('%s=%s' % (x['req_id'], x['verdict_after']) for x in map(json.loads, open(sys.argv[1])) if x.get('kind')=='miss-fix'))" "$d2/docs/metrics/misses.jsonl")"
+  [[ "$v" == "REQ-UI-100=Verified REQ-NFR-003=FAIL" ]] \
+    && ok tf_052d "each row's miss-fix carries the verdict of the verify that graded it, not the last ledger's absence" \
+    || { bad tf_052d "a row verified by the earlier scope got the wrong verdict"; note "$v"; }
+}
+
 # --- TF-036: two wrapped sentences that share a line ----------------------------------------
 # An inline element's bounding box is the union of its line fragments, so two sentences sharing a
 # line "overlapped" across a tile's width on TfLens /effort (2026-09-11) with 0 px² in common.
@@ -2767,6 +2866,40 @@ for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], ' '.jo
     || { bad am_014b "a page that escaped its scroll container went unreported"; note "$f"; }
 }
 
+# --- AppManager TF-015: a padded one-line badge read as two rows -------------------------------
+# lineCount divided the border box by the line height, so a badge with 4px padding top and bottom
+# and `line-height: 1` measured 18 / 9.756 = 1.85, rounded to 2: "wraps to 2 rows where the mockup
+# keeps it on 1" on AppManager's adoption report, whose badges all sit on one line (2026-09-15).
+am_015() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then
+    printf 'skip am_015 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    return
+  fi
+  local d="$SCRATCH/am015"; mkdir -p "$d/docs/mockups"
+  local head='<!doctype html><html><head><meta charset="utf-8"><style>'
+  printf '<!doctype html><html><head><meta charset="utf-8"></head><body><div data-testid="status"><span>Not adopted</span></div></body></html>\n' > "$d/docs/mockups/badge.html"
+  printf '%s%s</style></head><body><div data-testid="status"><span class="b">Not adopted</span></div></body></html>\n' "$head" \
+    '.b{display:inline-block;padding:4px 8px;line-height:1;font-size:9.756px;white-space:nowrap}' > "$d/badge.html"
+  printf '<!doctype html><html><head><meta charset="utf-8"></head><body><div data-testid="note"><span>Not adopted on any device</span></div></body></html>\n' > "$d/docs/mockups/wrapped.html"
+  printf '%s%s</style></head><body><div data-testid="note"><span class="w">Not adopted on any device</span></div></body></html>\n' "$head" \
+    '.w{display:inline-block;width:40px;padding:4px;line-height:1;font-size:10px}' > "$d/wrapped.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
+  sleep 1
+  ( cd "$d" && timeout 180 node parity.mjs --base "http://127.0.0.1:$port" --screen badge=/badge.html --screen wrapped=/wrapped.html \
+      --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$(cat "$d/srv.pid")" 2>/dev/null
+  local f; f="$(python3 -c "import json
+for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], ' '.join(x['class'] for x in s['findings']))" 2>&1)"
+  grep -qx 'badge ' <<<"$f" && ok am_015a "a padded badge on one line is not reported as wrapping" \
+    || { bad am_015a "a one-line badge's padding is still counted as a text row"; note "$f"; }
+  grep -q '^wrapped .*wrap' <<<"$f" && ok am_015b "text that really wraps inside a padded box is still reported" \
+    || { bad am_015b "a real wrap inside a padded box went unreported"; note "$f"; }
+}
+
 # --- the ignore file that grew by one block per update -----------------------------------
 # `tr -d '\r' < .gitignore | grep -qE …` under `set -o pipefail`: grep -q stops at the first
 # match, tr dies writing the rest, the pipeline reports failure, and the framework block is
@@ -2782,7 +2915,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done
