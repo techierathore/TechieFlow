@@ -2900,6 +2900,74 @@ for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], ' '.jo
     || { bad am_015b "a real wrap inside a padded box went unreported"; note "$f"; }
 }
 
+# --- AppManager TF-016: no UIDesign, so no UI row had a screen ---------------------------------
+# Screens were read from the UIDesign only. AppManager has none, so REQ-UI-027 printed "No screen
+# resolved" although its checklist heading reads `### Page: Device adoption report
+# (`/reports/device-adoption`)`, and the verdict credited it with build and acceptance only
+# (2026-09-16). The fixture holds the checklist's three real shapes: the anchor below its `### Page:`
+# heading, the older anchor above it, and a `### Cross-page:` heading that must end the page before
+# it; plus a page whose only route needs an id, which names no screen.
+am_016() {
+  local d="$SCRATCH/am016" out
+  mkdir -p "$d/docs"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Details |
+|---|---|---|---|---|---|
+| REQ-UI-001 | Applications list | Verified | 100% | | [view](#d-req-ui-001) |
+| REQ-UI-002 | Application roles | Verified | 100% | | [view](#d-req-ui-002) |
+| REQ-UI-003 | Connection test | Verified | 100% | | [view](#d-req-ui-003) |
+| REQ-UI-004 | Adoption report | Verified | 100% | | [view](#d-req-ui-004) |
+
+## UI / Pages
+
+<a id="d-req-ui-001"></a>
+### Page: Applications (`/applications`, `/applications/{id}`)
+- **REQ-UI-001** — Application list. *(BRD-1)*
+  - *Acceptance:* When an Admin opens the applications list, then every application appears.
+
+<a id="d-req-ui-002"></a>
+### Page: Application Roles (`/applications/{id}/roles`)
+- **REQ-UI-002** — Roles per application. *(BRD-2)*
+  - *Acceptance:* When an Admin adds a role, then it appears in the list.
+
+### Cross-page: connection test
+
+<a id="d-req-ui-003"></a>
+- **REQ-UI-003** — Test the connection. *(BRD-3)*
+  - *Acceptance:* When an Admin tests the connection, then a result shows.
+
+### Page: Device adoption report (`/reports/device-adoption`)
+
+<a id="d-req-ui-004"></a>
+- **REQ-UI-004** — Adoption per application. *(BRD-4)*
+  - *Acceptance:* When an Admin opens the device-adoption report, then each application shows its status.
+  - *Mockup:* [mockups/device-adoption-report.html](mockups/device-adoption-report.html)
+MD
+  out="$(cd "$d" && python3 "$UTILS/tf-verify-list.py" Fx ui --json-out list.json >/dev/null 2>&1; python3 -c "
+import json; j=json.load(open('list.json'))
+print(' '.join(r['id']+'='+(r['route'] or '-') for r in j['rows']))
+print(' '.join(s['route']+'@'+(s['mockup'] or '-') for s in j['screens']))" 2>&1)"
+  [[ "$(sed -n 1p <<<"$out")" == "REQ-UI-001=/applications REQ-UI-002=- REQ-UI-003=- REQ-UI-004=/reports/device-adoption" ]] \
+    && ok am_016a "without a UIDesign each UI row takes its screen from the Page heading it sits under, in both anchor shapes" \
+    || { bad am_016a "without a UIDesign a UI row's screen is unresolved or taken from the wrong heading"; note "$out"; }
+  [[ "$(sed -n 2p <<<"$out")" == "/applications@- /reports/device-adoption@docs/mockups/device-adoption-report.html" ]] \
+    && ok am_016b "the screens to drive carry the heading's first openable route and the entry's mockup" \
+    || { bad am_016b "the screens read from the checklist are wrong"; note "$out"; }
+  cat > "$d/docs/Fx-UIDesign.md" <<'MD'
+# Fx UI Design
+
+### Screen: Adoption (/adoption)
+MD
+  out="$(cd "$d" && python3 "$UTILS/tf-verify-list.py" Fx ui --json-out list2.json 2>&1 | grep '^## Screens to drive')"
+  [[ "$out" == "## Screens to drive (0 of 1 in the UIDesign)" ]] \
+    && ok am_016c "a project with a UIDesign still reads its screens from the UIDesign only" \
+    || { bad am_016c "the checklist's headings were used although a UIDesign exists"; note "$out"; }
+}
+
 # --- the ignore file that grew by one block per update -----------------------------------
 # `tr -d '\r' < .gitignore | grep -qE …` under `set -o pipefail`: grep -q stops at the first
 # match, tr dies writing the rest, the pipeline reports failure, and the framework block is
@@ -2915,7 +2983,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

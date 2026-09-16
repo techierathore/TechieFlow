@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-09-15. |
+| Last updated | 2026-09-16. |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -114,7 +114,7 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | **Open misses** are listed with their outcome in `docs/TechieFlow-Misses.md` — 52 of 167 open (2026-09-12). The one this maintainer owes a fix for is 12 of 2026-09-07, that a hidden framework folder is invisible to search and nothing enforces the rule. | Maintainer |
 | **TrStudio is not on this machine.** It is a named fixture and could not be refreshed here. | Owner action |
 | **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` (that repository, not this one) and waiting on the owner's go-ahead. | Separate repo |
-| **TfLens's TF-013 to TF-052 and AppManager's TF-001 to TF-015 are fixed and deployed in all 19 repositories.** Waiting for a re-check (2026-09-15): TfLens's TF-051 (triage reaches an earlier phase's checklist) and TF-052 (a chained verify no longer swallows the fix's run record), AppManager's TF-015 (padding read as a wrapped row). `tf-feedback.sh <App>` prints a project's state. | TfLens, AppManager (close) |
+| **TfLens's TF-013 to TF-052 and AppManager's TF-001 to TF-016 are fixed and deployed in all 19 repositories.** Waiting for a re-check: TfLens's TF-051 (triage reaches an earlier phase's checklist) and TF-052 (a chained verify keeps the fix's run record); AppManager's TF-016 (screens from the checklist's Page headings). `tf-feedback.sh <App>` prints a project's state. | TfLens, AppManager (close) |
 | **Eighteen `.gitignore` files carry repeated framework blocks** left by FR-76's defect: TechieBlog 50 copies, TfLens 30, one private project 10, fifteen others 2. Repeated lines ignore nothing extra, so nothing is wrong, only untidy; the updater no longer adds them, and removes none. | Owner decision |
 | **286 misses predate the `sort` field** (2026-09-07). Nothing is backfilled, nothing is edited, and a reader labels what it derives; no action, by anyone. See `docs/CHANGELOG.md`. | Closed |
 | **TrSetup has thousands of tracked build-output files.** Its ignore rules are correct and inert until the index entries go. `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the commands. Agents never run version control. | Owner action |

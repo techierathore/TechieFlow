@@ -8,6 +8,23 @@
 
 ---
 
+## 2026-09-16 — AppManager's TF-016
+
+`tf-verify-list.py` read screens from the UIDesign only, so AppManager, which has none, left every UI
+row without a screen and the verdict credited REQ-UI-027 with build and acceptance only. When the
+UIDesign names no screens, the checklist's `## Page:` / `### Page:` headings are read instead: the
+name, the first route that opens as written (no `{id}`), the mockup of the first entry under it. A
+row belongs to the heading it sits under whether its anchor is below it or above it (AppManager has
+both), and any other `###` heading (`### Cross-page:`) ends the page before it — the first cut
+missed both and put REQ-UI-002 on Applications and TechieRag's REQ-UI-009/010 on Token Usage, caught
+by reading the output. Case `am_016`, failing against the old script; miss
+`MISS-TechieFlow-20260916-01`. Proved on every checklist on this machine: the seven with a UIDesign
+print exactly what they printed before; AppManager (20 of 29 UI rows now resolved), TechieRag and
+AppStudio gain correct screens. Then on AppManager's admin site, booted on 5041: screens, assets and
+parity run from the new list, and the verdict on the same evidence credits REQ-UI-027 with six
+checks where the old list gave two. AppManager's ledger was left untouched. Deployed to all 19
+projects, every copy matching; reply written to both copies of AppManager's feedback file.
+
 ## 2026-09-15, evening — AppManager's TF-015
 
 `tf-mockup-parity.mjs` `lineCount` divided an element's full height by its line height, so a

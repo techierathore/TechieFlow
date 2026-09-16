@@ -71,13 +71,21 @@ def entries_of(text):
     out, current = {}, ""
     lines = text.splitlines()
     for i, line in enumerate(lines):
-        m = re.match(r"^##\s+(.+)$", line)
+        # a heading one level down (`### Page: …` under `## UI / Pages`) names the section too, and any
+        # other one (`### Cross-page: …`) ends the page above it
+        m = re.match(r"^#{2,3}\s+(.+)$", line)
         if m:
             current = re.sub(r"^(?:page|screen)\s*:\s*", "", m.group(1).strip(), flags=re.I)
             continue
         a = re.search(r"<a id=['\"]d-(req-[a-z]+-\d+)['\"]", line, re.I)
         if a:
             rid = a.group(1).upper()
+            # an anchor written above its own page heading belongs to that page, not the one before
+            # (AppManager's older entries: `<a id>` then `### Page:` then the row)
+            nxt = next((l for l in lines[i + 1:i + 3] if l.strip()), "")
+            h = re.match(r"^#{2,3}\s+(?:page|screen)\s*:\s*(.+)$", nxt, re.I)
+            if h:
+                current = h.group(1).strip()
             e = {"section": current, "acceptance": "", "mockup": "", "brd": "", "perf_budget": ""}
             for j in range(i, min(i + 14, len(lines))):
                 l = lines[j]
@@ -114,6 +122,28 @@ def screens_of_uidesign(path):
         if mock and not mock.startswith("docs/"):
             mock = "docs/" + mock
         out.append({"name": m.group(1).strip(), "route": m.group(2).strip(), "mockup": mock})
+    return out
+
+
+def screens_of_checklist(text, ent):
+    """[{name, route, mockup}] from the checklist's own '## Page: Name (`/route`, …)' headings, at ## or
+    ###, for a project with no UIDesign: the first route that can be opened as typed (no `{id}`),
+    the mockup from the first entry under the heading. A heading with no such route names no screen.
+    Without this every UI row of such a project was graded by its test only (AppManager TF-016)."""
+    out, seen = [], set()
+    for line in text.splitlines():
+        m = re.match(r"^#{2,3}\s+(?:page|screen)\s*:\s*(.+?)\s*\((.*)\)\s*$", line, re.I)
+        if not m or norm_name(m.group(1)) in seen:
+            continue
+        inner = m.group(2)
+        cands = re.findall(r"`([^`]+)`", inner) or re.split(r"\s*,\s*", inner)
+        route = next((c.strip() for c in cands if c.strip().startswith("/") and "{" not in c and " " not in c.strip()), "")
+        if not route:
+            continue
+        section = re.sub(r"^#+\s+(?:page|screen)\s*:\s*", "", line.strip(), flags=re.I)
+        mock = next((e["mockup"] for e in ent.values() if e["section"] == section and e["mockup"]), "")
+        seen.add(norm_name(m.group(1)))
+        out.append({"name": m.group(1).strip(), "route": route, "mockup": mock, "section": section})
     return out
 
 
@@ -216,12 +246,15 @@ def main(argv):
     if not rows:
         die(f"{cl} has no REQ rows")
     ent = entries_of(text)
-    screens = screens_of_uidesign(os.path.join("docs", f"{pfx}UIDesign.md"))
+    screens, source = screens_of_uidesign(os.path.join("docs", f"{pfx}UIDesign.md")), "UIDesign"
+    if not screens:
+        screens, source = screens_of_checklist(text, ent), "checklist's Page headings"
     dialogs = dialogs_of_brd(os.path.join("docs", f"{pfx}BRD.md"))
     users = test_users(usage_guide(app))
     by_name = {norm_name(s["name"]): s for s in screens}
     by_mock = {s["mockup"]: s for s in screens if s["mockup"]}
     by_route = {s["route"].lower(): s for s in screens}
+    by_section = {s["section"]: s for s in screens if s.get("section")}
 
     work, skipped, unresolved = [], 0, []
     for r in rows:
@@ -234,6 +267,10 @@ def main(argv):
         row = dict(r, acceptance=e["acceptance"], mockup=e["mockup"], brd=e["brd"], perf_budget=e["perf_budget"],
                    section=e["section"], screen="", route="", dialog="")
         cand = [screen_from_acceptance(e["acceptance"]), e["section"], r["title"]]
+        if e["section"] in by_section:     # a screen read from the checklist: the heading the row sits under
+            s = by_section[e["section"]]
+            row["screen"], row["route"] = s["name"], s["route"]
+            cand = []
         for c in cand:
             n = norm_name(c)
             if not n:
@@ -266,7 +303,7 @@ def main(argv):
     if not work:
         print("NOTHING: no row in scope. Run the status gate and stop.")
     print()
-    print(f"## Screens to drive ({len(screen_list)} of {len(screens)} in the UIDesign)")
+    print(f"## Screens to drive ({len(screen_list)} of {len(screens)} in the {source})")
     for s in screen_list:
         print(f"- {s['name']} ({s['route']}) — mockup {s['mockup'] or 'none'} — rows {', '.join(s['rows'])}")
     print()
@@ -289,7 +326,7 @@ def main(argv):
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump({"app": app, "scope": scope, "phase": phase, "kind": cfg("appKind", "app"), "checklist": cl,
-                   "rows": work, "screens": screen_list, "unresolved": unresolved, "test_users": users,
+                   "rows": work, "screens": screen_list, "screens_source": source, "unresolved": unresolved, "test_users": users,
                    "skipped_na": skipped, "total": len(rows)}, f, indent=1)
     print()
     print(f"JSON: {out_path}")

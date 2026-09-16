@@ -4,13 +4,13 @@
 |---|---|
 | App | AppManager |
 | Upstream | TechieFlow |
-| Updated | 2026-09-15 |
+| Updated | 2026-09-16 |
 
 ## Summary
 
-15 entries: 0 blocking now, 0 open, 1 fixed upstream and waiting to be re-checked here (TF-015, fixed 2026-09-15), 14 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-014 on 2026-09-14.
+16 entries: 0 blocking now, 0 open, 1 fixed upstream and waiting to be re-checked here (TF-016, fixed 2026-09-16), 15 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-014 on 2026-09-14, TF-015 on 2026-09-16.
 
-Nothing is blocked. Once TF-015 is re-checked, REQ-UI-027's mockup check can pass: the wrap it reported is no longer counted.
+Nothing is blocked. Once TF-016 is re-checked, a verify of a UI row here drives its page from the checklist's Page heading, so the row is credited with every check that ran on it.
 
 ## Entries
 
@@ -222,6 +222,8 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 
 ### TF-015 — `tf-mockup-parity.sh` reports a one-line padded badge as wrapping to two rows
 
+> ✅ **Closed 2026-09-16** — re-checked here: Re-checked here on 2026-09-16: booted the admin site with tf-verify-boot.sh start (src/AppManagerWeb, port 5041) and ran tf-mockup-parity.sh --base http://localhost:5041 --screen device-adoption-report=/reports/device-adoption --login-path /login --user admin@appmanager.local. Verdict PASS at 1280 and 390, findings 0, anchor_deficit 0 — the wrap finding on adoption-status-badge > span[0] is gone at both widths. Evidence tests/.artifacts/verify/parity.json. REQ-UI-027 returned to Verified in the same run.
+
 - **Severity:** minor
 - **Blocks:** no — the screen was measured by hand and is correct; only REQ-UI-027's return to `Verified` waits, because its mockup check would fail on this finding alone.
 - **Repro:** `bash .tfcore/utils/tf-mockup-parity.sh --base http://localhost:5041 --screen device-adoption-report=/reports/device-adoption --login-path /login --user admin@appmanager.local --password '…'` in AppManager, against `docs/mockups/device-adoption-report.html` as redrawn on 2026-09-15.
@@ -231,9 +233,45 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 - **Workaround:** none in the tool; the finding is recorded against REQ-UI-027 as not reproducible, with the measurements in `tests/.artifacts/fix-issues/adoption-badge/`.
 - **Suggested fix:** in `lineCount` (`tf-mockup-parity.mjs`, around line 233), `Math.round(h / lh)` divides the border-box height by the line height, so vertical padding and borders count as text rows: 18 / 9.756 = 1.85 rounds to 2. Subtract `paddingTop + paddingBottom + borderTopWidth + borderBottomWidth` from `h` first, or count distinct line tops from a `Range` over the element's text (`range.getClientRects()`), which ignores padding entirely.
 
+### TF-016 — `tf-verify-list.sh` leaves a row's screen unresolved when the project has no UIDesign document, ignoring the route in the checklist's own Page heading
+
+- **Severity:** minor
+- **Blocks:** no — the screen was driven by hand with the route read from the checklist, and every check passed; the row's verdict is unaffected.
+- **Repro:** `bash .tfcore/utils/tf-verify-list.sh AppManager REQ-UI-027` in AppManager, which has no `docs/AppManager-UIDesign.md`.
+- **Expected:** the row resolved to screen `device-adoption-report` at route `/reports/device-adoption`, so the render, visual, assets and mockup checks run against it.
+- **Actual:** `Screens to drive (0 of 0 in the UIDesign)` and `No screen resolved (1): graded by their test only — REQ-UI-027`, although the checklist's detail section carries `### Page: Device adoption report (`/reports/device-adoption`)` directly above the entry and a `*Mockup:* [mockups/device-adoption-report.html]` line inside it. `tf-verify-verdict.sh` then recorded `Checks that ran: build, acceptance` only.
+- **Encountered in:** `*verify REQ-UI-027 AppManager`, step 1.
+- **Workaround:** ran `tf-verify-screens.sh`, `tf-assets.sh` and `tf-mockup-parity.sh` with `--screen device-adoption-report=/reports/device-adoption` typed by hand; all three passed.
+- **Suggested fix:** when no UIDesign document exists, fall back to the checklist itself — take the screen name and route from the nearest preceding `### Page: {name} (`{route}`)` heading, as the mockup path is already taken from the entry's `*Mockup:*` line. Otherwise a project without a UIDesign silently grades every UI row on two of the seven checks.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### TF-016 — fixed 2026-09-16
+
+- **What was wrong.** The list tool read screens from the UIDesign only. With no UIDesign it found
+  none, so every UI row read "no screen resolved" and the verdict credited build and acceptance only.
+- **Fix.** When the UIDesign names no screens, the checklist's own `## Page:` or `### Page:`
+  headings are used: the page name, the first address in the brackets that can be opened as written,
+  and the mockup from the first entry under it. A row belongs to the heading it sits under, whether
+  its anchor is written below the heading (REQ-UI-025 to 029) or above it (REQ-UI-001 to 024); any
+  other heading, such as `### Cross-page:`, ends the page before it. A page whose only address needs
+  a record id (`/users/{id}`), or that has no address (the desktop app), still names no screen. A
+  project that has a UIDesign reads exactly as before. Deployed to this repository. Case `am_016` in
+  TechieFlow's `tests/regression/run.sh`, which fails against the script you had; miss
+  `MISS-TechieFlow-20260916-01`.
+- **Proof.** On this repository, `tf-verify-list.sh AppManager ui`: 20 screens from the checklist,
+  REQ-UI-027 on Device adoption report `/reports/device-adoption` with its mockup; 20 rows resolved,
+  9 still unresolved for the reasons above. Then this repository's admin site, booted on port 5041
+  and signed in as the usage guide's admin: the screen, asset and mockup checks were run from the new
+  list, and the verdict tool was run on the same evidence twice. With the old list, REQ-UI-027 was
+  credited with build and acceptance. With the new one: build, acceptance, render, assets, visual
+  and mockup, all passing. Your ledger and checklist were not touched. Every other project on this
+  machine that has a UIDesign reads the same as before.
+- **Verify from here.** `bash .tfcore/utils/tf-verify-list.sh AppManager REQ-UI-027`: "Screens to
+  drive (1 of 20 in the checklist's Page headings)" and the row on `/reports/device-adoption`. Then
+  close it with `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-016 "<what you ran and what it showed>"`.
 
 ### TF-015 — fixed 2026-09-15
 
