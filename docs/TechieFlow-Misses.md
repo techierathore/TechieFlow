@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 195 logged: 52 open, 142 fixed, 1 will not fix |
+| Count | 198 logged: 52 open, 145 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
 | Updated | 2026-09-16 |
 
@@ -66,10 +66,13 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (142)
+## Fixed (145)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260916-04 | 2026-09-16 by owner | 2026-09-16 by fix-issues | said and ignored | tf-status-facts.py named *verify all for 21 Needs re-verify rows whose Remarks carry a confirmed defect, while build-phase step 7 and tf-build-list.py treat those rows as fix work, so a verify could pass rows with the defect still in the code (AppManager TF-019) |
+| MISS-TechieFlow-20260916-03 | 2026-09-16 by owner | 2026-09-16 by fix-issues | the framework never said it | tf-status-facts.py and tf-brd-status.py counted an N/A row as verified, so AppManager's status read 89 of 89 verified and its BRD table 9 of 9 though REQ-NFR-008 was never verified (AppManager TF-018) |
+| MISS-TechieFlow-20260916-02 | 2026-09-16 by owner | 2026-09-16 by fix-issues | the framework never said it | tf-build-list.py and tf-status-facts.py counted a row whose acceptance line says 'Roadmap — not in this phase's scope' as work to build, so the next command was *build-phase and a builder built a parked row (AppManager TF-017) |
 | MISS-TechieFlow-20260916-01 | 2026-09-16 by owner | 2026-09-16 by log-miss | the check was too weak | tf-verify-list.py read screens from the UIDesign only, so a project with none left every UI row without a screen and the verdict credited build and acceptance only, although the checklist's Page headings name each page and its route (AppManager TF-016) |
 | MISS-TechieFlow-20260915-03 | 2026-09-15 by owner | 2026-09-15 by log-miss | the check was too weak | tf-mockup-parity.mjs lineCount divided an element's border-box height by its line height, so a one-line badge with vertical padding and line-height 1 read as two rows and was reported as wrapping (AppManager TF-015) |
 | MISS-TechieFlow-20260915-02 | 2026-09-15 by owner | 2026-09-15 by log-miss | the check was too weak | inside *fix-issues the inline verify took the fix's start so its run record swallowed the fix's, and tf-fix-close read one ledger so rows of an earlier scoped verify got Needs re-verify (TfLens TF-052) |

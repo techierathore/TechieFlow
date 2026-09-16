@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-09-16. |
+| Last updated | 2026-09-16 (AppManager TF-017 to TF-019). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -26,7 +26,7 @@ Alongside the work the framework measures the work: five append-only streams und
 |---|---|
 | `docs/TechieFlow-How-It-Works.md` | What every command does, what surrounds it, what it costs, where the design falls short. |
 | `docs/TechieFlow-Document-Schemas.md` | The required shape, size and row rules of every document the framework produces. |
-| `docs/TechieFlow-Requirements.md` | The framework's own checklist: 78 lines, each with a way to check it, 44 of them proved by a script. Agent document. |
+| `docs/TechieFlow-Requirements.md` | The framework's own checklist: 81 lines, each with a way to check it, 47 of them proved by a script. Agent document. |
 | `docs/TechieFlow-Telemetry-Explained.md` | The five report numbers, with real figures and the sentence to say about each. |
 | `docs/TechieFlow-Reset-Plan-2026-09-04.md` | The seven sessions that shrank the framework, one Done line each. |
 | `README.md` | How a person installs it and drives it. |
@@ -114,7 +114,7 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | **Open misses** are listed with their outcome in `docs/TechieFlow-Misses.md` — 52 of 167 open (2026-09-12). The one this maintainer owes a fix for is 12 of 2026-09-07, that a hidden framework folder is invisible to search and nothing enforces the rule. | Maintainer |
 | **TrStudio is not on this machine.** It is a named fixture and could not be refreshed here. | Owner action |
 | **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` (that repository, not this one) and waiting on the owner's go-ahead. | Separate repo |
-| **TfLens's TF-013 to TF-052 and AppManager's TF-001 to TF-016 are fixed and deployed in all 19 repositories.** Waiting for a re-check: TfLens's TF-051 (triage reaches an earlier phase's checklist) and TF-052 (a chained verify keeps the fix's run record); AppManager's TF-016 (screens from the checklist's Page headings). `tf-feedback.sh <App>` prints a project's state. | TfLens, AppManager (close) |
+| **TfLens's TF-013 to TF-052 and AppManager's TF-001 to TF-019 are fixed and deployed everywhere.** Awaiting re-check: TfLens's TF-051 and TF-052; AppManager's TF-017 to TF-019. `tf-feedback.sh <App>` prints a project's state. | TfLens, AppManager (close) |
 | **Eighteen `.gitignore` files carry repeated framework blocks** left by FR-76's defect: TechieBlog 50 copies, TfLens 30, one private project 10, fifteen others 2. Repeated lines ignore nothing extra, so nothing is wrong, only untidy; the updater no longer adds them, and removes none. | Owner decision |
 | **286 misses predate the `sort` field** (2026-09-07). Nothing is backfilled, nothing is edited, and a reader labels what it derives; no action, by anyone. See `docs/CHANGELOG.md`. | Closed |
 | **TrSetup has thousands of tracked build-output files.** Its ignore rules are correct and inert until the index entries go. `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the commands. Agents never run version control. | Owner action |
@@ -122,6 +122,7 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | **TechieRag holds two products in one repository**, which the one-checklist assumption cannot resolve: split the repo, or teach telemetry about it. | Owner decision |
 | **Mockup parity needs anchored mockups.** A project whose mockups carry no `data-testid` is reported ungradeable, never passed. Per-project work. | Per project |
 | **The scripts are not technology-neutral, though the personas and tasks are** (checked by `tests/mirror/run.sh`). `tf-build.sh` is .NET's and the browser layer is Playwright's, with no stack question behind either, so another stack gets the documents and telemetry and none of the build or verify scripts (MISS-TechieFlow-20260912-06). | Owner decision |
+| **`tests/bugs` fails 3 log-miss and fix-close checks** (FR-28, FR-31 to FR-33), from before 2026-09-16; cause not found. | Maintainer |
 | Two owner-owned HTML documents still name the pre-2026 layout; the updater reports them and never edits them. | Owner action |
 
 | **Impossible run records on three streams cannot be repaired**, and no longer need to be. TechieBlog holds 13 whose `started` is after their `ended`, TfLens 1, and TechieRag 1 record no elapsed time. The emitter refuses new ones, the reader discards them and prints how many (`duration_measured_n` / `duration_impossible_n` / `duration_absent_n` / `duration_recomputed_n`), and the streams are append-only, so nothing is deleted. TechieBlog reads 72.9 hours over 33 usable records where it used to read 79.0 over 45. | Closed |

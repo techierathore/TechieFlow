@@ -8,9 +8,9 @@
 
 ## Summary
 
-16 entries: 0 blocking now, 0 open, 1 fixed upstream and waiting to be re-checked here (TF-016, fixed 2026-09-16), 15 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-014 on 2026-09-14, TF-015 on 2026-09-16.
+19 entries: 0 blocking now, 0 open, 3 fixed upstream and waiting to be re-checked here (TF-017 to TF-019, fixed 2026-09-16), 16 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-014 on 2026-09-14, TF-015 and TF-016 on 2026-09-16.
 
-Nothing is blocked. Once TF-016 is re-checked, a verify of a UI row here drives its page from the checklist's Page heading, so the row is credited with every check that ran on it.
+Nothing is blocked. TF-017 is fixed upstream; it can be re-checked only when a roadmap row sits in the phase again. TF-018 is fixed upstream: a not-applicable row is counted apart, never as verified. TF-019 is fixed upstream: rows carrying a defect mark name `*build-phase`, not a verify.
 
 ## Entries
 
@@ -235,6 +235,8 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 
 ### TF-016 — `tf-verify-list.sh` leaves a row's screen unresolved when the project has no UIDesign document, ignoring the route in the checklist's own Page heading
 
+> ✅ **Closed 2026-09-16** — re-checked here: Ran tf-verify-list.sh AppManager REQ-UI-027 on 2026-09-16 (no UIDesign document in this project): it printed 'Screens to drive (1 of 20 in the checklist's Page headings)' with Device adoption report (/reports/device-adoption), mockup docs/mockups/device-adoption-report.html, rows REQ-UI-027; the row line names the screen and route, and list.json has screens_source "checklist's Page headings" and unresolved [].
+
 - **Severity:** minor
 - **Blocks:** no — the screen was driven by hand with the route read from the checklist, and every check passed; the row's verdict is unaffected.
 - **Repro:** `bash .tfcore/utils/tf-verify-list.sh AppManager REQ-UI-027` in AppManager, which has no `docs/AppManager-UIDesign.md`.
@@ -244,9 +246,107 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 - **Workaround:** ran `tf-verify-screens.sh`, `tf-assets.sh` and `tf-mockup-parity.sh` with `--screen device-adoption-report=/reports/device-adoption` typed by hand; all three passed.
 - **Suggested fix:** when no UIDesign document exists, fall back to the checklist itself — take the screen name and route from the nearest preceding `### Page: {name} (`{route}`)` heading, as the mockup path is already taken from the entry's `*Mockup:*` line. Otherwise a project without a UIDesign silently grades every UI row on two of the seven checks.
 
+### TF-017 — `tf-build-list.sh` and `tf-status-facts.sh` treat a row marked "Roadmap — not in this phase's scope" as work to build, so the next command loops
+
+- **Severity:** minor
+- **Blocks:** no — the row was left alone, as the owner decided, and named under Known blockers.
+- **Repro:** `bash .tfcore/utils/tf-build-list.sh AppManager --prompts` with REQ-NFR-008 at `In Progress` and the acceptance line ending `*Roadmap — not in this phase's scope.*`; then `bash .tfcore/utils/tf-status-facts.sh AppManager "*build-phase AppManager"`.
+- **Expected:** the row is not on the working list (or is listed apart as out of this phase), and the next command is not `*build-phase`.
+- **Actual:** `Mode: FIX — 1 row(s) to build … REQ-NFR-008`, with a builder prompt that tells a sub-agent to implement it; the status facts print `Why: 1 rows are not built yet: REQ-NFR-008` and name `*build-phase AppManager` as the next command. Running that command lands on the same row again. On 2026-09-14 a builder did build this row from that prompt, against the checklist and without being asked.
+- **Encountered in:** `*build-phase AppManager`, step 1, on 2026-09-16.
+- **Workaround:** did not spawn the builder; the owner's decision of 2026-09-15 (keep it a roadmap item) stands, and the row is named under Known blockers.
+- **Suggested fix:** read the roadmap marker in the acceptance line (or a `Roadmap` / `Deferred` status) and leave such rows off the working list and out of the "not built yet" count, printing them as "parked, waiting on the owner"; when only parked rows remain, the next command should be the one that moves them (`*amend-docs`) or the next phase, never `*build-phase`.
+
+### TF-018 — `tf-status-facts.sh` and `tf-brd-status.sh` count an `N/A` row as verified
+
+- **Severity:** minor
+- **Blocks:** no — every other row really is verified; only the headline number is one too high.
+- **Repro:** set REQ-NFR-008 to `N/A` (moved out of phase 1), then run `bash .tfcore/utils/tf-status-facts.sh AppManager "*amend-docs AppManager"` and `bash .tfcore/utils/tf-brd-status.sh AppManager`.
+- **Expected:** "88 of 89 verified, 1 not applicable" (or "88 of 88" with the N/A row left out of both numbers).
+- **Actual:** `current_phase: Handoff — 89 of 89 verified`, `89/89 Verified` in the verification log, and the BRD's Development status table shows Non-functional `9 | 9 verified`, although REQ-NFR-008 was never verified.
+- **Encountered in:** `*amend-docs AppManager`, status gate, 2026-09-16.
+- **Workaround:** "Where I am" in PROJECT-STATUS says in words that 88 are verified and one moved out of the phase.
+- **Suggested fix:** keep `N/A` terminal for the build list, but count it apart in the verified figures: leave it out of both numbers, or add a "not applicable" count to the phase line, the log's Result column and the BRD table.
+
+### TF-019 — `tf-status-facts.sh` names `*verify all` for rows set to Needs re-verify because of code defects, while `tf-build-list.sh` treats the same rows as fix work
+
+- **Severity:** minor
+- **Blocks:** no — the owner is given `*build-phase AppManager` as the next step, which fixes and then verifies.
+- **Repro:** set 21 rows to `Needs re-verify` with Remarks naming a confirmed defect at file and line (the DevGuide step of `*handoff-phase`), then run `bash .tfcore/utils/tf-status-facts.sh AppManager "*handoff-phase AppManager"` and `bash .tfcore/utils/tf-build-list.sh AppManager`.
+- **Expected:** both name the same next step; for a row whose Remarks carry a defect, the fix comes first.
+- **Actual:** the status facts print `Why: 21 rows are built and not verified` and `*verify all AppManager`; the build list prints `Mode: FIX — 21 row(s) to build`. A verify run first would grade each row only on its acceptance line; none of these lines covers the defect found, so the rows could return to `Verified` with the defect still in the code.
+- **Encountered in:** `*handoff-phase AppManager`, status gate, 2026-09-16.
+- **Workaround:** named `*build-phase AppManager` to the owner; the status file carries the printed command.
+- **Suggested fix:** when a `Needs re-verify` row's Remarks carry a dated defect (`⚠ DevGuide`, `⚠ visual`, a FAIL note), name `*build-phase` (fix mode) as the next command; name `*verify` only when the rows were changed and not yet graded.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### TF-019 — fixed 2026-09-16
+
+- **What was wrong.** The status tool sent every `Needs re-verify` row to a verify, whatever its
+  Remarks said. The build list and build-phase step 7 treat the same rows as fix work, so the two
+  tools named different next steps, and a verify of the acceptance line cannot see a DevGuide defect.
+- **Fix.** A `Needs re-verify` row whose Remarks carry a mark the framework itself writes for a
+  defect — `⚠ DevGuide`, `⚠ UAT bug`, `⚠ prod bug`, `⚠ miss`, a failing verify check (`⚠ render`,
+  `⚠ visual`, `⚠ acceptance`, …) or `⚠ SECURITY` — makes `*build-phase` the next command, and the phase
+  line counts it "to fix". A `Needs re-verify` row without such a mark still goes to a verify,
+  including one with a hand-written `⚠` such as "not verifiable here", so a row the environment cannot
+  grade does not loop through builds. Deployed to this repository. Case `am_019` in TechieFlow's
+  `tests/regression/run.sh`, which fails against the script you had; miss `MISS-TechieFlow-20260916-04`.
+- **Proof.** On a copy of your checklist: old `Verify — 21 to verify` and `*verify all AppManager`;
+  new `Build — 21 to fix, 67 of 88 verified, 1 not applicable`, `*build-phase AppManager`, and "21 rows
+  carry a defect (⚠ in Remarks) that a fix must clear before a verify". Your checklist and status file
+  were not touched.
+- **Verify from here.** `bash .tfcore/utils/tf-status-facts.sh AppManager "*build-phase AppManager"`:
+  the next command is `*build-phase AppManager` while the 21 DevGuide rows are open, the same step the
+  build list's FIX mode names. Then close it with
+  `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-019 "<what you ran and what it showed>"`.
+
+### TF-018 — fixed 2026-09-16
+
+- **What was wrong.** Both tools counted `N/A` with `Verified` and `Done (pre-existing)`, so a row
+  moved out of the phase raised the verified figure.
+- **Fix.** `N/A` is still terminal (never built, and handoff is still reachable), but it is left out
+  of both numbers and named. The phase line reads "67 of 88 verified, 1 not applicable", the log's
+  Result column "67/88 Verified, 1 N/A", and the BRD's Development status counts only the rows in
+  scope; a screen whose rows are all `N/A` reads "Not applicable". Deployed to this repository. Case
+  `am_018` in TechieFlow's `tests/regression/run.sh`, which fails against the scripts you had; miss
+  `MISS-TechieFlow-20260916-03`.
+- **Proof.** On a copy of your checklist and BRD: old `68 of 89 verified`, `68/89 Verified`, BRD
+  Non-functional `9 | 9`; new `67 of 88 verified, 1 not applicable`, `67/88 Verified, 1 N/A`, BRD
+  `8 | 8`. (Verified rows read 67, not 68: the old 68 included REQ-NFR-008.) Your BRD and status file
+  were not touched.
+- **Verify from here.** `bash .tfcore/utils/tf-status-facts.sh AppManager x` shows "1 not applicable"
+  in the phase line and the log row; `bash .tfcore/utils/tf-brd-status.sh AppManager` writes
+  Non-functional `8 | 8`. Then close it with
+  `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-018 "<what you ran and what it showed>"`.
+
+### TF-017 — fixed 2026-09-16
+
+- **What was wrong.** Neither script read the acceptance line, so a row at `In Progress` was open
+  work whatever the line said: a builder prompt for REQ-NFR-008, "1 rows are not built yet", and
+  `*build-phase` as the next command.
+- **Fix.** A row whose acceptance line carries "Roadmap — not in this phase's scope" is a roadmap
+  row. The build list counts it apart (`… 0 Blocked, 1 roadmap, 89 total`), names it on its own
+  line, and gives it no cluster or prompt. The status facts leave it out of the "not built" count
+  and the next-command decision, name it in the reason, and mark it in the open list. The rule lives
+  in one place, `.tfcore/utils/tf_roadmap.py`, which both scripts use; the self-check reads the new
+  count. A row that is only mentioned as a roadmap item in its Remarks is still built. Deployed to
+  this repository. Case `am_017` in TechieFlow's `tests/regression/run.sh`, which fails against the
+  scripts you had; miss `MISS-TechieFlow-20260916-02`.
+- **Proof.** You have since set REQ-NFR-008 to `N/A`, so the fix was proved on a copy of your
+  checklist with the row put back at `In Progress`. Old scripts: `Mode: FIX — 1 row(s) to build …
+  REQ-NFR-008` and `*build-phase AppManager`, "1 rows are not built yet". New scripts:
+  `Mode: NOTHING — 0 row(s) to build; 88 terminal, 0 Blocked, 1 roadmap, 89 total`, and
+  `*handoff-phase AppManager`, the reason naming REQ-NFR-008 as a roadmap row left for the owner.
+  Every other checklist on this machine reads the same as before. Your checklist was not touched.
+  TF-018 (the `N/A` count) is a separate entry and is not part of this fix.
+- **Verify from here.** `bash .tfcore/utils/tf-build-list.sh AppManager` prints the Mode line with
+  `0 roadmap` (the row is `N/A` now, so it counts as terminal). To see the roadmap case itself, put
+  the row back at `In Progress` in a copy of the checklist, or wait for the next roadmap row. Then
+  close it with `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-017 "<what you ran and what it showed>"`.
 
 ### TF-016 — fixed 2026-09-16
 

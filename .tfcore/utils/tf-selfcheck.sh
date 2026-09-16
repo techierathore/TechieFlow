@@ -117,7 +117,7 @@ else:
 # TF-019: a row can sit at `Needs re-verify` forever, which pinned the mode and dropped
 # every not-started row out of the list AND out of the counts, so a build pass could report
 # a phase finished with rows at 0%. The arithmetic is the check: every row lands in exactly
-# one of open / terminal / Blocked.
+# one of open / terminal / Blocked / roadmap.
 apps = app_names()
 if not apps:
     skip("tf-build-list", "no checklist in docs/ yet")
@@ -128,7 +128,7 @@ for app, phase, path in apps:
     if rc not in (0, 2):
         broken("tf-build-list", "%s: exited %d" % (label, rc), out.strip().splitlines()[0][:120] if out.strip() else "")
         continue
-    m = re.search(r"Mode: (\w+) — (\d+) row\(s\) to build; (\d+) terminal, (\d+) Blocked, (\d+) total", out)
+    m = re.search(r"Mode: (\w+) — (\d+) row\(s\) to build; (\d+) terminal, (\d+) Blocked, (?:(\d+) roadmap, )?(\d+) total", out)
     if not m:
         if "has no REQ rows" in out:
             skip("tf-build-list", "%s: checklist has no requirement rows yet" % label)
@@ -136,11 +136,11 @@ for app, phase, path in apps:
             broken("tf-build-list", "%s: no counts line to check" % label,
                    "the output shape changed; the arithmetic can no longer be verified")
         continue
-    mode, work, term, blocked, total = m.group(1), *(int(x) for x in m.groups()[1:])
-    if work + term + blocked != total:
+    mode, work, term, blocked, roadmap, total = m.group(1), *(int(x or 0) for x in m.groups()[1:])
+    if work + term + blocked + roadmap != total:
         broken("tf-build-list",
-               "%s: %d rows are in no category (%d open + %d terminal + %d blocked ≠ %d total)"
-               % (label, total - work - term - blocked, work, term, blocked, total),
+               "%s: %d rows are in no category (%d open + %d terminal + %d blocked + %d roadmap ≠ %d total)"
+               % (label, total - work - term - blocked - roadmap, work, term, blocked, roadmap, total),
                "a build pass trusting this list would leave those rows at 0%")
     else:
         ok("tf-build-list", "%s: %d rows, all accounted for (%s)" % (label, total, mode))

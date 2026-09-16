@@ -27,6 +27,7 @@ import re
 import sys
 
 TERMINAL = {"verified", "done (pre-existing)", "n/a"}
+NA = {"n/a"}                         # terminal, but never counted as verified (TF-018)
 PASS_THROUGH = {"blocked"}           # a library gap; counts as closed for the ladder
 BUILT = {"implemented", "needs re-verify"}
 OWNER = {"owner-uat"}                # only the owner can close it, from the UsageGuide test plan
@@ -61,6 +62,9 @@ def read(path):
 
 
 def checklist_rows(text):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import tf_roadmap
+    marked = tf_roadmap.ids(text)
     rows = []
     for line in text.splitlines():
         if not re.match(r"^\s*\|\s*`?REQ-", line):
@@ -69,8 +73,34 @@ def checklist_rows(text):
         if len(cells) < 3:
             continue
         rid = cells[0].strip("`* ")
-        rows.append({"id": rid, "name": cells[1].strip("`* "), "status": norm_status(cells[2])})
+        status = norm_status(cells[2])
+        rows.append({"id": rid, "name": cells[1].strip("`* "), "status": status,
+                     "remarks": cells[4] if len(cells) > 4 else "",
+                     "roadmap": rid.upper() in marked and status.lower() not in TERMINAL})
     return rows
+
+
+def figures(rows):
+    """(verified, counted, not applicable). An N/A row is terminal but was never verified, so it is
+    left out of both numbers and named: AppManager read "89 of 89 verified" with REQ-NFR-008 at N/A
+    (TF-018). tests/regression/run.sh am_018."""
+    na = sum(1 for r in rows if r["status"].lower() in NA)
+    return sum(1 for r in rows if r["status"].lower() in TERMINAL - NA), len(rows) - na, na
+
+
+# The marks the framework's own writers put in Remarks for a defect: devguide.md, tf-checklist-edit
+# demote (UAT bug, prod bug, miss), tf-verify-verdict (each failing check), the smoke policy (visual),
+# security findings. A bare ⚠ is not enough: hand-written remarks use it for "not verifiable here" and
+# "honest non-observation", and sending those to a build is the TfLens loop again.
+DEFECT = re.compile(r"\u26a0\s*(?:DevGuide|UAT bug|prod bug|miss \d{4}-|acceptance|build|render|assets|visual|"
+                    r"mockup-parity|perf|SECURITY)\b")
+
+
+def has_defect(r):
+    """A Needs re-verify row whose Remarks carry a framework defect mark holds a defect no fix has
+    cleared, and a verify of the acceptance line cannot see it. So it is fix work, as build-phase step 7
+    and tf-build-list say, never a verify (AppManager TF-019). tests/regression/run.sh am_019."""
+    return r["status"].lower() == "needs re-verify" and bool(DEFECT.search(r.get("remarks", "")))
 
 
 def ladder_rank(status):
@@ -201,17 +231,23 @@ def next_command(app, rows, log_rows, phase=1, verdicts=None):
                 f"{CC}analyst *day1-greenfield {app}", f"{OC}flow-analyst *day1-greenfield {app}",
                 "no BRD and no checklist exist; day-1 stage 1 has not run")
 
-    unbuilt = [r for r in rows if r["status"].lower() not in TERMINAL | PASS_THROUGH | BUILT | OWNER]
-    built = [r for r in rows if r["status"].lower() in BUILT]
-    owner = [r for r in rows if r["status"].lower() in OWNER]
-    total = len(rows)
-    closed = sum(1 for r in rows if r["status"].lower() in TERMINAL)
-    q = f"{closed} of {total} verified"
+    # A roadmap row is not this phase's work, so it never decides the next command (TF-017).
+    now = [r for r in rows if not r.get("roadmap")]
+    unbuilt = [r for r in now if r["status"].lower() not in TERMINAL | PASS_THROUGH | BUILT | OWNER]
+    defects = [r for r in now if has_defect(r)]
+    built = [r for r in now if r["status"].lower() in BUILT and r not in defects]
+    owner = [r for r in now if r["status"].lower() in OWNER]
+    verified, counted, na = figures(rows)
+    q = f"{verified} of {counted} verified" + (f", {na} not applicable" if na else "")
 
-    if unbuilt:
-        return ("Build", f"{len(unbuilt)} not built, {q}",
-                f"{CC}flow-master *build-phase {app}", f"{OC}flow-master *build-phase {app}",
-                f"{len(unbuilt)} rows are not built yet: {ids(unbuilt)}")
+    if unbuilt or defects:
+        qual = ", ".join(x for x in (f"{len(unbuilt)} not built" if unbuilt else "",
+                                     f"{len(defects)} to fix" if defects else "") if x)
+        why = "; ".join(x for x in (f"{len(unbuilt)} rows are not built yet: {ids(unbuilt)}" if unbuilt else "",
+                                    f"{len(defects)} rows carry a defect (⚠ in Remarks) that a fix must clear before "
+                                    f"a verify: {ids(defects)}" if defects else "") if x)
+        return ("Build", f"{qual}, {q}",
+                f"{CC}flow-master *build-phase {app}", f"{OC}flow-master *build-phase {app}", why)
     if built:
         # A row the last verify could not MEASURE is not a row waiting for another verify.
         # Its tests declined — the state they need does not exist in this environment — so
@@ -246,10 +282,10 @@ def next_command(app, rows, log_rows, phase=1, verdicts=None):
     if handoff_ran(log_rows):
         line = "(owner) set current_phase to Released after UAT — no agent command"
         return ("UAT", f"handoff done, {q}", line, line,
-                "every row is terminal and handoff has run; waiting on the owner")
+                "every row in this phase's scope is terminal and handoff has run; waiting on the owner")
     return ("Handoff", q,
             f"{CC}flow-master *handoff-phase {app}", f"{OC}flow-master *handoff-phase {app}",
-            "every row is terminal and handoff has not run yet")
+            "every row in this phase's scope is terminal and handoff has not run yet")
 
 
 def main(argv):
@@ -278,14 +314,17 @@ def main(argv):
     log_rows = existing_log_rows(st_text)
     vdate, vresult = last_verify(root, app)
     phase, qual, cc, oc, reason = next_command(app, rows, log_rows, phase_n, ledger_verdicts(root))
+    roadmap = [r["id"] for r in rows if r["roadmap"]]
+    if roadmap:
+        reason += (f"; {len(roadmap)} roadmap row(s) are not in this phase's scope and are left for the owner "
+                   f"(*amend-docs): {', '.join(roadmap)}")
     pname, ptotal = phase_row(root, app, phase_n)
     if ptotal or phase_n > 1:
         tag = f"Phase {phase_n} of {ptotal or '?'}" + (f" ({pname})" if pname else "")
         phase = f"{tag} · {phase}"
         reason = f"{reason}; working {cl_rel}"
 
-    total = len(rows)
-    closed = sum(1 for r in rows if r["status"].lower() in TERMINAL)
+    verified, counted, na = figures(rows)
     counts = {}
     for r in rows:
         counts[r["status"]] = counts.get(r["status"], 0) + 1
@@ -316,7 +355,7 @@ def main(argv):
     print()
     if open_rows:
         for r in open_rows[:10]:
-            print(f"- [ ] {r['id']} — {r['name']} ({r['status']})")
+            print(f"- [ ] {r['id']} — {r['name']} ({r['status']}{', roadmap — not in this phase' if r['roadmap'] else ''})")
         if len(open_rows) > 10:
             print(f"- ({len(open_rows) - 10} more open rows in {cl_rel})")
     else:
@@ -326,7 +365,7 @@ def main(argv):
     print("Last five passes; older passes live in `docs/metrics/gates.jsonl`.")
     print()
     print("| Date | Phase | Result | Status table |\n|---|---|---|---|")
-    new_row = f"| {today} | {label} | {closed}/{total} Verified | {cl_rel}#requirements-status |"
+    new_row = f"| {today} | {label} | {verified}/{counted} Verified{f', {na} N/A' if na else ''} | {cl_rel}#requirements-status |"
     for r in (log_rows[-4:] if len(log_rows) > 4 else log_rows):
         print(r)
     print(new_row)

@@ -2968,6 +2968,152 @@ MD
     || { bad am_016c "the checklist's headings were used although a UIDesign exists"; note "$out"; }
 }
 
+# --- AppManager TF-017: a roadmap row was put on the build list -----------------------------
+# REQ-NFR-008's acceptance line ends "*Roadmap — not in this phase's scope.*" and the row sat at
+# In Progress by the owner's decision. The build list gave it a builder prompt (a builder built it
+# on 2026-09-14) and the status facts named *build-phase as the next command forever (2026-09-16).
+# The fixture keeps one ordinary open row beside it, then closes that row so only the roadmap row
+# remains; a Remarks cell that mentions the marker must not take an ordinary row off the list.
+am_017() {
+  local d="$SCRATCH/am017" out
+  mkdir -p "$d/docs" "$d/.tfcore"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Details |
+|---|---|---|---|---|---|
+| REQ-FN-001 | Sign in | Verified | 100% | | [view](#d-req-fn-001) |
+| REQ-FN-002 | Export | In Progress | 50% | not the Roadmap — not in this phase's scope row | [view](#d-req-fn-002) |
+| REQ-NFR-008 | Two-factor authentication | In Progress | 50% | owner chose option B; roadmap item | [view](#d-req-nfr-008) |
+
+## Functional
+
+<a id="d-req-fn-001"></a>
+- **REQ-FN-001** — Sign in.
+  - *Acceptance:* When a user signs in on Login, then the dashboard shows.
+<a id="d-req-fn-002"></a>
+- **REQ-FN-002** — Export.
+  - *Acceptance:* When a user clicks Export on Reports, then a file downloads.
+
+## Non-functional
+
+<a id="d-req-nfr-008"></a>
+- **REQ-NFR-008** — Two-factor authentication. (BRD-80)
+  - *Acceptance:* When a user with two-factor enabled signs in, then a second factor is demanded before tokens are issued. *Roadmap — not in this phase's scope.*
+MD
+  out="$(cd "$d" && python3 "$UTILS/tf-build-list.py" Fx 2>&1)"
+  grep -q '^Mode: FIX — 1 row(s) to build;.* — REQ-FN-002$' <<<"$out" && ! grep -q 'REQ-NFR-008 \[' <<<"$out" \
+    && grep -q "^Roadmap, not in this phase's scope.*: REQ-NFR-008$" <<<"$out" \
+    && ok am_017a "a roadmap row is named apart and left off the working list; an ordinary open row stays on it" \
+    || { bad am_017a "the roadmap row is on the build list, or the ordinary row left it"; note "$(head -4 <<<"$out")"; }
+  sed -i 's/^| REQ-FN-002 | Export | In Progress | 50% |/| REQ-FN-002 | Export | Verified | 100% |/' "$d/docs/Fx-Checklist.md"
+  out="$(cd "$d" && python3 "$UTILS/tf-build-list.py" Fx 2>&1 | sed -n 2p)"
+  [[ "$out" == Mode:\ NOTHING* ]] \
+    && ok am_017b "with only a roadmap row open there is nothing to build" \
+    || { bad am_017b "the build list still offers the roadmap row"; note "$out"; }
+  out="$(cd "$d" && python3 "$UTILS/tf-status-facts.py" Fx "*build-phase Fx" 2>&1)"
+  ! grep -q '\*build-phase Fx$' <<<"$out" && ! grep -q 'not built' <<<"$out" && grep -q '^Why: .*roadmap.*REQ-NFR-008' <<<"$out" \
+    && ok am_017c "with only a roadmap row open the next command is not *build-phase and nothing reads 'not built'" \
+    || { bad am_017c "the status facts still send the project back to *build-phase for a roadmap row"; note "$(grep -E '^(current_phase|Why|/)' <<<"$out")"; }
+}
+
+# --- AppManager TF-018: an N/A row was counted as verified ------------------------------------
+# REQ-NFR-008 went to N/A (moved out of phase 1) and the status read "89 of 89 verified", the log
+# "89/89 Verified" and the BRD's Non-functional line "9 | 9", though the row was never verified.
+am_018() {
+  local d="$SCRATCH/am018" out
+  mkdir -p "$d/docs" "$d/.tfcore"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Details |
+|---|---|---|---|---|---|
+| REQ-NFR-001 | Audit log | Verified | 100% | | [view](#d-req-nfr-001) |
+| REQ-NFR-002 | Backups | Done (pre-existing) | 100% | | [view](#d-req-nfr-002) |
+| REQ-NFR-008 | Two-factor authentication | N/A | 50% | moved out of phase 1 | [view](#d-req-nfr-008) |
+| REQ-FN-009 | Old export | N/A (removed 2026-09-01) | 0% | | [view](#d-req-fn-009) |
+
+## Non-functional
+
+<a id="d-req-nfr-001"></a>
+- **REQ-NFR-001** — Audit log.
+  - *Acceptance:* When an admin saves on Users, then an audit line is written.
+<a id="d-req-nfr-002"></a>
+- **REQ-NFR-002** — Backups.
+  - *Acceptance:* When the night job runs on Server, then a backup file exists.
+<a id="d-req-nfr-008"></a>
+- **REQ-NFR-008** — Two-factor authentication.
+  - *Acceptance:* When a user signs in on Login, then a second factor is demanded.
+
+## Export
+
+<a id="d-req-fn-009"></a>
+- **REQ-FN-009** — Old export.
+  - *Acceptance:* When a user clicks Export on Export, then a file downloads.
+MD
+  printf '# Fx — BRD\n\n## 7. Development status\n\nold\n' > "$d/docs/Fx-BRD.md"
+  out="$(cd "$d" && python3 "$UTILS/tf-status-facts.py" Fx "*amend-docs Fx" 2>&1)"
+  grep -q '^current_phase: .*2 of 2 verified, 2 not applicable$' <<<"$out" \
+    && grep -q '| \*amend-docs Fx | 2/2 Verified, 2 N/A |' <<<"$out" \
+    && ok am_018a "an N/A row is left out of the verified figures and counted apart, in the phase line and the log" \
+    || { bad am_018a "an N/A row is still counted as verified"; note "$(grep -E '^current_phase|amend-docs Fx \|' <<<"$out")"; }
+  out="$(cd "$d" && python3 "$UTILS/tf-brd-status.py" Fx --no-render 2>&1; grep -E '^\| (Non-functional|Export) ' docs/Fx-BRD.md)"
+  grep -q '2 of 2 requirements verified, 2 not applicable' <<<"$out" && grep -q '^| Non-functional | 2 | 2 | 0 | Done |$' <<<"$out" \
+    && grep -q '^| Export | 0 | 0 | 0 | Not applicable |$' <<<"$out" \
+    && ok am_018b "the BRD's Development status leaves N/A rows out of both numbers and names an all-N/A screen" \
+    || { bad am_018b "the BRD's Development status still counts N/A rows as verified"; note "$out"; }
+}
+
+# --- AppManager TF-019: rows carrying a defect were sent to a verify ---------------------------
+# *handoff-phase's DevGuide step set 21 rows to Needs re-verify with "⚠ DevGuide <date>: <defect>
+# <file:line>". The status facts named *verify all while the build list put the same rows in FIX
+# mode; a verify grades the acceptance line, which none of those defects is in (2026-09-16). A
+# Needs re-verify row without a defect mark (a changed requirement to re-grade, or a hand-written
+# "⚠ NOT VERIFIABLE" as TfLens's REQ-FN-063 carries) still goes to verify.
+am_019() {
+  local d="$SCRATCH/am019" out
+  mkdir -p "$d/docs" "$d/.tfcore"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Details |
+|---|---|---|---|---|---|
+| REQ-UI-001 | Applications | Needs re-verify | 75% | [REQ-UI-001] ⚠ DevGuide 2026-09-16: the database Test button never tests (ApplicationCreate.razor:400) | [view](#d-req-ui-001) |
+| REQ-UI-002 | Users | Needs re-verify | 75% | 2026-09-16 amend-docs: the list now sorts by name | [view](#d-req-ui-002) |
+| REQ-UI-003 | Roles | Needs re-verify | 75% | 2026-08-27 ⚠ NOT VERIFIABLE IN THIS ENVIRONMENT (*verify all) | [view](#d-req-ui-003) |
+
+## Pages
+
+<a id="d-req-ui-001"></a>
+- **REQ-UI-001** — Applications.
+  - *Acceptance:* When an admin opens Applications, then every application appears.
+<a id="d-req-ui-002"></a>
+- **REQ-UI-002** — Users.
+  - *Acceptance:* When an admin opens Users, then users appear sorted by name.
+<a id="d-req-ui-003"></a>
+- **REQ-UI-003** — Roles.
+  - *Acceptance:* When an admin opens Roles, then every role appears.
+MD
+  out="$(cd "$d" && python3 "$UTILS/tf-status-facts.py" Fx "*handoff-phase Fx" 2>&1)"
+  grep -q '^/TechieFlow:agents:flow-master \*build-phase Fx$' <<<"$out" && grep -q '^Why: 1 rows carry a defect .*: REQ-UI-001\.$' <<<"$out" \
+    && ok am_019a "a Needs re-verify row whose Remarks carry a ⚠ defect makes *build-phase the next command, as the build list does" \
+    || { bad am_019a "a row carrying a defect is still sent to a verify"; note "$(grep -E '^(current_phase|Why|/)' <<<"$out")"; }
+  sed -i '/^| REQ-UI-001 /s/| Needs re-verify | 75% |/| Verified | 100% |/' "$d/docs/Fx-Checklist.md"
+  out="$(cd "$d" && python3 "$UTILS/tf-status-facts.py" Fx x 2>&1)"
+  grep -q '^/TechieFlow:agents:verifier \*verify ui Fx$' <<<"$out" \
+    && ok am_019b "Needs re-verify rows with no defect mark, a hand-written ⚠ among them, still go to a verify" \
+    || { bad am_019b "a row waiting only for a re-grade is no longer sent to a verify"; note "$(grep -E '^(current_phase|Why|/)' <<<"$out")"; }
+}
+
 # --- the ignore file that grew by one block per update -----------------------------------
 # `tr -d '\r' < .gitignore | grep -qE …` under `set -o pipefail`: grep -q stops at the first
 # match, tr dies writing the rest, the pipeline reports failure, and the framework block is
@@ -2983,7 +3129,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

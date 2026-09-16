@@ -8,6 +8,53 @@
 
 ---
 
+## 2026-09-16, evening — AppManager's TF-018 and TF-019
+
+**TF-018.** `tf-status-facts.py` and `tf-brd-status.py` counted `N/A` as verified: AppManager read
+"89 of 89 verified" and a BRD line "9 | 9" with REQ-NFR-008 never verified. `N/A` stays terminal
+(nothing to build, handoff still reachable) but is left out of both numbers and named: "67 of 88
+verified, 1 not applicable", log "67/88 Verified, 1 N/A", and a BRD screen whose rows are all `N/A`
+reads "Not applicable". Case `am_018`; FR-80; miss `MISS-TechieFlow-20260916-03` (`unsaid`).
+
+**TF-019.** `tf-status-facts.py` named `*verify all` for 21 `Needs re-verify` rows carrying
+"⚠ DevGuide <date>: <defect> <file:line>", while build-phase step 7 and `tf-build-list.py` treat
+them as fix work; a verify grades the acceptance line, which none of those defects is in. A
+`Needs re-verify` row whose Remarks carry a mark the framework writes for a defect (DevGuide, UAT bug,
+prod bug, miss, each failing verify check, visual, SECURITY) now makes `*build-phase` the next
+command. The first cut took any `⚠`; running it over every checklist on this machine showed
+hand-written ones meaning "not verifiable here" (TfLens REQ-FN-063), "residual" (AppStudio) and
+"honest non-observation" (TechieDesk), and sending those to a build is TfLens's old loop, so the list
+was narrowed. Case `am_019` (a hand-written `⚠` row still goes to a verify); miss
+`MISS-TechieFlow-20260916-04` (`ignored`).
+
+Proved on a copy of AppManager's checklist and BRD: old `Verify — 21 to verify, 68 of 89 verified`,
+`*verify all`, BRD `9 | 9`; new `Build — 21 to fix, 67 of 88 verified, 1 not applicable`,
+`*build-phase`, BRD `8 | 8`. Across the machine the figures change wherever a checklist holds `N/A`
+rows (TfLens, TechieBlog, TechieDesk, Xpenser, Lekhak, TrSetup); the next command changes only for
+AppManager and MyDiary (verify → build: DevGuide and render defects) and gains a "to fix" count on
+AstroLyfe, TechieBlog and TechieDesk, each a real defect mark. Deployed to all 19 projects.
+
+## 2026-09-16, afternoon — AppManager's TF-017
+
+A row whose acceptance line carries "*Roadmap — not in this phase's scope.*" was open work to both
+scripts: `tf-build-list.py` gave REQ-NFR-008 a builder prompt (a builder built it on 2026-09-14
+against the owner's decision) and `tf-status-facts.py` counted it "not built" and named
+`*build-phase` as the next command, which landed on the same row again. One reader,
+`.tfcore/utils/tf_roadmap.py`, finds such rows (the nearest REQ anchor or bold id above the
+acceptance line; the status table is never read) and both scripts import it. The build list counts
+them apart (`… 0 Blocked, 1 roadmap, 89 total`) and names them; the status facts leave them out of
+the next-command decision, name them in the reason, and mark them in the open list.
+`tf-selfcheck.sh` reads the new count. No task prose changed. Case `am_017`, failing against the
+old scripts; miss `MISS-TechieFlow-20260916-02`. Proved on a copy of AppManager's checklist with
+the row back at In Progress (AppManager has since set it to N/A): old FIX / `*build-phase`, new
+NOTHING / `*handoff-phase`; every other checklist on this machine reads the same as before. The
+same run under OpenCode printed the same lines. Deployed to all 19 projects, every copy matching;
+reply written to both copies of AppManager's feedback file. Suites: regression, mirror 19, verify 67,
+goal 36, routing 42 and doc-check pass; requirements 80 lines, FR-79 graded and passing. `tests/bugs`
+fails 3 checks (log-miss run record, fix-close run record, fix-close unnamed row), and with them
+FR-28 and FR-31 to FR-33: the same 3 fail with the old scripts put back, so they predate this change
+and were not investigated here.
+
 ## 2026-09-16 — AppManager's TF-016
 
 `tf-verify-list.py` read screens from the UIDesign only, so AppManager, which has none, left every UI

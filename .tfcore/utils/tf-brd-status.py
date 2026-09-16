@@ -16,8 +16,9 @@ docs/<App>-BRD.md (Screen | Requirements | Verified | Open | Status) with a
 re-renders docs/<App>-BRD.html through tf-render-html.sh unless --no-render.
 
 Status per screen: Done (every row terminal), Planned (no row started),
-Partial (some terminal, some open), In progress (started, none terminal).
-Terminal = Verified, Done (pre-existing), N/A. Blocked is counted as open.
+Partial (some terminal, some open), In progress (started, none terminal), Not applicable
+(every row N/A). Terminal = Verified, Done (pre-existing). An N/A row is left out of the counts,
+never counted as verified (AppManager TF-018). Blocked is counted as open.
 
 Python 3 standard library only. Exit 0 written or nothing to do, 2 could not run.
 """
@@ -28,7 +29,8 @@ import subprocess
 import sys
 
 # norm() drops a bracketed tail, so "Done (pre-existing)" arrives as "done" and was counted open (AppManager TF-003)
-TERMINAL = {"verified", "done", "done (pre-existing)", "n/a"}
+TERMINAL = {"verified", "done", "done (pre-existing)"}
+NA = {"n/a"}
 NOT_STARTED = {"not started"}
 
 
@@ -81,6 +83,8 @@ def table(rows, screen_of):
         if s not in per:
             per[s] = {"n": 0, "v": 0, "ns": 0}
             order.append(s)
+        if status in NA:
+            continue
         per[s]["n"] += 1
         per[s]["v"] += 1 if status in TERMINAL else 0
         per[s]["ns"] += 1 if status in NOT_STARTED else 0
@@ -88,7 +92,9 @@ def table(rows, screen_of):
     for s in order:
         d = per[s]
         open_n = d["n"] - d["v"]
-        if open_n == 0:
+        if d["n"] == 0:
+            st = "Not applicable"
+        elif open_n == 0:
             st = "Done"
         elif d["ns"] == d["n"]:
             st = "Planned"
@@ -154,7 +160,9 @@ def main(argv):
     with open(brd, "w", encoding="utf-8") as f:
         f.write(new_text)
     verified = sum(1 for _, s in rows if s in TERMINAL)
-    print(f"tf-brd-status: {brd_rel} Development status {how}: {screens} screens, {verified} of {len(rows)} requirements verified")
+    na = sum(1 for _, s in rows if s in NA)
+    print(f"tf-brd-status: {brd_rel} Development status {how}: {screens} screens, {verified} of {len(rows) - na} "
+          f"requirements verified" + (f", {na} not applicable" if na else ""))
     if render:
         script = os.path.join(root, ".tfcore", "utils", "tf-render-html.sh")
         if os.path.isfile(script):
