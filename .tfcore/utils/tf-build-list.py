@@ -82,6 +82,16 @@ def ui_builder(app):
     return "builder", "no project file yet, and the Architecture document does not name TrBlazeUI"
 
 
+def usage_guide(app):
+    """The guide the project really has, UsageGuide or Usage-Guide: tf-verify-list.py's reader. The prompt
+    named the first spelling only, a file AppManager does not have (TF-022). tests/regression/run.sh am_022."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("tf_verify_list", os.path.join(os.path.dirname(os.path.abspath(__file__)), "tf-verify-list.py"))
+    vl = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(vl)
+    return vl.usage_guide(app)
+
+
 def rows_of(text):
     rows = []
     for line in text.splitlines():
@@ -145,6 +155,7 @@ def main(argv):
     ent = entries_of(text)
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import tf_roadmap
+    import tf_defect
     marked = tf_roadmap.ids(text)
     roadmap = [r for r in rows if r["id"].upper() in marked and r["status"] not in TERMINAL | BLOCKED]
 
@@ -165,6 +176,12 @@ def main(argv):
         mode, work = "FRESH", open_rows
     else:
         mode, work = "NOTHING", []
+    # A row in FIX mode is on the list for a defect its acceptance line rarely names; a builder given
+    # only that line finds the row working and fixes nothing (AppManager TF-020). The defect rides with
+    # the row: its ⚠ clauses, else a FAIL/PARTIAL row's whole Remarks. tests/regression/run.sh am_020.
+    for r in rows:
+        r["defects"] = (tf_defect.clauses(r["remarks"]) or ([r["remarks"]] if r["status"] in {"fail", "partial"}
+                        and r["remarks"] else [])) if r in fix_rows else []
     terminal = sum(1 for r in rows if r["status"] in TERMINAL)
     blocked = [r for r in rows if r["status"] in BLOCKED]
     print(f"# tf-build-list — {app} — {cl} — phase {phase}")
@@ -217,6 +234,8 @@ def main(argv):
             print(f"- {r['id']} [{label}/{builder}] {r['title']} — {r['status']}{todo}")
             if acc:
                 print(f"    Acceptance: {acc}")
+            for x in r["defects"]:
+                print(f"    Defect: {x}")
             if mock:
                 print(f"    Mockup: {mock}")
     if not prompts:
@@ -227,18 +246,24 @@ def main(argv):
         die(f"template {TPL} does not exist at its literal path")
     tpl = read(TPL)
     tpl = re.sub(r"<!--.*?-->\s*", "", tpl, flags=re.S)
+    guide = usage_guide(app)
     for label, sec, builder, items in named:
         lines = []
         for r, acc, mock, brd in items:
             lines.append(f"- {r['id']} — {r['title']}" + (f" ({brd})" if brd else ""))
             lines.append(f"  Acceptance: {acc or 'MISSING — refuse the row and report it'}")
+            lines.extend(f"  Defect: {x}" for x in r["defects"])
             if mock:
                 lines.append(f"  Mockup: {mock}")
+        if any(r["defects"] for r, *_ in items):
+            lines.append("\nA row with a Defect line is on this list for that defect. Fix every one at the file and "
+                         "line it names, keep the acceptance line true, and replace the row's Remarks: a row that "
+                         "already passes its acceptance line is not done while its defect stands.")
         mocks = sorted({m for _r, _a, m, _b in items if m})
         body = (tpl.replace("{App}", app).replace("{Cluster}", label).replace("{Builder}", builder)
                 .replace("{Section}", sec).replace("{Rows}", "\n".join(lines))
                 .replace("{Mockups}", ", ".join(mocks) if mocks else "none (not a UI cluster)")
-                .replace("{Checklist}", cl))
+                .replace("{Checklist}", cl).replace("{UsageGuide}", guide))
         print()
         print(f"## Prompt for cluster {label} [{builder}]")
         print(body.strip())

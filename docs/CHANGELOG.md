@@ -8,6 +8,38 @@
 
 ---
 
+## 2026-09-17, afternoon — AppManager's TF-022
+
+The builder prompt template hardcoded `docs/<App>-UsageGuide.md`; AppManager's guide is
+`docs/<App>-Usage-Guide.md`, the spelling TF-009 taught the readers. The template now takes
+`{UsageGuide}`, filled by `tf-build-list.py` from `tf-verify-list.py`'s reader; the status tool's
+owner-run line uses the same reader. Case `am_022`; FR-83; miss `MISS-TechieFlow-20260917-03`
+(`ignored`). Deployed to all 19 (both scripts and the template), every copy matching: only
+AppManager's prompt changes, status output unchanged everywhere; same under OpenCode. AstroLyfe has no
+usage guide at all, so its prompt still names the default spelling. Suites: regression, mirror,
+verify, doc-check pass; requirements 84 lines with the same 4 older `tests/bugs` failures.
+
+## 2026-09-17 — AppManager's TF-020 and TF-021; TF-017 closed
+
+**TF-020.** `tf-build-list.py --prompts` in FIX mode gave each builder the title and acceptance line
+only, not the `⚠` defect the row was listed for. Each fix row now prints `Defect: <clause>` in the
+working list and the prompt, plus one closing rule line. Case `am_020`; FR-81; miss
+`MISS-TechieFlow-20260917-01` (`unsaid`).
+
+**TF-021.** `tf-verify-verdict.py --apply` rewrote Remarks to the verdict alone, erasing `⚠ DevGuide`
+notes and writing Verified over them. Non-verify defect clauses are now kept; a pass on such a row is
+`DEFECT-OPEN` → `Needs re-verify`, no gate record. Case `am_021`; FR-82; miss
+`MISS-TechieFlow-20260917-02` (`unsaid`). The defect marks moved to one file, `tf_defect.py`, used by
+the status facts, the build list and the verdict writer.
+
+Proved on AppManager's real 2026-09-17 verify evidence (old 60 PASS; new 4 DEFECT-OPEN on exactly the
+four rows filed, 56 PASS) and its build list (0 → 5 Defect lines), same under OpenCode. Across 19
+projects status facts are unchanged; the build list gains Defect lines on XVault, AppManager,
+AstroLyfe, MyDiary and TechieBlog only. Deployed to all 19, every copy matching. TF-017 closed in
+AppManager with `am_017` run against its deployed scripts. A `log-miss` run record given the session
+start was voided. Suites: regression, mirror 19, verify 67 pass; requirements 83 lines, FR-81/82 pass;
+`tests/bugs` still fails its 3 older checks (FR-28, FR-31 to FR-33).
+
 ## 2026-09-16, evening — AppManager's TF-018 and TF-019
 
 **TF-018.** `tf-status-facts.py` and `tf-brd-status.py` counted `N/A` as verified: AppManager read

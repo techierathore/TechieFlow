@@ -1,5 +1,5 @@
 <!-- build-subagent-prompt.md — the prompt build-phase gives every cluster sub-agent.
-     Filled by tf-build-list.sh --prompts: {App} {Cluster} {Builder} {Section} {Rows} {Mockups} {Checklist}.
+     Filled by tf-build-list.sh --prompts: {App} {Cluster} {Builder} {Section} {Rows} {Mockups} {Checklist} {UsageGuide}.
      Library agents (trblazeui, techierag) never read .tfcore/ tasks, so the two standing rules
      reach them only through this text. Keep it short; the rows carry the detail. -->
 You are building cluster {Cluster} of {App} ({Section}) as the {Builder}. Implement exactly these rows, nothing else:
@@ -10,7 +10,7 @@ Read first: `docs/{App}-Coding-Standards.md` (and the standard files it names un
 
 Two standing rules:
 1. Git is manual. Never run `git` or `gh` for any purpose. Record your row ids in the checklist Remarks (`[REQ-…]`), not in commits.
-2. Smoke it yourself before you return: `bash .tfcore/utils/tf-build.sh` must PASS, then boot the app and open every screen you touched with headless Playwright (or the native driver the ladder names); the data must show and nothing may overlap; use a test user from `docs/{App}-UsageGuide.md`, never an invented one. A green compiler is not a smoke.
+2. Smoke it yourself before you return: `bash .tfcore/utils/tf-build.sh` must PASS, then boot the app and open every screen you touched with headless Playwright (or the native driver the ladder names); the data must show and nothing may overlap; use a test user from `{UsageGuide}`, never an invented one. A green compiler is not a smoke.
 
 Unit tests for every FN, RAG and NFR row go under `tests/unit/`. Run-generated files go under `tests/.artifacts/`, never at the repository root.
 

@@ -88,12 +88,10 @@ def figures(rows):
     return sum(1 for r in rows if r["status"].lower() in TERMINAL - NA), len(rows) - na, na
 
 
-# The marks the framework's own writers put in Remarks for a defect: devguide.md, tf-checklist-edit
-# demote (UAT bug, prod bug, miss), tf-verify-verdict (each failing check), the smoke policy (visual),
-# security findings. A bare ⚠ is not enough: hand-written remarks use it for "not verifiable here" and
-# "honest non-observation", and sending those to a build is the TfLens loop again.
-DEFECT = re.compile(r"\u26a0\s*(?:DevGuide|UAT bug|prod bug|miss \d{4}-|acceptance|build|render|assets|visual|"
-                    r"mockup-parity|perf|SECURITY)\b")
+# The defect marks live in tf_defect.py. A bare ⚠ is not enough: sending "not verifiable here" to a
+# build is the TfLens loop again.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from tf_defect import DEFECT  # noqa: E402
 
 
 def has_defect(r):
@@ -215,6 +213,15 @@ def phase_row(root, app, phase):
     return name, total
 
 
+def usage_guide(app):
+    """UsageGuide or Usage-Guide, whichever exists: tf-verify-list.py's reader (AppManager TF-022)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("tf_verify_list", os.path.join(os.path.dirname(os.path.abspath(__file__)), "tf-verify-list.py"))
+    vl = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(vl)
+    return vl.usage_guide(app)
+
+
 def next_command(app, rows, log_rows, phase=1, verdicts=None):
     """Returns (phase, qualifier, cc_line, oc_line, reason)."""
     verdicts = verdicts or {}
@@ -273,7 +280,7 @@ def next_command(app, rows, log_rows, phase=1, verdicts=None):
                 reason)
     if owner:
         if handoff_ran(log_rows):
-            line = f"(owner-run) docs/{app}-UsageGuide.md — {ids(owner)}"
+            line = f"(owner-run) {usage_guide(app)} — {ids(owner)}"
             return ("UAT", f"{len(owner)} owner-run, {q}", line, line,
                     f"{len(owner)} rows are Owner-UAT and handoff has run; the owner closes them")
         return ("Handoff", f"{len(owner)} owner-run, {q}",

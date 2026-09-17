@@ -4,13 +4,13 @@
 |---|---|
 | App | AppManager |
 | Upstream | TechieFlow |
-| Updated | 2026-09-16 |
+| Updated | 2026-09-17 |
 
 ## Summary
 
-19 entries: 0 blocking now, 0 open, 3 fixed upstream and waiting to be re-checked here (TF-017 to TF-019, fixed 2026-09-16), 16 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-014 on 2026-09-14, TF-015 and TF-016 on 2026-09-16.
+22 entries: 0 blocking now, 0 open, 1 fixed upstream and waiting to be re-checked here (TF-022, fixed 2026-09-17), 21 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-014 on 2026-09-14, TF-015 and TF-016 on 2026-09-16, TF-017 to TF-021 on 2026-09-17.
 
-Nothing is blocked. TF-017 is fixed upstream; it can be re-checked only when a roadmap row sits in the phase again. TF-018 is fixed upstream: a not-applicable row is counted apart, never as verified. TF-019 is fixed upstream: rows carrying a defect mark name `*build-phase`, not a verify.
+Nothing is blocked. TF-022 is fixed upstream: the builder prompt names the usage guide that exists. TF-020 is closed: a fix prompt carries each row's defect. TF-021 is closed: a verify keeps a defect it cannot see and sends the row to a fix. TF-017 is closed: a roadmap row is left off the build list. TF-018 is closed: a not-applicable row is counted apart, never as verified. TF-019 is closed: rows carrying a defect mark name `*build-phase`, not a verify.
 
 ## Entries
 
@@ -248,6 +248,8 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 
 ### TF-017 — `tf-build-list.sh` and `tf-status-facts.sh` treat a row marked "Roadmap — not in this phase's scope" as work to build, so the next command loops
 
+> ✅ **Closed 2026-09-17** — re-checked here: Re-checked 2026-09-17. Ran bash .tfcore/utils/tf-build-list.sh AppManager: 'Mode: FIX — 1 row(s) to build; 88 terminal, 0 Blocked, 0 roadmap, 89 total — REQ-NFR-009' (REQ-NFR-008 carries the roadmap marker but is N/A, so it counts as terminal, not work). The roadmap case itself was run against this repository's deployed scripts with TechieFlow's case am_017 (TF_REGRESSION_UTILS=.tfcore/utils): a roadmap row at In Progress is named apart and gets no cluster or prompt, with only that row open the Mode reads NOTHING, and the next command is not *build-phase — all three checks ok.
+
 - **Severity:** minor
 - **Blocks:** no — the row was left alone, as the owner decided, and named under Known blockers.
 - **Repro:** `bash .tfcore/utils/tf-build-list.sh AppManager --prompts` with REQ-NFR-008 at `In Progress` and the acceptance line ending `*Roadmap — not in this phase's scope.*`; then `bash .tfcore/utils/tf-status-facts.sh AppManager "*build-phase AppManager"`.
@@ -258,6 +260,8 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 - **Suggested fix:** read the roadmap marker in the acceptance line (or a `Roadmap` / `Deferred` status) and leave such rows off the working list and out of the "not built yet" count, printing them as "parked, waiting on the owner"; when only parked rows remain, the next command should be the one that moves them (`*amend-docs`) or the next phase, never `*build-phase`.
 
 ### TF-018 — `tf-status-facts.sh` and `tf-brd-status.sh` count an `N/A` row as verified
+
+> ✅ **Closed 2026-09-17** — re-checked here: Re-checked 2026-09-17. Ran bash .tfcore/utils/tf-status-facts.sh AppManager: phase line 'current_phase: Build — 21 to fix, 67 of 88 verified, 1 not applicable'; log row '2026-09-17 | status | 67/88 Verified, 1 N/A'. Ran bash .tfcore/utils/tf-brd-status.sh AppManager: 'Development status updated: 3 screens, 67 of 88 requirements verified, 1 not applicable'; BRD section 4 now reads '| Non-functional | 8 | 8 | 0 | Done |' (was 9 | 9). REQ-NFR-008 (N/A) is no longer counted as verified.
 
 - **Severity:** minor
 - **Blocks:** no — every other row really is verified; only the headline number is one too high.
@@ -270,6 +274,8 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 
 ### TF-019 — `tf-status-facts.sh` names `*verify all` for rows set to Needs re-verify because of code defects, while `tf-build-list.sh` treats the same rows as fix work
 
+> ✅ **Closed 2026-09-17** — re-checked here: Re-checked 2026-09-17. Ran bash .tfcore/utils/tf-status-facts.sh AppManager: next command '/TechieFlow:agents:flow-master *build-phase AppManager', phase line 'Build — 21 to fix', Why: '21 rows carry a defect (⚠ in Remarks) that a fix must clear before a verify: REQ-UI-001, REQ-UI-003, …'. Ran bash .tfcore/utils/tf-build-list.sh AppManager: 'Mode: FIX — 21 row(s) to build; 68 terminal, 0 Blocked, 0 roadmap, 89 total'. Both tools now name the same step (*build-phase, fix first); no more *verify all.
+
 - **Severity:** minor
 - **Blocks:** no — the owner is given `*build-phase AppManager` as the next step, which fixes and then verifies.
 - **Repro:** set 21 rows to `Needs re-verify` with Remarks naming a confirmed defect at file and line (the DevGuide step of `*handoff-phase`), then run `bash .tfcore/utils/tf-status-facts.sh AppManager "*handoff-phase AppManager"` and `bash .tfcore/utils/tf-build-list.sh AppManager`.
@@ -279,9 +285,87 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 - **Workaround:** named `*build-phase AppManager` to the owner; the status file carries the printed command.
 - **Suggested fix:** when a `Needs re-verify` row's Remarks carry a dated defect (`⚠ DevGuide`, `⚠ visual`, a FAIL note), name `*build-phase` (fix mode) as the next command; name `*verify` only when the rows were changed and not yet graded.
 
+### TF-020 — `tf-build-list.sh --prompts` in FIX mode leaves out the defects the rows are being fixed for
+
+> ✅ **Closed 2026-09-17** — re-checked here: Re-checked 2026-09-17. Ran bash .tfcore/utils/tf-build-list.sh AppManager --prompts: 'Mode: FIX — 1 row(s) to build; 88 terminal, 0 Blocked, 0 roadmap, 89 total — REQ-NFR-009'. The working list and the cluster A prompt both show REQ-NFR-009 with 'Defect: ⚠ acceptance — Error: https://appmgrapi.techierathore.com/healthz' under its acceptance line, and the prompt ends with 'A row with a Defect line is on this list for that defect. Fix every one at the file and line it names, keep the acceptance line true…'.
+
+- **Severity:** major
+- **Blocks:** no — the defects are passed to each builder alongside the printed prompt.
+- **Repro:** with rows at `Needs re-verify` whose Remarks carry `⚠ DevGuide 2026-09-16: … (File.razor:NN)` defects, run `bash .tfcore/utils/tf-build-list.sh AppManager --prompts`.
+- **Expected:** in FIX mode, each row in a cluster prompt carries the defect text from its Remarks (the file and line to fix), since that defect is the reason the row is on the list.
+- **Actual:** `Mode: FIX — 22 row(s) to build`, but each prompt row carries only its title, BRD ids and acceptance line. Most of these acceptance lines do not mention the defect (for example REQ-UI-007 "manager view filtered to assigned apps" for a dashboard whose "Expiring (7 days)" count is always 0), so a builder that follows the prompt finds the row already working and re-smokes it without fixing anything. Build-phase step 2 says to pass the prompt unchanged.
+- **Encountered in:** `*build-phase AppManager`, step 1, on 2026-09-17.
+- **Workaround:** each builder gets the printed prompt unchanged, followed by a separate block quoting its rows' Remarks defects.
+- **Suggested fix:** in FIX mode, print the row's current Remarks (or the `⚠` part of it) under its acceptance line in the prompt, with one line saying every listed defect must be fixed and the acceptance line still hold.
+
+### TF-021 — `tf-verify-verdict.sh --apply` erases a `⚠` defect note from a row that passes its acceptance test
+
+> ✅ **Closed 2026-09-17** — re-checked here: Re-checked 2026-09-17 on a copy only. Copied docs/AppManager-Checklist.md and tests/.artifacts/verify/*.json into tests/.artifacts/tf021-recheck/ (docs/, ev/), added '⚠ DevGuide 2026-09-17: test note (X.razor:1)' to REQ-UI-002 (Verified) in the copied checklist and in ev/list.json, then ran tf-verify-verdict.sh AppManager --apply --dir ev from that folder. Output: 'Rows: 4 DEFECT-OPEN, 1 FAIL, 5 NOT-OBSERVABLE, 22 NOT-TESTED, 56 PASS' and '| REQ-UI-002 | DEFECT-OPEN | - | Needs re-verify |'. The copied row now reads 'Needs re-verify | 75% | 2026-09-17 verify: checks pass, defect open — test REQ-UI-002 role rows persist … ⚠ DevGuide 2026-09-17: test note (X.razor:1)'. The other three DEFECT-OPEN rows (REQ-UI-004, 006, 028) kept their 2026-09-16 DevGuide notes from the older list.json. The real checklist and docs/.last-verify.json were unchanged (byte compare and 08:41 timestamp).
+
+- **Severity:** minor
+- **Blocks:** no — the four defects are still listed in the DevGuide's Known issues and in PROJECT-STATUS.
+- **Repro:** leave a `Verified` row whose Remarks carry `… PASS …. ⚠ DevGuide 2026-09-16: saving an empty Role Name does nothing (ApplicationRoles.razor:187).` (REQ-UI-002), then run `*verify all` and `bash .tfcore/utils/tf-verify-verdict.sh AppManager --apply --started <t>`.
+- **Expected:** the verdict cell is rewritten, but a defect found by another step (`⚠ DevGuide`, `⚠ UAT bug`, `⚠ miss`) and not covered by the acceptance line is kept, or the row is flagged, so the defect stays on record in the checklist.
+- **Actual:** the Remarks became `2026-09-17 verify: PASS — test REQ-UI-002 role rows persist …`; the `⚠ DevGuide` note was gone. The same happened on REQ-UI-004, REQ-UI-006 and REQ-UI-028. Nothing in the build list or the status facts now shows those four defects.
+- **Encountered in:** `*build-phase AppManager`, chained verify, step 6, on 2026-09-17.
+- **Workaround:** the four defects are named under "Deferred / future" in PROJECT-STATUS; the DevGuide Known issues still lists them.
+- **Suggested fix:** carry any `⚠` clause from the old Remarks that is not a previous verify verdict into the new Remarks; or, per TF-019's rule, treat a row with such a mark as fix work instead of re-confirming it as Verified.
+
+### TF-022 — the build-list prompt names `docs/AppManager-UsageGuide.md`, but this project's guide is `docs/AppManager-Usage-Guide.md`
+
+- **Severity:** minor
+- **Blocks:** no — the builder is told the right path next to the prompt.
+- **Repro:** in a project whose guide is `docs/{App}-Usage-Guide.md` (the hyphenated name the doc checker accepts), run `bash .tfcore/utils/tf-build-list.sh AppManager --prompts`.
+- **Expected:** standing rule 2 names the guide file that exists, as `tf-devguide-list.py` already does (it looks for both `{App}-UsageGuide.md` and `{App}-Usage-Guide.md`).
+- **Actual:** "use a test user from `docs/AppManager-UsageGuide.md`, never an invented one"; that file does not exist, so a builder that follows the prompt finds no test users.
+- **Encountered in:** `*build-phase AppManager`, step 2, on 2026-09-17 (also on the earlier pass the same day).
+- **Workaround:** each builder is given the real path and the two test users alongside the unchanged prompt.
+- **Suggested fix:** resolve the guide path the way `tf-devguide-list.py` does, and print the one that exists.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### TF-022 — fixed 2026-09-17
+
+- **Fix.** The prompt template takes the guide path as `{UsageGuide}`, and `tf-build-list.py` fills it with
+  `tf-verify-list.py`'s reader: `docs/<App>-UsageGuide.md` or `docs/<App>-Usage-Guide.md`, whichever exists.
+  The status tool's owner-run line uses the same reader. Case `am_022`; miss `MISS-TechieFlow-20260917-03`.
+  Deployed here (both scripts and the template).
+- **Proof.** Here, old: "use a test user from `docs/AppManager-UsageGuide.md`"; new:
+  "`docs/AppManager-Usage-Guide.md`", same under OpenCode. On the other 18 projects the prompts are
+  otherwise unchanged.
+- **Verify from here.** `bash .tfcore/utils/tf-build-list.sh AppManager --prompts` names
+  `docs/AppManager-Usage-Guide.md`. Then
+  `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-022 "<what you ran and what it showed>"`.
+
+### TF-021 — fixed 2026-09-17
+
+- **Fix.** A `⚠ DevGuide`, `⚠ UAT bug`, `⚠ prod bug`, `⚠ miss` or `⚠ SECURITY` clause in the old Remarks
+  is kept by `--apply`. If every check passes, the verdict is `DEFECT-OPEN`: the row goes to
+  `Needs re-verify` at 75%, no gate record is written, and the build list and status facts treat it as
+  fix work. A verify's own old marks (`⚠ render`, …) are still replaced. The marks live in one file,
+  `.tfcore/utils/tf_defect.py`. Case `am_021`; miss `MISS-TechieFlow-20260917-02`. Deployed here.
+- **Proof.** Your 2026-09-17 verify evidence replayed on a copy: old `60 PASS`, REQ-UI-002/004/006/028
+  Verified with the note gone; new `4 DEFECT-OPEN, 56 PASS`, those four at Needs re-verify with their
+  `⚠ DevGuide` note kept. REQ-UI-022/023 ("DevGuide defects fixed", no `⚠`) stay Verified.
+- **Verify from here.** The four notes are already gone from your checklist, so put one back on a
+  Verified row in a copy and re-run the verdict on your evidence; or wait for the next `⚠ DevGuide`.
+  Then `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-021 "<what you ran and what it showed>"`.
+
+### TF-020 — fixed 2026-09-17
+
+- **Fix.** In FIX mode each row prints `Defect: <its ⚠ clause>` under its acceptance line, in the working
+  list and the prompt (a FAIL/PARTIAL row with no mark gets its whole Remarks). A prompt with any such
+  row ends with: fix every defect at the file and line named, keep the acceptance line true; a row
+  that passes its acceptance line is not done while its defect stands. Case `am_020`; miss
+  `MISS-TechieFlow-20260917-01`. Deployed here.
+- **Proof.** On the copy from TF-021: old prompts 0 `Defect:` lines; new 5, one per fix row, e.g.
+  REQ-UI-002 `Defect: ⚠ DevGuide 2026-09-16: saving an empty Role Name does nothing … (ApplicationRoles.razor:187).`
+  OpenCode printed the same lines.
+- **Verify from here.** `bash .tfcore/utils/tf-build-list.sh AppManager --prompts`: REQ-NFR-009 carries
+  `Defect: ⚠ acceptance — Error: https://appmgrapi.techierathore.com/healthz`. Then
+  `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-020 "<what you ran and what it showed>"`.
 
 ### TF-019 — fixed 2026-09-16
 

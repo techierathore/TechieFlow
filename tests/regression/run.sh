@@ -3114,6 +3114,107 @@ MD
     || { bad am_019b "a row waiting only for a re-grade is no longer sent to a verify"; note "$(grep -E '^(current_phase|Why|/)' <<<"$out")"; }
 }
 
+# --- AppManager TF-020: a fix prompt left out the defect the row was on the list for --------
+# 22 rows at Needs re-verify carried "⚠ DevGuide <date>: <defect> (File.razor:NN)". Each cluster
+# prompt gave only the title and acceptance line, which name none of the defects, so a builder
+# found the row working and fixed nothing (2026-09-17).
+am_020() {
+  local d="$SCRATCH/am020" out
+  mkdir -p "$d/docs" "$d/.tfcore/templates/v4custom"
+  cp "$ROOT/.tfcore/templates/v4custom/build-subagent-prompt.md" "$d/.tfcore/templates/v4custom/"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Details |
+|---|---|---|---|---|---|
+| REQ-UI-007 | Dashboard | Needs re-verify | 75% | 2026-09-14 verify: PASS — test REQ-UI-007. ⚠ DevGuide 2026-09-16: "Expiring (7 days)" is always 0 (Dashboard.razor:212) | [view](#d-req-ui-007) |
+| REQ-UI-008 | Reports | Not Started | 0% | | [view](#d-req-ui-008) |
+
+## Page: Dashboard
+
+<a id="d-req-ui-007"></a>
+- **REQ-UI-007** — Dashboard.
+  - *Acceptance:* When a manager opens Dashboard, then only assigned apps appear.
+<a id="d-req-ui-008"></a>
+- **REQ-UI-008** — Reports.
+  - *Acceptance:* When a manager opens Reports, then the report rows appear.
+MD
+  out="$(cd "$d" && python3 "$UTILS/tf-build-list.py" Fx --prompts 2>&1)"
+  local prompt; prompt="$(sed -n '/^## Prompt for cluster/,$p' <<<"$out")"
+  grep -q '^  Defect: ⚠ DevGuide 2026-09-16: "Expiring (7 days)" is always 0 (Dashboard.razor:212)$' <<<"$prompt" \
+    && grep -q 'not done while its defect stands' <<<"$prompt" && [[ "$(grep -c 'Defect:' <<<"$prompt")" == 1 ]] \
+    && ok am_020 "a FIX-mode prompt carries each row's defect under its acceptance line, and a row with none gets no Defect line" \
+    || { bad am_020 "the builder prompt still leaves out the defect the row is being fixed for"; note "$(grep -A3 'REQ-UI-007 —' <<<"$out" | head -4)"; }
+}
+
+# --- AppManager TF-021: a verify pass erased a defect note the verify cannot see -----------
+# REQ-UI-002 was Verified with "⚠ DevGuide 2026-09-16: saving an empty Role Name does nothing
+# (ApplicationRoles.razor:187)". *verify all passed its acceptance test and --apply rewrote the
+# Remarks to the verdict alone; the same on three more rows, so no tool showed the four defects.
+am_021() {
+  local d="$SCRATCH/am021" out
+  mkdir -p "$d/docs" "$d/tests/.artifacts/verify"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+| ID | Title | Status | % | Remarks | Details |
+|---|---|---|---|---|---|
+| REQ-UI-002 | Roles | Verified | 100% | 2026-09-14 verify: PASS — test REQ-UI-002. ⚠ DevGuide 2026-09-16: saving an empty Role Name does nothing (ApplicationRoles.razor:187). | [view](#d-req-ui-002) |
+| REQ-UI-003 | Users | Needs re-verify | 75% | 2026-09-14 verify: ⚠ render — grid empty on users @1280 | [view](#d-req-ui-003) |
+MD
+  cat > "$d/tests/.artifacts/verify/list.json" <<'JS'
+{"app":"Fx","scope":"all","phase":1,"kind":"app","checklist":"docs/Fx-Checklist.md","screens":[],"unresolved":[],
+ "rows":[{"id":"REQ-UI-002","class":"UI","title":"Roles","screen":"","route":"","status_raw":"Verified","pct":100,
+          "remarks":"2026-09-14 verify: PASS — test REQ-UI-002. ⚠ DevGuide 2026-09-16: saving an empty Role Name does nothing (ApplicationRoles.razor:187)."},
+         {"id":"REQ-UI-003","class":"UI","title":"Users","screen":"","route":"","status_raw":"Needs re-verify","pct":75,
+          "remarks":"2026-09-14 verify: ⚠ render — grid empty on users @1280"}]}
+JS
+  printf '{"reqs":{"REQ-UI-002":{"result":"PASS","tests":["REQ-UI-002 role rows persist"]},"REQ-UI-003":{"result":"PASS","tests":["REQ-UI-003 users list"]}}}\n' \
+    > "$d/tests/.artifacts/verify/tests.json"
+  printf '{"mode":"served","reason":"","reason_kind":"","head":"web","rung":"run","url":"http://127.0.0.1:1"}\n' \
+    > "$d/tests/.artifacts/verify/boot.json"
+  (cd "$d" && python3 "$UTILS/tf-verify-verdict.py" Fx --apply --dir tests/.artifacts/verify >/dev/null 2>&1)
+  out="$(grep '^| REQ-UI-00[23] ' "$d/docs/Fx-Checklist.md"; cat "$d/docs/.last-verify.json" 2>/dev/null)"
+  grep -q '^| REQ-UI-002 | Roles | Needs re-verify | 75% | .*⚠ DevGuide 2026-09-16: saving an empty Role Name does nothing (ApplicationRoles.razor:187)' <<<"$out" \
+    && grep -q '"REQ-UI-002": "DEFECT-OPEN"' <<<"$out" \
+    && ok am_021a "a pass on a row carrying a defect no verify sees keeps the defect and sends the row to a fix, not Verified" \
+    || { bad am_021a "the verify rewrite still erases the defect, or still writes Verified over it"; note "$(grep 'REQ-UI-002' <<<"$out")"; }
+  grep -q '^| REQ-UI-003 | Users | Verified | 100% | [0-9-]* verify: PASS' <<<"$out" && ! grep -q 'REQ-UI-003 .*⚠ render' <<<"$out" \
+    && ok am_021b "a verify's own old mark is still replaced by the new verdict" \
+    || { bad am_021b "a cleared verify mark was carried forward"; note "$(grep 'REQ-UI-003' <<<"$out")"; }
+}
+
+# --- AppManager TF-022: the prompt named a guide file the project does not have -------------
+# Standing rule 2 said "use a test user from docs/AppManager-UsageGuide.md"; AppManager's guide is
+# docs/AppManager-Usage-Guide.md, the other spelling the doc checker accepts (2026-09-17).
+am_022() {
+  local d="$SCRATCH/am022" out
+  mkdir -p "$d/docs" "$d/.tfcore/templates/v4custom"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  cp "$ROOT/.tfcore/templates/v4custom/build-subagent-prompt.md" "$d/.tfcore/templates/v4custom/"
+  printf '# Fx — Usage Guide\n' > "$d/docs/Fx-Usage-Guide.md"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+| ID | Title | Status | % | Remarks | Details |
+|---|---|---|---|---|---|
+| REQ-FN-001 | Export | Not Started | 0% | | [view](#d-req-fn-001) |
+
+## Export
+
+<a id="d-req-fn-001"></a>
+- **REQ-FN-001** — Export.
+  - *Acceptance:* When a user clicks Export on Reports, then a file downloads.
+MD
+  out="$(cd "$d" && python3 "$UTILS/tf-build-list.py" Fx --prompts 2>&1)"
+  grep -q 'use a test user from `docs/Fx-Usage-Guide.md`' <<<"$out" && ! grep -q 'Fx-UsageGuide\|{UsageGuide}' <<<"$out" \
+    && ok am_022 "the builder prompt names the usage guide file the project really has" \
+    || { bad am_022 "the builder prompt names a usage guide file that does not exist"; note "$(grep -o 'use a test user from [^,]*' <<<"$out")"; }
+}
+
 # --- the ignore file that grew by one block per update -----------------------------------
 # `tr -d '\r' < .gitignore | grep -qE …` under `set -o pipefail`: grep -q stops at the first
 # match, tr dies writing the rest, the pipeline reports failure, and the framework block is
@@ -3129,7 +3230,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

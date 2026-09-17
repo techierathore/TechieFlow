@@ -22,7 +22,9 @@ Verdicts: PASS · FAIL (acceptance) · BUILD-FAIL · RENDER-FAIL · ASSET-FAIL �
 PERF-FAIL · NOT-TESTED (no test carried the id, or every test carrying it was skipped; the screen
 checks passed or did not run) ·
 NOT-OBSERVABLE (an NFR row with no budget and no unit test) · NOT-DRIVEN (its screen was never driven:
-the head could not be booted, or has no driver). A row is Verified only on PASS. NOT-* rows keep their
+the head could not be booted, or has no driver) · DEFECT-OPEN (every check passed, but the old Remarks
+carry a defect no verify can see, tf_defect.py: the row goes to Needs re-verify, and so to a fix, with
+the defect kept; AppManager TF-021). A row is Verified only on PASS. NOT-* rows keep their
 status and get a Remark saying so; nothing is ever written as a static-only pass.
 
 Writes docs/.last-verify.json (the ledger the verify hook reads: date, app, scope, booted, the checks
@@ -38,6 +40,8 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import tf_defect  # noqa: E402
 FAILING = {"BUILD-FAIL": "build", "FAIL": "acceptance", "RENDER-FAIL": "render", "ASSET-FAIL": "assets",
            "VISUAL-FAIL": "visual", "MOCKUP-FAIL": "mockup-parity", "PERF-FAIL": "perf"}
 STATUS = {"PASS": "Verified", "FAIL": "FAIL", "BUILD-FAIL": "FAIL", "RENDER-FAIL": "Needs re-verify", "ASSET-FAIL": "Needs re-verify",
@@ -212,22 +216,29 @@ def main(argv):
                     parts.append("within its speed budget")
                 detail = "; ".join(parts)
 
-        status = STATUS.get(verdict, prior)
+        # A defect found by the guide, the owner's testing or production is not in the acceptance line, so
+        # a pass cannot clear it and a rewrite must not erase it (TF-021). tests/regression/run.sh am_021.
+        kept = tf_defect.unseen(r.get("remarks"))
+        if kept and verdict == "PASS":
+            verdict = "DEFECT-OPEN"
+        status = STATUS.get(verdict, "Needs re-verify" if verdict == "DEFECT-OPEN" else prior)
         pct = r.get("pct")
         if verdict == "PASS":
             pct = 100
-        elif verdict in ("RENDER-FAIL", "ASSET-FAIL", "VISUAL-FAIL", "MOCKUP-FAIL", "PERF-FAIL"):
+        elif verdict in ("DEFECT-OPEN", "RENDER-FAIL", "ASSET-FAIL", "VISUAL-FAIL", "MOCKUP-FAIL", "PERF-FAIL"):
             pct = min(pct if pct is not None else 75, 75)
         gate = FAILING.get(verdict)
         marks = {"FAIL": "⚠ acceptance", "BUILD-FAIL": "⚠ build", "RENDER-FAIL": "⚠ render", "ASSET-FAIL": "⚠ assets",
                  "VISUAL-FAIL": "⚠ visual", "MOCKUP-FAIL": "⚠ mockup-parity", "PERF-FAIL": "⚠ perf",
-                 "NOT-TESTED": "not verified", "NOT-OBSERVABLE": "not observable", "NOT-DRIVEN": "not verified", "PASS": "PASS"}
+                 "NOT-TESTED": "not verified", "NOT-OBSERVABLE": "not observable", "NOT-DRIVEN": "not verified", "PASS": "PASS",
+                 "DEFECT-OPEN": "checks pass, defect open"}
         remark = f"{today} verify: {marks[verdict]} — {detail}"
         if evidence:
             remark += f" ({evidence})"
         if notes:
             remark += "; " + "; ".join(notes[:2])
-        remark = words(remark.replace("|", "/"), 60)
+        carried = words(" ".join(kept).replace("|", "/"), 30) if kept else ""
+        remark = words(remark.replace("|", "/"), 60 - len(carried.split())) + (f" {carried}" if carried else "")
         emit = verdict == "PASS" or gate is not None
         row = {"id": rid, "class": r["class"], "verdict": verdict, "gate": gate, "gates_run": ran, "failure_class": cls if gate else None,
                "prior_verdict": prior or None, "status": status, "pct": pct, "remark": remark, "screen": r.get("screen"),
