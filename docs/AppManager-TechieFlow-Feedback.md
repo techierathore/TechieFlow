@@ -4,17 +4,16 @@
 |---|---|
 | App | AppManager |
 | Upstream | TechieFlow |
-| Updated | 2026-09-18 |
+| Updated | 2026-09-19 |
 
 ## Summary
 
-- 0 blockers, 7 majors, 17 minors, 0 nice-to-haves
-- Last consolidated: 2026-09-18
+- 0 blockers, 7 majors, 20 minors, 0 nice-to-haves
+- Last consolidated: 2026-09-19
 
-24 entries: 0 blocking now, 0 open, 1 fixed upstream and waiting to be re-checked here (TF-024, fixed 2026-09-18), 23 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-014 on 2026-09-14, TF-015 and TF-016 on 2026-09-16, TF-017 to TF-022 on 2026-09-17, TF-023 on 2026-09-18.
+27 entries: 0 blocking now, 0 open, 3 fixed upstream and waiting to be re-checked here (TF-025 to TF-027, fixed 2026-09-19), 24 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-014 on 2026-09-14, TF-015 and TF-016 on 2026-09-16, TF-017 to TF-022 on 2026-09-17, TF-023 and TF-024 on 2026-09-18.
 
-Nothing is blocked. TF-024 is fixed upstream: the API reference is no longer graded as the usage guide. TF-023 is closed: a DevGuide's word limit grows with each screen past 20, so the guide is one file again. TF-022 is closed: the builder prompt names the usage guide that exists. TF-020 is closed: a fix prompt carries each row's defect. TF-021 is closed: a verify keeps a defect it cannot see and sends the row to a fix. TF-017 is closed: a roadmap row is left off the build list. TF-018 is closed: a not-applicable row is counted apart, never as verified. TF-019 is closed: rows carrying a defect mark name `*build-phase`, not a verify.
-
+Nothing is blocked. TF-025 to TF-027 are fixed upstream: a quoted `&` no longer reads as a background run, the app's log files no longer count as code, and `*triage-and-fix` may run a migration. TF-024 is closed: the API reference is no longer graded as the usage guide. TF-023 is closed: a DevGuide's word limit grows with each screen past 20, so the guide is one file again. TF-022 is closed: the builder prompt names the usage guide that exists. TF-020 is closed: a fix prompt carries each row's defect. TF-021 is closed: a verify keeps a defect it cannot see and sends the row to a fix.
 ## Entries
 
 ### TF-001 — `tf-split-brd.sh --add-missing` re-appended a row for every BRD item, not just the new ones, and emitted stray markup
@@ -343,6 +342,8 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 
 ### TF-024 — the checker reads any `*-usage-guide.md` as the project's UsageGuide, so an API reference can never pass
 
+> ✅ **Closed 2026-09-18** — re-checked here: Re-checked 2026-09-18. Ran bash .tfcore/utils/tf-doc-check.sh docs/AppManager-api-usage-guide.md: 'WARN docs/AppManager-api-usage-guide.md: "AppManager-api" is not an app here (no AppManager-api-BRD.md or -Checklist.md beside it); not a TechieFlow document, skipped' and 'tf-doc-check: 0 FAIL, 1 WARN in 1 document(s)', where before the fix the same command printed 18 FAILs (missing App/Kind/Size/Date header fields, the API sections refused as 'not in the template', the UsageGuide sections demanded, and 10,557 words against a 6,000 cap). The file is back in the gate's check list: the six documents together now read '0 FAIL, 35 WARN in 6 document(s)', and docs/AppManager-Usage-Guide.md beside it is still checked as the app's own usage guide.
+
 - **Severity:** minor
 - **Blocks:** no — the document is complete and correct; only the checker judges it by the wrong template.
 - **Repro:** `bash .tfcore/utils/tf-doc-check.sh docs/AppManager-api-usage-guide.md` (an external API reference for child applications; the project's real UsageGuide is `docs/AppManager-Usage-Guide.md` and passes).
@@ -352,9 +353,80 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 - **Workaround:** the file is excluded from the gate's check list and named in the report. Renaming it would break the links in the BRD, the Architecture and four other documents.
 - **Suggested fix:** anchor the name match to the app (`{App}-Usage-Guide.md` exactly), or let a document opt out with a one-line marker the checker honours.
 
+### TF-025 — the background-run guard refuses a foreground command whose screen name contains `&`
+
+- **Severity:** minor
+- **Blocks:** no — the screen was renamed "Scorecard and Portfolio" on the command line and the comparison ran.
+- **Repro:** in YOLO, `bash .tfcore/utils/tf-mockup-parity.sh --base http://localhost:5041 --screen "Scorecard & Portfolio=/reports/portfolio" …` (the name `tf-verify-list.sh` itself prints for that screen).
+- **Expected:** the command runs; the `&` sits inside a double-quoted argument.
+- **Actual:** `guard-build.sh` refuses it: "in YOLO mode a build, test or app run is NEVER started in the background (nohup / setsid / a trailing & here)".
+- **Encountered in:** `*triage-and-fix AppManager` step 1, 2026-09-19.
+- **Workaround:** replace `&` with "and" in the screen names passed on the command line.
+- **Suggested fix:** strip quoted strings before looking for a background `&`, or match only an `&` that ends a command (followed by end of line, `;` or a newline) and is not `&&`.
+
+### TF-026 — triage reports "code untouched: NO" when the only changed files are the running app's own log files
+
+- **Severity:** minor
+- **Blocks:** no — nothing was logged against the run for it (`--cmd fix-issues`); only the summary line is wrong.
+- **Repro:** `tf-verify-boot.sh start` (the app writes `src/AppManagerApi/logs/*.log` and `src/AppManagerWeb/logs/*.log`), then `bash .tfcore/utils/tf-triage.sh AppManager close --started <start> --cmd fix-issues`.
+- **Expected:** "code untouched: yes" — no source file changed.
+- **Actual:** "code untouched: NO". The walk in `tf-triage.py` near line 203 skips `bin`, `obj`, `node_modules`, `.artifacts` and `TestResults` but not `logs`, so a Serilog file counts as a code change. Under `--cmd triage-issues` the same files would log a false "triage edited code" miss.
+- **Encountered in:** `*triage-and-fix AppManager` step 2, 2026-09-19.
+- **Workaround:** none needed for this run; checked by hand that only the two log files changed.
+- **Suggested fix:** skip `logs` directories and `*.log` files, or count only source extensions (`.cs`, `.razor`, `.ts`, `.sql`, `.csproj` and the like).
+
+### TF-027 — `*triage-and-fix` runs the fix-issues steps, but the database guard refuses its migrations
+
+- **Severity:** minor
+- **Blocks:** no — the phase marker was restarted as `fix-issues` for step 3 (as fix-issues step 0 does) and migration 123 was applied.
+- **Repro:** `tf-phase.sh start triage-and-fix AppManager`, then in step 3 a fix that adds a migration: `dotnet run --project src/AppManagerDB -- "<connection>" --migrate`.
+- **Expected:** allowed. `triage-and-fix.md` step 3 is "`fix-issues.md` steps 2 to 5", and fix-issues may run a migration.
+- **Actual:** `guard-db.sh` near line 78 allows only `build-phase` and `fix-issues`: "a database migration runs only from *build-phase or *fix-issues, and the marker says triage-and-fix". The builder sub-agent stopped there and returned the migration unapplied.
+- **Encountered in:** `*triage-and-fix AppManager` step 3, 2026-09-19.
+- **Workaround:** `bash .tfcore/utils/tf-phase.sh start fix-issues AppManager` before the migration; the original start time is still passed to the close scripts with `--started`.
+- **Suggested fix:** add `triage-and-fix` to the allowed list in `guard-db.sh`, or have `triage-and-fix.md` step 3 say to restart the marker as `fix-issues`.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### TF-025 — fixed 2026-09-19
+
+- **Fix.** `guard-build.sh` now ignores quoted arguments when it looks for a background `&`, so
+  `--screen "Scorecard & Portfolio=/reports/portfolio"` passes. A quoted string that itself names a build
+  or run is still read, so `powershell.exe -Command "dotnet run &"` and a trailing `&` on
+  `tf-build.sh` are still refused. Case `am_025`; miss `MISS-TechieFlow-20260919-03`. Deployed here.
+- **Proof.** Your hook as it was: the parity command refused (exit 2). Now: allowed (exit 0); the two
+  real background forms are still refused.
+- **Verify from here.** In YOLO, run the parity command with the original screen name
+  `"Scorecard & Portfolio=/reports/portfolio"`: it runs. Then
+  `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-025 "<what you ran and what it showed>"`.
+
+### TF-026 — fixed 2026-09-19
+
+- **Fix.** `tf-triage.py close` skips `logs` and `log` folders and every `*.log` file when it looks for
+  changed code. Any other file changed under `src/`, `source/` or `tests/` still counts. Case `am_026`;
+  miss `MISS-TechieFlow-20260919-04`. Deployed here.
+- **Proof.** A fixture with only `src/FxApi/logs/*.log` and `src/FxWeb/app.log` changed: old
+  "code untouched: NO", new "yes"; add a `.cs` file and it reads "NO". On this repository the walk now
+  skips 69 log files (the app's `logs/` folders and the `*.log` issue attachments under `App_Data/`);
+  none of them is source. Other files the app writes at run time, such as non-log attachments, still count.
+- **Verify from here.** Boot the app, then
+  `bash .tfcore/utils/tf-triage.sh AppManager close --started <a time before the boot> --cmd fix-issues`:
+  "code untouched: yes" when only logs changed. Then
+  `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-026 "<what you ran and what it showed>"`.
+
+### TF-027 — fixed 2026-09-19
+
+- **Fix.** `guard-db.sh` allows a migration while the marker says `triage-and-fix`, as it already did
+  for `build-phase` and `fix-issues`, because step 3 runs the fix-issues steps. A triage alone
+  (`triage-issues`) is still refused. You no longer need to restart the marker as `fix-issues`. Case
+  `am_027`; miss `MISS-TechieFlow-20260919-05`. Deployed here.
+- **Proof.** Your hook as it was: the migration command under the `triage-and-fix` marker refused
+  (exit 2). Now: allowed (exit 0); under `triage-issues` still refused.
+- **Verify from here.** `bash .tfcore/utils/tf-phase.sh start triage-and-fix AppManager`, then run your
+  migration command: it is not refused. Then
+  `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-027 "<what you ran and what it showed>"`.
 
 ### TF-024 — fixed 2026-09-18
 

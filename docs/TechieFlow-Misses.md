@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 203 logged: 52 open, 150 fixed, 1 will not fix |
+| Count | 208 logged: 52 open, 155 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-09-18 |
+| Updated | 2026-09-19 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -66,10 +66,15 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (150)
+## Fixed (155)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260919-05 | 2026-09-19 by owner | 2026-09-19 by log-miss | the framework never said it | The database guard allowed migrations only under build-phase and fix-issues, so triage-and-fix step 3, which runs the fix-issues steps, could not apply a migration (AppManager TF-027). |
+| MISS-TechieFlow-20260919-04 | 2026-09-19 by owner | 2026-09-19 by log-miss | the check was too weak | Triage close counted the running app's own log files under src as code changes and reported code untouched NO (AppManager TF-026). |
+| MISS-TechieFlow-20260919-03 | 2026-09-19 by owner | 2026-09-19 by log-miss | the check was too weak | The YOLO background guard read an & inside a quoted screen name as a background job and refused a foreground mockup-parity run (AppManager TF-025). |
+| MISS-TechieFlow-20260919-02 | 2026-09-19 by owner | 2026-09-19 by log-miss | said and ignored | While clearing stale feedback HTML copies in MyDiary the maintainer deleted MyDiary-TechieRag-Feedback.html without checking its markdown source existed; it was the only copy there and was restored from TechieRag's docs folder. |
+| MISS-TechieFlow-20260919-01 | 2026-09-19 by owner | 2026-09-19 by log-miss | said and ignored | The render rules named a feedback file as a human document and the renderer drew it, so the status gate left a feedback HTML copy in Chatur that the owner had asked several times to be rid of (Chatur TF-001). |
 | MISS-TechieFlow-20260918-02 | 2026-09-18 by owner | 2026-09-18 by log-miss | the check was too weak | tf-doc-check picked a template from the file name's ending alone, so AppManager's API reference docs/AppManager-api-usage-guide.md was graded as the UsageGuide of an app called AppManager-api and failed 18 times (AppManager TF-024) |
 | MISS-TechieFlow-20260918-01 | 2026-09-18 by owner | 2026-09-18 by log-miss | the framework never said it | the DevGuide word budget held only the size's screen cap of entries (20 for Medium), so a single-phase guide of AppManager's 54 screens failed at 11,861 words although every entry was within its own limit; handoff and productguide still offered an index plus per-role files under docs/devguides/ that |
 | MISS-TechieFlow-20260917-03 | 2026-09-17 by owner | 2026-09-17 by log-miss | said and ignored | the build-list prompt template hardcoded docs/<App>-UsageGuide.md although TF-009 made the readers accept docs/<App>-Usage-Guide.md too, so AppManager's builders were pointed at a guide file that does not exist (AppManager TF-022) |

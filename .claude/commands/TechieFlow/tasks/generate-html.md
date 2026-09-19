@@ -1,6 +1,6 @@
 # generate-html
 
-Convert one or more **human-readable** markdown files to self-contained HTML using the shared shell. Use this when you need to render documents that `*render-workflow-docs` does not cover (the UsageGuide, the DevGuide, library-feedback docs, ad-hoc design notes, legacy/archived docs). Note: suffixed doc variants like `-v2` are banned by the collision policy (day1-brownfield §1.6) — superseded docs live unmodified in `docs/OldDocs/`.
+Convert one or more **human-readable** markdown files to self-contained HTML using the shared shell. Use this when you need to render documents that `*render-workflow-docs` does not cover (the UsageGuide, the DevGuide, ad-hoc design notes, legacy/archived docs). Note: suffixed doc variants like `-v2` are banned by the collision policy (day1-brownfield §1.6) — superseded docs live unmodified in `docs/OldDocs/`.
 
 **NEVER render an agent working document to HTML.** Two are banned by name and `tf-render-html.sh` refuses both with exit 2: the **requirements checklist** `*-Checklist.md` (and its Requirements Status table), and the **miss log** `*-Misses.md`. Agents read them in markdown; an HTML mirror burns tokens and drifts from the source. If asked to render either, decline and explain it is an agent document; if a stale `*-Checklist.html` or `*-Misses.html` exists from before this rule, delete it. The test for any other file: **if the only reader is an agent, it stays markdown.**
 

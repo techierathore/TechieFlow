@@ -23,7 +23,7 @@ Each rendered HTML file is:
 - A **single self-contained `.html` file**, no external CSS, no external JS except the two `<script>` tags below (mermaid + svg-pan-zoom from jsdelivr CDN).
 - Sibling to the source MD (same filename, `.html` extension).
 - **Light + dark theme with a persisted toggle** (§2 + §3 + §7). Default is chosen by **time of day** on first open — light between 07:00 and 19:00 local, softened dark otherwise — then the user's explicit toggle choice (saved in `localStorage` as `tf-theme`) wins on every later visit. Light is a **warm off-white** (never harsh bright white); dark is a softened near-black. Monospace for code/pre, sans for body.
-- **Only human-readable docs are ever rendered to HTML** (BRD, Architecture, UsageGuide, DevGuide, ProductGuide, PROJECT-STATUS, a Decision Request, a feedback file). **An agent working document is never rendered to HTML** — it is read in markdown, and an HTML mirror wastes tokens and drifts from the source. Two are banned by name, and `tf-render-html.py` refuses both with exit 2: the **requirements checklist** `{App}-Checklist.md`, and the **miss log** `{App}-Misses.md`. If you are about to emit a `*-Checklist.html` or a `*-Misses.html`, STOP — that is banned. The test for anything else: if the only reader is an agent, it stays markdown.
+- **Only human-readable docs are ever rendered to HTML** (BRD, Architecture, UsageGuide, DevGuide, ProductGuide, PROJECT-STATUS, a Decision Request). **An agent working document is never rendered to HTML** — it is read in markdown, and an HTML mirror wastes tokens and drifts from the source. Three are banned by name, and `tf-render-html.py` refuses all three with exit 2: the **requirements checklist** `{App}-Checklist.md`, the **miss log** `{App}-Misses.md`, and an **upstream feedback file** `{App}-{Upstream}-Feedback.md`. If you are about to emit a `*-Checklist.html`, a `*-Misses.html` or a `*-Feedback.html`, STOP — that is banned. The test for anything else: if the only reader is an agent, it stays markdown.
 - Working anchor links from any auto-generated or hand-written TOC to its target heading.
 - Copy buttons on every **code** `<pre>` — but NOT on `pre.mermaid` (a button injected there corrupts the diagram source mermaid reads → "Syntax error"; mermaid blocks get copy/export from their own diagram toolbar).
 - Mermaid toolbar on every rendered diagram.
@@ -489,7 +489,7 @@ The inline `<div class="toc-inline">` mirrors the MD Table of Contents. When the
 
 - [ ] CSS palette matches §2 verbatim (themed `:root` light + `html[data-theme="dark"]` overrides; no hardcoded hex colors reintroduced in the body rules)
 - [ ] Page skeleton matches §3 — flash-free theme-init `<script>` in `<head>` + the `#themeToggle` button present; §7 JS wires the toggle and Mermaid's theme follows `data-theme`
-- [ ] This is a human-readable doc (BRD / Architecture / UsageGuide / DevGuide / PROJECT-STATUS) — NOT a checklist (checklists are never rendered to HTML)
+- [ ] This is a human-readable doc (BRD / Architecture / UsageGuide / DevGuide / PROJECT-STATUS) — NOT a checklist, miss log or feedback file (those are never rendered to HTML)
 - [ ] Every H2/H3/H4 has `id="{slug}"` matching §1 algorithm
 - [ ] Every TOC entry (MD inline AND HTML inline/sidebar) uses the same slug
 - [ ] Every mermaid fence is wrapped in `<div class="diagram">` with the §5 toolbar

@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-09-18 (AppManager TF-024). |
+| Last updated | 2026-09-19 (AppManager TF-027). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -68,7 +68,7 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 - **Every miss is logged through `tf-log-miss.sh` with its sort** — whose gap it was: `spec`, `unsaid`, `weak-check` or `ignored`. The maintainer's own misses included.
 - **Owner-reviewed documents change only after the owner says yes.** `TechieFlow-How-It-Works.md`, the Stack documents, the Reset Plan, the README, and any BRD or mockup. Propose in plain words first. **This file is not one of them** — it is the agent's briefing, written by the maintainer for the maintainer, and it is kept current without asking (owner, 2026-09-09: *"it's a document for you"*). The owner reads output, the productivity figures and the readable documents; those are what a change must be worth.
 - **Plain English to the owner; a decision goes in a file, not the conversation; an upstream defect is always filed, `Blocks: yes|no` first, and `no` never stops the run.** `.tfcore/tasks/_owner-language.md`. Since 2026-09-11 the closing message of a command, and any free-form document it hands over, is checked by the Stop hook through `tf-owner-text.sh` (FR-74): no word from `.tfcore/standards/owner-words.txt`, every open upstream problem with what it affects and its prompt, none fixed upstream called open, every command still to run as a line to paste, the next prompt in a code block. Add a word to that list when the owner has to ask what one means.
-- **An agent document is never rendered to HTML.** The checklist and the miss list are refused by name; anything else whose only reader is an agent stays markdown.
+- **An agent document is never rendered to HTML.** The checklist, the miss list and feedback files are refused by name; anything else whose only reader is an agent stays markdown.
 - **A rule is a script, and it is written once.** `tests/mirror/run.sh` refuses the same sentence in two rule files (32 deliberate ones baselined) and holds the word caps. When a cap is reached, delete prose a check has replaced; never raise the cap.
 - **Public documents name only public repositories**: TechieRag, TechieDesk, TrBlazeUI, TfLens, TechieBlog, TrStudio, TrSetup, Xpenser.
 
@@ -114,7 +114,7 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | **Open misses** are listed with their outcome in `docs/TechieFlow-Misses.md` — 52 of 167 open (2026-09-12). The one this maintainer owes a fix for is 12 of 2026-09-07, that a hidden framework folder is invisible to search and nothing enforces the rule. | Maintainer |
 | **TrStudio is not on this machine.** It is a named fixture and could not be refreshed here. | Owner action |
 | **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` (that repository, not this one) and waiting on the owner's go-ahead. | Separate repo |
-| **TfLens's TF-013 to TF-052 and AppManager's TF-001 to TF-024 are fixed and deployed everywhere.** Awaiting re-check: TfLens's TF-051 and TF-052; AppManager's TF-024. `tf-feedback.sh <App>` prints a project's state. | TfLens, AppManager (close) |
+| **TfLens's TF-013 to TF-052, AppManager's TF-001 to TF-027 and Chatur's TF-001 are fixed and deployed everywhere.** Awaiting re-check: TfLens TF-051, TF-052; AppManager TF-025–027; Chatur TF-001. `tf-feedback.sh <App>` prints each state. | TfLens, AppManager, Chatur (close) |
 | **Eighteen `.gitignore` files carry repeated framework blocks** left by FR-76's defect: TechieBlog 50 copies, TfLens 30, one private project 10, fifteen others 2. Repeated lines ignore nothing extra, so nothing is wrong, only untidy; the updater no longer adds them, and removes none. | Owner decision |
 | **286 misses predate the `sort` field** (2026-09-07). Nothing is backfilled, nothing is edited, and a reader labels what it derives; no action, by anyone. See `docs/CHANGELOG.md`. | Closed |
 | **TrSetup has thousands of tracked build-output files.** Its ignore rules are correct and inert until the index entries go. `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the commands. Agents never run version control. | Owner action |

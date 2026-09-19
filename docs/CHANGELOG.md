@@ -8,6 +8,38 @@
 
 ---
 
+## 2026-09-19, later — AppManager's TF-025 to TF-027
+
+Three hook and script slips from AppManager's first `*triage-and-fix`. **TF-025**: `guard-build.sh` read
+the `&` in a quoted screen name (`"Scorecard & Portfolio=…"`) as a background job; quoted strings are now
+blanked before the `&` test unless the string itself names a build, so `powershell.exe -Command "dotnet
+run &"` is still refused. **TF-026**: `tf-triage.py close` counted the running app's `logs/` and `*.log`
+files as code changes; both are skipped (69 files on AppManager, none source). **TF-027**: `guard-db.sh`
+allowed migrations only under `build-phase` and `fix-issues`, though `triage-and-fix` step 3 runs the
+fix-issues steps; `triage-and-fix` is added, `triage-issues` still refused. Cases `am_025` to `am_027`,
+each failing on AppManager's deployed copy and passing now; the suite takes `TF_REGRESSION_HOOKS` for
+that. Misses `MISS-TechieFlow-20260919-03` to `-05`. Deployed to all 20 (each differed by exactly this
+change); replies written into AppManager's own file and copied here. Suites: regression, mirror pass.
+
+## 2026-09-19 — Chatur's TF-001
+
+`html-render-shell.md` §0 listed "a feedback file" among the human documents, and `tf-render-html.py`
+drew it, so the status gate's "every human document this command wrote" left
+`Chatur-TrBlazeUI-Feedback.html` behind, which the owner had asked more than once to be rid of. New
+`is_feedback_file()`: a name ending `-Feedback.md` carrying the template's `| Upstream |` row or an id'd
+entry heading is refused with exit 2, like the checklist and the miss log; a document merely named
+`*-Feedback.md` still renders. §0 and §9 of the shell, `_status-update-gate.md` step 4,
+`generate-html.md` and `render-workflow-docs.md` no longer point at feedback files. Case `ch_001`,
+proved to fail on the renderer with the refusal taken out; `replies_complete` now reads Chatur's
+numbering from `ch_` cases. All five feedback files here are refused. Deployed to all 20 projects
+carrying the renderer (each differed by exactly this change) and proved in Chatur, whose `docs/` had
+no feedback file on this machine, so the answered file was copied there. Misses
+`MISS-TechieFlow-20260919-01` (`ignored`) and `-02`: clearing MyDiary's two stale feedback HTML copies,
+the maintainer deleted `MyDiary-TechieRag-Feedback.html` without checking for a markdown source, and it
+was the only copy there; restored as markdown from `TechieRag/docs/MyDiary-TechieRag-Feedback.md`
+(written 20 minutes before the HTML was rendered). Suites: regression, mirror pass. OpenCode not run:
+the change is a script and task text that OpenCode reads through the same `.tfcore/` files.
+
 ## 2026-09-18, later — AppManager's TF-024
 
 `tf-doc-check.py` chose a template from the file name's ending, so `docs/AppManager-api-usage-guide.md`

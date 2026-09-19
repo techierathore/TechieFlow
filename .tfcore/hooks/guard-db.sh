@@ -9,7 +9,8 @@
 #     mongosh with INSERT / UPDATE / DELETE / CREATE / ALTER / DROP / TRUNCATE / GRANT /
 #     REPLACE / MERGE in the command text, a -f / -i script, or stdin redirected from a file
 #   - dropping or resetting a database
-# What it allows only while .tfcore/.session/phase.json says build-phase or fix-issues
+# What it allows only while .tfcore/.session/phase.json says build-phase, fix-issues or
+# triage-and-fix (whose step 3 runs the fix-issues steps)
 # (written by bash .tfcore/utils/tf-phase.sh start <command>, step 0 of every task):
 #   - a migration runner: dotnet ef database update, dotnet run --project <…Db|…Migration(s)…>,
 #     dbup, flyway migrate, liquibase update, alembic upgrade, prisma migrate, knex migrate,
@@ -75,11 +76,12 @@ if direct_write or re.search(DROP_DB, low):
 
 if re.search(MIGRATORS, low):
     ph = phase()
-    if ph in ("build-phase", "fix-issues"):
+    # triage-and-fix step 3 is fix-issues steps 2 to 5 under its own marker (AppManager TF-027)
+    if ph in ("build-phase", "fix-issues", "triage-and-fix"):
         sys.exit(0)
     who = f"the marker says {ph}" if ph else "no command marker is set"
-    print("BLOCKED by TechieFlow policy: a database migration runs only from *build-phase or "
-          f"*fix-issues, and {who}. Day-1, mockups, split-brd, amend-docs, devguide, verify, "
+    print("BLOCKED by TechieFlow policy: a database migration runs only from *build-phase, "
+          f"*fix-issues or *triage-and-fix, and {who}. Day-1, mockups, split-brd, amend-docs, devguide, verify, "
           "triage and status commands write documents and records, never the database. If you are "
           "inside build-phase or fix-issues, step 0 was skipped: run "
           "bash .tfcore/utils/tf-phase.sh start <command> <App> and retry. Owner rule 2026-09-05.",

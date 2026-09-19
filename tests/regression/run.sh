@@ -20,6 +20,7 @@
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 UTILS="${TF_REGRESSION_UTILS:-$ROOT/.tfcore/utils}"
+HOOKS="${TF_REGRESSION_HOOKS:-$ROOT/.tfcore/hooks}"
 TELEM="$ROOT/.tfcore/telemetry"
 SCRATCH="$ROOT/tests/.artifacts/regression.$$"
 mkdir -p "$SCRATCH"
@@ -1077,7 +1078,8 @@ import tf_feedback
 cased = {"TF-%s" % n for n in re.findall(r"(?m)^tf_0?(\d{2,3})\(\)", suite)}
 cased = {("TF-%03d" % int(c[3:])) for c in cased}
 # a project whose own numbering overlaps TfLens's has its cases under its own prefix
-own = {"AppManager": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^am_0?(\d{2,3})\(\)", suite)}}
+own = {"AppManager": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^am_0?(\d{2,3})\(\)", suite)},
+       "Chatur": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^ch_0?(\d{2,3})\(\)", suite)}}
 for f in sorted(glob.glob(os.path.join(root, "docs", "*-TechieFlow-Feedback.md"))):
     app = os.path.basename(f).split("-")[0]
     for e in tf_feedback.entries(f):
@@ -3256,6 +3258,69 @@ am_024() {
     || { bad am_024 "an API reference named like a UsageGuide is graded as one"; note "$(grep -m2 'api-usage' <<<"$out")"; }
 }
 
+# --- AppManager TF-025: a quoted `&` read as a background job ---------------------------------
+# `--screen "Scorecard & Portfolio=/reports/portfolio"`, the name tf-verify-list prints, was refused
+# in YOLO as a backgrounded run. A quoted argument is data; a real trailing `&`, and one inside a
+# quoted command a shell will run, are still refused.
+am_025() {
+  local d="$SCRATCH/am025" a b c; mkdir -p "$d"
+  _gb() { python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$1" \
+          | TF_YOLO=1 CLAUDE_PROJECT_DIR="$d" bash "$HOOKS/guard-build.sh" >/dev/null 2>&1; }
+  _gb 'bash .tfcore/utils/tf-mockup-parity.sh --base http://localhost:5041 --screen "Scorecard & Portfolio=/reports/portfolio"'; a=$?
+  _gb 'bash .tfcore/utils/tf-build.sh build &'; b=$?
+  _gb 'powershell.exe -Command "dotnet run --project src/Web &"'; c=$?
+  [[ $a -eq 0 && $b -eq 2 && $c -eq 2 ]] \
+    && ok am_025 "an & inside a quoted screen name passes; a real background run is still refused" \
+    || bad am_025 "background guard: quoted name rc=$a (want 0), trailing & rc=$b (want 2), quoted command rc=$c (want 2)"
+}
+
+# --- AppManager TF-026: the running app's log files counted as a code change ------------------
+# The app under test writes src/<Project>/logs/*.log; triage close walked them and said "code
+# untouched: NO", and under --cmd triage-issues would log a false "triage edited code" miss.
+am_026() {
+  local d="$SCRATCH/am026" out1 out2
+  mkdir -p "$d/docs" "$d/.tfcore" "$d/src/FxApi/logs" "$d/src/FxWeb"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  printf 'x\n' > "$d/src/FxApi/logs/fx-20260919.log"; printf 'x\n' > "$d/src/FxWeb/app.log"
+  out1="$(cd "$d" && bash "$UTILS/tf-triage.sh" Fx close --started 2026-01-01T00:00:00Z --cmd fix-issues 2>&1)"
+  printf 'class A {}\n' > "$d/src/FxWeb/A.cs"
+  out2="$(cd "$d" && bash "$UTILS/tf-triage.sh" Fx close --started 2026-01-01T00:00:00Z --cmd fix-issues 2>&1)"
+  grep -q 'code untouched: yes' <<<"$out1" && grep -q 'code untouched: NO' <<<"$out2" \
+    && ok am_026 "log files alone leave the code untouched; a changed source file still counts" \
+    || { bad am_026 "triage close misreads log files as code"; note "$(grep -h 'untouched' <<<"$out1$out2" | head -2)"; }
+}
+
+# --- AppManager TF-027: triage-and-fix could not run the migration its own step 3 needs -------
+# Step 3 is fix-issues steps 2 to 5, but the marker says triage-and-fix and the database guard
+# allowed only build-phase and fix-issues. A triage alone is still refused.
+am_027() {
+  local d="$SCRATCH/am027" a b; mkdir -p "$d/.tfcore/.session"
+  _gd() { printf '{"cmd":"%s","started":"2026-09-19T00:00:00Z"}\n' "$1" > "$d/.tfcore/.session/phase.json"
+          python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' \
+            'dotnet run --project src/FxDB -- "Host=x" --migrate' | CLAUDE_PROJECT_DIR="$d" bash "$HOOKS/guard-db.sh" >/dev/null 2>&1; }
+  _gd triage-and-fix; a=$?; _gd triage-issues; b=$?
+  [[ $a -eq 0 && $b -eq 2 ]] \
+    && ok am_027 "a migration runs under triage-and-fix; a triage alone is still refused" \
+    || bad am_027 "database guard: triage-and-fix rc=$a (want 0), triage-issues rc=$b (want 2)"
+}
+
+# --- Chatur TF-001: a feedback file was rendered to HTML ----------------------------------
+# The render shell listed "a feedback file" as a human document and the renderer drew it, so
+# the status gate's "every human document this command wrote" left a *-Feedback.html behind
+# that the owner had to ask, more than once, to have deleted. Now it is refused like the
+# checklist; an ordinary document that merely ends in -Feedback.md still renders.
+ch_001() {
+  local d="$SCRATCH/ch001" out rc1 rc2
+  mkdir -p "$d/docs"
+  printf '# TrBlazeUI feedback — found while building Fx\n\n| | |\n|---|---|\n| App | Fx |\n| Upstream | TrBlazeUI |\n| Updated | 2026-09-19 |\n\n## Summary\n\nx\n\n## Entries\n\n### TR-001 — a gap\n\n- **Blocks:** no\n' > "$d/docs/Fx-TrBlazeUI-Feedback.md"
+  printf '# What customers said\n\n## Survey\n\nThey liked it.\n' > "$d/docs/Customer-Feedback.md"
+  out="$(cd "$d" && python3 "$UTILS/tf-render-html.py" --quiet docs/Fx-TrBlazeUI-Feedback.md 2>&1)"; rc1=$?
+  (cd "$d" && python3 "$UTILS/tf-render-html.py" --quiet docs/Customer-Feedback.md >/dev/null 2>&1); rc2=$?
+  [[ $rc1 -eq 2 && ! -f "$d/docs/Fx-TrBlazeUI-Feedback.html" && $rc2 -eq 0 && -f "$d/docs/Customer-Feedback.html" ]] \
+    && ok ch_001 "an upstream feedback file is refused by the renderer; a document merely named *-Feedback.md still renders" \
+    || { bad ch_001 "feedback render: rc=$rc1 (want 2), plain doc rc=$rc2 (want 0)"; note "$(head -1 <<<"$out" | cut -c1-160)"; }
+}
+
 # --- the ignore file that grew by one block per update -----------------------------------
 # `tr -d '\r' < .gitignore | grep -qE …` under `set -o pipefail`: grep -q stops at the first
 # match, tr dies writing the rest, the pipeline reports failure, and the framework block is
@@ -3271,7 +3336,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

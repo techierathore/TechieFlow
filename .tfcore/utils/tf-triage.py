@@ -202,8 +202,12 @@ def main(argv):
             t0 = datetime.datetime.strptime(started, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc).timestamp()
             for top in ("src", "source", "tests"):
                 for d, dirs, files in os.walk(top):
-                    dirs[:] = [x for x in dirs if x not in ("bin", "obj", "node_modules", ".artifacts", "TestResults")]
+                    # a running app's own log files are not code (AppManager TF-026)
+                    dirs[:] = [x for x in dirs if x not in ("bin", "obj", "node_modules", ".artifacts", "TestResults")
+                               and x.lower() not in ("logs", "log")]
                     for f in files:
+                        if f.lower().endswith(".log"):
+                            continue
                         p = os.path.join(d, f)
                         try:
                             if os.path.getmtime(p) > t0:

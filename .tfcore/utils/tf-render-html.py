@@ -12,7 +12,7 @@ Usage:
 Writes a sibling <file>.html for each input. Exit codes:
     0  all rendered
     1  a render failed
-    2  refused (checklist, or missing spec)
+    2  refused (checklist, miss log, feedback file, or missing spec)
 
 Dependency-free by design: Python 3 standard library only. The reference machine
 has no pandoc / python-markdown / node markdown library installed.
@@ -495,6 +495,26 @@ def is_miss_list(base, raw):
     return "Rewritten by `tf-misses-md.sh`" in raw[:2000]
 
 
+FEEDBACK_ENTRY = re.compile(r"^#{2,3}\s+[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+\b", re.M)
+
+
+def is_feedback_file(base, raw):
+    """Is this an upstream feedback file, or an ordinary document about feedback?
+
+    `docs/{App}-{Upstream}-Feedback.md` is read by the upstream's agent and by the
+    maintainer who fixes it, in markdown. Nobody opens an HTML copy; the status gate's
+    "every human document this command wrote" kept producing one anyway, and an owner
+    asked more than once for it to be deleted (Chatur TF-001).
+
+    Identify the document, as the two rules above do: the name must match AND the
+    content must carry the template's `| Upstream |` header row or an entry heading
+    that opens with its id (TF-001, TR-RAG-002). A customer-feedback summary has neither."""
+    if not re.search(r"-Feedback\.md$", base, re.I):
+        return False
+    head = raw[:8000]
+    return bool(re.search(r"^\|\s*Upstream\s*\|", head, re.M) or FEEDBACK_ENTRY.search(raw))
+
+
 NEXT_CMD_H2 = re.compile(r"^##\s+Next command to run\s*$", re.I)
 
 
@@ -560,6 +580,10 @@ def render(md_path, css, head_js, body_js, out_dir=None):
     if is_miss_list(base, raw_probe):
         raise Refused("%s is the derived miss log — it is read in markdown by agents "
                       "and by the owner, and is NEVER rendered to HTML "
+                      "(html-render-shell §0)." % base)
+    if is_feedback_file(base, raw_probe):
+        raise Refused("%s is an upstream feedback file — it is read in markdown by the "
+                      "upstream's agent, and is NEVER rendered to HTML "
                       "(html-render-shell §0)." % base)
 
     raw = raw_probe

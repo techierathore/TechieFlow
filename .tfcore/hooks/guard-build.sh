@@ -59,8 +59,12 @@ if not re.search(BUILD, low):
     sys.exit(0)
 
 bg_flag = bool(ti.get("run_in_background"))
+# A quoted argument is data, not shell: `--screen "Scorecard & Portfolio=/x"` backgrounds nothing
+# (AppManager TF-025). A quoted string that itself names a build stays, so
+# `powershell.exe -Command "dotnet run &"` is still read.
+bare = re.sub(r"\"[^\"]*\"|'[^']*'", lambda m: m.group(0) if re.search(BUILD, m.group(0)) else '""', low)
 # `&` that is not `&&` and not inside `2>&1` / `>&2`
-inline_bg = bool(re.search(r"(?<![&>\d])&(?![&\d])", low)) or bool(re.search(r"\b(nohup|setsid|disown)\b", low))
+inline_bg = bool(re.search(r"(?<![&>\d])&(?![&\d])", bare)) or bool(re.search(r"\b(nohup|setsid|disown)\b", bare))
 if not (bg_flag or inline_bg):
     sys.exit(0)
 
