@@ -61,7 +61,7 @@ A known defect follows from this and is logged as a miss (§8): the verifier tod
 
 For each document: what it is for, the sections a Small app needs, what Medium and Large add, the budget, and the row rules. "Removed" means the section was in the old template and is no longer allowed; existing content in a project is not deleted by anything.
 
-**Budgets are a target and a maximum** (owner, 2026-09-04: a single hard number makes the AI truncate). The checker warns above the target and fails only above the maximum. Word counts exclude code blocks, diagrams and comments. Truncation is stopped by the content rules, not the budget: a document that drops a screen, a field, a requirement or a row to fit fails on those rules first, so the only way to meet a budget is shorter prose. The only fixed numbers are Coding Standards and the checklist Remarks cell.
+**Budgets are a target and a maximum** (owner, 2026-09-04: a single hard number makes the AI truncate). The checker warns above the target and fails only above the maximum. Word counts exclude code blocks, diagrams and comments. Truncation is stopped by the content rules, not the budget: a document that drops a screen, a field, a requirement or a row to fit fails on those rules first, so the only way to meet a budget is shorter prose. A budget holds as many per-screen entries as the size allows screens (10 Small, 20 Medium and per Large phase); each entry past that adds its own per-entry target and maximum, so a DevGuide or UsageGuide of a 54-screen app is never asked to drop screens (2026-09-18, AppManager TF-023). The only fixed numbers are Coding Standards and the checklist Remarks cell.
 
 ### 3.1 BRD — `docs/<App>-BRD.md`
 
@@ -316,7 +316,7 @@ Checks: the eight fields on every live entry; `Blocks:` starting `yes` or `no`, 
 
 ## 4. The checker, as built
 
-`bash .tfcore/utils/tf-doc-check.sh` takes document paths, or `--app <App>` to check every human document of that app plus `PROJECT-STATUS.md`. For each document it finds the template by file name, reads the schema block, and checks:
+`bash .tfcore/utils/tf-doc-check.sh` takes document paths, or `--app <App>` to check every human document of that app plus `PROJECT-STATUS.md`. For each document it finds the template by file name, reads the schema block, and checks. The name's app must be an app of that folder, one with a BRD or checklist beside it, so `docs/AppManager-api-usage-guide.md` next to `docs/AppManager-BRD.md` is skipped as not the framework's (2026-09-18, AppManager TF-024); a folder with neither checks every name. It checks:
 
 1. Header fields present and filled in (Size, Kind where required). A document without a Size falls back to the BRD's header, then to `core-config.yaml`.
 2. Required sections present, in order, no top-level section outside the allowed set. Numbering and trailing qualifiers in headings are ignored, so "## 3. Scope (v2)" still counts as Scope.

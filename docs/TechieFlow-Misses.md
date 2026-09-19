@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 201 logged: 52 open, 148 fixed, 1 will not fix |
+| Count | 203 logged: 52 open, 150 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-09-17 |
+| Updated | 2026-09-18 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -66,10 +66,12 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (148)
+## Fixed (150)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260918-02 | 2026-09-18 by owner | 2026-09-18 by log-miss | the check was too weak | tf-doc-check picked a template from the file name's ending alone, so AppManager's API reference docs/AppManager-api-usage-guide.md was graded as the UsageGuide of an app called AppManager-api and failed 18 times (AppManager TF-024) |
+| MISS-TechieFlow-20260918-01 | 2026-09-18 by owner | 2026-09-18 by log-miss | the framework never said it | the DevGuide word budget held only the size's screen cap of entries (20 for Medium), so a single-phase guide of AppManager's 54 screens failed at 11,861 words although every entry was within its own limit; handoff and productguide still offered an index plus per-role files under docs/devguides/ that |
 | MISS-TechieFlow-20260917-03 | 2026-09-17 by owner | 2026-09-17 by log-miss | said and ignored | the build-list prompt template hardcoded docs/<App>-UsageGuide.md although TF-009 made the readers accept docs/<App>-Usage-Guide.md too, so AppManager's builders were pointed at a guide file that does not exist (AppManager TF-022) |
 | MISS-TechieFlow-20260917-02 | 2026-09-17 by owner | 2026-09-17 by log-miss | the framework never said it | tf-verify-verdict.py --apply rewrote Remarks to the verdict alone, erasing a ⚠ DevGuide defect no verify can see and writing Verified over it on four rows (AppManager TF-021) |
 | MISS-TechieFlow-20260917-01 | 2026-09-17 by owner | 2026-09-17 by log-miss | the framework never said it | tf-build-list.py --prompts in FIX mode gave each builder only the row's title and acceptance line, not the ⚠ defect the row was on the list for, so a builder found the row working and fixed nothing (AppManager TF-020) |

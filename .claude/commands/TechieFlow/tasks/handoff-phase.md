@@ -84,11 +84,11 @@ Invoke `render-workflow-docs {AppName}` as a subtask. Specifically:
 - `docs/{AppName}-Architecture.html` — if implementation revealed "as-built" deltas from "Target", update Architecture.md first, then re-render. Set status to "Current (post-implementation)" or "Current + planned target" as appropriate.
 - `PROJECT-STATUS.html` — always re-render (just updated in §2)
 
-Then re-render the **Usage Guide** (updated in §1) and the **DevGuide** (refreshed in §3a) via `.tfcore/tasks/generate-html.md`: `docs/{AppName}-UsageGuide.md` (+ the DevGuide — `docs/{AppName}-DevGuide.md` if single, or every file under `docs/devguides/` if split) → sibling `.html`. **Do NOT render the checklist to HTML** — it is an AI-agent working document kept in markdown only; its Status table stays accurate in markdown.
+Then re-render the **Usage Guide** (updated in §1) and the **DevGuide** (refreshed in §3a) via `.tfcore/tasks/generate-html.md`: `docs/{AppName}-UsageGuide.md` (+ `docs/{AppName}-DevGuide.md`) → sibling `.html`. **Do NOT render the checklist to HTML** — it is an AI-agent working document kept in markdown only; its Status table stays accurate in markdown.
 
 ### 3a. Refresh the Developer Guide
 
-Run `.tfcore/tasks/devguide.md` for `{AppName}` (`*devguide {AppName}`) so the screen-by-screen code map reflects the final as-built code — this is the doc a human developer uses to chase bugs and verify the AI-generated code from page → control → service → data-access → stored proc. If a DevGuide already exists, an incremental `--update` is enough (remap only changed screens). It produces `docs/{AppName}-DevGuide.md` (single) — or, for a large app, an index + per-role files under `docs/devguides/` — and their `.html`; §3 above already lists them in the re-render set.
+Run `.tfcore/tasks/devguide.md` for `{AppName}` (`*devguide {AppName}`) so the screen-by-screen code map reflects the final as-built code — this is the doc a human developer uses to chase bugs and verify the AI-generated code from page → control → service → data-access → stored proc. If a DevGuide already exists, an incremental `--update` is enough (remap only changed screens). It produces `docs/{AppName}-DevGuide.md`, one file at any size, and its `.html`; §3 above already lists them in the re-render set.
 
 ### 4. Consolidate the per-library feedback files
 

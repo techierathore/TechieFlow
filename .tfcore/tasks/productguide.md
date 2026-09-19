@@ -26,7 +26,7 @@ The Product Guide documents the real running app. If the repo is doc-only / not 
 ### 2. Gather the screen inventory + screenshots (reuse, don't reinvent)
 
 The DevGuide already did the hard discovery work — reuse it:
-- Read the **DevGuide** (`docs/{AppName}-DevGuide.md`, or the split set under `docs/devguides/`) for the role→menu map, the screen list, the real post-login landing per role (LANDING-TRUTH), and each screen's purpose.
+- Read the **DevGuide** (`docs/{AppName}-DevGuide.md`) for the role→menu map, the screen list, the real post-login landing per role (LANDING-TRUTH), and each screen's purpose.
 - Use the **screenshots** the DevGuide's OBSERVE pass captured under `docs/screenshots/{AppName}/` (`{role}-{screen-slug}.png`, + `-mobile` where present). These are the images the guide embeds.
 - Read the **BRD** §9 feature catalog (feature purpose/benefit, personas) and the **UsageGuide** (user flows + known limitations) for the plain-language "what it's for" and "tips".
 
@@ -34,7 +34,7 @@ The DevGuide already did the hard discovery work — reuse it:
 
 ### 3. Decide structure — single doc vs per-role split
 
-Same rule as devguide §3: **split per role** when `roles ≥ 3` OR `screens > 12` OR any role has `> 8` screens; else single. Honor `--single`/`--split`. A split guide lives in `docs/productguides/` (index + per-role files co-located, so relative links resolve); a single guide is `docs/{AppName}-ProductGuide.md`. On a structure switch (single↔split), move/delete the stale-location copy so only one canonical copy survives.
+**Split per role** when `roles ≥ 3` OR `screens > 12` OR any role has `> 8` screens; else single. Honor `--single`/`--split`. A split guide lives in `docs/productguides/` (index + per-role files co-located, so relative links resolve); a single guide is `docs/{AppName}-ProductGuide.md`. On a structure switch (single↔split), move/delete the stale-location copy so only one canonical copy survives.
 
 ### 4. Write the guide — END-USER voice, screenshot per screen (FAN OUT per role)
 

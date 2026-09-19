@@ -76,6 +76,7 @@ BRD_RANGE = re.compile(r"(?:BRD-)?(\d+)\s*(?:to|-|–|—)\s*(?:BRD-)?(\d+)", re
 SIZE_NAMES = {"s": "S", "small": "S", "m": "M", "medium": "M", "l": "L", "large": "L"}
 SIZE_LONG = {"S": "Small", "M": "Medium", "L": "Large"}
 REQ_CAP = {"S": 50, "M": 100, "L": 100}
+SCREEN_CAP = {"S": 10, "M": 20, "L": 20}   # Large: per phase
 
 CHECKLIST_HEADER = "| ID | Requirement | Status | % | Remarks | Details |"
 STATUS_VALUES = {
@@ -344,6 +345,17 @@ def split_name(path: str):
     return m.group(1), int(m.group(2) or 1)
 
 
+def foreign_prefix(path: str):
+    """The name's app when it is not an app of its folder: docs/AppManager-api-usage-guide.md beside
+    docs/AppManager-BRD.md is an API reference, not a UsageGuide (AppManager TF-024). A folder
+    holding no BRD or checklist anchors nothing, so a lone document is checked by its name."""
+    app, _ = split_name(path)
+    folder = os.path.dirname(os.path.abspath(path))
+    apps = {m.group(1).lower() for m in (re.match(r"(.+?)-(BRD|Checklist)\.md$", f, re.I) for f in os.listdir(folder))
+            if m and not re.search(r"-P\d+$|-Deployment$", m.group(1), re.I)}
+    return app if app and apps and app.lower() not in apps else None
+
+
 def phase_file(app: str, phase: int, suffix: str) -> str:
     return f"{app}-{suffix}.md" if phase <= 1 else f"{app}-P{phase}-{suffix}.md"
 
@@ -391,6 +403,10 @@ def check_document(path: str, rep: Report, cli_size=None, root=None):
     doc, tmpl = detect_kind(path)
     if not doc:
         rep.warn(path, "not a TechieFlow document name; skipped")
+        return None
+    foreign = foreign_prefix(path)
+    if foreign:
+        rep.warn(os.path.relpath(path, root or find_root(path)), f'"{foreign}" is not an app here (no {foreign}-BRD.md or -Checklist.md beside it); not a TechieFlow document, skipped')
         return None
     try:
         schema = load_schema(tmpl)
@@ -477,10 +493,18 @@ def check_document(path: str, rep: Report, cli_size=None, root=None):
     total = word_count(body)
     if size in schema.budget:
         target, mx = schema.budget[size]
+        # The budget holds the size's screen cap of entries. Each entry past it brings its own
+        # per-entry target and maximum, which already bound it (AppManager TF-023: 54 screens).
+        extra, why = 0, ""
+        if schema.entries and schema.per_entry:
+            sec = section_text(present, schema.entries[0]) or ""
+            extra = max(0, sum(1 for h, _t in split_sections(sec, 3) if h) - SCREEN_CAP[size])
+            target, mx = target + extra * schema.per_entry[0], mx + extra * schema.per_entry[1]
+            why = f", with {extra} entries past the cap of {SCREEN_CAP[size]}" if extra else ""
         if total > mx:
-            rep.fail(rel, f"{total:,} words; the {SIZE_LONG[size]} maximum is {mx:,} (target {target:,}). Shorten prose; never drop a screen, field or requirement to fit")
+            rep.fail(rel, f"{total:,} words; the {SIZE_LONG[size]} maximum is {mx:,} (target {target:,}{why}). Shorten prose; never drop a screen, field or requirement to fit")
         elif total > target:
-            rep.warn(rel, f"{total:,} words; the {SIZE_LONG[size]} target is {target:,} (maximum {mx:,})")
+            rep.warn(rel, f"{total:,} words; the {SIZE_LONG[size]} target is {target:,} (maximum {mx:,}{why})")
     for key, h, txt in present:
         d = schema.declared(key)
         if d and d[2]:

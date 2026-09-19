@@ -4,13 +4,16 @@
 |---|---|
 | App | AppManager |
 | Upstream | TechieFlow |
-| Updated | 2026-09-17 |
+| Updated | 2026-09-18 |
 
 ## Summary
 
-22 entries: 0 blocking now, 0 open, 1 fixed upstream and waiting to be re-checked here (TF-022, fixed 2026-09-17), 21 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-014 on 2026-09-14, TF-015 and TF-016 on 2026-09-16, TF-017 to TF-021 on 2026-09-17.
+- 0 blockers, 7 majors, 17 minors, 0 nice-to-haves
+- Last consolidated: 2026-09-18
 
-Nothing is blocked. TF-022 is fixed upstream: the builder prompt names the usage guide that exists. TF-020 is closed: a fix prompt carries each row's defect. TF-021 is closed: a verify keeps a defect it cannot see and sends the row to a fix. TF-017 is closed: a roadmap row is left off the build list. TF-018 is closed: a not-applicable row is counted apart, never as verified. TF-019 is closed: rows carrying a defect mark name `*build-phase`, not a verify.
+24 entries: 0 blocking now, 0 open, 1 fixed upstream and waiting to be re-checked here (TF-024, fixed 2026-09-18), 23 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-014 on 2026-09-14, TF-015 and TF-016 on 2026-09-16, TF-017 to TF-022 on 2026-09-17, TF-023 on 2026-09-18.
+
+Nothing is blocked. TF-024 is fixed upstream: the API reference is no longer graded as the usage guide. TF-023 is closed: a DevGuide's word limit grows with each screen past 20, so the guide is one file again. TF-022 is closed: the builder prompt names the usage guide that exists. TF-020 is closed: a fix prompt carries each row's defect. TF-021 is closed: a verify keeps a defect it cannot see and sends the row to a fix. TF-017 is closed: a roadmap row is left off the build list. TF-018 is closed: a not-applicable row is counted apart, never as verified. TF-019 is closed: rows carrying a defect mark name `*build-phase`, not a verify.
 
 ## Entries
 
@@ -313,6 +316,8 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 
 ### TF-022 — the build-list prompt names `docs/AppManager-UsageGuide.md`, but this project's guide is `docs/AppManager-Usage-Guide.md`
 
+> ✅ **Closed 2026-09-17** — re-checked here: Re-checked 2026-09-17. Ran bash .tfcore/utils/tf-build-list.sh AppManager --prompts: 'Mode: FIX — 1 row(s) to build; 88 terminal, 0 Blocked, 0 roadmap, 89 total — REQ-NFR-009'. Standing rule 2 of the cluster prompt now reads '…the data must show and nothing may overlap; use a test user from `docs/AppManager-Usage-Guide.md`, never an invented one.', the file that exists in this repository.
+
 - **Severity:** minor
 - **Blocks:** no — the builder is told the right path next to the prompt.
 - **Repro:** in a project whose guide is `docs/{App}-Usage-Guide.md` (the hyphenated name the doc checker accepts), run `bash .tfcore/utils/tf-build-list.sh AppManager --prompts`.
@@ -322,9 +327,69 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 - **Workaround:** each builder is given the real path and the two test users alongside the unchanged prompt.
 - **Suggested fix:** resolve the guide path the way `tf-devguide-list.py` does, and print the one that exists.
 
+### TF-023 — a DevGuide for an app with 50+ screens cannot fit the 10,000-word budget, and the split the task allows has no schema
+
+> ✅ **Closed 2026-09-18** — re-checked here: Re-checked 2026-09-18. Moved the 42 screen entries from the four docs/devguides/*-DevGuide.md files back into the Screen-by-screen code map of docs/AppManager-DevGuide.md in their original order, changed their '](../screenshots/' links back to '](screenshots/', and deleted docs/devguides/. The merged guide holds all 51 screens (none lost, none duplicated) and 11,877 words. bash .tfcore/utils/tf-render-html.sh docs/AppManager-DevGuide.md rendered 196.0 KB, 5 H2, 1 diagram. bash .tfcore/utils/tf-doc-check.sh docs/AppManager-DevGuide.md now prints 'OK docs/AppManager-DevGuide.md' and '0 FAIL, 0 WARN in 1 document(s)', where before the fix it read 'FAIL … 11,823 words; the Medium maximum is 10,000'.
+
+- **Severity:** minor
+- **Blocks:** no — the guide was split into a main file plus four part files, and all five pass the checker.
+- **Repro:** refresh the DevGuide for an app with 54 screens, then run `bash .tfcore/utils/tf-doc-check.sh docs/AppManager-DevGuide.md`.
+- **Expected:** a guide keeping exactly what the schema demands per screen fits its budget, or the schema names the structure to use instead.
+- **Actual:** `FAIL … 11,823 words; the Medium maximum is 10,000`. Four separate passes measured the mandated content per entry — screenshot, `Seen` line, every call-chain step, one table row per step — at 140 to 240 words, so 54 screens need about 10,000 words before any prose. Large has the same cap.
+- **Also:** `devguide.md` step 1 allows "an index + per-role files under `docs/devguides/`" for a large app, but `tf-doc-check.py` has no schema for it: every `*-DevGuide.md` is checked as a whole guide, so each part must repeat the four shared sections to pass.
+- **Encountered in:** `*handoff-phase AppManager`, DevGuide step, on 2026-09-17.
+- **Workaround:** split into the main guide (shared sections, 12 screens, links) plus four part files under `docs/devguides/`, each with its screens and a pointer for the shared sections. All five pass and render.
+- **Suggested fix:** scale the budget with the entry count (say 7,000 plus 180 a screen), or give the split a schema: a part names its parent, keeps only the screen map, and is budgeted per file.
+
+### TF-024 — the checker reads any `*-usage-guide.md` as the project's UsageGuide, so an API reference can never pass
+
+- **Severity:** minor
+- **Blocks:** no — the document is complete and correct; only the checker judges it by the wrong template.
+- **Repro:** `bash .tfcore/utils/tf-doc-check.sh docs/AppManager-api-usage-guide.md` (an external API reference for child applications; the project's real UsageGuide is `docs/AppManager-Usage-Guide.md` and passes).
+- **Expected:** a document the framework does not own is left alone, or is matched by something narrower than its file name.
+- **Actual:** 18 FAILs. `DOC_NAME` in `tf-doc-check.py:70` matches `Usage-Guide|UsageGuide` case-insensitively against the whole basename, so `AppManager-api-usage-guide.md` is read as the UsageGuide of an app called "AppManager-api". It then demands "Test users", "Execution guide", "How to test, screen by screen", "Automated tests" and "Known limitations", refuses the API sections as "not in the template", and caps a 10,557-word API reference at 6,000.
+- **Encountered in:** `*handoff-phase AppManager`, after updating the API guide to v1.5, on 2026-09-18.
+- **Workaround:** the file is excluded from the gate's check list and named in the report. Renaming it would break the links in the BRD, the Architecture and four other documents.
+- **Suggested fix:** anchor the name match to the app (`{App}-Usage-Guide.md` exactly), or let a document opt out with a one-line marker the checker honours.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### TF-024 — fixed 2026-09-18
+
+- **Fix.** The checker now takes a name's app only when that app has a BRD or checklist in the same
+  folder. `AppManager-api-usage-guide.md` sits beside `AppManager-BRD.md` and there is no
+  `AppManager-api-BRD.md`, so it is named as not the framework's and skipped, with no marker to add and
+  nothing renamed. A folder with no BRD or checklist still checks every name, as before. Case `am_024`;
+  miss `MISS-TechieFlow-20260918-02`. Deployed here.
+- **Proof.** Here, old: 18 FAILs on the API guide; new: `WARN … "AppManager-api" is not an app here …
+  skipped`, while `AppManager-Usage-Guide.md` beside it is still checked. On every document of the 19
+  projects, the only files that change are seven the framework does not own: five copies of this API
+  guide, SpinSins's setup guide, and an old coding-standards copy under `docs/OldDocs/`. DataStudio has
+  no BRD yet, so its copy is still graded until it has one.
+- **Verify from here.** `bash .tfcore/utils/tf-doc-check.sh docs/AppManager-api-usage-guide.md`: 0 FAIL,
+  the skip line. Put the file back in the gate's check list, then
+  `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-024 "<what you ran and what it showed>"`.
+
+### TF-023 — fixed 2026-09-18
+
+- **Fix.** The limit was written for 20 screens, the Medium cap, so it could never hold 54. Now each
+  screen past the cap (10 Small, 20 Medium and per Large phase) adds its own per-screen limits, 300
+  target and 450 maximum, to the guide's; the rest of the guide is held to the old figures. The same
+  applies to the UsageGuide. The split is withdrawn, not given a schema: the DevGuide is one file at
+  any size, and the "index + per-role files under `docs/devguides/`" wording is gone from handoff and
+  productguide (it was never in `devguide.md`). Case `am_023`; miss `MISS-TechieFlow-20260918-01`.
+  Deployed here.
+- **Proof.** Your five files merged back into one guide of 54 screens, on a copy: old
+  `FAIL … 11,861 words; the Medium maximum is 10,000`; new `OK`. On every other guide on this machine
+  the checker reads the same, except AppStudio, whose 17-screen Small guide still fails, now against
+  the higher limit.
+- **Verify from here.** Paste into your agent: "Move the screen entries from every
+  `docs/devguides/*-DevGuide.md` into the Screen-by-screen code map of `docs/AppManager-DevGuide.md`,
+  change their `../` links to match, delete `docs/devguides/`, re-render the guide, and run
+  `bash .tfcore/utils/tf-doc-check.sh docs/AppManager-DevGuide.md`." It reads `OK`. Then
+  `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-023 "<what you ran and what it showed>"`.
 
 ### TF-022 — fixed 2026-09-17
 

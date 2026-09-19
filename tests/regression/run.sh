@@ -3215,6 +3215,47 @@ MD
     || { bad am_022 "the builder prompt names a usage guide file that does not exist"; note "$(grep -o 'use a test user from [^,]*' <<<"$out")"; }
 }
 
+# --- AppManager TF-023: the DevGuide budget held 20 screens -------------------------------
+# 54 screens at 140 to 240 words each could not fit the Medium 10,000 whatever the prose did.
+# Case: 30 entries of ~360 words (11,000 total) passes; 20 entries plus 3,000 words of prose
+# (same total) still fails, so the budget still binds the prose.
+am_023() {
+  local d="$SCRATCH/am023" out1 out2
+  mkdir -p "$d/docs" "$d/.tfcore"
+  printf 'appSize: M\n' > "$d/.tfcore/core-config.yaml"
+  python3 - "$d/docs" <<'PY'
+import sys
+w = lambda n: " ".join(["word"] * n)
+def guide(n, prose):
+    head = "# Fx — DevGuide\n\n| | |\n|---|---|\n| App | Fx |\n| Kind | app |\n| Size | Medium |\n| Verified on | 2026-09-18 |\n| Date | 2026-09-18 |\n\n"
+    body = "## Architecture cheat-sheet\n\nx\n\n## Roles and menu map\n\nx\n\n## Screen-by-screen code map\n\n"
+    body += "".join(f"### Screen {i}\n\n{w(360)}\n\n" for i in range(n))
+    return head + body + f"## Cross-cutting flows\n\n{w(prose)}\n\n## Known issues\n\nnone\n"
+open(sys.argv[1] + "/Fx-DevGuide.md", "w").write(guide(30, 100))
+open(sys.argv[1] + "/Gx-DevGuide.md", "w").write(guide(20, 3700).replace("Fx", "Gx"))
+PY
+  out1="$(cd "$d" && python3 "$UTILS/tf-doc-check.py" docs/Fx-DevGuide.md 2>&1)"
+  out2="$(cd "$d" && python3 "$UTILS/tf-doc-check.py" docs/Gx-DevGuide.md 2>&1)"
+  ! grep -q 'words; the Medium maximum' <<<"$out1" && grep -q 'words; the Medium maximum is 10,000' <<<"$out2" \
+    && ok am_023 "a DevGuide past 20 screens gets each extra screen's limits; the prose budget still binds" \
+    || { bad am_023 "the DevGuide budget does not grow with screens past the size's cap"; note "$(grep 'words;' <<<"$out1$out2" | head -2)"; }
+}
+
+# --- AppManager TF-024: an API reference named *-usage-guide.md was graded as the UsageGuide --
+# The name match read "AppManager-api" as an app. Now the name's app must have a BRD or checklist
+# beside it; the real guide beside it is still checked.
+am_024() {
+  local d="$SCRATCH/am024" out
+  mkdir -p "$d/docs" "$d/.tfcore"
+  printf '# Fx — BRD\n' > "$d/docs/Fx-BRD.md"
+  printf '# Fx API\n\n## 1. Quick Start\n\nCall it.\n' > "$d/docs/Fx-api-usage-guide.md"
+  printf '# Fx — Usage Guide\n\n## Quick Start\n\nx\n' > "$d/docs/Fx-Usage-Guide.md"
+  out="$(cd "$d" && python3 "$UTILS/tf-doc-check.py" docs/Fx-api-usage-guide.md docs/Fx-Usage-Guide.md 2>&1)"
+  ! grep -q '^FAIL docs/Fx-api-usage-guide.md' <<<"$out" && grep -q 'not an app here' <<<"$out" && grep -q '^FAIL docs/Fx-Usage-Guide.md' <<<"$out" \
+    && ok am_024 "a document whose name's app has no BRD or checklist is skipped; the real guide is still checked" \
+    || { bad am_024 "an API reference named like a UsageGuide is graded as one"; note "$(grep -m2 'api-usage' <<<"$out")"; }
+}
+
 # --- the ignore file that grew by one block per update -----------------------------------
 # `tr -d '\r' < .gitignore | grep -qE …` under `set -o pipefail`: grep -q stops at the first
 # match, tr dies writing the rest, the pipeline reports failure, and the framework block is
@@ -3230,7 +3271,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

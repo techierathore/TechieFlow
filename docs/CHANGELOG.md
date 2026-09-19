@@ -8,6 +8,28 @@
 
 ---
 
+## 2026-09-18, later — AppManager's TF-024
+
+`tf-doc-check.py` chose a template from the file name's ending, so `docs/AppManager-api-usage-guide.md`
+(an API reference) was graded as the UsageGuide of an app "AppManager-api": 18 FAILs. New
+`foreign_prefix()`: the name's app must have a `-BRD.md` or `-Checklist.md` in the same folder, or the
+file is skipped with a WARN naming why; a folder with neither checks every name as before (fixtures,
+lone documents). No opt-out marker, so no document can hide from the checker by a comment. Across all
+19 projects only seven files change, none the framework's own. Case `am_024`; miss
+`MISS-TechieFlow-20260918-02` (`weak-check`). Deployed to all 19. Suites: regression, doc-check pass.
+
+## 2026-09-18 — AppManager's TF-023
+
+The DevGuide budget (Medium 7,000/10,000) was sized for 20 screens at 300/450 each, so AppManager's
+54-screen guide failed at 11,861 words with every entry inside its own limit. `tf-doc-check.py` now
+adds each entry's per-entry target and maximum for every entry past the size's screen cap
+(`SCREEN_CAP`: 10, 20, 20 per phase); only DevGuide and UsageGuide carry both a budget and per-entry
+limits. The per-role split under `docs/devguides/` was never checkable and is withdrawn from
+`handoff-phase.md` and `productguide.md` rather than given a schema. Case `am_023`; miss
+`MISS-TechieFlow-20260918-01` (`unsaid`); no new FR line. Deployed to all 19. Across every guide on
+the machine only AppStudio's message changes (a 17-screen Small guide, still failing). OpenCode not
+run: no model reachable from this machine that day.
+
 ## 2026-09-17, afternoon — AppManager's TF-022
 
 The builder prompt template hardcoded `docs/<App>-UsageGuide.md`; AppManager's guide is
