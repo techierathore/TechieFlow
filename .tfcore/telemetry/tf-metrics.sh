@@ -375,6 +375,11 @@ def analyse_misses(misses):
 
     Raw counts and the miss-class distribution ARE poolable: a miss counts as a miss
     whoever missed it; only its attribution is confidence-bounded."""
+    # a miss withdrawn by a miss-void leaves every figure, with its fixes and amends (§5.5.11)
+    voids = {m.get("miss_id"): m for m in misses if m.get("kind") == "miss-void"}
+    ids = {m.get("miss_id") for m in misses if m.get("kind") == "miss"}
+    voided = ["%s — %s" % (k, v.get("reason") or "no reason recorded") for k, v in voids.items() if k in ids]
+    misses = [m for m in misses if m.get("miss_id") not in voids or m.get("kind") == "review"]
     opened = [m for m in misses if m.get("kind") == "miss" and not m.get("backfilled")]
     fixes = [m for m in misses if m.get("kind") == "miss-fix" and not m.get("backfilled")]
     amends = [m for m in misses if m.get("kind") == "miss-amend"]
@@ -566,6 +571,9 @@ def analyse_misses(misses):
         "resolved_misses": len(resolved),
         "amendments_applied": amended,
         "orphan_amends": orphan_amends,
+        "misses_voided_n": len(voided),
+        "misses_voided": voided,
+        "miss_voids_orphaned_n": len(voids) - len(voided),
         # Denominator is records that CARRY the field — why_missed is optional (§5.5.6)
         # and a missing value means "not assessed", never a zero for some category —
         # AND records that COULD have carried it: one written before 2026-08-28 had no
@@ -1266,8 +1274,8 @@ def analyse(repos):
                          "project_type": project_type(repo)[0],
                          "gates": len(g), "gates_backfilled": sum(1 for x in g if x.get("backfilled")),
                          "runs": len(r), "sessions": len(s), "commits": len(c),
-                         "misses": sum(1 for x in read_stream(repo, "misses")
-                                       if x.get("kind") == "miss"),
+                         "misses": sum(1 for x in repo_misses if x.get("kind") == "miss" and x.get("miss_id") not in
+                                       {v.get("miss_id") for v in repo_misses if v.get("kind") == "miss-void"}),
                          # A repo reclassified after records were written (most often a
                          # greenfield project born `docs` and upgraded once it grew a head)
                          # keeps the OLD value on every existing record — append-only means
@@ -1795,6 +1803,15 @@ def print_misses(m, W):
         print("     tokens to apply the corrections       : %s (n=%d)"
               % (m["review_tokens_correct_mean"] if m["review_tokens_correct_mean"] is not None
                  else "insufficient data", m["review_tokens_correct_n"]))
+    if m.get("misses_voided_n"):
+        print("  withdrawn           : %d miss(es) named by a miss-void, in no figure above:" % m["misses_voided_n"])
+        for line in m["misses_voided"][:6]:
+            print("     " + line)
+        if m["misses_voided_n"] > 6:
+            print("     ... and %d more" % (m["misses_voided_n"] - 6))
+    if m.get("miss_voids_orphaned_n"):
+        print("     ⚠ %d miss-void record(s) name no miss on this stream — nothing was excluded for them"
+              % m["miss_voids_orphaned_n"])
     if m["orphan_amends"]:
         print("     ⚠ %d miss-amend record(s) name no known miss, or a field outside the"
               % m["orphan_amends"])

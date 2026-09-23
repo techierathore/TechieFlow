@@ -659,6 +659,10 @@ The stream is for scripts. The owner reads `docs/<App>-Misses.md`: one row per `
 
 `tf-emit.sh` rebuilds the file and its HTML through `tf-misses-md.py` after **every** write to the misses stream, whichever door wrote it (log-miss, triage, fix-close, a hand-written record, an amend), so the file is never older than the record. It is **derived**: nothing reads it, nobody edits it, and a wrong row is corrected by a new record. A project whose stream predates the script gets the file by running `bash .tfcore/utils/tf-misses-md.sh` once. The check for FR-31 is in `tests/bugs/run.sh`: the row count equals the record count.
 
+### 5.5.11 `kind: "miss-void"` — withdrawing a miss that should never have been written (added 2026-09-22, TrBlazeUI TF-001)
+
+§2.7's `run-void`, for this stream. Fields: `miss_id` (the miss withdrawn) and `reason`. Written only by `bash .tfcore/utils/tf-emit.sh --void-miss <miss_id> "<reason>"`, which refuses a miss not on the stream, a second void and an empty reason. Readers: the miss leaves every figure with its fixes and amends (`misses_voided_n`, `misses_voided`; an orphan is `miss_voids_orphaned_n`), `--open-miss` and `--open-misses` skip it, and `docs/<App>-Misses.md` lists it under *Withdrawn*. Proved by `tests/regression/run.sh tb_001`.
+
 ## 6. Provenance — three separations, one rule applied three times
 
 **Data from different provenances never merges.**

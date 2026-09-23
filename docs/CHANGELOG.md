@@ -8,6 +8,19 @@
 
 ---
 
+## 2026-09-22 — TrBlazeUI's TF-001
+
+`tf-triage.py close` wrote every action in `triage.json` ever taken, so each close logged earlier runs'
+bugs again: 13 false escaped checks and 5 misses on 2026-09-19, one more of each on 2026-09-22. Close now
+skips actions older than `--started`, prints how many, and empties the list once written (a refused
+record waits for the next close of the same run). New `tf-emit.sh --void-miss <miss_id> "<reason>"`
+writes a `miss-void` (SCHEMA §5.5.11), `run-void`'s answer for misses; `tf-metrics.sh`, `--open-miss`,
+`--open-misses` and `tf-misses-md.py` honour it. Case `tb_001`, failing on TrBlazeUI's deployed copy and
+passing now; `replies_complete` reads TrBlazeUI's numbering from `tb_` cases. Deployed to all 20; the six
+false TrBlazeUI misses withdrawn; reply written in TrBlazeUI's file and copied here. The 14 false check
+records stay: no `gate-void` exists. Miss `MISS-TechieFlow-20260922-01`. Suites: regression, mirror pass;
+bugs unchanged at its 3 known failures. OpenCode not run.
+
 ## 2026-09-19, later — AppManager's TF-025 to TF-027
 
 Three hook and script slips from AppManager's first `*triage-and-fix`. **TF-025**: `guard-build.sh` read

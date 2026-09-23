@@ -23,7 +23,8 @@ close   what triage owes the telemetry, from the actions above (tests/.artifacts
         spec for a new row, which the spec never had) (duplicates collapsed through
         tf-emit.sh --open-miss; the origin run looked up with --origin-of), then the run record. It also
         lists every file under src/, source/ or tests/ changed since the start: a triage that edited code
-        is reported and logged as an instruction-ignored miss (FR-28).
+        is reported and logged as an instruction-ignored miss (FR-28). Only actions logged since the start
+        count, and a close empties the list (TrBlazeUI TF-001).
 Exit 0 · 2 could not run.
 """
 import datetime
@@ -214,8 +215,13 @@ def main(argv):
                                 changed.append(p.replace("\\", "/"))
                         except OSError:
                             pass
-        acts = [a for a in log.get("actions", []) if a["verb"] in ("demote", "new")]
+        # only this triage's actions: an earlier run's leftovers were logged again under today's run (TrBlazeUI TF-001)
+        stale = [a for a in log.get("actions", []) if started and (a.get("ts") or "") < started]
+        if stale:
+            print(f"  skipped {len(stale)} action(s) from before {started} — an earlier triage's, already closed or abandoned")
+        acts = [a for a in log.get("actions", []) if a["verb"] in ("demote", "new") and a not in stale]
         gates = misses = 0
+        failed = []
         for a in acts:
             rid = a["req_id"]; cls_req = rid.split("-")[1]
             att = q("--next-attempt", rid) or "1"
@@ -225,7 +231,9 @@ def main(argv):
                    "gate": "escaped", "gates_run": [], "failure_class": fc, "prior_verdict": a.get("prior")}
             if emit("gates", rec):
                 gates += 1
-            mc = ("unspecified-gap" if a["verb"] == "new" else "regression" if (a.get("prior") or "").lower().startswith("verified") else "wrong-behaviour")
+            else:
+                failed.append(a)
+            mc =("unspecified-gap" if a["verb"] == "new" else "regression" if (a.get("prior") or "").lower().startswith("verified") else "wrong-behaviour")
             opened = q("--open-miss", rid)
             if opened and opened.split()[-1] == mc:
                 print(f"  {rid}: already open as {opened.split()[0]} ({mc}); no second miss")
@@ -243,9 +251,11 @@ def main(argv):
             if emit("misses", m):
                 misses += 1
                 a["miss_id"] = mid
-        if changed and cmd == "triage-issues" and not log.get("code_miss_id"):
+            elif a not in failed:
+                failed.append(a)
+        if changed and cmd == "triage-issues" and log.get("code_miss_run") != started:
             mid = q("--next-miss-id")
-            log["code_miss_id"] = mid
+            log["code_miss_id"] = mid; log["code_miss_run"] = started
             emit("misses", {"kind": "miss", "miss_id": mid, "req_id": None, "req_class": None, "miss_class": "other", "artifact": "src",
                             "severity": "major", "why_missed": "instruction-ignored", "origin_phase": "triage-issues", "origin_agent": "flow-master",
                             "found_by": "gate", "found_phase": "triage-issues", "found_gate": None, "found_run_id": started, "failure_class": "other",
@@ -265,6 +275,7 @@ def main(argv):
         else:
             ok = None
         log["closed"] = now
+        log["actions"] = failed          # a closed action is never closed again; one whose record was refused waits for the next close
         log_save(log)
         print(f"triage: {len(acts)} row(s) logged — {gates} gate record(s) (escaped), {misses} miss(es)"
               + (f", run record {'written' if ok else 'not written'}" if ok is not None else "") + f"; code untouched: {'yes' if not changed else 'NO'}")

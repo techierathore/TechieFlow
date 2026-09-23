@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 208 logged: 52 open, 155 fixed, 1 will not fix |
+| Count | 209 logged: 52 open, 156 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-09-19 |
+| Updated | 2026-09-22 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -66,10 +66,11 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (155)
+## Fixed (156)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260922-01 | 2026-09-22 by owner | 2026-09-22 by log-miss | the check was too weak | triage close re-logged every earlier run's actions under the current run (TrBlazeUI TF-001: 14 false escaped checks, 6 false misses), and no record could withdraw a wrong miss |
 | MISS-TechieFlow-20260919-05 | 2026-09-19 by owner | 2026-09-19 by log-miss | the framework never said it | The database guard allowed migrations only under build-phase and fix-issues, so triage-and-fix step 3, which runs the fix-issues steps, could not apply a migration (AppManager TF-027). |
 | MISS-TechieFlow-20260919-04 | 2026-09-19 by owner | 2026-09-19 by log-miss | the check was too weak | Triage close counted the running app's own log files under src as code changes and reported code untouched NO (AppManager TF-026). |
 | MISS-TechieFlow-20260919-03 | 2026-09-19 by owner | 2026-09-19 by log-miss | the check was too weak | The YOLO background guard read an & inside a quoted screen name as a background job and refused a foreground mockup-parity run (AppManager TF-025). |

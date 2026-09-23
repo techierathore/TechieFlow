@@ -23,6 +23,8 @@
 #                                               # marks a WRONG run record as not to be counted: both
 #                                               # records stay, every figure skips it and says how many
 #                                               # and why (SCHEMA.md §2.7). Refuses if no such run.
+#   tf-emit.sh --void-miss MISS-App-20260919-01 "logged again from an earlier triage's leftovers"
+#                                               # the same for a WRONG miss (SCHEMA.md §5.5.11)
 #   tf-emit.sh --origin-of REQ-UI-014           # prints "<started> <cmd> <agent>" of the last build or fix
 #                                               # run that touched the row, nothing when there is none
 #   tf-emit.sh --where                          # prints the resolved docs/metrics dir
@@ -292,7 +294,7 @@ if [[ "$1" == "--open-misses" ]]; then
 import json, os, sys
 DOC = {"brd", "architecture", "uidesign", "checklist", "devguide"}
 app, klass = os.environ.get("TF_OMAPP") or "", os.environ.get("TF_OMCLASS") or ""
-opened, fixes = [], {}
+opened, fixes, voided = [], {}, set()
 try:
     with open(sys.argv[1], encoding="utf-8") as fh:
         for line in fh:
@@ -305,6 +307,8 @@ try:
                 continue
             if r.get("kind") == "miss":
                 opened.append(r)
+            elif r.get("kind") == "miss-void":
+                voided.add(r.get("miss_id"))
             elif r.get("kind") == "miss-fix":
                 mid = r.get("miss_id")
                 if mid:
@@ -314,6 +318,8 @@ try:
 except FileNotFoundError:
     pass
 for r in opened:
+    if r.get("miss_id") in voided:
+        continue
     if app and r.get("app") and r.get("app") != app:
         continue
     art = r.get("artifact") or ""
@@ -335,7 +341,7 @@ if [[ "$1" == "--open-miss" ]]; then
   python3 - "$MET_DIR/misses.jsonl" "$REQ" 2>"$TF_ERR" <<'PY' || true
 import json, sys
 path, req = sys.argv[1], sys.argv[2]
-opened, fixes = [], {}
+opened, fixes, voided = [], {}, set()
 try:
     with open(path, encoding="utf-8") as fh:
         for line in fh:
@@ -348,6 +354,8 @@ try:
                 continue
             if r.get("kind") == "miss" and r.get("req_id") == req:
                 opened.append(r)
+            elif r.get("kind") == "miss-void":
+                voided.add(r.get("miss_id"))
             elif r.get("kind") == "miss-fix":
                 mid = r.get("miss_id")
                 if mid:
@@ -357,6 +365,8 @@ try:
 except FileNotFoundError:
     pass
 for r in reversed(opened):                     # most recent first
+    if r.get("miss_id") in voided:
+        continue
     fix = fixes.get(r.get("miss_id"))
     if fix is None or fix.get("verdict_after") != "Verified":
         print("%s %s" % (r.get("miss_id"), r.get("miss_class") or "other"))
@@ -454,6 +464,45 @@ PY
             echo "tf-emit: amended $AMID — $AFLD = $AVAL" ;;
     "REFUSED "*) echo "tf-emit: amend refused — ${AREC#REFUSED }" ;;
     *) echo "tf-emit: amend could not be evaluated — nothing written" ;;
+  esac
+  exit 0
+fi
+
+# --- write helper: withdraw a miss that should never have been written -----
+# SCHEMA.md §5.5.11 — --void-run's answer for the misses stream (TrBlazeUI TF-001).
+if [[ "$1" == "--void-miss" ]]; then
+  VMID="$2"; VWHY="$3"
+  VREC="$(python3 - "$MET_DIR/misses.jsonl" "$VMID" "$VWHY" 2>"$TF_ERR" <<'PY' || true
+import json, sys
+path, mid, why = sys.argv[1], sys.argv[2], sys.argv[3]
+found, voided = False, False
+try:
+    for line in open(path, encoding="utf-8"):
+        try:
+            r = json.loads(line)
+        except Exception:
+            continue
+        if r.get("miss_id") == mid:
+            found = found or r.get("kind") == "miss"
+            voided = voided or r.get("kind") == "miss-void"
+except FileNotFoundError:
+    pass
+if not found:
+    print("REFUSED no miss record %s on this stream" % mid)
+elif voided:
+    print("REFUSED %s is already voided — one void is enough" % mid)
+elif not why.strip():
+    print("REFUSED a void needs a reason a reader can check")
+else:
+    print("OK " + json.dumps({"kind": "miss-void", "miss_id": mid, "reason": why.strip()},
+                             separators=(",", ":"), ensure_ascii=False))
+PY
+)"
+  case "$VREC" in
+    "OK "*) printf '%s' "${VREC#OK }" | bash "${BASH_SOURCE[0]}" misses
+            echo "tf-emit: voided $VMID — $VWHY" ;;
+    "REFUSED "*) echo "tf-emit: void refused — ${VREC#REFUSED }" ;;
+    *) echo "tf-emit: void could not be evaluated — nothing written" ;;
   esac
   exit 0
 fi
@@ -1438,6 +1487,8 @@ _ALLOWED = {
                              "tokens_cache_write", "cost_usd", "tokens_scope", "model",
                              "billing_mode", "cost_source"},
     ("misses", "miss-amend"): {"miss_id", "field", "value"},
+    # a miss that should never have been written, withdrawn by --void-miss (SCHEMA.md §5.5.11)
+    ("misses", "miss-void"): {"miss_id", "reason"},
     # an owner review of a phase's output (FR-36, built 2026-09-06): how many corrections were
     # given, what producing the reviewed output cost, what applying the corrections cost. The two
     # costs are copied from the runs named by reviewed_run_id and correction_run_id (their `started`).

@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-09-19 (AppManager TF-027). |
+| Last updated | 2026-09-22 (TrBlazeUI TF-001). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -114,7 +114,7 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | **Open misses** are listed with their outcome in `docs/TechieFlow-Misses.md` — 52 of 167 open (2026-09-12). The one this maintainer owes a fix for is 12 of 2026-09-07, that a hidden framework folder is invisible to search and nothing enforces the rule. | Maintainer |
 | **TrStudio is not on this machine.** It is a named fixture and could not be refreshed here. | Owner action |
 | **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` (that repository, not this one) and waiting on the owner's go-ahead. | Separate repo |
-| **TfLens's TF-013 to TF-052, AppManager's TF-001 to TF-027 and Chatur's TF-001 are fixed and deployed everywhere.** Awaiting re-check: TfLens TF-051, TF-052; AppManager TF-025–027; Chatur TF-001. `tf-feedback.sh <App>` prints each state. | TfLens, AppManager, Chatur (close) |
+| **TfLens's TF-013 to TF-052, AppManager's TF-001 to TF-027, Chatur's TF-001 and TrBlazeUI's TF-001 are fixed and deployed everywhere.** Awaiting re-check: TfLens TF-051, TF-052; AppManager TF-025–027; Chatur TF-001; TrBlazeUI TF-001. `tf-feedback.sh <App>` prints each state. | TfLens, AppManager, Chatur, TrBlazeUI (close) |
 | **Eighteen `.gitignore` files carry repeated framework blocks** left by FR-76's defect: TechieBlog 50 copies, TfLens 30, one private project 10, fifteen others 2. Repeated lines ignore nothing extra, so nothing is wrong, only untidy; the updater no longer adds them, and removes none. | Owner decision |
 | **286 misses predate the `sort` field** (2026-09-07). Nothing is backfilled, nothing is edited, and a reader labels what it derives; no action, by anyone. See `docs/CHANGELOG.md`. | Closed |
 | **TrSetup has thousands of tracked build-output files.** Its ignore rules are correct and inert until the index entries go. `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the commands. Agents never run version control. | Owner action |
@@ -127,7 +127,7 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 
 | **Impossible run records on three streams cannot be repaired**, and no longer need to be. TechieBlog holds 13 whose `started` is after their `ended`, TfLens 1, and TechieRag 1 record no elapsed time. The emitter refuses new ones, the reader discards them and prints how many (`duration_measured_n` / `duration_impossible_n` / `duration_absent_n` / `duration_recomputed_n`), and the streams are append-only, so nothing is deleted. TechieBlog reads 72.9 hours over 33 usable records where it used to read 79.0 over 45. | Closed |
 
-The last five are carried from the pre-reset list and were not re-checked during the reset.
+The last five predate the reset and were not re-checked.
 
 ---
 

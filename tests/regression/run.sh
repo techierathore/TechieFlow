@@ -1079,7 +1079,8 @@ cased = {"TF-%s" % n for n in re.findall(r"(?m)^tf_0?(\d{2,3})\(\)", suite)}
 cased = {("TF-%03d" % int(c[3:])) for c in cased}
 # a project whose own numbering overlaps TfLens's has its cases under its own prefix
 own = {"AppManager": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^am_0?(\d{2,3})\(\)", suite)},
-       "Chatur": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^ch_0?(\d{2,3})\(\)", suite)}}
+       "Chatur": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^ch_0?(\d{2,3})\(\)", suite)},
+       "TrBlazeUI": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^tb_0?(\d{2,3})\(\)", suite)}}
 for f in sorted(glob.glob(os.path.join(root, "docs", "*-TechieFlow-Feedback.md"))):
     app = os.path.basename(f).split("-")[0]
     for e in tf_feedback.entries(f):
@@ -3321,6 +3322,42 @@ ch_001() {
     || { bad ch_001 "feedback render: rc=$rc1 (want 2), plain doc rc=$rc2 (want 0)"; note "$(head -1 <<<"$out" | cut -c1-160)"; }
 }
 
+# --- TrBlazeUI TF-001: triage close logged last week's bugs again under today's run -------------
+# triage.json kept every action ever taken, so each close wrote them all again: 13 phantom escaped
+# checks and 5 misses on 2026-09-19, one more on 2026-09-22. And a wrong miss could not be withdrawn.
+tb_001() {
+  local d; d="$(_metrics_fx tb001)"; mkdir -p "$d/.tfcore" "$d/tests/.artifacts/verify"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"; printf '# Fx — Checklist\n' > "$d/docs/Fx-Checklist.md"
+  cat > "$d/tests/.artifacts/verify/triage.json" <<'JS'
+{"app":"Fx","actions":[
+ {"verb":"demote","req_id":"REQ-UI-001","symptom":"old bug, fixed last week","kind":null,"source":"owner","prior":"Verified","ts":"2026-09-12T10:00:00Z"},
+ {"verb":"new","req_id":"REQ-UI-021","symptom":"today's bug","kind":null,"source":"owner","prior":null,"ts":"2026-09-19T08:20:00Z"}]}
+JS
+  local tri out1 out2
+  tri() { ( cd "$d" && bash "$UTILS/tf-triage.sh" Fx close --started 2026-09-19T08:17:18Z --cmd fix-issues ) 2>&1; }
+  out1="$(tri)"; out2="$(tri)"
+  grep -q 'triage: 1 row(s) logged — 1 gate record(s) (escaped), 1 miss(es)' <<<"$out1" \
+    && grep -q 'triage: 0 row(s) logged' <<<"$out2" \
+    && ok tb_001a "close logs only this triage's actions, and a second close logs nothing" \
+    || { bad tb_001a "close logged actions it had already logged"; note "$(grep 'triage:' <<<"$out1$out2" | tr '\n' ' ')"; }
+  local mid; mid="$(python3 -c "import json,sys; print([json.loads(l)['miss_id'] for l in open(sys.argv[1]) if '\"kind\":\"miss\"' in l][0])" "$d/docs/metrics/misses.jsonl" 2>/dev/null)"
+  local e="$UTILS/tf-emit.sh" r1 r2 r3
+  r1="$(cd "$d" && bash "$e" --void-miss MISS-Fx-20200101-01 "no such miss" 2>&1)"
+  r2="$(cd "$d" && bash "$e" --void-miss "$mid" "logged again from an earlier triage's leftovers" 2>&1)"
+  r3="$(cd "$d" && bash "$e" --void-miss "$mid" "again" 2>&1)"
+  grep -qi refus <<<"$r1" && grep -q voided <<<"$r2" && grep -qi 'already voided' <<<"$r3" \
+    && ok tb_001b "a wrong miss can be withdrawn once; a void naming no miss is refused" \
+    || { bad tb_001b "--void-miss"; note "$r1 | $r2 | $r3"; }
+  bash "$TELEM/tf-metrics.sh" --rollup "$d" --json > "$d/out.json" 2>/dev/null
+  local v; v="$(python3 -c "
+import json,sys
+m=json.load(open(sys.argv[1]))['misses']; print('%s|%s|%s' % (m['misses_total'], m['open_misses'], m['misses_voided_n']))" "$d/out.json" 2>&1)"
+  local open; open="$(cd "$d" && bash "$e" --open-miss REQ-UI-021)"
+  [[ "$v" == "0|0|1" && -z "$open" ]] && grep -q '^## Withdrawn' "$d/docs/Fx-Misses.md" \
+    && ok tb_001c "a withdrawn miss is in no figure, not open, and listed as withdrawn with the count published" \
+    || bad tb_001c "a withdrawn miss still counts (total|open|voided = $v, open-miss '$open')"
+}
+
 # --- the ignore file that grew by one block per update -----------------------------------
 # `tr -d '\r' < .gitignore | grep -qE …` under `set -o pipefail`: grep -q stops at the first
 # match, tr dies writing the rest, the pipeline reports failure, and the framework block is
@@ -3336,7 +3373,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 tb_001 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

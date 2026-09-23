@@ -4,7 +4,7 @@
     python3 .tfcore/utils/tf-misses-md.py [--root <repo>] [--app <App>] [--quiet]
 
 Rebuilds docs/<App>-Misses.md from docs/metrics/misses.jsonl: one row per `miss` record, newest first,
-in three tables (open, fixed, will not fix), each row holding the miss id, the owning row, when and
+in up to four tables (open, fixed, will not fix, withdrawn by a miss-void), each row holding the miss id, the owning row, when and
 by whom it was found, whose gap it was (the `sort` field, folded from any miss-amend) and the `what`
 sentence. Markdown only — there is no HTML sibling: the miss log is read by agents and by the owner
 in markdown, and tf-render-html.py refuses it (owner, 2026-09-08; an HTML copy nobody opened was
@@ -108,11 +108,15 @@ def build(root, app):
         if prev is None or (f.get("ts") or "") >= (prev.get("ts") or ""):
             latest[f["miss_id"]] = f
 
+    voids = {r.get("miss_id"): r for r in recs if r.get("kind") == "miss-void"}
+
     def state(m):
+        if m["miss_id"] in voids:
+            return "withdrawn"
         v = (latest.get(m["miss_id"]) or {}).get("verdict_after")
         return "fixed" if v == "Verified" else "wont-fix" if v == "wont-fix" else "open"
 
-    groups = {"open": [], "fixed": [], "wont-fix": []}
+    groups = {"open": [], "fixed": [], "wont-fix": [], "withdrawn": []}
     for m in sorted(by_id.values(), key=lambda r: (r.get("miss_id") or "", r.get("ts") or ""), reverse=True):
         groups[state(m)].append(m)
 
@@ -138,12 +142,12 @@ def build(root, app):
     today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
     n = len(by_id)
     lines = [f"# {app} — Misses", "", "| | |", "|---|---|", f"| App | {app} |",
-             f"| Count | {n} logged: {len(groups['open'])} open, {len(groups['fixed'])} fixed, {len(groups['wont-fix'])} will not fix |",
+             f"| Count | {n} logged: {len(groups['open'])} open, {len(groups['fixed'])} fixed, {len(groups['wont-fix'])} will not fix" + (f", {len(groups['withdrawn'])} withdrawn" if groups["withdrawn"] else "") + " |",
              "| Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |",
              f"| Updated | {today} |", "", SORT_LEGEND, ""]
     if not n:
         lines += ["No miss has been logged yet.", ""]
-    for key, title in (("open", "Open"), ("fixed", "Fixed"), ("wont-fix", "Will not fix")):
+    for key, title in (("open", "Open"), ("fixed", "Fixed"), ("wont-fix", "Will not fix"), ("withdrawn", "Withdrawn — logged in error")):
         rows = groups[key]
         if not rows:
             continue
@@ -157,6 +161,8 @@ def build(root, app):
             for m in rows:
                 f = latest.get(m["miss_id"]) or {}
                 closed = day(f.get("ts")) + (f" by {f['fix_cmd']}" if f.get("fix_cmd") else "")
+                if key == "withdrawn":
+                    closed = f"{day(voids[m['miss_id']].get('ts'))}: {cell(voids[m['miss_id']].get('reason'))}"
                 lines.append(f"| {ident(m)} | {found(m)} | {closed} | {gap(m)} | {what(m)} |")
         lines.append("")
     return "\n".join(lines), n
