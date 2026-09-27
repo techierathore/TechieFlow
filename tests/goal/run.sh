@@ -14,6 +14,7 @@
 # Run: bash tests/goal/run.sh   (about 60 seconds; exit 0 = every check passed)
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$HERE/../.." && pwd)"
+source "$ROOT/.tfcore/utils/tf-portable.sh"   # tf_timeout: a stock Mac has no timeout command
 GOAL_SH="$ROOT/.tfcore/utils/tf-goal.sh"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/tf-goal-test.XXXXXX")"
 APP="$WORK/fakeapp"; mkdir -p "$APP/.tfcore/utils" "$APP/docs"
@@ -60,7 +61,7 @@ took=$(( $(date +%s) - t0 ))
 check "stalled cycle is killed and the run completes on cycle 2 (exit $rc, ${took}s)" "$([[ $rc -eq 0 && $took -lt 40 ]]; echo $?)"
 check "log names the stall" "$(grep -q 'STALL: no output for' "$WORK/stall.log"; echo $?)"
 check "stall is re-prompted, not backed off" "$(grep -q 'stalled 15m) — re-prompting in 1s' "$WORK/stall.log"; echo $?)"
-check "no fake harness left running" "$(pgrep -x sleep -a | grep -q ' 120$'; [[ $? -ne 0 ]]; echo $?)"
+check "no fake harness left running" "$(ps -A -o args= | grep -qE '^([^ ]*/)?sleep( .*)? 120$'; [[ $? -ne 0 ]]; echo $?)"
 
 # ---- 3. TERM stops the supervisor AND its child ---------------------------------------
 rm -f "$APP/.tfcore/.session/"* "$APP/cycle1.done" 2>/dev/null
@@ -72,7 +73,7 @@ kill -TERM "$sup"
 t0=$(date +%s); wait "$sup"; rc=$?; took=$(( $(date +%s) - t0 ))
 check "TERM exits 130 within seconds (exit $rc, ${took}s)" "$([[ $rc -eq 130 && $took -lt 15 ]]; echo $?)"
 sleep 1
-check "the harness child is gone" "$(pgrep -x sleep -a | grep -q ' 300$'; [[ $? -ne 0 ]]; echo $?)"
+check "the harness child is gone" "$(ps -A -o args= | grep -qE '^([^ ]*/)?sleep( .*)? 300$'; [[ $? -ne 0 ]]; echo $?)"
 check "goal.json says stopped" "$(grep -q '"last_reason": "stopped"' "$APP/.tfcore/.session/goal.json"; echo $?)"
 check "YOLO flag cleared" "$([[ ! -f "$APP/.tfcore/.session/yolo.json" ]]; echo $?)"
 
@@ -97,7 +98,7 @@ check "run completes on cycle 4 after two stalled resumes (exit $rc, ${took}s)" 
 check "log announces the fresh session" "$(grep -q 'two stalled resumes in a row' "$WORK/fresh.log"; echo $?)"
 check "cycle 4 was launched as a first (fresh) cycle" "$(grep -q 'cycle 4 (first)' "$WORK/fresh.log"; echo $?)"
 check "cycle 3 was still a resume" "$(grep -q 'cycle 3 (resume)' "$WORK/fresh.log"; echo $?)"
-check "no stray fake harness" "$(pgrep -x sleep -a | grep -q ' 120$'; [[ $? -ne 0 ]]; echo $?)"
+check "no stray fake harness" "$(ps -A -o args= | grep -qE '^([^ ]*/)?sleep( .*)? 120$'; [[ $? -ne 0 ]]; echo $?)"
 # --resume --fresh on a stopped run: the state says cycle 4 and done; make it look stopped
 python3 - "$APP/.tfcore/.session/goal.json" <<'PY2'
 import json,sys; p=sys.argv[1]; d=json.load(open(p)); d["last_reason"]="stopped"; d["session_id"]="oldsession"; json.dump(d,open(p,"w"))
@@ -118,11 +119,11 @@ took=$(( $(date +%s) - t0 ))
 check "silent provider limit stops the supervisor with exit 5 (exit $rc, ${took}s)" "$([[ $rc -eq 5 && $took -lt 30 ]]; echo $?)"
 check "log carries the provider's own words" "$(grep -q 'Monthly usage limit reached' "$WORK/plimit.log"; echo $?)"
 check "goal.json says provider-limit" "$(grep -q '"last_reason": "provider-limit"' "$APP/.tfcore/.session/goal.json"; echo $?)"
-check "no stray fake harness" "$(pgrep -x sleep -a | grep -q ' 120$'; [[ $? -ne 0 ]]; echo $?)"
+check "no stray fake harness" "$(ps -A -o args= | grep -qE '^([^ ]*/)?sleep( .*)? 120$'; [[ $? -ne 0 ]]; echo $?)"
 
 # ---- 7. `done` is refused while the status gate has not run --------------------------------
 rm -f "$APP/.tfcore/.session/"* "$APP/n" 2>/dev/null; mkdir -p "$APP/docs/metrics"
-PS="$APP/PROJECT-STATUS.md"; printf '# status\n' > "$PS"; touch -d '2026-01-01' "$PS"; : > "$APP/docs/metrics/runs.jsonl"
+PS="$APP/PROJECT-STATUS.md"; printf '# status\n' > "$PS"; touch -t 202601010000 "$PS"; : > "$APP/docs/metrics/runs.jsonl"
 FAKE='bash .tfcore/utils/tf-yolo.sh done blocked "too early"; if [[ ! -f .tfcore/.session/goal-done.json ]]; then echo refused-as-expected; touch PROJECT-STATUS.md; printf "{\"cmd\":\"build-phase\",\"claimed\":true}" > .tfcore/.session/phase.json; printf "{\"kind\":\"run\",\"cmd\":\"verify-phase\",\"ts\":\"%s\"}\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> docs/metrics/runs.jsonl; bash .tfcore/utils/tf-yolo.sh done blocked "only a verify record"; [[ -f .tfcore/.session/goal-done.json ]] || echo refused-again-as-expected; printf "{\"kind\":\"run\",\"cmd\":\"build-phase\",\"ts\":\"%s\"}\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> docs/metrics/runs.jsonl; bash .tfcore/utils/tf-yolo.sh done complete "after the gate"; fi'
 TF_GOAL_FAKE_CMD="$FAKE" TF_GOAL_STALL_TICK=1 bash "$GOAL_SH" --idle-retry-sec 1 --max-cycles 2 "$APP" "done test" >"$WORK/done.log" 2>&1; rc=$?
 check "done is refused before the gate and accepted after it (exit $rc)" "$([[ $rc -eq 0 ]] && grep -q 'refused-as-expected' "$APP/.tfcore/.session/goal.log" && grep -q 'GOAL-DONE refused' "$APP/.tfcore/.session/goal.log"; echo $?)"
@@ -164,7 +165,7 @@ EOF
 }
 rm -f "$TF_MODEL_HEALTH_FILE"; limit_fixture 7200
 TF_GOAL_FAKE_CMD="bash $WORK/fb.sh" TF_GOAL_STALL_TICK=1 \
-  timeout 90 bash "$GOAL_SH" --tier standard --idle-retry-sec 1 --max-cycles 3 "$APP" "fallback test" >"$WORK/fb.log" 2>&1; rc=$?
+  tf_timeout 90 bash "$GOAL_SH" --tier standard --idle-retry-sec 1 --max-cycles 3 "$APP" "fallback test" >"$WORK/fb.log" 2>&1; rc=$?
 check "a usage limit falls back to the next model and finishes (exit $rc)" "$([[ $rc -eq 0 ]]; echo $?)"
 check "the log names the switch" "$(grep -q 'FALLBACK: claude-sonnet-5 is limited' "$APP/.tfcore/.session/goal.log"; echo $?)"
 check "the next cycle is launched with --model haiku" "$(grep -q '"model": "haiku"' "$APP/.tfcore/.session/goal.json"; echo $?)"
@@ -174,7 +175,7 @@ check "the limited model is parked until its stated reset" \
 # ---- 9. --no-fallback keeps the old behaviour: sleep until the reset -----------------------
 rm -f "$TF_MODEL_HEALTH_FILE"; limit_fixture 7200
 TF_GOAL_FAKE_CMD="bash $WORK/fb.sh" TF_GOAL_STALL_TICK=1 \
-  timeout 25 bash "$GOAL_SH" --tier standard --no-fallback --max-cycles 3 "$APP" "no fallback" >"$WORK/nofb.log" 2>&1
+  tf_timeout 25 bash "$GOAL_SH" --tier standard --no-fallback --max-cycles 3 "$APP" "no fallback" >"$WORK/nofb.log" 2>&1
 check "--no-fallback sleeps instead of switching" \
   "$(grep -q 'USAGE LIMIT hit' "$APP/.tfcore/.session/goal.log" && ! grep -q 'FALLBACK:' "$APP/.tfcore/.session/goal.log"; echo $?)"
 check "--no-fallback parks nothing" "$([[ ! -f "$TF_MODEL_HEALTH_FILE" ]]; echo $?)"
@@ -183,7 +184,7 @@ check "--no-fallback parks nothing" "$([[ ! -f "$TF_MODEL_HEALTH_FILE" ]]; echo 
 rm -f "$TF_MODEL_HEALTH_FILE"; limit_fixture 7200
 bash "$APP/.tfcore/utils/tf-model-pick.sh" cooldown claude haiku +180 "already limited" >/dev/null
 TF_GOAL_FAKE_CMD="bash $WORK/fb.sh" TF_GOAL_STALL_TICK=1 \
-  timeout 25 bash "$GOAL_SH" --tier standard --max-cycles 3 "$APP" "chain exhausted" >"$WORK/exh.log" 2>&1
+  tf_timeout 25 bash "$GOAL_SH" --tier standard --max-cycles 3 "$APP" "chain exhausted" >"$WORK/exh.log" 2>&1
 check "an exhausted chain says so and waits" \
   "$(grep -q 'no fallback left' "$APP/.tfcore/.session/goal.log" && grep -q 'USAGE LIMIT hit' "$APP/.tfcore/.session/goal.log"; echo $?)"
 rm -f "$TF_MODEL_HEALTH_FILE"
