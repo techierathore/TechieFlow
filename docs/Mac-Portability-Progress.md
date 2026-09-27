@@ -10,8 +10,8 @@ and WSL. Branch `mac-portability`, one draft pull request to `main`. Ravi review
 | 2 | Shim library `.tfcore/utils/tf-portable.sh` | Done | 10 functions (tf_timeout, tf_setsid, tf_sed_inplace, tf_stat_mtime, tf_stat_size, tf_date_from, tf_epoch_frac, tf_realpath, tf_relpath, tf_read_lines); `tests/portability/shim-tests.sh` 62 cases pass on Linux, fallbacks included |
 | 3 | tf-goal.sh, tf-yolo.sh, tf-build.sh | Done | tf-goal.sh 9 sites and tf-build.sh 12 sites moved to the shim or POSIX spellings, plus 4 empty-array expansions in tf-build.sh; tf-yolo.sh needed nothing. goal 36/36, regression all hold, other suites unchanged from the baseline |
 | 4 | Everything else; the check passes | Blocked (one file) | Every remaining site fixed, and in the working copy `tests/portability/run.sh` passes (65 scripts, 18 commented exceptions, all false positives or guarded); Linux: goal, routing, mirror, doc-check, regression pass, bugs/verify/requirements fail exactly as in the baseline, `npm run validate` and `npm run test:install` pass. One file could not be pushed: `tests/regression/run.sh` (209 KB) is too large for the GitHub API upload this session had to use. Its change is `docs/Mac-Portability-regression.patch`; until it is applied the check fails on the branch (the 48 old sites in that file) |
-| 5 | macOS job in CI, draft pull request | Not started | |
-| 6 | Docs | Not started | |
+| 5 | macOS job in CI, draft pull request | Blocked (seen red; the rest waits on the patch) | Job `validate (stock macOS, /bin/bash 3.2)` added; draft PR techierathore/TechieFlow#6 opened. First run on `3d66060`, read from this session: on /bin/bash 3.2 with BSD tools, `npm run test:install`, doc-check, goal, mirror, routing and verify (67/67) PASS. Red: the portability check and tests/regression (the old regression file does not even parse under bash 3.2, the here-document fault the patch fixes), tests/requirements (it grades those two), and tests/bugs (3 cases that fail the same way on Linux on `main`, before this branch). Not green, and it cannot be from this session until the patch is applied |
+| 6 | Docs | Done | README §2, docs/TechieFlow-Installation.md ("On a Mac" paragraph, the bash row, the python3 fix) and one line of docs/TechieFlow-Setup.md §16 |
 
 ## Inventory (session 1)
 
@@ -125,6 +125,11 @@ them either text inside embedded Python/JavaScript or a `/proc` read that is gua
   `md5sum` → `cksum` (only equality is compared), `pgrep -a` → `ps -A -o args= | grep -E`,
   `declare -A` in tests/requirements → two plain arrays, `\|` in basic grep regexes → `grep -E`.
   The fake `dotnet` in tests/regression prints its timestamps with python3 (BSD date has no %N).
+- `tests/portability/run.sh` runs the shim tests even when the scan fails (it still exits 1), so a
+  red scan cannot hide how the shim behaves on the Mac runner.
+- The macOS job puts only Node, a link to /bin/bash and /usr/bin:/bin:/usr/sbin:/sbin on PATH, so
+  Homebrew's GNU tools and bash on the runner image cannot hide a fault. rsync there is Apple's
+  openrsync, and the installer tests passed with it.
 - A trailing comment that names a flagged command (for example "no realpath here") trips the
   check, so such comments were worded around it rather than adding exceptions.
 
@@ -141,6 +146,12 @@ them either text inside embedded Python/JavaScript or a `/proc` read that is gua
 - `.tfcore/utils/tf-verify-boot.sh` (embedded Python in `stop`): a leftover app is also searched
   for through `/proc`; on a Mac that search fails quietly inside try/except, and only the pid-file
   path stops the app.
+- tests/bugs/run.sh fails 3 cases ("log-miss: run record cmd log-miss", "fix-close called twice
+  writes one run record", "fix-close: a row with no open miss is named") on `main` on Linux, before
+  any change of this branch, and the same 3 on the Mac job. Not a portability fault; not touched.
+- The macOS CI job could not be seen green: after the patch, re-run it and check that
+  portability, regression and requirements pass there too. The Linux job only goes green with
+  the patch as well.
 - `scripts/validate.mjs` still tells a Mac user whose bash -n fails that "the framework needs
   bash 4 or newer" and to `brew install bash`. That text is in a Node utility, which this task
   was told not to change beyond wiring in the new check; with this branch it should no longer be

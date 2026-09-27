@@ -142,13 +142,18 @@ while [[ $i -lt ${#EXC[@]} ]]; do
   i=$((i + 1))
 done
 
+SCAN_RC=0
 if [[ $FOUND -gt 0 ]]; then
   printf '%s' "$REPORT"
   echo "portability: $FOUND non-portable use(s) in ${#FILES[@]} script(s). Use the function or spelling named above, or add a commented exception to tests/portability/exceptions.txt when the line is guarded."
-  exit 1
+  SCAN_RC=1
+elif [[ $STALE -gt 0 ]]; then
+  echo "portability: $STALE stale exception(s)"; SCAN_RC=1
+else
+  echo "portability: no GNU-only or bash-4-only construct in ${#FILES[@]} script(s) (${#EXC[@]} commented exception(s))"
 fi
-[[ $STALE -gt 0 ]] && { echo "portability: $STALE stale exception(s)"; exit 1; }
-echo "portability: no GNU-only or bash-4-only construct in ${#FILES[@]} script(s) (${#EXC[@]} commented exception(s))"
 
-[[ $SCAN_ONLY -eq 1 ]] && exit 0
-bash "$HERE/shim-tests.sh"
+[[ $SCAN_ONLY -eq 1 ]] && exit $SCAN_RC
+# the shim tests run either way, so a failing scan does not hide how the shim behaves here
+bash "$HERE/shim-tests.sh" || exit 1
+exit $SCAN_RC
