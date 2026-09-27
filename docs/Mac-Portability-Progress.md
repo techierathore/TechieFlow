@@ -219,8 +219,20 @@ them either text inside embedded Python/JavaScript or a `/proc` read that is gua
   (`opencode2 run --auto` is its own switch), and the nudge's owner-text check, since 2.x gives a
   plugin no session messages; the nudge's other checks run. The CHANGELOG entry reached the branch
   through a patch and a one-off workflow, as before.
+- The Linux installer test failed once on `63033f7` (run 36346265448): "plain `npm install` in a
+  JavaScript project…", "Unexpected end of JSON input". Not the plugin: a race in the test. The
+  package's post-install cleanup rewrites the project's package.json with `writeFileSync`, which
+  empties the file before writing it; the test waited until package.json no longer named techieflow,
+  an empty file passed that wait, and `JSON.parse("")` failed. The wait now also requires the file to
+  parse (scripts/test-install.mjs only). The same step passed on the Mac in that run and on Linux in
+  every earlier run.
 
 ## Left for the owner
+
+- `scripts/npm-cleanup.mjs` rewrites a project's package.json in place, so for a moment the file is
+  empty. Only the installer test tripped on it, and the test now waits for a whole file; writing to a
+  temporary file and renaming it would close the gap for anything else reading package.json during
+  `npm install`. It is a Node utility, left unchanged here.
 
 - On the Mac, restart OpenCode 2 after pulling this branch: plugins load at start. OpenCode 2 is a
   preview and its plugin API is still changing (its `dev` channel already differs from `next`), so a
