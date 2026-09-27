@@ -154,14 +154,27 @@ if run_port:
         procs = [p for p in os.listdir("/proc") if p.isdigit()]
     except Exception:
         procs = []
+    cmds = []   # (pid, command line)
     for p in procs:
         try:
             cmd = open(f"/proc/{p}/cmdline", "rb").read().replace(b"\0", b" ").decode(errors="replace")
         except Exception:
             continue
-        if mark in cmd and int(p) != os.getpid():
+        cmds.append((int(p), cmd))
+    if not procs:
+        # No /proc (macOS): the same list from ps, full width so the run-<port>/ path is not cut off.
+        try:
+            out = subprocess.run(["ps", "-A", "-ww", "-o", "pid=,command="], capture_output=True).stdout.decode(errors="replace")
+        except Exception:
+            out = ""
+        for line in out.splitlines():
+            pid, _, cmd = line.strip().partition(" ")
+            if pid.isdigit():
+                cmds.append((int(pid), cmd))
+    for pid, cmd in cmds:
+        if mark in cmd and pid != os.getpid():
             try:
-                os.kill(int(p), signal.SIGKILL)
+                os.kill(pid, signal.SIGKILL)
             except Exception:
                 pass
 s["stopped"] = True

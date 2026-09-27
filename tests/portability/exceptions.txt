@@ -29,7 +29,6 @@ proc-fs .tfcore/utils/tf-emit.sh with open("/proc/%d/stat" % pid) as fh:
 # Shell harness detection: reads /proc only when /proc/self exists, ps otherwise (the next lines).
 proc-fs .tfcore/utils/tf-harness.sh stat="$(cat /proc/$pid/stat 2>/dev/null)" || break
 proc-fs .tfcore/utils/tf-harness.sh [[ -d /proc/self ]]
-# Python in tf-verify-boot.sh: kills a leftover app found through /proc. On a Mac the listing fails
-# inside try/except and nothing extra is killed (the pid-file path still stops the app). Listed
-# under "Left for the owner" in docs/Mac-Portability-Progress.md.
+# Python in tf-verify-boot.sh: finds a leftover app through /proc; where there is no /proc (macOS)
+# the same list comes from `ps -A -ww -o pid=,command=` (the lines right after this one).
 proc-fs .tfcore/utils/tf-verify-boot.sh cmd = open(f"/proc/{p}/cmdline", "rb")
