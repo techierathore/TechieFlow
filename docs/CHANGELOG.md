@@ -8,6 +8,27 @@
 
 ---
 
+## 2026-09-27 — The status-gate Stop hook skipped its checks when the shell had an OPENCODE_* variable
+
+On the owner's Mac (macOS 26, Asia/Kolkata) `tests/regression` failed one case, `owner_handoff_a`: the
+Stop hook `guard-status-html.sh` let TfLens's jargon hand-off through with exit 0 and named none of its
+faults. The time zone was the first suspect and is not the cause: every suite now runs in UTC and in
+Asia/Kolkata on both CI jobs, and a diagnostic run on macOS 15 and macOS 26, with TZ set and with the
+system zone set, passed the case each time. The cause is how the hook tells the harness apart. It took
+any variable starting `OPENCODE` as "this is OpenCode" before it looked at Claude Code's own variables,
+so a Claude Code turn in a shell that has, say, an OpenCode API key or config path exported looked for
+`.tfcore/.session/opencode.json`, found none, and skipped checks 2-5 (the document check, the BRD
+status, the run record and the owner-text check). `OPENCODE=1` reproduces the owner's failure line for
+line on Linux. The hook now takes the harness in the order `tf-harness.sh` and `tf-emit.sh` already use:
+`TF_HARNESS` (which the OpenCode plugin sets on every guard it runs), then `CLAUDECODE`,
+`CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_SESSION_ID` or `CLAUDE_PROJECT_DIR`, then `OPENCODE*`. Every other
+script that compares transcript or file times was checked for mixed local and UTC time and needed no
+change: the hook itself reads transcript and run-record timestamps as UTC and file times as epochs, and
+`tf-yolo.sh`, `tf-triage.py`, `tf-log-miss.py`, `tf-emit.sh`, `metrics-session.sh`, `tf-metrics.sh` and
+`tf-verify-emit.sh` do the same. New regression case `harness_env`, failing against the old hook: a Claude
+Code turn with `OPENCODE_API_KEY` set is still checked, and an OpenCode turn named by `TF_HARNESS` still
+reads `opencode.json`. Not yet deployed to projects.
+
 ## 2026-09-27 — TF-052 follow-up: log-miss and triage close read the "outer" command as their own
 
 Since TF-052, `tf-phase.sh start` keeps a command still in the marker as `"outer"`, written first, and

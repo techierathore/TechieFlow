@@ -981,6 +981,35 @@ Fix TF-024 from docs/Fx-TechieFlow-Feedback.md in the Fx repo.
                   || { bad owner_handoff_c "an ordinary reply was held to the hand-off check"; note "$(sed -n 2,3p <<<"$out")"; }
 }
 
+# --- a Claude Code turn taken for an OpenCode one ----------------------------------------
+# guard-status-html.sh took any OPENCODE* variable as "this is OpenCode" before it looked at
+# Claude Code's own. The owner's Mac had one in the shell (a key or a config path, never set by
+# OpenCode itself), so a Claude Code turn looked for .tfcore/.session/opencode.json, found none,
+# and skipped checks 2-5: owner_handoff_a let TfLens's closing message through there and nowhere
+# else (2026-09-27). tf-harness.sh and tf-emit.sh already took Claude Code's variables first.
+harness_env() {
+  local d="$SCRATCH/harness"; mkdir -p "$d/.tfcore/.session"
+  printf '{"session_id":"x"}\n' > "$d/.tfcore/.session/claude-code.json"
+  touch -t "$(tf_date_from '-10 min' +%Y%m%d%H%M.%S)" "$d/.tfcore/.session/claude-code.json"
+  printf '# Fx — Status\n' > "$d/PROJECT-STATUS.md"; printf '<html></html>' > "$d/PROJECT-STATUS.html"
+  # no docs/metrics/runs.jsonl: check 4 names the missing run record, on a turn the hook checks
+  local out rc
+  out="$(printf '{"hook_event_name":"Stop","stop_hook_active":false}' \
+         | CLAUDE_PROJECT_DIR="$d" CLAUDECODE=1 OPENCODE_API_KEY=x bash "$HOOKS/guard-status-html.sh" 2>&1)"; rc=$?
+  if [[ $rc -eq 2 ]] && grep -qF "no run record follows it" <<<"$out"; then
+    ok harness_env_a "an OPENCODE_* variable in the shell does not turn a Claude Code turn's checks off"
+  else
+    bad harness_env_a "a Claude Code turn with an OPENCODE_* variable in the shell ended unchecked (exit $rc)"; note "$(head -2 <<<"$out")"
+  fi
+  # not affected: OpenCode's own turn, named by the plugin's TF_HARNESS, reads opencode.json
+  mv "$d/.tfcore/.session/claude-code.json" "$d/.tfcore/.session/opencode.json"
+  out="$(printf '{"hook_event_name":"Stop","stop_hook_active":false}' \
+         | CLAUDE_PROJECT_DIR="$d" TF_HARNESS=opencode bash "$HOOKS/guard-status-html.sh" 2>&1)"; rc=$?
+  [[ $rc -eq 2 ]] && grep -qF "no run record follows it" <<<"$out" \
+    && ok harness_env_b "an OpenCode turn is still checked against opencode.json" \
+    || { bad harness_env_b "an OpenCode turn ended unchecked (exit $rc)"; note "$(head -2 <<<"$out")"; }
+}
+
 # --- the status file said every upstream problem was open ----------------------------------
 # tf-status-facts counted every ### heading as an entry and accepted only a closing line no file
 # used, so TfLens's PROJECT-STATUS read "TechieFlow: 62 open of 62" for 27 entries, 19 of them
@@ -3376,7 +3405,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 tb_001 owner_handoff feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 tb_001 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done
