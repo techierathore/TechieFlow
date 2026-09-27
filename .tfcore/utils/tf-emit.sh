@@ -585,7 +585,7 @@ esac
 
 # The program is captured into a variable rather than fed on stdin — a heredoc
 # on `python3 -` would REPLACE the caller's piped JSON and silently drop every event.
-TF_PROG="$(cat <<'PY'
+IFS= read -r -d '' TF_PROG <<'PY' || true   # bash 3.2 misreads a here-document inside a command substitution
 import json, os, sys, datetime, glob, re, subprocess, time
 
 met_dir, stream, root = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -1646,7 +1646,6 @@ except Exception as e:
     warn("append failed (%s) — event dropped" % e)
     raise SystemExit(0)
 PY
-)"
 python3 -c "$TF_PROG" "$MET_DIR" "$STREAM" "$ROOT" 2>"$TF_ERR"
 
 # The readable miss list beside the record (FR-31, Session 5 2026-09-07): after any write to the
