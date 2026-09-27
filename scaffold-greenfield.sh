@@ -29,11 +29,12 @@ set -euo pipefail
 # The reference framework is wherever this script lives — no hardcoded path,
 # so the repo works from WSL (/mnt/c/...), macOS (/Volumes/...), or Linux.
 TEMPLATE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$TEMPLATE/.tfcore/utils/tf-portable.sh"   # tf_realpath (older macOS lacks the command)
 TARGET="${1:-$PWD}"
 # BSD realpath (macOS) has no -m for not-yet-existing paths — create first,
 # then resolve; the template-refusal check below cleans up an empty mistake.
 mkdir -p "$TARGET"
-TARGET="$(realpath "$TARGET")"
+TARGET="$(tf_realpath "$TARGET")"
 
 if [[ "$TARGET" == "$TEMPLATE" || "$TARGET" == "$TEMPLATE"/* ]]; then
   echo "Refusing to scaffold into the template itself. Pass a different path." >&2
