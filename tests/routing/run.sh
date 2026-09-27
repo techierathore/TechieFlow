@@ -31,6 +31,7 @@
 # Run: bash tests/routing/run.sh    (a few seconds; exit 0 = every check passed)
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$HERE/../.." && pwd)"
+source "$ROOT/.tfcore/utils/tf-portable.sh"   # tf_date_from: BSD date has no -d
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/tf-routing-test.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 APP="$WORK/app"; mkdir -p "$APP/.tfcore/utils" "$APP/.tfcore/tasks" "$APP/docs/metrics"
@@ -176,7 +177,7 @@ eq "an unaffected tier keeps its own model" \
 # Four runs, four CONSECUTIVE windows — a run may not start before the last one ended (FR-72),
 # and a fixture that shares one window across four runs is a timeline that cannot happen.
 S_EP=$(( $(date +%s) - 400 ))
-W() { date -u -d "@$(( S_EP + $1 ))" +%Y-%m-%dT%H:%M:%SZ; }
+W() { tf_date_from -u "@$(( S_EP + $1 ))" +%Y-%m-%dT%H:%M:%SZ; }
 STARTED="$(W 0)"; ENDED="$(W 60)"                    # run 1: the Claude window
 S2="$(W 60)";  E2="$(W 120)"                          # run 2: metered OpenCode
 S3="$(W 120)"; E3="$(W 180)"                          # run 3: subscription OpenCode
@@ -285,7 +286,7 @@ printf 'enabled: true\ntiers:\n  standard:\n    claude: sonnet\nphases:\n  build
 bash "$OLD/.tfcore/utils/tf-routing-bind.sh" "$OLD" >"$WORK/mig1.out" 2>&1
 bash "$OLD/.tfcore/utils/tf-routing-bind.sh" "$OLD" >"$WORK/mig2.out" 2>&1
 eq "a pre-2026-09-10 routing.yaml gains the two blocks" \
-   "$(grep -c '^fallbacks:\|^billing:' "$OLD/.tfcore/routing.yaml")" "2"
+   "$(grep -cE '^fallbacks:|^billing:' "$OLD/.tfcore/routing.yaml")" "2"
 eq "the migration is idempotent" "$(grep -c 'added fallbacks' "$WORK/mig2.out")" "0"
 eq "the project's own lines come first and are untouched" \
    "$(head -6 "$OLD/.tfcore/routing.yaml" | tr '\n' '|')" \

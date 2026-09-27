@@ -67,7 +67,7 @@ out="$(bash $U/tf-triage.sh FxApp close --started "$S1" 2>&1)"; rc=$?
 check "close runs (exit $rc)" "$rc"
 check "close: 2 rows logged, 2 escaped gate records, 2 misses, code NOT untouched" "$(has "$out" "triage: 2 row(s) logged — 2 gate record(s) (escaped), 2 miss(es), run record written; code untouched: NO")"
 check "close: warns about the edited file and logs it" "$(has "$out" "WARNING: .*src/Oops.cs")"
-check "gates: REQ-UI-003 escaped, prior Verified" "$(grep '"req_id":"REQ-UI-003"' $M/gates.jsonl | grep -q '"gate":"escaped".*"prior_verdict":"Verified"\|"prior_verdict":"Verified".*"gate":"escaped"'; echo $?)"
+check "gates: REQ-UI-003 escaped, prior Verified" "$(grep '"req_id":"REQ-UI-003"' $M/gates.jsonl | grep -qE '"gate":"escaped".*"prior_verdict":"Verified"|"prior_verdict":"Verified".*"gate":"escaped"'; echo $?)"
 check "miss: REQ-UI-003 is a regression found by the owner with the symptom as what" "$(grep '"req_id":"REQ-UI-003"' $M/misses.jsonl | grep -q '"miss_class":"regression"' && grep '"req_id":"REQ-UI-003"' $M/misses.jsonl | grep -q '"found_by":"owner"' && grep '"req_id":"REQ-UI-003"' $M/misses.jsonl | grep -q '"what":"Save and Cancel sit on top of each other"'; echo $?)"
 check "miss: REQ-FN-010 is an unspecified-gap on the brd" "$(grep '"req_id":"REQ-FN-010"' $M/misses.jsonl | grep -q '"miss_class":"unspecified-gap"' && grep '"req_id":"REQ-FN-010"' $M/misses.jsonl | grep -q '"artifact":"brd"'; echo $?)"
 check "miss: the code edit is instruction-ignored" "$(grep -c '"why_missed":"instruction-ignored"' $M/misses.jsonl | grep -q '^1$'; echo $?)"
