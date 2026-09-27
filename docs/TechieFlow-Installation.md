@@ -16,13 +16,15 @@ You need four things on the machine.
 | Tool | Why | Check |
 |---|---|---|
 | Node.js 20 or newer | Runs the installer. Nothing is added to your project. | `node --version` |
-| bash | The framework's guard hooks and helper scripts run under bash. macOS and Linux have it. On Windows, work inside WSL or Git Bash. | `bash --version` |
+| bash | The framework's guard hooks and helper scripts run under bash. macOS and Linux have it; the bash 3.2 that comes with macOS is enough. On Windows, work inside WSL or Git Bash. | `bash --version` |
 | Python 3 | Powers the HTML renderer, the telemetry writer and the guard hooks. | `python3 --version` |
 | Claude Code or OpenCode | The harness that runs the agents. Either one. Both work from the same install. | `claude --version` or `opencode --version` |
 
 For a .NET project you also need the .NET SDK. Run `dotnet --version` to check.
 
 You do not need rsync, git on the command line, or a clone of this repository.
+
+**On a Mac.** A stock Mac is enough. The scripts run on Apple's own bash 3.2 and the `sed`, `date`, `stat` and `xargs` that come with macOS. You do not need Homebrew, a newer bash or GNU coreutils for them. The one thing to add is Python 3: it comes with Apple's Command Line Tools, so run `xcode-select --install` once if `python3 --version` asks for them. perl and rsync already ship with macOS. Your project's own tools, such as the .NET SDK, are installed as usual.
 
 ---
 
@@ -312,7 +314,7 @@ It installs the framework if it is not there yet, then removes the leftover pack
 |---|---|
 | The framework is under `node_modules/@techierathore/techieflow/` and nowhere else | You ran `npm install`. See section 9. Run `npx @techierathore/techieflow@latest install`. |
 | `bash was not found` | On Windows, run the command inside WSL or Git Bash. |
-| `python3 was not found` | Install Python 3 and run the command again. On macOS: `brew install python3`. On Ubuntu or WSL: `sudo apt-get install -y python3`. |
+| `python3 was not found` | Install Python 3 and run the command again. On macOS: `xcode-select --install` (Apple's Command Line Tools include python3), or `brew install python3`. On Ubuntu or WSL: `sudo apt-get install -y python3`. |
 | `Refusing to install into the framework itself` | You ran the command inside a clone of this repository. Pass `--target=<your project>`. |
 | `does not look installed` on update | The folder has no `.tfcore/`. Run `install` first. |
 | Claude Code does not show the `/TechieFlow:agents:analyst` command | Restart Claude Code in the project folder. Check that `.claude/commands/TechieFlow/agents/analyst.md` exists. |
