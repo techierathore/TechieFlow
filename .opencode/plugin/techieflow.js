@@ -42,14 +42,25 @@
 // idles once). Records share session_id; consumers take the record with the
 // highest output_tokens (or latest ts) per session_id. SCHEMA.md §4 notes this.
 
+//
+// Two OpenCode plugin APIs, one file (2026-09-27). OpenCode 1.x (the design's 1.18.18, still the
+// stable release) reads the default export's `server`; the OpenCode 2 preview (`opencode2`) accepts
+// only a default export with `id` and `setup`, and refused this file with "Plugin must export a
+// default definition with an id and an effect or setup function". The default export carries all
+// three; `setup` translates 2.x's hook and event API into the 1.x hooks below, so the guards, the
+// shell env and telemetry are the same code in both. What 2.x does not offer: `permission.ask` (YOLO
+// auto-approval; `opencode2 run --auto` is its own switch) and the session's messages, so the Stop
+// nudge's owner-text check (guard-status-html.sh check 5) is skipped there; checks 1-4 still run.
+
 import fs from "node:fs"
 import path from "node:path"
 import os from "node:os"
 import { spawnSync } from "node:child_process"
+import { fileURLToPath } from "node:url"
 
 const GUARD_TIMEOUT_MS = 10000
 
-export const TechieFlowPlugin = async ({ directory, client }) => {
+const TechieFlowPlugin = async ({ directory, client }) => {
   const root = directory
   const hooksDir = path.join(root, ".tfcore", "hooks")
   const tfEmit = path.join(root, ".tfcore", "utils", "tf-emit.sh")
@@ -254,14 +265,16 @@ export const TechieFlowPlugin = async ({ directory, client }) => {
       const args = output.args || {}
       let payload = null
       let scripts = []
-      if (input.tool === "bash") {
+      if (input.tool === "bash" || input.tool === "shell") {
+        // 1.x calls it bash; the 2.x preview calls it shell (same `command` argument)
         payload = { tool_name: "Bash", tool_input: { command: String(args.command || ""), run_in_background: !!(args.background || args.run_in_background) } }
         scripts = ["block-git.sh", "guard-artifacts.sh", "guard-status.sh", "guard-metrics.sh", "guard-db.sh", "guard-build.sh", "guard-verify-deps.sh"]
       } else if (input.tool === "edit") {
+        // 1.x names the file filePath, 2.x names it path
         payload = {
           tool_name: "Edit",
           tool_input: {
-            file_path: String(args.filePath || ""),
+            file_path: String(args.filePath || args.path || ""),
             old_string: String(args.oldString || ""),
             new_string: String(args.newString || ""),
           },
@@ -270,7 +283,7 @@ export const TechieFlowPlugin = async ({ directory, client }) => {
       } else if (input.tool === "write") {
         payload = {
           tool_name: "Write",
-          tool_input: { file_path: String(args.filePath || ""), content: String(args.content || "") },
+          tool_input: { file_path: String(args.filePath || args.path || ""), content: String(args.content || "") },
         }
         scripts = ["guard-status.sh", "guard-verify.sh", "guard-metrics.sh"]
       } else if (input.tool === "apply_patch") {
@@ -396,4 +409,141 @@ export const TechieFlowPlugin = async ({ directory, client }) => {
       } catch {} // telemetry never blocks anything
     },
   }
+}
+
+// ---- OpenCode 2.x: translate its API into the 1.x hooks above ----
+// The 2.x context names no project directory, and its background service does not run in the
+// project, so the root is where this file sits: <root>/.opencode/plugin/techieflow.js.
+function projectRoot() {
+  try {
+    return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
+  } catch {
+    return process.cwd()
+  }
+}
+
+function eventTime(value) {
+  const n = typeof value === "number" ? value : Date.parse(String(value || ""))
+  return Number.isFinite(n) ? n : Date.now()
+}
+
+async function setupV2(context) {
+  const root = projectRoot()
+  // What the Stop nudge needs from a client: prompt a session. 2.x has no message listing, so
+  // closingTurn() finds no messages and the owner-text check is skipped (see the header).
+  const client = {
+    session: {
+      prompt: ({ path: p, body }) =>
+        context.session.prompt({
+          sessionID: p.id,
+          text: ((body && body.parts) || []).map((x) => x.text || "").join("\n"),
+        }),
+    },
+  }
+  const hooks = await TechieFlowPlugin({ directory: root, client })
+  const registrations = []
+
+  // Guards. A throw here stops the call, as in 1.x.
+  registrations.push(
+    await context.tool.hook("execute.before", async (event) => {
+      await hooks["tool.execute.before"]({ tool: event.tool, sessionID: event.sessionID, callID: event.id }, { args: event.input || {} })
+    }),
+  )
+
+  // TF_HARNESS, TF_PROJECT_DIR, TF_YOLO for the agent's shell commands.
+  registrations.push(
+    await context.shell.hook("create.before", async (event) => {
+      if (!event || !event.env) return
+      await hooks["shell.env"]({}, { env: event.env })
+    }),
+  )
+
+  // Telemetry and the Stop nudge: 2.x events rewritten as the 1.x events the handler reads.
+  // A step carries its own tokens and cost; each step is recorded once, under its own key.
+  // The session is created before this subscription starts, so no session.created arrives for
+  // it: a session is learned the first time an event of this project names it, and its parent
+  // is read with session.get (a root session has no parentID). A turn ends with
+  // session.execution.*, which carries no location, so only sessions learned here count.
+  const models = Object.create(null) // assistantMessageID -> {model, t0}
+  const known = Object.create(null) // sessionID -> true once learned
+  let stream = null
+  let stopped = false
+  const learn = async (sessionID) => {
+    if (!sessionID || known[sessionID]) return
+    known[sessionID] = true
+    let parentID = null
+    try {
+      const info = await context.session.get({ sessionID })
+      parentID = (info && info.parentID) || null
+    } catch {}
+    await hooks.event({ event: { type: "session.created", properties: { info: { id: sessionID, parentID } } } })
+  }
+  const translate = (ev) => {
+    const d = ev.data || {}
+    if (ev.type === "session.step.started") {
+      models[d.assistantMessageID] = { model: d.model || {}, t0: eventTime(ev.created) }
+      return null
+    }
+    if (ev.type === "session.step.ended") {
+      const started = models[d.assistantMessageID] || { model: {}, t0: eventTime(ev.created) }
+      const t = d.tokens || {}
+      return {
+        type: "message.updated",
+        properties: {
+          info: {
+            role: "assistant",
+            id: String(d.assistantMessageID) + ":" + String(ev.id),
+            sessionID: d.sessionID,
+            providerID: started.model.providerID,
+            modelID: started.model.id,
+            cost: d.cost,
+            tokens: { input: t.input, output: t.output, cache: t.cache || {} },
+            time: { created: started.t0, completed: eventTime(ev.created) },
+          },
+        },
+      }
+    }
+    const idle =
+      /^session\.execution\.(succeeded|failed|interrupted)$/.test(ev.type) ||
+      (ev.type === "session.status" && d.status && d.status.type === "idle") ||
+      ev.type === "session.idle"
+    if (idle && known[d.sessionID]) return { type: "session.idle", properties: { sessionID: d.sessionID } }
+    return null
+  }
+  ;(async () => {
+    try {
+      stream = context.event.subscribe()
+      for await (const ev of stream) {
+        if (stopped) break
+        try {
+          if (!ev) continue
+          if (ev.location && ev.location.directory) {
+            if (path.resolve(ev.location.directory) !== root) continue
+            if (ev.data && ev.data.sessionID) await learn(ev.data.sessionID)
+          }
+          const event = translate(ev)
+          if (event) await hooks.event({ event })
+        } catch {} // telemetry never blocks anything
+      }
+    } catch {}
+  })()
+
+  return async () => {
+    stopped = true
+    try {
+      if (stream && typeof stream.return === "function") await stream.return()
+    } catch {}
+    for (const r of registrations) {
+      try {
+        await r.dispose()
+      } catch {}
+    }
+  }
+}
+
+// OpenCode 1.x reads `server`; OpenCode 2.x reads `setup`. Each ignores the other.
+export default {
+  id: "techieflow",
+  server: TechieFlowPlugin,
+  setup: setupV2,
 }

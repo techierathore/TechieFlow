@@ -1,0 +1,42 @@
+# One-off: puts the OpenCode 2 plugin entry into docs/CHANGELOG.md on mac-portability by applying
+# docs/Mac-Portability-opencode2.patch here, because the file is too large for one GitHub API upload
+# from the session that wrote it. Runs only on mac-portability, does nothing once the patch file is
+# gone, and is deleted right after it has run.
+name: Apply the OpenCode 2 changelog patch (one-off)
+
+on:
+  push:
+    branches: [mac-portability]
+    paths:
+      - docs/Mac-Portability-opencode2.patch
+      - .github/workflows/apply-opencode2-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/mac-portability'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out mac-portability
+        uses: actions/checkout@v4
+        with:
+          ref: mac-portability
+
+      - name: Apply the patch, check it, commit, push to mac-portability
+        run: |
+          set -eu
+          if [ ! -f docs/Mac-Portability-opencode2.patch ]; then echo "no patch file; nothing to do"; exit 0; fi
+          git apply --check docs/Mac-Portability-opencode2.patch
+          git apply docs/Mac-Portability-opencode2.patch
+          got="$(git hash-object docs/CHANGELOG.md)"
+          echo "docs/CHANGELOG.md blob: $got"
+          test "$got" = adbf59c149034ccb103cce8bf351b3ce5be03f19
+          git rm -q docs/Mac-Portability-opencode2.patch
+          git add docs/CHANGELOG.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "CHANGELOG: the OpenCode plugin loads on the OpenCode 2 preview as well as on 1.x" -m "Applied from docs/Mac-Portability-opencode2.patch, which this commit removes."
+          git push origin HEAD:refs/heads/mac-portability
+          git log -1 --format='pushed %H'

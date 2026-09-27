@@ -13,6 +13,7 @@ and WSL. Branch `mac-portability`, one draft pull request to `main`. Ravi review
 | 5 | macOS job in CI, draft pull request | Done | Job `validate (stock macOS, /bin/bash 3.2)` added; draft PR techierathore/TechieFlow#6. Last run, `c392da8` (https://github.com/techierathore/TechieFlow/actions/runs/36330188858), read from this session: both jobs green. Linux `validate` passes; on the Mac `npm run validate`, `npm run test:install`, the portability check and shim tests, and every tests/*/run.sh (bugs, doc-check, goal, mirror, portability, regression, requirements, routing, verify) pass under /bin/bash 3.2 with BSD tools. On the way: one real Mac fault fixed (`tf_043b`, /proc in tf-verify-boot.sh) and one framework bug found and fixed (TF-052 follow-up, see Decisions) |
 | 6 | Docs | Done | README §2, docs/TechieFlow-Installation.md ("On a Mac" paragraph, the bash row, the python3 fix) and one line of docs/TechieFlow-Setup.md §16 |
 | 7 | The owner's Mac: `owner_handoff_a` | Done | Both CI jobs now run every tests/*/run.sh in UTC and in Asia/Kolkata. The time zone is not the cause (see Decisions): an `OPENCODE*` variable in the shell turned the Stop hook's checks off. `guard-status-html.sh` fixed; new regression case `harness_env`. On `62f66fb` (https://github.com/techierathore/TechieFlow/actions/runs/36338960867), read from this session: Linux `validate` green (validate, installer, every suite in UTC and in Asia/Kolkata); stock-Mac job green (validate, installer, portability check and shim tests, every suite under /bin/bash 3.2 in UTC and in Asia/Kolkata) |
+| 8 | The owner's Mac: OpenCode 2 refused the plugin | Done | `.opencode/plugin/techieflow.js` loads on the OpenCode 2 preview and on 1.x (see Decisions). Tested with the real `opencode2` 0.0.0-next-17444 and OpenCode 1.18.32 binaries against a scripted model; `npm run validate` and `npm run test:install` pass |
 
 ## Inventory (session 1)
 
@@ -200,7 +201,30 @@ them either text inside embedded Python/JavaScript or a `/proc` read that is gua
   hook and passes now; it and the CHANGELOG entry reached the branch through a patch and a one-off
   workflow, as before. The diagnose job was removed once the cause was found.
 
+- OpenCode 2 (owner's decision, 2026-09-27: a dual-format plugin on this branch). On the owner's Mac,
+  OpenCode refused the plugin: "Plugin must export a default definition with an id and an effect or
+  setup function". That was the OpenCode 2 preview (`opencode2`, npm channel `next`); the stable release
+  is still 1.18.32 and the design is pinned to 1.18.18. The file now default-exports `{ id, server,
+  setup }`. OpenCode 1.x reads `server`, its own V1 module form, with the same function as before;
+  OpenCode 2 reads `setup` and ignores the rest (checked in both loaders' source). `setup` feeds 2.x's
+  tool hook, shell hook and event stream into the unchanged 1.x hook code. What running the real
+  2.x binary showed, and the plugin now handles: the shell tool is `shell`, not `bash`; `edit` and
+  `write` take `path`, not `filePath`; the root session exists before the plugin subscribes, so it is
+  learned from its first event and `session.get` gives its parent; a turn ends with
+  `session.execution.*`. Both binaries were driven by a scripted OpenAI-style server in a scratch
+  project: the shell env, the git ban (the session goes on after the block), the status-file guard on
+  write and edit, the session pointer and the session record all work on both; the Stop nudge was
+  delivered on 2.x (under 1.x `opencode run` exits right after its one idle, the same as with the
+  unchanged file). Not on 2.x: YOLO auto-approval, since 2.x has no `permission.ask`
+  (`opencode2 run --auto` is its own switch), and the nudge's owner-text check, since 2.x gives a
+  plugin no session messages; the nudge's other checks run. The CHANGELOG entry reached the branch
+  through a patch and a one-off workflow, as before.
+
 ## Left for the owner
+
+- On the Mac, restart OpenCode 2 after pulling this branch: plugins load at start. OpenCode 2 is a
+  preview and its plugin API is still changing (its `dev` channel already differs from `next`), so a
+  later preview can break the plugin again; OpenCode 1.18.x remains the tested, stable choice.
 
 - The TF-052 follow-up (`tf-log-miss.py`, `tf-triage.py`) is fixed here but not deployed to the
   projects; run update-framework.sh on them after merging, as for any framework fix. The same goes

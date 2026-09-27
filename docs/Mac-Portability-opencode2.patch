@@ -1,0 +1,31 @@
+--- a/docs/CHANGELOG.md
++++ b/docs/CHANGELOG.md
+@@ -8,6 +8,28 @@
+ 
+ ---
+ 
++## 2026-09-27 — The OpenCode plugin loads on the OpenCode 2 preview as well as on 1.x
++
++On the owner's Mac, OpenCode refused `.opencode/plugin/techieflow.js`: "Plugin must export a default
++definition with an id and an effect or setup function". That OpenCode was the 2.x preview (`opencode2`,
++npm channel `next`); the stable release is still 1.18.32, and the design is pinned to 1.18.18. OpenCode 2
++replaced the plugin API: the default export must be `{ id, setup }`, hooks are registered through
++`context.tool.hook`, `context.shell.hook` and `context.event.subscribe()`, the context names no project
++directory, and there is no `permission.ask`. The file now default-exports `{ id, server, setup }`: 1.x
++reads `server` (its own V1 module form, the same function as before), 2.x reads `setup`, and each
++ignores the other. `setup` feeds 2.x's hooks and events into the unchanged 1.x hook code, so the
++guards, the shell env and telemetry stay one implementation. Differences found by running the real
++2.x binary (`0.0.0-next-17444`) against a scripted model: the shell tool is `shell`, not `bash`; `edit`
++and `write` take `path`, not `filePath` (the bridge now reads either); the root session is created
++before the plugin subscribes, so it is learned from its first event and `session.get` gives its
++parent; a turn ends with `session.execution.*`. Tested with that binary: shell env set, `git commit`
++blocked with block-git.sh's message and the session going on, a status-file write and edit blocked by
++guard-status.sh, the session pointer and a session record written with the right token totals, and the
++stale-HTML nudge delivered. Tested with OpenCode 1.18.32: the same results as the unchanged file. Not on
++2.x: YOLO auto-approval (`opencode2 run --auto` is its own switch) and the owner-text check of the Stop
++nudge (2.x gives a plugin no session messages); checks 1-4 of that nudge run. Not yet deployed to
++projects.
++
+ ## 2026-09-27 — The status-gate Stop hook skipped its checks when the shell had an OPENCODE_* variable
+ 
+ On the owner's Mac (macOS 26, Asia/Kolkata) `tests/regression` failed one case, `owner_handoff_a`: the
