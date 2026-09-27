@@ -90,13 +90,14 @@ detect_type() {
   # docs: a markdown/spec repo — no source at all
   [[ -z "$projects" ]] && { echo docs; return; }
 
+  # ($projects is never empty here, so xargs always has input: no GNU-only -r needed.)
   # Packable = genuinely published. IsPackable is usually <IsPackable>false</IsPackable>
   # on test projects, so only an explicit `true` counts.
-  packable="$(printf '%s\n' "$projects" | xargs -r grep -lE \
+  packable="$(printf '%s\n' "$projects" | xargs grep -lE \
       '<(PackageId>|GeneratePackageOnBuild>[[:space:]]*true|IsPackable>[[:space:]]*true)' 2>/dev/null)"
 
   # A shipped executable/hostable head: console/desktop (Exe), MAUI, or ASP.NET/Blazor host.
-  heads="$(printf '%s\n' "$projects" | xargs -r grep -lE \
+  heads="$(printf '%s\n' "$projects" | xargs grep -lE \
       '<OutputType>[[:space:]]*Exe|<UseMaui>[[:space:]]*true|Sdk="Microsoft\.NET\.Sdk\.(Web|BlazorWebAssembly)"' 2>/dev/null)"
 
   # THE DECIDING TEST: is a packaged project the product, or merely a helper?
