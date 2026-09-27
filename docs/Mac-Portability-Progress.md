@@ -152,16 +152,33 @@ them either text inside embedded Python/JavaScript or a `/proc` read that is gua
   found a leftover app only through `/proc`, which a Mac does not have. The embedded Python now
   reads the same list from `ps -A -ww -o pid=,command=` when `/proc` gives nothing; on Linux the
   `/proc` path runs exactly as before (`tf_043` on Linux: all hold).
-- tests/bugs/run.sh fails the same 3 cases on `main` and on this branch, on Linux and on the Mac
-  (see below). Because the Mac job runs every tests/*/run.sh, those 3 cases, and
-  tests/requirements, which grades tests/bugs, keep that job red. This is recorded, not hidden;
-  no test was skipped or changed to make it pass.
+- tests/bugs (owner decision, 2026-09-27): its 3 failing cases were looked at one by one.
+  - "log-miss: run record cmd log-miss" was a real script bug, not a stale test. Since TF-052,
+    `tf-phase.sh start` keeps an earlier command in the marker as `"outer"`, written first, and
+    `tf-log-miss.py` read the marker with a first-match regex, so it took the outer command for its
+    own and wrote no run record. `tf-triage.py close` (no `--started`) had the same read. Both now
+    parse the marker as JSON and take its top-level `cmd` and `started`, an owner-approved exception
+    to "no script under .tfcore/". Every other reader of the marker was checked and already reads the
+    top-level values: `guard-db.sh`, `tf-emit.sh`, `tf-yolo.sh`, `tf-verify-emit.sh`, `tf-fix-close.sh`,
+    and the greedy `sed` reads in `tf-phase.sh` and `tf-verify-emit.sh`. The test itself is unchanged
+    and passes. New case "triage close without --started takes its own start" (fails on the old script).
+    Recorded in docs/CHANGELOG.md as a TF-052 follow-up; no feedback-file entry, because a defect found
+    in the framework itself and not reported by a project carries no TF number (the convention stated
+    in tests/regression/run.sh).
+  - "fix-close called twice writes one run record": the script's message changed on purpose in the
+    TF-052 rewrite of `tf-fix-close.sh` (CHANGELOG 2026-09-15). The expected text is now
+    "run record already there"; the one-record assertion is unchanged.
+  - "fix-close: a row with no open miss is named": the test's setup no longer matched the script.
+    TF-052 part 3 names a row no verify graded as such before looking for an open miss, and
+    REQ-UI-004 was not in the test's ledger. REQ-UI-004 (which has no miss) is now graded PASS in
+    that ledger, so the "no open miss on REQ-UI-004" path is reached; the assertion is unchanged.
+- docs/CHANGELOG.md (414 KB) reached the branch the same way as tests/regression/run.sh: a patch
+  and a one-off workflow that applied it on the runner, checked the result and removed both.
 
 ## Left for the owner
 
-- tests/bugs/run.sh fails 3 cases ("log-miss: run record cmd log-miss", "fix-close called twice
-  writes one run record", "fix-close: a row with no open miss is named") on `main` on Linux, before
-  any change of this branch, and the same 3 on the Mac job. Not a portability fault; not touched.
+- The TF-052 follow-up (`tf-log-miss.py`, `tf-triage.py`) is fixed here but not deployed to the
+  projects; run update-framework.sh on them after merging, as for any framework fix.
 - `scripts/validate.mjs` still tells a Mac user whose bash -n fails that "the framework needs
   bash 4 or newer" and to `brew install bash`. That text is in a Node utility, which this task
   was told not to change beyond wiring in the new check; with this branch it should no longer be

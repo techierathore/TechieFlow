@@ -131,7 +131,7 @@ python3 - <<PY
 import json, datetime
 json.dump({"date": datetime.date.today().isoformat(), "app": "FxApp", "scope": "REQ-UI-003,REQ-FN-010", "booted": "static",
            "gates": ["build", "acceptance"], "evidence": "tests/.artifacts/verify", "run_id": "$S3",
-           "rows": {"REQ-UI-003": "PASS", "REQ-FN-010": "FAIL", "REQ-UI-002": "RENDER-FAIL"}}, open("docs/.last-verify.json", "w"), indent=1)
+           "rows": {"REQ-UI-003": "PASS", "REQ-FN-010": "FAIL", "REQ-UI-002": "RENDER-FAIL", "REQ-UI-004": "PASS"}}, open("docs/.last-verify.json", "w"), indent=1)
 PY
 out="$(bash $U/tf-fix-close.sh FxApp --started "$S3" --reqs REQ-UI-003,REQ-FN-010,REQ-UI-002,REQ-UI-004 --subagents trblazeui --build pass 2>&1)"; rc=$?
 check "fix-close runs (exit $rc): $out" "$rc"
@@ -139,12 +139,21 @@ check "fix-close: a ledger RENDER-FAIL becomes verdict_after Needs re-verify (RE
 n1="$(grep -c '"cmd":"fix-issues"' $M/runs.jsonl)"
 out2="$(bash $U/tf-fix-close.sh FxApp --started "$S3" --reqs REQ-UI-003 --build pass 2>&1)"
 n2="$(grep -c '"cmd":"fix-issues"' $M/runs.jsonl)"
-check "fix-close called twice writes one run record ($n1 → $n2)" "$([[ "$n1" == 1 && "$n2" == 1 ]] && [[ "$(has "$out2" "already exists")" == 0 ]]; echo $?)"
+check "fix-close called twice writes one run record ($n1 → $n2)" "$([[ "$n1" == 1 && "$n2" == 1 ]] && [[ "$(has "$out2" "run record already there")" == 0 ]]; echo $?)"
 check "fix-close: run record first, cmd fix-issues mode fix with the sub-agent" "$(grep '"cmd":"fix-issues"' $M/runs.jsonl | grep -q '"mode":"fix"' && grep '"cmd":"fix-issues"' $M/runs.jsonl | grep -q '"subagents":\["trblazeui"\]'; echo $?)"
 check "fix-close: miss-fix for REQ-UI-003 says Verified" "$(grep '"kind":"miss-fix"' $M/misses.jsonl | grep '"req_id":"REQ-UI-003"' | grep -q '"verdict_after":"Verified"'; echo $?)"
 check "fix-close: miss-fix for REQ-FN-010 says FAIL" "$(grep '"kind":"miss-fix"' $M/misses.jsonl | grep '"req_id":"REQ-FN-010"' | grep -q '"verdict_after":"FAIL"'; echo $?)"
 check "fix-close: a row with no open miss is named" "$(has "$out" "no open miss on REQ-UI-004")"
 check "fix-close: the miss-fix carries the fix run" "$(grep '"kind":"miss-fix"' $M/misses.jsonl | grep '"req_id":"REQ-UI-003"' | grep -q "\"fix_run_id\":\"$S3\""; echo $?)"
+
+# ---- 6b. triage close reads its own start from the marker, never the "outer" one --------------
+# The marker still names the fix above, so this start keeps it as "outer", written first. A close with
+# no --started took the outer start and recorded the triage over the fix's time (TF-052 follow-up).
+sleep 1
+S5="$(bash $U/tf-phase.sh start triage-issues FxApp 2>/dev/null)"
+bash $U/tf-triage.sh FxApp note REQ-UI-001 "could not reproduce: header logo shows on every width" >/dev/null 2>&1
+out="$(bash $U/tf-triage.sh FxApp close 2>&1)"
+check "triage close without --started takes its own start, not the outer command's ($S5)" "$(grep '"cmd":"triage-issues"' $M/runs.jsonl | grep -q "\"started\":\"$S5\""; echo $?)"
 
 # ---- 7. the emitter and log-miss report honestly (Session 6, 2026-09-07) ---------------------
 # 7a. MISS-TechieFlow-20260907-09: a run record with no `ended` was accepted and could never be
