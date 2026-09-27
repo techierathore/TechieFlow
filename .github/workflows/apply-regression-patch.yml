@@ -1,0 +1,44 @@
+# One-off: puts the tested tests/regression/run.sh on mac-portability by applying
+# docs/Mac-Portability-regression.patch here, because the 209 KB file does not fit in one
+# GitHub API upload from the session that wrote it. Runs only on mac-portability, does nothing
+# once the patch file is gone, and is deleted right after it has run.
+name: Apply the regression patch (one-off)
+
+on:
+  push:
+    branches: [mac-portability]
+    paths:
+      - docs/Mac-Portability-regression.patch
+      - .github/workflows/apply-regression-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/mac-portability'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out mac-portability
+        uses: actions/checkout@v4
+        with:
+          ref: mac-portability
+
+      - name: Apply the patch, check it, commit, push to mac-portability
+        run: |
+          set -eu
+          if [ ! -f docs/Mac-Portability-regression.patch ]; then echo "no patch file; nothing to do"; exit 0; fi
+          git apply --check docs/Mac-Portability-regression.patch
+          git apply docs/Mac-Portability-regression.patch
+          got="$(git hash-object tests/regression/run.sh)"
+          echo "tests/regression/run.sh blob: $got"
+          test "$got" = 5b1356484fe288049bb04cd1538d418b6a95ea99
+          bash -n tests/regression/run.sh
+          bash tests/portability/run.sh --scan-only
+          git rm -q docs/Mac-Portability-regression.patch
+          git add tests/regression/run.sh
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "tests/regression: run on a stock Mac (the patch, applied)" -m "timeout, sed -i, date -d and touch -d go through tf-portable.sh; md5sum becomes cksum; \\| in basic grep regexes becomes grep -E; wc output is normalised; the fake dotnet prints timestamps with python3; one comment in embedded Python loses an apostrophe bash 3.2 cannot parse. Applied from docs/Mac-Portability-regression.patch, which this commit removes."
+          git push origin HEAD:refs/heads/mac-portability
+          git log -1 --format='pushed %H'
