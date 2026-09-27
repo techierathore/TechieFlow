@@ -80,6 +80,7 @@ set -euo pipefail
 # The reference framework is wherever this script lives — no hardcoded path,
 # so the repo works from WSL (/mnt/c/...), macOS (/Volumes/...), or Linux.
 TEMPLATE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$TEMPLATE/.tfcore/utils/tf-portable.sh"   # tf_realpath (older macOS lacks the command)
 
 DRY_RUN=0
 KEEP_PERMS=0
@@ -107,7 +108,7 @@ for arg in "$@"; do
 done
 
 TARGET="${TARGET:-$PWD}"
-TARGET="$(realpath "$TARGET")"
+TARGET="$(tf_realpath "$TARGET")"
 
 if [[ "$TARGET" == "$TEMPLATE" || "$TARGET" == "$TEMPLATE"/* ]]; then
   echo "Refusing to update the reference template itself." >&2
