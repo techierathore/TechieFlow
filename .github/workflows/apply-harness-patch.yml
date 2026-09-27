@@ -1,0 +1,43 @@
+# One-off: puts the harness_env regression case into tests/regression/run.sh and its entry into
+# docs/CHANGELOG.md on mac-portability by applying docs/Mac-Portability-harness.patch here, because
+# both files are too large for one GitHub API upload from the session that wrote them. Runs only on
+# mac-portability, does nothing once the patch file is gone, and is deleted right after it has run.
+name: Apply the harness patch (one-off)
+
+on:
+  push:
+    branches: [mac-portability]
+    paths:
+      - docs/Mac-Portability-harness.patch
+      - .github/workflows/apply-harness-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/mac-portability'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out mac-portability
+        uses: actions/checkout@v4
+        with:
+          ref: mac-portability
+
+      - name: Apply the patch, check it, commit, push to mac-portability
+        run: |
+          set -eu
+          if [ ! -f docs/Mac-Portability-harness.patch ]; then echo "no patch file; nothing to do"; exit 0; fi
+          git apply --check docs/Mac-Portability-harness.patch
+          git apply docs/Mac-Portability-harness.patch
+          reg="$(git hash-object tests/regression/run.sh)"; log="$(git hash-object docs/CHANGELOG.md)"
+          echo "tests/regression/run.sh blob: $reg"; echo "docs/CHANGELOG.md blob: $log"
+          test "$reg" = a1394f5b20749039ddd6bf296c858712e02145b8
+          test "$log" = a2d192b8ec56b19d0ea22988481ee969a1e8d389
+          git rm -q docs/Mac-Portability-harness.patch
+          git add tests/regression/run.sh docs/CHANGELOG.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "Regression case harness_env and its CHANGELOG entry" -m "Applied from docs/Mac-Portability-harness.patch, which this commit removes."
+          git push origin HEAD:refs/heads/mac-portability
+          git log -1 --format='pushed %H'

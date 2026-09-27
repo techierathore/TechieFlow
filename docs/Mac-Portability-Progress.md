@@ -12,6 +12,7 @@ and WSL. Branch `mac-portability`, one draft pull request to `main`. Ravi review
 | 4 | Everything else; the check passes | Done | Every site fixed. `tests/regression/run.sh` reached the branch through a one-off workflow that applied the tested patch on the runner (commit `7b22b30`, blob `5b13564`; see Decisions). On the branch the portability check passes on Linux and on the Mac (65 scripts, 18 commented exceptions). Linux in this session: goal, routing, mirror, doc-check, regression pass; bugs, verify, requirements fail exactly as in the baseline; `npm run validate` and `npm run test:install` pass |
 | 5 | macOS job in CI, draft pull request | Done | Job `validate (stock macOS, /bin/bash 3.2)` added; draft PR techierathore/TechieFlow#6. Last run, `c392da8` (https://github.com/techierathore/TechieFlow/actions/runs/36330188858), read from this session: both jobs green. Linux `validate` passes; on the Mac `npm run validate`, `npm run test:install`, the portability check and shim tests, and every tests/*/run.sh (bugs, doc-check, goal, mirror, portability, regression, requirements, routing, verify) pass under /bin/bash 3.2 with BSD tools. On the way: one real Mac fault fixed (`tf_043b`, /proc in tf-verify-boot.sh) and one framework bug found and fixed (TF-052 follow-up, see Decisions) |
 | 6 | Docs | Done | README §2, docs/TechieFlow-Installation.md ("On a Mac" paragraph, the bash row, the python3 fix) and one line of docs/TechieFlow-Setup.md §16 |
+| 7 | The owner's Mac: `owner_handoff_a` | In progress | Both CI jobs now run every tests/*/run.sh in UTC and in Asia/Kolkata. The time zone is not the cause (see Decisions): an `OPENCODE*` variable in the shell turned the Stop hook's checks off. `guard-status-html.sh` fixed; new regression case `harness_env` |
 
 ## Inventory (session 1)
 
@@ -174,11 +175,38 @@ them either text inside embedded Python/JavaScript or a `/proc` read that is gua
     that ledger, so the "no open miss on REQ-UI-004" path is reached; the assertion is unchanged.
 - docs/CHANGELOG.md (414 KB) reached the branch the same way as tests/regression/run.sh: a patch
   and a one-off workflow that applied it on the runner, checked the result and removed both.
+- `owner_handoff_a` on the owner's Mac (macOS 26, Asia/Kolkata, 2026-09-27). The time zone was tested
+  first, as asked: both jobs now run every tests/*/run.sh a second time with `TZ=Asia/Kolkata` (the UTC
+  runs are kept, now with `TZ=UTC` set). A temporary diagnose job ran the case on macOS 15 and macOS 26
+  (26.6.2), with `TZ=UTC`, with `TZ=Asia/Kolkata`, and with the system zone set to Asia/Kolkata and `TZ`
+  unset as on the owner's Mac: it passed all six times (run 36337846064), and the shim printed the
+  right local and UTC times in both zones. On Linux it passed in UTC, Asia/Kolkata and
+  America/Los_Angeles, and with a stand-in BSD `date`. The three suspects hold: `tf_date_from -u` on
+  the BSD path is arithmetic on the epoch plus `date -u -r`; `touch -t` gets local time from
+  `tf_date_from` without `-u`, which is what it reads; the hook reads transcript and run-record
+  timestamps as UTC and file times as epochs. What does reproduce the owner's line exactly is any
+  variable starting `OPENCODE` in the environment: the hook took it as "this is OpenCode" before it
+  looked at Claude Code's own variables, looked for `.tfcore/.session/opencode.json`, found none, and
+  skipped checks 2-5, so the closing message went through with exit 0 and no fault named. That is a
+  real bug in projects too (a Claude Code turn in a shell with an OpenCode key or config path exported
+  ends unchecked), so the hook is fixed, not the test: it now takes the harness in the order
+  `tf-harness.sh` and `tf-emit.sh` already use (`TF_HARNESS`, which the OpenCode plugin sets on every
+  guard it runs; then `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_SESSION_ID`,
+  `CLAUDE_PROJECT_DIR`; then `OPENCODE*`). No other script picks the harness OpenCode-first. Every
+  other script that compares transcript or file times was read for mixed local and UTC time and needed
+  no change (`tf-yolo.sh`, `tf-triage.py`, `tf-log-miss.py`, `tf-emit.sh`, `metrics-session.sh`,
+  `tf-metrics.sh`, `tf-verify-emit.sh`, `tf-goal.sh`, `tf-status-evidence.sh`, `tf-devguide-list.py`,
+  whose cutoff is a local date on purpose). New regression case `harness_env` fails against the old
+  hook and passes now; it and the CHANGELOG entry reached the branch through a patch and a one-off
+  workflow, as before. The diagnose job was removed once the cause was found.
 
 ## Left for the owner
 
 - The TF-052 follow-up (`tf-log-miss.py`, `tf-triage.py`) is fixed here but not deployed to the
-  projects; run update-framework.sh on them after merging, as for any framework fix.
+  projects; run update-framework.sh on them after merging, as for any framework fix. The same goes
+  for the `guard-status-html.sh` harness fix.
+- On your Mac, `env | grep '^OPENCODE'` should show the variable that turned the hook's checks off.
+  With this branch `tests/regression/run.sh` passes with it set; nothing needs unsetting.
 - `scripts/validate.mjs` still tells a Mac user whose bash -n fails that "the framework needs
   bash 4 or newer" and to `brew install bash`. That text is in a Node utility, which this task
   was told not to change beyond wiring in the new check; with this branch it should no longer be
