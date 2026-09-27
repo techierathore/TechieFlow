@@ -7,7 +7,7 @@ and WSL. Branch `mac-portability`, one draft pull request to `main`. Ravi review
 | # | Session | Status | Result |
 |---|---------|--------|--------|
 | 1 | Inventory and a check in code | Done | 123 pattern hits in 20 scripts plus 5 found by reading (below); `tests/portability/run.sh` wired into `npm run validate`, fails listing every site |
-| 2 | Shim library `.tfcore/utils/tf-portable.sh` | Not started | |
+| 2 | Shim library `.tfcore/utils/tf-portable.sh` | Done | 10 functions (tf_timeout, tf_setsid, tf_sed_inplace, tf_stat_mtime, tf_stat_size, tf_date_from, tf_epoch_frac, tf_realpath, tf_relpath, tf_read_lines); `tests/portability/shim-tests.sh` 62 cases pass on Linux, fallbacks included |
 | 3 | tf-goal.sh, tf-yolo.sh, tf-build.sh | Not started | |
 | 4 | Everything else; the check passes | Not started | |
 | 5 | macOS job in CI, draft pull request | Not started | |
@@ -75,6 +75,17 @@ Found by reading, not by a pattern (5):
   doc-check and regression pass; bugs (3 failures), verify (22) and requirements (9, caused by
   those two) fail because this container has no Playwright browser and no .NET SDK. Runs after
   each change are compared against these exact failure lists.
+- Shim additions beyond the list asked for, each because a caller needed it: `tf_relpath`
+  (`realpath --relative-to` in tests/mirror), `tf_epoch_frac` (`date +%s.%N` in a regression
+  fixture). `tf_date_from` takes `@EPOCH`, `now`, `+/-N unit` and `YYYY-MM-DD[ HH:MM[:SS]][Z]`,
+  the forms the scripts use; on GNU date the argument goes to `date -d` unchanged.
+- `tf_setsid --exec CMD` replaces the calling subshell, as `exec setsid CMD` did in tf-goal.sh,
+  so the process ids tf-goal.sh watches and kills stay the same.
+- `tf_timeout`'s fallback is perl (always on macOS): it runs the command in its own process
+  group, sends the group TERM at the limit and exits 124, like GNU timeout. Whole seconds only
+  (a fraction rounds up).
+- The shim tests take the native tools off PATH to prove the fallbacks on Linux too; the BSD
+  branches of `tf_sed_inplace`, `tf_stat_*` and `tf_date_from` can only run on the Mac job.
 
 ## Left for the owner
 
