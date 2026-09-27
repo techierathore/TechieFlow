@@ -15,7 +15,7 @@
 #   tf_date_from [-u] WHEN [+FORMAT]     date -d WHEN; WHEN is @EPOCH, "-10 min", "+2 hours",
 #                                        "now", or YYYY-MM-DD[( |T)HH:MM[:SS]][Z]
 #   tf_epoch_frac                        seconds since the epoch with a fraction (date +%s.%N)
-#   tf_realpath PATH                     realpath(1)
+#   tf_realpath PATH                     realpath(1) as GNU has it (the last part may be missing)
 #   tf_relpath BASE PATH                 realpath --relative-to=BASE PATH
 #   tf_read_lines ARRAY-NAME             mapfile -t ARRAY-NAME (reads stdin)
 
@@ -196,7 +196,9 @@ tf_epoch_frac() {
 # ---- tf_realpath / tf_relpath -------------------------------------------------------------
 tf_realpath() {
   if [ $# -ne 1 ]; then echo "tf_realpath: usage: tf_realpath PATH" >&2; return 1; fi
-  if command -v realpath >/dev/null 2>&1 && realpath / >/dev/null 2>&1; then realpath "$1"; return $?; fi
+  # GNU realpath (it has -m) only: the macOS 13+ realpath refuses a path whose last part does not
+  # exist yet, which GNU realpath and the fallback below both accept.
+  if realpath -m / >/dev/null 2>&1; then realpath "$1"; return $?; fi
   python3 -c 'import os, sys
 p = sys.argv[1]
 if not os.path.exists(os.path.dirname(os.path.abspath(p)) or "/"):

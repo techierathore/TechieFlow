@@ -11,11 +11,23 @@
 # must run once (only when a browser install needs sudo and sudo is unavailable).
 # Exit 0 ready · 1 not ready · 2 node or npm missing.
 set -u
+source "$(dirname "${BASH_SOURCE[0]}")/tf-portable.sh"   # tf_sed_inplace: GNU and BSD sed
 CHECK=0; [[ "${1:-}" == "--check" ]] && CHECK=1
 command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1 || { echo "NOT-READY node and npm are required"; exit 2; }
 ok=1
 
 say() { echo "  $*"; }
+# cfg_sub FILE ALL ERE TEXT: replace the first match of ERE on each line (ALL=1), or only on the
+# first line that matches (ALL=0, what GNU sed's 0,/re/ address did), with TEXT; \n in TEXT is a
+# newline. awk, so it reads the same on GNU and BSD systems.
+cfg_sub() {
+  local tmp
+  tmp="$(mktemp "$1.XXXXXX")" || return 1
+  awk -v all="$2" -v re="$3" -v rep="$4" '
+    (all == 1 || !done) && match($0, re) { $0 = substr($0, 1, RSTART - 1) rep substr($0, RSTART + RLENGTH); done = 1 }
+    { print }' "$1" > "$tmp" && cat "$tmp" > "$1"
+  rm -f "$tmp"
+}
 
 # package.json
 if [[ ! -f package.json ]]; then
@@ -64,9 +76,9 @@ elif ! grep -q "tests/.artifacts" playwright.config.ts; then
   if [[ $CHECK -eq 1 ]]; then say "playwright.config.ts: outputDir not under tests/.artifacts"; ok=0
   else
     if grep -q "outputDir" playwright.config.ts; then
-      sed -i "s#outputDir:[^,]*,#outputDir: './tests/.artifacts/test-results',#" playwright.config.ts
+      tf_sed_inplace "s#outputDir:[^,]*,#outputDir: './tests/.artifacts/test-results',#" playwright.config.ts
     else
-      sed -i "s#defineConfig({#defineConfig({\n  outputDir: './tests/.artifacts/test-results',#" playwright.config.ts
+      cfg_sub playwright.config.ts 1 "defineConfig[(][{]" "defineConfig({\n  outputDir: './tests/.artifacts/test-results',"
     fi
     say "playwright.config.ts: outputDir pinned under tests/.artifacts"
   fi
@@ -77,13 +89,13 @@ else say "playwright.config.ts: present, output pinned"; fi
 if [[ -f playwright.config.ts ]] && ! grep -q "BASE_URL" playwright.config.ts; then
   if [[ $CHECK -eq 1 ]]; then say "playwright.config.ts: does not read BASE_URL, so --base is ignored"; ok=0
   elif grep -qE "baseURL[\"']?[[:space:]]*:" playwright.config.ts; then
-    sed -i -E "s#(baseURL[\"']?[[:space:]]*:[[:space:]]*)#\1process.env.BASE_URL || #" playwright.config.ts
+    tf_sed_inplace -E "s#(baseURL[\"']?[[:space:]]*:[[:space:]]*)#\1process.env.BASE_URL || #" playwright.config.ts
     say "playwright.config.ts: baseURL now reads BASE_URL first, its own address after"
   elif grep -qE "use[[:space:]]*:[[:space:]]*\{" playwright.config.ts; then
-    sed -i -E "0,/use[[:space:]]*:[[:space:]]*\{/s##use: { baseURL: process.env.BASE_URL,#" playwright.config.ts
+    cfg_sub playwright.config.ts 0 "use[[:space:]]*:[[:space:]]*[{]" "use: { baseURL: process.env.BASE_URL,"
     say "playwright.config.ts: baseURL added, read from BASE_URL"
   else
-    sed -i "0,/defineConfig({/s##defineConfig({\n  use: { baseURL: process.env.BASE_URL },#" playwright.config.ts
+    cfg_sub playwright.config.ts 0 "defineConfig[(][{]" "defineConfig({\n  use: { baseURL: process.env.BASE_URL },"
     say "playwright.config.ts: baseURL added, read from BASE_URL"
   fi
 fi

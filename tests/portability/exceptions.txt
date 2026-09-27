@@ -32,5 +32,4 @@ proc-fs .tfcore/utils/tf-harness.sh [[ -d /proc/self ]]
 # Python in tf-verify-boot.sh: kills a leftover app found through /proc. On a Mac the listing fails
 # inside try/except and nothing extra is killed (the pid-file path still stops the app). Listed
 # under "Left for the owner" in docs/Mac-Portability-Progress.md.
-proc-fs .tfcore/utils/tf-verify-boot.sh procs = [p for p in os.listdir("/proc") if p.isdigit()]
 proc-fs .tfcore/utils/tf-verify-boot.sh cmd = open(f"/proc/{p}/cmdline", "rb")
