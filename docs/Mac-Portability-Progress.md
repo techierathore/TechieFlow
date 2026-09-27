@@ -9,7 +9,7 @@ and WSL. Branch `mac-portability`, one draft pull request to `main`. Ravi review
 | 1 | Inventory and a check in code | Done | 123 pattern hits in 20 scripts plus 5 found by reading (below); `tests/portability/run.sh` wired into `npm run validate`, fails listing every site |
 | 2 | Shim library `.tfcore/utils/tf-portable.sh` | Done | 10 functions (tf_timeout, tf_setsid, tf_sed_inplace, tf_stat_mtime, tf_stat_size, tf_date_from, tf_epoch_frac, tf_realpath, tf_relpath, tf_read_lines); `tests/portability/shim-tests.sh` 62 cases pass on Linux, fallbacks included |
 | 3 | tf-goal.sh, tf-yolo.sh, tf-build.sh | Done | tf-goal.sh 9 sites and tf-build.sh 12 sites moved to the shim or POSIX spellings, plus 4 empty-array expansions in tf-build.sh; tf-yolo.sh needed nothing. goal 36/36, regression all hold, other suites unchanged from the baseline |
-| 4 | Everything else; the check passes | Not started | |
+| 4 | Everything else; the check passes | Blocked (one file) | Every remaining site fixed, and in the working copy `tests/portability/run.sh` passes (65 scripts, 18 commented exceptions, all false positives or guarded); Linux: goal, routing, mirror, doc-check, regression pass, bugs/verify/requirements fail exactly as in the baseline, `npm run validate` and `npm run test:install` pass. One file could not be pushed: `tests/regression/run.sh` (209 KB) is too large for the GitHub API upload this session had to use. Its change is `docs/Mac-Portability-regression.patch`; until it is applied the check fails on the branch (the 48 old sites in that file) |
 | 5 | macOS job in CI, draft pull request | Not started | |
 | 6 | Docs | Not started | |
 
@@ -59,6 +59,9 @@ Found by reading, not by a pattern (5):
 - `"${arr[@]}"` of an empty array under `set -u` is an "unbound variable" error before bash 4.4.
   No pattern can tell an empty array from a full one; reviewed file by file in sessions 3 and 4.
 
+After session 4: **0 of the 128** are left. The check passes with 18 commented exceptions, all of
+them either text inside embedded Python/JavaScript or a `/proc` read that is guarded.
+
 ## Decisions taken
 
 - Git: the hook `.tfcore/hooks/block-git.sh` and the deny rules in `.claude/settings.json` block
@@ -95,9 +98,50 @@ Found by reading, not by a pattern (5):
 - Empty arrays under `set -u` in tf-build.sh (`EXTRA`, `projects`, `pdirs`) use
   `${a[@]+"${a[@]}"}`. `EXTRA` is empty on every build without `--`, so under bash 3.2 every such
   build stopped with "EXTRA[@]: unbound variable".
+- Session 4, the same empty-array fix where an array can be empty under `set -u`:
+  tf-verify-boot.sh (`ALL`, `LSENV`, `WEBR`, `CFGARGS`), tf-verify-tests.sh (`SPECS`),
+  tf-status-evidence.sh (`NEWER`), tests/mirror (`priv`), tests/requirements (`EMIT_LINES`).
+  Every other array expansion under `set -u` was read and is either never empty or already
+  behind a `${#a[@]} -gt 0` test.
+- `sed -i` with GNU-only scripts in tf-verify-env.sh (`0,/re/` addresses, `\n` in a replacement)
+  became a small awk helper, `cfg_sub`, in that file. Its output was compared with GNU sed's on a
+  sample config for all three edits: identical.
+- `xargs -r`: install-metrics.sh only ever calls xargs with input (the list was tested non-empty
+  just above), so `-r` was dropped. tf-status-evidence.sh now skips the xargs call when find
+  found nothing, which is what `-r` did.
+- `realpath`: `tf_realpath` uses the native command only when it is GNU realpath, because the
+  macOS 13+ realpath refuses a path whose last part does not exist yet (update-framework.sh can
+  be given such a path). scaffold-*.sh and update-framework.sh source the shim from the template.
+- `mktemp --suffix .json` (tf-assets.sh) became mktemp with a template, renamed to `.json`.
+- tf-harness.sh walks the process tree with `ps -o ppid=,comm=` when there is no `/proc`, the way
+  the Python copy in tf-emit.sh already did, so harness detection works on a Mac.
+- The two here-documents bash 3.2 cannot parse (block-git.sh's verdict program, tf-emit.sh's
+  TF_PROG) are now read into a variable with `IFS= read -r -d ''` and run with `python3 -c`.
+  block-git.sh was compared against the old copy on 13 commands, with and without YOLO: the
+  same exit code and the same output in all 26 cases. In tests/regression one comment inside
+  embedded Python lost an apostrophe instead.
+- `wc` output is wrapped in `$(( ))` wherever it is compared as text or printed (BSD wc pads it).
+- Tests: `timeout` → `tf_timeout`, `touch -d` → `touch -t "$(tf_date_from ... +%Y%m%d%H%M.%S)"`,
+  `md5sum` → `cksum` (only equality is compared), `pgrep -a` → `ps -A -o args= | grep -E`,
+  `declare -A` in tests/requirements → two plain arrays, `\|` in basic grep regexes → `grep -E`.
+  The fake `dotnet` in tests/regression prints its timestamps with python3 (BSD date has no %N).
+- A trailing comment that names a flagged command (for example "no realpath here") trips the
+  check, so such comments were worded around it rather than adding exceptions.
 
 ## Left for the owner
+
+- **Apply `docs/Mac-Portability-regression.patch`** to `tests/regression/run.sh`, then commit:
+  `git apply docs/Mac-Portability-regression.patch` from the repository root (it was checked to
+  turn `main`'s file into exactly the tested version, blob `5b13564`). Every commit on this branch
+  went through the GitHub API, one call per commit, because the repository's own git hook stops an
+  agent from running git; a 209 KB file does not fit in one such call. Until the patch is applied,
+  `npm run validate` fails on the branch, on Linux and on the Mac, with the 48 sites still in that
+  file. The patch file itself can be deleted afterwards.
 
 - `.tfcore/utils/tf-verify-boot.sh` (embedded Python in `stop`): a leftover app is also searched
   for through `/proc`; on a Mac that search fails quietly inside try/except, and only the pid-file
   path stops the app.
+- `scripts/validate.mjs` still tells a Mac user whose bash -n fails that "the framework needs
+  bash 4 or newer" and to `brew install bash`. That text is in a Node utility, which this task
+  was told not to change beyond wiring in the new check; with this branch it should no longer be
+  reached on a Mac, and the owner may want to reword or drop it.
