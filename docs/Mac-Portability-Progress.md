@@ -8,7 +8,7 @@ and WSL. Branch `mac-portability`, one draft pull request to `main`. Ravi review
 |---|---------|--------|--------|
 | 1 | Inventory and a check in code | Done | 123 pattern hits in 20 scripts plus 5 found by reading (below); `tests/portability/run.sh` wired into `npm run validate`, fails listing every site |
 | 2 | Shim library `.tfcore/utils/tf-portable.sh` | Done | 10 functions (tf_timeout, tf_setsid, tf_sed_inplace, tf_stat_mtime, tf_stat_size, tf_date_from, tf_epoch_frac, tf_realpath, tf_relpath, tf_read_lines); `tests/portability/shim-tests.sh` 62 cases pass on Linux, fallbacks included |
-| 3 | tf-goal.sh, tf-yolo.sh, tf-build.sh | Not started | |
+| 3 | tf-goal.sh, tf-yolo.sh, tf-build.sh | Done | tf-goal.sh 9 sites and tf-build.sh 12 sites moved to the shim or POSIX spellings, plus 4 empty-array expansions in tf-build.sh; tf-yolo.sh needed nothing. goal 36/36, regression all hold, other suites unchanged from the baseline |
 | 4 | Everything else; the check passes | Not started | |
 | 5 | macOS job in CI, draft pull request | Not started | |
 | 6 | Docs | Not started | |
@@ -86,6 +86,15 @@ Found by reading, not by a pattern (5):
   (a fraction rounds up).
 - The shim tests take the native tools off PATH to prove the fallbacks on Linux too; the BSD
   branches of `tf_sed_inplace`, `tf_stat_*` and `tf_date_from` can only run on the Mac job.
+- tf-goal.sh now always starts the harness in its own session (`tf_setsid --exec`). On Linux
+  that is what it did already (setsid is always there); on a Mac it used to skip setsid, so
+  `kill_child` could stop only the top process. Now it stops the whole tree there too.
+- GNU regex escapes were replaced by their POSIX spelling, which GNU tools read the same way:
+  `\s` → `[[:space:]]`, `\b429\b` → `(^|[^[:alnum:]_])429([^[:alnum:]_]|$)` (inside `grep -q`, so
+  only match or no match matters).
+- Empty arrays under `set -u` in tf-build.sh (`EXTRA`, `projects`, `pdirs`) use
+  `${a[@]+"${a[@]}"}`. `EXTRA` is empty on every build without `--`, so under bash 3.2 every such
+  build stopped with "EXTRA[@]: unbound variable".
 
 ## Left for the owner
 

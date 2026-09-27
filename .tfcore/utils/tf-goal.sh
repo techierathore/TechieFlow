@@ -68,6 +68,8 @@
 #   Override command lines with TF_GOAL_CLAUDE_FLAGS / TF_GOAL_OPENCODE_FLAGS /
 
 set -u
+# GNU-only commands (setsid, stat -c, date -d) go through the shim, so a stock Mac runs this too.
+source "$(dirname "${BASH_SOURCE[0]}")/tf-portable.sh"
 
 HARNESS="claude"; MODEL=""; BUFFER_MIN=15; DEFAULT_WAIT_MIN=60; MAX_CYCLES=60; IDLE_RETRY=30
 PROBE_MIN=15; PROBE_MAX_H=8; STALL_MIN=15
@@ -162,7 +164,7 @@ else
     _lr="$(state_get last_reason)"
     case "$_lr" in
       done:*|max-cycles|stopped|"") ;;
-      *) echo "tf-goal: a run looks active in $APP_DIR (goal.json last_reason=$_lr, touched $(date -u -r "$STATE" +%H:%MZ)). Wait for it, or continue it with --resume." >&2; exit 2 ;;
+      *) echo "tf-goal: a run looks active in $APP_DIR (goal.json last_reason=$_lr, touched $(tf_date_from -u "@$(tf_stat_mtime "$STATE")" +%H:%MZ)). Wait for it, or continue it with --resume." >&2; exit 2 ;;
     esac
   fi
   CYCLE=0; SESSION_ID=""; STALLS=0
@@ -436,11 +438,11 @@ probe_until_clear() {
     else
       ( cd "$APP_DIR" && opencode run --auto "Reply with the single word OK." ) > "$pout" 2>&1; prc=$?
     fi
-    if [[ $prc -eq 0 ]] && ! grep -qiE 'usage limit|hit your limit|rate[ _-]?limit|limit (has been )?(reached|exceeded)|too many requests|\b429\b|overloaded|weekly limit|resets? (at|in)\b' "$pout"; then
+    if [[ $prc -eq 0 ]] && ! grep -qiE 'usage limit|hit your limit|rate[ _-]?limit|limit (has been )?(reached|exceeded)|too many requests|(^|[^[:alnum:]_])429([^[:alnum:]_]|$)|overloaded|weekly limit|resets? (at|in)([^[:alnum:]_]|$)' "$pout"; then
       log "probe #$n OK"; return 0
     fi
     log "probe #$n still limited (rc=$prc: $(head -c 120 "$pout" | tr '\n' ' ')) — next in ${PROBE_MIN}m"
-    state_set resume_at "probe #$((n+1)) at $(date -d "+${PROBE_MIN} min" '+%H:%M' 2>/dev/null)"
+    state_set resume_at "probe #$((n+1)) at $(tf_date_from "+${PROBE_MIN} min" '+%H:%M' 2>/dev/null)"
     if [[ $(date +%s) -ge $deadline ]]; then log "probe window (${PROBE_MAX_H}h) exhausted — resuming anyway"; return 1; fi
     nap $(( PROBE_MIN * 60 ))
   done
@@ -450,7 +452,7 @@ sleep_until() { # epoch
   local target="$1" now left
   while :; do
     now=$(date +%s); left=$(( target - now )); [[ $left -le 0 ]] && break
-    state_set resume_at "$(date -u -d "@$target" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "$target")"
+    state_set resume_at "$(tf_date_from -u "@$target" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "$target")"
     if [[ $left -gt 300 ]]; then nap 300; else nap "$left"; fi
   done
   state_set resume_at ""
@@ -482,16 +484,14 @@ run_cycle() { # runs "${CMD[@]}" in $APP_DIR, output to $OUT and $LOG; sets RC, 
   STALLED=0
   local quiet=0 prev=-1 size
   if [[ -n "${TF_GOAL_FAKE_CMD:-}" ]]; then CMD=(bash -c "$TF_GOAL_FAKE_CMD"); fi
-  if command -v setsid >/dev/null 2>&1; then
-    ( cd "$APP_DIR" && TF_YOLO=1 exec setsid "${CMD[@]}" ) > >(tee -a "$LOG" > "$OUT") 2>&1 &
-  else
-    ( cd "$APP_DIR" && TF_YOLO=1 exec "${CMD[@]}" ) > >(tee -a "$LOG" > "$OUT") 2>&1 &
-  fi
+  # Its own session and process group (tf_setsid: setsid(1), or python3/perl on a Mac), so
+  # kill_child can stop the whole tree.
+  ( cd "$APP_DIR" && TF_YOLO=1 tf_setsid --exec "${CMD[@]}" ) > >(tee -a "$LOG" > "$OUT") 2>&1 &
   CHILD=$!
   while kill -0 "$CHILD" 2>/dev/null; do
     nap "$STALL_TICK"
     kill -0 "$CHILD" 2>/dev/null || break
-    size="$(stat -c %s "$OUT" 2>/dev/null || echo 0)"
+    size="$(tf_stat_size "$OUT" 2>/dev/null || echo 0)"
     if [[ "$size" == "$prev" ]]; then quiet=$(( quiet + STALL_TICK )); else quiet=0; prev="$size"; fi
     if [[ "$STALL_SEC" -gt 0 && $quiet -ge "$STALL_SEC" ]]; then
       log "STALL: no output for $(( quiet / 60 ))m$(( quiet % 60 ))s (cycle $CYCLE, ${size} bytes) — stopping the harness, re-prompting"
@@ -569,7 +569,7 @@ while :; do
   OUT="$STATE_DIR/goal-cycle-$CYCLE.out"
   if [[ $DRY -eq 1 ]]; then echo "dry run — would launch cycle $CYCLE ($KIND):" >&2; printf '  %q' "${CMD[@]}"; echo; exit 0; fi
   state_set cycle "$CYCLE"; CYCLE_START="$(date +%s)"
-  log "cycle $CYCLE ($KIND) → ${CMD[*]:0:6} … (prompt ${#CMD[-1]} chars)"
+  log "cycle $CYCLE ($KIND) → ${CMD[*]:0:6} … (prompt ${#CMD[${#CMD[@]}-1]} chars)"
 
   # The run's start is now, not when the agent reaches step 0: write an unclaimed marker the
   # first command's `tf-phase.sh start` claims (MISS-TechieFlow-20260905-20).
@@ -620,7 +620,7 @@ while :; do
         log "probe succeeded — resuming session ${SESSION_ID:-(--continue)} after a ${BUFFER_MIN}m buffer"
         nap $(( BUFFER_MIN * 60 ))
       else
-        WHEN="$(date -d "@$DETAIL" '+%Y-%m-%d %H:%M %Z' 2>/dev/null || echo "$DETAIL")"
+        WHEN="$(tf_date_from "@$DETAIL" '+%Y-%m-%d %H:%M %Z' 2>/dev/null || echo "$DETAIL")"
         log "USAGE LIMIT hit (cycle $CYCLE) — RETRY AT $WHEN (stated reset + ${BUFFER_MIN}m buffer). Sleeping."
         state_set last_reason "limit" resume_at "$WHEN"
         sleep_until "$DETAIL"
