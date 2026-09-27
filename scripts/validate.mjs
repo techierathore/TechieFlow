@@ -6,7 +6,8 @@
 //      OpenCode run different instructions.
 //   2. OpenCode references: every {file:...} in opencode.jsonc points at a file that exists.
 //      One dead reference makes OpenCode reject the whole config.
-//   3. Shell syntax: `bash -n` on every .sh file in the repository.
+//   3. Shell syntax: `bash -n` on every .sh file in the repository, and shell portability
+//      (tests/portability/run.sh: nothing GNU-only or bash-4-only outside the shim library).
 //   4. Package contents: `npm pack --dry-run` succeeds, ships every file the shell scripts
 //      deploy, and ships none of the local-only or per-machine files.
 //
@@ -97,6 +98,14 @@ check("bash -n passes on every .sh file", () => {
   }
   assert(broken.length === 0, broken.join("\n"));
   console.log(`      ${scripts.length} script(s) checked with bash ${bashVersion}`);
+});
+
+// ---- 3b. shell portability (tests/portability/run.sh): no GNU-only or bash-4-only construct
+// outside .tfcore/utils/tf-portable.sh, and the shim's own unit tests pass.
+check("shell scripts run on a stock Mac (tests/portability/run.sh)", () => {
+  const result = spawnSync("bash", [join(root, "tests", "portability", "run.sh")], { cwd: root, encoding: "utf8" });
+  if (result.error) throw new Error(`bash could not be started: ${result.error.message}`);
+  assert(result.status === 0, `${result.stdout}${result.stderr}`.trim());
 });
 
 // ---- 4. package contents
