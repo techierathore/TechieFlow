@@ -1,0 +1,36 @@
+# Lines tests/portability/run.sh may leave alone. One per line: <rule-id> <path> <text on the line>
+# Every entry says why. A stale entry (it matches nothing any more) fails the check.
+
+# --- not shell: the word sits inside embedded Python or JavaScript
+# guard-build.sh's Python looks for `setsid` in the command it is judging; it does not run it.
+setsid .tfcore/hooks/guard-build.sh re.search(r"\b(nohup|setsid|disown)\b", bare)
+setsid .tfcore/hooks/guard-build.sh "nohup / setsid / a trailing &"
+# Python regexes naming the SQL verb TRUNCATE and the truncate command they block; not calls.
+gnu-only-tool .tfcore/hooks/guard-db.sh WRITE_VERBS = r"\b(insert|update|delete|create|alter|drop|truncate|
+gnu-only-tool .tfcore/hooks/guard-metrics.sh r"|(\b(truncate|dd)\b[^|;&]*" + STREAM + r")",
+gnu-only-tool .tfcore/hooks/guard-status.sh r"|(\b(truncate|dd)\b[^|;&]*PROJECT-STATUS\.md)",
+# Python tokenizers listing the shell's own separators, |& among them; not a redirection.
+amp-redirect .tfcore/hooks/block-git.sh SEPS = {";", "&&", "||", "|", "&", "(", ")", "{", "}", "\n", "|&"}
+amp-redirect .tfcore/hooks/block-git.sh if t in SEPS or t in (";;", "&&", "||", "|&"):
+amp-redirect .tfcore/hooks/guard-db.sh low = re.sub(r"\b(echo|printf)\s+(\"[^\"]*\"|'[^']*'|[^\n;|&]*)", r"\1", low)
+amp-redirect .tfcore/hooks/guard-verify-deps.sh for seg in re.split(r"(?:\|\||&&|;|\||\n)", cmd):
+amp-redirect .tfcore/hooks/guard-verify-deps.sh ASSIGN = r"(?:\bexport\s+|\bset\s+|^|\s|;|&&)
+# A message string in guard-status.sh's Python that names sed -i as a way around the guard.
+sed-inplace .tfcore/hooks/guard-status.sh "cp, mv, sed -i, a script). The shell path bypasses
+# A JavaScript template string in a test fixture page (${p}</h1>); not a bash {fd} redirection.
+auto-fd tests/regression/run.sh root.innerHTML = ok ? `<h1>${p}</h1>
+
+# --- guarded: /proc is read only where it exists, and the fallback is right on a Mac
+# WSL detection: on a Mac /proc/version is absent, grep fails quietly, the platform stays as set.
+proc-fs .tfcore/utils/tf-build.sh grep -qiE "microsoft|wsl" /proc/version 2>/dev/null
+proc-fs .tfcore/utils/tf-verify-boot.sh grep -qiE "microsoft|wsl" /proc/version 2>/dev/null
+# Python harness detection: /proc first, `ps -o comm=,ppid=` when /proc is not there (macOS).
+proc-fs .tfcore/utils/tf-emit.sh with open("/proc/%d/stat" % pid) as fh:
+# Shell harness detection: reads /proc only when /proc/self exists, ps otherwise (the next lines).
+proc-fs .tfcore/utils/tf-harness.sh stat="$(cat /proc/$pid/stat 2>/dev/null)" || break
+proc-fs .tfcore/utils/tf-harness.sh [[ -d /proc/self ]]
+# Python in tf-verify-boot.sh: kills a leftover app found through /proc. On a Mac the listing fails
+# inside try/except and nothing extra is killed (the pid-file path still stops the app). Listed
+# under "Left for the owner" in docs/Mac-Portability-Progress.md.
+proc-fs .tfcore/utils/tf-verify-boot.sh procs = [p for p in os.listdir("/proc") if p.isdigit()]
+proc-fs .tfcore/utils/tf-verify-boot.sh cmd = open(f"/proc/{p}/cmdline", "rb")
