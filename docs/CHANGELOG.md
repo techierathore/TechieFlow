@@ -8,6 +8,25 @@
 
 ---
 
+## 2026-09-27 — TF-052 follow-up: log-miss and triage close read the "outer" command as their own
+
+Since TF-052, `tf-phase.sh start` keeps a command still in the marker as `"outer"`, written first, and
+every reader must take the marker's own `cmd` and `started`. `tf-log-miss.py` and `tf-triage.py close`
+read them with a first-match regex, so after an earlier command they took the outer one: a `*log-miss`
+after `*triage-issues` believed triage was still running and wrote no run record, and a triage close
+without `--started` after `*fix-issues` recorded the triage from the fix's start. Both now parse the
+marker as JSON and take its top-level `cmd` and `started`. Every other reader was checked and already
+does (`guard-db.sh`, `tf-emit.sh`, `tf-yolo.sh`, `tf-verify-emit.sh`, `tf-fix-close.sh`, and the greedy
+`sed` reads in `tf-phase.sh` and `tf-verify-emit.sh`, which land on the last, top-level value). Found by
+the stock-Mac CI job of the portability branch, which is the first CI to run `tests/bugs`: its case
+"log-miss: run record cmd log-miss" had failed since TF-052 and now passes unchanged. New case "triage
+close without --started takes its own start", failing against the old script. Two other `tests/bugs`
+cases were stale since TF-052 and were updated on the owner's decision: the fix-close repeat now looks
+for the script's wording "run record already there", and REQ-UI-004 is graded in that case's ledger so
+the "no open miss on REQ-UI-004" path is reached (TF-052 part 3 names a row no verify graded
+differently). Suites: bugs 52/52, regression, mirror, routing, goal, doc-check pass; verify and
+requirements as before in this container (no Playwright browser). Not yet deployed to projects.
+
 ## 2026-09-22 — TrBlazeUI's TF-001
 
 `tf-triage.py close` wrote every action in `triage.json` ever taken, so each close logged earlier runs'
