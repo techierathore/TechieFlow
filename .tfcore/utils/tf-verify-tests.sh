@@ -19,6 +19,7 @@
 # Exit 0 ran (whatever the results) · 2 nothing could run.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$HERE/tf-portable.sh"   # tf_read_lines, for bash 3.2 on a stock Mac
 BASE=""; TARGET=""; BROWSER=1; UNIT=1; OUT=""; SHARD=""; SPECS=(); MERGE=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -102,7 +103,7 @@ if [[ $BROWSER -eq 1 ]]; then
       rm -f "$PWJSON"
     elif node -e "require.resolve('@playwright/test')" >/dev/null 2>&1; then
       PWARGS=(--reporter=json); [[ -n "$SHARD" ]] && PWARGS+=("--shard=$SHARD")
-      BASE_URL="$BASE" PLAYWRIGHT_JSON_OUTPUT_NAME="$PWJSON" npx playwright test "${PWARGS[@]}" "${SPECS[@]}" > "$PWLOG" 2>&1
+      BASE_URL="$BASE" PLAYWRIGHT_JSON_OUTPUT_NAME="$PWJSON" npx playwright test "${PWARGS[@]}" ${SPECS[@]+"${SPECS[@]}"} > "$PWLOG" 2>&1
       echo "browser tests: ran${SHARD:+ shard $SHARD}${SPECS:+ (${#SPECS[@]} spec argument(s))} (log $PWLOG)"; ran_any=1
     else
       echo "browser tests: @playwright/test is not installed here (bash .tfcore/utils/tf-verify-env.sh); skipped"; rm -f "$PWJSON"
@@ -118,7 +119,7 @@ if [[ $UNIT -eq 1 ]]; then
   # (AppManager TF-007: tests/unit/AppManager.UnitTests/). tf-build.sh finds a root solution itself;
   # without one it is handed the only test project, and several are named rather than guessed between.
   ROOTSLN="$(compgen -G '*.sln'; compgen -G '*.slnx'; compgen -G '*.csproj')"
-  mapfile -t TESTPROJ < <(find tests -name '*.csproj' -not -path 'tests/.artifacts/*' -not -path '*/bin/*' -not -path '*/obj/*' -not -path '*/node_modules/*' 2>/dev/null | sort)
+  tf_read_lines TESTPROJ < <(find tests -name '*.csproj' -not -path 'tests/.artifacts/*' -not -path '*/bin/*' -not -path '*/obj/*' -not -path '*/node_modules/*' 2>/dev/null | sort)
   [[ -z "$TARGET" && -z "$ROOTSLN" && ${#TESTPROJ[@]} -eq 1 ]] && TARGET="${TESTPROJ[0]}"
   if [[ -z "$TARGET" && -z "$ROOTSLN" && ${#TESTPROJ[@]} -gt 1 ]]; then
     echo "unit tests: NOT RUN — no solution here and ${#TESTPROJ[@]} test projects under tests/ (${TESTPROJ[*]}); name one with --target"

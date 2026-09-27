@@ -85,7 +85,9 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 # Verdicts: ALLOW | ASK_RM | BLOCK_WRITE | BLOCK_READ
-VERDICT="$(TF_HOOK_INPUT="$INPUT" TF_YOLO_ON="$YOLO" python3 - <<'PY' 2>/dev/null
+# The program is read into a variable first: bash 3.2 (a stock Mac) cannot parse this program as a
+# here-document inside $( ), because it scans the text for quotes and brackets.
+IFS= read -r -d '' GIT_GUARD_PY <<'PY' || true
 import json, os, re, shlex, sys
 
 raw = os.environ.get("TF_HOOK_INPUT", "")
@@ -283,7 +285,7 @@ elif (found_rm[0] or found_sudo[0]) and not yolo:
 else:
     print("ALLOW")
 PY
-)"
+VERDICT="$(TF_HOOK_INPUT="$INPUT" TF_YOLO_ON="$YOLO" python3 -c "$GIT_GUARD_PY" 2>/dev/null </dev/null)"
 
 case "$VERDICT" in
   BLOCK_WRITE) block_git_msg; exit 2 ;;
