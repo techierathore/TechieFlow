@@ -29,6 +29,7 @@
 # Exit 0 booted / stopped · 2 NONE (reason printed; kind=build-error, host or no-driver) · 3 usage.
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$HERE/tf-portable.sh"   # bash-4 and GNU-only spellings go through the shim (stock Mac)
 DIR="tests/.artifacts/verify"; STATE="$DIR/boot.json"; LOG="$DIR/app.log"; KEYED=""
 mkdir -p "$DIR"
 # once the port is known: this app's own state file and log (TF-034)
@@ -68,7 +69,7 @@ find_projects() { # prints csproj paths under src/, source/, the root and one le
        -not -path './tests/*' -not -path '*/test/*' -not -path '*Tests/*' -not -path '*.Tests/*' 2>/dev/null | sed 's#^\./##' | sort
 }
 is_web()  { grep -qE 'Microsoft\.NET\.Sdk\.Web|Microsoft\.NET\.Sdk\.BlazorWebAssembly' "$1"; }
-is_maui_win() { grep -qiE '<UseMaui>\s*true|Microsoft\.NET\.Sdk\.Maui' "$1" && grep -qE 'net[0-9.]+-windows' "$1"; }
+is_maui_win() { grep -qiE '<UseMaui>[[:space:]]*true|Microsoft\.NET\.Sdk\.Maui' "$1" && grep -qE 'net[0-9.]+-windows' "$1"; }
 
 poll_http() { # url seconds pid-to-watch(optional) -> 0 when it answers
   local url="$1" secs="$2" pid="${3:-}" i=0 code
@@ -118,7 +119,7 @@ print(" ".join(out))
 PY
 )"
       if [[ $(wc -w <<<"$live") -ge 2 ]]; then
-        echo "NOT-STOPPED $(wc -w <<<"$live") apps are running (ports ${live// /, }); stop yours with: bash .tfcore/utils/tf-verify-boot.sh stop --port <n>"; exit 2
+        echo "NOT-STOPPED $(( $(wc -w <<<"$live") )) apps are running (ports ${live// /, }); stop yours with: bash .tfcore/utils/tf-verify-boot.sh stop --port <n>"; exit 2
       fi
     fi
     python3 - "$DIR" "$SPORT" <<'PY'
@@ -153,14 +154,27 @@ if run_port:
         procs = [p for p in os.listdir("/proc") if p.isdigit()]
     except Exception:
         procs = []
+    cmds = []   # (pid, command line)
     for p in procs:
         try:
             cmd = open(f"/proc/{p}/cmdline", "rb").read().replace(b"\0", b" ").decode(errors="replace")
         except Exception:
             continue
-        if mark in cmd and int(p) != os.getpid():
+        cmds.append((int(p), cmd))
+    if not procs:
+        # No /proc (macOS): the same list from ps, full width so the run-<port>/ path is not cut off.
+        try:
+            out = subprocess.run(["ps", "-A", "-ww", "-o", "pid=,command="], capture_output=True).stdout.decode(errors="replace")
+        except Exception:
+            out = ""
+        for line in out.splitlines():
+            pid, _, cmd = line.strip().partition(" ")
+            if pid.isdigit():
+                cmds.append((int(pid), cmd))
+    for pid, cmd in cmds:
+        if mark in cmd and pid != os.getpid():
             try:
-                os.kill(int(p), signal.SIGKILL)
+                os.kill(pid, signal.SIGKILL)
             except Exception:
                 pass
 s["stopped"] = True
@@ -215,9 +229,9 @@ if [[ "$HEAD" == "static" ]]; then
 fi
 
 # ---- pick the project and the head ------------------------------------------------------
-mapfile -t ALL < <(find_projects)
+tf_read_lines ALL < <(find_projects)
 WEB=(); WIN=()
-for p in "${ALL[@]}"; do is_web "$p" && WEB+=("$p"); is_maui_win "$p" && WIN+=("$p"); done
+for p in ${ALL[@]+"${ALL[@]}"}; do is_web "$p" && WEB+=("$p"); is_maui_win "$p" && WIN+=("$p"); done
 # Several web projects: the one that serves screens. The first in sorted order booted AppManager's
 # external API, which has no screens, in front of its admin site (AppManager TF-010). A project
 # serves screens when its own folder holds .razor or .cshtml pages, or it references a project
@@ -298,7 +312,7 @@ if [[ "$HEAD" == "web" ]]; then
     printf '%s\n' "$pub" >> "$LOG"
     verdict="$(grep -E '^(PASS|FAIL|NOT-RUN)' <<<"$pub" | tail -1)"
     if [[ $prc -eq 1 ]]; then
-      first="$(grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$pub" | head -1 | sed 's/^\s*//' | cut -c1-160)"
+      first="$(grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$pub" | head -1 | sed 's/^[[:space:]]*//' | cut -c1-160)"
       write_state web none "" "" "tf-build.sh publish" "$PROJECT" "build error: ${first:-$verdict}" build-error "$PLATFORM"
       echo "NONE head=web kind=build-error reason=the code does not build: ${first:-$verdict} (log $LOG)"; exit 2
     elif [[ $prc -ne 0 || ! -f "$RUN/$ASM.dll" ]]; then
@@ -308,7 +322,7 @@ if [[ "$HEAD" == "web" ]]; then
     fi
     # what `dotnet run` sets from the launch profile; the environment above all, which picks the
     # settings file and whether the secrets are read
-    mapfile -t LSENV < <(python3 - "$PDIR/Properties/launchSettings.json" <<'PY'
+    tf_read_lines LSENV < <(python3 - "$PDIR/Properties/launchSettings.json" <<'PY'
 import json, os, sys
 try:
     profiles = json.load(open(sys.argv[1], encoding="utf-8-sig")).get("profiles", {})
@@ -327,7 +341,7 @@ PY
       *"via cmd.exe"*|*"via winrun"*|*"via powershell.exe"*)
         WIN=1; WPD="$(winarg "$(wslpath -w "$PDIR")")"; WDLL="$(winarg "$(wslpath -w "$RUN/$ASM.dll")")"
         WWEB=""; [[ -d "$RUN/wwwroot" ]] && WWEB="--webroot $(winarg "$(wslpath -w "$RUN/wwwroot")")"
-        sets=""; for kv in "${LSENV[@]}"; do sets+="set $kv&& "; done
+        sets=""; for kv in ${LSENV[@]+"${LSENV[@]}"}; do sets+="set $kv&& "; done
         nohup cmd.exe /c "cd /d $WPD && ${sets}dotnet $WDLL --urls $URL --contentRoot $WPD $WWEB" >> "$LOG" 2>&1 < /dev/null &
         PID=$!; label="cmd.exe /c dotnet" ;;
       *)
@@ -335,7 +349,7 @@ PY
         WEBR=(); [[ -d "$RUN/wwwroot" ]] && WEBR=(--webroot "$ROOTDIR/$RUN/wwwroot")
         # the redirections belong to the whole background group and the group becomes the app: a group
         # left waiting on its app kept this script's output open, so a caller reading it waited for ever
-        ( cd "$PDIR" || exit 1; exec env "${LSENV[@]}" nohup "$runner" "$ROOTDIR/$RUN/$ASM.dll" --urls "$URL" --contentRoot "$PWD" "${WEBR[@]}" ) \
+        ( cd "$PDIR" || exit 1; exec env ${LSENV[@]+"${LSENV[@]}"} nohup "$runner" "$ROOTDIR/$RUN/$ASM.dll" --urls "$URL" --contentRoot "$PWD" ${WEBR[@]+"${WEBR[@]}"} ) \
             >> "$ROOTDIR/$LOG" 2>&1 < /dev/null &
         PID=$!; label="$([[ "$runner" == dotnet ]] && echo dotnet || echo '~/.dotnet/dotnet')" ;;
     esac
@@ -347,7 +361,7 @@ PY
     fi
     pkill -P "$PID" 2>/dev/null; kill "$PID" 2>/dev/null
     [[ -n "$WIN" ]] && powershell.exe -NoProfile -Command "Get-NetTCPConnection -LocalPort $PORT -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" >/dev/null 2>&1
-    last="$(grep -vE '^\s*$' "$LOG" | tail -3 | tr '\n' ' ' | cut -c1-240)"
+    last="$(grep -vE '^[[:space:]]*$' "$LOG" | tail -3 | tr '\n' ' ' | cut -c1-240)"
     # say what the log says: "no rung brought it up" sent a reader to the build when the app had started
     said=""; grep -q 'Now listening on' "$LOG" && said=" although its log says it is listening"
     write_state web none "" "" "$label (published copy)" "$PROJECT" "the published copy did not answer on $URL$PROBE within 120 s$said" host "$PLATFORM"
@@ -366,10 +380,10 @@ PY
     case "$r" in
       cmd.exe)
         WP="$(winarg "$(wslpath -w "$PROJECT")")"
-        nohup cmd.exe /c "dotnet run --project $WP ${CFGARGS[*]} --urls $URL" >> "$LOG" 2>&1 < /dev/null &
+        nohup cmd.exe /c "dotnet run --project $WP ${CFGARGS[*]:-} --urls $URL" >> "$LOG" 2>&1 < /dev/null &
         PID=$!; label="cmd.exe /c dotnet" ;;
       *)
-        ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT:-Development}" nohup "$r" run --project "$PROJECT" "${CFGARGS[@]}" --urls "$URL" >> "$LOG" 2>&1 < /dev/null &
+        ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT:-Development}" nohup "$r" run --project "$PROJECT" ${CFGARGS[@]+"${CFGARGS[@]}"} --urls "$URL" >> "$LOG" 2>&1 < /dev/null &
         PID=$!; label="$r" ;;
     esac
     tried+=("$label")
@@ -385,7 +399,7 @@ PY
     [[ "$r" == "cmd.exe" ]] && powershell.exe -NoProfile -Command "Get-NetTCPConnection -LocalPort $PORT -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" >/dev/null 2>&1
     seg="$(awk '/^### rung: /{p=0} index($0,"### rung: '"$r"'")==1{p=1} p' "$LOG")"
     if grep -qE "$CODE_ERR" <<<"$seg" && ! grep -qE "$WRONG_RUNG" <<<"$seg"; then
-      first="$(grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" | head -1 | sed 's/^\s*//' | cut -c1-160)"
+      first="$(grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" | head -1 | sed 's/^[[:space:]]*//' | cut -c1-160)"
       write_state web none "" "" "$label" "$PROJECT" "build error: $first" build-error "$PLATFORM"
       echo "NONE head=web kind=build-error reason=the code does not build via $label: $first (log $LOG)"; exit 2
     fi
@@ -401,7 +415,7 @@ TFM="$(grep -oE 'net[0-9.]+-windows[0-9.]*' "$PROJECT" | head -1)"
 CDP_PORT=9222; RELAY_PORT="${PORT:-9223}"; keyed "$RELAY_PORT"
 WP="$(winarg "$(wslpath -w "$PROJECT")")"; RELAY="$(wslpath -w "$HERE/tf-cdp-relay.ps1")"
 echo "### windows head: $PROJECT -f $TFM" >> "$LOG"
-nohup cmd.exe /c "set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=$CDP_PORT&& dotnet run --project $WP -f $TFM ${CFGARGS[*]}" >> "$LOG" 2>&1 < /dev/null &
+nohup cmd.exe /c "set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=$CDP_PORT&& dotnet run --project $WP -f $TFM ${CFGARGS[*]:-}" >> "$LOG" 2>&1 < /dev/null &
 APP_PID=$!
 nohup powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$RELAY" -ListenPort "$RELAY_PORT" -TargetPort "$CDP_PORT" >> "$DIR/relay.log" 2>&1 < /dev/null &
 RELAY_PID=$!
@@ -416,7 +430,7 @@ while [[ $i -lt 300 && -z "$URL" ]]; do
   if ! kill -0 "$APP_PID" 2>/dev/null; then
     seg="$(cat "$LOG")"
     if grep -qE "$CODE_ERR" <<<"$seg"; then
-      first="$(grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" | head -1 | sed 's/^\s*//' | cut -c1-160)"
+      first="$(grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" | head -1 | sed 's/^[[:space:]]*//' | cut -c1-160)"
       kill "$RELAY_PID" 2>/dev/null
       write_state windows none "" "" "cmd.exe /c dotnet run -f $TFM" "$PROJECT" "build error: $first" build-error "$PLATFORM"
       echo "NONE head=windows kind=build-error reason=the code does not build: $first (log $LOG)"; exit 2

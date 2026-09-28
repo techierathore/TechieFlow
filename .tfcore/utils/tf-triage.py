@@ -192,9 +192,11 @@ def main(argv):
     if verb == "close":
         started = opt(argv, "--started") or subprocess.run(["bash", os.path.join(HERE, "tf-phase.sh"), "show"], capture_output=True, text=True).stdout
         if started.startswith("{"):
-            import re
-            m = re.search(r'"started":"([^"]*)"', started)
-            started = m.group(1) if m else ""
+            # the marker's own started, never its "outer" block's (TF-052 follow-up)
+            try:
+                started = (json.loads(started) or {}).get("started") or ""
+            except ValueError:
+                started = ""
         started = started.strip() if started and not started.startswith("none") else ""
         cmd = opt(argv, "--cmd", "triage-issues")
         # code untouched?

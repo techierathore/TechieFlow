@@ -27,14 +27,18 @@ REQ_DOC="docs/TechieFlow-Requirements.md"
 [[ -f $REQ_DOC ]] || { echo "no $REQ_DOC"; exit 2; }
 
 # ---- run each distinct artefact once, cache its exit status -----------------------------
-declare -A ARTEFACT_RC
+# Two plain arrays, key i <-> status i (bash 3.2 on a Mac has no associative arrays).
+ARTEFACT_KEYS=(); ARTEFACT_RCS=()
 run_artefact() {
-  local key="$1" cmd="$2"
-  if [[ -z "${ARTEFACT_RC[$key]:-}" ]]; then
-    if bash -c "$cmd" >/dev/null 2>&1; then ARTEFACT_RC[$key]=0; else ARTEFACT_RC[$key]=1; fi
-    echo "  ran ${key} -> $([[ ${ARTEFACT_RC[$key]} -eq 0 ]] && echo pass || echo FAIL)" >&2
-  fi
-  return "${ARTEFACT_RC[$key]}"
+  local key="$1" cmd="$2" i=0 rc
+  while [[ $i -lt ${#ARTEFACT_KEYS[@]} ]]; do
+    [[ "${ARTEFACT_KEYS[$i]}" == "$key" ]] && return "${ARTEFACT_RCS[$i]}"
+    i=$((i + 1))
+  done
+  if bash -c "$cmd" >/dev/null 2>&1; then rc=0; else rc=1; fi
+  ARTEFACT_KEYS[$i]="$key"; ARTEFACT_RCS[$i]="$rc"
+  echo "  ran ${key} -> $([[ $rc -eq 0 ]] && echo pass || echo FAIL)" >&2
+  return "$rc"
 }
 
 # The Check column names these; each maps to the command that runs it.
@@ -136,7 +140,7 @@ echo "  ungraded means the line's own check is a fixture run, a review, or a scr
 echo "  described but never written. It is not a pass and it is not a failure."
 
 if [[ $EMIT -eq 1 && ${#EMIT_LINES[@]} -gt 0 ]]; then
-  printf '%s\n' "${EMIT_LINES[@]}" | bash .tfcore/utils/tf-emit.sh gates
+  printf '%s\n' ${EMIT_LINES[@]+"${EMIT_LINES[@]}"} | bash .tfcore/utils/tf-emit.sh gates
   echo "emitted ${#EMIT_LINES[@]} gate record(s) under run_id $RUN_ID"
 fi
 

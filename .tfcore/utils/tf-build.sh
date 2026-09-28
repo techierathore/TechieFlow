@@ -40,6 +40,8 @@
 # obj/ under the others: a running app lost its stylesheet or its process, and a publish carried a
 # dll older than its own source (TF-043). A lock whose process has gone is taken over.
 set -u
+# mapfile and the other bash-4 / GNU-only spellings go through the shim (a stock Mac has bash 3.2).
+source "$(dirname "${BASH_SOURCE[0]}")/tf-portable.sh"
 
 MODE="build"; TARGET=""; EXTRA=(); PRINT=0
 [[ "${1:-}" == "--print" ]] && { PRINT=1; shift; }   # print the resolved command, run nothing (TfLens TF-049)
@@ -66,7 +68,7 @@ PLATFORM="${TF_BUILD_PLATFORM:-$PLATFORM}"   # the self-tests only
 
 # ---- target ---------------------------------------------------------------------------
 if [[ -z "$TARGET" && "$MODE" != "probe" ]]; then
-  mapfile -t CANDS < <(ls -1 *.slnx *.sln 2>/dev/null; ls -1 *.csproj 2>/dev/null)
+  tf_read_lines CANDS < <(ls -1 *.slnx *.sln 2>/dev/null; ls -1 *.csproj 2>/dev/null)
   if [[ ${#CANDS[@]} -eq 1 ]]; then TARGET="${CANDS[0]}"
   elif [[ ${#CANDS[@]} -gt 1 ]]; then echo "NOT-RUN more than one solution or project here; name one: ${CANDS[*]}"; exit 2
   fi
@@ -78,14 +80,14 @@ projects=()
 if [[ -n "$TARGET" ]]; then
   case "$TARGET" in
     *.csproj) projects=("$TARGET") ;;
-    *.sln)  mapfile -t projects < <(grep -oE '"[^"]+\.csproj"' "$TARGET" 2>/dev/null | tr -d '"' | tr '\\' '/') ;;
-    *.slnx) mapfile -t projects < <(grep -oE 'Path="[^"]+\.csproj"' "$TARGET" 2>/dev/null | sed 's/Path="//; s/"$//' | tr '\\' '/') ;;
+    *.sln)  tf_read_lines projects < <(grep -oE '"[^"]+\.csproj"' "$TARGET" 2>/dev/null | tr -d '"' | tr '\\' '/') ;;
+    *.slnx) tf_read_lines projects < <(grep -oE 'Path="[^"]+\.csproj"' "$TARGET" 2>/dev/null | sed 's/Path="//; s/"$//' | tr '\\' '/') ;;
   esac
   base="$(dirname "$TARGET")"
-  for p in "${projects[@]}"; do
+  for p in ${projects[@]+"${projects[@]}"}; do   # the +form: an empty array under set -u (bash 3.2)
     f="$p"; [[ -f "$f" ]] || f="$base/$p"
     [[ -f "$f" ]] || continue
-    if grep -qiE '<UseMaui>\s*true|Microsoft\.NET\.Sdk\.Maui|net[0-9.]+-(android|ios|maccatalyst|windows10)' "$f"; then maui=1; fi
+    if grep -qiE '<UseMaui>[[:space:]]*true|Microsoft\.NET\.Sdk\.Maui|net[0-9.]+-(android|ios|maccatalyst|windows10)' "$f"; then maui=1; fi
   done
 fi
 
@@ -111,7 +113,7 @@ verb="$MODE"
 args=("$verb")
 [[ -n "$TARGET" ]] && args+=("$TARGET")
 [[ "$MODE" == "run" ]] && args=("run" "--project" "$TARGET")
-args+=("${EXTRA[@]}")
+args+=(${EXTRA[@]+"${EXTRA[@]}"})
 [[ $PRINT -eq 1 ]] && { echo "dotnet ${args[*]}"; exit 0; }
 
 mkdir -p tests/.artifacts/build
@@ -126,7 +128,7 @@ LOCKED='error MSB302[17]|being used by another process|Access to the path .* is 
 side_of() { case "$1" in winrun|cmd.exe|powershell.exe) echo windows ;; *) echo wsl ;; esac; }
 # the projects the target builds, and every project they reference: a web head's static assets come
 # from the library it references, whose obj/ the other side may have written (AppManager TF-004)
-mapfile -t pdirs < <(python3 - "${base:-.}" "${projects[@]}" <<'PY'
+tf_read_lines pdirs < <(python3 - "${base:-.}" ${projects[@]+"${projects[@]}"} <<'PY'
 import os, re, sys
 base, todo, seen = sys.argv[1], [], []
 for p in sys.argv[2:]:
@@ -143,7 +145,7 @@ PY
 )
 cross_side() { # side: clear what another side built with its own paths in it, then mark this side
   local d cleared=0
-  for d in "${pdirs[@]}"; do
+  for d in ${pdirs[@]+"${pdirs[@]}"}; do
     [[ -d "$d/obj" ]] || continue
     if [[ "$(cat "$d/obj/.tf-build-side" 2>/dev/null)" != "$1" ]]; then
       # the scoped stylesheets (TF-035) and the static web asset lists: each side writes its own absolute
@@ -191,12 +193,12 @@ for r in "${rungs[@]}"; do
   # taken for a wrong rung and reported NOT-RUN "host issue" (MISS-TechieFlow-20260906-03).
   if grep -qE 'error (CS|RZ|BL|XC|XLS)[0-9]{3,5}|error MSB[0-9]{4}: .*(does not exist|could not be found)|error NU1' <<<"$seg" && ! grep -qE "$WRONG_RUNG" <<<"$seg"; then
     errs="$(grep -cE 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" || true)"
-    first="$(grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" | head -1 | sed 's/^\s*//' | cut -c1-160)"
+    first="$(grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" | head -1 | sed 's/^[[:space:]]*//' | cut -c1-160)"
     echo "FAIL  real errors on $PLATFORM via $label (rung $n): $errs error line(s), first: $first; log $LOG"
-    grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" | sed 's/^\s*//' | sort -u | head -10
+    grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" | sed 's/^[[:space:]]*//' | sort -u | head -10
     exit 1
   fi
-  if [[ "$MODE" == "test" ]] && grep -qE 'Failed!|Failed:\s+[1-9]|Tests? failed' <<<"$seg"; then
+  if [[ "$MODE" == "test" ]] && grep -qE 'Failed!|Failed:[[:space:]]+[1-9]|Tests? failed' <<<"$seg"; then
     echo "FAIL  tests failed on $PLATFORM via $label (rung $n); log $LOG"
     grep -E 'Failed |Failed!|Error Message|Total tests|Passed!' <<<"$seg" | head -12
     exit 1
@@ -204,7 +206,7 @@ for r in "${rungs[@]}"; do
   # a locked output file: the rung is right and the code is fine; another rung over the same obj/
   # is exactly what broke the stylesheets (TF-035), so stop here and name the lock
   if grep -qE "$LOCKED" <<<"$seg"; then
-    first="$(grep -E "$LOCKED" <<<"$seg" | head -1 | sed 's/^\s*//' | cut -c1-200)"
+    first="$(grep -E "$LOCKED" <<<"$seg" | head -1 | sed 's/^[[:space:]]*//' | cut -c1-200)"
     echo "NOT-RUN the build output is held by a running process (still after $((${TF_BUILD_LOCK_RETRIES:-2} + 1)) tries on $label): $first. Stop that app -- bash .tfcore/utils/tf-verify-boot.sh stop --port <its port> -- and build again. Not a code error; log $LOG"
     exit 2
   fi

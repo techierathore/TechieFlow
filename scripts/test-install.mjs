@@ -518,7 +518,10 @@ try {
   writeFileSync(join(jsTarget, "package.json"), `${JSON.stringify(ownManifest, null, 2)}\n`);
   npm(["install"], { cwd: jsTarget });
   npm(["install", tarball], { cwd: jsTarget });
-  const jsSettled = await settled(jsTarget, (dir) => !existsSync(join(dir, "node_modules", "@techierathore")) && !read(join(dir, "package.json")).includes("techieflow"));
+  // The cleanup rewrites package.json in place, so a read can land between the truncate and the
+  // write and see an empty file, which also "no longer names techieflow". Settled means it parses.
+  const parses = (path) => { try { JSON.parse(read(path)); return true; } catch { return false; } };
+  const jsSettled = await settled(jsTarget, (dir) => !existsSync(join(dir, "node_modules", "@techierathore")) && parses(join(dir, "package.json")) && !read(join(dir, "package.json")).includes("techieflow"));
   check("plain `npm install` in a JavaScript project keeps the project's own package.json, lock file and node_modules", () => {
     assert(jsSettled, "after 30 seconds the package was still in node_modules/ or package.json");
     const manifest = JSON.parse(read(join(jsTarget, "package.json")));

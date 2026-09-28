@@ -73,7 +73,7 @@ check "Home renders and looks right" "$(has "$out" "^OK   Home (/) — render OK
 check "Entries: header-only table is render EMPTY (zero-rows)" "$(has "$out" "^FAIL Entries .*render EMPTY.*has a header and no rows")"
 check "Editor: overlapping buttons are visual FAIL" "$(has "$out" "^FAIL Editor .*visual FAIL.*save overlaps cancel")"
 check "Settings: missing stylesheet is visual FAIL (unstyled)" "$(has "$out" "^FAIL Settings .*visual FAIL.*no stylesheet")"
-shots="$(ls tests/.artifacts/verify/screens/*.png 2>/dev/null | wc -l)"
+shots="$(( $(ls tests/.artifacts/verify/screens/*.png 2>/dev/null | wc -l) ))"   # $(( )): BSD wc pads
 check "a screenshot per screen and width (8): $shots" "$([[ "$shots" == 8 ]]; echo $?)"
 out2="$(bash $U/tf-verify-screens.sh --screen Home=/ --base "$BASE" --mockups docs/mockups --json-out tests/.artifacts/verify/smoke.json 2>&1)"; rc=$?
 check "a smoke on one named screen passes (exit $rc)" "$rc"
@@ -132,7 +132,7 @@ check "6 misses (one per failing row): $misses" "$([[ "$misses" == 6 ]]; echo $?
 check "one verify-phase run record with yolo false: $runs" "$([[ "$runs" == 1 ]] && grep -q '"yolo":false' docs/metrics/runs.jsonl; echo $?)"
 check "the run record's started is the phase marker's" "$(grep -q "\"started\":\"$STARTED\"" docs/metrics/runs.jsonl; echo $?)"
 check "REQ-UI-003 miss is a regression (prior Verified)" "$(grep '"req_id":"REQ-UI-003"' docs/metrics/misses.jsonl | grep -q '"miss_class":"regression"'; echo $?)"
-check "REQ-UI-004 gate is assets with missing-asset" "$(grep '"req_id":"REQ-UI-004"' docs/metrics/gates.jsonl | grep -q '"gate":"assets".*"failure_class":"missing-asset"\|"failure_class":"missing-asset".*"gate":"assets"'; echo $?)"
+check "REQ-UI-004 gate is assets with missing-asset" "$(grep '"req_id":"REQ-UI-004"' docs/metrics/gates.jsonl | grep -qE '"gate":"assets".*"failure_class":"missing-asset"|"failure_class":"missing-asset".*"gate":"assets"'; echo $?)"
 bash $U/tf-verify-emit.sh FxApp --started "$STARTED" >/dev/null 2>&1
 misses2="$(grep -c '"kind":"miss"' docs/metrics/misses.jsonl)"
 check "a second emit adds no duplicate miss: $misses2" "$([[ "$misses2" == 6 ]]; echo $?)"

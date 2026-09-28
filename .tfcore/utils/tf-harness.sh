@@ -48,13 +48,18 @@ _detect() {
   fi
   local k
   for k in $(compgen -v | grep '^OPENCODE' 2>/dev/null); do printf 'opencode'; return; done
-  # /proc ancestry walk (Linux/WSL); bounded
+  # ancestry walk, bounded: /proc on Linux/WSL, ps where there is no /proc (macOS)
   local pid=$PPID name ppid seen=0 stat
   while [[ -n "$pid" && "$pid" -gt 1 && $seen -lt 12 ]]; do
     seen=$((seen + 1))
-    stat="$(cat /proc/$pid/stat 2>/dev/null)" || break
-    name="${stat#*(}"; name="${name%%)*}"
-    ppid="$(printf '%s' "${stat##*) }" | awk '{print $2}')"
+    if [[ -d /proc/self ]]; then
+      stat="$(cat /proc/$pid/stat 2>/dev/null)" || break
+      name="${stat#*(}"; name="${name%%)*}"
+      ppid="$(printf '%s' "${stat##*) }" | awk '{print $2}')"
+    else
+      ppid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"; [[ -n "$ppid" ]] || break
+      name="$(ps -o comm= -p "$pid" 2>/dev/null)"; name="${name##*/}"
+    fi
     case "$name" in
       *opencode*) printf 'opencode'; return ;;
       *claude*)   printf 'claude-code'; return ;;

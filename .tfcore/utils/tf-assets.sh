@@ -92,7 +92,7 @@ if [[ -n "$LOGIN_PATH" || -n "$STORAGE" ]]; then
   if ! command -v node >/dev/null 2>&1 || ! node -e "import('playwright').then(()=>process.exit(0)).catch(()=>process.exit(1))" 2>/dev/null; then
     echo '{"status":"no-playwright","note":"--login-path needs node and playwright (verify-phase §1 installs the verify environment)"}'; exit 3
   fi
-  DOCS="$(mktemp --suffix .json)"
+  DOCS="$(mktemp "${TMPDIR:-/tmp}/tmp.XXXXXXXXXX")" && mv "$DOCS" "$DOCS.json" && DOCS="$DOCS.json"   # only GNU mktemp takes a suffix option
   node "$HERE/tf-assets-browser.mjs" --base "$BASE" --paths "$PATHS" --json-out "$DOCS" \
        ${LOGIN_PATH:+--login-path "$LOGIN_PATH"} ${USER:+--user "$USER"} ${PASS:+--password "$PASS"} \
        ${STORAGE:+--storage-state "$STORAGE"} ${COOKIE:+--cookie "$COOKIE"} >&2 || { echo '{"status":"browser-failed"}'; rm -f "$DOCS"; exit 3; }

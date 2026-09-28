@@ -8,6 +8,68 @@
 
 ---
 
+## 2026-09-27 — The OpenCode plugin loads on the OpenCode 2 preview as well as on 1.x
+
+On the owner's Mac, OpenCode refused `.opencode/plugin/techieflow.js`: "Plugin must export a default
+definition with an id and an effect or setup function". That OpenCode was the 2.x preview (`opencode2`,
+npm channel `next`); the stable release is still 1.18.32, and the design is pinned to 1.18.18. OpenCode 2
+replaced the plugin API: the default export must be `{ id, setup }`, hooks are registered through
+`context.tool.hook`, `context.shell.hook` and `context.event.subscribe()`, the context names no project
+directory, and there is no `permission.ask`. The file now default-exports `{ id, server, setup }`: 1.x
+reads `server` (its own V1 module form, the same function as before), 2.x reads `setup`, and each
+ignores the other. `setup` feeds 2.x's hooks and events into the unchanged 1.x hook code, so the
+guards, the shell env and telemetry stay one implementation. Differences found by running the real
+2.x binary (`0.0.0-next-17444`) against a scripted model: the shell tool is `shell`, not `bash`; `edit`
+and `write` take `path`, not `filePath` (the bridge now reads either); the root session is created
+before the plugin subscribes, so it is learned from its first event and `session.get` gives its
+parent; a turn ends with `session.execution.*`. Tested with that binary: shell env set, `git commit`
+blocked with block-git.sh's message and the session going on, a status-file write and edit blocked by
+guard-status.sh, the session pointer and a session record written with the right token totals, and the
+stale-HTML nudge delivered. Tested with OpenCode 1.18.32: the same results as the unchanged file. Not on
+2.x: YOLO auto-approval (`opencode2 run --auto` is its own switch) and the owner-text check of the Stop
+nudge (2.x gives a plugin no session messages); checks 1-4 of that nudge run. Not yet deployed to
+projects.
+
+## 2026-09-27 — The status-gate Stop hook skipped its checks when the shell had an OPENCODE_* variable
+
+On the owner's Mac (macOS 26, Asia/Kolkata) `tests/regression` failed one case, `owner_handoff_a`: the
+Stop hook `guard-status-html.sh` let TfLens's jargon hand-off through with exit 0 and named none of its
+faults. The time zone was the first suspect and is not the cause: every suite now runs in UTC and in
+Asia/Kolkata on both CI jobs, and a diagnostic run on macOS 15 and macOS 26, with TZ set and with the
+system zone set, passed the case each time. The cause is how the hook tells the harness apart. It took
+any variable starting `OPENCODE` as "this is OpenCode" before it looked at Claude Code's own variables,
+so a Claude Code turn in a shell that has, say, an OpenCode API key or config path exported looked for
+`.tfcore/.session/opencode.json`, found none, and skipped checks 2-5 (the document check, the BRD
+status, the run record and the owner-text check). `OPENCODE=1` reproduces the owner's failure line for
+line on Linux. The hook now takes the harness in the order `tf-harness.sh` and `tf-emit.sh` already use:
+`TF_HARNESS` (which the OpenCode plugin sets on every guard it runs), then `CLAUDECODE`,
+`CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_SESSION_ID` or `CLAUDE_PROJECT_DIR`, then `OPENCODE*`. Every other
+script that compares transcript or file times was checked for mixed local and UTC time and needed no
+change: the hook itself reads transcript and run-record timestamps as UTC and file times as epochs, and
+`tf-yolo.sh`, `tf-triage.py`, `tf-log-miss.py`, `tf-emit.sh`, `metrics-session.sh`, `tf-metrics.sh` and
+`tf-verify-emit.sh` do the same. New regression case `harness_env`, failing against the old hook: a Claude
+Code turn with `OPENCODE_API_KEY` set is still checked, and an OpenCode turn named by `TF_HARNESS` still
+reads `opencode.json`. Not yet deployed to projects.
+
+## 2026-09-27 — TF-052 follow-up: log-miss and triage close read the "outer" command as their own
+
+Since TF-052, `tf-phase.sh start` keeps a command still in the marker as `"outer"`, written first, and
+every reader must take the marker's own `cmd` and `started`. `tf-log-miss.py` and `tf-triage.py close`
+read them with a first-match regex, so after an earlier command they took the outer one: a `*log-miss`
+after `*triage-issues` believed triage was still running and wrote no run record, and a triage close
+without `--started` after `*fix-issues` recorded the triage from the fix's start. Both now parse the
+marker as JSON and take its top-level `cmd` and `started`. Every other reader was checked and already
+does (`guard-db.sh`, `tf-emit.sh`, `tf-yolo.sh`, `tf-verify-emit.sh`, `tf-fix-close.sh`, and the greedy
+`sed` reads in `tf-phase.sh` and `tf-verify-emit.sh`, which land on the last, top-level value). Found by
+the stock-Mac CI job of the portability branch, which is the first CI to run `tests/bugs`: its case
+"log-miss: run record cmd log-miss" had failed since TF-052 and now passes unchanged. New case "triage
+close without --started takes its own start", failing against the old script. Two other `tests/bugs`
+cases were stale since TF-052 and were updated on the owner's decision: the fix-close repeat now looks
+for the script's wording "run record already there", and REQ-UI-004 is graded in that case's ledger so
+the "no open miss on REQ-UI-004" path is reached (TF-052 part 3 names a row no verify graded
+differently). Suites: bugs 52/52, regression, mirror, routing, goal, doc-check pass; verify and
+requirements as before in this container (no Playwright browser). Not yet deployed to projects.
+
 ## 2026-09-22 — TrBlazeUI's TF-001
 
 `tf-triage.py close` wrote every action in `triage.json` ever taken, so each close logged earlier runs'

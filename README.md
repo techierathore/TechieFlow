@@ -35,6 +35,8 @@ The framework is technology-neutral. It asks a set of stack questions at day-1 a
 
 Prerequisites are one-time per machine and live in [`docs/TechieFlow-Setup.md`](docs/TechieFlow-Setup.md): the toolchain, headless Chromium, and — for mobile heads — the Appium device hosts. **`python3` is required**; the guard hooks fail open without it.
 
+It runs on Linux, WSL and a stock Mac. On a Mac the scripts use Apple's own bash 3.2 and BSD tools, so Homebrew, a newer bash and GNU coreutils are not needed; `python3` comes with the Command Line Tools (`xcode-select --install`).
+
 Copy the framework in; never `npm install` it. All three scripts locate the framework from their own directory, so invoke whichever machine's copy you are on.
 
 ```bash

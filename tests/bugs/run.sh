@@ -67,7 +67,7 @@ out="$(bash $U/tf-triage.sh FxApp close --started "$S1" 2>&1)"; rc=$?
 check "close runs (exit $rc)" "$rc"
 check "close: 2 rows logged, 2 escaped gate records, 2 misses, code NOT untouched" "$(has "$out" "triage: 2 row(s) logged — 2 gate record(s) (escaped), 2 miss(es), run record written; code untouched: NO")"
 check "close: warns about the edited file and logs it" "$(has "$out" "WARNING: .*src/Oops.cs")"
-check "gates: REQ-UI-003 escaped, prior Verified" "$(grep '"req_id":"REQ-UI-003"' $M/gates.jsonl | grep -q '"gate":"escaped".*"prior_verdict":"Verified"\|"prior_verdict":"Verified".*"gate":"escaped"'; echo $?)"
+check "gates: REQ-UI-003 escaped, prior Verified" "$(grep '"req_id":"REQ-UI-003"' $M/gates.jsonl | grep -qE '"gate":"escaped".*"prior_verdict":"Verified"|"prior_verdict":"Verified".*"gate":"escaped"'; echo $?)"
 check "miss: REQ-UI-003 is a regression found by the owner with the symptom as what" "$(grep '"req_id":"REQ-UI-003"' $M/misses.jsonl | grep -q '"miss_class":"regression"' && grep '"req_id":"REQ-UI-003"' $M/misses.jsonl | grep -q '"found_by":"owner"' && grep '"req_id":"REQ-UI-003"' $M/misses.jsonl | grep -q '"what":"Save and Cancel sit on top of each other"'; echo $?)"
 check "miss: REQ-FN-010 is an unspecified-gap on the brd" "$(grep '"req_id":"REQ-FN-010"' $M/misses.jsonl | grep -q '"miss_class":"unspecified-gap"' && grep '"req_id":"REQ-FN-010"' $M/misses.jsonl | grep -q '"artifact":"brd"'; echo $?)"
 check "miss: the code edit is instruction-ignored" "$(grep -c '"why_missed":"instruction-ignored"' $M/misses.jsonl | grep -q '^1$'; echo $?)"
@@ -131,7 +131,7 @@ python3 - <<PY
 import json, datetime
 json.dump({"date": datetime.date.today().isoformat(), "app": "FxApp", "scope": "REQ-UI-003,REQ-FN-010", "booted": "static",
            "gates": ["build", "acceptance"], "evidence": "tests/.artifacts/verify", "run_id": "$S3",
-           "rows": {"REQ-UI-003": "PASS", "REQ-FN-010": "FAIL", "REQ-UI-002": "RENDER-FAIL"}}, open("docs/.last-verify.json", "w"), indent=1)
+           "rows": {"REQ-UI-003": "PASS", "REQ-FN-010": "FAIL", "REQ-UI-002": "RENDER-FAIL", "REQ-UI-004": "PASS"}}, open("docs/.last-verify.json", "w"), indent=1)
 PY
 out="$(bash $U/tf-fix-close.sh FxApp --started "$S3" --reqs REQ-UI-003,REQ-FN-010,REQ-UI-002,REQ-UI-004 --subagents trblazeui --build pass 2>&1)"; rc=$?
 check "fix-close runs (exit $rc): $out" "$rc"
@@ -139,12 +139,21 @@ check "fix-close: a ledger RENDER-FAIL becomes verdict_after Needs re-verify (RE
 n1="$(grep -c '"cmd":"fix-issues"' $M/runs.jsonl)"
 out2="$(bash $U/tf-fix-close.sh FxApp --started "$S3" --reqs REQ-UI-003 --build pass 2>&1)"
 n2="$(grep -c '"cmd":"fix-issues"' $M/runs.jsonl)"
-check "fix-close called twice writes one run record ($n1 → $n2)" "$([[ "$n1" == 1 && "$n2" == 1 ]] && [[ "$(has "$out2" "already exists")" == 0 ]]; echo $?)"
+check "fix-close called twice writes one run record ($n1 → $n2)" "$([[ "$n1" == 1 && "$n2" == 1 ]] && [[ "$(has "$out2" "run record already there")" == 0 ]]; echo $?)"
 check "fix-close: run record first, cmd fix-issues mode fix with the sub-agent" "$(grep '"cmd":"fix-issues"' $M/runs.jsonl | grep -q '"mode":"fix"' && grep '"cmd":"fix-issues"' $M/runs.jsonl | grep -q '"subagents":\["trblazeui"\]'; echo $?)"
 check "fix-close: miss-fix for REQ-UI-003 says Verified" "$(grep '"kind":"miss-fix"' $M/misses.jsonl | grep '"req_id":"REQ-UI-003"' | grep -q '"verdict_after":"Verified"'; echo $?)"
 check "fix-close: miss-fix for REQ-FN-010 says FAIL" "$(grep '"kind":"miss-fix"' $M/misses.jsonl | grep '"req_id":"REQ-FN-010"' | grep -q '"verdict_after":"FAIL"'; echo $?)"
 check "fix-close: a row with no open miss is named" "$(has "$out" "no open miss on REQ-UI-004")"
 check "fix-close: the miss-fix carries the fix run" "$(grep '"kind":"miss-fix"' $M/misses.jsonl | grep '"req_id":"REQ-UI-003"' | grep -q "\"fix_run_id\":\"$S3\""; echo $?)"
+
+# ---- 6b. triage close reads its own start from the marker, never the "outer" one --------------
+# The marker still names the fix above, so this start keeps it as "outer", written first. A close with
+# no --started took the outer start and recorded the triage over the fix's time (TF-052 follow-up).
+sleep 1
+S5="$(bash $U/tf-phase.sh start triage-issues FxApp 2>/dev/null)"
+bash $U/tf-triage.sh FxApp note REQ-UI-001 "could not reproduce: header logo shows on every width" >/dev/null 2>&1
+out="$(bash $U/tf-triage.sh FxApp close 2>&1)"
+check "triage close without --started takes its own start, not the outer command's ($S5)" "$(grep '"cmd":"triage-issues"' $M/runs.jsonl | grep -q "\"started\":\"$S5\""; echo $?)"
 
 # ---- 7. the emitter and log-miss report honestly (Session 6, 2026-09-07) ---------------------
 # 7a. MISS-TechieFlow-20260907-09: a run record with no `ended` was accepted and could never be

@@ -64,10 +64,18 @@ elif md_mtime > os.path.getmtime(html):
 def session_start():
     """mtime of the harness's session pointer; None when there is none (checks 2-4 skipped)."""
     d = os.path.join(root, ".tfcore", ".session")
-    if any(k.startswith("OPENCODE") for k in os.environ):
+    # The harness in the order tf-harness.sh and tf-emit.sh take it: TF_HARNESS (the OpenCode
+    # plugin sets it on every guard it spawns), then Claude Code's own variables, then OPENCODE*.
+    # OpenCode first let any OPENCODE_* in the owner's shell (an API key, a config path) send a
+    # Claude Code turn to opencode.json; with no such file, checks 2-5 never ran (2026-09-27).
+    tf = os.environ.get("TF_HARNESS")
+    if tf == "opencode":
         cands = [os.path.join(d, "opencode.json")]
-    elif os.environ.get("CLAUDECODE") or any(k.startswith("CLAUDE_CODE") for k in os.environ):
+    elif tf == "claude-code" or any(os.environ.get(k) for k in (
+            "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ID", "CLAUDE_PROJECT_DIR")):
         cands = [os.path.join(d, "claude-code.json")]
+    elif any(k.startswith("OPENCODE") for k in os.environ):
+        cands = [os.path.join(d, "opencode.json")]
     else:
         cands = [os.path.join(d, "claude-code.json"), os.path.join(d, "opencode.json")]
     times = [os.path.getmtime(p) for p in cands if os.path.isfile(p)]

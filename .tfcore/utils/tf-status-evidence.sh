@@ -12,6 +12,7 @@
 #   4. the build verdict from tf-build.sh (skipped with --no-build)
 # Then the agent decides the interruption signature and runs tf-status-facts.sh for the gate.
 set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/tf-portable.sh"   # GNU-only commands, for a stock Mac
 APP="${1:-}"; [[ -z "$APP" ]] && { sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
 shift
 BUILD=1; PHASE=""
@@ -22,7 +23,7 @@ while [[ $# -gt 0 ]]; do
     *) shift ;;
   esac
 done
-[[ -z "$PHASE" ]] && PHASE="$(grep -oE '^appPhase:\s*[0-9]+' .tfcore/core-config.yaml 2>/dev/null | grep -oE '[0-9]+' || echo 1)"
+[[ -z "$PHASE" ]] && PHASE="$(grep -oE '^appPhase:[[:space:]]*[0-9]+' .tfcore/core-config.yaml 2>/dev/null | grep -oE '[0-9]+' || echo 1)"
 [[ "$PHASE" -le 1 ]] && CL="docs/${APP}-Checklist.md" || CL="docs/${APP}-P${PHASE}-Checklist.md"
 ST="PROJECT-STATUS.md"
 
@@ -31,19 +32,20 @@ echo
 echo "## 1. What the stale status file claims (a hypothesis, not a fact)"
 if [[ -f "$ST" ]]; then
   grep -E '^(last_updated|current_phase|last_verified_build|last_verified_date):' "$ST" | sed 's/^/- /'
-  awk '/^## Next command to run/{p=1;next} /^## /{p=0} p' "$ST" | grep -E '^\s*/' | sed 's/^\s*/- next: /' | head -2
-  echo "- written: $(date -u -r "$ST" +%Y-%m-%dT%H:%M:%SZ)"
+  awk '/^## Next command to run/{p=1;next} /^## /{p=0} p' "$ST" | grep -E '^[[:space:]]*/' | sed 's/^[[:space:]]*/- next: /' | head -2
+  echo "- written: $(tf_date_from -u "@$(tf_stat_mtime "$ST")" +%Y-%m-%dT%H:%M:%SZ)"
 else
   echo "- no PROJECT-STATUS.md; treat as never written"
 fi
 echo
 echo "## 2. Files changed after the status file was written (src/ and tests/, newest first)"
 if [[ -f "$ST" ]]; then
-  mapfile -t NEWER < <(find src tests -type f -newer "$ST" \
-      -not -path '*/bin/*' -not -path '*/obj/*' -not -path '*/node_modules/*' -not -path '*/.artifacts/*' 2>/dev/null \
-      | xargs -r ls -t 2>/dev/null)
+  # xargs runs ls only when find listed something (GNU xargs -r; BSD xargs has no -r)
+  NEWER=(); _found="$(find src tests -type f -newer "$ST" \
+      -not -path '*/bin/*' -not -path '*/obj/*' -not -path '*/node_modules/*' -not -path '*/.artifacts/*' 2>/dev/null)"
+  [[ -n "$_found" ]] && tf_read_lines NEWER < <(printf '%s\n' "$_found" | xargs ls -t 2>/dev/null)
   echo "- ${#NEWER[@]} file(s)"
-  printf -- '- %s\n' "${NEWER[@]:0:30}"
+  printf -- '- %s\n' ${NEWER[@]+"${NEWER[@]:0:30}"}
   [[ ${#NEWER[@]} -gt 30 ]] && echo "- (${#NEWER[@]} in total; the rest with: find src tests -type f -newer PROJECT-STATUS.md)"
 else
   echo "- no status file to compare against"
@@ -51,9 +53,9 @@ fi
 echo
 echo "## 3. Checklist rows that look interrupted ($CL)"
 if [[ -f "$CL" ]]; then
-  grep -E '^\s*\|\s*`?REQ-' "$CL" | awk -F'|' '{id=$2; st=$4; gsub(/^[ `*]+|[ `*]+$/,"",id); gsub(/^[ ]+|[ ]+$/,"",st); print id" — "st}' \
+  grep -E '^[[:space:]]*\|[[:space:]]*`?REQ-' "$CL" | awk -F'|' '{id=$2; st=$4; gsub(/^[ `*]+|[ `*]+$/,"",id); gsub(/^[ ]+|[ ]+$/,"",st); print id" — "st}' \
     | grep -iE ' — (Implemented|In Progress|Needs re-verify|PARTIAL|FAIL)' | sed 's/^/- /' | head -40
-  n=$(grep -E '^\s*\|\s*`?REQ-' "$CL" | awk -F'|' '{print $4}' | grep -ciE 'Implemented|In Progress|Needs re-verify|PARTIAL|FAIL' || true)
+  n=$(grep -E '^[[:space:]]*\|[[:space:]]*`?REQ-' "$CL" | awk -F'|' '{print $4}' | grep -ciE 'Implemented|In Progress|Needs re-verify|PARTIAL|FAIL' || true)
   [[ "$n" == "0" ]] && echo "- none: every row is terminal, Blocked or not started"
 else
   echo "- $CL does not exist"
