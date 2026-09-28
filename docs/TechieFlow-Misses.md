@@ -3,16 +3,17 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 209 logged: 52 open, 156 fixed, 1 will not fix |
+| Count | 219 logged: 53 open, 165 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-09-22 |
+| Updated | 2026-09-28 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
-## Open (52)
+## Open (53)
 
 | Miss | Found | Whose gap | What went wrong |
 |---|---|---|---|
+| MISS-TechieFlow-20260928-07 | 2026-09-28 by owner | the framework never said it | Lekhak TF-003: no Mac Catalyst driver ships, so a Mac head can never get a verdict; the project drove it by hand with Appium mac2 |
 | MISS-TechieFlow-20260910-03 | 2026-09-10 by owner | the check was too weak | tf-metrics.sh --phases crashes with UnboundLocalError on any phase that touched no REQ and wrote no file, because by_mode was read outside the branch that assigned it. |
 | MISS-TechieFlow-20260910-02 | 2026-09-10 by owner | the framework never said it | Every model's cost is recorded the same way, so a run on a flat-fee subscription, a run on a metered API key and a run on a local model all land in one cost_usd figure — a zero on a subscription reads as free and money that was really spent cannot be told from money that was not. |
 | MISS-TechieFlow-20260910-01 | 2026-09-10 by owner | the framework never said it | Routing picks one model per tier and has no answer when that model's usage limit is reached — the run stops or sleeps instead of moving to another model in the same tier. |
@@ -66,10 +67,19 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (156)
+## Fixed (165)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260928-10 | 2026-09-28 by owner | 2026-09-28 by log-miss | the check was too weak | Lekhak TF-012: tf-doc-check failed a Remark tf-verify-verdict wrote, because a test title it copied said 'Not found'; the two scripts disagreed on every verify |
+| MISS-TechieFlow-20260928-09 | 2026-09-28 by owner | 2026-09-28 by log-miss | the check was too weak | Lekhak TF-011: a box the mockup marks as another state, first in its card, shifted the positional keys of every row below it, so the app's first row was compared with the alert |
+| MISS-TechieFlow-20260928-08 | 2026-09-28 by owner | 2026-09-28 by log-miss | the check was too weak | Lekhak TF-010: the mockup check graded the app in the theme the viewer had last picked, so a dark app against a light mockup reported every accent control as a colour difference |
+| MISS-TechieFlow-20260928-06 | 2026-09-28 by owner | 2026-09-28 by log-miss | the check was too weak | Lekhak TF-007: a merge kept the first failure of a test over its later re-run, and a targeted verify rewrote the ledger with only its own rows (395 became 1) |
+| MISS-TechieFlow-20260928-05 | 2026-09-28 by owner | 2026-09-28 by log-miss | the framework never said it | Lekhak TF-006: the asset and mockup checks had no way to attach to a desktop head, so 11 desktop screens were never graded for those two checks |
+| MISS-TechieFlow-20260928-04 | 2026-09-28 by owner | 2026-09-28 by log-miss | the framework never said it | Lekhak TF-005: the screen check opened a route with a placeholder as written (404) and required controls that only show in another state of the screen |
+| MISS-TechieFlow-20260928-03 | 2026-09-28 by owner | 2026-09-28 by log-miss | the check was too weak | Lekhak TF-004: the seven-day sweep deleted a hand-made fixture and helper scripts that specs name by path, failing two rows on a working product |
+| MISS-TechieFlow-20260928-02 | 2026-09-28 by owner | 2026-09-28 by log-miss | the check was too weak | Lekhak TF-002: tf-verify-screens refused a development HTTPS certificate that the mockup and asset checks already accepted, so every screen read UNREACHABLE |
+| MISS-TechieFlow-20260928-01 | 2026-09-28 by owner | 2026-09-28 by log-miss | the framework never said it | Lekhak TF-001: the verify boot ran the web head's copy in WSL, which cannot see the Windows user-secrets store, so an app that starts under dotnet run stopped at start-up; and there was no way to name the environment |
 | MISS-TechieFlow-20260922-01 | 2026-09-22 by owner | 2026-09-22 by log-miss | the check was too weak | triage close re-logged every earlier run's actions under the current run (TrBlazeUI TF-001: 14 false escaped checks, 6 false misses), and no record could withdraw a wrong miss |
 | MISS-TechieFlow-20260919-05 | 2026-09-19 by owner | 2026-09-19 by log-miss | the framework never said it | The database guard allowed migrations only under build-phase and fix-issues, so triage-and-fix step 3, which runs the fix-issues steps, could not apply a migration (AppManager TF-027). |
 | MISS-TechieFlow-20260919-04 | 2026-09-19 by owner | 2026-09-19 by log-miss | the check was too weak | Triage close counted the running app's own log files under src as code changes and reported code untouched NO (AppManager TF-026). |

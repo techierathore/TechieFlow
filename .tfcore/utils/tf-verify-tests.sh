@@ -15,7 +15,7 @@
 # A suite too long for one command runs in parts (AppManager TF-013): `--shard N/M` runs Playwright's
 # shard N of M (browser only; run the unit tests once with --no-browser), `--spec` names files, and
 # each part writes its own playwright-<part>.json and tests-<part>.json. `--merge` then combines the
-# parts' rows (FAIL wins, counts add) and totals into one tests.json.
+# parts' rows and totals into one tests.json; a later run of the same test stands for it (Lekhak TF-007).
 # Exit 0 ran (whatever the results) · 2 nothing could run.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,27 +47,37 @@ mkdir -p "$(dirname "$OUT")" tests/.artifacts/verify
 if [[ ${#MERGE[@]} -gt 0 ]]; then
   TF_OUT="$OUT" python3 - "${MERGE[@]}" <<'PY'
 import json, os, sys
-reqs, browser, unit, parts = {}, {"ran": False, "passed": 0, "failed": 0, "skipped": 0, "tests": 0}, {"ran": False, "line": ""}, []
-for p in sys.argv[1:]:
+# Lekhak TF-007. The parts are read oldest first (by the time each ran, else in the order given), and
+# a later run of the SAME test stands for it: a test that failed because its service was not started,
+# run again once it was, clears the row. A later skip never replaces a run that happened. A part
+# written before tests carried their own outcome counts each of its tests as the row's result.
+loaded = []
+for i, p in enumerate(sys.argv[1:]):
     try:
-        d = json.load(open(p, encoding="utf-8"))
+        loaded.append((json.load(open(p, encoding="utf-8")), i, p))
     except Exception as e:
-        print(f"merge: {p} unreadable ({str(e)[:80]}); skipped"); continue
+        print(f"merge: {p} unreadable ({str(e)[:80]}); skipped")
+loaded.sort(key=lambda x: (x[0].get("ran_at") or "", x[1]) if all(y[0].get("ran_at") for y in loaded) else (x[1],))
+reqs, browser, unit, parts = {}, {"ran": False, "passed": 0, "failed": 0, "skipped": 0, "tests": 0}, {"ran": False, "line": ""}, []
+outs, sources, superseded = {}, {}, 0
+for d, _i, p in loaded:
     parts.append(p)
     for rid, r in d.get("reqs", {}).items():
-        m = reqs.setdefault(rid, {"result": "NOT-TESTED", "source": r.get("source", ""), "tests": [], "skipped": [],
-                                  "passed": 0, "failed": 0, "reason": "", "screenshot": ""})
-        m["tests"] += [t for t in r.get("tests", []) if t not in m["tests"]]
-        m["skipped"] += [t for t in r.get("skipped", []) if t not in m["skipped"]]
-        m["passed"] += r.get("passed", 0); m["failed"] += r.get("failed", 0)
-        if r.get("result") == "FAIL" and m["result"] != "FAIL":          # the first failure owns the reason
-            m["result"], m["reason"], m["screenshot"] = "FAIL", r.get("reason", ""), r.get("screenshot", "")
-        elif r.get("result") == "PASS" and m["result"] == "NOT-TESTED":
-            m["result"], m["reason"] = "PASS", ""
-        elif m["result"] == "NOT-TESTED" and not m["reason"]:
-            m["reason"] = r.get("reason", "")
-        if m["source"] != r.get("source", m["source"]):
-            m["source"] = "browser+unit"
+        oc = r.get("outcomes")
+        if oc is None:   # an older part: every test it lists carries the row's result
+            res = {"PASS": "pass", "FAIL": "fail"}.get(r.get("result"), "skip")
+            oc = {t: {"outcome": res, "reason": r.get("reason", "") if res == "fail" else "", "screenshot": r.get("screenshot", "")} for t in r.get("tests", [])}
+            oc.update({t: {"outcome": "skip", "reason": r.get("reason", ""), "screenshot": ""} for t in r.get("skipped", [])})
+        o = outs.setdefault(rid, {})
+        for name, rec in oc.items():
+            old = o.get(name)
+            if old and rec["outcome"] == "skip" and old["outcome"] != "skip":
+                continue
+            if old and old["outcome"] != rec["outcome"]:
+                superseded += 1
+            o[name] = rec
+        src = sources.get(rid)
+        sources[rid] = r.get("source", "") if src in (None, r.get("source", "")) else "browser+unit"
     b = d.get("browser", {})
     if b.get("ran"):
         browser["ran"] = True
@@ -76,11 +86,22 @@ for p in sys.argv[1:]:
     u = d.get("unit", {})
     if u.get("ran") and not unit["ran"]:
         unit = u
-json.dump({"reqs": reqs, "browser": browser, "unit": unit, "merged_from": parts}, open(os.environ["TF_OUT"], "w"), indent=1)
+for rid, o in outs.items():
+    fails = [(n, x) for n, x in o.items() if x["outcome"] == "fail"]
+    npass = sum(1 for x in o.values() if x["outcome"] == "pass")
+    skips = [(n, x) for n, x in o.items() if x["outcome"] == "skip"]
+    result = "FAIL" if fails else "PASS" if npass else "NOT-TESTED"
+    reason = fails[0][1]["reason"] if fails else (skips[0][1]["reason"] if skips and not npass else "")
+    reqs[rid] = {"result": result, "source": sources.get(rid, ""), "tests": [n for n, x in o.items() if x["outcome"] != "skip"],
+                 "skipped": [n for n, _ in skips], "passed": npass, "failed": len(fails), "reason": reason,
+                 "screenshot": fails[0][1].get("screenshot", "") if fails else "", "outcomes": o}
+json.dump({"reqs": reqs, "browser": browser, "unit": unit, "merged_from": parts, "superseded": superseded},
+          open(os.environ["TF_OUT"], "w"), indent=1)
 p = sum(1 for r in reqs.values() if r["result"] == "PASS"); f = sum(1 for r in reqs.values() if r["result"] == "FAIL")
 ns = sum(1 for r in reqs.values() if r["result"] == "NOT-TESTED")
 print(f"merged {len(parts)} part(s): rows with a test: {len(reqs)} — {p} PASS, {f} FAIL, {ns} NOT-TESTED (every clause skipped)"
-      + (f" (browser {browser['passed']}/{browser['tests']} tests passed, {browser['skipped']} skipped)" if browser["ran"] else ""))
+      + (f" (browser {browser['passed']}/{browser['tests']} tests passed, {browser['skipped']} skipped)" if browser["ran"] else "")
+      + (f"; {superseded} test(s) ran again in a later part, and the later run stands" if superseded else ""))
 for rid, r in sorted(reqs.items()):
     if r["result"] == "FAIL":
         print(f"  FAIL {rid} — {r['reason']}" + (f" — {r['screenshot']}" if r["screenshot"] else ""))
@@ -186,7 +207,9 @@ def add(rid, outcome, name, source, reason="", shot=""):
     defect. tests/regression/run.sh tf_022."""
     r = reqs.setdefault(rid.upper(), {"result": "NOT-TESTED", "source": source, "tests": [],
                                       "skipped": [], "passed": 0, "failed": 0,
-                                      "reason": "", "screenshot": ""})
+                                      "reason": "", "screenshot": "", "outcomes": {}})
+    # each test's own outcome, so a merge can let a later run of the same test stand (Lekhak TF-007)
+    r["outcomes"][name] = {"outcome": outcome, "reason": (reason or "")[:200], "screenshot": shot}
     if outcome == "skip":
         r["skipped"].append(name)
         if not r["reason"]:
@@ -292,7 +315,9 @@ unit["passed"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r["re
 unit["failed"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r["result"] == "FAIL")
 unit["not_tested"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r["result"] == "NOT-TESTED")
 
-json.dump({"reqs": reqs, "browser": browser, "unit": unit}, open(os.environ["TF_OUT"], "w"), indent=1)
+import datetime
+ran_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+json.dump({"reqs": reqs, "browser": browser, "unit": unit, "ran_at": ran_at}, open(os.environ["TF_OUT"], "w"), indent=1)
 p = sum(1 for r in reqs.values() if r["result"] == "PASS")
 f = sum(1 for r in reqs.values() if r["result"] == "FAIL")
 ns = sum(1 for r in reqs.values() if r["result"] == "NOT-TESTED")

@@ -54,6 +54,9 @@ const arg = (name, dflt = null) => {
 const flag = (name) => argv.includes(name);
 
 const BASE = (arg('--base') || '').replace(/\/$/, '');
+// An embedded-browser desktop head, attached over its DevTools port as tf-verify-screens does; its
+// screens are opened the way its router does, by pushState (Lekhak TF-006).
+const CDP = arg('--cdp') || '';
 const MOCKUPS = arg('--mockups', 'docs/mockups');
 const WIDTHS = (arg('--widths', '1280,390') || '').split(',').map((w) => parseInt(w.trim(), 10)).filter(Boolean);
 const JSON_OUT = arg('--json-out');
@@ -74,10 +77,37 @@ for (let i = 0; i < argv.length; i++) {
   }
 }
 const THIN_RATIO = parseFloat(arg('--thin-ratio', '0.25'));
+// --keep-app-theme compares the app in the theme it is showing, not the mockup's (Lekhak TF-010)
+const KEEP_APP_THEME = flag('--keep-app-theme');
+// The theme a page declares: data-* attributes on <html> and <body> whose name says theme, mode or
+// scheme (data-theme, data-bs-theme, data-site-theme, data-color-mode …). Nothing about any one stack.
+const READ_THEME = () => {
+  const out = {};
+  for (const [where, el] of [['html', document.documentElement], ['body', document.body]]) {
+    if (!el) continue;
+    for (const a of el.attributes) if (/^data-.*(theme|mode|scheme)/i.test(a.name)) out[`${where}|${a.name}`] = a.value;
+  }
+  return out;
+};
+// Sets those attributes on this page; returns what it had, so the same call puts it back. An
+// attribute the page lacked is removed again on the way back (value null).
+const APPLY_THEME = (t) => {
+  const before = {}; let changed = false;
+  for (const [k, v] of Object.entries(t || {})) {
+    const [where, name] = k.split('|');
+    const el = where === 'body' ? document.body : document.documentElement;
+    if (!el) continue;
+    const had = el.getAttribute(name);
+    before[k] = had;
+    if (had !== v) changed = true;
+    if (v === null) el.removeAttribute(name); else el.setAttribute(name, v);
+  }
+  return { before, changed };
+};
 const MAX_FINDINGS_PER_SCREEN = parseInt(arg('--max-findings', '40'), 10);
 
-if (!BASE || SCREENS.length === 0) {
-  console.error('usage: tf-mockup-parity.sh --base URL --screen name=/route [--screen ...]');
+if ((!BASE && !CDP) || SCREENS.length === 0) {
+  console.error('usage: tf-mockup-parity.sh --base URL|--cdp URL --screen name=/route [--screen ...]');
   process.exit(3);
 }
 
@@ -365,12 +395,17 @@ const PROBE = (wanted = []) => {
   // table already was. Keys pair only when both sides produce them, so extra depth
   // costs precision nothing — it only ever adds comparisons that were impossible
   // before.
+  // A box the mockup marks as another state of the screen (data-tf-state="<state>", or
+  // data-state-testid="<id>") is not on the first view, so it is neither walked nor counted when its
+  // siblings are numbered: a database-down alert first in a card moved every row below it one place,
+  // and the Host/Port row was compared with the alert (Lekhak TF-011).
+  const stateOnly = (el) => el.hasAttribute('data-tf-state') || el.hasAttribute('data-state-testid');
   const keyOf = (el, parentKey) => {
     const tag = el.tagName.toLowerCase();
     let n = 0;
     for (const s of el.parentElement ? el.parentElement.children : []) {
       if (s === el) break;
-      if (s.tagName === el.tagName) n++;
+      if (s.tagName === el.tagName && !stateOnly(s)) n++;
     }
     return `${parentKey} > ${tag}[${n}]`;
   };
@@ -393,7 +428,7 @@ const PROBE = (wanted = []) => {
   for (const a of anchors) {
     const id = a.getAttribute('data-testid');
     if (!id || index[id]) continue;
-    if (isHidden(a)) continue;
+    if (isHidden(a) || a.closest('[data-tf-state],[data-state-testid]')) continue;   // TF-011
     index[id] = sigOf(a);
     let budget = MAX_PER_ANCHOR;
     const walk = (el, key, depth) => {
@@ -402,6 +437,7 @@ const PROBE = (wanted = []) => {
         if (budget <= 0) return;
         if (c.hasAttribute('data-testid')) continue;   // it gets its own top-level entry
         if (isHidden(c)) continue;                     // TF-012
+        if (stateOnly(c)) continue;                    // another state of the screen (TF-011)
         const k = keyOf(c, key);
         index[k] = sigOf(c);
         budget--;
@@ -417,7 +453,7 @@ const PROBE = (wanted = []) => {
         const [el, key, depth] = queue.shift();
         if (depth >= 12) continue;
         for (const c of el.children) {
-          if (c.hasAttribute('data-testid') || isHidden(c)) continue;
+          if (c.hasAttribute('data-testid') || isHidden(c) || stateOnly(c)) continue;
           seen++;
           const k = keyOf(c, key);
           if (want.has(norm((c.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 60)))) found.push({ key: k, ...sigOf(c) });
@@ -650,7 +686,27 @@ const browser = await chromium.launch();
 const ctxOpts = { ignoreHTTPSErrors: true };
 if (STORAGE && existsSync(STORAGE)) ctxOpts.storageState = STORAGE;
 const ctx = await browser.newContext(ctxOpts);
-if (COOKIE) {
+let cdpBrowser = null, cdpPage = null;
+if (CDP) {
+  try {
+    cdpBrowser = await chromium.connectOverCDP(CDP, { timeout: 15000 });
+    const c = cdpBrowser.contexts()[0];
+    cdpPage = c && c.pages()[0];
+  } catch (e) { console.error(`tf-mockup-parity: UNREACHABLE cdp ${CDP}: ${e.message.split('\n')[0]}`); }
+  if (!cdpPage) {
+    console.error(`tf-mockup-parity: UNREACHABLE cdp ${CDP}: no page in the attached app`);
+    await browser.close(); process.exit(2);
+  }
+}
+// the attached app's router, not a document load: a desktop head has no server to answer a goto
+async function reachCdp(page, route) {
+  try {
+    await page.evaluate((r) => { history.pushState({}, '', r); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); }, route);
+    await page.waitForTimeout(LOGIN_OPTS.settle);
+    return { status: 200, url: page.url() };
+  } catch (e) { return { status: 0, error: e.message.split('\n')[0] }; }
+}
+if (COOKIE && !CDP) {
   const u = new URL(BASE);
   for (const pair of COOKIE.split(';')) {
     const [name, ...v] = pair.trim().split('=');
@@ -670,9 +726,9 @@ const tabs = {};
 let loginResult = null;
 for (const width of WIDTHS) {
   const size = { width, height: width < 700 ? 844 : 800 };
-  const app = await ctx.newPage(); await app.setViewportSize(size);
+  const app = CDP ? cdpPage : await ctx.newPage(); if (!CDP) await app.setViewportSize(size);
   const mock = await ctx.newPage(); await mock.setViewportSize(size);
-  if (LOGIN_PATH && USER) { const l = await signIn(app, LOGIN_OPTS); if (loginResult === null) loginResult = l; }
+  if (!CDP && LOGIN_PATH && USER) { const l = await signIn(app, LOGIN_OPTS); if (loginResult === null) loginResult = l; }
   tabs[width] = { app, mock };
 }
 if (loginResult && loginResult.attempted && !loginResult.ok) console.error(`tf-mockup-parity: LOGIN failed at ${BASE}${LOGIN_PATH}: ${loginResult.error || 'still on the sign-in page'}`);
@@ -690,14 +746,15 @@ for (const s of SCREENS) {
   const perWidth = [];
   for (const width of WIDTHS) {
     const { app: page, mock: mockPage } = tabs[width];
-    let mock, app, docFindings = [], reached = '';
+    let mock, app, docFindings = [], reached = '', theme = null;
     try {
       await mockPage.goto(pathToFileURL(mockPath).href, { waitUntil: 'load' });
       mock = await mockPage.evaluate(PROBE);
       // The document may answer 401 and still draw the screen signed in (AppManager TF-006/TF-011):
       // reach() judges by what the page draws, signs in again from inside the page when it must, and
       // returns 200 only when the screen was really drawn signed in.
-      const nav = await reach(page, LOGIN_OPTS, s.route);
+      if (CDP) await page.setViewportSize({ width, height: width < 700 ? 844 : 800 }).catch(() => {});
+      const nav = CDP ? await reachCdp(page, s.route) : await reach(page, LOGIN_OPTS, s.route);
       if (nav.status === 0 || nav.status >= 400 || nav.signedOut) {
         perWidth.push({ width, error: nav.status === 0 ? `could not open ${s.route}: ${nav.error || 'no response'}`
           : nav.signedOut ? `app returned HTTP ${nav.document_status ?? nav.status} and stayed signed out (sign-in ${LOGIN_PATH && USER ? 'did not hold' : 'not given: --login-path/--user/--password or --cookie'})`
@@ -707,7 +764,15 @@ for (const s of SCREENS) {
       reached = nav.reached || '';
       await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
       const wanted = [...new Set(Object.values(mock.index).filter((x) => x.badge === true && x.text).map((x) => x.text))];
-      app = await page.evaluate(PROBE, wanted);
+      // Lekhak TF-010: the app is drawn in the mockup's theme for the comparison. The app kept the
+      // viewer's saved dark theme, the mockup was light, and every primary button read "mockup accent,
+      // app neutral". The mockup's theme attributes on <html> and <body> are copied onto the app page
+      // and the app's own are put back afterwards, so an attached app is left as the viewer had it.
+      const mockTheme = KEEP_APP_THEME ? null : await mockPage.evaluate(READ_THEME);
+      const saved = mockTheme ? await page.evaluate(APPLY_THEME, mockTheme).catch(() => null) : null;
+      if (saved && saved.changed) { theme = { mockup: mockTheme, app_had: saved.before }; await page.waitForTimeout(400); }
+      try { app = await page.evaluate(PROBE, wanted); }
+      finally { if (saved && saved.changed) await page.evaluate(APPLY_THEME, saved.before).catch(() => {}); }
 
       // TF-008 §2. Cheap, no false positives in a shell-scrolled app, and it would
       // have caught the /routing void on its own: 2607px of document against a
@@ -729,7 +794,7 @@ for (const s of SCREENS) {
     const d = diff(mock, app, s.name, width);
     d.findings.push(...docFindings);
     perWidth.push({ width, ...d, mockAnchors: mock.anchors, appAnchors: app.anchors,
-      appTestIds: app.testids, mockTestIds: mock.testids, ...(reached ? { reached } : {}) });
+      appTestIds: app.testids, mockTestIds: mock.testids, ...(reached ? { reached } : {}), ...(theme ? { theme } : {}) });
   }
 
   const ok = perWidth.filter((w) => !w.error);
@@ -792,15 +857,17 @@ for (const s of SCREENS) {
     },
     widths: perWidth.map((w) => ({ width: w.width, error: w.error || null,
       compared: w.compared || 0, content_graded: w.contentGraded || 0, findings: (w.findings || []).length,
-      ...(w.reached ? { reached: w.reached } : {}) })),   // how a 401 screen was reached signed in (TF-011)
+      ...(w.reached ? { reached: w.reached } : {}),       // how a 401 screen was reached signed in (TF-011)
+      ...(w.theme ? { theme: w.theme } : {}) })),          // the app was drawn in the mockup's theme (Lekhak TF-010)
   });
 }
 
 await browser.close();
+if (cdpBrowser) await cdpBrowser.close().catch(() => {});   // disconnects; the app keeps running
 
 const summary = {
   status: 'measured',
-  base: BASE,
+  base: BASE || CDP, mode: CDP ? 'cdp' : 'base',
   widths: WIDTHS,
   screens_n: results.length,
   pass: results.filter((r) => r.verdict === 'PASS').length,

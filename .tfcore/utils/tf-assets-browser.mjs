@@ -25,7 +25,48 @@ const PATHS = (arg('--paths', '/') || '').split(',').map((p) => p.trim()).filter
 const OUT = arg('--json-out');
 const COOKIE = arg('--cookie'); const STORAGE = arg('--storage-state');
 const LOGIN_OPTS = { base: BASE, loginPath: arg('--login-path'), user: arg('--user'), password: arg('--password'), settle: 1500, renderWait: 5000 };
-if (!BASE || !OUT) { console.error('usage: tf-assets-browser.mjs --base URL --paths /a,/b --login-path /login --user U --password P --json-out file'); process.exit(3); }
+// Lekhak TF-006: a desktop head, attached over its DevTools port. Its pages and assets are served by
+// the embedded browser itself, so no request from outside can fetch them: each path is opened by
+// pushState, and every asset the document declares is fetched from inside the page, its status and
+// size handed back beside the document ("fetched").
+const CDP = arg('--cdp') || '';
+if ((!BASE && !CDP) || !OUT) { console.error('usage: tf-assets-browser.mjs --base URL|--cdp URL --paths /a,/b [--login-path /login --user U --password P] --json-out file'); process.exit(3); }
+
+if (CDP) {
+  let b, page;
+  try {
+    b = await chromium.connectOverCDP(CDP, { timeout: 15000 });
+    const c = b.contexts()[0]; page = c && c.pages()[0];
+  } catch (e) { page = null; }
+  mkdirSync(dirname(resolve(OUT)), { recursive: true });
+  if (!page) { writeFileSync(resolve(OUT), JSON.stringify({ unreachable: true, cdp: CDP })); process.exit(0); }
+  const pages = {};
+  let origin = '';
+  for (const p of PATHS) {
+    let status = 200, error = '', html = '', url = '', fetched = {};
+    try {
+      await page.evaluate((r) => { history.pushState({}, '', r); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); }, p);
+      await page.waitForTimeout(LOGIN_OPTS.settle);
+      url = page.url(); origin = origin || new URL(url).origin;
+      html = await page.content();
+      fetched = await page.evaluate(async () => {
+        const out = {};
+        const urls = [...document.querySelectorAll('link[href]')].filter((l) => /stylesheet|preload|modulepreload|icon/i.test(l.rel)).map((l) => l.href)
+          .concat([...document.querySelectorAll('script[src]')].map((s) => s.src));
+        for (const u of [...new Set(urls)]) {
+          if (!/^https?:/i.test(u)) continue;
+          try { const r = await fetch(u, { cache: 'no-store' }); const buf = await r.arrayBuffer(); out[u] = { status: r.status, bytes: buf.byteLength }; }
+          catch (e) { out[u] = { status: null, bytes: 0, error: String(e.message || e).slice(0, 120) }; }
+        }
+        return out;
+      });
+    } catch (e) { status = 0; error = e.message.split('\n')[0]; }
+    pages[p] = { status, document_status: status, url, reached: 'opened inside the attached app (pushState)', signed_out: false, error, html, fetched };
+  }
+  await b.close().catch(() => {});   // disconnects; the app keeps running
+  writeFileSync(resolve(OUT), JSON.stringify({ login: null, cdp: CDP, origin, pages }));
+  process.exit(0);
+}
 
 const browser = await chromium.launch();
 const ctxOpts = { ignoreHTTPSErrors: true };

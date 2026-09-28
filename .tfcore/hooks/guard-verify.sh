@@ -99,14 +99,19 @@ if ledger is not None:
         sys.exit(0)  # a same-day ledger from a framework version before Sitting 4c: date unlocks
     else:
         rows = ledger.get("rows") or {}
-        not_listed = sorted(i for i in introduced if rows.get(i) != "PASS")
+        # a ledger kept row by row holds older runs' rows too (Lekhak TF-007): only a row graded
+        # today unlocks
+        dates = ledger.get("row_dates")
+        not_listed = sorted(i for i in introduced if rows.get(i) != "PASS"
+                            or (isinstance(dates, dict) and str(dates.get(i, "")) != today))
         if not introduced:
             # a Verified cell without a readable row id (a malformed line): refuse, nothing can vouch for it
             not_listed = ["(row id not readable)"]
         if not not_listed:
             sys.exit(0)
-        problem = ("lists these rows as " + ", ".join(f"{i}: {rows.get(i, 'absent')}" for i in not_listed)
-                   + ", not PASS")
+        problem = ("lists these rows as " + ", ".join(
+            f"{i}: {rows.get(i, 'absent')}" + (f" (graded {dates.get(i)})" if isinstance(dates, dict) and dates.get(i) and dates.get(i) != today else "")
+            for i in not_listed) + ", not PASS today")
 
 print(
     "BLOCKED by TechieFlow policy: this write INTRODUCES a `Verified` status, "

@@ -3,6 +3,7 @@
 #
 #   bash .tfcore/utils/tf-verify-boot.sh start [--head web|windows|static] [--project <csproj>] [--dry-run]
 #                                              [--port N] [--config Release] [--static <dir>] [--probe-path /healthz]
+#                                              [--environment Development]   (web: ASPNETCORE_ENVIRONMENT)
 #   bash .tfcore/utils/tf-verify-boot.sh stop [--port N]
 #   bash .tfcore/utils/tf-verify-boot.sh status [--port N]
 #
@@ -193,12 +194,13 @@ print(f"STOPPED head={s.get('head')} mode={s.get('mode')} pids={s.get('pids')}")
 PY
     exit 0 ;;
   start) ;;
-  *) sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 3 ;;
+  *) sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 3 ;;
 esac
 
-HEAD=""; PROJECT=""; PORT=""; CONFIG=""; STATIC=""; PROBE="/"; DRYRUN=0
+HEAD=""; PROJECT=""; PORT=""; CONFIG=""; STATIC=""; PROBE="/"; DRYRUN=0; ENVNAME=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --environment) ENVNAME="${2:-}"; shift 2 ;;   # the web head's ASPNETCORE_ENVIRONMENT (Lekhak TF-001)
     --probe-path) PROBE="${2:-/}"; [[ "$PROBE" == /* ]] || PROBE="/$PROBE"; shift 2 ;;
     --dry-run) DRYRUN=1; shift ;;   # print which project and head would boot, and stop (TF-010)
     --head) HEAD="${2:-}"; shift 2 ;;
@@ -322,7 +324,7 @@ if [[ "$HEAD" == "web" ]]; then
     fi
     # what `dotnet run` sets from the launch profile; the environment above all, which picks the
     # settings file and whether the secrets are read
-    tf_read_lines LSENV < <(python3 - "$PDIR/Properties/launchSettings.json" <<'PY'
+    tf_read_lines LSENV < <(TF_BOOT_ENV="$ENVNAME" python3 - "$PDIR/Properties/launchSettings.json" <<'PY'
 import json, os, sys
 try:
     profiles = json.load(open(sys.argv[1], encoding="utf-8-sig")).get("profiles", {})
@@ -332,6 +334,8 @@ env = next((dict(p.get("environmentVariables") or {}) for p in profiles.values()
 env.setdefault("ASPNETCORE_ENVIRONMENT", "Development")
 if os.environ.get("ASPNETCORE_ENVIRONMENT"):
     env["ASPNETCORE_ENVIRONMENT"] = os.environ["ASPNETCORE_ENVIRONMENT"]
+if os.environ.get("TF_BOOT_ENV"):
+    env["ASPNETCORE_ENVIRONMENT"] = os.environ["TF_BOOT_ENV"]
 for k, v in env.items():
     print(f"{k}={v}")
 PY
@@ -346,6 +350,22 @@ PY
         PID=$!; label="cmd.exe /c dotnet" ;;
       *)
         runner="dotnet"; [[ "$verdict" == *"via ~/.dotnet/dotnet"* ]] && runner="$HOME/.dotnet/dotnet"
+        # Lekhak TF-001. A copy run on the WSL side reads user-secrets from ~/.microsoft/usersecrets,
+        # while `dotnet user-secrets set` on Windows wrote them to %APPDATA%\Microsoft\UserSecrets:
+        # "Required configuration value(s) not set" on an app that starts under `dotnet run`. The
+        # secrets reader looks under $APPDATA first on any system, so when only the Windows store
+        # holds this project's secrets, the app is pointed at it.
+        SID="$(grep -oE '<UserSecretsId>[^<]+' "$PROJECT" 2>/dev/null | head -1 | sed 's/<UserSecretsId>//')"
+        if [[ -n "$SID" && ! -f "$HOME/.microsoft/usersecrets/$SID/secrets.json" ]] && [[ "$PLATFORM" == wsl || -n "${TF_WIN_APPDATA:-}" ]]; then
+          WAD="${TF_WIN_APPDATA:-}"
+          if [[ -z "$WAD" ]] && command -v cmd.exe >/dev/null 2>&1; then
+            WAD="$(cmd.exe /c 'echo %APPDATA%' 2>/dev/null | tr -d '\r')"; [[ -n "$WAD" ]] && WAD="$(wslpath -u "$WAD" 2>/dev/null)"
+          fi
+          if [[ -n "$WAD" && -f "$WAD/Microsoft/UserSecrets/$SID/secrets.json" ]]; then
+            LSENV+=("APPDATA=$WAD")
+            echo "tf-verify-boot: user-secrets $SID are in the Windows store only; the app reads them from $WAD/Microsoft/UserSecrets"
+          fi
+        fi
         WEBR=(); [[ -d "$RUN/wwwroot" ]] && WEBR=(--webroot "$ROOTDIR/$RUN/wwwroot")
         # the redirections belong to the whole background group and the group becomes the app: a group
         # left waiting on its app kept this script's output open, so a caller reading it waited for ever
@@ -383,7 +403,7 @@ PY
         nohup cmd.exe /c "dotnet run --project $WP ${CFGARGS[*]:-} --urls $URL" >> "$LOG" 2>&1 < /dev/null &
         PID=$!; label="cmd.exe /c dotnet" ;;
       *)
-        ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT:-Development}" nohup "$r" run --project "$PROJECT" ${CFGARGS[@]+"${CFGARGS[@]}"} --urls "$URL" >> "$LOG" 2>&1 < /dev/null &
+        ASPNETCORE_ENVIRONMENT="${ENVNAME:-${ASPNETCORE_ENVIRONMENT:-Development}}" nohup "$r" run --project "$PROJECT" ${CFGARGS[@]+"${CFGARGS[@]}"} --urls "$URL" >> "$LOG" 2>&1 < /dev/null &
         PID=$!; label="$r" ;;
     esac
     tried+=("$label")

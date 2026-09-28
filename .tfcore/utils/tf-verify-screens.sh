@@ -7,6 +7,10 @@
 #   bash .tfcore/utils/tf-verify-screens.sh --list … --cdp http://172.18.144.1:9223               # an embedded-browser desktop head
 #   … --error-selector '.my-crash-banner'   # the banner THIS stack shows when its client side falls over
 #                                           # (repeatable; defaults cover one framework's id and [data-error-ui])
+#   … --route-value ProviderId=21           # a sample for /x/{ProviderId:long} (repeatable; or "route_values"
+#                                           # in the list); a screen whose route still needs one is SKIPped
+#   A mockup control marked data-tf-state="<state>" (on it or a box around it) belongs to another state
+#   of the screen: it is not owed on the first view.
 #
 # For every screen, at 1280 and 390 px: every control the mockup anchors is present and shows
 # something, no header-only table, no blank page, no Blazor or console error (render); nothing
@@ -22,8 +26,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # `--help` is a request and exits 0; no argument at all is a mistake and exits 3. (The one-line
 # form this replaces computed "0--help" as its exit code and printed a bash error under the help.)
 case "${1:-}" in
-  -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-  "")        sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 3 ;;
+  -h|--help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  "")        sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 3 ;;
 esac
 command -v node >/dev/null 2>&1 || { echo "tf-verify-screens: node is required (bash .tfcore/utils/tf-verify-env.sh)" >&2; exit 4; }
 node -e "import('playwright').then(()=>process.exit(0)).catch(()=>process.exit(1))" 2>/dev/null || {

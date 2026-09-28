@@ -26,6 +26,8 @@
 #     test-results/  test-results-*/  scripts-*/  playwright-report/
 #   The project's own tracked scripts/ is never touched (needs the hyphen).
 #   tests/verify/ (promoted, tracked specs) is never touched (outside the roots).
+#   A file under the roots that a test names by path (tests/.artifacts/<folder>/<name>) is kept at
+#   any age, with everything below it (Lekhak TF-004); the summary says how many were kept.
 #
 # RETENTION: default 7 days. Override per project with `artifactRetentionDays: N`
 # in .tfcore/core-config.yaml, or per run with TF_ARTIFACT_RETENTION_DAYS=N.
@@ -98,6 +100,42 @@ DAYS = retention_days()
 CUTOFF = time.time() - DAYS * 86400
 
 SWEEP_ROOTS = [os.path.join("tests", ".artifacts"), ".verify"]
+
+# ---- what a test names is not litter (Lekhak TF-004) ---------------------------
+# A spec that reads tests/.artifacts/harness/hindi-src lost it on the eighth day, and two rows failed
+# "the crawl produced no result" on a working product. Any path under the sweep roots that a file of
+# the project's tests (or its Playwright config) names is kept, with everything below it, whatever its
+# age. The right home for a fixture is still tests/verify/fixtures/, outside the sweep.
+# Only a NAMED thing inside a folder counts (tests/.artifacts/<folder>/<name>): a folder a test writes
+# into is named with a variable after it (`shots/${name}.png`), which the pattern stops at, and the
+# framework's own output folders are never kept. The Playwright config is not read: it names outputs.
+KEEP_RE = re.compile(r"(?:tests[/\\]+\.artifacts|\.verify)[/\\]+[^'\"`\s)\]},;*?<>|${}+]+")
+OUTPUTS = ("tests/.artifacts/verify/", "tests/.artifacts/build/", "tests/.artifacts/test-results",
+           "tests/.artifacts/playwright", "tests/.artifacts/regression", "tests/.artifacts/doc-check/")
+TEXT_EXT = (".ts", ".js", ".mjs", ".cjs", ".cs", ".py", ".json", ".sh", ".cmd", ".ps1", ".yaml", ".yml", ".txt", ".md")
+keep = set()
+def scan_refs(fp):
+    try:
+        if os.path.getsize(fp) > 2 * 1024 * 1024:
+            return
+        with open(fp, encoding="utf-8", errors="replace") as fh:
+            for m in KEEP_RE.finditer(fh.read()):
+                k = re.sub(r"/+", "/", m.group(0).replace("\\", "/")).rstrip("/.")
+                if k.count("/") >= (2 if k.startswith(".verify/") else 3) and not (k + "/").startswith(OUTPUTS):
+                    keep.add(k)
+    except Exception:
+        pass
+tests_dir = os.path.join(root, "tests")
+if os.path.isdir(tests_dir) and not os.path.islink(tests_dir):
+    for dp, dns, fns in os.walk(tests_dir, followlinks=False):
+        dns[:] = [d for d in dns if d not in (".artifacts", "node_modules", "bin", "obj", ".git")]
+        for f in fns:
+            if f.endswith(TEXT_EXT):
+                scan_refs(os.path.join(dp, f))
+kept_n = 0
+def kept(fp):
+    rel = os.path.relpath(fp, root).replace(os.sep, "/")
+    return any(rel == k or rel.startswith(k + "/") for k in keep)
 LEGACY_ROOT_GLOBS = ["test-results", "test-results-*", "scripts-*", "playwright-report"]
 
 removed_files = 0
@@ -162,6 +200,9 @@ if DAYS > 0:
                 except Exception:
                     continue
                 if st.st_mtime < CUTOFF:
+                    if keep and kept(fp):
+                        kept_n += 1
+                        continue
                     rm_file(fp)
             # remove dirs emptied by this sweep (never the root itself)
             if dp != top:
@@ -193,6 +234,11 @@ if removed_files or removed_dirs or legacy:
              f"tests/.artifacts/ and .verify/"]
     if legacy:
         parts.append("banned repo-root legacy dirs removed: " + ", ".join(sorted(legacy)))
+    if kept_n:
+        parts.append(f"kept {kept_n} old file(s) a test names by path (move them to tests/verify/fixtures/)")
     print("; ".join(parts))
+elif kept_n:
+    print(f"TechieFlow sweep-artifacts: kept {kept_n} file(s) older than {DAYS}d because a test names them by path; "
+          "move them to tests/verify/fixtures/")
 PY
 exit 0

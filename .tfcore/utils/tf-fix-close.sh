@@ -104,7 +104,11 @@ try:
 except Exception:
     pass
 if not started or not ledger.get("run_id") or ledger["run_id"] >= started:
+    row_runs = ledger.get("row_runs")   # a ledger kept row by row also holds older runs' rows (Lekhak TF-007)
     for rid, v in (ledger.get("rows") or {}).items():
+        if started and isinstance(row_runs, dict) and rid not in (ledger.get("this_run") or []) \
+                and (row_runs.get(rid) or "") < started:
+            continue
         # verdict_after takes a checklist status (SCHEMA §5.5): the ledger's verdict is mapped, never passed raw
         # (MISS-TechieFlow-20260906-25: RENDER-FAIL was refused and twenty miss-fix records never landed)
         rows.setdefault(rid.upper(), "Verified" if v == "PASS" else "FAIL" if v in ("FAIL", "BUILD-FAIL") else "Needs re-verify")

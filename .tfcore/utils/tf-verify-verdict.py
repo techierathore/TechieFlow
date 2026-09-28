@@ -75,6 +75,14 @@ def norm_route(r):
     return r or "/"
 
 
+def quoted(s, n=None):
+    """A test's own words — its title or its failure message — in backticks, so the Remark shows them as
+    quoted and tf-doc-check reads them as quoted: a title saying "Found/Not found" failed the checker's
+    not-present rule on every verify (Lekhak TF-012)."""
+    s = re.sub(r"\s+", " ", (s or "").replace("`", "'").replace("|", "/")).strip()
+    return f"`{s[:n] if n else s}`" if s else ""
+
+
 def words(s, n=60):
     w = s.split()
     return s if len(w) <= n else " ".join(w[:n]) + "…"   # the ellipsis rides on the last word: the checker counts words, and a bare "…" was a 61st (miss 29)
@@ -96,6 +104,8 @@ def main(argv):
     tests_ran = os.path.isfile(os.path.join(d, "tests.json"))
     screens = load(os.path.join(d, "screens.json")) or {}
     scr_by_name = {s["name"]: s for s in screens.get("screens", [])}
+    # screens tf-verify-screens did not drive because their route needs a sample value (Lekhak TF-005)
+    scr_skipped = {s["name"]: s for s in screens.get("skipped", []) or []}
     assets = load(os.path.join(d, "assets.json")) or {}
     pages = {norm_route(p.get("path")): p for p in assets.get("pages", [])}
     parity = load(os.path.join(d, "parity.json")) or {}
@@ -133,7 +143,7 @@ def main(argv):
         checks.append(("build", booted or build_failed, build_failed, "BUILD-FAIL", "build-error", boot.get("reason", "build failed"), ""))
         # 2 acceptance
         if t:
-            checks.append(("acceptance", True, t["result"] != "PASS", "FAIL", "assert-fail", t.get("reason") or "test failed", t.get("screenshot") or ""))
+            checks.append(("acceptance", True, t["result"] != "PASS", "FAIL", "assert-fail", quoted(t.get("reason")) or "test failed", t.get("screenshot") or ""))
         # 3 render
         if scr:
             if scr.get("render") == "UNREACHABLE":
@@ -196,7 +206,10 @@ def main(argv):
                 detail = "NFR row with no perf-budget and no unit test carrying its id"
             elif not t and r.get("screen") and not driven:
                 verdict = "NOT-DRIVEN"
+                sk = scr_skipped.get(r["screen"])
                 detail = (f"{boot.get('head', 'the app')} not driven: {boot.get('reason')}" if not booted
+                          else f"screen {r['screen']} was not driven: its route {sk['route']} needs --route-value "
+                               + ", ".join(f"{n}=<id>" for n in sk.get("needs", [])) if sk
                           else f"screen {r['screen']} was not driven in this run")
             elif not t:
                 verdict = "NOT-TESTED"
@@ -207,7 +220,7 @@ def main(argv):
                 detail = f"test passed but {boot.get('head', 'the app')} was not driven: {boot.get('reason')}"
             else:
                 verdict = "PASS"
-                parts = [f"test {t['tests'][0][:60]}" if t and t.get("tests") else "test passed"]
+                parts = [f"test {quoted(t['tests'][0], 60)}" if t and t.get("tests") else "test passed"]
                 if driven:
                     parts.append(f"{r['screen']} renders and looks right @{'/'.join(str(w['width']) for w in scr['widths'])}")
                 if "mockup-parity" in ran:
@@ -251,8 +264,23 @@ def main(argv):
     for c in ("build", "acceptance", "render", "assets", "visual", "mockup-parity", "perf"):
         if any(c in x["gates_run"] for x in rows_out):
             checks.append(c)
+    # Lekhak TF-007: a targeted verify rewrote the ledger with its own rows only (395 became 1), so every
+    # other row lost its last verdict. The ledger is kept row by row: a row this run graded is replaced,
+    # with the date and run it was graded in; the rest keep theirs. A scope-all run starts it afresh.
+    # The verify guard unlocks a Verified only for a row graded today, and fix-close reads only the rows
+    # graded since its fix began, by these dates.
+    all_rows, row_dates, row_runs = dict(ledger_rows), {k: today for k in ledger_rows}, {k: started for k in ledger_rows}
+    prev = load(os.path.join("docs", ".last-verify.json")) if os.path.isfile(os.path.join("docs", ".last-verify.json")) else None
+    if lst.get("scope", "all") != "all" and isinstance(prev, dict) and prev.get("app") in (None, app) \
+            and isinstance(prev.get("rows"), dict) and prev.get("mode") != "reconcile":
+        for k, v in prev["rows"].items():
+            if k not in all_rows:
+                all_rows[k] = v
+                row_dates[k] = (prev.get("row_dates") or {}).get(k, prev.get("date", ""))
+                row_runs[k] = (prev.get("row_runs") or {}).get(k, prev.get("run_id", ""))
     ledger = {"date": today, "app": app, "scope": lst.get("scope", "all"), "booted": boot_text, "gates": checks,
-              "evidence": d, "run_id": started, "rows": ledger_rows}
+              "evidence": d, "run_id": started, "rows": all_rows, "row_dates": row_dates, "row_runs": row_runs,
+              "this_run": sorted(ledger_rows)}
     os.makedirs("docs", exist_ok=True)
     with open(os.path.join("docs", ".last-verify.json"), "w", encoding="utf-8") as f:
         json.dump(ledger, f, indent=1)
@@ -294,7 +322,7 @@ def main(argv):
     for t in table:
         print("| " + " | ".join(str(x).replace("|", "/") for x in t) + " |")
     print()
-    print(f"Ledger: docs/.last-verify.json ({len(ledger_rows)} rows). Verdicts: {os.path.join(d, 'verdicts.json')}."
+    print(f"Ledger: docs/.last-verify.json ({len(ledger_rows)} rows graded now, {len(all_rows)} in all). Verdicts: {os.path.join(d, 'verdicts.json')}."
           + (f" Checklist: {applied} row(s) rewritten in {lst.get('checklist')}." if apply else " Checklist untouched (no --apply)."))
     return 0
 

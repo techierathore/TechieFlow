@@ -7,6 +7,9 @@
 #        --login-path /login --user <u> --password <p>   (or --storage-state <file>)
 #   opens each path in a browser that signed in through the form and grades the
 #   document it drew; `pages[].reached` says how a 401 page was reached.
+#   A desktop head (Lekhak TF-006): --cdp http://<host>:9223 in place of --base attaches to the app,
+#   opens each path by pushState and fetches every declared asset from inside the page, because
+#   nothing outside the embedded browser can reach the files it serves.
 #
 # WHAT IT ASKS, and it is the only question no other gate asks:
 #
@@ -57,7 +60,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE=""; PATHS="/"; TIMEOUT=20; LABEL=""; OUT=""; EXTERNAL=0; MINBYTES=1
 HDRS=""   # newline-separated "K: V" pairs (--header, repeatable; --cookie is sugar)
-COOKIE=""; LOGIN_PATH=""; USER=""; PASS=""; STORAGE=""
+COOKIE=""; LOGIN_PATH=""; USER=""; PASS=""; STORAGE=""; CDP=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base)             BASE="${2:-}"; shift 2 ;;
@@ -75,20 +78,27 @@ while [[ $# -gt 0 ]]; do
     --user)             USER="${2:-}"; shift 2 ;;
     --password)         PASS="${2:-}"; shift 2 ;;
     --storage-state)    STORAGE="${2:-}"; shift 2 ;;
-    -h|--help)          sed -n '2,48p' "$0"; exit 0 ;;
+    --cdp)              CDP="${2:-}"; shift 2 ;;   # a desktop head over its DevTools port (Lekhak TF-006)
+    -h|--help)          sed -n '2,56p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 3 ;;
   esac
 done
 
-[[ -n "$BASE" ]] || { printf '%s\n' \
-  "usage: tf-assets.sh --base URL [--paths /,/login] [--cookie 'k=v'] [--include-external]" \
+[[ -n "$BASE" || -n "$CDP" ]] || { printf '%s\n' \
+  "usage: tf-assets.sh --base URL|--cdp URL [--paths /,/login] [--cookie 'k=v'] [--include-external]" \
   "                    [--login-path /login --user U --password P] [--storage-state file]" \
   "                    [--json-out tests/.artifacts/assets/REQ-NFR-015.json]" >&2; exit 3; }
 command -v python3 >/dev/null 2>&1 || { echo '{"status":"no-python3"}'; exit 3; }
 
 # ---- the documents, through a signed-in browser when a sign-in is given (TF-011) --------------
 DOCS=""
-if [[ -n "$LOGIN_PATH" || -n "$STORAGE" ]]; then
+if [[ -n "$CDP" ]]; then
+  if ! command -v node >/dev/null 2>&1 || ! node -e "import('playwright').then(()=>process.exit(0)).catch(()=>process.exit(1))" 2>/dev/null; then
+    echo '{"status":"no-playwright","note":"--cdp needs node and playwright (verify-phase §1 installs the verify environment)"}'; exit 3
+  fi
+  DOCS="$(mktemp "${TMPDIR:-/tmp}/tmp.XXXXXXXXXX")" && mv "$DOCS" "$DOCS.json" && DOCS="$DOCS.json"
+  node "$HERE/tf-assets-browser.mjs" --cdp "$CDP" --paths "$PATHS" --json-out "$DOCS" >&2 || { echo '{"status":"browser-failed"}'; rm -f "$DOCS"; exit 3; }
+elif [[ -n "$LOGIN_PATH" || -n "$STORAGE" ]]; then
   if ! command -v node >/dev/null 2>&1 || ! node -e "import('playwright').then(()=>process.exit(0)).catch(()=>process.exit(1))" 2>/dev/null; then
     echo '{"status":"no-playwright","note":"--login-path needs node and playwright (verify-phase §1 installs the verify environment)"}'; exit 3
   fi
@@ -98,7 +108,7 @@ if [[ -n "$LOGIN_PATH" || -n "$STORAGE" ]]; then
        ${STORAGE:+--storage-state "$STORAGE"} ${COOKIE:+--cookie "$COOKIE"} >&2 || { echo '{"status":"browser-failed"}'; rm -f "$DOCS"; exit 3; }
 fi
 
-TF_BASE="$BASE" TF_PATHS="$PATHS" TF_TIMEOUT="$TIMEOUT" TF_LABEL="$LABEL" TF_OUT="$OUT" TF_DOCS="$DOCS" \
+TF_CDP="$CDP" TF_BASE="$BASE" TF_PATHS="$PATHS" TF_TIMEOUT="$TIMEOUT" TF_LABEL="$LABEL" TF_OUT="$OUT" TF_DOCS="$DOCS" \
 TF_HEADERS="$HDRS" TF_EXTERNAL="$EXTERNAL" TF_MINBYTES="$MINBYTES" python3 - <<'PY'
 import html.parser, json, os, ssl, sys, urllib.error, urllib.request
 from urllib.parse import urljoin, urlsplit
@@ -123,6 +133,21 @@ if os.environ.get("TF_DOCS"):
         os.remove(os.environ["TF_DOCS"])
     except Exception:
         pass
+# an attached desktop head (TF-006): the assets were fetched inside the page, by URL
+CDP = os.environ.get("TF_CDP") or ""
+FETCHED = {}
+if CDP:
+    try:
+        _d
+    except NameError:
+        _d = {}
+    if _d.get("unreachable") or not DOCS:
+        print(json.dumps({"status": "unreachable", "base": CDP, "label": LABEL,
+                          "note": "the desktop head's DevTools port did not answer — a `build` gate problem, not an assets result"}, indent=2))
+        raise SystemExit(2)
+    BASE = (_d.get("origin") or "").rstrip("/")
+    for _pg in DOCS.values():
+        FETCHED.update(_pg.get("fetched") or {})
 
 HEADERS = []
 for line in (os.environ.get("TF_HEADERS") or "").splitlines():
@@ -183,6 +208,11 @@ class AssetParser(html.parser.HTMLParser):
 def fetch(url, want_body=True):
     """Return (status, nbytes, error). Never raises — a transport failure is a
     finding, not a crash, and the caller needs every path's result."""
+    if CDP:
+        f = FETCHED.get(url)
+        if f is None:
+            return None, 0, "not fetched inside the attached app", b""
+        return f.get("status"), f.get("bytes", 0), f.get("error"), b""
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     for k, v in HEADERS:
         req.add_header(k, v)
@@ -231,7 +261,7 @@ def fetch_page(url):
 
 
 # --- reachability first: an unreachable base is a `build` problem, not an assets one
-probe_status, _, probe_err = fetch_page(BASE + "/")
+probe_status, _, probe_err = (200, b"", None) if CDP else fetch_page(BASE + "/")
 if probe_status is None:
     print(json.dumps({"status": "unreachable", "base": BASE, "error": probe_err,
                       "label": LABEL, "note": "app not reachable — this is a `build` "

@@ -1040,7 +1040,11 @@ def check_checklist(c, rep):
         n = len(re.findall(r"\S+", remarks))
         if n > 60:
             rep.fail(rel, f"{rid} Remarks is {n} words; at most 60, current state only (history lives in the telemetry streams)")
-        if NOT_PRESENT.search(remarks) and not NAMES_PATH.search(remarks):
+        # text in backticks is quoted — a test's title or message the verdict script copied — not an agent's
+        # claim about a file; an unclosed span (a Remark cut at its word cap) counts as quoted to its end
+        # (Lekhak TF-012)
+        said = re.sub(r"`[^`]*(?:`|$)", " ", remarks)
+        if NOT_PRESENT.search(said) and not NAMES_PATH.search(remarks):
             rep.fail(rel, f"{rid} Remarks says something is not present without naming the path that was tried; search tools skip .tfcore/, so read the literal path first")
         m = re.search(r"\(#([^)]+)\)", details)
         if not m:

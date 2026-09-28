@@ -9,6 +9,12 @@
 #        --login-path /login --user <u> --password <p>   (or --storage-state <file>)
 #   and each screen is opened in a tab that signed in through the form, the way
 #   tf-verify-screens.sh does; `widths[].reached` in the JSON says how a 401 screen was reached.
+#   A desktop head (Lekhak TF-006): --cdp http://<host>:9223 in place of --base attaches to the
+#   running app, as tf-verify-screens.sh --cdp does, and opens each route by pushState.
+#   The app is compared in the mockup's theme: the mockup's data-*theme/mode/scheme attributes on
+#   <html> and <body> are set on the app page for the comparison and put back after (Lekhak TF-010);
+#   --keep-app-theme compares the theme the app shows. A mockup box marked data-tf-state or
+#   data-state-testid (another state of the screen) is left out of the comparison (Lekhak TF-011).
 #
 # WHAT IT ASKS: "does the built screen carry the structure its approved mockup
 # draws?" — at the same viewports, comparing STRUCTURE, never pixels. Pixel diffing
@@ -51,7 +57,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-case "${1:-}" in -h|--help) sed -n '2,42p' "$0"; exit 0 ;; esac
+case "${1:-}" in -h|--help) sed -n '2,48p' "$0"; exit 0 ;; esac
 
 command -v node >/dev/null 2>&1 || {
   echo "tf-mockup-parity: node is required (verify-phase §1 installs the verify environment)." >&2

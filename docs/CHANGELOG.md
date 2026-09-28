@@ -8,6 +8,88 @@
 
 ---
 
+## 2026-09-28 — Lekhak TF-012: the checker failed a Remark the verdict script wrote
+
+`tf-verify-verdict.py` copied a passing test's title, "REQ-UI-133 AI Setup embedding card shows
+Found/Not found …", into the Remark. `tf-doc-check.py` then failed it under its not-present rule, which
+exists for an agent claiming a file is missing without naming the path it tried. Two framework scripts
+disagreed on every verify. The verdict now writes a test's title and failure message in backticks (new
+`quoted()`; backticks and pipes inside become `'` and `/`). The checker applies the not-present rule
+only outside backtick spans, and counts an unclosed span (a Remark cut at its word cap) as quoted to its
+end. Regression case `lk_012` fails against the scripts Lekhak had, with the reported message, and
+checks that an unquoted "model file not found" still fails. `MISS-TechieFlow-20260928-10` is logged
+as fixed. The reply is in Lekhak's feedback file, copied here.
+
+## 2026-09-28 — Lekhak TF-010 and TF-011: the mockup check's theme and state-only boxes
+
+- **TF-010.** `tf-mockup-parity` graded an attached BlogAdmin in the viewer's saved dark theme against a
+  light mockup, and every accent control read "mockup accent, app neutral". Before the app is probed,
+  the mockup's `data-*` attributes on `<html>` and `<body>` whose name contains theme, mode or scheme
+  are set on the app page. After the probe, the app's own values go back (an attribute it lacked is
+  removed), so an attached app is left as the viewer had it. `widths[].theme` records both sides when
+  they differed. `--keep-app-theme` opts out. It depends on no stack: it works wherever the mockup and
+  the app declare the theme the same way, which a mockup drawn from the app's design system does.
+- **TF-011.** A mockup box marked `data-tf-state` or `data-state-testid` (Lekhak's own form) is left out
+  of the parity walk and is not counted when its siblings are numbered. A database-down alert first in
+  a card had paired the app's Host/Port row with it: "border style differs — mockup solid, app none".
+  `tf-verify-screens` also accepts `data-state-testid` as a state-only mark.
+
+Regression cases `lk_010` (attached app: graded in the mockup's theme, left in its own) and `lk_011`
+(both marks) fail against the scripts Lekhak had, with the two reported findings. Misses
+`MISS-TechieFlow-20260928-08` and `-09` are logged as fixed. The reply was written in Lekhak's own
+feedback file and copied here.
+
+## 2026-09-28 — Lekhak TF-009: the TF-001 fix works; the failed boot predates its deploy
+
+Lekhak reported that the TF-001 fix did not boot its web head. The failed boot state was written at
+11:23 UTC, before the fix was deployed there (about 11:45). A boot at 12:45 UTC with the deployed script
+started the app on port 59689. The running process had `ASPNETCORE_ENVIRONMENT=Development` and
+`APPDATA` set to the Windows roaming folder, and the log had no missing-secret error. No code change.
+The reply is in `docs/Lekhak-TechieFlow-Feedback.md`, copied from the project, which now also holds
+its open TF-008.
+
+## 2026-09-28 — Lekhak TF-001 to TF-007: six verify defects fixed, the Mac driver left open
+
+Lekhak filed seven entries from its first verify runs (`docs/Lekhak-TechieFlow-Feedback.md`). Six are
+fixed and answered in that file, each with a regression case (`lk_001` to `lk_007`) that fails against
+the scripts as Lekhak had them. They were run against a saved copy of those scripts; every defect
+check failed there.
+
+- **TF-001, the web head's secrets.** The report said the app ran outside Development, but its log
+  says "Hosting environment: Development". The real cause: the published copy ran on the WSL side,
+  which reads user-secrets from `~/.microsoft/usersecrets`, while the owner's secrets were only in
+  `%APPDATA%\Microsoft\UserSecrets` on Windows. The .NET secrets reader looks under `$APPDATA` first on
+  any system, so when only the Windows store holds the project's `UserSecretsId`, `tf-verify-boot.sh`
+  now passes `APPDATA=<the Windows roaming folder>` to the app and prints one line. New
+  `--environment <Name>`. `TF_WIN_APPDATA` overrides the lookup (the test uses it).
+- **TF-002.** `tf-verify-screens.mjs` creates its browser context with `ignoreHTTPSErrors`, as
+  `tf-mockup-parity` and `tf-assets` already did.
+- **TF-004.** `sweep-artifacts.sh` keeps any file under `tests/.artifacts/` or `.verify/` that a file
+  under `tests/` names by path, at any age, and reports how many it kept. The Playwright config is not
+  read, because it names outputs. The framework's own output folders are never kept. Only a named
+  thing inside a folder counts, and a pattern stops at `${`, so `shots/${n}.png` keeps nothing. On
+  Lekhak it keeps `hindi-src`, `run-blogadmin.cmd`, `cdp-relay.cjs` and `serials-seed.mjs`. The last
+  three would have gone on 2026-10-03.
+- **TF-005.** `tf-verify-screens` fills route parameters from `--route-value Name=value` or
+  `route_values` in the list (list-wide or per screen). A route still missing a value is not driven:
+  the script prints `SKIP` with the option to pass, and the verdict's note names it. A mockup control
+  marked `data-tf-state="<state>"` (on it or on a box around it) is not owed on the first view.
+- **TF-006.** `tf-assets.sh --cdp` and `tf-mockup-parity.sh --cdp` attach to a desktop head. Screens
+  open by pushState. The asset check fetches each declared file from inside the page and grades the
+  status and size it got. Disconnecting leaves the app running.
+- **TF-007.** Each test's own outcome and a `ran_at` time are written into every tests JSON. `--merge`
+  reads the parts oldest first, and a later run of the same test stands. A later skip never replaces a
+  run that happened, and an older part without outcomes counts each of its tests as the row's result.
+  `docs/.last-verify.json` is kept row by row with `row_dates`, `row_runs` and `this_run`. A scope-`all`
+  run starts it afresh. `guard-verify.sh` unlocks a `Verified` only for a row graded today, and
+  `tf-fix-close.sh` reads only rows graded since its fix began.
+
+**TF-003 (no Mac Catalyst driver) stays open.** It has to be built and proved on a Mac. Lekhak's
+Appium mac2 steps are recorded in the reply as the plan. Misses `MISS-TechieFlow-20260928-01` to `-07`
+are logged: six fixed, `-07` open. Suites: regression all hold (with `TF_PLAYWRIGHT_DIR` pointing at
+Lekhak's Playwright), mirror 19/0, verify 67/0, bugs 52/0, portability 65/0, doc-check clean. The
+three `tests/bugs` failures listed as open in the briefing no longer happen.
+
 ## 2026-09-27 — The OpenCode plugin loads on the OpenCode 2 preview as well as on 1.x
 
 On the owner's Mac, OpenCode refused `.opencode/plugin/techieflow.js`: "Plugin must export a default

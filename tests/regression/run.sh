@@ -1111,7 +1111,8 @@ cased = {("TF-%03d" % int(c[3:])) for c in cased}
 # a project whose own numbering overlaps that of TfLens has its cases under its own prefix
 own = {"AppManager": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^am_0?(\d{2,3})\(\)", suite)},
        "Chatur": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^ch_0?(\d{2,3})\(\)", suite)},
-       "TrBlazeUI": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^tb_0?(\d{2,3})\(\)", suite)}}
+       "TrBlazeUI": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^tb_0?(\d{2,3})\(\)", suite)},
+       "Lekhak": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^lk_0?(\d{2,3})\(\)", suite)}}
 for f in sorted(glob.glob(os.path.join(root, "docs", "*-TechieFlow-Feedback.md"))):
     app = os.path.basename(f).split("-")[0]
     for e in tf_feedback.entries(f):
@@ -3390,6 +3391,344 @@ m=json.load(open(sys.argv[1]))['misses']; print('%s|%s|%s' % (m['misses_total'],
     || bad tb_001c "a withdrawn miss still counts (total|open|voided = $v, open-miss '$open')"
 }
 
+# --- Lekhak TF-001: the web head's secrets were in the Windows store, the copy ran in WSL ---------
+# `dotnet user-secrets set` on Windows writes %APPDATA%\Microsoft\UserSecrets; the published copy run
+# on the WSL side looked in ~/.microsoft/usersecrets and stopped: "Required configuration value(s) not
+# set". The fake app reads its secrets where the .NET reader looks — $APPDATA first, then HOME.
+lk_001() {
+  local d; d="$(_tf043_fx lk001)"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup><UserSecretsId>fx-secrets-1</UserSecretsId></PropertyGroup></Project>\n' > "$d/p/Fx.csproj"
+  mkdir -p "$d/win/Microsoft/UserSecrets/fx-secrets-1"; printf '{"FxKey":"k"}\n' > "$d/win/Microsoft/UserSecrets/fx-secrets-1/secrets.json"
+  cat > "$d/bin/dotnet" <<'SH'
+#!/usr/bin/env bash
+urlport() { local u=""; while [[ $# -gt 0 ]]; do [[ "$1" == "--urls" ]] && u="$2"; shift; done; echo "${u##*:}"; }
+case "$1" in
+  publish) out=""; for ((i=1; i<=$#; i++)); do [[ "${!i}" == "-o" ]] && { j=$((i+1)); out="${!j}"; }; done
+           mkdir -p "$out"; echo dll > "$out/Fx.dll"; echo "Fx -> $out"; exit 0 ;;
+  build) echo "Build succeeded."; exit 0 ;;
+  *.dll) if [[ -n "${APPDATA:-}" ]]; then sf="$APPDATA/Microsoft/UserSecrets/fx-secrets-1/secrets.json"
+         else sf="$HOME/.microsoft/usersecrets/fx-secrets-1/secrets.json"; fi
+         echo "env=${ASPNETCORE_ENVIRONMENT:-}" >> __D__/app.env
+         [[ -f "$sf" ]] || { echo "Required configuration value(s) not set: FxKey"; exit 1; }
+         exec python3 -m http.server "$(urlport "$@")" --bind 127.0.0.1 ;;
+esac
+SH
+  tf_sed_inplace "s#__D__#$d#" "$d/bin/dotnet"; chmod +x "$d/bin/dotnet"
+  local p out
+  p="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  out="$(tf_timeout 200 cat < <(cd "$d" && TF_WIN_APPDATA="$d/win" HOME="$d/home" PATH="$d/bin:/usr/bin:/bin" bash "$UTILS/tf-verify-boot.sh" start --project p/Fx.csproj --port "$p" 2>&1))"
+  ( cd "$d" && HOME="$d/home" PATH="$d/bin:/usr/bin:/bin" bash "$UTILS/tf-verify-boot.sh" stop --port "$p" ) >/dev/null 2>&1
+  grep -q '^BOOTED' <<<"$out" \
+    && ok lk_001a "a web head whose user-secrets are only in the Windows store boots, reading them there" \
+    || { bad lk_001a "the published copy could not see the Windows user-secrets"; note "$(grep -E '^(BOOTED|NONE)' <<<"$out" | cut -c1-160)"; }
+  p="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"; : > "$d/app.env"
+  out="$(tf_timeout 200 cat < <(cd "$d" && TF_WIN_APPDATA="$d/win" HOME="$d/home" PATH="$d/bin:/usr/bin:/bin" bash "$UTILS/tf-verify-boot.sh" start --project p/Fx.csproj --port "$p" --environment Staging 2>&1))"
+  ( cd "$d" && HOME="$d/home" PATH="$d/bin:/usr/bin:/bin" bash "$UTILS/tf-verify-boot.sh" stop --port "$p" ) >/dev/null 2>&1
+  grep -q '^BOOTED' <<<"$out" && grep -q '^env=Staging$' "$d/app.env" \
+    && ok lk_001b "--environment names the environment the web head runs in" \
+    || { bad lk_001b "--environment did not reach the app"; note "$(head -2 <<<"$out" | cut -c1-160) | $(cat "$d/app.env" 2>/dev/null)"; }
+}
+
+# --- Lekhak TF-002: a development head on HTTPS was UNREACHABLE to the screen check ---------------
+lk_002() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]] || ! command -v openssl >/dev/null 2>&1; then printf 'skip lk_002 — needs playwright (TF_PLAYWRIGHT_DIR) and openssl\n'; return; fi
+  local d="$SCRATCH/lk002"; mkdir -p "$d/site" "$d/docs/mockups"
+  openssl req -x509 -newkey rsa:2048 -nodes -subj /CN=localhost -days 2 -keyout "$d/key.pem" -out "$d/cert.pem" >/dev/null 2>&1
+  printf '<!doctype html><html><head><meta charset="utf-8"><style>body{font:14px system-ui}</style></head><body><h1 data-testid="page-title">Home</h1><p>Signed-in home of the development head.</p></body></html>\n' > "$d/site/index.html"
+  cp "$d/site/index.html" "$d/docs/mockups/home.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-login.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 - "$d" "$port" >/dev/null 2>&1 <<'PY' &
+import functools, http.server, ssl, sys
+d, port = sys.argv[1], int(sys.argv[2])
+h = functools.partial(http.server.SimpleHTTPRequestHandler, directory=d + "/site")
+s = http.server.ThreadingHTTPServer(("127.0.0.1", port), h)
+c = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); c.load_cert_chain(d + "/cert.pem", d + "/key.pem")
+s.socket = c.wrap_socket(s.socket, server_side=True); s.serve_forever()
+PY
+  local srv=$!; sleep 1
+  local out; out="$(cd "$d" && tf_timeout 120 node tf-verify-screens.mjs --base "https://127.0.0.1:$port" --screen home=/ --widths 1280 --json-out "$d/screens.json" 2>&1)"
+  kill "$srv" 2>/dev/null
+  grep -q '^OK   home' <<<"$out" \
+    && ok lk_002 "a development head on HTTPS with an untrusted certificate is opened and graded" \
+    || { bad lk_002 "the screen check could not open an HTTPS development head"; note "$(grep home <<<"$out" | head -1 | cut -c1-160)"; }
+}
+
+# --- Lekhak TF-004: the seven-day sweep deleted a fixture a spec reads ---------------------------
+lk_004() {
+  local d="$SCRATCH/lk004"; mkdir -p "$d/.tfcore" "$d/tests/verify" "$d/tests/.artifacts/harness/hindi-src" "$d/tests/.artifacts/shots" "$d/tests/.artifacts/verify/screens"
+  cat > "$d/tests/verify/hindi.spec.ts" <<'TS'
+// The SOURCE is served locally (tests/.artifacts/harness/hindi-src).
+const start = 'C:\\Fx\\tests\\.artifacts\\harness\\run-app.cmd';
+const shot = (n: string) => `tests/.artifacts/shots/${n}.png`;
+const out = 'tests/.artifacts/verify/screens';
+TS
+  echo '<p>हिन्दी</p>' > "$d/tests/.artifacts/harness/hindi-src/index.html"
+  echo 'dotnet run' > "$d/tests/.artifacts/harness/run-app.cmd"
+  echo 'old log' > "$d/tests/.artifacts/harness/old.log"
+  echo png > "$d/tests/.artifacts/shots/home.png"
+  echo png > "$d/tests/.artifacts/verify/screens/home-1280.png"
+  python3 - "$d/tests/.artifacts" <<'PY'
+import os, sys, time
+old = time.time() - 10 * 86400
+for dp, _dn, fns in os.walk(sys.argv[1]):
+    for f in fns:
+        os.utime(os.path.join(dp, f), (old, old))
+PY
+  local out; out="$(cd "$d" && TF_SWEEP_FORCE=1 CLAUDE_PROJECT_DIR="$d" bash "$HOOKS/sweep-artifacts.sh" </dev/null 2>&1)"
+  local a="$d/tests/.artifacts"
+  [[ -f "$a/harness/hindi-src/index.html" && -f "$a/harness/run-app.cmd" ]] \
+    && ok lk_004a "a fixture and a helper script a spec names by path survive the sweep at any age" \
+    || { bad lk_004a "the sweep deleted what a spec depends on"; note "$out"; }
+  [[ ! -e "$a/harness/old.log" && ! -e "$a/shots/home.png" && ! -e "$a/verify/screens/home-1280.png" ]] \
+    && ok lk_004b "run output — unnamed, written into a named folder, or the framework's own — is still swept" \
+    || { bad lk_004b "the keep rule stopped the sweep removing run output"; note "$(cd "$a" && find . -type f | tr '\n' ' ')"; }
+}
+
+# --- Lekhak TF-005: a route with a parameter, and a control of another state ----------------------
+lk_005() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip lk_005 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/lk005"; mkdir -p "$d/site/admin/llm-signin/21" "$d/site/conn" "$d/docs/mockups" "$d/tests/.artifacts/verify"
+  printf '<!doctype html><html><head><meta charset="utf-8"><style>body{font:14px system-ui}</style></head><body><h1 data-testid="page-title">LLM sign-in</h1><p data-testid="provider-name">Provider 21 — sign in to continue.</p></body></html>\n' > "$d/site/admin/llm-signin/21/index.html"
+  cp "$d/site/admin/llm-signin/21/index.html" "$d/docs/mockups/llm-signin.html"
+  printf '<!doctype html><html><head><meta charset="utf-8"><style>body{font:14px system-ui}</style></head><body><h1 data-testid="page-title">Connection settings</h1><button data-testid="conn-test">Test</button><p>The database answers.</p></body></html>\n' > "$d/site/conn/index.html"
+  printf '<!doctype html><html><head><meta charset="utf-8"></head><body><h1 data-testid="page-title">Connection settings</h1><button data-testid="conn-test">Test</button><div data-tf-state="database down"><p data-testid="conn-reason">The database is unreachable.</p></div><p data-testid="conn-result" data-tf-state="after Test">Connected in 12 ms.</p></body></html>\n' > "$d/docs/mockups/conn.html"
+  cat > "$d/tests/.artifacts/verify/list.json" <<'JS'
+{"scope":"ui","screens":[
+ {"name":"LLM sign-in","route":"/admin/llm-signin/{ProviderId:long}","mockup":"docs/mockups/llm-signin.html","rows":["REQ-UI-001"]},
+ {"name":"Connection settings","route":"/conn/","mockup":"docs/mockups/conn.html","rows":["REQ-UI-002"]},
+ {"name":"Post","route":"/posts/{PostId:int}","mockup":"","rows":["REQ-UI-003"]}]}
+JS
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-login.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  local out; out="$(cd "$d" && tf_timeout 120 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --list tests/.artifacts/verify/list.json --route-value ProviderId=21 --widths 1280 --json-out "$d/screens.json" 2>&1)"
+  kill "$srv" 2>/dev/null
+  grep -q '^OK   LLM sign-in (/admin/llm-signin/21)' <<<"$out" \
+    && ok lk_005a "a route parameter is filled from --route-value, and the screen is graded" \
+    || { bad lk_005a "the placeholder route was opened as written"; note "$(grep 'LLM' <<<"$out" | head -1 | cut -c1-160)"; }
+  grep -q '^OK   Connection settings' <<<"$out" \
+    && ok lk_005b "a control the mockup marks as another state is not owed on the first view" \
+    || { bad lk_005b "a state-only control was required on the first view"; note "$(grep 'Connection' <<<"$out" | head -1 | cut -c1-160)"; }
+  grep -q '^SKIP Post (/posts/{PostId:int}) .*--route-value PostId=' <<<"$out" \
+    && ok lk_005c "a route still missing a value is not driven, and the option to give it is named" \
+    || { bad lk_005c "a route with no value was opened or dropped silently"; note "$(grep 'Post' <<<"$out" | head -1 | cut -c1-160)"; }
+}
+
+# --- Lekhak TF-006: the asset and mockup checks could not attach to a desktop head ----------------
+# The desktop head is stood in for by a browser started with its DevTools port open, showing a
+# one-page app that routes on popstate, as an embedded-browser head does.
+lk_006() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip lk_006 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/lk006"; mkdir -p "$d/docs/mockups"
+  printf '<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font:14px/20px system-ui} .badge{display:inline-block;border-radius:8px;background:#2563eb;color:#fff;padding:2px 8px;height:20px}</style></head><body><div data-testid="dash-header"><h1>Dashboard</h1><span class="badge">3 open</span></div><table data-testid="dash-table"><tr><th>Name</th><th>Count</th></tr><tr><td>Alpha</td><td>12</td></tr></table></body></html>\n' > "$d/docs/mockups/dashboard.html"
+  cat > "$d/server.py" <<'PY'
+import http.server, sys
+CSS = "body{margin:0;font:14px/20px system-ui} .badge{display:inline-block;border-radius:8px;background:#2563eb;color:#fff;padding:2px 8px;height:20px}"
+APP = """<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/missing.css"><script src="/app.js"></script></head>
+<body><div id="root"></div><script>
+function draw(){var r=document.getElementById('root');
+ if(location.pathname==='/dashboard'){r.innerHTML='<div data-testid="dash-header"><h1>Dashboard</h1><span class="badge">3 open</span></div><table data-testid="dash-table"><tr><th>Name</th><th>Count</th></tr><tr><td>Alpha</td><td>12</td></tr></table>';}
+ else r.innerHTML='<p>Home</p>';}
+window.addEventListener('popstate',draw);draw();
+</script></body></html>"""
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def send(self, code, body, ctype="text/html; charset=utf-8"):
+        b = body.encode("utf-8"); self.send_response(code); self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+    def do_GET(self):
+        p = self.path.split("?")[0]
+        if p == "/app.css": self.send(200, CSS, "text/css")
+        elif p == "/app.js": self.send(200, "window.fxLoaded=1;", "text/javascript")
+        elif p == "/missing.css": self.send(404, "not here", "text/plain")
+        else: self.send(200, APP)
+http.server.ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+PY
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-assets-browser.mjs" "$UTILS/tf-assets.sh" "$d/"
+  local port cport exe
+  port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  cport="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 "$d/server.py" "$port" >/dev/null 2>&1 & local srv=$!
+  exe="$(cd "$d" && node -e "import('playwright').then(p=>console.log(p.chromium.executablePath()))" 2>/dev/null)"
+  "$exe" --headless=new --no-sandbox --remote-debugging-port="$cport" --user-data-dir="$d/profile" "http://127.0.0.1:$port/" >/dev/null 2>&1 & local br=$!
+  local i=0; while [[ $i -lt 30 ]] && ! curl -s -m 2 "http://127.0.0.1:$cport/json/version" | grep -q webSocketDebuggerUrl; do sleep 1; i=$((i+1)); done
+  local out
+  out="$( cd "$d" && tf_timeout 120 bash ./tf-assets.sh --cdp "http://127.0.0.1:$cport" --paths /dashboard --json-out "$d/assets.json" >/dev/null 2>&1; python3 -c "
+import json; d=json.load(open('$d/assets.json')); p=d['pages'][0]
+print(d['status'], p['declared'], p['graded'], ' '.join(f['problem'] for f in d['findings']))" 2>&1 )"
+  [[ "$out" == "failed 3 3 status-404" ]] \
+    && ok lk_006a "tf-assets --cdp attaches to a desktop head, grades its declared assets and sees the 404" \
+    || { bad lk_006a "tf-assets cannot attach to a desktop head"; note "$(tail -1 <<<"$out" | cut -c1-160)"; }
+  out="$( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --cdp "http://127.0.0.1:$cport" --mockups docs/mockups --screen dashboard=/dashboard --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1; python3 -c "
+import json; s=json.load(open('$d/parity.json'))['screens'][0]; w=s['widths'][0]
+print(s['verdict'], w['compared'] > 0)" 2>&1 )"
+  [[ "$out" == "PASS True" ]] \
+    && ok lk_006b "tf-mockup-parity --cdp grades a desktop head's screen against its mockup" \
+    || { bad lk_006b "tf-mockup-parity cannot attach to a desktop head"; note "$(tail -1 <<<"$out" | cut -c1-160)"; }
+  curl -s -m 2 "http://127.0.0.1:$cport/json/list" | grep -q '"type": "page"' \
+    && ok lk_006c "the attached app is left running when the checks end" \
+    || bad lk_006c "a check closed the app it attached to"
+  kill "$br" "$srv" 2>/dev/null; wait "$br" 2>/dev/null
+}
+
+# --- Lekhak TF-007: a re-run could not clear a set-up failure; a targeted verify emptied the ledger
+lk_007() {
+  local d="$SCRATCH/lk007"; mkdir -p "$d/tests/.artifacts/verify" "$d/docs"
+  # a part from before tests carried their own outcome, failing on a service nobody started …
+  cat > "$d/p1.json" <<'JS'
+{"reqs":{"REQ-FN-134":{"result":"FAIL","source":"browser","tests":["REQ-FN-134 the crawl returns a result"],"skipped":[],"passed":0,"failed":1,"reason":"the crawl produced no result","screenshot":""},
+ "REQ-FN-135":{"result":"FAIL","source":"browser","tests":["REQ-FN-135 export"],"skipped":[],"passed":0,"failed":1,"reason":"500","screenshot":""}},
+ "browser":{"ran":true,"passed":0,"failed":2,"skipped":0,"tests":2},"unit":{"ran":false}}
+JS
+  # … and the re-run of that one test once the service was up
+  cat > "$d/p2.json" <<'JS'
+{"reqs":{"REQ-FN-134":{"result":"PASS","source":"browser","tests":["REQ-FN-134 the crawl returns a result"],"skipped":[],"passed":1,"failed":0,"reason":"","screenshot":"",
+  "outcomes":{"REQ-FN-134 the crawl returns a result":{"outcome":"pass","reason":"","screenshot":""}}}},
+ "browser":{"ran":true,"passed":1,"failed":0,"skipped":0,"tests":1},"unit":{"ran":false},"ran_at":"2026-09-27T12:00:00Z"}
+JS
+  ( cd "$d" && bash "$UTILS/tf-verify-tests.sh" --merge p1.json p2.json --json-out merged.json ) >/dev/null 2>&1
+  local got; got="$(python3 -c "import json,sys; r=json.load(open(sys.argv[1]))['reqs']; print(r['REQ-FN-134']['result'], r['REQ-FN-135']['result'])" "$d/merged.json" 2>&1)"
+  [[ "$got" == "PASS FAIL" ]] \
+    && ok lk_007a "a later run of the same test stands in a merge; a failure nothing re-ran stays" \
+    || { bad lk_007a "the merge kept the first failure over the re-run"; note "$got"; }
+  # a targeted verify over a ledger holding three rows from yesterday
+  local today yday; today="$(python3 -c 'import datetime;print(datetime.date.today())')"
+  yday="$(python3 -c 'import datetime;print(datetime.date.today()-datetime.timedelta(days=1))')"
+  printf '{"date":"%s","app":"Fx","scope":"all","run_id":"%sT09:00:00Z","rows":{"REQ-FN-001":"PASS","REQ-FN-002":"FAIL","REQ-FN-003":"PASS"}}\n' "$yday" "$yday" > "$d/docs/.last-verify.json"
+  printf '| ID | Title | Status | %% | Remarks | Detail |\n|---|---|---|---|---|---|\n| REQ-FN-001 | a | Verified | 100%% | — | x |\n| REQ-FN-002 | b | Implemented | 90%% | — | x |\n| REQ-FN-003 | c | Implemented | 90%% | — | x |\n' > "$d/docs/Fx-Checklist.md"
+  cat > "$d/tests/.artifacts/verify/list.json" <<'JS'
+{"scope":"REQ-FN-002","checklist":"docs/Fx-Checklist.md","rows":[{"id":"REQ-FN-002","class":"FN","title":"b","status_raw":"Implemented","pct":90,"screen":"","route":"","remarks":"—"}]}
+JS
+  printf '{"head":"web","mode":"base","url":"http://localhost:1","rung":"dotnet","reason":"","reason_kind":""}\n' > "$d/tests/.artifacts/verify/boot.json"
+  printf '{"reqs":{"REQ-FN-002":{"result":"PASS","source":"unit","tests":["REQ-FN-002 b"],"skipped":[],"passed":1,"failed":0,"reason":"","screenshot":""}}}\n' > "$d/tests/.artifacts/verify/tests.json"
+  ( cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --started "${today}T10:00:00Z" ) >/dev/null 2>&1
+  got="$(python3 -c "import json,sys; l=json.load(open(sys.argv[1])); print(len(l['rows']), l['rows'].get('REQ-FN-002'), l['rows'].get('REQ-FN-003'), (l.get('row_dates') or {}).get('REQ-FN-003'))" "$d/docs/.last-verify.json" 2>&1)"
+  [[ "$got" == "3 PASS PASS $yday" ]] \
+    && ok lk_007b "a targeted verify updates its own rows in the ledger and keeps the others with their dates" \
+    || { bad lk_007b "a targeted verify replaced the whole ledger"; note "$got"; }
+  local hin rc3 rc2
+  hin() { printf '{"tool_input":{"file_path":"docs/Fx-Checklist.md","old_string":"| %s | x | Implemented |","new_string":"| %s | x | Verified |"}}' "$1" "$1"; }
+  printf '{"date":"%s","app":"Fx","scope":"REQ-FN-002","rows":{"REQ-FN-002":"PASS","REQ-FN-003":"PASS"},"row_dates":{"REQ-FN-002":"%s","REQ-FN-003":"%s"}}\n' "$today" "$today" "$yday" > "$d/docs/.last-verify.json"
+  ( cd "$d" && hin REQ-FN-003 | bash "$HOOKS/guard-verify.sh" ) >/dev/null 2>&1; rc3=$?
+  ( cd "$d" && hin REQ-FN-002 | bash "$HOOKS/guard-verify.sh" ) >/dev/null 2>&1; rc2=$?
+  [[ $rc3 -eq 2 && $rc2 -eq 0 ]] \
+    && ok lk_007c "a row kept from yesterday's verify does not unlock Verified today; a row graded today does" \
+    || bad lk_007c "the guard read an older run's row as today's (yesterday's row rc=$rc3, want 2; today's rc=$rc2, want 0)"
+}
+
+# --- Lekhak TF-010: the mockup check graded the app in the theme the viewer last picked -----------
+# An attached app showing the viewer's saved dark theme against a light mockup: every accent control
+# read "mockup accent, app neutral". The app's theme must also be back as it was when the check ends.
+lk_010() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip lk_010 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/lk010"; mkdir -p "$d/site" "$d/docs/mockups"
+  local css='body{margin:0;font:14px/20px system-ui} .badge{display:inline-block;border-radius:8px;padding:2px 8px;height:20px;color:#fff}
+[data-theme="light"] .badge{background:#2563eb} [data-theme="dark"] .badge{background:#555} [data-theme="dark"] body{background:#111;color:#eee}'
+  local body='<div data-testid="dash-header"><h1>Dashboard</h1><span class="badge">3 open</span></div><table data-testid="dash-table"><tr><th>Name</th><th>Count</th></tr><tr><td>Alpha</td><td>12</td></tr></table>'
+  printf '<!doctype html><html data-theme="light"><head><meta charset="utf-8"><style>%s</style></head><body>%s</body></html>\n' "$css" "$body" > "$d/docs/mockups/dashboard.html"
+  # the app: the viewer's saved dark theme, a router that draws on popstate
+  printf '<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><style>%s</style></head><body><div id="root"></div><script>function draw(){document.getElementById("root").innerHTML=location.pathname==="/dashboard"?%s:"<p>Home</p>";}window.addEventListener("popstate",draw);draw();</script></body></html>\n' \
+    "$css" "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$body")" > "$d/site/index.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  local port cport exe
+  port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  cport="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  exe="$(cd "$d" && node -e "import('playwright').then(p=>console.log(p.chromium.executablePath()))" 2>/dev/null)"
+  "$exe" --headless=new --no-sandbox --remote-debugging-port="$cport" --user-data-dir="$d/profile" "http://127.0.0.1:$port/" >/dev/null 2>&1 & local br=$!
+  local i=0; while [[ $i -lt 30 ]] && ! curl -s -m 2 "http://127.0.0.1:$cport/json/version" | grep -q webSocketDebuggerUrl; do sleep 1; i=$((i+1)); done
+  local out
+  out="$( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --cdp "http://127.0.0.1:$cport" --mockups docs/mockups --screen dashboard=/dashboard --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1; python3 -c "
+import json; s=json.load(open('$d/parity.json'))['screens'][0]
+print(s['verdict'], '|'.join(f['detail'][:40] for f in s.get('findings', [])))" 2>&1 )"
+  [[ "$out" == "PASS " ]] \
+    && ok lk_010a "the app is compared in the mockup's theme, not the one the viewer last picked" \
+    || { bad lk_010a "the app was graded in the viewer's theme"; note "$(tail -1 <<<"$out" | cut -c1-160)"; }
+  local after; after="$(cd "$d" && node -e "
+import('playwright').then(async ({chromium}) => { const b = await chromium.connectOverCDP('http://127.0.0.1:$cport');
+  const p = b.contexts()[0].pages()[0]; console.log(await p.evaluate(() => document.documentElement.getAttribute('data-theme'))); process.exit(0); })" 2>&1)"
+  [[ "$after" == "dark" ]] \
+    && ok lk_010b "the attached app is left in the theme the viewer had" \
+    || { bad lk_010b "the check left the app in another theme"; note "$after"; }
+  kill "$br" "$srv" 2>/dev/null; wait "$br" 2>/dev/null
+}
+
+# --- Lekhak TF-011: a state-only box first in a card shifted every positional key below it -------
+lk_011() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip lk_011 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/lk011"; mkdir -p "$d/site/conn" "$d/site/conn2" "$d/docs/mockups"
+  local css='<style>body{margin:0;font:14px/20px system-ui} .alert{border:1px solid #c00;padding:8px} .badge{display:inline-block;border-radius:8px;background:#2563eb;color:#fff;padding:2px 8px;height:20px}</style>'
+  local row='<div class="row">Host <span class="badge">localhost</span></div><div class="row">Port <span class="badge">5432</span></div>'
+  # Lekhak's own mark, and the framework's
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="conn-card"><div class="alert" role="alert" data-state-testid="conn-reason">The database is unreachable.</div>%s</div></body></html>\n' "$css" "$row" > "$d/docs/mockups/conn.html"
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="conn-card"><div class="alert" data-tf-state="database down">The database is unreachable.</div>%s</div></body></html>\n' "$css" "$row" > "$d/docs/mockups/conn2.html"
+  # the app's first view: the database answers, so there is no alert
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="conn-card">%s</div></body></html>\n' "$css" "$row" | tee "$d/site/conn/index.html" > "$d/site/conn2/index.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  local out
+  out="$( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen conn=/conn/ --screen conn2=/conn2/ --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1; python3 -c "
+import json
+for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], s['verdict'], '|'.join(f['detail'][:40] for f in s.get('findings', [])))" 2>&1 )"
+  kill "$srv" 2>/dev/null
+  grep -q '^conn PASS $' <<<"$out" && grep -q '^conn2 PASS $' <<<"$out" \
+    && ok lk_011 "a mockup box marked as another state (data-state-testid or data-tf-state) does not shift the rows below it" \
+    || { bad lk_011 "the state-only box was paired with the app's first row"; note "$(tr '\n' ' ' <<<"$out" | cut -c1-200)"; }
+}
+
+# --- Lekhak TF-012: the checker failed a Remark the verdict script wrote ---------------------------
+# A test titled "… shows Found/Not found …" was copied into the Remark, and tf-doc-check read it as an
+# agent saying a file is not present. The verdict now quotes the title; the checker skips quotes. An
+# agent's own unquoted "not found" still fails.
+lk_012() {
+  local d="$SCRATCH/lk012"; mkdir -p "$d/tests/.artifacts/verify" "$d/docs" "$d/.tfcore"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Requirements Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Detail |
+|---|---|---|---|---|---|
+| REQ-UI-133 | AI Setup card | Implemented | 75% | — | [view](#d-req-ui-133) |
+| REQ-UI-134 | Model folder | Implemented | 75% | model file not found | [view](#d-req-ui-134) |
+
+## Coverage
+
+- <a id="d-req-ui-133"></a>**REQ-UI-133** — AI Setup card
+  - Acceptance: When an admin opens AI Setup on AI Setup, then the card shows its status.
+- <a id="d-req-ui-134"></a>**REQ-UI-134** — Model folder
+  - Acceptance: When an admin opens AI Setup on AI Setup, then the folder shows.
+MD
+  cat > "$d/tests/.artifacts/verify/list.json" <<'JS'
+{"scope":"REQ-UI-133","checklist":"docs/Fx-Checklist.md","rows":[{"id":"REQ-UI-133","class":"UI","title":"AI Setup card","status_raw":"Implemented","pct":75,"screen":"","route":"","remarks":"—"}]}
+JS
+  printf '{"head":"web","mode":"base","url":"http://localhost:1","rung":"dotnet","reason":"","reason_kind":""}\n' > "$d/tests/.artifacts/verify/boot.json"
+  printf '{"reqs":{"REQ-UI-133":{"result":"PASS","source":"browser","tests":["REQ-UI-133 AI Setup embedding card shows Found/Not found badge"],"skipped":[],"passed":1,"failed":0,"reason":"","screenshot":""}}}\n' > "$d/tests/.artifacts/verify/tests.json"
+  ( cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --apply ) >/dev/null 2>&1
+  local out; out="$(cd "$d" && python3 "$UTILS/tf-doc-check.py" --app Fx docs/Fx-Checklist.md 2>&1)"
+  grep -q 'REQ-UI-133 | AI Setup card | Verified' "$d/docs/Fx-Checklist.md" && ! grep -q 'REQ-UI-133 Remarks says something is not present' <<<"$out" \
+    && ok lk_012a "a Remark the verdict script wrote from a test titled 'Not found' passes the checker" \
+    || { bad lk_012a "the checker failed the verdict script's own Remark"; note "$(grep 'REQ-UI-133' <<<"$out" | head -1 | cut -c1-160)"; }
+  grep -q 'REQ-UI-134 Remarks says something is not present' <<<"$out" \
+    && ok lk_012b "an agent's own unquoted 'not found' still has to name the path it tried" \
+    || bad lk_012b "the not-present rule no longer fires on an agent's own words"
+}
+
 # --- the ignore file that grew by one block per update -----------------------------------
 # `tr -d '\r' < .gitignore | grep -qE …` under `set -o pipefail`: grep -q stops at the first
 # match, tr dies writing the rest, the pipeline reports failure, and the framework block is
@@ -3405,7 +3744,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 tb_001 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 tb_001 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

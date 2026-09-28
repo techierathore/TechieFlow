@@ -59,15 +59,45 @@ if (!BASE && !CDP) { console.error('tf-verify-screens: --base URL or --cdp URL i
 
 // ---------------------------------------------------------------- screens
 let screens = [];
+// Sample values for route parameters (Lekhak TF-005): `/admin/llm-signin/{ProviderId:long}` opened as
+// written answers 404. --route-value ProviderId=21 (repeatable), or "route_values" in the list, at its
+// top or on one screen. A screen whose route still needs a value is not driven, and says which.
+const ROUTE_VALUES = {};
+for (const kv of args('--route-value')) { const m = kv.match(/^([^=]+)=(.*)$/); if (m) ROUTE_VALUES[m[1].trim().toLowerCase()] = m[2]; }
+let listValues = {};
 if (LIST) {
   const l = JSON.parse(readFileSync(LIST, 'utf8'));
-  screens = (l.screens || []).map((s) => ({ name: s.name, route: s.route, mockup: s.mockup || '', rows: s.rows || [] }));
+  listValues = l.route_values || {};
+  screens = (l.screens || []).map((s) => ({ name: s.name, route: s.route, mockup: s.mockup || '', rows: s.rows || [], route_values: s.route_values || {} }));
 }
 for (const s of args('--screen')) {
   const m = s.match(/^([^=]+)=(.+)$/);
   if (m) screens.push({ name: m[1], route: m[2], mockup: `${MOCKUPS}/${m[1].toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`, rows: [] });
 }
 if (!screens.length) { console.error('tf-verify-screens: no screens (--list <json> or --screen name=/route)'); process.exit(3); }
+const fillRoute = (s) => {
+  const vals = {};
+  for (const src of [listValues, s.route_values || {}]) for (const [k, v] of Object.entries(src)) vals[k.toLowerCase()] = String(v);
+  Object.assign(vals, ROUTE_VALUES);
+  const need = [];
+  const route = s.route.replace(/\/?\{\*{0,2}([A-Za-z_][\w]*)(?::[^}=?]*)?(?:=([^}?]*))?(\?)?\}/g, (whole, name, dflt, opt) => {
+    const lead = whole.startsWith('/') ? '/' : '';
+    const v = vals[name.toLowerCase()] ?? dflt;
+    if (v !== undefined && v !== '') return lead + encodeURIComponent(v);
+    if (opt) return '';
+    need.push(name); return whole;
+  });
+  return { route, need };
+};
+const skipped = [];
+screens = screens.filter((s) => {
+  const f = fillRoute(s);
+  if (f.need.length) { skipped.push({ name: s.name, route: s.route, rows: s.rows, needs: f.need }); return false; }
+  if (f.route !== s.route) s.route_pattern = s.route;
+  s.route = f.route;
+  return true;
+});
+for (const k of skipped) console.log(`SKIP ${k.name} (${k.route}) — not driven: the route needs a value; pass ${k.needs.map((n) => `--route-value ${n}=<a real ${n}>`).join(' ')}`);
 
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const anchorsOf = (mockup) => {
@@ -113,6 +143,28 @@ async function hiddenByWidth(b, mockup, anchors) {
   return out;
 }
 
+// The anchors a mockup marks as belonging to another state of the screen (Lekhak TF-005): a reason
+// shown only while the database is down, a result shown only after "Test". The mockup says so with
+// data-tf-state="<state>" (or data-state-testid="<id>", Lekhak TF-011) on the control or on a box around it. Such a control is not owed on the
+// first view; when it is drawn and visible it is graded like any other.
+async function stateOnlyOf(b, mockup, anchors) {
+  if (!mockup || !existsSync(mockup) || !anchors || !anchors.length) return [];
+  if (b) {
+    let ctx;
+    try {
+      ctx = await b.newContext();
+      const p = await ctx.newPage();
+      await p.goto('file://' + resolve(mockup), { waitUntil: 'load', timeout: 15000 });
+      return await p.evaluate(({ anchors, attr }) => anchors.filter((id) => {
+        const el = document.querySelector(`[${attr}="${CSS.escape(id)}"]`);
+        return !!el && !!el.closest('[data-tf-state],[data-state-testid]');
+      }), { anchors, attr: ATTR });
+    } catch (e) { /* fall through to the mark on the control itself */ } finally { if (ctx) await ctx.close().catch(() => {}); }
+  }
+  const html = readFileSync(mockup, 'utf8');
+  return anchors.filter((id) => new RegExp(`<[^>]*\\bdata-(?:tf-state|state-testid)\\b[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']|<[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*\\bdata-(?:tf-state|state-testid)\\b`).test(html));
+}
+
 // ---------------------------------------------------------------- browser
 let browser, cdpPage = null;
 if (CDP) {
@@ -131,8 +183,10 @@ function writeOut(extra, results = [], login = null) {
   const summary = {
     mode: CDP ? 'cdp' : 'base', base: BASE || CDP, widths: WIDTHS, login,
     screens: results,
+    skipped,   // screens not driven because their route needs a value (TF-005)
     summary: {
       screens: results.length,
+      skipped: skipped.length,
       render_ok: results.filter((r) => r.render === 'OK').length,
       render_fail: results.filter((r) => r.render === 'EMPTY' || r.render === 'ERROR').length,
       unreachable: results.filter((r) => r.render === 'UNREACHABLE').length,
@@ -155,7 +209,9 @@ const login = (page) => signIn(page, LOGIN_OPTS);
 
 async function contextFor(width) {
   if (CDP) { await cdpPage.setViewportSize({ width, height: width < 600 ? 844 : 800 }).catch(() => {}); return { page: cdpPage, close: async () => {} }; }
-  const opts = { viewport: { width, height: width < 600 ? 844 : 800 } };
+  // a development head on HTTPS carries a certificate nothing trusts; tf-mockup-parity and tf-assets
+  // already accept it, and without it every screen was UNREACHABLE (Lekhak TF-002)
+  const opts = { viewport: { width, height: width < 600 ? 844 : 800 }, ignoreHTTPSErrors: true };
   if (STORAGE && existsSync(STORAGE)) opts.storageState = STORAGE;
   const ctx = await browser.newContext(opts);
   if (COOKIE) {
@@ -302,8 +358,11 @@ async function inspect(page, anchors, attr, errorSelectors) {
   }, { anchors, attr, errorSelectors });
 }
 
-function grade(info, consoleErrors, width, excused = []) {
+function grade(info, consoleErrors, width, excused = [], stateOnly = []) {
   const findings = [];
+  // a control of another state is graded only when this view draws it, visible and filled (TF-005)
+  const soft = new Set(stateOnly);
+  info = { ...info, anchors: info.anchors.filter((a) => !soft.has(a.id) || (a.present && a.visible && a.filled && a.w > 0 && a.h > 0)) };
   if (info.error_banner) findings.push({ check: 'render', class: 'exception', detail: `the application's error banner is showing (${info.error_banner})` });
   // a failed fetch ("Failed to load resource … 404") is the assets check's finding, not a page error
   const pageErrors = consoleErrors.filter((e) => !/^Failed to load resource/i.test(e));
@@ -375,8 +434,11 @@ for (const width of WIDTHS) {
     if (!r) {
       r = { name: s.name, route: s.route, mockup: s.mockup, rows: s.rows, anchors: anchorsOf(s.mockup), widths: [] }; results.push(r);
       r.hidden_by_width = await hiddenByWidth(mockBrowser, s.mockup, r.anchors);
+      r.state_only = await stateOnlyOf(mockBrowser, s.mockup, r.anchors);
+      if (s.route_pattern) r.route_pattern = s.route_pattern;
     }
     const excused = (r.hidden_by_width || {})[width] || [];
+    const stateOnly = r.state_only || [];
     consoleErrors.length = 0;
     let nav = await navigate(page, s.route);
     const shot = `${SHOTS}/${slug(s.name)}-${width}.png`;
@@ -402,10 +464,11 @@ for (const width of WIDTHS) {
       entry.findings = [{ check: 'render', class: 'other', detail: nav.status === 0 ? `could not open ${s.route}: ${nav.error || 'no response'}` : redirectedToLogin ? `${s.route} redirected to the sign-in page (not signed in)` : `${s.route} answered HTTP ${nav.status}` }];
       if (nav.status === 0 && results.length === 1 && width === WIDTHS[0]) firstUnreachable = true;
     } else {
-      entry.render_wait_ms = await waitForRender(page, (r.anchors || []).filter((id) => !excused.includes(id)), ATTR);
+      entry.render_wait_ms = await waitForRender(page, (r.anchors || []).filter((id) => !excused.includes(id) && !stateOnly.includes(id)), ATTR);
       const info = await inspect(page, r.anchors || [], ATTR, ERROR_SELECTORS);
-      const g = grade(info, consoleErrors, width, excused);
+      const g = grade(info, consoleErrors, width, excused, stateOnly);
       if (excused.length) entry.hidden_in_mockup = excused;
+      if (stateOnly.length) entry.state_only = stateOnly;
       Object.assign(entry, g);
       entry.console_errors = consoleErrors.slice(0, 5);
       entry.anchors_present = (info.anchors || []).filter((a) => a.present).length;
@@ -425,7 +488,7 @@ for (const r of results) {
 }
 const out = writeOut({}, results, loginResult);
 if (loginResult && loginResult.attempted && !loginResult.ok) console.log(`LOGIN failed at ${BASE}${LOGIN_PATH}: ${loginResult.error || 'still on the sign-in page'}`);
-console.log(`screens ${out.summary.screens}: render ${out.summary.render_ok} OK / ${out.summary.render_fail} failed / ${out.summary.unreachable} unreachable; visual ${out.summary.visual_ok} OK / ${out.summary.visual_fail} failed; screenshots ${SHOTS}; JSON ${OUT}`);
+console.log(`screens ${out.summary.screens}${skipped.length ? ` (+${skipped.length} not driven: route needs a value)` : ''}: render ${out.summary.render_ok} OK / ${out.summary.render_fail} failed / ${out.summary.unreachable} unreachable; visual ${out.summary.visual_ok} OK / ${out.summary.visual_fail} failed; screenshots ${SHOTS}; JSON ${OUT}`);
 if (CDP && mockBrowser) await mockBrowser.close().catch(() => {});
 if (!CDP) await browser.close(); else await browser.close().catch(() => {});
 process.exit(firstUnreachable && out.summary.unreachable === out.summary.screens ? 2 : (out.summary.render_fail + out.summary.visual_fail + out.summary.unreachable) ? 5 : 0);
