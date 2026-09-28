@@ -227,6 +227,44 @@ them either text inside embedded Python/JavaScript or a `/proc` read that is gua
   parse (scripts/test-install.mjs only). The same step passed on the Mac in that run and on Linux in
   every earlier run.
 
+## Mac check 28 Sep
+
+On the owner's Mac (macOS, Darwin 27.0.0), branch `mac-portability` at `5f8d8e6`, the same commit as
+GitHub. Tools as found, nothing installed: `/bin/bash` 3.2.57(1)-release, `sed` = `/usr/bin/sed` (BSD),
+`opencode --version` = **v2.0.18** (the released OpenCode 2, `~/.opencode/bin/opencode`). No
+`OPENCODE*` variable was set in the shell.
+
+- Every suite under `/bin/bash`: portability, bugs, doc-check, goal, mirror, requirements, routing,
+  verify, regression all exit 0. In regression, `owner_handoff_a`, `harness_env_a` and `harness_env_b`
+  are `ok`, and the last line is "all regression cases hold".
+- OpenCode plugin, retested on the real 2.0.18 (session 8 used the `opencode2` next-17444 build, which
+  is not OpenCode 2). TechieFlow was installed into `/tmp/tf-mac-check-0928/proj` from this checkout as
+  scripts/test-install.mjs does it (`npm pack`, then `npm exec --package=<tarball> -- techieflow
+  install`); the installed plugin is byte-identical to the repository's. `opencode plugin list` shows
+  `techieflow  local  …/.opencode/plugin/techieflow.js`. Load line from `opencode run --standalone
+  --print-logs`: `msg="loading plugin" id=/private/tmp/tf-mac-check-0928/proj/.opencode/plugin/techieflow.js
+  entrypoint=file:///…/techieflow.js`, with no error after it. Asked outside YOLO to run a `git commit`,
+  the shell tool call ended in error with block-git.sh's own text ("BLOCKED by TechieFlow policy:
+  agents NEVER WRITE to git or gh …"), so the plugin's guard stopped it, and the session went on to
+  answer. Model `opencode-go/glm-5.3` (the account's OpenAI models refused: not available on it).
+- `tf-goal.sh --harness opencode --model opencode-go/glm-5.3 --max-cycles 5 . "print the checklist
+  counts and stop"`: done in cycle 1 of 5, exit 0, `goal-done.json` written (outcome `complete`,
+  "0 requirements checklists, 0 REQ rows — day-1 stage 2 has not run yet"). The model read files under
+  `.tfcore/` but created or edited none: a checksum of every file there (183, `.session/` aside) was
+  the same before and after, and was watched every 10 seconds during the run. Its only writes were
+  through the framework's scripts (one line in docs/metrics/runs.jsonl via tf-emit.sh, the sessions
+  log, the done flag).
+- CI on `5f8d8e6`, read through the public GitHub API: push run
+  https://github.com/techierathore/TechieFlow/actions/runs/36347573219 and pull-request run
+  https://github.com/techierathore/TechieFlow/actions/runs/36347575861, both jobs green in both.
+- Nothing failed, so nothing was fixed. The one oddity: two of the first four `opencode run` starts hung
+  before the server booted. Another session on this Mac was running its own `opencode run` against the
+  same `~/.local/share/opencode/opencode.db` at the time; once runs waited for it to finish, every start
+  was clean. Not a TechieFlow fault.
+- Git: this repository's hook `.tfcore/hooks/block-git.sh` refused every git and gh command from the
+  session (fetch, status and `gh auth status` included), so this section is not committed by the
+  session; the owner commits it.
+
 ## Left for the owner
 
 - `scripts/npm-cleanup.mjs` rewrites a project's package.json in place, so for a moment the file is
@@ -234,9 +272,11 @@ them either text inside embedded Python/JavaScript or a `/proc` read that is gua
   temporary file and renaming it would close the gap for anything else reading package.json during
   `npm install`. It is a Node utility, left unchanged here.
 
-- On the Mac, restart OpenCode 2 after pulling this branch: plugins load at start. OpenCode 2 is a
-  preview and its plugin API is still changing (its `dev` channel already differs from `next`), so a
-  later preview can break the plugin again; OpenCode 1.18.x remains the tested, stable choice.
+- On the Mac, restart OpenCode after pulling this branch: plugins load at start. The plugin was
+  checked on the released OpenCode 2 (2.0.18) on 28 Sep (see "Mac check 28 Sep"); a later 2.x release
+  can still change the plugin API, so re-run that check after upgrading OpenCode.
+- The plugin's header comment (`.opencode/plugin/techieflow.js`, around line 47) still calls OpenCode 2
+  "the OpenCode 2 preview (`opencode2`)"; worth rewording to the released 2.x when next touched.
 
 - The TF-052 follow-up (`tf-log-miss.py`, `tf-triage.py`) is fixed here but not deployed to the
   projects; run update-framework.sh on them after merging, as for any framework fix. The same goes
