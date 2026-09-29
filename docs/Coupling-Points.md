@@ -7,6 +7,8 @@
 > gaps are maintained in `CodexChanges.md` §5; the historical register below is
 > intentionally preserved.
 
+> **Since this register (2026-09-27/28).** Two couplings changed. (1) OpenCode 2 replaced the plugin API, so the H-1/H-2/T-1/T-2 bridge now has two entry points in `.opencode/plugin/techieflow.js`: `server` for OpenCode 1.x (the `tool.execute.before`, `shell.env` and `event` hooks named below) and `setup` for OpenCode 2 (its tool hook, shell hook and event stream, fed into the same 1.x hook code). On OpenCode 2 the plugin has no `permission.ask` and no session messages, so YOLO auto-approval and the Stop nudge's owner-text check do not run there. (2) The `/proc` dependency named under T-2 is gone on a Mac: `tf-harness.sh` walks the process tree with `ps -o ppid=,comm=` when there is no `/proc`, as `tf-emit.sh` already did.
+
 **Date:** 2026-08-19 · **Scope:** Task 2 · **Companion:** `Capability-Matrix.md` (the facts), `Adapter-Design.md` (what to do about the *breaks* items).
 
 Ordered by severity. **breaks** = a phase cannot complete, or a hard framework rule the prose claims is mechanical is in fact unenforced; **degrades** = works but worse (lost guardrail, lost context, wrong next-command, lost telemetry); **cosmetic** = wording. Every row gives file:line in this repo (the Claude mirror `.claude/commands/TechieFlow/` is byte-identical to `.tfcore/`, so the same line numbers apply there). "OpenCode instead" cites `Capability-Matrix.md` rows or OpenCode source.

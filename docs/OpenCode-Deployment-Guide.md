@@ -29,22 +29,28 @@ What you give up: the container's **isolation** (a misbehaving agent in WSL can 
 
 ## 2. Install OpenCode in WSL
 
+The framework targets **OpenCode 2**. Install it with the command on opencode.ai (on npm it is `@opencode/cli`):
+
 ```bash
-curl -fsSL https://opencode.ai/install | bash          # installs to ~/.opencode/bin/opencode
+curl -fsSL https://opencode.ai/v2/install | bash       # installs to ~/.opencode/bin/opencode
 grep -q '.opencode/bin' ~/.bashrc || echo 'export PATH="$HOME/.opencode/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
-opencode --version                                     # pin this; the design cites 1.18.18
+opencode --version                                     # record it; the framework was last checked on 2.0.18
 ```
+
+The plain `https://opencode.ai/install` now asks for a version; use the `v2` address above.
+
+**The plugin on OpenCode 2.** `.opencode/plugin/techieflow.js` default-exports `{ id, server, setup }` (2026-09-27): OpenCode 2 reads `setup`, and OpenCode 1.x, which this guide was first written for (1.18.18), reads `server`. Checked on 2.0.18 on 2026-09-28: `opencode plugin list` lists it, it loads with no error, and a `git commit` is blocked by `block-git.sh`. Two things work differently on OpenCode 2: the plugin cannot auto-approve YOLO's `rm`/`sudo` prompts (OpenCode 2 has no `permission.ask`; start it with `--auto` instead, which `tf-goal.sh` already does), and the end-of-turn nudge skips its owner-text check (OpenCode 2 gives a plugin no session messages). Plugins load at start, so restart OpenCode after updating the framework, and re-check the plugin after upgrading OpenCode.
 
 Sign in **inside WSL** (the native-Windows `auth.json` stores `C:\…` project paths — `docs/opencode-docker.cmd` comments — so do not copy it):
 
 ```bash
 opencode auth login         # Anthropic (Claude Max) and/or OpenCode Go / Zen
-opencode auth list
+opencode auth list          # also: auth logout, auth switch
 opencode models             # confirm the ids you will put in routing.yaml (Adapter-Design §5.2)
 ```
 
-Data, config, cache, state live at `~/.local/share/opencode/` (incl. `opencode.db`), `~/.config/opencode/`, `~/.cache/opencode/`, `~/.local/state/opencode/` (`packages/core/src/global.ts:10-14`) — inside the distro, as the docs note (`windows-wsl.mdx:95`).
+Data, config, cache, state live at `~/.local/share/opencode/` (incl. `opencode.db` and `log/`), `~/.config/opencode/`, `~/.cache/opencode/`, `~/.local/state/opencode/` — inside the distro. `opencode debug paths` prints them.
 
 ## 3. Global config `~/.config/opencode/opencode.jsonc`
 
@@ -54,8 +60,8 @@ Machine-level defaults; the framework's per-project file adds agents/commands/pe
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "anthropic/claude-sonnet-4-6",          // session default; routing overrides per phase
-  "small_model": "anthropic/claude-haiku-4-5",      // title generation only (provider.ts:1909-1945)
-  "autoupdate": false,                              // pin the version the design was verified against
+  "small_model": "anthropic/claude-haiku-4-5",      // title generation only
+  "autoupdate": false,                              // upgrade on purpose, then re-check the plugin
   "share": "disabled",
   "permission": {                                   // global baseline; framework file adds git/gh deny
     "bash": { "rm -rf *": "ask", "sudo *": "ask" },
@@ -65,22 +71,25 @@ Machine-level defaults; the framework's per-project file adds agents/commands/pe
     "ignore": ["**/bin/**", "**/obj/**", "**/node_modules/**", "**/.git/**",
                "**/tests/.artifacts/**", "**/docs/screenshots/**", "**/.vs/**", "**/TestResults/**"]
   },
-  "compaction": { "auto": true, "prune": true, "reserved": 20000 }
-  // "lsp" omitted = all LSP servers disabled (config.mdx:698); enable selectively if you want C# diagnostics
+  "compaction": { "auto": true, "reserved": 20000 }
 }
 ```
+
+Checked on OpenCode 2.0.18 (2026-09-29, `opencode models --standalone --print-logs`): every key above is read. `compaction.prune`, which the 1.x version of this example had, is dropped by 2.0.18 with "omitted unsupported legacy setting", although the published schema still lists it, so it is gone from the example. OpenCode 2 reads the older `permission` map shape and converts it itself.
 
 `external_directory` patterns above mirror `.claude/settings.json` `additionalDirectories`; `permission.bash` mirrors its `ask` tier (Coupling-Points P-1).
 
 ## 4. Per-project setup (what the framework already does, plus one check)
 
-1. `scaffold-*.sh` / `update-framework.sh <app>` as today — deploys `.tfcore/`, `.opencode/command/*.md`, `opencode.jsonc` (root, if missing), `.gitignore` block, telemetry. **Known gap (Coupling-Points D-1):** an app scaffolded before 2026-08-13 keeps its old root `opencode.jsonc`; until the adapter ships the framework-owned `.opencode/opencode.jsonc`, copy `/mnt/c/3AIGenCode/TechieFlow/opencode.jsonc` over it by hand (back up first) or merge the `permission`, `agent.trblazeui/techierag`, and `instructions` keys.
+1. `scaffold-*.sh` / `update-framework.sh <app>` (or the npm installer) — deploys `.tfcore/`, `.opencode/plugin/techieflow.js`, `.opencode/command/*.md`, the framework-owned `.opencode/opencode.jsonc`, the root `opencode.jsonc` (refreshed only while it holds nothing of yours), the `.gitignore` block and telemetry.
 2. Verify the surface from the app folder:
    ```bash
    cd /mnt/c/1MyCode/<App>
-   opencode agent list          # expect flow-master (primary) + flow-analyst/-architect/-verifier, trblazeui, techierag
-   opencode debug config        # 29 commands, permission.bash denies git/gh, instructions resolve
+   opencode plugin list                                  # techieflow  local  …/.opencode/plugin/techieflow.js
+   opencode run --agent flow-master "Reply with OK."     # the first line reads "> flow-master · <model>"
+   opencode debug config                                 # the config files OpenCode read, and what they hold
    ```
+   Do not rely on `opencode debug agents` for this: it asks the shared background service, and on 2026-09-29 it listed none of the framework's agents in a folder where a run used `flow-master`.
 3. Start: `opencode` → Tab to `flow-master` → `*build-phase <App>` (or `/flow-master *build-phase <App>`).
 
 ## 5. Runtime harness parity — automated testing exactly as under Claude Code
@@ -92,8 +101,8 @@ Because OpenCode is now a WSL process, **every rung and gate is the one Claude C
 | Standard .NET build/test | ladder §B rung #2 `~/.dotnet/dotnet build` | `~/.dotnet/dotnet --info` |
 | MAUI Windows / Android builds | rung #4 `cmd.exe /c "dotnet build …"` or rung #3 `winrun "dotnet build …"` (interop) | `winrun "dotnet --info"`; `cmd.exe /c "dotnet --version"` |
 | Blazor headless verification | Playwright in WSL, self-provisioned by `verify-phase.md` §1 (`npx playwright install chromium`, `outputDir tests/.artifacts/test-results`) | `npx playwright --version`; first run installs Chromium once per distro |
-| MAUI Windows head (running app) | FlaUI / Appium-Windows on the Windows side, window-bound by PID (`verify-phase.md` §3b) — launched through `winrun` | as documented in WORKFLOW §11 |
-| MAUI Android / iOS / Mac Catalyst | Appium endpoints (`core-config.yaml runtimeVerification.appium.*`), WSL reaches `localhost:4723` with mirrored networking | `curl http://localhost:4723/status` |
+| MAUI Blazor Hybrid Windows head (running app) | `tf-verify-boot.sh start --head windows` starts it Windows-side with the WebView2 DevTools port open; the screen, mockup-parity and asset checks attach over CDP (`--cdp http://<host>:9223`). No other MAUI Windows head is verified | the boot prints `BOOTED head=windows mode=cdp url=…` |
+| MAUI Android / iOS / Mac Catalyst | No driver ships in this version: the boot prints `NONE … no driver` and the rows are recorded as not verified. The Appium endpoints (`core-config.yaml runtimeVerification.appium.*`, `localhost:4723` over mirrored networking) are the setup a future driver will use | `curl http://localhost:4723/status` |
 | Perf gate | `.tfcore/utils/tf-perf.sh` (bash + curl) | `bash -n .tfcore/utils/tf-perf.sh` |
 | Telemetry | `tf-emit.sh` (python3); harness detected via the `opencode` process name today, `TF_HARNESS` env once the plugin ships | run any phase; `tail -1 docs/metrics/runs.jsonl` shows `"harness":"opencode"` |
 | Git ban | `permission.bash` deny (prefix; compound forms parsed by tree-sitter per source — verify once: ask flow-master to run `cd . && git status`; expect a denial) | — |
@@ -116,13 +125,14 @@ Capture before filing: `opencode --version`, the log dir `~/.local/share/opencod
 ## 8. Headless / scripted runs (useful for routing and for overnight verify)
 
 ```bash
-# run one framework command headless on an explicit model (Capability-Matrix row b)
-opencode run --command techieflow:tasks:verify-phase --model anthropic/claude-sonnet-4-6 --agent flow-verifier "all <App>"
-opencode run --format json --command techieflow:tasks:refresh-status "<App>"    # JSON event lines for scripting
-opencode stats --project "" --days 7 --models                                   # tokens + real cost, this project
-opencode export <sessionID> > /tmp/session.json                                 # per-session JSON
+# run one framework command headless on an explicit model, through its persona
+opencode run --agent flow-verifier --model anthropic/claude-sonnet-4-6 "*verify all <App>"
+opencode run --format json --agent flow-master "*refresh-status <App>"         # JSON event lines for scripting
+opencode stats --project . --days 7 --models --cost                            # tokens + real cost, this project
+opencode session list                                                          # this project's sessions, newest first
+opencode session export <sessionID> > /tmp/session.json                        # per-session JSON
 ```
-(`packages/opencode/src/cli/cmd/run.ts:127-262`; `stats.ts:52-68`; `export.ts:223-232`.) These are owner-run; agents never run them (and never write git).
+Checked against the OpenCode 2.0.18 command help (2026-09-29). OpenCode 2's `run` has no `--command` flag, which the 1.x version of this block used, and `export` is now `session export`. These are owner-run; agents never run them (and never write git).
 
 **Unattended goal runs (YOLO, 2026-08-21 — `.tfcore/tasks/_yolo-mode.md`):** use the supervisor rather than a bare `opencode run` — it waits out the subscription 5-hour/weekly limit (reset time + 15 min) and resumes the same session:
 
@@ -144,13 +154,13 @@ It launches `opencode run --auto` (approve everything not denied — git writes 
 
 ## 10. Verification checklist (run once after install)
 
-- [ ] `opencode --version` recorded in `WorkFlow-Context.md` (the design is pinned to 1.18.18)
+- [ ] `opencode --version` reads 2.x (the framework was last checked on 2.0.18)
 - [ ] `opencode auth list` shows the providers you intend to route to; `opencode models` lists their ids
-- [ ] In an app folder: `opencode agent list` shows the six framework agents; `opencode debug config` shows git/gh denied
+- [ ] In an app folder: `opencode plugin list` shows `techieflow`; `opencode run --agent flow-master "Reply with OK."` starts with `> flow-master · <model>`; `opencode debug config` shows git/gh denied
 - [ ] `*build-phase` boots the app via rung #2/#4 and the self-smoke screenshots land in `tests/.artifacts/`
 - [ ] `tail -1 docs/metrics/runs.jsonl` shows `"harness":"opencode"`
 - [ ] Compound-git probe is denied (Coupling-Points H-3) — note the result in `docs/TechieFlow-OpenCode-Gaps.md`
-- [ ] `opencode stats --project ""` returns tokens **and cost** for the session (the source Telemetry-Hooks §3 will ingest)
+- [ ] `opencode stats --project . --cost` returns tokens **and cost** for the session (the source Telemetry-Hooks §3 will ingest)
 
 ## Council of experts — adversarial review
 

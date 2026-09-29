@@ -58,8 +58,8 @@ OpenCode's official installation documentation supports Docker with
 script, Homebrew, npm, and other package managers. OpenCode does not require
 Alpine for a user-built image. The official Dockerfile uses Alpine because it
 ships the musl-linked OpenCode binary; the custom `docs/Dockerfile` uses the
-Debian .NET SDK image and installs the regular Linux OpenCode binary through
-`https://opencode.ai/install`.
+Debian .NET SDK image and installs the regular Linux OpenCode 2 binary through
+`https://opencode.ai/v2/install`.
 
 Therefore:
 

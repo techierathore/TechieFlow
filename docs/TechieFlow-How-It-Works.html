@@ -106,7 +106,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout">
   <nav class="side">
     <h1>TechieFlow — How It Works</h1>
-    <div class="sub">Last rendered: 2026-09-08</div>
+    <div class="sub">Last rendered: 2026-09-29</div>
     <div class="group">Contents</div>
     <ol>
         <li><a href="#overview">1. Overview</a></li>
@@ -123,6 +123,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
         <li class="h3"><a href="#maintenance-flow-master">3.9 Maintenance — flow-master</a></li>
         <li class="h3"><a href="#running-unattended-the-supervisor">3.10 Running unattended — the supervisor</a></li>
         <li><a href="#what-surrounds-every-command">4. What surrounds every command</a></li>
+        <li class="h3"><a href="#step-0-is-the-framework-itself-working-here">4.0 Step 0 — is the framework itself working here?</a></li>
         <li class="h3"><a href="#example-a-document-producing-command-day1-greenfield-techiedesk">4.1 Example: a document-producing command, *day1-greenfield TechieDesk</a></li>
         <li class="h3"><a href="#example-a-code-producing-command-build-phase-techierag">4.2 Example: a code-producing command, *build-phase TechieRag</a></li>
         <li><a href="#fixed-instruction-cost-per-command">5. Fixed instruction cost per command</a></li>
@@ -135,7 +136,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
   </nav>
   <main>
     <h1>TechieFlow — How It Works</h1>
-    <div class="subtitle">Rendered 2026-09-08 &middot; source <code>TechieFlow-How-It-Works.md</code></div>
+    <div class="subtitle">Rendered 2026-09-29 &middot; source <code>TechieFlow-How-It-Works.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
@@ -154,6 +155,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
         <li class="h3"><a href="#maintenance-flow-master">3.9 Maintenance — flow-master</a></li>
         <li class="h3"><a href="#running-unattended-the-supervisor">3.10 Running unattended — the supervisor</a></li>
         <li><a href="#what-surrounds-every-command">4. What surrounds every command</a></li>
+        <li class="h3"><a href="#step-0-is-the-framework-itself-working-here">4.0 Step 0 — is the framework itself working here?</a></li>
         <li class="h3"><a href="#example-a-document-producing-command-day1-greenfield-techiedesk">4.1 Example: a document-producing command, *day1-greenfield TechieDesk</a></li>
         <li class="h3"><a href="#example-a-code-producing-command-build-phase-techierag">4.2 Example: a code-producing command, *build-phase TechieRag</a></li>
         <li><a href="#fixed-instruction-cost-per-command">5. Fixed instruction cost per command</a></li>
@@ -200,7 +202,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <tr><td><strong>Feedback file</strong></td><td><code>docs/&lt;App&gt;-&lt;Upstream&gt;-Feedback.md</code>, one per library and one for the framework. Reporting a defect is never refused; every entry answers <code>Blocks: yes|no</code> first, and a non-blocking entry is filed while the run carries on.</td><td>A bug report to another team.</td></tr>
 <tr><td><strong>Status gate</strong></td><td>The rule that every command ends by rewriting <code>PROJECT-STATUS.md</code> in a fixed shape. A hook rejects a malformed write.</td><td>A mandatory end-of-job report.</td></tr>
 <tr><td><strong>YOLO mode</strong></td><td>Run to completion with no questions and all permissions except git writes. Set by a flag file with a 24-hour expiry. The owner's preferred mode for most commands.</td><td>An unattended batch run.</td></tr>
-<tr><td><strong>Model routing</strong></td><td>A YAML file mapping each command to a cost tier (frontier, standard, economy) and each tier to a model per harness. Currently disabled.</td><td>Selecting machine size per pipeline stage.</td></tr>
+<tr><td><strong>Model routing</strong></td><td>A YAML file mapping each command to a cost tier (frontier, standard, economy) and each tier to a model per harness — plus the models a tier drops to while its own is limited, and how each harness is paid for. Enabled.</td><td>Selecting machine size per pipeline stage.</td></tr>
 <tr><td><strong>Telemetry streams</strong></td><td>The measurement system. Five files under <code>docs/metrics/</code>, one line appended per event, never edited: command runs (command, model, time, tokens), verification verdicts (first check that failed), misses (kind, phase, finder, whose gap, the owner's sentence, fix cost; mirrored into a readable <code>docs/&lt;App&gt;-Misses.md</code>), chat sessions (tokens in and out), and the owner's git commits. A report reads them into five figures; see section 6.</td><td>An append-only event log with a reporting query.</td></tr>
 </tbody>
 </table>
@@ -274,6 +276,8 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <li>Templates: <code>app-brd</code>, <code>app-architecture</code>, <code>app-usageguide</code>, <code>app-project-status</code>, <code>app-claude-md</code>, <code>app-agents-md</code>, <code>app-editorconfig</code>, <code>build-invocation-ladder</code>.
 </li>
 <li>Owner input requested: application name and concept only.
+</li>
+<li><strong>How the agents talk to people (since 2026-09-28).</strong> <code>AGENTS.md</code> ends with four "How to talk to me" rules that every agent in the project reads: tag each uncertain claim Certain, Likely or Guessing; say the unwelcome answer first; no warm-up; disagree as "I disagree because … I would do … The risk in your approach is …", then do what the person decides. This is a deliberate opinion of the framework, in every project it starts. A project started before that date gains them only by adding the lines to its own <code>AGENTS.md</code>; an update does not rewrite that file.
 </li>
 <li><strong>Defects found in review (see §8):</strong> D-1, D-2, D-3, D-4.
 </li>
@@ -369,7 +373,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <p>Examples from the reset's own test runs (2026-09-05): <code>bash .tfcore/utils/tf-goal.sh --model sonnet /mnt/c/1MyCode/MyDiary @goal.md</code> for Claude Code, and the same with <code>--harness opencode --model opencode-go/mimo-v2.5</code> for OpenCode. The interactive alternative is to start Claude Code with <code>--permission-mode bypassPermissions</code>, type <code>/goal &lt;condition&gt;</code>, then <code>*yolo</code> and the command; that gives YOLO and the goal loop but not the limit wait. (Moved here from <code>_yolo-mode.md</code> in Sitting 4b, 2026-09-05.)</p>
 <hr>
 <h2 id="what-surrounds-every-command">4. What surrounds every command<a class="anchor-link" href="#what-surrounds-every-command">#</a></h2>
-<p>Every command is wrapped by the same three mechanisms: shared rules read before the work, hooks watching during the work, and the status gate closing the work.</p>
+<p>Every command is wrapped by the same four mechanisms: a self-check before anything else, shared rules read before the work, hooks watching during the work, and the status gate closing the work.</p>
 <div class="diagram">
   <div class="dt">
     <button data-zout title="Zoom out">&minus;</button>
@@ -381,7 +385,8 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
     <button data-pop title="Open in new tab">&#8599;</button>
   </div>
   <pre class="mermaid">flowchart TD
-    A["Command typed"] --&gt; B["Persona file loads"]
+    A["Command typed"] --&gt; S["Step 0&lt;br/&gt;framework self-check against this project's own files"]
+    S --&gt; B["Persona file loads"]
     B --&gt; C["Shared rules load&lt;br/&gt;status gate · smoke-test policy · telemetry rule"]
     C --&gt; D["Task file loads"]
     D --&gt; E["The work&lt;br/&gt;read documents · write code or documents · run the application · test"]
@@ -393,6 +398,13 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
     F --&gt; G["Telemetry&lt;br/&gt;one line appended to runs.jsonl"]
     G --&gt; Z["Next command printed"]</pre>
 </div>
+<h3 id="step-0-is-the-framework-itself-working-here">4.0 Step 0 — is the framework itself working here?<a class="anchor-link" href="#step-0-is-the-framework-itself-working-here">#</a></h3>
+<p>Every command begins with <code>bash .tfcore/utils/tf-phase.sh start &lt;command&gt; &lt;App&gt;</code>, which marks the run and, since 2026-09-09, runs <code>tf-selfcheck.sh</code> first.</p>
+<p>The check points the framework's own scripts at <strong>this project's real files</strong> and reports which of them are broken here. It exists because nine framework defects reached TfLens in three weeks, every one met in the middle of a build: the checklist row that could never clear, the BRD carrying the anchors its own link checker demands, the metrics file holding the framework's own verdicts. None was exotic. They had simply never been run against a real project before the project ran them.</p>
+<p>It checks seven things: every framework script still parses; the checklist rows add up; the project's BRD can be read; its run records are not impossible; the framework's own verdicts are not pooled into the application's; miss amendments still attach to a parent; and the document checks run at all.</p>
+<p><strong>A FAIL is always the framework's, never the project's.</strong> Nothing in it grades the application, and it writes nothing. It never blocks: the defect is logged in the project's framework-feedback file and the command carries on, exactly as a library gap does. <code>bash .tfcore/utils/tf-selfcheck.sh --report</code> prints the entry ready to paste, because the paperwork is half the round trip.</p>
+<p>Two things it deliberately does not do. It does not report <strong>history</strong> as breakage: a stream that carries impossible records written before the emitter refused them cannot be repaired — the streams are append-only — and the reader already discards them and prints how many, so it is stated as a fact and not as a failure. And it is not a verdict of any kind: it can license nothing, least of all <code>Verified</code>.</p>
+<p>Run it by hand at any time, in any project. <code>TF_SKIP_SELFCHECK=1</code> skips it; the self-tests use that.</p>
 <h3 id="example-a-document-producing-command-day1-greenfield-techiedesk">4.1 Example: a document-producing command, <code>*day1-greenfield TechieDesk</code><a class="anchor-link" href="#example-a-document-producing-command-day1-greenfield-techiedesk">#</a></h3>
 <ol>
 <li>The owner types the command to the analyst persona inside the TechieDesk project, with the project brief as input.
@@ -550,7 +562,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <li><strong>Effort per phase.</strong> For each command: elapsed time, tokens, model, sub-agent count. It shows what each stage costs and allows a cheap model to be compared with an expensive one on the same kind of work.
 </li>
 </ol>
-<p>Dollar figures exist only for OpenCode runs. Claude Code reports tokens, never dollars, and the report never converts.</p>
+<p>Dollar figures on a <em>record</em> exist only for OpenCode runs: Claude Code reports tokens and never a price, and no record ever stores a computed one. Converting tokens to money is the report's job, not the framework's, so <code>*metrics</code> prices every run at the published rate when it runs — a <strong>list price</strong>, never called a bill — and keeps three things apart that used to be one column: what a provider actually billed, what a monthly plan's allowance was consumed by, and what a flat fee had already paid for.</p>
 <hr>
 <h2 id="instruction-size-and-its-effect">7. Instruction size and its effect<a class="anchor-link" href="#instruction-size-and-its-effect">#</a></h2>
 <p>An AI model divides its attention across everything it reads. The more text in front of it, the smaller the share each sentence receives. A rule alone in a short file is followed. The same rule as one of six hundred is followed most of the time, and the remainder is where misses originate. When an agent reports "the gate was missed" or "no such gate exists", both mean the same thing: the sentence was present and did not receive enough attention to be acted on.</p>

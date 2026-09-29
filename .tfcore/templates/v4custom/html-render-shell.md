@@ -216,6 +216,8 @@ The trailing `<a class="anchor-link">` lets users grab a deep link by hovering.
 
 **Preserve hand-written anchors.** Some source docs place explicit non-heading anchors like `<a id="d-req-ui-001"></a>` directly above a list item, and a table cell links to them with `[view](#d-req-ui-001)`. This is how the Requirements Status table's **Details** column jumps to each REQ's detail entry. Emit every such `<a id="...">` verbatim in the HTML and keep the matching `href="#..."` link intact — do NOT drop them, renumber them, or run them through the heading-slug function. Dropping them silently breaks the Details links (the exact class of bug the user keeps reporting).
 
+**Links to sibling documents open their HTML (2026-09-29).** A relative link to a `.md` file is written with `.html` when that page's HTML already sits beside the rendered page, or is written by the same render run; its `#anchor` is kept. Otherwise it stays `.md`: a markdown file with no rendered twin (an agent document, the checklist, the miss log, a feedback file) is never pointed at an HTML page that does not exist. Web links, absolute paths and `#anchor`-only links are never changed. So render a split guide's index together with its pages, or after them, and its links open the rendered pages.
+
 ---
 
 ## 5. Mermaid block conversion

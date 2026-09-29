@@ -80,23 +80,42 @@ const THIN_RATIO = parseFloat(arg('--thin-ratio', '0.25'));
 // --keep-app-theme compares the app in the theme it is showing, not the mockup's (Lekhak TF-010)
 const KEEP_APP_THEME = flag('--keep-app-theme');
 // The theme a page declares: data-* attributes on <html> and <body> whose name says theme, mode or
-// scheme (data-theme, data-bs-theme, data-site-theme, data-color-mode …). Nothing about any one stack.
+// scheme (data-theme, data-bs-theme, data-site-theme, data-color-mode …), and the class tokens there
+// that name a light or dark mode (dark, light, theme-dark, dark-mode …), which a class-driven dark mode
+// such as Tailwind's `dark` uses (Lekhak TF-013). A utility class such as bg-light does not count.
+// Nothing about any one stack. The class tokens are kept under `<where>|class`, '' when there are none.
 const READ_THEME = () => {
+  const MODE = /^(?:(?:theme|mode|scheme|color)[-_])?(?:dark|light)(?:[-_](?:theme|mode|scheme))?$/i;
   const out = {};
   for (const [where, el] of [['html', document.documentElement], ['body', document.body]]) {
     if (!el) continue;
     for (const a of el.attributes) if (/^data-.*(theme|mode|scheme)/i.test(a.name)) out[`${where}|${a.name}`] = a.value;
+    out[`${where}|class`] = [...el.classList].filter((c) => MODE.test(c)).join(' ');
   }
   return out;
 };
-// Sets those attributes on this page; returns what it had, so the same call puts it back. An
-// attribute the page lacked is removed again on the way back (value null).
+// A page declares a theme when it has such an attribute or mode class. A mockup that declares none
+// leaves the app as it is.
+const DECLARES_THEME = (t) => !!t && Object.entries(t).some(([k, v]) => !k.endsWith('|class') || v);
+// Sets those attributes and mode classes on this page; returns what it had, so the same call puts it
+// back. An attribute the page lacked is removed again on the way back (value null). For `|class` the
+// page's own mode tokens are replaced by the given ones; every other class is left alone.
 const APPLY_THEME = (t) => {
+  const MODE = /^(?:(?:theme|mode|scheme|color)[-_])?(?:dark|light)(?:[-_](?:theme|mode|scheme))?$/i;
   const before = {}; let changed = false;
   for (const [k, v] of Object.entries(t || {})) {
     const [where, name] = k.split('|');
     const el = where === 'body' ? document.body : document.documentElement;
     if (!el) continue;
+    if (name === 'class') {
+      const had = [...el.classList].filter((c) => MODE.test(c));
+      const want = String(v || '').split(/\s+/).filter(Boolean);
+      before[k] = had.join(' ');
+      if (had.slice().sort().join(' ') !== want.slice().sort().join(' ')) changed = true;
+      for (const c of had) el.classList.remove(c);
+      for (const c of want) el.classList.add(c);
+      continue;
+    }
     const had = el.getAttribute(name);
     before[k] = had;
     if (had !== v) changed = true;
@@ -768,7 +787,10 @@ for (const s of SCREENS) {
       // viewer's saved dark theme, the mockup was light, and every primary button read "mockup accent,
       // app neutral". The mockup's theme attributes on <html> and <body> are copied onto the app page
       // and the app's own are put back afterwards, so an attached app is left as the viewer had it.
-      const mockTheme = KEEP_APP_THEME ? null : await mockPage.evaluate(READ_THEME);
+      // Lekhak TF-013: a light/dark class on <html> or <body> is carried the same way, or a class-driven
+      // dark mode (class="dark") kept its dark colours under the mockup's light data-theme.
+      const mockRead = KEEP_APP_THEME ? null : await mockPage.evaluate(READ_THEME);
+      const mockTheme = DECLARES_THEME(mockRead) ? mockRead : null;
       const saved = mockTheme ? await page.evaluate(APPLY_THEME, mockTheme).catch(() => null) : null;
       if (saved && saved.changed) { theme = { mockup: mockTheme, app_had: saved.before }; await page.waitForTimeout(400); }
       try { app = await page.evaluate(PROBE, wanted); }

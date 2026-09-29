@@ -39,15 +39,17 @@ grep -q 'HOME/bin' ~/.bashrc || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashr
 
 Since 2026-08-20 OpenCode runs **natively inside the same WSL distro as Claude Code** (OpenCode's own docs recommend WSL over native Windows; full rationale, probe evidence, and the crash playbook are in `docs/OpenCode-Deployment-Guide.md`). It gets the entire runtime harness above — `winrun`, headless Chromium, Appium — for free, with no SSH bridge and no second NuGet config.
 
+The framework targets **OpenCode 2** (checked on 2.0.18, 2026-09-28); install it with the `v2` command opencode.ai gives. On OpenCode 2 the plugin cannot auto-approve YOLO's delete prompts (start OpenCode with `--auto`, as `tf-goal.sh` does), and its end-of-turn nudge skips the owner-text check.
+
 ```bash
-curl -fsSL https://opencode.ai/install | bash
+curl -fsSL https://opencode.ai/v2/install | bash
 grep -q '.opencode/bin' ~/.bashrc || echo 'export PATH="$HOME/.opencode/bin:$PATH"' >> ~/.bashrc
 opencode auth login     # or copy a portable API-key entry into ~/.local/share/opencode/auth.json
 ```
 
 The PATH line matters: WSL's Windows-interop otherwise resolves `opencode` to the Windows npm shim (`AppData\Roaming\npm\opencode`) — the native-Windows Bun build that breaks on large repos. Verify with `type -a opencode` (the `~/.opencode/bin` entry must come first) and `opencode --version`.
 
-The framework side needs no manual setup: `scaffold-*.sh` / `update-framework.sh` deploy `.opencode/plugin/techieflow.js` (the guard bridge — the same `.tfcore/hooks/` guards Claude Code runs: git ban, PROJECT-STATUS shape, Verified ledger — plus telemetry with real dollar cost into `docs/metrics/sessions.jsonl`) and a framework-owned `.opencode/opencode.jsonc` into every app. Check with `opencode agent list` in the app (the six TechieFlow agents must appear).
+The framework side needs no manual setup: `scaffold-*.sh` / `update-framework.sh` deploy `.opencode/plugin/techieflow.js` (the guard bridge — the same `.tfcore/hooks/` guards Claude Code runs: git ban, PROJECT-STATUS shape, Verified ledger — plus telemetry with real dollar cost into `docs/metrics/sessions.jsonl`) and a framework-owned `.opencode/opencode.jsonc` into every app. Check in the app: `opencode plugin list` shows `techieflow`, and `opencode run --agent flow-master "Reply with OK."` starts with `> flow-master · <model>` (the six TechieFlow agents are flow-analyst, flow-architect, flow-master, flow-verifier, trblazeui and techierag). `opencode debug agents` is not a reliable check: it asks the shared background service.
 
 **Large repos:** the failure historically blamed on Bun is a `/mnt/c` (9p filesystem) pathology — OpenCode's snapshot walk can take minutes there while the identical repo on WSL-native ext4 (`~/`) boots in seconds. Typical TechieFlow apps on `/mnt/c` are fine; genuinely large repos belong on ext4, or see the watcher/snapshot tuning in `docs/OpenCode-Deployment-Guide.md` §6.
 
@@ -236,9 +238,9 @@ dotnet build -t:Run -f net9.0-android          # Android head (emulator via Andr
 
 On macOS the Windows head (`net9.0-windows…`) can't build — the Mac desktop head is **Mac Catalyst**, and iOS builds natively too (Xcode required, §16). The `winrun` lines apply only inside WSL.
 
-For verifier on a MAUI **Windows** app: *"This is a MAUI Windows app. Build/run/test via `winrun`. UI automation: FlaUI or Appium-Windows-driver Windows-side, NOT Playwright. Output evidence the same as Blazor projects."* On a Mac the equivalent prompt names the **Catalyst** head and the local `mac2` Appium driver instead.
-
 ### Mobile & Mac-desktop heads — runtime-observe over Appium
+
+> **What the verify scripts drive today.** `tf-verify-boot.sh` starts three kinds of head: `web` (a `Microsoft.NET.Sdk.Web` project, reached over its URL), `windows` (a MAUI **Blazor Hybrid** head, started Windows-side with the WebView2 DevTools port open and reached from WSL over CDP at `http://<host>:9223`; only from WSL or Windows), and `static` (a folder of HTML). The screen check, the mockup-parity check and the asset check all take `--cdp <url>` for that Windows head (the last two since 2026-09-28). **No Android, iOS or Mac Catalyst driver ships in this version**: for those heads the boot prints `NONE … no driver` and their rows are recorded as not verified, never as passes (MISS-TechieFlow-20260928-07, open). The Appium table below is the setup those heads will use. A MAUI Windows head that is not Blazor Hybrid has no verify route.
 
 The §4a data-render and §4b visual-truth gates reach the MAUI **Android / iOS / Mac Catalyst** heads through an **Appium** WebDriver endpoint — the native analogue of Playwright (same screenshot + element-tree evidence, so the gates run unchanged). One-time host setup is §0b; the per-head driver map lives in `build-invocation-ladder.md §D`. **Builds don't change** — on WSL, Android still builds via `cmd.exe` (ladder rung #4) and iOS/Catalyst on the paired Mac; on a Mac-native setup all three build locally with plain `dotnet build` and the Appium endpoints are all `localhost`. This is purely how the verifier reaches the *running* UI after a green build.
 
@@ -247,15 +249,14 @@ The §4a data-render and §4b visual-truth gates reach the MAUI **Android / iOS 
 | MAUI Android | emulator on the Windows host (Android SDK) | `uiautomator2` | `http://localhost:4723` (mirrored networking); verifier boots emulator + Appium itself | `http://localhost:4723` — emulator + Appium run on the Mac itself |
 | MAUI iOS | Simulator on a LAN Mac | `xcuitest` | `http://<mac-ip>:4723`; Mac must be up or head is `⚠ STATIC-ONLY` | `http://localhost:4723` — local Simulator (Xcode) |
 | MAUI Mac Catalyst | the same LAN Mac (desktop .app) | `mac2` | `http://<mac-ip>:4723` | `http://localhost:4723` — the .app runs right here |
-| MAUI Windows | Windows side | FlaUI / Appium-Windows (unchanged) | `winrun` / `cmd.exe` | n/a — this head doesn't exist on a Mac |
 
 Selectors target each control's `AutomationId` (a coding standard, §10). A head with no registered endpoint in `core-config.yaml → runtimeVerification.appium`, or an unreachable host, is stamped `⚠ STATIC-ONLY` for that head — never a faked `Verified`.
 
-**Window binding & input discipline (all native heads, especially MAUI Windows):** the driver session is bound to the app under test *by identity* — the PID the agent launched → that process's top-level window handle (Appium Windows `appium:appTopLevelWindow` / FlaUI `Application.Attach(pid)`), or the app package/bundle id on mobile — and every interaction is **element-scoped via `AutomationId` inside that bound window**, with focus verified before input and handles re-resolved after dialogs. Global keyboard/mouse injection (FlaUI `Keyboard.Type`, coordinate clicks, `SendKeys`) is **banned**: it types into whatever window happens to hold focus — historically, a completely different window than the app. Full rules: `verify-phase.md §3b`.
+**Window binding & input discipline (all native heads):** the driver session is bound to the app under test *by identity* — the app package or bundle id — and every interaction is **element-scoped via `AutomationId` inside that app**, with focus verified before input and handles re-resolved after dialogs. Global keyboard/mouse injection (coordinate clicks, `SendKeys`) is **banned**: it types into whatever window happens to hold focus — historically, a completely different window than the app.
 
 ## 16. Running on macOS / native Windows / Linux
 
-TechieFlow was authored on the owner's **WSL-on-Windows** machine, so §0/§11 and the build-invocation ladder describe that setup. The framework itself is **portable** — agents, tasks, templates, and `/TechieFlow:*` slash-commands are plain Markdown and run identically under Claude Code / OpenCode on **macOS, native Windows, or native Linux**. Only two things are environment-specific: how `dotnet` is invoked, and the runtime-verification bridges (headless Playwright for Blazor; the §0b Appium endpoints for MAUI Android/iOS/Mac-Catalyst; FlaUI/Appium-Windows for the MAUI Windows head).
+TechieFlow was authored on the owner's **WSL-on-Windows** machine, so §0/§11 and the build-invocation ladder describe that setup. The framework itself is **portable** — agents, tasks, templates, and `/TechieFlow:*` slash-commands are plain Markdown and run identically under Claude Code / OpenCode on **macOS, native Windows, or native Linux**. Only two things are environment-specific: how `dotnet` is invoked, and the runtime-verification bridges (headless Playwright for Blazor; Playwright over the WebView2 DevTools port for a MAUI Blazor Hybrid Windows head; the §0b Appium endpoints for MAUI Android/iOS/Mac-Catalyst, which have no driver in this version — see §11).
 
 **Same everywhere:** the `scaffold-*.sh` / `update-framework.sh` scripts (bash + `rsync` + `python3`; on a Mac the stock bash 3.2 is enough, no Homebrew bash or GNU coreutils), all slash commands, the day-1 → split → build → verify → handoff flow, every template, and the permission model. On native Windows run the bash scripts from **WSL or Git Bash**.
 

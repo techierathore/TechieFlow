@@ -50,9 +50,16 @@ def cfg(key, default):
 PRUNE = {"bin", "obj", "node_modules", ".git", ".artifacts", "OldDocs", "dist", ".tfcore", ".claude", ".opencode", "packages", "TestResults"}
 
 
+# The folders a project keeps its code in, in the order tf-verify-boot.sh looks (Lekhak TF-014: Lekhak's
+# is source/, and --update counted only src/).
+CODE_ROOTS = ("src", "source")
+
+
 def walk(root, exts, skip_samples=False):
     for d, dirs, files in os.walk(root):
-        dirs[:] = [x for x in dirs if x not in PRUNE]   # prune in place: never descend into build output
+        # prune in place: never descend into build output, nor into any hidden folder (.tfbuild, .vs,
+        # .playwright …), which holds tool output, never a page (Lekhak TF-014)
+        dirs[:] = [x for x in dirs if x not in PRUNE and not x.startswith(".")]
         dd = d.replace("\\", "/") + "/"
         if any(s in dd for s in SKIP):
             continue
@@ -60,7 +67,17 @@ def walk(root, exts, skip_samples=False):
             continue
         for f in files:
             if f.lower().endswith(exts):
-                yield os.path.join(d, f).replace("\\", "/").lstrip("./")
+                p = os.path.join(d, f).replace("\\", "/")
+                # only a leading "./" goes: lstrip("./") also ate the dot of a hidden folder, and
+                # .tfbuild/… became tfbuild/…, which does not exist (Lekhak TF-014)
+                yield p[2:] if p.startswith("./") else p
+
+
+def code_files(exts, skip_samples=True):
+    """Every file with these extensions under the project's code folders (src/, source/)."""
+    for r in CODE_ROOTS:
+        if os.path.isdir(r):
+            yield from walk(r, exts, skip_samples=skip_samples)
 
 
 def roles_from_usageguide(app):
@@ -139,7 +156,7 @@ def main(argv):
         kind = argv[argv.index("--kind") + 1].lower()   # override for a project whose config lacks it
     sub = "app"
     if kind.startswith("lib"):
-        razors = [f for f in walk("src", (".razor",), skip_samples=True)] if os.path.isdir("src") else []
+        razors = list(code_files((".razor",)))
         sub = "ui-library" if razors else "service-library"
     print(f"# tf-devguide-list — {app} — kind {sub} — phase {phase}")
     print()
@@ -182,9 +199,9 @@ def main(argv):
             for k in sorted(endpoints):
                 print(f"- {k} — {', '.join(sorted(set(endpoints[k]))[:2])}")
     elif sub == "ui-library":
-        comps = [f for f in walk("src", (".razor",), skip_samples=True)]
+        comps = list(code_files((".razor",)))
         if not comps:
-            print("NOTHING: no component under src/. Build first.")
+            print("NOTHING: no component under src/ or source/. Build first.")
             return 0
         samples = sample_files((".razor", ".cshtml", ".html"))
         stxt = {f: read(f) for f in samples}
@@ -194,9 +211,9 @@ def main(argv):
             shown = [s for s, t in stxt.items() if re.search(rf"<{re.escape(name)}\b", t)]
             print(f"- {os.path.dirname(f).split('/')[-1]} / {name} — {f} — " + (f"shown in {shown[0]}" + (f" (+{len(shown)-1})" if len(shown) > 1 else "") if shown else "NO SAMPLE shows it: a sample gap to log"))
     else:
-        files = [f for f in walk("src", (".cs", ".ts", ".py", ".go", ".java"), skip_samples=True)]
+        files = list(code_files((".cs", ".ts", ".py", ".go", ".java")))
         if not files:
-            print("NOTHING: no source under src/. Build first.")
+            print("NOTHING: no source under src/ or source/. Build first.")
             return 0
         items = []
         for f in files:
@@ -220,6 +237,16 @@ def main(argv):
         print()
         if ver is None:
             print(f"## --update: no existing guide at {gp} (or no \"Verified on\"); everything is new")
+            # a guide kept under another name or folder (Lekhak TF-014: docs/devguides/, one file per
+            # role) is named, so it is read and carried over, never silently rewritten from scratch
+            import glob
+            base = os.path.basename(gp)[:-len(".md")]
+            others = sorted(f for f in glob.glob(os.path.join("docs", "**", base + "*.md"), recursive=True)
+                            if os.path.normpath(f) != os.path.normpath(gp))
+            if others:
+                print(f"- {len(others)} guide file(s) under another name: " + ", ".join(f.replace(os.sep, "/") for f in others[:8])
+                      + (" …" if len(others) > 8 else ""))
+                print(f"  read them and carry every entry that still matches the code into {gp}; do not start from nothing")
         else:
             print(f"## --update: existing guide {gp}, Verified on {ver}, {len(entries)} entries")
             try:
@@ -228,8 +255,8 @@ def main(argv):
             except Exception:
                 cutoff = None
             if cutoff:
-                changed = [f for f in walk(".", (".razor", ".cshtml", ".cs", ".ts", ".tsx", ".js", ".py"), skip_samples=False)
-                           if f.startswith(("src/",)) and os.path.getmtime(f) > cutoff]
+                changed = [f for f in code_files((".razor", ".cshtml", ".cs", ".ts", ".tsx", ".js", ".py"), skip_samples=False)
+                           if os.path.getmtime(f) > cutoff]
                 print(f"- {len(changed)} source file(s) changed since then; remap the entries they serve, keep the rest verbatim")
                 for f in changed[:30]:
                     print(f"  - {f}")

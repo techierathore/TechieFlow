@@ -43,14 +43,14 @@
 // highest output_tokens (or latest ts) per session_id. SCHEMA.md §4 notes this.
 
 //
-// Two OpenCode plugin APIs, one file (2026-09-27). OpenCode 1.x (the design's 1.18.18, still the
-// stable release) reads the default export's `server`; the OpenCode 2 preview (`opencode2`) accepts
-// only a default export with `id` and `setup`, and refused this file with "Plugin must export a
-// default definition with an id and an effect or setup function". The default export carries all
+// Two OpenCode plugin APIs, one file (2026-09-27). OpenCode 1.x (the design's 1.18.18; 1.18.32 is
+// the last 1.x) reads the default export's `server`; OpenCode 2 (checked on 2.0.18, 2026-09-28)
+// accepts only a default export with `id` and `setup`, and refused this file with "Plugin must export
+// a default definition with an id and an effect or setup function". The default export carries all
 // three; `setup` translates 2.x's hook and event API into the 1.x hooks below, so the guards, the
 // shell env and telemetry are the same code in both. What 2.x does not offer: `permission.ask` (YOLO
-// auto-approval; `opencode2 run --auto` is its own switch) and the session's messages, so the Stop
-// nudge's owner-text check (guard-status-html.sh check 5) is skipped there; checks 1-4 still run.
+// auto-approval; OpenCode 2's own `--auto` flag is the switch there) and the session's messages, so
+// the Stop nudge's owner-text check (guard-status-html.sh check 5) is skipped there; checks 1-4 run.
 
 import fs from "node:fs"
 import path from "node:path"
@@ -266,7 +266,7 @@ const TechieFlowPlugin = async ({ directory, client }) => {
       let payload = null
       let scripts = []
       if (input.tool === "bash" || input.tool === "shell") {
-        // 1.x calls it bash; the 2.x preview calls it shell (same `command` argument)
+        // 1.x calls it bash; 2.x calls it shell (same `command` argument)
         payload = { tool_name: "Bash", tool_input: { command: String(args.command || ""), run_in_background: !!(args.background || args.run_in_background) } }
         scripts = ["block-git.sh", "guard-artifacts.sh", "guard-status.sh", "guard-metrics.sh", "guard-db.sh", "guard-build.sh", "guard-verify-deps.sh"]
       } else if (input.tool === "edit") {

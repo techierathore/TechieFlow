@@ -12,7 +12,8 @@
 #   A desktop head (Lekhak TF-006): --cdp http://<host>:9223 in place of --base attaches to the
 #   running app, as tf-verify-screens.sh --cdp does, and opens each route by pushState.
 #   The app is compared in the mockup's theme: the mockup's data-*theme/mode/scheme attributes on
-#   <html> and <body> are set on the app page for the comparison and put back after (Lekhak TF-010);
+#   <html> and <body>, and a light/dark mode class there (class="dark", Lekhak TF-013), are set on the
+#   app page for the comparison and put back after (Lekhak TF-010);
 #   --keep-app-theme compares the theme the app shows. A mockup box marked data-tf-state or
 #   data-state-testid (another state of the screen) is left out of the comparison (Lekhak TF-011).
 #

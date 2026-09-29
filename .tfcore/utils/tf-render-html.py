@@ -111,6 +111,27 @@ RAW_TAG = re.compile(
     re.I)
 
 
+# Where the page being rendered will live, and every page this run will write (Lekhak TF-015). A
+# relative link to a sibling .md is written as .html when that .html is there already or is written in
+# the same run, so an index of a split guide opens the rendered pages, not raw markdown. A link to a
+# markdown file that has no rendered twin (an agent document, a checklist) stays .md.
+LINK_CTX = {"page_dir": None, "batch": set()}
+MD_LINK = re.compile(r"^([^#?]+?)\.md((?:[?#].*)?)$", re.I)
+
+
+def md_link_to_html(href):
+    if not LINK_CTX["page_dir"] or re.match(r"^[a-z][a-z0-9+.-]*:|^/|^#", href, re.I):
+        return href                                      # a web link, an absolute path, an anchor
+    m = MD_LINK.match(href)
+    if not m:
+        return href
+    from urllib.parse import unquote
+    target = os.path.normpath(os.path.join(LINK_CTX["page_dir"], unquote(m.group(1)) + ".html"))
+    if os.path.isfile(target) or target in LINK_CTX["batch"]:
+        return m.group(1) + ".html" + m.group(2)
+    return href
+
+
 def inline(text):
     """Markdown inline -> HTML. Code spans and deliberate raw inline HTML are
     protected before escaping, so `<a id="d-req-ui-001"></a>` survives verbatim
@@ -136,7 +157,7 @@ def inline(text):
                   lambda m: '<img src="%s" alt="%s" style="max-width:100%%">'
                             % (m.group(2), m.group(1)), text)
     text = re.sub(r"\[([^\]]+)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)",
-                  lambda m: '<a href="%s">%s</a>' % (m.group(2), m.group(1)), text)
+                  lambda m: '<a href="%s">%s</a>' % (md_link_to_html(m.group(2)), m.group(1)), text)
     text = re.sub(r"<(https?://[^>\s]+)>", r'<a href="\1">\1</a>', text)
 
     text = re.sub(r"\*\*\*(.+?)\*\*\*", r"<strong><em>\1</em></strong>", text, flags=re.S)
@@ -587,6 +608,7 @@ def render(md_path, css, head_js, body_js, out_dir=None):
                       "(html-render-shell §0)." % base)
 
     raw = raw_probe
+    LINK_CTX["page_dir"] = os.path.abspath(out_dir or os.path.dirname(os.path.abspath(md_path)))
     lines = raw.split("\n")
     fm, lines = frontmatter(lines)
 
@@ -725,6 +747,18 @@ def main(argv):
         return 2
 
     css, head_js, body_js = load_shell(spec)
+
+    # the pages this run will write, for md_link_to_html (a file the §0 ban refuses writes none)
+    LINK_CTX["batch"] = set()
+    for md in args:
+        try:
+            b = os.path.basename(md)
+            probe = open(md, encoding="utf-8").read().replace("\r\n", "\n")
+            if not (is_requirements_checklist(b, probe) or is_miss_list(b, probe) or is_feedback_file(b, probe)):
+                LINK_CTX["batch"].add(os.path.normpath(os.path.join(
+                    os.path.abspath(out_dir or os.path.dirname(os.path.abspath(md))), re.sub(r"\.md$", "", b) + ".html")))
+        except OSError:
+            pass
 
     rc = 0
     for md in args:

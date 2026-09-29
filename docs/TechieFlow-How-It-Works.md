@@ -107,6 +107,7 @@ flowchart LR
 - Writes: BRD, Architecture, Coding Standards, `.editorconfig`, PROJECT-STATUS, CLAUDE.md, AGENTS.md, UsageGuide. Calls `*mockups`, then `*split-brd`. Renders every human document to HTML.
 - Templates: `app-brd`, `app-architecture`, `app-usageguide`, `app-project-status`, `app-claude-md`, `app-agents-md`, `app-editorconfig`, `build-invocation-ladder`.
 - Owner input requested: application name and concept only.
+- **How the agents talk to people (since 2026-09-28).** `AGENTS.md` ends with four "How to talk to me" rules that every agent in the project reads: tag each uncertain claim Certain, Likely or Guessing; say the unwelcome answer first; no warm-up; disagree as "I disagree because … I would do … The risk in your approach is …", then do what the person decides. This is a deliberate opinion of the framework, in every project it starts. A project started before that date gains them only by adding the lines to its own `AGENTS.md`; an update does not rewrite that file.
 - **Defects found in review (see §8):** D-1, D-2, D-3, D-4.
 
 **`*day1-brownfield {App}`**: the starting command for a product that already has code.

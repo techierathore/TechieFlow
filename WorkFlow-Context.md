@@ -62,7 +62,7 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 - **Every acceptance line reads "When `<actor>` `<does what>` on `<screen>`, then `<observable result>`"**, at most 30 words, one behaviour.
 - **Telemetry is emitted by script, never assembled by hand**, and has no veto: a failed write never blocks anything. Never edit a stream. **A run's `started` is measured or taken from the previous run's `ended` — never typed.** The emitter refuses a run that begins before the last one ended and names the timestamp to use (SCHEMA §2.7b, FR-72); `--allow-overlap` is for two machines on one stream, nothing else. A record that is **wrong** is voided, not edited: `tf-emit.sh --void-run <cmd> <started> "<why>"` leaves both records on the stream and takes the named one out of every figure, with the count and the reason printed (SCHEMA §2.7, FR-69).
 - **Records hold tokens; money is worked out by the report.** A run record carries tokens per model and whatever cost the provider itself reported — never a computed price, because pricing is a reporting job (`tf-metrics.sh`, TfLens) and a rate card that changes must not make an old record wrong. It also carries `billing_mode`, resolved from the harness's own credentials by `tf-model-pick.sh` and never declared by an agent, so a flat fee, a monthly plan's allowance and a real invoice are never added together (SCHEMA §2.5b).
-- **Run material lives under `tests/.artifacts/`**, never at the repository root. It is swept after seven days.
+- **Run material lives under `tests/.artifacts/`**, never at the repository root. It is swept after seven days, except a file a test names by path.
 - **A library gap is logged in that library's feedback file and the row is blocked.** Never work around it silently, never merge the two files.
 - **The framework tree is invisible to file search.** `.tfcore/` is hidden and git-ignored, so Grep and Glob return nothing for files that are there. Confirm a file by reading its literal path, and never write "not present" without naming the path tried.
 - **Every miss is logged through `tf-log-miss.sh` with its sort** — whose gap it was: `spec`, `unsaid`, `weak-check` or `ignored`. The maintainer's own misses included.
@@ -93,7 +93,7 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 | `.tfcore/routing.yaml` | Which model tier runs which command, per harness; the fallback chain each tier drops to when a model is limited; how each harness is paid for. Per project, owner-tuned. `docs/TechieFlow-Routing-Guide.md` is the plain version. |
 | `.claude/commands/TechieFlow/` | The Claude Code mirror of the personas and tasks. Byte-identical to `.tfcore/`. |
 | `opencode.jsonc`, `.opencode/` | OpenCode's registrations and its guard-bridge plugin. There is no OpenCode mirror; it reads `.tfcore/` through file references. |
-| `tests/` | The self-tests: `mirror`, `doc-check`, `bugs`, `verify`, `goal`, `routing`, `requirements`, and `regression` — one case per defect a real project found in a shipped script, each required to fail against the script as that project found it. |
+| `tests/` | The self-tests: `mirror`, `doc-check`, `bugs`, `verify`, `goal`, `routing`, `requirements`, `portability` (stock-Mac shell), and `regression` — one case per defect a real project found in a shipped script, each required to fail against the script as that project found it. |
 | `scaffold-*.sh`, `update-framework.sh` | Deploy the framework into a project, or refresh it. |
 
 ---

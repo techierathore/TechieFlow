@@ -14,7 +14,7 @@ RUN apt-get update && \
 # 2. Install OpenCode manually
 # We download the binary directly instead of pulling the Docker image
 ARG OPENCODE_BUILD_TS
-RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path
+RUN curl -fsSL https://opencode.ai/v2/install | bash -s -- --no-modify-path
 
 # Add OpenCode to PATH
 ENV PATH="/root/.opencode/bin:$PATH"

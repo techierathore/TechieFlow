@@ -6,6 +6,8 @@
 > Current facts and paths are in `CodexChanges.md`. The historical two-column
 > investigation below remains the evidence for the original adapter.
 
+> **OpenCode 2 (2026-09-27).** Every OpenCode fact below is OpenCode 1.18.18. OpenCode 2 replaced the plugin API: a plugin's default export must carry `id` and `setup`, hooks are registered through `context.tool.hook`, `context.shell.hook` and `context.event.subscribe()`, the shell tool is `shell` (not `bash`), `edit`/`write` take `path` (not `filePath`), a turn ends with `session.execution.*`, and there is no `permission.ask` and no session-message listing for a plugin. `.opencode/plugin/techieflow.js` serves both versions (checked on 2.0.18, 2026-09-28); see `docs/CHANGELOG.md` 2026-09-27. The rows below were not re-derived for OpenCode 2.
+
 **Date:** 2026-08-19 · **Scope:** Task 1 of the harness-adapter design session · **Status:** investigation only, no implementation.
 
 **Sources.** OpenCode = source tree at `/mnt/c/4RoCode/opencode` (**v1.18.18**, `packages/opencode/package.json:3`); every OpenCode row cites `file:line`. Claude Code = the official docs at `code.claude.com/docs` (mirror of docs.claude.com); every Claude row cites a URL, and where a fact was confirmed empirically in this repo (not from a doc page) it says so. **UNVERIFIED** = inferred from reading, not executed. **DOCS DISAGREE** = OpenCode source and OpenCode docs diverge; source wins.

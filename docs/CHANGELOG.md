@@ -8,6 +8,100 @@
 
 ---
 
+## Unreleased (since v1.0.4)
+
+Everything below this section from 2026-09-11 onward is also unreleased: it reached `main` after the
+v1.0.4 tag (2026-09-10) and is in no published package yet. This section lists what those dated entries
+do not.
+
+- **The framework runs on a stock Mac** (pull request #6). Every shell script runs on Apple's own bash
+  3.2 and the BSD `sed`, `date`, `stat` and `xargs`, with no Homebrew, newer bash or GNU coreutils, and
+  behaves as before on Linux and WSL. GNU-only and bash-4-only spellings go through a new shim library,
+  `.tfcore/utils/tf-portable.sh` (`tf_timeout`, `tf_setsid`, `tf_sed_inplace`, `tf_stat_mtime`,
+  `tf_stat_size`, `tf_date_from`, `tf_epoch_frac`, `tf_realpath`, `tf_relpath`, `tf_read_lines`);
+  `scaffold-*.sh` and `update-framework.sh` load it from the template. What a Mac user notices:
+  unattended `tf-goal.sh` runs now stop the harness's whole process tree there, as on Linux;
+  `tf-harness.sh` and `tf-verify-boot.sh stop` find processes with `ps` where there is no `/proc`; a
+  build without `--` no longer stops on bash 3.2 with "EXTRA[@]: unbound variable".
+- **python3 on a Mac comes from Apple's Command Line Tools** (`xcode-select --install`). README,
+  `docs/TechieFlow-Installation.md` and `docs/TechieFlow-Setup.md` §16 say a stock Mac is enough and give
+  that as the python3 fix.
+- **A portability check in `npm run validate`.** `tests/portability/run.sh` fails on any GNU-only or
+  bash-4-only construct outside the shim (a deliberate exception is one commented line in
+  `tests/portability/exceptions.txt`, and an exception that matches nothing fails too), and runs the
+  shim's own tests. Because validate runs before every publish, a release can no longer ship a
+  script that breaks on a Mac.
+- **CI on a stock Mac, in two time zones.** The Validate workflow gained a second job on macOS with only
+  Apple's bash and tools on the path. Both jobs run `npm run validate`, `npm run test:install` and every
+  `tests/*/run.sh`, each suite twice: in UTC and in Asia/Kolkata.
+- **The framework has an opinion on how agents talk to people.** New projects' `AGENTS.md` ends with four
+  "How to talk to me" rules (confidence tags, the unwelcome answer first, no warm-up, disagreement in a
+  fixed shape), from `app-agents-md-tmpl.md` (2026-09-28). The README and How-It-Works §3.3 now say so.
+  Day-1 writes `AGENTS.md`; an update does not rewrite it, so an existing project does not gain them.
+- **OpenCode 2 is the version the framework targets** (the plugin still loads on 1.x). The docs install
+  it with `https://opencode.ai/v2/install` (the plain `/install` address now asks for a version), and so
+  does the Docker fallback's `docs/Dockerfile`. The OpenCode Deployment Guide's commands and example
+  config were checked against 2.0.18: `run` has no `--command` flag (a persona command is sent through
+  `--agent` instead), `export` is `session export`, `stats` takes `--project .`, and `compaction.prune`
+  is dropped by 2.0.18 as an unsupported legacy setting. The agent check is now `opencode run --agent
+  flow-master` (its first line names the agent) and `opencode plugin list`; `opencode debug agents` asks
+  the shared background service and listed none of the framework's agents in a folder where a run used
+  them. What does not work on 2.x is written down wherever OpenCode is set up: YOLO's auto-approval
+  (use `--auto`) and the Stop nudge's owner-text check.
+- **Documentation brought in line with the code (2026-09-29).** The Permissions page describes the sweep
+  keeping files a test names (TF-004) and `guard-verify.sh` unlocking only rows graded today (TF-007).
+  Setup §11 and the Deployment Guide say which heads the verify scripts drive (web, the Blazor Hybrid
+  Windows head over CDP, static) and that Android, iOS and Mac Catalyst have no driver; the FlaUI /
+  Appium-Windows instructions for other MAUI Windows heads are gone, since no script drives them. The
+  Release Guide lists the portability check and the Mac job. The design notes (`Capability-Matrix.md`,
+  `Adapter-Design.md`, `Coupling-Points.md`) carry a dated note on what OpenCode 2 changed.
+- **FR-84.** The phase-document requirement in `docs/TechieFlow-Requirements.md` shared the number FR-73
+  with the browser-lock requirement. The miss stream names FR-73 for the lock, and a stream is never
+  edited, so the phase-document one is now FR-84.
+
+## 2026-09-29 — Lekhak TF-015: a rendered index linked raw markdown
+
+`tf-render-html` copied every link target as written, so the index of Lekhak's split product guide
+kept `href="./Lekhak-ProductGuide-Admin.md"` and a reader clicking through in a browser landed on raw
+markdown; the split DevGuide index had the same shape, and Lekhak fixed the hrefs by hand after each
+render. A relative link to a `.md` file is now written as `.html` when that page's HTML already sits
+beside the rendered page or is written by the same run, with its `#anchor` kept. Everything else stays
+as written: a markdown file with no rendered twin (an agent document, the checklist, the miss log, a
+feedback file), web links, absolute paths and anchor-only links. The rule is in `html-render-shell.md`.
+Regression case `lk_015` fails 3 of 3 against the old renderer and passes now; on a copy of Lekhak's
+`docs/productguides/`, all six index links came out `.html`. `MISS-TechieFlow-20260929-03` is logged as
+fixed. The reply is in Lekhak's feedback file, copied here.
+
+## 2026-09-29 — Lekhak TF-014: the DevGuide lister crashed on a hidden build folder
+
+`tf-devguide-list.sh Lekhak --update` stopped with "[Errno 2] No such file or directory:
+'tfbuild/AdminChk/…/.playwright/package/cli.js'", so `*devguide --update` could not run and Lekhak wrote
+its handoff entries by hand. `walk()` went into `.tfbuild/` (a build folder the project's agents made; it
+was not pruned) and `lstrip("./")` stripped the dot, so the path pointed at a folder that does not exist.
+Now every hidden folder is pruned (it holds tool output, never a page) and only a leading `./` is
+stripped. Found while fixing it: `--update` and both library lists read only `src/`, and Lekhak's code is
+in `source/`, so `--update` would have reported no change even without the crash. They now read `src/`
+and `source/`, the folders `tf-verify-boot.sh` looks in. And when the guide is not at
+`docs/<App>-DevGuide.md` but a file of that name is elsewhere under `docs/` (Lekhak keeps five, one per
+role, in `docs/devguides/`), `--update` names them and says to carry their entries over instead of
+reporting "everything is new". Regression case `lk_014` fails 3 of 3 against the old script and passes
+now. `MISS-TechieFlow-20260929-02` is logged as fixed. The reply is in Lekhak's feedback file, copied
+here.
+
+## 2026-09-29 — Lekhak TF-013: the mockup check's theme switch left `class="dark"` on
+
+The TF-010 switch copied the mockup's `data-*` theme attributes onto the app but left a class-driven
+dark mode alone. BlogAdmin keeps `class="dark"` on `<html>`, so its info note kept the dark background
+and AI Setup read "color reembed-note — mockup neutral, app accent". `tf-mockup-parity` now also reads
+the class tokens on `<html>` and `<body>` that name a light or dark mode (`dark`, `light`, `theme-dark`,
+`dark-mode` and the like, never a utility class such as `bg-light`). When the mockup declares a theme
+(an attribute or a mode class), the app's mode classes are replaced by the mockup's for the probe, and
+the app's own go back afterwards. A mockup that declares no theme leaves the app as it is, as before.
+Regression case `lk_013` fails against the script Lekhak had, with the reported finding, and passes now;
+`lk_010` and `lk_011` still hold. `MISS-TechieFlow-20260929-01` is logged as fixed. The reply is in
+Lekhak's feedback file, copied here. Not re-checked on Lekhak's own screen yet: its desktop app was not
+running.
+
 ## 2026-09-28 — Lekhak TF-012: the checker failed a Remark the verdict script wrote
 
 `tf-verify-verdict.py` copied a passing test's title, "REQ-UI-133 AI Setup embedding card shows
@@ -90,27 +184,25 @@ are logged: six fixed, `-07` open. Suites: regression all hold (with `TF_PLAYWRI
 Lekhak's Playwright), mirror 19/0, verify 67/0, bugs 52/0, portability 65/0, doc-check clean. The
 three `tests/bugs` failures listed as open in the briefing no longer happen.
 
-## 2026-09-27 — The OpenCode plugin loads on the OpenCode 2 preview as well as on 1.x
+## 2026-09-27 — The OpenCode plugin loads on OpenCode 2 as well as on 1.x
 
-On the owner's Mac, OpenCode refused `.opencode/plugin/techieflow.js`: "Plugin must export a default
-definition with an id and an effect or setup function". That OpenCode was the 2.x preview (`opencode2`,
-npm channel `next`); the stable release is still 1.18.32, and the design is pinned to 1.18.18. OpenCode 2
-replaced the plugin API: the default export must be `{ id, setup }`, hooks are registered through
-`context.tool.hook`, `context.shell.hook` and `context.event.subscribe()`, the context names no project
-directory, and there is no `permission.ask`. The file now default-exports `{ id, server, setup }`: 1.x
-reads `server` (its own V1 module form, the same function as before), 2.x reads `setup`, and each
-ignores the other. `setup` feeds 2.x's hooks and events into the unchanged 1.x hook code, so the
-guards, the shell env and telemetry stay one implementation. Differences found by running the real
-2.x binary (`0.0.0-next-17444`) against a scripted model: the shell tool is `shell`, not `bash`; `edit`
+On the owner's Mac, OpenCode 2 refused `.opencode/plugin/techieflow.js`: "Plugin must export a default
+definition with an id and an effect or setup function". OpenCode 2 replaced the plugin API: the default
+export must be `{ id, setup }`, hooks are registered through `context.tool.hook`, `context.shell.hook`
+and `context.event.subscribe()`, the context names no project directory, and there is no
+`permission.ask`. The file now default-exports `{ id, server, setup }`: 1.x reads `server` (its own V1
+module form, the same function as before), 2.x reads `setup`, and each ignores the other. `setup` feeds
+2.x's hooks and events into the unchanged 1.x hook code, so the guards, the shell env and telemetry stay
+one implementation. Differences the plugin now handles: the shell tool is `shell`, not `bash`; `edit`
 and `write` take `path`, not `filePath` (the bridge now reads either); the root session is created
 before the plugin subscribes, so it is learned from its first event and `session.get` gives its
-parent; a turn ends with `session.execution.*`. Tested with that binary: shell env set, `git commit`
-blocked with block-git.sh's message and the session going on, a status-file write and edit blocked by
-guard-status.sh, the session pointer and a session record written with the right token totals, and the
-stale-HTML nudge delivered. Tested with OpenCode 1.18.32: the same results as the unchanged file. Not on
-2.x: YOLO auto-approval (`opencode2 run --auto` is its own switch) and the owner-text check of the Stop
-nudge (2.x gives a plugin no session messages); checks 1-4 of that nudge run. Not yet deployed to
-projects.
+parent; a turn ends with `session.execution.*`. These were found on a pre-release build
+(`0.0.0-next-17444`, which is not OpenCode 2) against a scripted model, and the plugin was checked again
+on the released OpenCode 2.0.18 on the owner's Mac on 2026-09-28: `opencode plugin list` lists it, it
+loads with no error, and a `git commit` is blocked with block-git.sh's message while the session goes
+on. Tested with OpenCode 1.18.32: the same results as the unchanged file. Not on 2.x: YOLO
+auto-approval (OpenCode 2's own `--auto` flag is the switch there) and the owner-text check of the Stop
+nudge (2.x gives a plugin no session messages); checks 1-4 of that nudge run. Deployed to all 18 projects on the owner's Windows machine (checked 2026-09-29).
 
 ## 2026-09-27 — The status-gate Stop hook skipped its checks when the shell had an OPENCODE_* variable
 
@@ -131,7 +223,7 @@ change: the hook itself reads transcript and run-record timestamps as UTC and fi
 `tf-yolo.sh`, `tf-triage.py`, `tf-log-miss.py`, `tf-emit.sh`, `metrics-session.sh`, `tf-metrics.sh` and
 `tf-verify-emit.sh` do the same. New regression case `harness_env`, failing against the old hook: a Claude
 Code turn with `OPENCODE_API_KEY` set is still checked, and an OpenCode turn named by `TF_HARNESS` still
-reads `opencode.json`. Not yet deployed to projects.
+reads `opencode.json`. Deployed to all 18 projects on the owner's Windows machine (checked 2026-09-29).
 
 ## 2026-09-27 — TF-052 follow-up: log-miss and triage close read the "outer" command as their own
 
@@ -150,7 +242,7 @@ cases were stale since TF-052 and were updated on the owner's decision: the fix-
 for the script's wording "run record already there", and REQ-UI-004 is graded in that case's ledger so
 the "no open miss on REQ-UI-004" path is reached (TF-052 part 3 names a row no verify graded
 differently). Suites: bugs 52/52, regression, mirror, routing, goal, doc-check pass; verify and
-requirements as before in this container (no Playwright browser). Not yet deployed to projects.
+requirements as before in this container (no Playwright browser). Deployed to all 18 projects on the owner's Windows machine (checked 2026-09-29).
 
 ## 2026-09-22 — TrBlazeUI's TF-001
 

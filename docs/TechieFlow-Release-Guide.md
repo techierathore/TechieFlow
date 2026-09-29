@@ -124,15 +124,18 @@ The first version, `1.0.0`, was published by hand in section 0. Releases start a
 
 Commit the changes as usual and push to `main`. Every push runs the **Validate** workflow. Wait for it to be green before you release. A red Validate means a red release.
 
-The checks are the same ones the release runs:
+`npm run validate` and `npm run test:install`, which the release runs too, check this:
 
 | Check | What it proves |
 |---|---|
 | Mirror parity | Every file under `.claude/commands/TechieFlow/` equals its twin under `.tfcore/`. |
 | OpenCode references | Every `{file:...}` in `opencode.jsonc` points at a file that exists. |
 | Shell syntax | `bash -n` passes on every `.sh` file. |
+| Shell portability | `tests/portability/run.sh`: no script uses a GNU-only tool option or a bash-4-only feature outside the shim library `.tfcore/utils/tf-portable.sh`, and the shim's own tests pass. Part of `npm run validate`. |
 | Package contents | `npm pack --dry-run` works, ships every file the shell scripts deploy, and ships no local-only file. |
 | Installer test | The installer and the three shell scripts produce identical folders, for brownfield, greenfield and update. |
+
+The Validate workflow does more than the release does. It runs as two jobs, one on Linux and one on a stock Mac (Apple's bash 3.2 at `/bin/bash` and the BSD tools, with Homebrew taken off the path). Each job runs `npm run validate`, `npm run test:install` and then every `tests/*/run.sh` twice, once with the time zone set to UTC and once to Asia/Kolkata, so a script that mixes local and UTC time fails. The Mac job also runs the portability check on its own. All of it must be green.
 
 You can run them yourself before pushing:
 

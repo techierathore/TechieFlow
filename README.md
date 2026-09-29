@@ -27,6 +27,8 @@ Three things make it different from prompting an agent by hand:
 - **Rules that were ignored became hooks.** Eight guards refuse an action outright and print why: any git write, a malformed status file, `Verified` without a verify run, a hand edit of a telemetry file, a database write outside build and fix, run material at the repository root, a backgrounded build in unattended mode, and ending a turn with the status gate incomplete.
 - **The work is measured.** Five append-only streams per project record what each command cost, which check caught which failure, and what each miss cost to fix.
 
+The framework has an opinion about how agents talk to people. Every project's `AGENTS.md` (written at day-1) tells the agent to tag each claim it is unsure of as Certain, Likely or Guessing; to say the thing you will not want to hear first; to skip warm-up and start with the most useful sentence; and to disagree in a fixed shape ("I disagree because … I would do … The risk in your approach is …") and then do what you decide.
+
 The framework is technology-neutral. It asks a set of stack questions at day-1 and records the answers in the project's Architecture document; an answer set can fill them in (the owner's .NET set ships as `docs/TechieFlow-Stack-Defaults-DotNet.md`).
 
 ---

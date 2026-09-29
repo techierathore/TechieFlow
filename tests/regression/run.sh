@@ -3663,6 +3663,98 @@ import('playwright').then(async ({chromium}) => { const b = await chromium.conne
   kill "$br" "$srv" 2>/dev/null; wait "$br" 2>/dev/null
 }
 
+# --- Lekhak TF-015: a rendered index kept its links to sibling .md files ------------------------------
+# A split guide's index linked ./Fx-ProductGuide-Admin.md; the HTML kept that href, so a reader clicking
+# through in a browser landed on raw markdown. A link to a page that is rendered becomes .html; one to a
+# markdown file with no rendered twin, a web link and a never-rendered checklist stay as written.
+lk_015() {
+  local d="$SCRATCH/lk015/docs/pg"; mkdir -p "$d"
+  printf '# Fx guide\n\n- [Admin](./Fx-ProductGuide-Admin.md)\n- [Admin setup](./Fx-ProductGuide-Admin.md#setup)\n- [Agent notes](./Fx-Notes.md)\n- [Web](https://example.com/readme.md)\n- [Checklist](./Fx-Checklist.md)\n' > "$d/Fx-ProductGuide.md"
+  printf '# Fx guide — Admin\n\n## Setup\n\nBack to the [index](Fx-ProductGuide.md).\n' > "$d/Fx-ProductGuide-Admin.md"
+  printf '# notes\n' > "$d/Fx-Notes.md"
+  printf '# Fx checklist\n\n## Requirements Status\n\n| ID | Title | Status | %% | Remarks | Detail |\n|---|---|---|---|---|---|\n| REQ-UI-001 | a | Verified | 100%% | — | x |\n' > "$d/Fx-Checklist.md"
+  ( cd "$d" && python3 "$UTILS/tf-render-html.py" --quiet Fx-ProductGuide.md Fx-ProductGuide-Admin.md Fx-Checklist.md ) >/dev/null 2>&1
+  local got; got="$(grep -oE 'href="[^"]*\.(md|html)[^"]*"' "$d/Fx-ProductGuide.html" | tr '\n' ' ')"
+  [[ "$got" == 'href="./Fx-ProductGuide-Admin.html" href="./Fx-ProductGuide-Admin.html#setup" href="./Fx-Notes.md" href="https://example.com/readme.md" href="./Fx-Checklist.md" ' ]] \
+    && ok lk_015a "an index rendered with its pages links them as .html (anchor kept); other links are left as written" \
+    || { bad lk_015a "the index still links raw markdown, or rewrote a link it should not"; note "$got"; }
+  grep -q 'href="Fx-ProductGuide.html"' "$d/Fx-ProductGuide-Admin.html" \
+    && ok lk_015b "a page links back to an index rendered in the same run as .html" \
+    || { bad lk_015b "the page's link back to the index still ends in .md"; note "$(grep -o 'href="Fx-[^"]*"' "$d/Fx-ProductGuide-Admin.html")"; }
+  # rendered alone later, the index still finds the sibling's .html on disk
+  ( cd "$d" && python3 "$UTILS/tf-render-html.py" --quiet Fx-ProductGuide.md ) >/dev/null 2>&1
+  grep -q 'href="./Fx-ProductGuide-Admin.html"' "$d/Fx-ProductGuide.html" \
+    && ok lk_015c "an index rendered on its own links a sibling that is already rendered as .html" \
+    || bad lk_015c "rendered alone, the index went back to linking raw markdown"
+}
+
+# --- Lekhak TF-014: the DevGuide lister crashed on a hidden build folder -------------------------------
+# walk() went into .tfbuild/ (not pruned) and lstrip("./") ate the dot, so .tfbuild/… became tfbuild/…,
+# which does not exist: "[Errno 2] No such file or directory", exit 2, and *devguide --update could not
+# run. --update also counted only src/, and Lekhak's code is in source/.
+lk_014() {
+  local d="$SCRATCH/lk014"; mkdir -p "$d/.tfcore" "$d/docs" "$d/source/Web/Pages" "$d/.tfbuild/Chk/Debug/.playwright/package"
+  printf 'appKind: app\nappPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  printf '@page "/home"\n<h1>Home</h1>\n' > "$d/source/Web/Pages/Home.razor"
+  printf 'const path = "x";\n' > "$d/.tfbuild/Chk/Debug/.playwright/package/cli.js"
+  printf '### Screen: Home (`/home`)\n' > "$d/docs/Fx-UIDesign.md"
+  printf '# Fx — DevGuide\n\n| | |\n|---|---|\n| Verified on | 2020-01-01 |\n\n### Home\n' > "$d/docs/Fx-DevGuide.md"
+  local out rc
+  out="$(cd "$d" && python3 "$UTILS/tf-devguide-list.py" Fx --update 2>&1)"; rc=$?
+  [[ $rc -eq 0 ]] && ! grep -q 'Errno' <<<"$out" \
+    && ok lk_014a "a hidden build folder (.tfbuild/…/.playwright) does not stop the DevGuide list" \
+    || { bad lk_014a "the lister crashed on a hidden folder (exit $rc)"; note "$(tail -1 <<<"$out" | cut -c1-160)"; }
+  grep -q 'source/Web/Pages/Home.razor' <<<"$out" && grep -q '1 source file(s) changed' <<<"$out" \
+    && ok lk_014b "--update counts a changed file under source/, not only src/" \
+    || { bad lk_014b "--update missed the change under source/"; note "$(grep -- '--update\|changed' <<<"$out" | head -2)"; }
+  # a guide kept under another name (Lekhak: docs/devguides/, one file per role) is named, not ignored
+  mkdir -p "$d/docs/devguides"; mv "$d/docs/Fx-DevGuide.md" "$d/docs/devguides/Fx-DevGuide-Admin.md"
+  out="$(cd "$d" && python3 "$UTILS/tf-devguide-list.py" Fx --update 2>&1)"
+  grep -q 'docs/devguides/Fx-DevGuide-Admin.md' <<<"$out" \
+    && ok lk_014c "a guide kept under another name or folder is named, so --update carries it over" \
+    || { bad lk_014c "--update said everything is new and named no existing guide"; note "$(grep -- '--update' <<<"$out" | head -1)"; }
+}
+
+# --- Lekhak TF-013: the TF-010 theme switch left the app's class="dark" on --------------------------
+# The app keeps its dark colours on a class (html.dark …), as a class-driven dark mode does. TF-010 set
+# data-theme to the mockup's "light" but left the class, so the badge stayed dark: "mockup accent, app
+# neutral". The class must follow the mockup too, and be back on the app when the check ends.
+lk_013() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip lk_013 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/lk013"; mkdir -p "$d/site" "$d/docs/mockups"
+  local css='body{margin:0;font:14px/20px system-ui} .badge{display:inline-block;border-radius:8px;padding:2px 8px;height:20px;color:#fff}
+[data-theme="light"] .badge{background:#2563eb} html.dark .badge{background:#555} html.dark body{background:#111;color:#eee}'
+  local body='<div data-testid="dash-header"><h1>Dashboard</h1><span class="badge">3 open</span></div><table data-testid="dash-table"><tr><th>Name</th><th>Count</th></tr><tr><td>Alpha</td><td>12</td></tr></table>'
+  printf '<!doctype html><html data-theme="light"><head><meta charset="utf-8"><style>%s</style></head><body>%s</body></html>\n' "$css" "$body" > "$d/docs/mockups/dashboard.html"
+  # the app: the viewer's saved dark theme, on the attribute AND on the class; bg-light must be left alone
+  printf '<!doctype html><html data-theme="dark" class="dark bg-light"><head><meta charset="utf-8"><style>%s</style></head><body><div id="root"></div><script>function draw(){document.getElementById("root").innerHTML=location.pathname==="/dashboard"?%s:"<p>Home</p>";}window.addEventListener("popstate",draw);draw();</script></body></html>\n' \
+    "$css" "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$body")" > "$d/site/index.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  local port cport exe
+  port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  cport="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  exe="$(cd "$d" && node -e "import('playwright').then(p=>console.log(p.chromium.executablePath()))" 2>/dev/null)"
+  "$exe" --headless=new --no-sandbox --remote-debugging-port="$cport" --user-data-dir="$d/profile" "http://127.0.0.1:$port/" >/dev/null 2>&1 & local br=$!
+  local i=0; while [[ $i -lt 30 ]] && ! curl -s -m 2 "http://127.0.0.1:$cport/json/version" | grep -q webSocketDebuggerUrl; do sleep 1; i=$((i+1)); done
+  local out
+  out="$( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --cdp "http://127.0.0.1:$cport" --mockups docs/mockups --screen dashboard=/dashboard --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1; python3 -c "
+import json; s=json.load(open('$d/parity.json'))['screens'][0]
+print(s['verdict'], '|'.join(f['detail'][:40] for f in s.get('findings', [])))" 2>&1 )"
+  [[ "$out" == "PASS " ]] \
+    && ok lk_013a "a class-driven dark mode (class=\"dark\") is switched to the mockup's light for the comparison" \
+    || { bad lk_013a "the app kept its dark class and was graded dark"; note "$(tail -1 <<<"$out" | cut -c1-160)"; }
+  local after; after="$(cd "$d" && node -e "
+import('playwright').then(async ({chromium}) => { const b = await chromium.connectOverCDP('http://127.0.0.1:$cport');
+  const p = b.contexts()[0].pages()[0]; console.log(await p.evaluate(() => document.documentElement.getAttribute('data-theme') + ' ' + [...document.documentElement.classList].sort().join(','))); process.exit(0); })" 2>&1)"
+  [[ "$after" == "dark bg-light,dark" ]] \
+    && ok lk_013b "the attached app gets its own class=\"dark\" back, and its other classes are untouched" \
+    || { bad lk_013b "the check left the app's classes changed"; note "$after"; }
+  kill "$br" "$srv" 2>/dev/null; wait "$br" 2>/dev/null
+}
+
 # --- Lekhak TF-011: a state-only box first in a card shifted every positional key below it -------
 lk_011() {
   local pw; pw="$(_pw_dir)"
@@ -3744,7 +3836,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 tb_001 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 tb_001 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

@@ -4,13 +4,16 @@
 |---|---|
 | App | Lekhak |
 | Upstream | TechieFlow |
-| Updated | 2026-09-28 |
+| Updated | 2026-09-29 |
 
 ## Summary
 
-12 entries: 0 blocking now, 2 open and not blocking (TF-003, TF-008), 3 fixed upstream and not yet re-checked here (TF-010, TF-011, TF-012), 7 closed after a re-check here on 2026-09-28 (TF-001, TF-002, TF-004, TF-005, TF-006, TF-007, TF-009).
+15 entries: 0 blocking now, 2 open and not blocking (TF-003, TF-008), 1 fixed upstream and not yet re-checked here (TF-015), 12 closed after a re-check here (TF-001, TF-002, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014).
 
 Nothing is blocked.
+
+- 0 blockers, 5 majors, 10 minors, 0 nice-to-haves.
+- Last consolidated: 2026-09-29.
 
 ## Entries
 
@@ -156,6 +159,8 @@ Nothing is blocked.
 
 ### TF-010 — The mockup check grades the app in whatever theme the viewer last picked
 
+> ✅ **Closed 2026-09-28** — re-checked here: Closed 2026-09-28: with BlogAdmin on its saved minimal dark theme (html data-site-theme=minimal data-theme=dark), ran tf-mockup-parity.sh --cdp http://172.18.144.1:9223 --screen admin/connection-settings=/connection-settings and no theme workaround. PASS, 0 findings: no 'mockup accent, app neutral' and no 'border style differs'. widths[].theme recorded mockup fluent-modern/light vs app_had minimal/dark, and BlogAdmin was still minimal dark afterwards. Evidence tests/.artifacts/verify/recheck/tf010-conn.json.
+
 - **Severity:** minor
 - **Blocks:** no — the verify switched the app to the mockup's theme for the comparison and restored the owner's choice afterwards.
 - **Repro:**
@@ -169,6 +174,8 @@ Nothing is blocked.
 - **Suggested fix:** Read the mockup's theme attributes and apply them to the app page (or report a theme mismatch as "not graded") before comparing.
 
 ### TF-011 — A state-only box at the top of a mockup shifts the mockup check's positional comparison
+
+> ✅ **Closed 2026-09-28** — re-checked here: Closed 2026-09-28: ran the same check with --mockups on a scratch copy whose three state-only messages are div elements marked only data-state-testid (tests/.artifacts/verify/recheck/mockups-tf011): PASS, 0 findings, no 'conn-card > div[1] > div[0] border style differs'. Control: the same copy with the mark removed from conn-reason gives exactly that finding (tf011-ctrl.json), so the fix is what removes it.
 
 - **Severity:** minor
 - **Blocks:** no — the one finding it causes is named as a false positive in the row's Remarks.
@@ -184,6 +191,8 @@ Nothing is blocked.
 
 ### TF-012 — The document checker fails a Remark the verdict script wrote, because a test title says "Not found"
 
+> ✅ **Closed 2026-09-28** — re-checked here: Closed 2026-09-28: ran a targeted *verify REQ-UI-133 (phase8-admin spec, screen/assets/mockup checks on AI Setup over CDP 9223). Verdict PASS; the Remark reads 'test `REQ-UI-133 AI Setup embedding card shows Found/Not found and`; AI Setup renders and looks right @1280/390; matches its mockup'. bash .tfcore/utils/tf-doc-check.sh docs/Lekhak-Checklist.md: 0 FAIL, no rewording.
+
 - **Severity:** minor
 - **Blocks:** no — the Remark was reworded by hand and the checklist passes.
 - **Repro:**
@@ -196,9 +205,73 @@ Nothing is blocked.
 - **Workaround:** Reword the phrase in the Remark after each verify.
 - **Suggested fix:** Apply the "not present" rule only to text an agent wrote, not to a quoted test title, or have the verdict quote titles in backticks and skip those.
 
+### TF-013 — The TF-010 theme switch leaves the app's `class="dark"` on, so dark-mode colours still apply
+
+> ✅ **Closed 2026-09-29** — re-checked here: Closed 2026-09-29: with BlogAdmin on its saved minimal dark theme (html data-site-theme=minimal data-theme=dark class=dark) and no workaround, ran tf-mockup-parity.sh --cdp http://172.18.144.1:9223 --screen admin/ai-setup=/admin/ai-setup: PASS, 0 findings (no 'color reembed-note — mockup neutral, app accent'). BlogAdmin was still minimal dark with class=dark afterwards. Evidence tests/.artifacts/verify/recheck/tf013b.json.
+
+- **Severity:** minor
+- **Blocks:** no — the verify switched BlogAdmin fully to light (theme and dark flag) for the comparison and restored the owner's dark theme afterwards.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-mockup-parity.sh --cdp http://172.18.144.1:9223 --screen admin/ai-setup=/admin/ai-setup
+  ```
+- **Expected:** With BlogAdmin on its saved minimal dark theme, AI Setup compares in the mockup's light theme and passes, as it does when the app is switched to light by hand.
+- **Actual:** `color reembed-note — mockup neutral, app accent` at 1280 and 390. The tool set `data-site-theme` and `data-theme` but left `class="dark"` on `<html>`, so the info note kept its dark-mode background (oklch 0.26 0.045 250). Switched to light fully (which also drops `class="dark"`), the same check passes with 0 findings. Connection settings passes either way, which is why the TF-010 re-check did not show it.
+- **Encountered in:** verify-phase (TF-012 re-check), 2026-09-28
+- **Workaround:** Set the app's saved theme to the mockup's (`techieblog-theme`, `techieblog-dark-mode`) before the check, restore after.
+- **Suggested fix:** Also carry a `dark`/`light` class on `<html>`/`<body>` (a class token whose name is a theme mode), or read the mockup's light/dark and toggle the app's class to match.
+
+### TF-014 — The DevGuide lister crashes on the `.tfbuild` folder, so `*devguide --update` cannot run
+
+> ✅ **Closed 2026-09-29** — re-checked here: Closed 2026-09-29: bash .tfcore/utils/tf-devguide-list.sh Lekhak --update exits 0 and prints the work list (65 routes in code, 41 UIDesign screens); its --update part names the five files in docs/devguides/ and says to carry their entries into docs/Lekhak-DevGuide.md. No .tfbuild crash.
+
+- **Severity:** major
+- **Blocks:** no — at handoff the DevGuide entries for the screens changed or added in this phase were written by hand from the code at file and line.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-devguide-list.sh Lekhak --update
+  ```
+- **Expected:** The work list of screens with files newer than the guide.
+- **Actual:** `tf-devguide-list: [Errno 2] No such file or directory: 'tfbuild/AdminChk/Debug/net10.0/.playwright/package/cli.js'`. `walk()` in `tf-devguide-list.py` descends into `.tfbuild` (not in `PRUNE`) and `.lstrip("./")` strips the leading dot, so `.tfbuild/…` becomes `tfbuild/…`, which does not exist.
+- **Encountered in:** handoff-phase, 2026-09-29
+- **Workaround:** Update the DevGuide by hand.
+- **Suggested fix:** Add `.tfbuild` to `PRUNE`, and replace `.lstrip("./")` with removing a leading `./` prefix only (`p[2:] if p.startswith("./") else p`).
+
+### TF-015 — The HTML renderer keeps links to sibling `.md` files, so a split guide's index opens raw markdown
+
+- **Severity:** minor
+- **Blocks:** no — the product guide's generated HTML was corrected to link `.html` after rendering.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-render-html.sh docs/productguides/Lekhak-ProductGuide.md
+  ```
+- **Expected:** `[Admin](./Lekhak-ProductGuide-Admin.md)` renders as a link to `./Lekhak-ProductGuide-Admin.html` when that sibling is also rendered.
+- **Actual:** The HTML keeps `href="./Lekhak-ProductGuide-Admin.md"`, so a reader clicking through the index in a browser lands on raw markdown. The split DevGuide index has the same shape.
+- **Encountered in:** productguide, 2026-09-29
+- **Workaround:** Replace the `.md` hrefs with `.html` in the rendered files after each render.
+- **Suggested fix:** Rewrite relative links to `*.md` as `*.html` when the target has (or will get) a rendered sibling.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### Resolution status (TechieFlow team, 2026-09-29, third reply)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-015 | Fixed upstream in `tf-render-html`. A relative link to a `.md` file is now written as `.html` in two cases: when that page's HTML is already next to the page being rendered, or when the same render run writes it. An `#anchor` on the link is kept. Other links stay exactly as written: a link to a markdown file that has no HTML copy (an agent document, the checklist, a feedback file), a web link, and a link that is only an `#anchor`. The rule is also written into the renderer's spec, `html-render-shell.md`. Regression case `lk_015` fails 3 of 3 against the script you had and passes now. On a copy of your `docs/productguides/`, all six index links came out as `.html`. | Render the index and its pages in one run: `bash .tfcore/utils/tf-render-html.sh docs/productguides/*.md`. In `Lekhak-ProductGuide.html` the Admin, Author, Editor and Reader links end in `.html`. Do the same for `docs/devguides/*.md`. You no longer need to fix the hrefs by hand after a render. |
+
+### Resolution status (TechieFlow team, 2026-09-29, second reply)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-014 | Fixed upstream, with three changes to `tf-devguide-list.py`. It no longer goes into hidden folders such as `.tfbuild`, `.vs` or `.playwright`, which hold tool output and never a page. It strips only a leading `./` from a path, so a hidden folder keeps its dot. With `--update`, it counts changed files under `source/` as well as `src/`: Lekhak's code is in `source/`, so before the fix `--update` would have reported no changes even without the crash. There is one more thing you would have hit next. Your guide is five files in `docs/devguides/`, one per role, written before the framework's layout. The framework's `*devguide` keeps one file, `docs/Lekhak-DevGuide.md`, with a "Verified on" row, so `--update` finds no guide there. It now names the five files it found and says to carry their entries over rather than start from nothing. Regression case `lk_014` fails 3 of 3 against the script you had and passes now. | `bash .tfcore/utils/tf-devguide-list.sh Lekhak --update` exits 0 and prints the work list (65 routes, 41 UIDesign screens). Its `--update` part names the five files in `docs/devguides/`. The next `*devguide Lekhak --update` carries them into `docs/Lekhak-DevGuide.md`. Hand-writing the entries is no longer needed. |
+
+### Resolution status (TechieFlow team, 2026-09-29)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-013 | Fixed upstream. The theme switch from TF-010 now also carries a light or dark class on `<html>` and `<body>`: `dark`, `light`, and names like `theme-dark` or `dark-mode`. A utility class such as `bg-light` is not touched. When the mockup declares a theme, the app's own mode classes are replaced by the mockup's for the comparison. The AI Setup mockup has no mode class, so BlogAdmin's `class="dark"` is taken off. Afterwards the app gets its own classes back, so BlogAdmin is still dark when the check ends. A mockup that declares no theme at all still leaves the app as it is. Regression case `lk_013` fails against the script you had, with your finding ("semantic colour differs — mockup accent"), and passes now. | With BlogAdmin on its saved minimal dark theme and no workaround, run the repro. AI Setup reads PASS with no `color reembed-note — mockup neutral, app accent` at 1280 or 390, and `<html>` still has `class="dark"` afterwards. The `techieblog-theme` / `techieblog-dark-mode` workaround can go. |
 
 ### Resolution status (TechieFlow team, 2026-09-28, fourth reply)
 

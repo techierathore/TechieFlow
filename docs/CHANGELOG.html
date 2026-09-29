@@ -106,9 +106,45 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout">
   <nav class="side">
     <h1>TechieFlow — Changelog</h1>
-    <div class="sub">Last rendered: 2026-09-11</div>
+    <div class="sub">Last rendered: 2026-09-29</div>
     <div class="group">Contents</div>
     <ol>
+        <li><a href="#unreleased-since-v1-0-4">Unreleased (since v1.0.4)</a></li>
+        <li><a href="#lekhak-tf-015-a-rendered-index-linked-raw-markdown">2026-09-29 — Lekhak TF-015: a rendered index linked raw markdown</a></li>
+        <li><a href="#lekhak-tf-014-the-devguide-lister-crashed-on-a-hidden-build-folder">2026-09-29 — Lekhak TF-014: the DevGuide lister crashed on a hidden build folder</a></li>
+        <li><a href="#lekhak-tf-013-the-mockup-check-s-theme-switch-left-class-dark-on">2026-09-29 — Lekhak TF-013: the mockup check&#x27;s theme switch left class=&quot;dark&quot; on</a></li>
+        <li><a href="#lekhak-tf-012-the-checker-failed-a-remark-the-verdict-script-wrote">2026-09-28 — Lekhak TF-012: the checker failed a Remark the verdict script wrote</a></li>
+        <li><a href="#lekhak-tf-010-and-tf-011-the-mockup-check-s-theme-and-state-only-boxes">2026-09-28 — Lekhak TF-010 and TF-011: the mockup check&#x27;s theme and state-only boxes</a></li>
+        <li><a href="#lekhak-tf-009-the-tf-001-fix-works-the-failed-boot-predates-its-deploy">2026-09-28 — Lekhak TF-009: the TF-001 fix works; the failed boot predates its deploy</a></li>
+        <li><a href="#lekhak-tf-001-to-tf-007-six-verify-defects-fixed-the-mac-driver-left-open">2026-09-28 — Lekhak TF-001 to TF-007: six verify defects fixed, the Mac driver left open</a></li>
+        <li><a href="#the-opencode-plugin-loads-on-opencode-2-as-well-as-on-1-x">2026-09-27 — The OpenCode plugin loads on OpenCode 2 as well as on 1.x</a></li>
+        <li><a href="#the-status-gate-stop-hook-skipped-its-checks-when-the-shell-had-an-opencode-variable">2026-09-27 — The status-gate Stop hook skipped its checks when the shell had an OPENCODE_* variable</a></li>
+        <li><a href="#tf-052-follow-up-log-miss-and-triage-close-read-the-outer-command-as-their-own">2026-09-27 — TF-052 follow-up: log-miss and triage close read the &quot;outer&quot; command as their own</a></li>
+        <li><a href="#trblazeui-s-tf-001">2026-09-22 — TrBlazeUI&#x27;s TF-001</a></li>
+        <li><a href="#later-appmanager-s-tf-025-to-tf-027">2026-09-19, later — AppManager&#x27;s TF-025 to TF-027</a></li>
+        <li><a href="#chatur-s-tf-001">2026-09-19 — Chatur&#x27;s TF-001</a></li>
+        <li><a href="#later-appmanager-s-tf-024">2026-09-18, later — AppManager&#x27;s TF-024</a></li>
+        <li><a href="#appmanager-s-tf-023">2026-09-18 — AppManager&#x27;s TF-023</a></li>
+        <li><a href="#afternoon-appmanager-s-tf-022">2026-09-17, afternoon — AppManager&#x27;s TF-022</a></li>
+        <li><a href="#appmanager-s-tf-020-and-tf-021-tf-017-closed">2026-09-17 — AppManager&#x27;s TF-020 and TF-021; TF-017 closed</a></li>
+        <li><a href="#evening-appmanager-s-tf-018-and-tf-019">2026-09-16, evening — AppManager&#x27;s TF-018 and TF-019</a></li>
+        <li><a href="#afternoon-appmanager-s-tf-017">2026-09-16, afternoon — AppManager&#x27;s TF-017</a></li>
+        <li><a href="#appmanager-s-tf-016">2026-09-16 — AppManager&#x27;s TF-016</a></li>
+        <li><a href="#evening-appmanager-s-tf-015">2026-09-15, evening — AppManager&#x27;s TF-015</a></li>
+        <li><a href="#tflens-s-tf-051-and-tf-052">2026-09-15 — TfLens&#x27;s TF-051 and TF-052</a></li>
+        <li><a href="#night-tflens-s-tf-049-and-tf-050">2026-09-14, night — TfLens&#x27;s TF-049 and TF-050</a></li>
+        <li><a href="#night-appmanager-s-tf-014">2026-09-14, night — AppManager&#x27;s TF-014</a></li>
+        <li><a href="#night-tflens-s-tf-048">2026-09-14, night — TfLens&#x27;s TF-048</a></li>
+        <li><a href="#evening-appmanager-s-tf-009-to-tf-013">2026-09-14, evening — AppManager&#x27;s TF-009 to TF-013</a></li>
+        <li><a href="#afternoon-tflens-s-tf-047">2026-09-14, afternoon — TfLens&#x27;s TF-047</a></li>
+        <li><a href="#later-tflens-s-tf-046">2026-09-14, later — TfLens&#x27;s TF-046</a></li>
+        <li><a href="#appmanager-s-tf-007-and-tf-008">2026-09-14 — AppManager&#x27;s TF-007 and TF-008</a></li>
+        <li><a href="#later-appmanager-s-tf-001-to-tf-006">2026-09-13, later — AppManager&#x27;s TF-001 to TF-006</a></li>
+        <li><a href="#tf-042-to-tf-045-builders-side-by-side-sign-in-and-badges-one-wrapper-deeper">2026-09-13 — TF-042 to TF-045: builders side by side, sign-in, and badges one wrapper deeper</a></li>
+        <li><a href="#tf-037-to-tf-041-and-what-the-framework-is-actually-neutral-about">2026-09-12 — TF-037 to TF-041, and what the framework is actually neutral about</a></li>
+        <li><a href="#night-tf-030-to-tf-036-seven-problems-tflens-met-in-one-build-and-verify">2026-09-11, night — TF-030 to TF-036: seven problems TfLens met in one build and verify</a></li>
+        <li><a href="#evening-later-tf-029-a-miss-logged-inside-another-command-took-that-command-s-time">2026-09-11, evening, later — TF-029: a miss logged inside another command took that command&#x27;s time</a></li>
+        <li><a href="#evening-tf-028-the-feedback-reader-missed-a-closing-line-under-a-bare-heading">2026-09-11, evening — TF-028: the feedback reader missed a closing line under a bare heading</a></li>
         <li><a href="#later-why-tflens-called-fixed-problems-open-and-every-entry-answered">2026-09-11, later — why TfLens called fixed problems open, and every entry answered</a></li>
         <li><a href="#tflens-s-four-entries-and-a-hand-off-the-owner-could-not-use">2026-09-11 — TfLens&#x27;s four entries, and a hand-off the owner could not use</a></li>
         <li><a href="#a-tier-gets-a-second-choice-and-a-cost-gets-a-meaning">2026-09-10 — a tier gets a second choice, and a cost gets a meaning</a></li>
@@ -190,11 +226,47 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
   </nav>
   <main>
     <h1>TechieFlow — Changelog</h1>
-    <div class="subtitle">Rendered 2026-09-11 &middot; source <code>CHANGELOG.md</code></div>
+    <div class="subtitle">Rendered 2026-09-29 &middot; source <code>CHANGELOG.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
       <ol>
+        <li><a href="#unreleased-since-v1-0-4">Unreleased (since v1.0.4)</a></li>
+        <li><a href="#lekhak-tf-015-a-rendered-index-linked-raw-markdown">2026-09-29 — Lekhak TF-015: a rendered index linked raw markdown</a></li>
+        <li><a href="#lekhak-tf-014-the-devguide-lister-crashed-on-a-hidden-build-folder">2026-09-29 — Lekhak TF-014: the DevGuide lister crashed on a hidden build folder</a></li>
+        <li><a href="#lekhak-tf-013-the-mockup-check-s-theme-switch-left-class-dark-on">2026-09-29 — Lekhak TF-013: the mockup check&#x27;s theme switch left class=&quot;dark&quot; on</a></li>
+        <li><a href="#lekhak-tf-012-the-checker-failed-a-remark-the-verdict-script-wrote">2026-09-28 — Lekhak TF-012: the checker failed a Remark the verdict script wrote</a></li>
+        <li><a href="#lekhak-tf-010-and-tf-011-the-mockup-check-s-theme-and-state-only-boxes">2026-09-28 — Lekhak TF-010 and TF-011: the mockup check&#x27;s theme and state-only boxes</a></li>
+        <li><a href="#lekhak-tf-009-the-tf-001-fix-works-the-failed-boot-predates-its-deploy">2026-09-28 — Lekhak TF-009: the TF-001 fix works; the failed boot predates its deploy</a></li>
+        <li><a href="#lekhak-tf-001-to-tf-007-six-verify-defects-fixed-the-mac-driver-left-open">2026-09-28 — Lekhak TF-001 to TF-007: six verify defects fixed, the Mac driver left open</a></li>
+        <li><a href="#the-opencode-plugin-loads-on-opencode-2-as-well-as-on-1-x">2026-09-27 — The OpenCode plugin loads on OpenCode 2 as well as on 1.x</a></li>
+        <li><a href="#the-status-gate-stop-hook-skipped-its-checks-when-the-shell-had-an-opencode-variable">2026-09-27 — The status-gate Stop hook skipped its checks when the shell had an OPENCODE_* variable</a></li>
+        <li><a href="#tf-052-follow-up-log-miss-and-triage-close-read-the-outer-command-as-their-own">2026-09-27 — TF-052 follow-up: log-miss and triage close read the &quot;outer&quot; command as their own</a></li>
+        <li><a href="#trblazeui-s-tf-001">2026-09-22 — TrBlazeUI&#x27;s TF-001</a></li>
+        <li><a href="#later-appmanager-s-tf-025-to-tf-027">2026-09-19, later — AppManager&#x27;s TF-025 to TF-027</a></li>
+        <li><a href="#chatur-s-tf-001">2026-09-19 — Chatur&#x27;s TF-001</a></li>
+        <li><a href="#later-appmanager-s-tf-024">2026-09-18, later — AppManager&#x27;s TF-024</a></li>
+        <li><a href="#appmanager-s-tf-023">2026-09-18 — AppManager&#x27;s TF-023</a></li>
+        <li><a href="#afternoon-appmanager-s-tf-022">2026-09-17, afternoon — AppManager&#x27;s TF-022</a></li>
+        <li><a href="#appmanager-s-tf-020-and-tf-021-tf-017-closed">2026-09-17 — AppManager&#x27;s TF-020 and TF-021; TF-017 closed</a></li>
+        <li><a href="#evening-appmanager-s-tf-018-and-tf-019">2026-09-16, evening — AppManager&#x27;s TF-018 and TF-019</a></li>
+        <li><a href="#afternoon-appmanager-s-tf-017">2026-09-16, afternoon — AppManager&#x27;s TF-017</a></li>
+        <li><a href="#appmanager-s-tf-016">2026-09-16 — AppManager&#x27;s TF-016</a></li>
+        <li><a href="#evening-appmanager-s-tf-015">2026-09-15, evening — AppManager&#x27;s TF-015</a></li>
+        <li><a href="#tflens-s-tf-051-and-tf-052">2026-09-15 — TfLens&#x27;s TF-051 and TF-052</a></li>
+        <li><a href="#night-tflens-s-tf-049-and-tf-050">2026-09-14, night — TfLens&#x27;s TF-049 and TF-050</a></li>
+        <li><a href="#night-appmanager-s-tf-014">2026-09-14, night — AppManager&#x27;s TF-014</a></li>
+        <li><a href="#night-tflens-s-tf-048">2026-09-14, night — TfLens&#x27;s TF-048</a></li>
+        <li><a href="#evening-appmanager-s-tf-009-to-tf-013">2026-09-14, evening — AppManager&#x27;s TF-009 to TF-013</a></li>
+        <li><a href="#afternoon-tflens-s-tf-047">2026-09-14, afternoon — TfLens&#x27;s TF-047</a></li>
+        <li><a href="#later-tflens-s-tf-046">2026-09-14, later — TfLens&#x27;s TF-046</a></li>
+        <li><a href="#appmanager-s-tf-007-and-tf-008">2026-09-14 — AppManager&#x27;s TF-007 and TF-008</a></li>
+        <li><a href="#later-appmanager-s-tf-001-to-tf-006">2026-09-13, later — AppManager&#x27;s TF-001 to TF-006</a></li>
+        <li><a href="#tf-042-to-tf-045-builders-side-by-side-sign-in-and-badges-one-wrapper-deeper">2026-09-13 — TF-042 to TF-045: builders side by side, sign-in, and badges one wrapper deeper</a></li>
+        <li><a href="#tf-037-to-tf-041-and-what-the-framework-is-actually-neutral-about">2026-09-12 — TF-037 to TF-041, and what the framework is actually neutral about</a></li>
+        <li><a href="#night-tf-030-to-tf-036-seven-problems-tflens-met-in-one-build-and-verify">2026-09-11, night — TF-030 to TF-036: seven problems TfLens met in one build and verify</a></li>
+        <li><a href="#evening-later-tf-029-a-miss-logged-inside-another-command-took-that-command-s-time">2026-09-11, evening, later — TF-029: a miss logged inside another command took that command&#x27;s time</a></li>
+        <li><a href="#evening-tf-028-the-feedback-reader-missed-a-closing-line-under-a-bare-heading">2026-09-11, evening — TF-028: the feedback reader missed a closing line under a bare heading</a></li>
         <li><a href="#later-why-tflens-called-fixed-problems-open-and-every-entry-answered">2026-09-11, later — why TfLens called fixed problems open, and every entry answered</a></li>
         <li><a href="#tflens-s-four-entries-and-a-hand-off-the-owner-could-not-use">2026-09-11 — TfLens&#x27;s four entries, and a hand-off the owner could not use</a></li>
         <li><a href="#a-tier-gets-a-second-choice-and-a-cost-gets-a-meaning">2026-09-10 — a tier gets a second choice, and a cost gets a meaning</a></li>
@@ -282,6 +354,562 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <tr><td>Companion</td><td><code>WorkFlow-Context.md</code> (the briefing), <code>README.md</code> (how to use it), <code>docs/TechieFlow-Reset-Plan-2026-09-04.md</code> (the reset).</td></tr>
 </tbody>
 </table>
+<hr>
+<h2 id="unreleased-since-v1-0-4">Unreleased (since v1.0.4)<a class="anchor-link" href="#unreleased-since-v1-0-4">#</a></h2>
+<p>Everything below this section from 2026-09-11 onward is also unreleased: it reached <code>main</code> after the
+v1.0.4 tag (2026-09-10) and is in no published package yet. This section lists what those dated entries
+do not.</p>
+<ul>
+<li><strong>The framework runs on a stock Mac</strong> (pull request #6). Every shell script runs on Apple's own bash 3.2 and the BSD <code>sed</code>, <code>date</code>, <code>stat</code> and <code>xargs</code>, with no Homebrew, newer bash or GNU coreutils, and behaves as before on Linux and WSL. GNU-only and bash-4-only spellings go through a new shim library, <code>.tfcore/utils/tf-portable.sh</code> (<code>tf_timeout</code>, <code>tf_setsid</code>, <code>tf_sed_inplace</code>, <code>tf_stat_mtime</code>, <code>tf_stat_size</code>, <code>tf_date_from</code>, <code>tf_epoch_frac</code>, <code>tf_realpath</code>, <code>tf_relpath</code>, <code>tf_read_lines</code>); <code>scaffold-*.sh</code> and <code>update-framework.sh</code> load it from the template. What a Mac user notices: unattended <code>tf-goal.sh</code> runs now stop the harness's whole process tree there, as on Linux; <code>tf-harness.sh</code> and <code>tf-verify-boot.sh stop</code> find processes with <code>ps</code> where there is no <code>/proc</code>; a build without <code>--</code> no longer stops on bash 3.2 with "EXTRA[@]: unbound variable".
+</li>
+<li><strong>python3 on a Mac comes from Apple's Command Line Tools</strong> (<code>xcode-select --install</code>). README, <code>docs/TechieFlow-Installation.md</code> and <code>docs/TechieFlow-Setup.md</code> §16 say a stock Mac is enough and give that as the python3 fix.
+</li>
+<li><strong>A portability check in <code>npm run validate</code>.</strong> <code>tests/portability/run.sh</code> fails on any GNU-only or bash-4-only construct outside the shim (a deliberate exception is one commented line in <code>tests/portability/exceptions.txt</code>, and an exception that matches nothing fails too), and runs the shim's own tests. Because validate runs before every publish, a release can no longer ship a script that breaks on a Mac.
+</li>
+<li><strong>CI on a stock Mac, in two time zones.</strong> The Validate workflow gained a second job on macOS with only Apple's bash and tools on the path. Both jobs run <code>npm run validate</code>, <code>npm run test:install</code> and every <code>tests/*/run.sh</code>, each suite twice: in UTC and in Asia/Kolkata.
+</li>
+<li><strong>The framework has an opinion on how agents talk to people.</strong> New projects' <code>AGENTS.md</code> ends with four "How to talk to me" rules (confidence tags, the unwelcome answer first, no warm-up, disagreement in a fixed shape), from <code>app-agents-md-tmpl.md</code> (2026-09-28). The README and How-It-Works §3.3 now say so. Day-1 writes <code>AGENTS.md</code>; an update does not rewrite it, so an existing project does not gain them.
+</li>
+<li><strong>OpenCode 2 is the version the framework targets</strong> (the plugin still loads on 1.x). The docs install it with <code>https://opencode.ai/v2/install</code> (the plain <code>/install</code> address now asks for a version), and so does the Docker fallback's <code>docs/Dockerfile</code>. The OpenCode Deployment Guide's commands and example config were checked against 2.0.18: <code>run</code> has no <code>--command</code> flag (a persona command is sent through <code>--agent</code> instead), <code>export</code> is <code>session export</code>, <code>stats</code> takes <code>--project .</code>, and <code>compaction.prune</code> is dropped by 2.0.18 as an unsupported legacy setting. The agent check is now <code>opencode run --agent flow-master</code> (its first line names the agent) and <code>opencode plugin list</code>; <code>opencode debug agents</code> asks the shared background service and listed none of the framework's agents in a folder where a run used them. What does not work on 2.x is written down wherever OpenCode is set up: YOLO's auto-approval (use <code>--auto</code>) and the Stop nudge's owner-text check.
+</li>
+<li><strong>Documentation brought in line with the code (2026-09-29).</strong> The Permissions page describes the sweep keeping files a test names (TF-004) and <code>guard-verify.sh</code> unlocking only rows graded today (TF-007). Setup §11 and the Deployment Guide say which heads the verify scripts drive (web, the Blazor Hybrid Windows head over CDP, static) and that Android, iOS and Mac Catalyst have no driver; the FlaUI / Appium-Windows instructions for other MAUI Windows heads are gone, since no script drives them. The Release Guide lists the portability check and the Mac job. The design notes (<code>Capability-Matrix.md</code>, <code>Adapter-Design.md</code>, <code>Coupling-Points.md</code>) carry a dated note on what OpenCode 2 changed.
+</li>
+<li><strong>FR-84.</strong> The phase-document requirement in <code>docs/TechieFlow-Requirements.md</code> shared the number FR-73 with the browser-lock requirement. The miss stream names FR-73 for the lock, and a stream is never edited, so the phase-document one is now FR-84.
+</li>
+</ul>
+<h2 id="lekhak-tf-015-a-rendered-index-linked-raw-markdown">2026-09-29 — Lekhak TF-015: a rendered index linked raw markdown<a class="anchor-link" href="#lekhak-tf-015-a-rendered-index-linked-raw-markdown">#</a></h2>
+<p><code>tf-render-html</code> copied every link target as written, so the index of Lekhak's split product guide
+kept <code>href="./Lekhak-ProductGuide-Admin.md"</code> and a reader clicking through in a browser landed on raw
+markdown; the split DevGuide index had the same shape, and Lekhak fixed the hrefs by hand after each
+render. A relative link to a <code>.md</code> file is now written as <code>.html</code> when that page's HTML already sits
+beside the rendered page or is written by the same run, with its <code>#anchor</code> kept. Everything else stays
+as written: a markdown file with no rendered twin (an agent document, the checklist, the miss log, a
+feedback file), web links, absolute paths and anchor-only links. The rule is in <code>html-render-shell.md</code>.
+Regression case <code>lk_015</code> fails 3 of 3 against the old renderer and passes now; on a copy of Lekhak's
+<code>docs/productguides/</code>, all six index links came out <code>.html</code>. <code>MISS-TechieFlow-20260929-03</code> is logged as
+fixed. The reply is in Lekhak's feedback file, copied here.</p>
+<h2 id="lekhak-tf-014-the-devguide-lister-crashed-on-a-hidden-build-folder">2026-09-29 — Lekhak TF-014: the DevGuide lister crashed on a hidden build folder<a class="anchor-link" href="#lekhak-tf-014-the-devguide-lister-crashed-on-a-hidden-build-folder">#</a></h2>
+<p><code>tf-devguide-list.sh Lekhak --update</code> stopped with "[Errno 2] No such file or directory:
+'tfbuild/AdminChk/…/.playwright/package/cli.js'", so <code>*devguide --update</code> could not run and Lekhak wrote
+its handoff entries by hand. <code>walk()</code> went into <code>.tfbuild/</code> (a build folder the project's agents made; it
+was not pruned) and <code>lstrip("./")</code> stripped the dot, so the path pointed at a folder that does not exist.
+Now every hidden folder is pruned (it holds tool output, never a page) and only a leading <code>./</code> is
+stripped. Found while fixing it: <code>--update</code> and both library lists read only <code>src/</code>, and Lekhak's code is
+in <code>source/</code>, so <code>--update</code> would have reported no change even without the crash. They now read <code>src/</code>
+and <code>source/</code>, the folders <code>tf-verify-boot.sh</code> looks in. And when the guide is not at
+<code>docs/&lt;App&gt;-DevGuide.md</code> but a file of that name is elsewhere under <code>docs/</code> (Lekhak keeps five, one per
+role, in <code>docs/devguides/</code>), <code>--update</code> names them and says to carry their entries over instead of
+reporting "everything is new". Regression case <code>lk_014</code> fails 3 of 3 against the old script and passes
+now. <code>MISS-TechieFlow-20260929-02</code> is logged as fixed. The reply is in Lekhak's feedback file, copied
+here.</p>
+<h2 id="lekhak-tf-013-the-mockup-check-s-theme-switch-left-class-dark-on">2026-09-29 — Lekhak TF-013: the mockup check's theme switch left <code>class="dark"</code> on<a class="anchor-link" href="#lekhak-tf-013-the-mockup-check-s-theme-switch-left-class-dark-on">#</a></h2>
+<p>The TF-010 switch copied the mockup's <code>data-*</code> theme attributes onto the app but left a class-driven
+dark mode alone. BlogAdmin keeps <code>class="dark"</code> on <code>&lt;html&gt;</code>, so its info note kept the dark background
+and AI Setup read "color reembed-note — mockup neutral, app accent". <code>tf-mockup-parity</code> now also reads
+the class tokens on <code>&lt;html&gt;</code> and <code>&lt;body&gt;</code> that name a light or dark mode (<code>dark</code>, <code>light</code>, <code>theme-dark</code>,
+<code>dark-mode</code> and the like, never a utility class such as <code>bg-light</code>). When the mockup declares a theme
+(an attribute or a mode class), the app's mode classes are replaced by the mockup's for the probe, and
+the app's own go back afterwards. A mockup that declares no theme leaves the app as it is, as before.
+Regression case <code>lk_013</code> fails against the script Lekhak had, with the reported finding, and passes now;
+<code>lk_010</code> and <code>lk_011</code> still hold. <code>MISS-TechieFlow-20260929-01</code> is logged as fixed. The reply is in
+Lekhak's feedback file, copied here. Not re-checked on Lekhak's own screen yet: its desktop app was not
+running.</p>
+<h2 id="lekhak-tf-012-the-checker-failed-a-remark-the-verdict-script-wrote">2026-09-28 — Lekhak TF-012: the checker failed a Remark the verdict script wrote<a class="anchor-link" href="#lekhak-tf-012-the-checker-failed-a-remark-the-verdict-script-wrote">#</a></h2>
+<p><code>tf-verify-verdict.py</code> copied a passing test's title, "REQ-UI-133 AI Setup embedding card shows
+Found/Not found …", into the Remark. <code>tf-doc-check.py</code> then failed it under its not-present rule, which
+exists for an agent claiming a file is missing without naming the path it tried. Two framework scripts
+disagreed on every verify. The verdict now writes a test's title and failure message in backticks (new
+<code>quoted()</code>; backticks and pipes inside become <code>'</code> and <code>/</code>). The checker applies the not-present rule
+only outside backtick spans, and counts an unclosed span (a Remark cut at its word cap) as quoted to its
+end. Regression case <code>lk_012</code> fails against the scripts Lekhak had, with the reported message, and
+checks that an unquoted "model file not found" still fails. <code>MISS-TechieFlow-20260928-10</code> is logged
+as fixed. The reply is in Lekhak's feedback file, copied here.</p>
+<h2 id="lekhak-tf-010-and-tf-011-the-mockup-check-s-theme-and-state-only-boxes">2026-09-28 — Lekhak TF-010 and TF-011: the mockup check's theme and state-only boxes<a class="anchor-link" href="#lekhak-tf-010-and-tf-011-the-mockup-check-s-theme-and-state-only-boxes">#</a></h2>
+<ul>
+<li><strong>TF-010.</strong> <code>tf-mockup-parity</code> graded an attached BlogAdmin in the viewer's saved dark theme against a light mockup, and every accent control read "mockup accent, app neutral". Before the app is probed, the mockup's <code>data-*</code> attributes on <code>&lt;html&gt;</code> and <code>&lt;body&gt;</code> whose name contains theme, mode or scheme are set on the app page. After the probe, the app's own values go back (an attribute it lacked is removed), so an attached app is left as the viewer had it. <code>widths[].theme</code> records both sides when they differed. <code>--keep-app-theme</code> opts out. It depends on no stack: it works wherever the mockup and the app declare the theme the same way, which a mockup drawn from the app's design system does.
+</li>
+<li><strong>TF-011.</strong> A mockup box marked <code>data-tf-state</code> or <code>data-state-testid</code> (Lekhak's own form) is left out of the parity walk and is not counted when its siblings are numbered. A database-down alert first in a card had paired the app's Host/Port row with it: "border style differs — mockup solid, app none". <code>tf-verify-screens</code> also accepts <code>data-state-testid</code> as a state-only mark.
+</li>
+</ul>
+<p>Regression cases <code>lk_010</code> (attached app: graded in the mockup's theme, left in its own) and <code>lk_011</code>
+(both marks) fail against the scripts Lekhak had, with the two reported findings. Misses
+<code>MISS-TechieFlow-20260928-08</code> and <code>-09</code> are logged as fixed. The reply was written in Lekhak's own
+feedback file and copied here.</p>
+<h2 id="lekhak-tf-009-the-tf-001-fix-works-the-failed-boot-predates-its-deploy">2026-09-28 — Lekhak TF-009: the TF-001 fix works; the failed boot predates its deploy<a class="anchor-link" href="#lekhak-tf-009-the-tf-001-fix-works-the-failed-boot-predates-its-deploy">#</a></h2>
+<p>Lekhak reported that the TF-001 fix did not boot its web head. The failed boot state was written at
+11:23 UTC, before the fix was deployed there (about 11:45). A boot at 12:45 UTC with the deployed script
+started the app on port 59689. The running process had <code>ASPNETCORE_ENVIRONMENT=Development</code> and
+<code>APPDATA</code> set to the Windows roaming folder, and the log had no missing-secret error. No code change.
+The reply is in <code>docs/Lekhak-TechieFlow-Feedback.md</code>, copied from the project, which now also holds
+its open TF-008.</p>
+<h2 id="lekhak-tf-001-to-tf-007-six-verify-defects-fixed-the-mac-driver-left-open">2026-09-28 — Lekhak TF-001 to TF-007: six verify defects fixed, the Mac driver left open<a class="anchor-link" href="#lekhak-tf-001-to-tf-007-six-verify-defects-fixed-the-mac-driver-left-open">#</a></h2>
+<p>Lekhak filed seven entries from its first verify runs (<code>docs/Lekhak-TechieFlow-Feedback.md</code>). Six are
+fixed and answered in that file, each with a regression case (<code>lk_001</code> to <code>lk_007</code>) that fails against
+the scripts as Lekhak had them. They were run against a saved copy of those scripts; every defect
+check failed there.</p>
+<ul>
+<li><strong>TF-001, the web head's secrets.</strong> The report said the app ran outside Development, but its log says "Hosting environment: Development". The real cause: the published copy ran on the WSL side, which reads user-secrets from <code>~/.microsoft/usersecrets</code>, while the owner's secrets were only in <code>%APPDATA%\Microsoft\UserSecrets</code> on Windows. The .NET secrets reader looks under <code>$APPDATA</code> first on any system, so when only the Windows store holds the project's <code>UserSecretsId</code>, <code>tf-verify-boot.sh</code> now passes <code>APPDATA=&lt;the Windows roaming folder&gt;</code> to the app and prints one line. New <code>--environment &lt;Name&gt;</code>. <code>TF_WIN_APPDATA</code> overrides the lookup (the test uses it).
+</li>
+<li><strong>TF-002.</strong> <code>tf-verify-screens.mjs</code> creates its browser context with <code>ignoreHTTPSErrors</code>, as <code>tf-mockup-parity</code> and <code>tf-assets</code> already did.
+</li>
+<li><strong>TF-004.</strong> <code>sweep-artifacts.sh</code> keeps any file under <code>tests/.artifacts/</code> or <code>.verify/</code> that a file under <code>tests/</code> names by path, at any age, and reports how many it kept. The Playwright config is not read, because it names outputs. The framework's own output folders are never kept. Only a named thing inside a folder counts, and a pattern stops at <code>${</code>, so <code>shots/${n}.png</code> keeps nothing. On Lekhak it keeps <code>hindi-src</code>, <code>run-blogadmin.cmd</code>, <code>cdp-relay.cjs</code> and <code>serials-seed.mjs</code>. The last three would have gone on 2026-10-03.
+</li>
+<li><strong>TF-005.</strong> <code>tf-verify-screens</code> fills route parameters from <code>--route-value Name=value</code> or <code>route_values</code> in the list (list-wide or per screen). A route still missing a value is not driven: the script prints <code>SKIP</code> with the option to pass, and the verdict's note names it. A mockup control marked <code>data-tf-state="&lt;state&gt;"</code> (on it or on a box around it) is not owed on the first view.
+</li>
+<li><strong>TF-006.</strong> <code>tf-assets.sh --cdp</code> and <code>tf-mockup-parity.sh --cdp</code> attach to a desktop head. Screens open by pushState. The asset check fetches each declared file from inside the page and grades the status and size it got. Disconnecting leaves the app running.
+</li>
+<li><strong>TF-007.</strong> Each test's own outcome and a <code>ran_at</code> time are written into every tests JSON. <code>--merge</code> reads the parts oldest first, and a later run of the same test stands. A later skip never replaces a run that happened, and an older part without outcomes counts each of its tests as the row's result. <code>docs/.last-verify.json</code> is kept row by row with <code>row_dates</code>, <code>row_runs</code> and <code>this_run</code>. A scope-<code>all</code> run starts it afresh. <code>guard-verify.sh</code> unlocks a <code>Verified</code> only for a row graded today, and <code>tf-fix-close.sh</code> reads only rows graded since its fix began.
+</li>
+</ul>
+<p><strong>TF-003 (no Mac Catalyst driver) stays open.</strong> It has to be built and proved on a Mac. Lekhak's
+Appium mac2 steps are recorded in the reply as the plan. Misses <code>MISS-TechieFlow-20260928-01</code> to <code>-07</code>
+are logged: six fixed, <code>-07</code> open. Suites: regression all hold (with <code>TF_PLAYWRIGHT_DIR</code> pointing at
+Lekhak's Playwright), mirror 19/0, verify 67/0, bugs 52/0, portability 65/0, doc-check clean. The
+three <code>tests/bugs</code> failures listed as open in the briefing no longer happen.</p>
+<h2 id="the-opencode-plugin-loads-on-opencode-2-as-well-as-on-1-x">2026-09-27 — The OpenCode plugin loads on OpenCode 2 as well as on 1.x<a class="anchor-link" href="#the-opencode-plugin-loads-on-opencode-2-as-well-as-on-1-x">#</a></h2>
+<p>On the owner's Mac, OpenCode 2 refused <code>.opencode/plugin/techieflow.js</code>: "Plugin must export a default
+definition with an id and an effect or setup function". OpenCode 2 replaced the plugin API: the default
+export must be <code>{ id, setup }</code>, hooks are registered through <code>context.tool.hook</code>, <code>context.shell.hook</code>
+and <code>context.event.subscribe()</code>, the context names no project directory, and there is no
+<code>permission.ask</code>. The file now default-exports <code>{ id, server, setup }</code>: 1.x reads <code>server</code> (its own V1
+module form, the same function as before), 2.x reads <code>setup</code>, and each ignores the other. <code>setup</code> feeds
+2.x's hooks and events into the unchanged 1.x hook code, so the guards, the shell env and telemetry stay
+one implementation. Differences the plugin now handles: the shell tool is <code>shell</code>, not <code>bash</code>; <code>edit</code>
+and <code>write</code> take <code>path</code>, not <code>filePath</code> (the bridge now reads either); the root session is created
+before the plugin subscribes, so it is learned from its first event and <code>session.get</code> gives its
+parent; a turn ends with <code>session.execution.*</code>. These were found on a pre-release build
+(<code>0.0.0-next-17444</code>, which is not OpenCode 2) against a scripted model, and the plugin was checked again
+on the released OpenCode 2.0.18 on the owner's Mac on 2026-09-28: <code>opencode plugin list</code> lists it, it
+loads with no error, and a <code>git commit</code> is blocked with block-git.sh's message while the session goes
+on. Tested with OpenCode 1.18.32: the same results as the unchanged file. Not on 2.x: YOLO
+auto-approval (OpenCode 2's own <code>--auto</code> flag is the switch there) and the owner-text check of the Stop
+nudge (2.x gives a plugin no session messages); checks 1-4 of that nudge run. Deployed to all 18 projects on the owner's Windows machine (checked 2026-09-29).</p>
+<h2 id="the-status-gate-stop-hook-skipped-its-checks-when-the-shell-had-an-opencode-variable">2026-09-27 — The status-gate Stop hook skipped its checks when the shell had an OPENCODE_* variable<a class="anchor-link" href="#the-status-gate-stop-hook-skipped-its-checks-when-the-shell-had-an-opencode-variable">#</a></h2>
+<p>On the owner's Mac (macOS 26, Asia/Kolkata) <code>tests/regression</code> failed one case, <code>owner_handoff_a</code>: the
+Stop hook <code>guard-status-html.sh</code> let TfLens's jargon hand-off through with exit 0 and named none of its
+faults. The time zone was the first suspect and is not the cause: every suite now runs in UTC and in
+Asia/Kolkata on both CI jobs, and a diagnostic run on macOS 15 and macOS 26, with TZ set and with the
+system zone set, passed the case each time. The cause is how the hook tells the harness apart. It took
+any variable starting <code>OPENCODE</code> as "this is OpenCode" before it looked at Claude Code's own variables,
+so a Claude Code turn in a shell that has, say, an OpenCode API key or config path exported looked for
+<code>.tfcore/.session/opencode.json</code>, found none, and skipped checks 2-5 (the document check, the BRD
+status, the run record and the owner-text check). <code>OPENCODE=1</code> reproduces the owner's failure line for
+line on Linux. The hook now takes the harness in the order <code>tf-harness.sh</code> and <code>tf-emit.sh</code> already use:
+<code>TF_HARNESS</code> (which the OpenCode plugin sets on every guard it runs), then <code>CLAUDECODE</code>,
+<code>CLAUDE_CODE_ENTRYPOINT</code>, <code>CLAUDE_CODE_SESSION_ID</code> or <code>CLAUDE_PROJECT_DIR</code>, then <code>OPENCODE*</code>. Every other
+script that compares transcript or file times was checked for mixed local and UTC time and needed no
+change: the hook itself reads transcript and run-record timestamps as UTC and file times as epochs, and
+<code>tf-yolo.sh</code>, <code>tf-triage.py</code>, <code>tf-log-miss.py</code>, <code>tf-emit.sh</code>, <code>metrics-session.sh</code>, <code>tf-metrics.sh</code> and
+<code>tf-verify-emit.sh</code> do the same. New regression case <code>harness_env</code>, failing against the old hook: a Claude
+Code turn with <code>OPENCODE_API_KEY</code> set is still checked, and an OpenCode turn named by <code>TF_HARNESS</code> still
+reads <code>opencode.json</code>. Deployed to all 18 projects on the owner's Windows machine (checked 2026-09-29).</p>
+<h2 id="tf-052-follow-up-log-miss-and-triage-close-read-the-outer-command-as-their-own">2026-09-27 — TF-052 follow-up: log-miss and triage close read the "outer" command as their own<a class="anchor-link" href="#tf-052-follow-up-log-miss-and-triage-close-read-the-outer-command-as-their-own">#</a></h2>
+<p>Since TF-052, <code>tf-phase.sh start</code> keeps a command still in the marker as <code>"outer"</code>, written first, and
+every reader must take the marker's own <code>cmd</code> and <code>started</code>. <code>tf-log-miss.py</code> and <code>tf-triage.py close</code>
+read them with a first-match regex, so after an earlier command they took the outer one: a <code>*log-miss</code>
+after <code>*triage-issues</code> believed triage was still running and wrote no run record, and a triage close
+without <code>--started</code> after <code>*fix-issues</code> recorded the triage from the fix's start. Both now parse the
+marker as JSON and take its top-level <code>cmd</code> and <code>started</code>. Every other reader was checked and already
+does (<code>guard-db.sh</code>, <code>tf-emit.sh</code>, <code>tf-yolo.sh</code>, <code>tf-verify-emit.sh</code>, <code>tf-fix-close.sh</code>, and the greedy
+<code>sed</code> reads in <code>tf-phase.sh</code> and <code>tf-verify-emit.sh</code>, which land on the last, top-level value). Found by
+the stock-Mac CI job of the portability branch, which is the first CI to run <code>tests/bugs</code>: its case
+"log-miss: run record cmd log-miss" had failed since TF-052 and now passes unchanged. New case "triage
+close without --started takes its own start", failing against the old script. Two other <code>tests/bugs</code>
+cases were stale since TF-052 and were updated on the owner's decision: the fix-close repeat now looks
+for the script's wording "run record already there", and REQ-UI-004 is graded in that case's ledger so
+the "no open miss on REQ-UI-004" path is reached (TF-052 part 3 names a row no verify graded
+differently). Suites: bugs 52/52, regression, mirror, routing, goal, doc-check pass; verify and
+requirements as before in this container (no Playwright browser). Deployed to all 18 projects on the owner's Windows machine (checked 2026-09-29).</p>
+<h2 id="trblazeui-s-tf-001">2026-09-22 — TrBlazeUI's TF-001<a class="anchor-link" href="#trblazeui-s-tf-001">#</a></h2>
+<p><code>tf-triage.py close</code> wrote every action in <code>triage.json</code> ever taken, so each close logged earlier runs'
+bugs again: 13 false escaped checks and 5 misses on 2026-09-19, one more of each on 2026-09-22. Close now
+skips actions older than <code>--started</code>, prints how many, and empties the list once written (a refused
+record waits for the next close of the same run). New <code>tf-emit.sh --void-miss &lt;miss_id&gt; "&lt;reason&gt;"</code>
+writes a <code>miss-void</code> (SCHEMA §5.5.11), <code>run-void</code>'s answer for misses; <code>tf-metrics.sh</code>, <code>--open-miss</code>,
+<code>--open-misses</code> and <code>tf-misses-md.py</code> honour it. Case <code>tb_001</code>, failing on TrBlazeUI's deployed copy and
+passing now; <code>replies_complete</code> reads TrBlazeUI's numbering from <code>tb_</code> cases. Deployed to all 20; the six
+false TrBlazeUI misses withdrawn; reply written in TrBlazeUI's file and copied here. The 14 false check
+records stay: no <code>gate-void</code> exists. Miss <code>MISS-TechieFlow-20260922-01</code>. Suites: regression, mirror pass;
+bugs unchanged at its 3 known failures. OpenCode not run.</p>
+<h2 id="later-appmanager-s-tf-025-to-tf-027">2026-09-19, later — AppManager's TF-025 to TF-027<a class="anchor-link" href="#later-appmanager-s-tf-025-to-tf-027">#</a></h2>
+<p>Three hook and script slips from AppManager's first <code>*triage-and-fix</code>. <strong>TF-025</strong>: <code>guard-build.sh</code> read
+the <code>&amp;</code> in a quoted screen name (<code>"Scorecard &amp; Portfolio=…"</code>) as a background job; quoted strings are now
+blanked before the <code>&amp;</code> test unless the string itself names a build, so <code>powershell.exe -Command "dotnet
+run &amp;"</code> is still refused. <strong>TF-026</strong>: <code>tf-triage.py close</code> counted the running app's <code>logs/</code> and <code>*.log</code>
+files as code changes; both are skipped (69 files on AppManager, none source). <strong>TF-027</strong>: <code>guard-db.sh</code>
+allowed migrations only under <code>build-phase</code> and <code>fix-issues</code>, though <code>triage-and-fix</code> step 3 runs the
+fix-issues steps; <code>triage-and-fix</code> is added, <code>triage-issues</code> still refused. Cases <code>am_025</code> to <code>am_027</code>,
+each failing on AppManager's deployed copy and passing now; the suite takes <code>TF_REGRESSION_HOOKS</code> for
+that. Misses <code>MISS-TechieFlow-20260919-03</code> to <code>-05</code>. Deployed to all 20 (each differed by exactly this
+change); replies written into AppManager's own file and copied here. Suites: regression, mirror pass.</p>
+<h2 id="chatur-s-tf-001">2026-09-19 — Chatur's TF-001<a class="anchor-link" href="#chatur-s-tf-001">#</a></h2>
+<p><code>html-render-shell.md</code> §0 listed "a feedback file" among the human documents, and <code>tf-render-html.py</code>
+drew it, so the status gate's "every human document this command wrote" left
+<code>Chatur-TrBlazeUI-Feedback.html</code> behind, which the owner had asked more than once to be rid of. New
+<code>is_feedback_file()</code>: a name ending <code>-Feedback.md</code> carrying the template's <code>| Upstream |</code> row or an id'd
+entry heading is refused with exit 2, like the checklist and the miss log; a document merely named
+<code>*-Feedback.md</code> still renders. §0 and §9 of the shell, <code>_status-update-gate.md</code> step 4,
+<code>generate-html.md</code> and <code>render-workflow-docs.md</code> no longer point at feedback files. Case <code>ch_001</code>,
+proved to fail on the renderer with the refusal taken out; <code>replies_complete</code> now reads Chatur's
+numbering from <code>ch_</code> cases. All five feedback files here are refused. Deployed to all 20 projects
+carrying the renderer (each differed by exactly this change) and proved in Chatur, whose <code>docs/</code> had
+no feedback file on this machine, so the answered file was copied there. Misses
+<code>MISS-TechieFlow-20260919-01</code> (<code>ignored</code>) and <code>-02</code>: clearing MyDiary's two stale feedback HTML copies,
+the maintainer deleted <code>MyDiary-TechieRag-Feedback.html</code> without checking for a markdown source, and it
+was the only copy there; restored as markdown from <code>TechieRag/docs/MyDiary-TechieRag-Feedback.md</code>
+(written 20 minutes before the HTML was rendered). Suites: regression, mirror pass. OpenCode not run:
+the change is a script and task text that OpenCode reads through the same <code>.tfcore/</code> files.</p>
+<h2 id="later-appmanager-s-tf-024">2026-09-18, later — AppManager's TF-024<a class="anchor-link" href="#later-appmanager-s-tf-024">#</a></h2>
+<p><code>tf-doc-check.py</code> chose a template from the file name's ending, so <code>docs/AppManager-api-usage-guide.md</code>
+(an API reference) was graded as the UsageGuide of an app "AppManager-api": 18 FAILs. New
+<code>foreign_prefix()</code>: the name's app must have a <code>-BRD.md</code> or <code>-Checklist.md</code> in the same folder, or the
+file is skipped with a WARN naming why; a folder with neither checks every name as before (fixtures,
+lone documents). No opt-out marker, so no document can hide from the checker by a comment. Across all
+19 projects only seven files change, none the framework's own. Case <code>am_024</code>; miss
+<code>MISS-TechieFlow-20260918-02</code> (<code>weak-check</code>). Deployed to all 19. Suites: regression, doc-check pass.</p>
+<h2 id="appmanager-s-tf-023">2026-09-18 — AppManager's TF-023<a class="anchor-link" href="#appmanager-s-tf-023">#</a></h2>
+<p>The DevGuide budget (Medium 7,000/10,000) was sized for 20 screens at 300/450 each, so AppManager's
+54-screen guide failed at 11,861 words with every entry inside its own limit. <code>tf-doc-check.py</code> now
+adds each entry's per-entry target and maximum for every entry past the size's screen cap
+(<code>SCREEN_CAP</code>: 10, 20, 20 per phase); only DevGuide and UsageGuide carry both a budget and per-entry
+limits. The per-role split under <code>docs/devguides/</code> was never checkable and is withdrawn from
+<code>handoff-phase.md</code> and <code>productguide.md</code> rather than given a schema. Case <code>am_023</code>; miss
+<code>MISS-TechieFlow-20260918-01</code> (<code>unsaid</code>); no new FR line. Deployed to all 19. Across every guide on
+the machine only AppStudio's message changes (a 17-screen Small guide, still failing). OpenCode not
+run: no model reachable from this machine that day.</p>
+<h2 id="afternoon-appmanager-s-tf-022">2026-09-17, afternoon — AppManager's TF-022<a class="anchor-link" href="#afternoon-appmanager-s-tf-022">#</a></h2>
+<p>The builder prompt template hardcoded <code>docs/&lt;App&gt;-UsageGuide.md</code>; AppManager's guide is
+<code>docs/&lt;App&gt;-Usage-Guide.md</code>, the spelling TF-009 taught the readers. The template now takes
+<code>{UsageGuide}</code>, filled by <code>tf-build-list.py</code> from <code>tf-verify-list.py</code>'s reader; the status tool's
+owner-run line uses the same reader. Case <code>am_022</code>; FR-83; miss <code>MISS-TechieFlow-20260917-03</code>
+(<code>ignored</code>). Deployed to all 19 (both scripts and the template), every copy matching: only
+AppManager's prompt changes, status output unchanged everywhere; same under OpenCode. AstroLyfe has no
+usage guide at all, so its prompt still names the default spelling. Suites: regression, mirror,
+verify, doc-check pass; requirements 84 lines with the same 4 older <code>tests/bugs</code> failures.</p>
+<h2 id="appmanager-s-tf-020-and-tf-021-tf-017-closed">2026-09-17 — AppManager's TF-020 and TF-021; TF-017 closed<a class="anchor-link" href="#appmanager-s-tf-020-and-tf-021-tf-017-closed">#</a></h2>
+<p><strong>TF-020.</strong> <code>tf-build-list.py --prompts</code> in FIX mode gave each builder the title and acceptance line
+only, not the <code>⚠</code> defect the row was listed for. Each fix row now prints <code>Defect: &lt;clause&gt;</code> in the
+working list and the prompt, plus one closing rule line. Case <code>am_020</code>; FR-81; miss
+<code>MISS-TechieFlow-20260917-01</code> (<code>unsaid</code>).</p>
+<p><strong>TF-021.</strong> <code>tf-verify-verdict.py --apply</code> rewrote Remarks to the verdict alone, erasing <code>⚠ DevGuide</code>
+notes and writing Verified over them. Non-verify defect clauses are now kept; a pass on such a row is
+<code>DEFECT-OPEN</code> → <code>Needs re-verify</code>, no gate record. Case <code>am_021</code>; FR-82; miss
+<code>MISS-TechieFlow-20260917-02</code> (<code>unsaid</code>). The defect marks moved to one file, <code>tf_defect.py</code>, used by
+the status facts, the build list and the verdict writer.</p>
+<p>Proved on AppManager's real 2026-09-17 verify evidence (old 60 PASS; new 4 DEFECT-OPEN on exactly the
+four rows filed, 56 PASS) and its build list (0 → 5 Defect lines), same under OpenCode. Across 19
+projects status facts are unchanged; the build list gains Defect lines on XVault, AppManager,
+AstroLyfe, MyDiary and TechieBlog only. Deployed to all 19, every copy matching. TF-017 closed in
+AppManager with <code>am_017</code> run against its deployed scripts. A <code>log-miss</code> run record given the session
+start was voided. Suites: regression, mirror 19, verify 67 pass; requirements 83 lines, FR-81/82 pass;
+<code>tests/bugs</code> still fails its 3 older checks (FR-28, FR-31 to FR-33).</p>
+<h2 id="evening-appmanager-s-tf-018-and-tf-019">2026-09-16, evening — AppManager's TF-018 and TF-019<a class="anchor-link" href="#evening-appmanager-s-tf-018-and-tf-019">#</a></h2>
+<p><strong>TF-018.</strong> <code>tf-status-facts.py</code> and <code>tf-brd-status.py</code> counted <code>N/A</code> as verified: AppManager read
+"89 of 89 verified" and a BRD line "9 | 9" with REQ-NFR-008 never verified. <code>N/A</code> stays terminal
+(nothing to build, handoff still reachable) but is left out of both numbers and named: "67 of 88
+verified, 1 not applicable", log "67/88 Verified, 1 N/A", and a BRD screen whose rows are all <code>N/A</code>
+reads "Not applicable". Case <code>am_018</code>; FR-80; miss <code>MISS-TechieFlow-20260916-03</code> (<code>unsaid</code>).</p>
+<p><strong>TF-019.</strong> <code>tf-status-facts.py</code> named <code>*verify all</code> for 21 <code>Needs re-verify</code> rows carrying
+"⚠ DevGuide &lt;date&gt;: &lt;defect&gt; &lt;file:line&gt;", while build-phase step 7 and <code>tf-build-list.py</code> treat
+them as fix work; a verify grades the acceptance line, which none of those defects is in. A
+<code>Needs re-verify</code> row whose Remarks carry a mark the framework writes for a defect (DevGuide, UAT bug,
+prod bug, miss, each failing verify check, visual, SECURITY) now makes <code>*build-phase</code> the next
+command. The first cut took any <code>⚠</code>; running it over every checklist on this machine showed
+hand-written ones meaning "not verifiable here" (TfLens REQ-FN-063), "residual" (AppStudio) and
+"honest non-observation" (TechieDesk), and sending those to a build is TfLens's old loop, so the list
+was narrowed. Case <code>am_019</code> (a hand-written <code>⚠</code> row still goes to a verify); miss
+<code>MISS-TechieFlow-20260916-04</code> (<code>ignored</code>).</p>
+<p>Proved on a copy of AppManager's checklist and BRD: old <code>Verify — 21 to verify, 68 of 89 verified</code>,
+<code>*verify all</code>, BRD <code>9 | 9</code>; new <code>Build — 21 to fix, 67 of 88 verified, 1 not applicable</code>,
+<code>*build-phase</code>, BRD <code>8 | 8</code>. Across the machine the figures change wherever a checklist holds <code>N/A</code>
+rows (TfLens, TechieBlog, TechieDesk, Xpenser, Lekhak, TrSetup); the next command changes only for
+AppManager and MyDiary (verify → build: DevGuide and render defects) and gains a "to fix" count on
+AstroLyfe, TechieBlog and TechieDesk, each a real defect mark. Deployed to all 19 projects.</p>
+<h2 id="afternoon-appmanager-s-tf-017">2026-09-16, afternoon — AppManager's TF-017<a class="anchor-link" href="#afternoon-appmanager-s-tf-017">#</a></h2>
+<p>A row whose acceptance line carries "<em>Roadmap — not in this phase's scope.</em>" was open work to both
+scripts: <code>tf-build-list.py</code> gave REQ-NFR-008 a builder prompt (a builder built it on 2026-09-14
+against the owner's decision) and <code>tf-status-facts.py</code> counted it "not built" and named
+<code>*build-phase</code> as the next command, which landed on the same row again. One reader,
+<code>.tfcore/utils/tf_roadmap.py</code>, finds such rows (the nearest REQ anchor or bold id above the
+acceptance line; the status table is never read) and both scripts import it. The build list counts
+them apart (<code>… 0 Blocked, 1 roadmap, 89 total</code>) and names them; the status facts leave them out of
+the next-command decision, name them in the reason, and mark them in the open list.
+<code>tf-selfcheck.sh</code> reads the new count. No task prose changed. Case <code>am_017</code>, failing against the
+old scripts; miss <code>MISS-TechieFlow-20260916-02</code>. Proved on a copy of AppManager's checklist with
+the row back at In Progress (AppManager has since set it to N/A): old FIX / <code>*build-phase</code>, new
+NOTHING / <code>*handoff-phase</code>; every other checklist on this machine reads the same as before. The
+same run under OpenCode printed the same lines. Deployed to all 19 projects, every copy matching;
+reply written to both copies of AppManager's feedback file. Suites: regression, mirror 19, verify 67,
+goal 36, routing 42 and doc-check pass; requirements 80 lines, FR-79 graded and passing. <code>tests/bugs</code>
+fails 3 checks (log-miss run record, fix-close run record, fix-close unnamed row), and with them
+FR-28 and FR-31 to FR-33: the same 3 fail with the old scripts put back, so they predate this change
+and were not investigated here.</p>
+<h2 id="appmanager-s-tf-016">2026-09-16 — AppManager's TF-016<a class="anchor-link" href="#appmanager-s-tf-016">#</a></h2>
+<p><code>tf-verify-list.py</code> read screens from the UIDesign only, so AppManager, which has none, left every UI
+row without a screen and the verdict credited REQ-UI-027 with build and acceptance only. When the
+UIDesign names no screens, the checklist's <code>## Page:</code> / <code>### Page:</code> headings are read instead: the
+name, the first route that opens as written (no <code>{id}</code>), the mockup of the first entry under it. A
+row belongs to the heading it sits under whether its anchor is below it or above it (AppManager has
+both), and any other <code>###</code> heading (<code>### Cross-page:</code>) ends the page before it — the first cut
+missed both and put REQ-UI-002 on Applications and TechieRag's REQ-UI-009/010 on Token Usage, caught
+by reading the output. Case <code>am_016</code>, failing against the old script; miss
+<code>MISS-TechieFlow-20260916-01</code>. Proved on every checklist on this machine: the seven with a UIDesign
+print exactly what they printed before; AppManager (20 of 29 UI rows now resolved), TechieRag and
+AppStudio gain correct screens. Then on AppManager's admin site, booted on 5041: screens, assets and
+parity run from the new list, and the verdict on the same evidence credits REQ-UI-027 with six
+checks where the old list gave two. AppManager's ledger was left untouched. Deployed to all 19
+projects, every copy matching; reply written to both copies of AppManager's feedback file.</p>
+<h2 id="evening-appmanager-s-tf-015">2026-09-15, evening — AppManager's TF-015<a class="anchor-link" href="#evening-appmanager-s-tf-015">#</a></h2>
+<p><code>tf-mockup-parity.mjs</code> <code>lineCount</code> divided an element's full height by its line height, so a
+one-line badge with 4px padding and <code>line-height: 1</code> read 18 / 9.756 = 1.85, rounded to 2 rows, and
+was reported as wrapping. Vertical padding and borders are now taken off the height first. Case
+<code>am_015</code> (a padded badge on one line is not reported; text that really wraps in a padded box still
+is), failing against the old script; miss <code>MISS-TechieFlow-20260915-03</code>. Proved on AppManager's own
+admin site, booted on 5041 and signed in as the usage guide's admin, on <code>/reports/device-adoption</code>:
+the old script FAIL with the two <code>wrap</code> findings AppManager filed, the new one PASS with none.
+Deployed to all 19 projects, every copy matching.</p>
+<h2 id="tflens-s-tf-051-and-tf-052">2026-09-15 — TfLens's TF-051 and TF-052<a class="anchor-link" href="#tflens-s-tf-051-and-tf-052">#</a></h2>
+<p><code>tf-triage.sh</code> <code>demote</code>, <code>new</code> and <code>note</code> take <code>--phase N</code>, and without it find a row in an earlier
+phase's checklist, so a Phase 1 row a Phase 3 verify fails can be demoted. Inside <code>*fix-issues</code> the
+inline verify took the fix's start, so its run record covered the fix and <code>tf-fix-close.sh</code> was
+refused; and the close read one ledger, so rows of an earlier scoped verify got <code>Needs re-verify</code>.
+Now <code>tf-phase.sh start</code> keeps the calling command as <code>outer</code> in the marker, <code>tf-verify-emit.sh</code>
+records the verify from its own start, and <code>tf-fix-close.sh</code> records the fix around any run it
+chained and takes verdicts from the gate records of every verify since the fix started, the ledger
+only when it belongs to the fix. One sentence added to <code>fix-issues.md</code> step 4. <code>tests/regression/run.sh</code>
+takes <code>TF_REGRESSION_UTILS</code> so a project can run a case against its own deployed copy. Cases
+<code>tf_051</code> and <code>tf_052</code>, both failing against the old scripts; misses <code>MISS-TechieFlow-20260915-01</code>
+and <code>-02</code>. Proved on copies of TfLens's checklists and stream (REQ-NFR-003 demoted in the Phase 1
+checklist; MISS-TfLens-20260911-39 closed <code>Verified</code> where the old close wrote <code>Needs re-verify</code>).
+Deployed to all 19 projects, every copy matching. <code>WorkFlow-Context.md</code> trimmed back under its cap.</p>
+<h2 id="night-tflens-s-tf-049-and-tf-050">2026-09-14, night — TfLens's TF-049 and TF-050<a class="anchor-link" href="#night-tflens-s-tf-049-and-tf-050">#</a></h2>
+<p><code>tf-build.sh --print</code> (and <code>test --print</code>) now prints the resolved command and runs nothing, as
+<code>handoff-phase.md</code> has said since the reset. <code>tf-devguide-list.py</code> skips the sample and test folders
+and any <code>*.spec.*</code> or <code>*.test.*</code> file when reading routes, so a test's screenshot <code>path:</code> is not a
+page. Cases <code>tf_049</code> and <code>tf_050</code>; misses <code>MISS-TechieFlow-20260914-12</code> and <code>-13</code>. Proved on TfLens
+(<code>dotnet build TfLens.slnx</code>; the two <code>.png</code> lines gone, 19 routes kept) and AppManager. Deployed to
+all 19 projects. Suite 156 checks.</p>
+<h2 id="night-appmanager-s-tf-014">2026-09-14, night — AppManager's TF-014<a class="anchor-link" href="#night-appmanager-s-tf-014">#</a></h2>
+<p><code>tf-mockup-parity</code> reported <code>document-scroll</code> on every page whose document scrolls, including an app
+whose document is its only scroller. It is raised only when the shell has a content scroll container
+(a box at least half the viewport each way that scrolls inside itself) and the document scrolls too.
+Case <code>am_014</code>; miss <code>MISS-TechieFlow-20260914-11</code>. Proved on AppManager's adoption report, 6600 px,
+signed in: no finding. Deployed to all 19 projects. Suite 152 checks.</p>
+<h2 id="night-tflens-s-tf-048">2026-09-14, night — TfLens's TF-048<a class="anchor-link" href="#night-tflens-s-tf-048">#</a></h2>
+<p>Browser checks run side by side share one signed-in user, and the acceptance tests change that user's
+settings and window: 11 false parity findings on TfLens. The lock <code>tf-build.sh</code> takes moved to
+<code>tf-lock.sh</code>, and <code>tf-verify-tests.sh</code>, <code>tf-verify-screens.sh</code> and <code>tf-mockup-parity.sh</code> take it too;
+a script the holder starts shares it. FR-73 says it. Case <code>tf_048</code>; miss <code>MISS-TechieFlow-20260914-10</code>,
+<code>unsaid</code>. Deployed to all 19 projects, every copy matching. Suite 150 checks.</p>
+<h2 id="evening-appmanager-s-tf-009-to-tf-013">2026-09-14, evening — AppManager's TF-009 to TF-013<a class="anchor-link" href="#evening-appmanager-s-tf-009-to-tf-013">#</a></h2>
+<p>All five found by AppManager's <code>*build-phase</code> and its chained verify the same day. Cases <code>am_009</code> to
+<code>am_013</code> in <code>tests/regression/run.sh</code>, each failing against the scripts as AppManager had them and
+passing now. Misses <code>MISS-TechieFlow-20260914-05</code> to <code>-09</code>, <code>weak-check</code>, closed in the same run.
+The reply is in AppManager's own file and copied here byte for byte; <code>tf-feedback.sh</code> reads all five
+as fixed and waiting for a re-check. <strong>Deployed:</strong> <code>update-framework.sh</code> ran in all 19 projects, every
+one exit 0, and every copy of the changed files matches this repository byte for byte. The whole
+regression suite holds, 147 checks. Every proof below ran on AppManager's own admin site, booted from
+its copy on port 5041 and signed in as its usage guide's admin user, old and new script on the same
+data; the results are in AppManager's <code>tests/.artifacts/fix-parity/tf011/</code>.</p>
+<ul>
+<li><strong>TF-009, no test users from a guide named <code>{App}-Usage-Guide.md</code></strong> (<code>tf-verify-list.py</code>, <code>tf-devguide-list.py</code>). Only <code>{App}-UsageGuide.md</code> was looked for, the heading only at <code>##</code>, and only the template's numbered table read. Both spellings are tried, the heading may sit at <code>##</code> or <code>###</code>, and a table is read by its header names (user or email, role); the numbered shape reads as before, and the devguide list uses the same reader. AppManager's two users are listed; TfLens's guide reads exactly as before.
+</li>
+<li><strong>TF-010, the first web project in sorted order booted</strong> (<code>tf-verify-boot.sh</code>). AppManager's API sorts before its admin site and has no screens. Among several web projects the one that serves screens is booted — its folder holds <code>.razor</code> or <code>.cshtml</code> pages, or it references a Razor SDK project — one such is taken and the choice printed; several or none stop with the candidates named. <code>start --dry-run</code> prints the pick without booting. On AppManager, a bare <code>start</code> now boots the admin site and says why.
+</li>
+<li><strong>TF-011, no way past a sign-in the page keeps for itself</strong> (<code>tf-mockup-parity.mjs</code>, <code>tf-assets.sh</code>, new <code>tf-login.mjs</code> and <code>tf-assets-browser.mjs</code>). Both tools took only <code>--cookie</code>; AppManager sets none, so every path answered 401 and nothing was graded. The sign-in recipe (TF-033, TF-044) and the way a 401 screen is reached (TF-006) moved out of <code>tf-verify-screens.mjs</code> into <code>tf-login.mjs</code>, which all three checks now share; parity and assets take <code>--login-path</code>, <code>--user</code>, <code>--password</code> and <code>--storage-state</code>. Parity keeps one signed-in tab per width on the app and a separate tab for the mockups. Assets opens each path in a signed-in browser, takes the document it drew, and still fetches each declared asset itself, so a 404 stays visible. On AppManager: assets from <code>declared 0</code> on both paths to 11 graded on each, none failing; parity from <code>app returned HTTP 401</code> to the screen reached at both widths — where it is UNGRADEABLE because AppManager's mockup carries no test ids, and reports the page's 6600 px document height, both AppManager's to judge.
+</li>
+<li><strong>TF-012, a password field read as the sign-in page</strong> (<code>tf-login.mjs</code>, used by <code>tf-verify-screens.mjs</code>). AppManager's signed-in "Create user" form has one for the new account. Signed out now means: on the sign-in address, or a password field with a button beside it that says sign in or log in. On AppManager, <code>/users/create</code> from UNREACHABLE at both widths to render OK at both; a sign-in form drawn at a screen's own address still reads as signed out.
+</li>
+<li><strong>TF-013, the whole browser suite in one command</strong> (<code>tf-verify-tests.sh</code>). <code>--shard N/M</code> and <code>--spec</code> run parts, each writing its own <code>playwright-&lt;NofM&gt;.json</code> and <code>tests-&lt;NofM&gt;.json</code>; <code>--merge</code> combines the parts' rows (FAIL wins, PASS over NOT-TESTED, counts add) and totals into one <code>tests.json</code>. Shard 1/30 of AppManager's own suite ran through it against the booted site: 11 of 11 tests passed, one row mapped.
+</li>
+<li><strong>A slip of ours, caught by the suite before it shipped.</strong> Moving the sign-in recipe into <code>tf-login.mjs</code> broke every regression case that copied <code>tf-verify-screens.mjs</code> or <code>tf-mockup-parity.mjs</code> alone into its fixture (22 checks). The cases now copy the module beside the script; a project gets the whole <code>utils/</code> folder from <code>update-framework.sh</code>, so no project was affected.
+</li>
+</ul>
+<h2 id="afternoon-tflens-s-tf-047">2026-09-14, afternoon — TfLens's TF-047<a class="anchor-link" href="#afternoon-tflens-s-tf-047">#</a></h2>
+<p>Found by TfLens's <code>*fix-issues</code> the same day: with its mockups updated, these were the only findings
+left on 13 of its rows. Case <code>tf_047</code> in <code>tests/regression/run.sh</code>, failing against the script as
+TfLens had it and passing now. Miss <code>MISS-TechieFlow-20260914-04</code>, <code>weak-check</code>, closed in the same
+run. The reply is in TfLens's own file and copied here byte for byte; <code>tf-feedback.sh</code> reads TF-047
+as fixed and waiting for a re-check. <strong>Deployed:</strong> <code>update-framework.sh</code> ran in all 19 projects, every
+one exit 0, and all 19 copies of <code>tf-mockup-parity.mjs</code> match this repository byte for byte. The whole
+regression suite holds, 133 checks.</p>
+<ul>
+<li><strong>TF-047, a treatment one element away, an icon in another child, wrap on other text</strong> (<code>tf-mockup-parity.mjs</code>). Keys pair by position, and a component library draws the active link's fill on the <code>&lt;a&gt;</code> inside a <code>&lt;li&gt;</code> and the filter's ring on the <code>InputGroup</code> around the input, so the badge and stroke clauses compared the control with the plain box beside the one carrying the treatment. Now the probe keeps each element's neighbours one step away — the parent when it is the same row and its other children carry no text, and the only child — and when the sides disagree the plain side is read there. The card header a library wraps once more paired the mockup's description with the app's toolbar, so the toolbar's icon read as one the mockup lacks while the header held one icon on both sides: an <code>icon</code> finding is dropped when the parent or grandparent is paired with the same number of icons on both sides (up to four), the rule <code>missing</code> has followed since TF-027. And <code>wrap</code> compared row counts of texts that read differently; it is now not applicable unless the digit-folded texts match. Proved on TfLens's own app, signed in as its demo user, <code>/misses</code>, <code>/effort</code> and <code>/prices</code> at 1280 and 390, old and new script run together on the same data: 15 findings became 0, all three screens PASS, the comparison counts (242, 248, 222) unchanged, and <code>wrap</code> on <code>/misses</code> graded on 18 pairs instead of 26. A first, cold run of the old script showed six extra <code>missing</code> findings at 390 on <code>/misses</code> that neither TfLens's own run nor the warm run had; that clause is untouched.
+</li>
+</ul>
+<h2 id="later-tflens-s-tf-046">2026-09-14, later — TfLens's TF-046<a class="anchor-link" href="#later-tflens-s-tf-046">#</a></h2>
+<p>Found by TfLens's <code>*verify ui</code> the same morning. Case <code>tf_046</code> in <code>tests/regression/run.sh</code>, failing
+against the script as TfLens had it and passing now. Miss <code>MISS-TechieFlow-20260914-03</code>, <code>weak-check</code>,
+closed in the same run. The reply is in TfLens's own file and copied here byte for byte;
+<code>tf-feedback.sh</code> reads TF-046 as fixed and waiting for a re-check, and TF-045 as closed by TfLens.
+<strong>Deployed:</strong> <code>update-framework.sh</code> ran in all 19 projects, every one exit 0, and all 19 copies of
+<code>tf-mockup-parity.mjs</code> match this repository byte for byte. The whole regression suite holds, 130 checks.</p>
+<ul>
+<li><strong>TF-046, one extra icon reported at every element that contains it</strong> (<code>tf-mockup-parity.mjs</code>). The icon clause asks "is there an icon anywhere inside?", which is true of the element holding the icon and of each wrapper and anchor above it. The probe now numbers every icon on the page and records which icons each element holds and how deep it sits; an <code>icon</code> finding is dropped when all its icons are already reported on a deeper element in the same direction. A container with an extra icon of its own is still reported, and so is an icon the app lost, once. Proved on TfLens's own app, signed in, <code>/misses</code>, <code>/effort</code> and <code>/prices</code> at 1280 and 390, old and new script run together on the same data: 42 findings became 28, 26 <code>icon</code> findings became 12, the 14 removed were each an element containing one kept, and the 16 other findings and the three FAIL verdicts were identical.
+</li>
+</ul>
+<h2 id="appmanager-s-tf-007-and-tf-008">2026-09-14 — AppManager's TF-007 and TF-008<a class="anchor-link" href="#appmanager-s-tf-007-and-tf-008">#</a></h2>
+<p>Both found by AppManager while re-checking TF-005 and TF-003. Cases <code>am_007</code> and <code>am_008</code> in
+<code>tests/regression/run.sh</code>, each failing against the scripts as AppManager had them and passing now.
+Misses <code>MISS-TechieFlow-20260914-01</code> and <code>-02</code>, both <code>weak-check</code>, fixed in the same run. The replies
+are in <code>docs/AppManager-TechieFlow-Feedback.md</code> and copied into AppManager's own file, where
+<code>tf-feedback.sh</code> reads both as fixed and waiting for a re-check. <strong>Deployed:</strong> <code>update-framework.sh</code> ran
+in all 19 projects, every one exit 0, and all 19 copies of the three changed scripts match this
+repository byte for byte. Both re-checks were run in AppManager with its deployed scripts:
+<code>tf-build-list.sh</code> labels the UI cluster <code>[builder]</code>, and <code>tf-verify-tests.sh --no-browser</code> with no
+<code>--target</code> ran the unit tests, PASS, <code>REQ-NFR-007</code> mapped.</p>
+<ul>
+<li><strong>TF-007, no unit test run for a <code>.slnx</code>-only solution</strong> (<code>tf-verify-tests.sh</code>). <code>ls *.sln *.slnx</code> fails when either pattern matches nothing, and <code>tests/*/*.csproj</code> looked one folder deep. Each pattern is tested on its own now, and a test project is found at any depth under <code>tests/</code>. With no solution, the only test project becomes the target; several are named, never guessed between. On AppManager with no <code>--target</code>: unit tests PASS, one TRX report, <code>REQ-NFR-007</code> PASS, 160 s. Before: skipped.
+</li>
+<li><strong>TF-008, UI clusters always labelled <code>trblazeui</code></strong> (<code>tf-build-list.py</code>). The framework copies <code>.trblazeui/</code> into every project, so that folder is no evidence. The label now comes from a TrBlazeUI package or project reference in a <code>.csproj</code> or <code>.props</code> file, or, before any project file exists, from the Architecture document naming it. A printed line says which and why. AppManager: <code>[builder]</code>. TfLens and TechieBlog: still <code>[trblazeui]</code>. The framework self-check still reads the list (87 rows, all accounted for).
+</li>
+</ul>
+<h2 id="later-appmanager-s-tf-001-to-tf-006">2026-09-13, later — AppManager's TF-001 to TF-006<a class="anchor-link" href="#later-appmanager-s-tf-001-to-tf-006">#</a></h2>
+<p>AppManager's first feedback file, filed while building it. AppManager numbers its entries from
+TF-001, which TfLens's numbers also use, so its cases are <code>am_001</code> to <code>am_006</code> in
+<code>tests/regression/run.sh</code>, and <code>replies_complete</code> reads them against AppManager's file only. Each
+fails against the scripts AppManager has and passes now. Misses <code>MISS-TechieFlow-20260913-06</code> to <code>-11</code>.</p>
+<ul>
+<li><strong>TF-001, <code>--add-missing</code> blind to a migrated checklist</strong> (<code>weak-check</code>). BRD ids were read only from a <code>*BRD:*</code> line or the status table; a checklist migrated from an older plan names them on the requirement line, so all 88 items were appended. The requirement line and the lines under it are read now. On a copy of AppManager's files: nothing to add. <code>&lt;/content&gt;</code> and <code>&lt;/invoke&gt;</code> in the report were the editing tool's text, not the script's.
+</li>
+<li><strong>TF-002, an entry cut at its own heading</strong> (<code>weak-check</code>). A <code>### Page:</code> heading straight under an anchor ended the entry before its content. On AppManager's checklist, 106 false findings became 67 real ones, from 24 UI entries never checked before.
+</li>
+<li><strong>TF-003, <code>Done (pre-existing)</code> read as open</strong> (<code>weak-check</code>). <code>norm()</code> drops a bracketed tail, so the status arrived as <code>done</code>; <code>tf-build-list.py</code> and <code>tf-brd-status.py</code> both listed only the bracketed spelling. AppManager: 32 rows to build became 14; the BRD table's 55 of 87 became 73.
+</li>
+<li><strong>TF-004, a Web API never booted</strong> (<code>weak-check</code>). <code>poll_http</code> accepted only 2xx/3xx at <code>/</code>; any HTTP answer counts now, <code>--probe-path</code> exists, and a NONE says when the log shows the app listening. <code>tf-build.sh</code> follows <code>ProjectReference</code>s and, on a side change, clears the other side's <code>*staticwebassets*.json</code> as well as <code>scopedcss</code>. AppManagerApi: NONE after 151 s before, BOOTED in 9 s now; AppManagerUI's 461 Windows paths cleared, and AppManagerWeb booted.
+</li>
+<li><strong>TF-005, Testing Platform unit tests never mapped</strong> (<code>weak-check</code>). When every such project agrees, the runner passes <code>-p:TestingPlatformCommandLineArguments=--report-xunit-trx</code> (or <code>--report-trx</code>) and reads the TRX; console lines match in any case. On a copy of AppManager's 286 tests: 0 rows mapped before, <code>REQ-NFR-007</code> PASS now.
+</li>
+<li><strong>TF-006, a 401 page graded unreachable</strong> (<code>weak-check</code>). With <code>--login-path</code>, a 401 or 403 is judged by what the page draws; still signed out, the tool signs in again and opens the screen from inside the page, counting it only when the page changed. On AppManagerWeb's Devices screen: UNREACHABLE before, render and visual OK now.
+</li>
+</ul>
+<hr>
+<h2 id="tf-042-to-tf-045-builders-side-by-side-sign-in-and-badges-one-wrapper-deeper">2026-09-13 — TF-042 to TF-045: builders side by side, sign-in, and badges one wrapper deeper<a class="anchor-link" href="#tf-042-to-tf-045-builders-side-by-side-sign-in-and-badges-one-wrapper-deeper">#</a></h2>
+<p>Four from TfLens's build and verify of 2026-09-12, fixed in one <code>*triage-and-fix</code> pass under YOLO.
+Each has a case in <code>tests/regression/run.sh</code> that fails against the scripts TfLens has and passes
+now. Misses <code>MISS-TechieFlow-20260913-01</code> to <code>-05</code>.</p>
+<ul>
+<li><strong>TF-042, overflow read as clipping</strong> (<code>weak-check</code>). The clip clause took <code>scrollWidth</code> alone, so a sidebar whose rail handle straddles its edge by 8px failed every screen with nothing clipped. An element whose overflow is visible is now cut off only where a clipping ancestor ends first. <strong>A slip of ours from TF-039 was found on the way</strong> (<code>-02</code>, <code>regression</code>): <code>paintedRight()</code> cut a descendant by the measured element itself, so a card that really clips, holding screen-reader text, read as holding everything.
+</li>
+<li><strong>TF-043, one build output for every builder</strong> (<code>weak-check</code>, blocker). TF-034 isolated the state files and not the build: every start ran <code>dotnet run</code> over the shared <code>bin/</code> and <code>obj/</code>, and TfLens apps served a 0-byte or foreign stylesheet with a 200, or a dll older than its source. <code>start</code> now publishes Debug into <code>tests/.artifacts/verify/run-&lt;port&gt;/</code> through the new <code>tf-build.sh publish</code> and runs that copy with the project folder as its content root; <code>tf-build.sh</code> holds a per-repository lock (<code>tests/.artifacts/build/.lock</code>) for build, test and publish, taken over when its holder died; <code>stop --port</code> also finds an orphaned copy by its path. Proved on a real Blazor Server app, where the old script let a sibling build change a running app's stylesheet and the new one did not. <strong>Two mistakes of the first version were caught on that app before shipping:</strong> the start line left a waiting group holding the caller's output, so an agent reading <code>start</code> would have waited forever (now a case, <code>tf_043e</code>), and <code>dotnet publish</code> defaults to Release, which is not what <code>dotnet run</code> runs. The Windows-side run of the copy was not exercised.
+</li>
+<li><strong>TF-044, sign-in before the page was interactive</strong> (<code>weak-check</code>, blocker). <code>login()</code> now types, reads both values back, presses, and types again while the page stays on the sign-in address, up to four times; fields and buttons are picked by selector order, not page order. On the real app the old sign-in failed one run in three and the new one none.
+</li>
+<li><strong>TF-045, positional pairing</strong> (<code>weak-check</code>). A mockup badge is found in the app by its text under the same anchor at any depth, digits folded, and then compared normally; a badge found by neither is missing only while the parent is short of badges; the message says "could not be located" unless the text is really there; colour buckets go by hue. Extra app icons, live-data wraps and the <code>InputGroup</code> border are left as findings, and the reply says why.
+</li>
+</ul>
+<p>Suites: regression, verify, bugs, routing, goal, document check, mirror and requirements, run after
+the last change. Deployed to all 19 projects: <code>tf-build.sh</code>, <code>tf-verify-boot.sh</code>,
+<code>tf-verify-screens.mjs</code>, <code>tf-mockup-parity.mjs</code>. Answered in TfLens's feedback file; it reads 0
+open, 15 waiting to be re-checked, 30 closed.</p>
+<hr>
+<h2 id="tf-037-to-tf-041-and-what-the-framework-is-actually-neutral-about">2026-09-12 — TF-037 to TF-041, and what the framework is actually neutral about<a class="anchor-link" href="#tf-037-to-tf-041-and-what-the-framework-is-actually-neutral-about">#</a></h2>
+<p>Five more from TfLens's build and verify of 2026-09-11, fixed in one pass under YOLO. Each has a case
+in <code>tests/regression/run.sh</code> that fails against the scripts TfLens has and passes now. Misses
+<code>MISS-TechieFlow-20260912-01</code> to <code>-06</code>.</p>
+<ul>
+<li><strong>TF-037, a note read as the build's verdict</strong> (<code>weak-check</code>). <strong>Both halves were ours, made the day before.</strong> The TF-035 fix prints a note when it clears scoped stylesheets, and <code>tf-verify-tests.sh</code> kept the FIRST line <code>tf-build.sh</code> printed: 975 passing TfLens unit tests were recorded as never run and 17 rows lost their only test. The same fix counted the lines of a log not yet written, and the shell's error about it became that first line. The reader now takes the line starting <code>PASS</code>, <code>FAIL</code> or <code>NOT-RUN</code>, and the line count is guarded by the file existing.
+</li>
+<li><strong>TF-038, a transparent border read as a drawn one</strong> (<code>weak-check</code>). One rule now serves the three places that asked about borders: a border counts only with width <strong>and</strong> a colour that is not transparent. So <code>border: 1px solid transparent</code> is not a ring, not a badge, and never the source of an element's colour — which is how a page reset's <code>border-color</code> became a borderless icon's colour. 13 of 15 findings on TfLens <code>/prices</code> came from these two.
+</li>
+<li><strong>TF-039, a table scrolling inside its card</strong> (<code>weak-check</code>). The clip clause's fallback branch cuts each descendant by every ancestor that scrolls, the rectangle <code>tf-verify-screens</code> has used since TF-021.
+</li>
+<li><strong>TF-040, a chained run left the outer command unrecordable</strong> (<code>weak-check</code>). The emitter compared a new record against the newest record only, so <code>*build-phase</code>, which chains <code>*verify</code> inside itself and finishes after it, could never record the 80 minutes it ran first. It now compares windows: a record is refused only when its window overlaps a live one's, and touching at a boundary is fine. The refusal names the record it collides with, and <code>tests/regression/run.sh tf_overlap</code> was updated to that wording.
+</li>
+<li><strong>TF-041, a document reported missing while on disk</strong> (<code>weak-check</code>). The cross-phase rule reads <code>docs/&lt;App&gt;-Phases.md</code> from disk when it was not named on the command line, discarding findings about the document itself; the message now says "no Phases document is on disk". An agent following the old line would have written over the real file.
+</li>
+</ul>
+<p><strong>The owner asked whether these fixes are prose or scripts, and whether they are tool-independent.</strong>
+Every one is a change to a script or a hook plus a case, never a paragraph; no task file gained a rule.
+On neutrality, the answer has two halves and only one was good. The personas, tasks and shared rules
+name no technology — now checked by <code>tests/mirror/run.sh</code>, which fails when a task names a language,
+database, UI library, browser driver or host (one example naming .NET in <code>generate-html.md</code> was
+neutralised). The scripts are another matter: <code>tf-build.sh</code> is .NET's, and the whole browser layer —
+<code>tf-verify-env.sh</code>, <code>tf-verify-tests.sh</code>, <code>tf-verify-screens.mjs</code>, <code>tf-mockup-parity.mjs</code> — is
+Playwright's, with no stack question behind either. That is a real limit of this version, now recorded
+as an open item and as <code>MISS-TechieFlow-20260912-06</code> (<code>unsaid</code>).</p>
+<p>Suites: regression 100 pass, verify 67, bugs 51, routing 42, goal 36, document check 12, mirror 19,
+requirements 44 of 44 graded lines. Deployed to all 19 projects: <code>tf-build.sh</code>, <code>tf-verify-tests.sh</code>,
+<code>tf-doc-check.py</code>, <code>tf-emit.sh</code>, <code>tf-mockup-parity.mjs</code> and the <code>generate-html</code> task with its mirror.
+Answered in TfLens's feedback file, rows TF-037 to TF-041; it reads 0 open, 16 waiting to be
+re-checked, 25 closed.</p>
+<hr>
+<h2 id="night-tf-030-to-tf-036-seven-problems-tflens-met-in-one-build-and-verify">2026-09-11, night — TF-030 to TF-036: seven problems TfLens met in one build and verify<a class="anchor-link" href="#night-tf-030-to-tf-036-seven-problems-tflens-met-in-one-build-and-verify">#</a></h2>
+<p>The owner pasted TF-030 and, mid-way, said YOLO. TfLens filed TF-031 to TF-036 while the first was
+being fixed, so all seven were fixed in the same pass. Each one has a case in <code>tests/regression/run.sh</code>.
+Every case was run against the scripts as TfLens had them (byte-identical in all 19 projects) and
+failed, and it passes now. Misses <code>MISS-TechieFlow-20260911-12</code> to <code>-18</code>.</p>
+<ul>
+<li><strong>TF-030, a screen named only inside a requirement</strong> (<code>weak-check</code>). TfLens's BRD-200 added "a <strong>Price providers</strong> screen" with no screens-table row, UI design entry or mockup, and the page was built and verified with no design. <code>*amend-docs</code> step 4 already said a new screen gets a row, but nothing checked it. <code>tf-doc-check.py</code> now reads every screen a requirement names, in the template's <code>*Screen:*</code> field or as <code>**&lt;name&gt;** screen</code>, and fails when no phase's Screens and flow table has it. The Stop hook (<code>guard-status-html.sh</code>, check 2c) refuses to end a turn that wrote a BRD or UI design while a screen lacks its row, its UI design entry or its mockup link. Measured before building it: those findings number zero across all 15 apps today. A broken mockup link was left out of the hook, because three projects carry placeholder links (<code>{screen}.html</code>) that would wedge an unrelated amendment. Making the checklist's "UI row without a mockup link" blocking was measured and dropped: 412 old rows in ten projects. On TfLens's three BRDs with the Price providers row removed, the old check is silent and the new one names BRD-200. On every project's real documents, old and new agree finding for finding.
+</li>
+<li><strong>TF-031, <code>--base</code> never reached the browser tests</strong> (<code>weak-check</code>). The config <code>tf-verify-env.sh</code> writes reads <code>BASE_URL</code>, and an existing config is repaired to read it first. <code>tf-verify-tests.sh --base</code> refuses to run the browser tests when nothing reads it, rather than testing whatever is on the default port.
+</li>
+<li><strong>TF-032, a sidebar the mockup hides on a phone</strong> (<code>weak-check</code>). <code>tf-verify-screens</code> draws each mockup at each width. A control it shows at one width and hides at another is not owed where hidden. One it hides at every width (a closed dialog) is still owed. Proved on TfLens's real <code>misses.html</code> and <code>effort.html</code>: the sidebar is owed at 1280px, not at 390px.
+</li>
+<li><strong>TF-033, sign-in pressed the email field</strong> (<code>weak-check</code>). The submit button first; never a text field.
+</li>
+<li><strong>TF-034, parallel builders stopped each other's apps</strong> (<code>unsaid</code>). <code>tf-verify-boot.sh</code> writes <code>boot-&lt;port&gt;.json</code> and <code>app-&lt;port&gt;.log</code> per app, keeps <code>boot.json</code> as the latest start for the verdict, stops one app with <code>stop --port</code>, refuses a bare <code>stop</code> while two run, and stops a timed-out Windows-side start by its port.
+</li>
+<li><strong>TF-035, a locked file sent the build to the Windows side</strong> (<code>weak-check</code>). <code>tf-build.sh</code> treats MSB3021/MSB3027 and "in use"/"access denied" as a lock: it waits, tries again, then says NOT-RUN. It never falls to another rung. On WSL a build that changes side clears <code>obj/**/scopedcss</code> first, with the side recorded in <code>obj/.tf-build-side</code>. The full suite caught a flaw in the first version: two builds in one second shared a log, and one read the other's lock. Each attempt now reads only its own lines, and the log name carries the process id.
+</li>
+<li><strong>TF-036, wrapped sentences read as overlapping</strong> (<code>weak-check</code>). An inline element is compared by its line fragments. A real overlap between two wrapped inline elements is still reported.
+</li>
+</ul>
+<p>Also fixed: five browser cases in the regression suite recorded a subshell's process id instead of
+the server's, so every run left a web server behind; 22 were running, all from test folders, and were
+stopped. The three browser cases that were skipped all day ran with Playwright borrowed from TfLens.
+The whole suite: 91 pass, none fail, none skipped. The verify self-test: 67 pass, none fail; bugs 51 pass. Deployed to all 19 projects: <code>tf-doc-check.py</code>,
+<code>guard-status-html.sh</code>, <code>tf-verify-env.sh</code>, <code>tf-verify-tests.sh</code>, <code>tf-verify-screens.mjs</code>,
+<code>tf-verify-boot.sh</code>, <code>tf-build.sh</code>. Every copy was byte-identical to the old version beforehand, and all
+20 are now the same. Answered in TfLens's feedback file, rows TF-030 to TF-036.</p>
+<hr>
+<h2 id="evening-later-tf-029-a-miss-logged-inside-another-command-took-that-command-s-time">2026-09-11, evening, later — TF-029: a miss logged inside another command took that command's time<a class="anchor-link" href="#evening-later-tf-029-a-miss-logged-inside-another-command-took-that-command-s-time">#</a></h2>
+<p>TfLens's analyst logged misses with <code>tf-log-miss.sh --fixed</code> at step 10 of <code>*amend-docs</code>. The logger
+took its run record's start from the command marker, whatever command had written it. So the first
+call wrote a <code>log-miss</code> run over the amendment's whole window and tokens (13:17:38 to 13:36:49). The
+later calls' run records were refused for overlap, and then the amendment's own record was refused too.
+TfLens voided the log-miss record and wrote the amendment's. The overlap rule (FR-72) shipped on
+2026-09-10, and nobody checked it against the scripts that write their own run record in the middle of
+another command. The same lines also read a marker of any age, where every other reader ignores one
+older than 24 hours. <code>MISS-TechieFlow-20260911-11</code>, sorted <code>weak-check</code>.</p>
+<ul>
+<li><strong>Fix.</strong> When the marker names any command but <code>log-miss</code>, the logger writes no run record, and its report says so: "Run record : none written — the running *&lt;command&gt;'s own record covers this time". A marker older than 24 hours is ignored. The miss and miss-fix records are unchanged.
+</li>
+<li><strong>Case.</strong> <code>tests/regression/run.sh tf_029</code>: two misses logged under an <code>amend-docs</code> marker, then the amendment's record; and a <code>*log-miss</code> run under a three-day-old marker. Run against the old logger (byte-identical to the copy in all 19 projects), three of the four checks failed: a log-miss run over the window, the amendment's record refused, and a run recorded as starting three days earlier. All four pass now. The whole suite: 68 pass, none fail, 3 browser cases skipped.
+</li>
+<li><strong>Proof in a real repository.</strong> This entry's own miss was logged inside a <code>framework-reset</code> marker in this repository. The logger wrote the miss and its fix, and no run record. A proof on a copy of TfLens's metrics files was refused by <code>guard-metrics.sh</code>, which blocks copying onto any <code>docs/metrics</code> path, a scratch copy included. It was not worked around.
+</li>
+<li><strong>Deployed</strong> to all 19 projects; all 20 copies are identical, and TfLens's self-check passes.
+</li>
+<li><strong>Answered</strong> with a TF-029 row in the 2026-09-11 Resolution status table of TfLens's feedback file, which now reads 0 open, 8 fixed upstream, 21 closed. Both copies are identical.
+</li>
+<li><strong>Also found.</strong> The TF-028 edit to <code>WorkFlow-Context.md</code> had taken it to 3,024 words, over its 3,000 cap, and the mirror self-test was not re-run after that edit. The item was shortened; 2,964 words.
+</li>
+</ul>
+<hr>
+<h2 id="evening-tf-028-the-feedback-reader-missed-a-closing-line-under-a-bare-heading">2026-09-11, evening — TF-028: the feedback reader missed a closing line under a bare heading<a class="anchor-link" href="#evening-tf-028-the-feedback-reader-missed-a-closing-line-under-a-bare-heading">#</a></h2>
+<p>TfLens closed eight re-checked entries and found that TF-013 still read "fixed" after <code>--close</code>
+printed "TF-013 closed". Its heading was a bare <code>## TF-013</code>. The heading pattern in
+<code>tf_feedback.py</code>, written this morning, used <code>\s</code> where it meant a space, and <code>\s</code> also matches a line
+break, so a heading with no title took the next line with text as its title. After the close, that line
+was the closing line itself, and the reader never saw it. This morning's session ran the reader on
+TfLens's real file, and its listing showed TF-013's title as <code>**Severity:** major</code>. Nobody read it, and
+the owner had to carry one more problem between the two repositories. <code>MISS-TechieFlow-20260911-10</code>,
+sorted <code>weak-check</code>.</p>
+<ul>
+<li><strong>Fix.</strong> Both heading patterns in <code>tf_feedback.py</code> now use <code>[ \t]</code>, so a heading is one line.
+</li>
+<li><strong>Case.</strong> <code>tests/regression/run.sh tf_028</code>: a bare heading has no title, and a closing line under it counts. Both halves failed against the old reader and pass now. The whole suite: 64 pass, none fail, 3 skipped (the browser cases; Playwright is not installed on this machine).
+</li>
+<li><strong>Proof on real files.</strong> The old and new readers were run on all 24 feedback files in the 20 repositories that carry the script. They agree on every entry except TF-013's title in the framework's stale copy of TfLens's file.
+</li>
+<li><strong>Deployed.</strong> The fixed <code>tf_feedback.py</code> was copied into all 19 project repositories. All 19 copies were byte-identical to the old reader beforehand, and all 20 copies are now the same. TfLens's self-check passes with no findings.
+</li>
+<li><strong>Answered.</strong> A TF-028 row in the 2026-09-11 Resolution status table of TfLens's feedback file, with a one-line re-check. The Summary now reads 0 open, 8 fixed upstream, 20 closed. TfLens's file was the complete one (it holds TfLens's eight closings), so it was copied over the framework's stale copy in <code>docs/</code>. The two are identical, and the owner has nothing to copy across.
+</li>
+<li><strong>Not proved in OpenCode.</strong> No OpenCode run could finish here. Its default provider was unreachable, the account refused the OpenAI models, and the <code>opencode-go</code> models ran past four minutes without answering. The reader is plain Python with nothing specific to a harness, and it was run directly in TfLens.
+</li>
+</ul>
 <hr>
 <h2 id="later-why-tflens-called-fixed-problems-open-and-every-entry-answered">2026-09-11, later — why TfLens called fixed problems open, and every entry answered<a class="anchor-link" href="#later-why-tflens-called-fixed-problems-open-and-every-entry-answered">#</a></h2>
 <p>The owner asked whose mistake it was that TfLens reported TF-019 and TF-022 as open when the owner had

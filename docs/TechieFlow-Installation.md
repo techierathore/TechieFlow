@@ -18,7 +18,7 @@ You need four things on the machine.
 | Node.js 20 or newer | Runs the installer. Nothing is added to your project. | `node --version` |
 | bash | The framework's guard hooks and helper scripts run under bash. macOS and Linux have it; the bash 3.2 that comes with macOS is enough. On Windows, work inside WSL or Git Bash. | `bash --version` |
 | Python 3 | Powers the HTML renderer, the telemetry writer and the guard hooks. | `python3 --version` |
-| Claude Code or OpenCode | The harness that runs the agents. Either one. Both work from the same install. | `claude --version` or `opencode --version` |
+| Claude Code or OpenCode | The harness that runs the agents. Either one. Both work from the same install. The framework targets OpenCode 2; its plugin still loads on OpenCode 1.x. | `claude --version` or `opencode --version` |
 
 For a .NET project you also need the .NET SDK. Run `dotnet --version` to check.
 
