@@ -106,10 +106,11 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout">
   <nav class="side">
     <h1>TechieFlow — Changelog</h1>
-    <div class="sub">Last rendered: 2026-09-29</div>
+    <div class="sub">Last rendered: 2026-09-30</div>
     <div class="group">Contents</div>
     <ol>
         <li><a href="#unreleased-since-v1-0-4">Unreleased (since v1.0.4)</a></li>
+        <li><a href="#lekhak-tf-016-tf-017-and-tf-018-document-edits-scoped-verify-test-reasons">2026-09-30 — Lekhak TF-016, TF-017 and TF-018: document edits, scoped verify, test reasons</a></li>
         <li><a href="#lekhak-tf-015-a-rendered-index-linked-raw-markdown">2026-09-29 — Lekhak TF-015: a rendered index linked raw markdown</a></li>
         <li><a href="#lekhak-tf-014-the-devguide-lister-crashed-on-a-hidden-build-folder">2026-09-29 — Lekhak TF-014: the DevGuide lister crashed on a hidden build folder</a></li>
         <li><a href="#lekhak-tf-013-the-mockup-check-s-theme-switch-left-class-dark-on">2026-09-29 — Lekhak TF-013: the mockup check&#x27;s theme switch left class=&quot;dark&quot; on</a></li>
@@ -226,12 +227,13 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
   </nav>
   <main>
     <h1>TechieFlow — Changelog</h1>
-    <div class="subtitle">Rendered 2026-09-29 &middot; source <code>CHANGELOG.md</code></div>
+    <div class="subtitle">Rendered 2026-09-30 &middot; source <code>CHANGELOG.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
       <ol>
         <li><a href="#unreleased-since-v1-0-4">Unreleased (since v1.0.4)</a></li>
+        <li><a href="#lekhak-tf-016-tf-017-and-tf-018-document-edits-scoped-verify-test-reasons">2026-09-30 — Lekhak TF-016, TF-017 and TF-018: document edits, scoped verify, test reasons</a></li>
         <li><a href="#lekhak-tf-015-a-rendered-index-linked-raw-markdown">2026-09-29 — Lekhak TF-015: a rendered index linked raw markdown</a></li>
         <li><a href="#lekhak-tf-014-the-devguide-lister-crashed-on-a-hidden-build-folder">2026-09-29 — Lekhak TF-014: the DevGuide lister crashed on a hidden build folder</a></li>
         <li><a href="#lekhak-tf-013-the-mockup-check-s-theme-switch-left-class-dark-on">2026-09-29 — Lekhak TF-013: the mockup check&#x27;s theme switch left class=&quot;dark&quot; on</a></li>
@@ -377,6 +379,24 @@ do not.</p>
 <li><strong>FR-84.</strong> The phase-document requirement in <code>docs/TechieFlow-Requirements.md</code> shared the number FR-73 with the browser-lock requirement. The miss stream names FR-73 for the lock, and a stream is never edited, so the phase-document one is now FR-84.
 </li>
 </ul>
+<h2 id="lekhak-tf-016-tf-017-and-tf-018-document-edits-scoped-verify-test-reasons">2026-09-30 — Lekhak TF-016, TF-017 and TF-018: document edits, scoped verify, test reasons<a class="anchor-link" href="#lekhak-tf-016-tf-017-and-tf-018-document-edits-scoped-verify-test-reasons">#</a></h2>
+<ul>
+<li><strong>TF-016 (major).</strong> <code>*amend-docs</code> removed a paragraph from Lekhak's UsageGuide that a unit test (<code>VerificationRuleDocTests</code>) reads, ran no test, closed green, and only CI caught it. New <code>.tfcore/utils/tf-doc-tests.sh &lt;doc&gt;…</code> looks for test source files that name a changed document and, when one does, runs the unit tests through <code>tf-build.sh test</code>: <code>NONE</code>, <code>PASS</code>, <code>FAIL</code> (exit 1) or <code>NOT-RUN</code>. The status gate (new step 4) and <code>*amend-docs</code> step 11 run it on every document the command changed; a <code>FAIL</code> keeps the phase open. It is a written step, not checked by the Stop hook. Only .NET test projects are run; any other stack gets <code>NOT-RUN</code> and a line to run its own tests.
+</li>
+<li><strong>TF-017 (minor).</strong> <code>tf-verify-tests.sh</code> never read <code>list.json</code>, so <code>*verify REQ-NFR-042</code> (one row, a unit test, no screen) ran every browser spec and was stopped at 30 minutes. A verify scoped to a list of ids now passes <code>--grep &lt;the ids&gt;</code> to Playwright, and skips the browser run when no row in scope has a screen and no file under <code>tests/verify/</code> names one. <code>ui</code>, <code>functional</code>, <code>all</code>, <code>--spec</code>, the new <code>--all-specs</code>, and a run without <code>list.json</code> run everything as before; <code>--list</code> names another file.
+</li>
+<li><strong>TF-018 (minor).</strong> The unit-log reader wrote "unit test skipped: &lt;name&gt;" as the reason for every outcome that was not a failure, including a pass. A pass now has no reason.
+</li>
+</ul>
+<p>Regression cases <code>lk_016</code>, <code>lk_017</code> and <code>lk_018</code> fail against the scripts Lekhak had and pass now
+(<code>lk_017c</code>, a full verify still running every spec, is the control). Proved on Lekhak's own repo:
+<code>tf-doc-tests.sh docs/Lekhak-UsageGuide.md</code> found <code>VerificationRuleDocTests.cs</code> and two other readers
+and ran the 855-test suite (PASS, 36 s); the BRD printed <code>NONE</code>. <code>tf-verify-list.sh Lekhak REQ-NFR-042</code>
+then <code>tf-verify-tests.sh --base http://localhost:59689</code> skipped the browser run and finished in 1 m 19 s
+with REQ-NFR-042 PASS and an empty reason. Misses <code>MISS-TechieFlow-20260930-01</code> (TF-017), <code>-02</code> (TF-018) and
+<code>-03</code> (TF-016) are logged as fixed. The reply is in Lekhak's feedback
+file, copied here. Deployed to all 18 projects on the owner's Windows machine; the changed files are
+byte-identical in each.</p>
 <h2 id="lekhak-tf-015-a-rendered-index-linked-raw-markdown">2026-09-29 — Lekhak TF-015: a rendered index linked raw markdown<a class="anchor-link" href="#lekhak-tf-015-a-rendered-index-linked-raw-markdown">#</a></h2>
 <p><code>tf-render-html</code> copied every link target as written, so the index of Lekhak's split product guide
 kept <code>href="./Lekhak-ProductGuide-Admin.md"</code> and a reader clicking through in a browser landed on raw

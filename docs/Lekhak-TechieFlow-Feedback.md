@@ -4,16 +4,16 @@
 |---|---|
 | App | Lekhak |
 | Upstream | TechieFlow |
-| Updated | 2026-09-29 |
+| Updated | 2026-09-30 |
 
 ## Summary
 
-15 entries: 0 blocking now, 2 open and not blocking (TF-003, TF-008), 1 fixed upstream and not yet re-checked here (TF-015), 12 closed after a re-check here (TF-001, TF-002, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014).
+18 entries: 0 blocking now, 2 open and not blocking (TF-003, TF-008), 3 fixed upstream and not yet re-checked here (TF-016, TF-017, TF-018), 13 closed after a re-check here (TF-001, TF-002, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015).
 
 Nothing is blocked.
 
-- 0 blockers, 5 majors, 10 minors, 0 nice-to-haves.
-- Last consolidated: 2026-09-29.
+- 0 blockers, 6 majors, 12 minors, 0 nice-to-haves.
+- Last consolidated: 2026-09-30.
 
 ## Entries
 
@@ -239,6 +239,8 @@ Nothing is blocked.
 
 ### TF-015 — The HTML renderer keeps links to sibling `.md` files, so a split guide's index opens raw markdown
 
+> ✅ **Closed 2026-09-29** — re-checked here: Closed 2026-09-29: re-rendered the five docs/productguides/*.md with no post-render edit; the index links to ./Lekhak-ProductGuide-{Admin,Author,Editor,Reader}.html and no .md href remains in the five HTML files. The DevGuide index links came out as .html too. Scratch test: [./c.md#part] with c.html present -> ./c.html#part; [./b.md] with no HTML copy -> stays ./b.md; https link and #anchor unchanged.
+
 - **Severity:** minor
 - **Blocks:** no — the product guide's generated HTML was corrected to link `.html` after rendering.
 - **Repro:**
@@ -251,9 +253,62 @@ Nothing is blocked.
 - **Workaround:** Replace the `.md` hrefs with `.html` in the rendered files after each render.
 - **Suggested fix:** Rewrite relative links to `*.md` as `*.html` when the target has (or will get) a rendered sibling.
 
+### TF-016 — `*amend-docs` never runs the unit tests, so it can delete a paragraph a test guards and only CI notices
+
+- **Severity:** major
+- **Blocks:** no — the paragraph was restored in `triage-and-fix` on 2026-09-30 and the suite passes 855/855.
+- **Repro:**
+  ```
+  # after an *amend-docs that edits docs/Lekhak-UsageGuide.md
+  cmd.exe /c "cd /d C:\3AIGenCode\Lekhak && dotnet test tests\Lekhak.Tests\Lekhak.Tests.csproj --configuration Release"
+  ```
+- **Expected:** a command that edits a document which a unit test reads (here `VerificationRuleDocTests` reads the UsageGuide) runs the unit suite before it closes, and fails its phase when a test fails.
+- **Actual:** `*amend-docs` on 2026-09-29 (Mac deferral, ADR-021) removed the quoted REQ-NFR-042 paragraph from the UsageGuide. Neither `amend-docs.md` nor `_status-update-gate.md` runs any test, so the phase closed green and CI run 36612916084 failed on `REQ-NFR-042 UsageGuideStatesBothHeadsRule`. Logged as a miss sorted `unsaid`.
+- **Encountered in:** triage-and-fix, 2026-09-30
+- **Workaround:** run the unit suite by hand after any document edit.
+- **Suggested fix:** in the status gate, when the command wrote a file under `docs/`, run `tf-build.sh test` (unit only) and fail on a red test. Or have `*amend-docs` run it as its last step.
+
+### TF-017 — A scoped verify of one no-screen NFR row runs the whole browser suite and hits the 30-minute limit
+
+- **Severity:** minor
+- **Blocks:** no — re-ran with `--no-browser`, which graded the row from its unit test.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-verify-list.sh Lekhak REQ-NFR-042
+  bash .tfcore/utils/tf-verify-tests.sh --base http://localhost:59689
+  ```
+- **Expected:** `tf-verify-tests.sh` runs only the tests carrying the ids in `list.json`, and skips Playwright when no row in scope has a screen. `verify-phase.md` step 5 names `--no-browser` for that case.
+- **Actual:** it runs every spec under `tests/verify/` for a single row whose only test is a unit test; the command was stopped after 30 minutes with no output.
+- **Encountered in:** triage-and-fix (chained verify), 2026-09-30
+- **Workaround:** `--no-browser` for a scope with no screen.
+- **Suggested fix:** filter the Playwright run by the scope's ids (`--grep`), and skip it entirely when `list.json` has no screen.
+
+### TF-018 — `tests.json` writes "unit test skipped" as the reason for a unit test that passed
+
+- **Severity:** minor
+- **Blocks:** no — the outcome field is right (`pass`), and the verdict reads the outcome.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-verify-tests.sh --no-browser
+  # tests/.artifacts/verify/tests.json → reqs["REQ-NFR-042"].outcomes
+  ```
+- **Expected:** a passing test has an empty reason.
+- **Actual:** `{"outcome": "pass", "reason": "unit test skipped: REQ-NFR-042 UsageGuideStatesBothHeadsRule"}` — the same for every unit row.
+- **Encountered in:** triage-and-fix, 2026-09-30
+- **Workaround:** none needed; read `outcome`.
+- **Suggested fix:** set `reason` only when the outcome is `skip` or `fail`.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### Resolution status (TechieFlow team, 2026-09-30)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-016 | Fixed upstream. New script `tf-doc-tests.sh <doc>…`. It looks for test files that name a changed document (by file name, or by name without `.md`). When one does, it runs the unit tests and prints `PASS`, or `FAIL` with exit 1. When no test reads the document it prints `NONE` and runs nothing. The status gate now runs it (step 4) on every document the command changed, and so does `*amend-docs` (step 11). A `FAIL` keeps the phase open: put the guarded text back, or, when the change is meant, the report names the test for `*triage-and-fix`, since a document command never edits code. Two limits: the Stop hook does not check this step, and only .NET test projects are run (any other stack prints `NOT-RUN`). Regression case `lk_016` fails against the framework you had and passes now. | `bash .tfcore/utils/tf-doc-tests.sh docs/Lekhak-UsageGuide.md` prints `PASS 3 test file(s) read docs/Lekhak-UsageGuide.md (…AppSecretsTests.cs, …VerificationRuleDocTests.cs, tests/verify/_phase8-db.ts)`, run here in 36 s. `bash .tfcore/utils/tf-doc-tests.sh docs/Lekhak-BRD.md` prints `NONE`. Your next `*amend-docs` runs it by itself. |
+| TF-017 | Fixed upstream in `tf-verify-tests.sh`. It now reads `tests/.artifacts/verify/list.json`. When the verify was given a list of ids, Playwright runs only the tests carrying those ids (`--grep`). When no row in scope has a screen and no file under `tests/verify/` names one of the ids, the browser run is skipped and says why. A verify of `ui`, `functional` or `all`, a run with `--spec`, and a run with the new `--all-specs` still run every spec. Regression case `lk_017` fails against the script you had and passes now. | `bash .tfcore/utils/tf-verify-list.sh Lekhak REQ-NFR-042` then `bash .tfcore/utils/tf-verify-tests.sh --base http://localhost:59689` (no `--no-browser`). It prints `browser tests: skipped — no row in scope (REQ-NFR-042) has a screen …` and finishes in about a minute and a half (1 m 19 s here), with REQ-NFR-042 PASS. You no longer need `--no-browser` for such a scope. |
+| TF-018 | Fixed upstream in `tf-verify-tests.sh`. A passing unit test now has an empty reason. A skipped one keeps "unit test skipped: …" and a failed one keeps "unit test failed: …". Regression case `lk_018` fails against the script you had, with your exact text, and passes now. | In the same run's `tests/.artifacts/verify/tests.json`, `reqs["REQ-NFR-042"].outcomes` reads `{"outcome": "pass", "reason": ""}`. |
 
 ### Resolution status (TechieFlow team, 2026-09-29, third reply)
 

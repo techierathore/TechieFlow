@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 222 logged: 53 open, 168 fixed, 1 will not fix |
+| Count | 225 logged: 53 open, 171 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-09-29 |
+| Updated | 2026-09-30 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -67,10 +67,13 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (168)
+## Fixed (171)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260930-03 | 2026-09-30 by owner | 2026-09-30 by log-miss | the framework never said it | Lekhak TF-016: amend-docs and the status gate ran no test, so an amendment deleted a UsageGuide paragraph a unit test guards and closed green; only CI caught it |
+| MISS-TechieFlow-20260930-02 | 2026-09-30 by owner | 2026-09-30 by log-miss | the framework never said it | Lekhak TF-018: tf-verify-tests.sh wrote 'unit test skipped' as the reason for a unit test that passed |
+| MISS-TechieFlow-20260930-01 | 2026-09-30 by owner | 2026-09-30 by log-miss | the framework never said it | Lekhak TF-017: tf-verify-tests.sh never read list.json, so a verify of one no-screen NFR row ran every browser spec and was stopped at 30 minutes |
 | MISS-TechieFlow-20260929-03 | 2026-09-29 by owner | 2026-09-29 by log-miss | the framework never said it | Lekhak TF-015: tf-render-html copied every link target unchanged, so a split guide's index linked ./X.md and a reader clicking through the rendered HTML landed on raw markdown |
 | MISS-TechieFlow-20260929-02 | 2026-09-29 by owner | 2026-09-29 by log-miss | the check was too weak | Lekhak TF-014: tf-devguide-list crashed on a hidden build folder (.tfbuild) because walk() did not prune it and lstrip('./') ate the dot, so *devguide --update could not run; --update also counted only src/, not source/ |
 | MISS-TechieFlow-20260929-01 | 2026-09-29 by owner | 2026-09-29 by log-miss | the check was too weak | Lekhak TF-013: the TF-010 theme switch set the mockup's data-theme on the app but left the app's class="dark" on <html>, so a class-driven dark mode kept its dark colours and a light mockup reported 'mockup neutral, app accent' |

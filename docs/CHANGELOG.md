@@ -59,6 +59,33 @@ do not.
   with the browser-lock requirement. The miss stream names FR-73 for the lock, and a stream is never
   edited, so the phase-document one is now FR-84.
 
+## 2026-09-30 — Lekhak TF-016, TF-017 and TF-018: document edits, scoped verify, test reasons
+
+- **TF-016 (major).** `*amend-docs` removed a paragraph from Lekhak's UsageGuide that a unit test
+  (`VerificationRuleDocTests`) reads, ran no test, closed green, and only CI caught it. New
+  `.tfcore/utils/tf-doc-tests.sh <doc>…` looks for test source files that name a changed document and,
+  when one does, runs the unit tests through `tf-build.sh test`: `NONE`, `PASS`, `FAIL` (exit 1) or
+  `NOT-RUN`. The status gate (new step 4) and `*amend-docs` step 11 run it on every document the
+  command changed; a `FAIL` keeps the phase open. It is a written step, not checked by the Stop hook.
+  Only .NET test projects are run; any other stack gets `NOT-RUN` and a line to run its own tests.
+- **TF-017 (minor).** `tf-verify-tests.sh` never read `list.json`, so `*verify REQ-NFR-042` (one row, a
+  unit test, no screen) ran every browser spec and was stopped at 30 minutes. A verify scoped to a list
+  of ids now passes `--grep <the ids>` to Playwright, and skips the browser run when no row in scope has
+  a screen and no file under `tests/verify/` names one. `ui`, `functional`, `all`, `--spec`, the new
+  `--all-specs`, and a run without `list.json` run everything as before; `--list` names another file.
+- **TF-018 (minor).** The unit-log reader wrote "unit test skipped: <name>" as the reason for every
+  outcome that was not a failure, including a pass. A pass now has no reason.
+
+Regression cases `lk_016`, `lk_017` and `lk_018` fail against the scripts Lekhak had and pass now
+(`lk_017c`, a full verify still running every spec, is the control). Proved on Lekhak's own repo:
+`tf-doc-tests.sh docs/Lekhak-UsageGuide.md` found `VerificationRuleDocTests.cs` and two other readers
+and ran the 855-test suite (PASS, 36 s); the BRD printed `NONE`. `tf-verify-list.sh Lekhak REQ-NFR-042`
+then `tf-verify-tests.sh --base http://localhost:59689` skipped the browser run and finished in 1 m 19 s
+with REQ-NFR-042 PASS and an empty reason. Misses `MISS-TechieFlow-20260930-01` (TF-017), `-02` (TF-018) and
+`-03` (TF-016) are logged as fixed. The reply is in Lekhak's feedback
+file, copied here. Deployed to all 18 projects on the owner's Windows machine; the changed files are
+byte-identical in each.
+
 ## 2026-09-29 — Lekhak TF-015: a rendered index linked raw markdown
 
 `tf-render-html` copied every link target as written, so the index of Lekhak's split product guide

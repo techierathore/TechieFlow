@@ -3663,6 +3663,96 @@ import('playwright').then(async ({chromium}) => { const b = await chromium.conne
   kill "$br" "$srv" 2>/dev/null; wait "$br" 2>/dev/null
 }
 
+# --- Lekhak TF-018: a passing unit test was given the reason "unit test skipped" ---------------------
+# The console-log reader wrote "unit test skipped: <name>" for every outcome that was not a failure, so
+# REQ-NFR-042's passing test carried a skip reason in tests.json. A pass has no reason; a skip and a
+# failure keep theirs.
+lk_018() {
+  local d="$SCRATCH/lk018"; mkdir -p "$d/.tfcore" "$d/tests/Fx.Tests"
+  cp -r "$UTILS" "$d/.tfcore/"
+  printf '<Project Sdk="Microsoft.NET.Sdk"></Project>\n' > "$d/tests/Fx.Tests/Fx.Tests.csproj"
+  cat > "$d/.tfcore/utils/tf-build.sh" <<SH
+#!/usr/bin/env bash
+mkdir -p $d/tests/.artifacts/build
+printf '  Passed REQ-NFR-042 UsageGuideStatesBothHeadsRule [12 ms]\n  Skipped REQ-NFR-043 needs the Mac head [1 ms]\n  Failed REQ-NFR-044 reads the guide [3 ms]\n' > $d/tests/.artifacts/build/unit.log
+echo "FAIL  tests failed on wsl via dotnet (rung 1); log tests/.artifacts/build/unit.log"
+SH
+  ( cd "$d" && bash .tfcore/utils/tf-verify-tests.sh --no-browser ) >/dev/null 2>&1
+  local got; got="$(python3 -c "import json,sys
+r = json.load(open(sys.argv[1]))['reqs']
+print('|'.join(next(iter(r[k]['outcomes'].values()))['reason'] for k in ('REQ-NFR-042','REQ-NFR-043','REQ-NFR-044')))" "$d/tests/.artifacts/verify/tests.json" 2>&1)"
+  [[ "$got" == "|unit test skipped: REQ-NFR-043 needs the Mac head|unit test failed: REQ-NFR-044 reads the guide" ]] \
+    && ok lk_018 "a passing unit test has no reason; a skipped and a failed one keep theirs" \
+    || { bad lk_018 "a unit test's reason does not match its outcome"; note "$got"; }
+}
+
+# --- Lekhak TF-017: a verify of one no-screen NFR row ran the whole browser suite -----------------
+# tf-verify-tests.sh never read list.json, so `*verify REQ-NFR-042` (one row, a unit test, no screen)
+# ran every spec under tests/verify/ and was stopped at 30 minutes. A scope of ids now runs only the
+# browser tests carrying those ids, and none at all when no row has a screen and no browser test names
+# one. ui, functional and all still run everything. npx is replaced so no browser is needed.
+lk_017() {
+  local d="$SCRATCH/lk017"; mkdir -p "$d/bin"
+  cat > "$d/bin/npx" <<'SH'
+#!/usr/bin/env bash
+echo "$*" > npx.args
+echo '{"suites":[]}' > "$PLAYWRIGHT_JSON_OUTPUT_NAME"
+SH
+  chmod +x "$d/bin/npx"
+  _lk017_fx() {   # $1 folder, $2 list.json body
+    local p="$d/$1"; mkdir -p "$p/tests/verify" "$p/tests/.artifacts/verify" "$p/node_modules/@playwright/test"
+    printf '{"name":"@playwright/test","main":"index.js"}\n' > "$p/node_modules/@playwright/test/package.json"
+    : > "$p/node_modules/@playwright/test/index.js"
+    printf "import { test } from '@playwright/test';\ntest('REQ-UI-001 opens', async () => {});\ntest('REQ-UI-002 saves', async () => {});\n" > "$p/tests/verify/fx.spec.ts"
+    printf '%s\n' "$2" > "$p/tests/.artifacts/verify/list.json"
+    ( cd "$p" && PATH="$d/bin:$PATH" bash "$UTILS/tf-verify-tests.sh" --no-unit 2>&1 )
+  }
+  local out
+  out="$(_lk017_fx a '{"scope":"REQ-NFR-042","rows":[{"id":"REQ-NFR-042","class":"NFR","screen":""}]}')"
+  [[ ! -f "$d/a/npx.args" ]] && grep -q "browser tests: skipped" <<<"$out" \
+    && ok lk_017a "a scope whose only row has no screen and no browser test runs no browser test" \
+    || { bad lk_017a "the whole browser suite ran for a no-screen NFR row"; note "$(cat "$d/a/npx.args" 2>/dev/null) $(grep 'browser tests' <<<"$out")"; }
+  out="$(_lk017_fx b '{"scope":"REQ-UI-001,REQ-NFR-042","rows":[{"id":"REQ-UI-001","class":"UI","screen":"Home"},{"id":"REQ-NFR-042","class":"NFR","screen":""}]}')"
+  grep -qE -- '--grep (REQ-UI-001\|REQ-NFR-042|REQ-NFR-042\|REQ-UI-001)( |$)' "$d/b/npx.args" 2>/dev/null \
+    && ok lk_017b "a scope of ids runs only the browser tests carrying those ids" \
+    || { bad lk_017b "a scope of ids ran the browser tests unfiltered"; note "$(cat "$d/b/npx.args" 2>/dev/null)"; }
+  out="$(_lk017_fx c '{"scope":"all","rows":[{"id":"REQ-UI-001","class":"UI","screen":"Home"}]}')"
+  [[ -f "$d/c/npx.args" ]] && ! grep -q -- '--grep' "$d/c/npx.args" \
+    && ok lk_017c "a full (all) verify still runs every browser test" \
+    || { bad lk_017c "a full verify was filtered or skipped"; note "$(cat "$d/c/npx.args" 2>/dev/null)"; }
+}
+
+# --- Lekhak TF-016: *amend-docs deleted a paragraph a unit test guards, and only CI noticed ---------
+# VerificationRuleDocTests reads docs/Lekhak-UsageGuide.md. *amend-docs removed the quoted REQ-NFR-042
+# paragraph, ran no test, closed green, and CI failed. tf-doc-tests.sh runs the unit tests when a test
+# reads a document the command changed; the status gate and *amend-docs name it.
+lk_016() {
+  local d="$SCRATCH/lk016"; mkdir -p "$d/.tfcore" "$d/docs" "$d/tests/Fx.Tests"
+  cp -r "$UTILS" "$d/.tfcore/"
+  printf '<Project Sdk="Microsoft.NET.Sdk"></Project>\n' > "$d/tests/Fx.Tests/Fx.Tests.csproj"
+  printf 'var v = File.ReadAllLines(Path.Combine(root, "docs", "Fx-UsageGuide.md"));\n' > "$d/tests/Fx.Tests/RuleDocTests.cs"
+  printf '# usage\n' > "$d/docs/Fx-UsageGuide.md"; printf '# brd\n' > "$d/docs/Fx-BRD.md"
+  cat > "$d/.tfcore/utils/tf-build.sh" <<SH
+#!/usr/bin/env bash
+echo "\$*" > $d/build.args
+echo "FAIL  tests failed on wsl via dotnet (rung 1); log tests/.artifacts/build/unit.log"
+SH
+  local out rc
+  out="$( cd "$d" && bash .tfcore/utils/tf-doc-tests.sh docs/Fx-UsageGuide.md 2>&1 )"; rc=$?
+  [[ $rc -eq 1 ]] && grep -q '^FAIL' <<<"$out" && grep -q 'RuleDocTests.cs' <<<"$out" \
+    && ok lk_016a "a changed document a unit test reads runs the unit tests, and a red test fails the check" \
+    || { bad lk_016a "an edit to a test-guarded document ran no test (exit $rc)"; note "$(head -2 <<<"$out")"; }
+  rm -f "$d/build.args"
+  out="$( cd "$d" && bash .tfcore/utils/tf-doc-tests.sh docs/Fx-BRD.md 2>&1 )"; rc=$?
+  [[ $rc -eq 0 && ! -f "$d/build.args" ]] && grep -q '^NONE' <<<"$out" \
+    && ok lk_016b "a document no test reads runs nothing" \
+    || { bad lk_016b "the unit tests ran for a document no test reads (exit $rc)"; note "$(head -1 <<<"$out")"; }
+  local T="$ROOT/.tfcore/tasks"
+  grep -q 'tf-doc-tests.sh' "$T/_status-update-gate.md" && grep -q 'tf-doc-tests.sh' "$T/amend-docs.md" \
+    && ok lk_016c "the status gate and *amend-docs both run the check" \
+    || bad lk_016c "a command that edits documents is not told to run the tests that read them"
+}
+
 # --- Lekhak TF-015: a rendered index kept its links to sibling .md files ------------------------------
 # A split guide's index linked ./Fx-ProductGuide-Admin.md; the HTML kept that href, so a reader clicking
 # through in a browser landed on raw markdown. A link to a page that is rendered becomes .html; one to a
@@ -3836,7 +3926,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 tb_001 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 tb_001 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

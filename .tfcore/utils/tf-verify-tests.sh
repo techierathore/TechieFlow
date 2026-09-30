@@ -2,7 +2,8 @@
 # tf-verify-tests.sh — run the acceptance tests and map them to rows (Sitting 4c, 2026-09-06).
 #
 #   bash .tfcore/utils/tf-verify-tests.sh [--base URL] [--target <sln|csproj>] [--no-browser] [--no-unit]
-#                                         [--shard N/M] [--spec <file or glob>]… [--json-out tests/.artifacts/verify/tests.json]
+#                                         [--shard N/M] [--spec <file or glob>]… [--list <list.json>] [--all-specs]
+#                                         [--json-out tests/.artifacts/verify/tests.json]
 #   bash .tfcore/utils/tf-verify-tests.sh --merge <tests-a.json> <tests-b.json>… [--json-out tests/.artifacts/verify/tests.json]
 #
 # Browser tests: `npx playwright test` over tests/verify/ (the JSON reporter). Unit tests:
@@ -16,11 +17,14 @@
 # shard N of M (browser only; run the unit tests once with --no-browser), `--spec` names files, and
 # each part writes its own playwright-<part>.json and tests-<part>.json. `--merge` then combines the
 # parts' rows and totals into one tests.json; a later run of the same test stands for it (Lekhak TF-007).
+# When tf-verify-list.sh was given a list of ids, the browser run keeps only the tests carrying them
+# (`--grep`), and is skipped when no row has a screen and no browser test names one (Lekhak TF-017).
+# `--list` names another list.json; `--all-specs` runs every browser test whatever the scope.
 # Exit 0 ran (whatever the results) · 2 nothing could run.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/tf-portable.sh"   # tf_read_lines, for bash 3.2 on a stock Mac
-BASE=""; TARGET=""; BROWSER=1; UNIT=1; OUT=""; SHARD=""; SPECS=(); MERGE=()
+BASE=""; TARGET=""; BROWSER=1; UNIT=1; OUT=""; SHARD=""; SPECS=(); MERGE=(); LIST="tests/.artifacts/verify/list.json"; ALLSPECS=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base) BASE="${2:-}"; shift 2 ;;
@@ -29,9 +33,11 @@ while [[ $# -gt 0 ]]; do
     --no-unit) UNIT=0; shift ;;
     --shard) SHARD="${2:-}"; UNIT=0; shift 2 ;;
     --spec) SPECS+=("${2:-}"); shift 2 ;;
+    --list) LIST="${2:-}"; shift 2 ;;
+    --all-specs) ALLSPECS=1; shift ;;
     --merge) shift; while [[ $# -gt 0 && "$1" != --* ]]; do MERGE+=("$1"); shift; done ;;
     --json-out) OUT="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "tf-verify-tests: unknown argument $1" >&2; exit 2 ;;
   esac
 done
@@ -124,8 +130,34 @@ if [[ $BROWSER -eq 1 ]]; then
       rm -f "$PWJSON"
     elif node -e "require.resolve('@playwright/test')" >/dev/null 2>&1; then
       PWARGS=(--reporter=json); [[ -n "$SHARD" ]] && PWARGS+=("--shard=$SHARD")
-      BASE_URL="$BASE" PLAYWRIGHT_JSON_OUTPUT_NAME="$PWJSON" npx playwright test "${PWARGS[@]}" ${SPECS[@]+"${SPECS[@]}"} > "$PWLOG" 2>&1
-      echo "browser tests: ran${SHARD:+ shard $SHARD}${SPECS:+ (${#SPECS[@]} spec argument(s))} (log $PWLOG)"; ran_any=1
+      # (the block below ends in SCOPEPY, not PY: tests/regression lifts the PY blocks out verbatim)
+      # Lekhak TF-017: a verify of a list of ids runs only the browser tests carrying those ids, and
+      # none when no row in scope has a screen and no file under tests/verify/ names one of them. A
+      # verify of one no-screen NFR row ran the whole suite and was stopped at 30 minutes. ui,
+      # functional and all run everything; so do --spec, --all-specs and a run without list.json.
+      SCOPE=""
+      [[ $ALLSPECS -eq 0 && ${#SPECS[@]} -eq 0 && -f "$LIST" ]] && SCOPE="$(python3 - "$LIST" <<'SCOPEPY'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1], encoding="utf-8"))
+except Exception:
+    sys.exit(0)
+if str(d.get("scope", "")).strip().lower() in ("", "ui", "functional", "all"):
+    sys.exit(0)
+rows = d.get("rows", [])
+ids = [r["id"] for r in rows if r.get("id")]
+if ids:
+    print(("screen " if any(r.get("screen") for r in rows) else "none ") + "|".join(ids))
+SCOPEPY
+)"
+      if [[ "$SCOPE" == none\ * ]] && ! grep -rqsE "${SCOPE#none }" tests/verify; then
+        echo "browser tests: skipped — no row in scope (${SCOPE#none }) has a screen and no file under tests/verify/ names one; its tests are unit tests (--all-specs runs every spec anyway)"
+        rm -f "$PWJSON"
+      else
+        [[ -n "$SCOPE" ]] && PWARGS+=(--grep "${SCOPE#* }")
+        BASE_URL="$BASE" PLAYWRIGHT_JSON_OUTPUT_NAME="$PWJSON" npx playwright test "${PWARGS[@]}" ${SPECS[@]+"${SPECS[@]}"} > "$PWLOG" 2>&1
+        echo "browser tests: ran${SHARD:+ shard $SHARD}${SPECS:+ (${#SPECS[@]} spec argument(s))}${SCOPE:+ only the tests carrying ${SCOPE#* } (the scope in $LIST)} (log $PWLOG)"; ran_any=1
+      fi
     else
       echo "browser tests: @playwright/test is not installed here (bash .tfcore/utils/tf-verify-env.sh); skipped"; rm -f "$PWJSON"
     fi
@@ -308,9 +340,11 @@ if ul and os.path.isfile(ul):
         if (name, outcome) in seen:
             continue
         seen.add((name, outcome))
+        # a pass has no reason: every non-failure was once written "unit test skipped" (Lekhak TF-018)
         for rid in set(ID.findall(name)):
             add(rid, outcome, name, "unit",
-                ("unit test failed: " if outcome == "fail" else "unit test skipped: ") + name[:120])
+                "unit test failed: " + name[:120] if outcome == "fail"
+                else "unit test skipped: " + name[:120] if outcome == "skip" else "")
 unit["passed"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r["result"] == "PASS")
 unit["failed"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r["result"] == "FAIL")
 unit["not_tested"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r["result"] == "NOT-TESTED")
