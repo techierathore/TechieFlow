@@ -3692,7 +3692,8 @@ jobs:
   printf '%s\n      - name: Restore\n        run: |\n          test -f "$NUGET_PACKAGES/runtime.pack/marker" || { echo "error NETSDK1112: The runtime pack for win-x64 was not downloaded."; exit 1; }\n' "$head" > "$d/repo/.github/workflows/ci.yml"
   printf '%s\n      - name: Restore\n        run: mkdir -p "$NUGET_PACKAGES/runtime.pack" && touch "$NUGET_PACKAGES/runtime.pack/marker"\n      - name: Never\n        if: steps.find.outputs.path == '"'nope'"'\n        run: exit 1\n      - name: Build\n        run: |\n          test -f "$NUGET_PACKAGES/runtime.pack/marker"\n          test ! -e bin/stale.dll\n          test "${{ steps.find.outputs.path }}" = src/app\n          test "$GREETING" = hi && test "$CI" = true\n' "$head" > "$d/good.yml"
   local out rc
-  out="$( cd "$d/repo" && NUGET_PACKAGES="$d/warm" TF_CI_REPRO_DIR="$d/work" bash "$UTILS/tf-ci-repro.sh" 2>&1 )"; rc=$?
+  # without PyYAML, as on a stock Mac (CI's macOS job failed on exactly that, 2026-09-30)
+  out="$( cd "$d/repo" && NUGET_PACKAGES="$d/warm" TF_CI_REPRO_DIR="$d/work" TF_CI_REPRO_NO_PYYAML=1 bash "$UTILS/tf-ci-repro.sh" 2>&1 )"; rc=$?
   [[ $rc -eq 1 ]] && grep -q '^FAIL .*Restore.*NETSDK1112' <<<"$out" \
     && ok lk_019a "a package only the developer's warm cache holds fails the reproduction, as it fails CI" \
     || { bad lk_019a "the reproduction used the warm cache (exit $rc)"; note "$(tail -1 <<<"$out" | cut -c1-160)"; }
@@ -3702,6 +3703,9 @@ jobs:
     && [[ ! -e "$d/repo/leaked.txt" && -z "$(ls -A "$d/work" 2>/dev/null)" ]] \
     && ok lk_019b "a clean copy without ignored files, step outputs, env and if: work; secret and setup steps are skipped; the copy is removed" \
     || { bad lk_019b "the clean-copy run did not behave like a fresh runner (exit $rc)"; note "$(grep -E '^(FAIL|PASS|NOT)' <<<"$out" | head -2 | cut -c1-200)"; }
+  ! grep -q '"rsync"' "$UTILS/tf-ci-repro.py" && grep -q 'def mini_yaml' "$UTILS/tf-ci-repro.py" \
+    && ok lk_019d "the reproduction needs neither rsync's --filter nor PyYAML, which a stock Mac lacks" \
+    || bad lk_019d "tf-ci-repro.py still depends on a tool a stock Mac does not have"
   local T="$ROOT/.tfcore/tasks"
   grep -q 'tf-ci-repro.sh' "$T/triage-issues.md" && grep -q 'tf-ci-repro.sh' "$T/fix-issues.md" \
     && ok lk_019c "triage and fix both reproduce a CI failure with tf-ci-repro.sh" \

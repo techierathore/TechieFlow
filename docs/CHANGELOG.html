@@ -110,6 +110,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
     <div class="group">Contents</div>
     <ol>
         <li><a href="#unreleased-since-v1-0-4">Unreleased (since v1.0.4)</a></li>
+        <li><a href="#ci-s-stock-mac-job-failed-on-the-tf-019-regression-case">2026-09-30 — CI&#x27;s stock-Mac job failed on the TF-019 regression case</a></li>
         <li><a href="#lekhak-tf-019-a-ci-failure-was-fixed-on-the-strength-of-a-warm-cache-local-run">2026-09-30 — Lekhak TF-019: a CI failure was &quot;fixed&quot; on the strength of a warm-cache local run</a></li>
         <li><a href="#lekhak-tf-016-tf-017-and-tf-018-document-edits-scoped-verify-test-reasons">2026-09-30 — Lekhak TF-016, TF-017 and TF-018: document edits, scoped verify, test reasons</a></li>
         <li><a href="#lekhak-tf-015-a-rendered-index-linked-raw-markdown">2026-09-29 — Lekhak TF-015: a rendered index linked raw markdown</a></li>
@@ -234,6 +235,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
       <div>Contents</div>
       <ol>
         <li><a href="#unreleased-since-v1-0-4">Unreleased (since v1.0.4)</a></li>
+        <li><a href="#ci-s-stock-mac-job-failed-on-the-tf-019-regression-case">2026-09-30 — CI&#x27;s stock-Mac job failed on the TF-019 regression case</a></li>
         <li><a href="#lekhak-tf-019-a-ci-failure-was-fixed-on-the-strength-of-a-warm-cache-local-run">2026-09-30 — Lekhak TF-019: a CI failure was &quot;fixed&quot; on the strength of a warm-cache local run</a></li>
         <li><a href="#lekhak-tf-016-tf-017-and-tf-018-document-edits-scoped-verify-test-reasons">2026-09-30 — Lekhak TF-016, TF-017 and TF-018: document edits, scoped verify, test reasons</a></li>
         <li><a href="#lekhak-tf-015-a-rendered-index-linked-raw-markdown">2026-09-29 — Lekhak TF-015: a rendered index linked raw markdown</a></li>
@@ -381,9 +383,25 @@ do not.</p>
 <li><strong>FR-84.</strong> The phase-document requirement in <code>docs/TechieFlow-Requirements.md</code> shared the number FR-73 with the browser-lock requirement. The miss stream names FR-73 for the lock, and a stream is never edited, so the phase-document one is now FR-84.
 </li>
 </ul>
+<h2 id="ci-s-stock-mac-job-failed-on-the-tf-019-regression-case">2026-09-30 — CI's stock-Mac job failed on the TF-019 regression case<a class="anchor-link" href="#ci-s-stock-mac-job-failed-on-the-tf-019-regression-case">#</a></h2>
+<p>Commit <code>6836d8e</code> (TF-019) turned the Validate workflow's macOS job red: both "Every tests/*/run.sh"
+steps failed, while the Ubuntu job passed. The only suite change in that commit was <code>lk_019</code>, which
+runs <code>tf-ci-repro.sh</code>, and that script needed two things a stock Mac lacks: PyYAML in its python3,
+and rsync's <code>--filter</code> (the copy used <code>rsync --filter=':- .gitignore'</code>). The raw log needs a signed-in
+GitHub account, so the cause is inferred from the diff, not read from the log. The script now:</p>
+<ul>
+<li>reads the workflow with PyYAML when it is installed, and otherwise with a built-in reader for the part of YAML workflow files use. On all 25 workflow files across the owner's projects it gives exactly the same result as PyYAML;
+</li>
+<li>makes the clean copy in Python, reading every <code>.gitignore</code> the way git does. On Lekhak (945 files), TechieFlow (327) and TechieBlog (928) it copies exactly the files the rsync version did.
+</li>
+</ul>
+<p><code>lk_019a</code> now runs without PyYAML (<code>TF_CI_REPRO_NO_PYYAML=1</code>), so the Ubuntu job covers the Mac path
+too, and new <code>lk_019d</code> fails if the script calls rsync again. Missed at the time because the
+portability check reads shell scripts only; the new script's Python dependencies were never checked
+against a stock Mac.</p>
 <h2 id="lekhak-tf-019-a-ci-failure-was-fixed-on-the-strength-of-a-warm-cache-local-run">2026-09-30 — Lekhak TF-019: a CI failure was "fixed" on the strength of a warm-cache local run<a class="anchor-link" href="#lekhak-tf-019-a-ci-failure-was-fixed-on-the-strength-of-a-warm-cache-local-run">#</a></h2>
 <ul>
-<li><strong>TF-019 (minor).</strong> Lekhak's CI failed with NETSDK1112: the solution was restored in Debug, so the win-x64 runtime pack a Release build of the self-contained Windows head needs was never downloaded. <code>triage-and-fix</code> ran the workflow's commands on the developer's machine, where <code>~/.nuget/packages</code> already held the pack, saw them pass, and called the CI failure fixed. The next CI run failed again (MISS-Lekhak-20260930-02). No task said how to reproduce a CI failure, and none counted a CI run as evidence. New <code>.tfcore/utils/tf-ci-repro.sh [&lt;workflow&gt;] [--job &lt;id&gt;] [--list] [--keep] [--run-setup]</code> (logic in <code>tf-ci-repro.py</code>, needs PyYAML) copies the repository to a temp folder outside it without anything <code>.gitignore</code> ignores, points the NuGet, npm, yarn, pnpm, pip, Go, Gradle and Maven caches at empty folders, and runs the job's <code>run:</code> steps in the runner's shell. A Windows job runs Windows-side from WSL. It stops at the first failure: <code>PASS</code>, <code>FAIL</code> (exit 1, first error) or <code>NOT-RUN</code>. <code>uses:</code> steps, steps that need a secret and machine-setup steps (workload, apt, choco, brew, winget) are skipped with the reason. Step outputs, <code>env:</code> and simple <code>if:</code> expressions are carried. <code>triage-issues</code> now lists a failed CI run as evidence and reproduces it only with the script; <code>fix-issues</code> step 3 requires its PASS and says the owner's next CI run is the final check. <code>triage-and-fix</code> reaches both through the steps it borrows.
+<li><strong>TF-019 (minor).</strong> Lekhak's CI failed with NETSDK1112: the solution was restored in Debug, so the win-x64 runtime pack a Release build of the self-contained Windows head needs was never downloaded. <code>triage-and-fix</code> ran the workflow's commands on the developer's machine, where <code>~/.nuget/packages</code> already held the pack, saw them pass, and called the CI failure fixed. The next CI run failed again (MISS-Lekhak-20260930-02). No task said how to reproduce a CI failure, and none counted a CI run as evidence. New <code>.tfcore/utils/tf-ci-repro.sh [&lt;workflow&gt;] [--job &lt;id&gt;] [--list] [--keep] [--run-setup]</code> (logic in <code>tf-ci-repro.py</code>) copies the repository to a temp folder outside it without anything <code>.gitignore</code> ignores, points the NuGet, npm, yarn, pnpm, pip, Go, Gradle and Maven caches at empty folders, and runs the job's <code>run:</code> steps in the runner's shell. A Windows job runs Windows-side from WSL. It stops at the first failure: <code>PASS</code>, <code>FAIL</code> (exit 1, first error) or <code>NOT-RUN</code>. <code>uses:</code> steps, steps that need a secret and machine-setup steps (workload, apt, choco, brew, winget) are skipped with the reason. Step outputs, <code>env:</code> and simple <code>if:</code> expressions are carried. <code>triage-issues</code> now lists a failed CI run as evidence and reproduces it only with the script; <code>fix-issues</code> step 3 requires its PASS and says the owner's next CI run is the final check. <code>triage-and-fix</code> reaches both through the steps it borrows.
 </li>
 </ul>
 <p>Regression case <code>lk_019</code> fails against the framework Lekhak had and passes now. Proved on Lekhak's own

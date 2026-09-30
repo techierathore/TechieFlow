@@ -35,6 +35,264 @@ def say(*a):
     print(*a, flush=True)
 
 
+# ---- a workflow reader that needs no PyYAML -----------------------------------------------------
+# A stock Mac's python3 has no PyYAML, and CI's stock-Mac job failed on it (2026-09-30). PyYAML is used
+# when it is installed; otherwise this reader takes the part of YAML a workflow file uses: block
+# mappings and sequences, | and > block scalars, quoted and plain scalars, and one-line [ ] and { }.
+# Anchors, tags and multi-line flow collections are not read.
+def _strip_comment(s):
+    q = None
+    for i, c in enumerate(s):
+        if q:
+            if c == q:
+                q = None
+        elif c in "'\"" and (i == 0 or s[i - 1] in " [{,:"):
+            q = c
+        elif c == "#" and (i == 0 or s[i - 1] in " \t"):
+            return s[:i].rstrip()
+    return s.rstrip()
+
+
+def _split_flow(s):
+    parts, depth, q, cur = [], 0, None, ""
+    for c in s:
+        if q:
+            q = None if c == q else q
+        elif c in "'\"":
+            q = c
+        elif c in "[{":
+            depth += 1
+        elif c in "]}":
+            depth -= 1
+        elif c == "," and depth == 0:
+            parts.append(cur.strip()); cur = ""; continue
+        cur += c
+    if cur.strip():
+        parts.append(cur.strip())
+    return parts
+
+
+def _scalar(s):
+    s = s.strip()
+    if not s:
+        return None
+    if s[0] == "'" and s.endswith("'") and len(s) > 1:
+        return s[1:-1].replace("''", "'")
+    if s[0] == '"' and s.endswith('"') and len(s) > 1:
+        try:
+            return json.loads(s)
+        except ValueError:
+            return s[1:-1]
+    if s[0] == "[" and s.endswith("]"):
+        return [_scalar(p) for p in _split_flow(s[1:-1])]
+    if s[0] == "{" and s.endswith("}"):
+        out = {}
+        for p in _split_flow(s[1:-1]):
+            k, _, v = p.partition(":")
+            out[_scalar(k)] = _scalar(v)
+        return out
+    s = _strip_comment(s)
+    low = s.lower()
+    if low in ("true", "false"):
+        return low == "true"
+    if low in ("null", "~"):
+        return None
+    if re.match(r"^-?\d+$", s):
+        return int(s)
+    if re.match(r"^-?\d+\.\d+$", s):
+        return float(s)
+    return s
+
+
+_KEY = re.compile(r"""^('(?:[^']|'')*'|"(?:[^"\\]|\\.)*"|[^\s'"#\-\[{][^:#]*?|-[^\s:][^:#]*?)\s*:(?:\s+|$)(.*)$""")
+
+
+def mini_yaml(text):
+    lines = text.replace("\t", "    ").splitlines()
+    ends_nl = text.endswith("\n")   # a block scalar that ends the file keeps a newline only if the file has one
+
+    def meaningful(i):
+        while i < len(lines) and (not lines[i].strip() or lines[i].strip().startswith("#") or lines[i].strip() == "---"):
+            i += 1
+        return i
+
+    def ind(i):
+        return len(lines[i]) - len(lines[i].lstrip(" "))
+
+    def block_scalar(head, i, parent):
+        style, chomp = head[0], ("-" if "-" in head else "+" if "+" in head else "")
+        body, width = [], None
+        while i < len(lines) and (not lines[i].strip() or ind(i) > parent):
+            if lines[i].strip() and width is None:
+                width = ind(i)
+            body.append(lines[i][width:] if width is not None and len(lines[i]) > width else "")
+            i += 1
+        while body and chomp != "+" and body[-1] == "":
+            body.pop()
+        if style == "|":
+            txt = "\n".join(body)
+        else:
+            txt, prev_blank = "", False
+            for ln in body:
+                if not ln:
+                    txt += "\n"; prev_blank = True
+                else:
+                    txt += (ln if not txt or txt.endswith("\n") else " " + ln); prev_blank = False
+        last_line_open = i >= len(lines) and not ends_nl and not (chomp != "+" and not lines[-1].strip())
+        return txt + ("" if chomp == "-" or not txt or last_line_open else "\n"), i
+
+    def value(rest, i, n):
+        rest = _strip_comment(rest) if not rest.startswith(("'", '"')) else rest
+        if rest[:1] in ("|", ">"):
+            return block_scalar(rest, i, n)
+        if rest:
+            return _scalar(rest), i
+        j = meaningful(i)
+        if j < len(lines) and (ind(j) > n or (ind(j) == n and lines[j].lstrip().startswith("- ") )):
+            return node(j)
+        return None, i
+
+    def node(i):
+        i = meaningful(i)
+        if i >= len(lines):
+            return None, i
+        n = ind(i)
+        if lines[i].lstrip().startswith("-") and lines[i].strip() in ("-",) or lines[i].lstrip().startswith("- "):
+            seq = []
+            while i < len(lines) and ind(i) == n and (lines[i].strip() == "-" or lines[i].lstrip().startswith("- ")):
+                content = lines[i].strip()[1:].lstrip()
+                if not content:
+                    v, i = node(i + 1)
+                elif _KEY.match(content) and not content.startswith(("'", '"', "[", "{")) or re.match(r"""^('[^']*'|"[^"]*")\s*:(\s|$)""", content):
+                    lines[i] = " " * (len(lines[i]) - len(content)) + content
+                    v, i = node(i)
+                else:
+                    v, i = value(content, i + 1, n)
+                seq.append(v)
+                i = meaningful(i)
+            return seq, i
+        out = {}
+        while i < len(lines) and ind(i) == n and not lines[i].lstrip().startswith("- "):
+            m = _KEY.match(lines[i].strip())
+            if not m:
+                raise ValueError("line %d: cannot read %r" % (i + 1, lines[i].strip()))
+            out[_scalar(m.group(1))], i = value(m.group(2), i + 1, n)
+            i = meaningful(i)
+        return out, i
+
+    v, _ = node(0)
+    return v
+
+
+def load_workflow(path):
+    text = open(path, encoding="utf-8").read()
+    if not os.environ.get("TF_CI_REPRO_NO_PYYAML"):
+        try:
+            import yaml
+            return yaml.safe_load(text)
+        except ImportError:
+            pass
+    return mini_yaml(text)
+
+
+# ---- a clean copy: what a fresh checkout holds ------------------------------------------------
+# Every .gitignore in the tree is read the way git reads it (last matching rule wins, "!" re-includes,
+# a trailing "/" means a folder, a "/" elsewhere anchors the rule to that .gitignore's folder, "**"
+# crosses folders). An ignored folder is not entered. Done in Python so the copy needs no rsync
+# `--filter` support, which a stock Mac's rsync may lack.
+def _glob_rx(pat):
+    rx, i = "", 0
+    while i < len(pat):
+        c = pat[i]
+        if pat.startswith("**/", i):
+            rx += "(?:.*/)?"; i += 3; continue
+        if pat.startswith("/**", i) and i + 3 == len(pat):
+            rx += "/.*"; i += 3; continue
+        if pat.startswith("**", i):
+            rx += ".*"; i += 2; continue
+        if c == "*":
+            rx += "[^/]*"
+        elif c == "?":
+            rx += "[^/]"
+        elif c == "\\" and i + 1 < len(pat):
+            i += 1; rx += re.escape(pat[i])
+        elif c == "[":
+            j = pat.find("]", i + 1)
+            if j < 0:
+                rx += "\\["
+            else:
+                rx += "[" + pat[i + 1:j].replace("!", "^", 1) + "]"; i = j
+        else:
+            rx += re.escape(c)
+        i += 1
+    return rx
+
+
+def _read_ignore(path):
+    rules = []
+    for ln in read_text(path).splitlines():
+        ln = ln.rstrip("\r")
+        if not ln.strip() or ln.startswith("#"):
+            continue
+        ln = re.sub(r"(?<!\\)\s+$", "", ln)
+        neg = ln.startswith("!")
+        if neg:
+            ln = ln[1:]
+        dir_only = ln.endswith("/")
+        ln = ln.rstrip("/")
+        anchored = "/" in ln
+        ln = ln.lstrip("/")
+        rules.append((re.compile("^" + _glob_rx(ln) + "$"), neg, dir_only, anchored))
+    return rules
+
+
+def clean_copy(src, dst):
+    stack = []   # (folder relative to src, rules)
+
+    def ignored(rel, is_dir):
+        hit = False
+        for base, rules in stack:
+            if base and not rel.startswith(base + "/"):
+                continue
+            sub = rel[len(base) + 1:] if base else rel
+            name = sub.rsplit("/", 1)[-1]
+            for rx, neg, dir_only, anchored in rules:
+                if dir_only and not is_dir:
+                    continue
+                if rx.match(sub if anchored else name):
+                    hit = not neg
+        return hit
+
+    n = 0
+    for root, dirs, files in os.walk(src):
+        rel_root = os.path.relpath(root, src).replace(os.sep, "/")
+        rel_root = "" if rel_root == "." else rel_root
+        while stack and stack[-1][0] and not (rel_root == stack[-1][0] or rel_root.startswith(stack[-1][0] + "/")):
+            stack.pop()
+        if ".gitignore" in files:
+            stack.append((rel_root, _read_ignore(os.path.join(root, ".gitignore"))))
+        keep = []
+        for d in sorted(dirs):
+            rel = (rel_root + "/" if rel_root else "") + d
+            if d == ".git" or rel == "tests/.artifacts" or ignored(rel, True):
+                continue
+            keep.append(d)
+            os.makedirs(os.path.join(dst, rel), exist_ok=True)
+        dirs[:] = keep
+        for f in files:
+            rel = (rel_root + "/" if rel_root else "") + f
+            if ignored(rel, False):
+                continue
+            s, t = os.path.join(root, f), os.path.join(dst, rel)
+            os.makedirs(os.path.dirname(t), exist_ok=True)
+            if os.path.islink(s):
+                os.symlink(os.readlink(s), t)
+            else:
+                shutil.copy2(s, t)
+            n += 1
+    return n
+
+
 def is_wsl():
     try:
         return "microsoft" in open("/proc/version").read().lower()
@@ -230,14 +488,13 @@ def main():
         elif x == "--run-setup": opt["setup"] = True
         elif x.startswith("-"): _notrun("unknown option %s" % x)
         else: opt["workflow"] = x
-    try:
-        import yaml
-    except ImportError:
-        _notrun("needs PyYAML to read the workflow (python3 -m pip install pyyaml)")
     wf_path = pick_workflow(opt["workflow"])
     if not wf_path:
         _notrun("no workflow file %s" % opt["workflow"])
-    wf = yaml.safe_load(open(wf_path, encoding="utf-8")) or {}
+    try:
+        wf = load_workflow(wf_path) or {}
+    except ValueError as e:
+        _notrun("could not read %s without PyYAML (%s); python3 -m pip install pyyaml" % (wf_path, e))
     jobs = wf.get("jobs") or {}
     if not jobs:
         _notrun("%s has no jobs" % wf_path)
@@ -303,10 +560,10 @@ def main():
     for d in (work, temp):
         os.makedirs(d, exist_ok=True)
     say("copying the repository to %s (without what .gitignore ignores) …" % work)
-    rs = subprocess.run(["rsync", "-a", "--filter=:- .gitignore", "--exclude=/.git", "--exclude=/tests/.artifacts",
-                         "./", work + "/"], capture_output=True, text=True)
-    if rs.returncode not in (0, 24):
-        _notrun("could not copy the repository: %s" % (rs.stderr.strip().splitlines() or ["rsync failed"])[-1])
+    try:
+        clean_copy(".", work)
+    except OSError as e:
+        _notrun("could not copy the repository: %s" % e)
 
     env = dict(os.environ)
     wslenv = [x for x in env.get("WSLENV", "").split(":") if x]

@@ -15,9 +15,10 @@
 # Prints ONE verdict line last:
 #   PASS     job <id>: <n> run step(s) passed on a clean copy with empty caches (…) — logs <dir>   exit 0
 #   FAIL     job <id>: step <n> "<name>" failed (exit N) with empty caches — <first error> — log <file>   exit 1
-#   NOT-RUN  <why: no workflow, several jobs, a macOS job off a Mac, no PyYAML …>              exit 2
+#   NOT-RUN  <why: no workflow, several jobs, a macOS job off a Mac …>                         exit 2
+# PyYAML is used when installed; without it (a stock Mac) a built-in reader takes the workflow.
 # Logs: tests/.artifacts/ci-repro/<UTC time>/step-NN.log. The first run downloads every package, so
 # it takes as long as a cold CI restore.
 set -uo pipefail
-case "${1:-}" in -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+case "${1:-}" in -h|--help) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
 exec python3 "$(dirname "${BASH_SOURCE[0]}")/tf-ci-repro.py" "$@"

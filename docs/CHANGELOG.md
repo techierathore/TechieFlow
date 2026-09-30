@@ -59,6 +59,23 @@ do not.
   with the browser-lock requirement. The miss stream names FR-73 for the lock, and a stream is never
   edited, so the phase-document one is now FR-84.
 
+## 2026-09-30 — CI's stock-Mac job failed on the TF-019 regression case
+
+Commit `6836d8e` (TF-019) turned the Validate workflow's macOS job red: both "Every tests/*/run.sh"
+steps failed, while the Ubuntu job passed. The only suite change in that commit was `lk_019`, which
+runs `tf-ci-repro.sh`, and that script needed two things a stock Mac lacks: PyYAML in its python3,
+and rsync's `--filter` (the copy used `rsync --filter=':- .gitignore'`). The raw log needs a signed-in
+GitHub account, so the cause is inferred from the diff, not read from the log. The script now:
+- reads the workflow with PyYAML when it is installed, and otherwise with a built-in reader for the
+  part of YAML workflow files use. On all 25 workflow files across the owner's projects it gives
+  exactly the same result as PyYAML;
+- makes the clean copy in Python, reading every `.gitignore` the way git does. On Lekhak (945 files),
+  TechieFlow (327) and TechieBlog (928) it copies exactly the files the rsync version did.
+`lk_019a` now runs without PyYAML (`TF_CI_REPRO_NO_PYYAML=1`), so the Ubuntu job covers the Mac path
+too, and new `lk_019d` fails if the script calls rsync again. Missed at the time because the
+portability check reads shell scripts only; the new script's Python dependencies were never checked
+against a stock Mac.
+
 ## 2026-09-30 — Lekhak TF-019: a CI failure was "fixed" on the strength of a warm-cache local run
 
 - **TF-019 (minor).** Lekhak's CI failed with NETSDK1112: the solution was restored in Debug, so the
@@ -67,7 +84,7 @@ do not.
   already held the pack, saw them pass, and called the CI failure fixed. The next CI run failed again
   (MISS-Lekhak-20260930-02). No task said how to reproduce a CI failure, and none counted a CI run as
   evidence. New `.tfcore/utils/tf-ci-repro.sh [<workflow>] [--job <id>] [--list] [--keep] [--run-setup]`
-  (logic in `tf-ci-repro.py`, needs PyYAML) copies the repository to a temp folder outside it without
+  (logic in `tf-ci-repro.py`) copies the repository to a temp folder outside it without
   anything `.gitignore` ignores, points the NuGet, npm, yarn, pnpm, pip, Go, Gradle and Maven caches at
   empty folders, and runs the job's `run:` steps in the runner's shell. A Windows job runs Windows-side
   from WSL. It stops at the first failure: `PASS`, `FAIL` (exit 1, first error) or `NOT-RUN`. `uses:`
