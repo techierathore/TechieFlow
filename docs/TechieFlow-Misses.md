@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 225 logged: 53 open, 171 fixed, 1 will not fix |
+| Count | 226 logged: 53 open, 172 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
 | Updated | 2026-09-30 |
 
@@ -67,10 +67,11 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (171)
+## Fixed (172)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20260930-04 | 2026-09-30 by owner | 2026-09-30 by log-miss | the framework never said it | Lekhak TF-019: no task said to reproduce a CI failure on a clean copy with empty package caches, so triage-and-fix reproduced NETSDK1112 with a warm NuGet cache, saw a pass and called the CI failure fixed; the next CI run failed again |
 | MISS-TechieFlow-20260930-03 | 2026-09-30 by owner | 2026-09-30 by log-miss | the framework never said it | Lekhak TF-016: amend-docs and the status gate ran no test, so an amendment deleted a UsageGuide paragraph a unit test guards and closed green; only CI caught it |
 | MISS-TechieFlow-20260930-02 | 2026-09-30 by owner | 2026-09-30 by log-miss | the framework never said it | Lekhak TF-018: tf-verify-tests.sh wrote 'unit test skipped' as the reason for a unit test that passed |
 | MISS-TechieFlow-20260930-01 | 2026-09-30 by owner | 2026-09-30 by log-miss | the framework never said it | Lekhak TF-017: tf-verify-tests.sh never read list.json, so a verify of one no-screen NFR row ran every browser spec and was stopped at 30 minutes |

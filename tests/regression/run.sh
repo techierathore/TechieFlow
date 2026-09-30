@@ -3663,6 +3663,51 @@ import('playwright').then(async ({chromium}) => { const b = await chromium.conne
   kill "$br" "$srv" 2>/dev/null; wait "$br" 2>/dev/null
 }
 
+# --- Lekhak TF-019: a CI failure was reproduced with a warm package cache, so it "passed" here --------
+# CI failed with NETSDK1112 because the win-x64 runtime pack was never downloaded; the developer's
+# ~/.nuget/packages already held it, so triage-and-fix ran the workflow's commands, saw them pass and
+# called the failure fixed. The next CI run failed again. A reproduction runs on a clean copy with
+# empty caches; a pack only the warm cache holds must therefore fail it.
+lk_019() {
+  local d="$SCRATCH/lk019"; mkdir -p "$d/repo/.github/workflows" "$d/repo/bin" "$d/warm/runtime.pack"
+  touch "$d/warm/runtime.pack/marker" "$d/repo/bin/stale.dll"; printf 'bin/\n' > "$d/repo/.gitignore"
+  local head='name: ci
+on: push
+env:
+  GREETING: hi
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with: {path: ~/.nuget/packages, key: k}
+      - name: Feed
+        run: echo "${{ secrets.TOKEN }}" > leaked.txt
+      - name: Workload
+        run: dotnet workload install maui-windows
+      - name: Find
+        id: find
+        run: echo "path=src/app" >> "$GITHUB_OUTPUT"'
+  printf '%s\n      - name: Restore\n        run: |\n          test -f "$NUGET_PACKAGES/runtime.pack/marker" || { echo "error NETSDK1112: The runtime pack for win-x64 was not downloaded."; exit 1; }\n' "$head" > "$d/repo/.github/workflows/ci.yml"
+  printf '%s\n      - name: Restore\n        run: mkdir -p "$NUGET_PACKAGES/runtime.pack" && touch "$NUGET_PACKAGES/runtime.pack/marker"\n      - name: Never\n        if: steps.find.outputs.path == '"'nope'"'\n        run: exit 1\n      - name: Build\n        run: |\n          test -f "$NUGET_PACKAGES/runtime.pack/marker"\n          test ! -e bin/stale.dll\n          test "${{ steps.find.outputs.path }}" = src/app\n          test "$GREETING" = hi && test "$CI" = true\n' "$head" > "$d/good.yml"
+  local out rc
+  out="$( cd "$d/repo" && NUGET_PACKAGES="$d/warm" TF_CI_REPRO_DIR="$d/work" bash "$UTILS/tf-ci-repro.sh" 2>&1 )"; rc=$?
+  [[ $rc -eq 1 ]] && grep -q '^FAIL .*Restore.*NETSDK1112' <<<"$out" \
+    && ok lk_019a "a package only the developer's warm cache holds fails the reproduction, as it fails CI" \
+    || { bad lk_019a "the reproduction used the warm cache (exit $rc)"; note "$(tail -1 <<<"$out" | cut -c1-160)"; }
+  out="$( cd "$d/repo" && NUGET_PACKAGES="$d/warm" TF_CI_REPRO_DIR="$d/work" bash "$UTILS/tf-ci-repro.sh" "$d/good.yml" 2>&1 )"; rc=$?
+  [[ $rc -eq 0 ]] && grep -q '^PASS' <<<"$out" && grep -q '^skip .*Feed — needs secrets.TOKEN' <<<"$out" \
+    && grep -q '^skip .*Workload — sets up the machine' <<<"$out" && grep -q '^skip .*Never — its condition is false' <<<"$out" \
+    && [[ ! -e "$d/repo/leaked.txt" && -z "$(ls -A "$d/work" 2>/dev/null)" ]] \
+    && ok lk_019b "a clean copy without ignored files, step outputs, env and if: work; secret and setup steps are skipped; the copy is removed" \
+    || { bad lk_019b "the clean-copy run did not behave like a fresh runner (exit $rc)"; note "$(grep -E '^(FAIL|PASS|NOT)' <<<"$out" | head -2 | cut -c1-200)"; }
+  local T="$ROOT/.tfcore/tasks"
+  grep -q 'tf-ci-repro.sh' "$T/triage-issues.md" && grep -q 'tf-ci-repro.sh' "$T/fix-issues.md" \
+    && ok lk_019c "triage and fix both reproduce a CI failure with tf-ci-repro.sh" \
+    || bad lk_019c "a CI failure can still be 'fixed' on the strength of a warm-cache local run"
+}
+
 # --- Lekhak TF-018: a passing unit test was given the reason "unit test skipped" ---------------------
 # The console-log reader wrote "unit test skipped: <name>" for every outcome that was not a failure, so
 # REQ-NFR-042's passing test carried a skip reason in tests.json. A pass has no reason; a skip and a
@@ -3926,7 +3971,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 tb_001 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 tb_001 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

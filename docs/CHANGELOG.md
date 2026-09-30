@@ -59,6 +59,30 @@ do not.
   with the browser-lock requirement. The miss stream names FR-73 for the lock, and a stream is never
   edited, so the phase-document one is now FR-84.
 
+## 2026-09-30 — Lekhak TF-019: a CI failure was "fixed" on the strength of a warm-cache local run
+
+- **TF-019 (minor).** Lekhak's CI failed with NETSDK1112: the solution was restored in Debug, so the
+  win-x64 runtime pack a Release build of the self-contained Windows head needs was never downloaded.
+  `triage-and-fix` ran the workflow's commands on the developer's machine, where `~/.nuget/packages`
+  already held the pack, saw them pass, and called the CI failure fixed. The next CI run failed again
+  (MISS-Lekhak-20260930-02). No task said how to reproduce a CI failure, and none counted a CI run as
+  evidence. New `.tfcore/utils/tf-ci-repro.sh [<workflow>] [--job <id>] [--list] [--keep] [--run-setup]`
+  (logic in `tf-ci-repro.py`, needs PyYAML) copies the repository to a temp folder outside it without
+  anything `.gitignore` ignores, points the NuGet, npm, yarn, pnpm, pip, Go, Gradle and Maven caches at
+  empty folders, and runs the job's `run:` steps in the runner's shell. A Windows job runs Windows-side
+  from WSL. It stops at the first failure: `PASS`, `FAIL` (exit 1, first error) or `NOT-RUN`. `uses:`
+  steps, steps that need a secret and machine-setup steps (workload, apt, choco, brew, winget) are
+  skipped with the reason. Step outputs, `env:` and simple `if:` expressions are carried. `triage-issues`
+  now lists a failed CI run as evidence and reproduces it only with the script; `fix-issues` step 3
+  requires its PASS and says the owner's next CI run is the final check. `triage-and-fix` reaches both
+  through the steps it borrows.
+
+Regression case `lk_019` fails against the framework Lekhak had and passes now. Proved on Lekhak's own
+repo: with the workflow as it was before Lekhak's fix, the script failed at Build with the same
+NETSDK1112 as CI run 36711733872 (4 min); with the current workflow it passed restore, build and all
+855 tests (6 min 40 s), and removed its temp copy. Miss `MISS-TechieFlow-20260930-04` is logged as fixed.
+The reply is in Lekhak's feedback file, copied here.
+
 ## 2026-09-30 — Lekhak TF-016, TF-017 and TF-018: document edits, scoped verify, test reasons
 
 - **TF-016 (major).** `*amend-docs` removed a paragraph from Lekhak's UsageGuide that a unit test

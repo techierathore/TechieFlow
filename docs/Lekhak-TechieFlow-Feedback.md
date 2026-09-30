@@ -8,11 +8,11 @@
 
 ## Summary
 
-18 entries: 0 blocking now, 2 open and not blocking (TF-003, TF-008), 3 fixed upstream and not yet re-checked here (TF-016, TF-017, TF-018), 13 closed after a re-check here (TF-001, TF-002, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015).
+19 entries: 0 blocking now, 2 open and not blocking (TF-003, TF-008), 1 fixed upstream and not yet re-checked here (TF-019), 16 closed after a re-check here (TF-001, TF-002, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018).
 
 Nothing is blocked.
 
-- 0 blockers, 6 majors, 12 minors, 0 nice-to-haves.
+- 0 blockers, 6 majors, 13 minors, 0 nice-to-haves.
 - Last consolidated: 2026-09-30.
 
 ## Entries
@@ -255,6 +255,8 @@ Nothing is blocked.
 
 ### TF-016 — `*amend-docs` never runs the unit tests, so it can delete a paragraph a test guards and only CI notices
 
+> ✅ **Closed 2026-09-30** — re-checked here: Closed 2026-09-30: bash .tfcore/utils/tf-doc-tests.sh docs/Lekhak-UsageGuide.md printed PASS naming tests/Lekhak.Tests/Common/VerificationRuleDocTests.cs (plus AppSecretsTests.cs and tests/verify/_phase8-db.ts), unit tests PASS, exit 0; the same on docs/Lekhak-BRD.md printed 'NONE no test reads docs/Lekhak-BRD.md; nothing to run'.
+
 - **Severity:** major
 - **Blocks:** no — the paragraph was restored in `triage-and-fix` on 2026-09-30 and the suite passes 855/855.
 - **Repro:**
@@ -269,6 +271,8 @@ Nothing is blocked.
 - **Suggested fix:** in the status gate, when the command wrote a file under `docs/`, run `tf-build.sh test` (unit only) and fail on a red test. Or have `*amend-docs` run it as its last step.
 
 ### TF-017 — A scoped verify of one no-screen NFR row runs the whole browser suite and hits the 30-minute limit
+
+> ✅ **Closed 2026-09-30** — re-checked here: Closed 2026-09-30: tf-verify-list.sh Lekhak REQ-NFR-042, then tf-verify-tests.sh --base http://localhost:59689 without --no-browser printed 'browser tests: skipped — no row in scope (REQ-NFR-042) has a screen and no file under tests/verify/ names one'; finished in 139 s (unit build included, against 30+ min before) with REQ-NFR-042 PASS.
 
 - **Severity:** minor
 - **Blocks:** no — re-ran with `--no-browser`, which graded the row from its unit test.
@@ -285,6 +289,8 @@ Nothing is blocked.
 
 ### TF-018 — `tests.json` writes "unit test skipped" as the reason for a unit test that passed
 
+> ✅ **Closed 2026-09-30** — re-checked here: Closed 2026-09-30: in that run's tests/.artifacts/verify/tests.json, reqs['REQ-NFR-042'].outcomes reads {"REQ-NFR-042 UsageGuideStatesBothHeadsRule": {"outcome": "pass", "reason": "", "screenshot": ""}}.
+
 - **Severity:** minor
 - **Blocks:** no — the outcome field is right (`pass`), and the verdict reads the outcome.
 - **Repro:**
@@ -298,9 +304,29 @@ Nothing is blocked.
 - **Workaround:** none needed; read `outcome`.
 - **Suggested fix:** set `reason` only when the outcome is `skip` or `fail`.
 
+### TF-019 — Nothing says to reproduce a CI failure with an empty package cache, so a local "pass" can hide the real error
+
+- **Severity:** minor
+- **Blocks:** no — the failure was reproduced with an empty cache and fixed on 2026-09-30.
+- **Repro:**
+  ```
+  set NUGET_PACKAGES=<empty folder> && dotnet restore Lekhak.slnx && dotnet build Lekhak.slnx --configuration Release --no-restore
+  ```
+- **Expected:** when a task reproduces a CI workflow locally, it runs the restore against an empty package folder, as a fresh runner does.
+- **Actual:** `triage-and-fix` ran the workflow's steps with the developer's warm NuGet cache. The win-x64 runtime pack was already cached, so the NETSDK1112 failure CI hits never appeared. The run reported the CI failure fixed; the owner's next CI run still failed (MISS-Lekhak-20260930-02).
+- **Encountered in:** triage-and-fix, 2026-09-30
+- **Workaround:** set `NUGET_PACKAGES` to an empty folder for the reproduction.
+- **Suggested fix:** a `tf-ci-repro.sh` that reads the workflow's `run:` steps and runs them with an empty `NUGET_PACKAGES` (and the npm equivalent), named by `triage-issues` when the evidence is a CI run.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### Resolution status (TechieFlow team, 2026-09-30, second reply)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-019 | Fixed upstream. New script `tf-ci-repro.sh [<workflow>] [--job <id>]`. It copies the repository to a temp folder outside it, leaving out everything `.gitignore` ignores (no `bin/`, `obj/`, `node_modules/`), as a fresh checkout has none. It points every package cache it knows at an empty folder: NuGet (`NUGET_PACKAGES` and its HTTP cache), npm, yarn, pnpm, pip, Go, Gradle and Maven. Then it runs the job's `run:` steps in the runner's shell, and a Windows job runs on the Windows side from WSL. It stops at the first failing step and prints `PASS`, `FAIL` (exit 1, with the first error) or `NOT-RUN`. It skips `uses:` steps (the copy stands in for the checkout, and the cache action is left out on purpose), steps that need a secret (your machine's credentials stand in), and steps that only install tools on the machine, such as the MAUI workload (`--run-setup` runs them). Step outputs, `env:` and simple `if:` conditions work, so your Locate test project → Test pair runs. `--list` prints the plan and runs nothing. `triage-issues` now counts a failed CI run as evidence and reproduces it only with this script. `fix-issues` does not call a CI failure fixed until the script prints PASS, and even then the report says your next CI run is the final check. `triage-and-fix` uses both steps. Regression case `lk_019` fails against the framework you had and passes now. | Proved on your repo here. With your workflow as it was before your fix (`dotnet restore Lekhak.slnx`, no `-p:Configuration=Release`), the script printed `FAIL job build: step 7 "Build" failed (exit 1) with empty caches — … error NETSDK1112: The runtime pack for Microsoft.NETCore.App.Runtime.win-x64 was not downloaded`, the same error as CI run 36711733872, in 4 min. With your current workflow it printed `PASS job build: 4 run step(s) passed …` in 6 min 40 s: restore, build, then 855 tests passed. To re-check, run `bash .tfcore/utils/tf-ci-repro.sh --list`, then `bash .tfcore/utils/tf-ci-repro.sh`. Expect PASS. The first run downloads every package, so it takes as long as a cold CI restore. |
 
 ### Resolution status (TechieFlow team, 2026-09-30)
 
