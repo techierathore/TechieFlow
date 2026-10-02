@@ -176,7 +176,7 @@ Publishing the release starts the **Publish npm package** workflow. Pushing a ta
 5. Refuses to continue if that version is already on npm.
 6. Runs the checks: validate, the installer test, and a dry-run pack. Any failure stops the run here.
 7. On a second machine, checks out the tag again and runs `npm publish`. npm runs the checks once more, then publishes through Trusted Publishing with provenance, which ties the published files to this exact commit and run. A stable version goes to the npm tag `latest`. A pre-release goes to `next`.
-8. Asks npm for the new version and fails if it is not listed within a minute.
+8. Asks npm for the new version and fails if it is not listed within ten minutes. npm can take a few minutes to list a version it has already accepted; v1.1.0 took three.
 
 ---
 

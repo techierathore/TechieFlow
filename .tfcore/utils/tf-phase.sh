@@ -42,12 +42,25 @@ case "${1:-}" in
     # the outer command as "outer", written FIRST so a greedy `.*"started":"…"` read still takes this
     # command's own start. tf-verify-emit.sh and tf-fix-close.sh read it to tell the two starts
     # apart (TF-052: the inline verify took the fix's start and its record swallowed the fix's).
-    OUTER=""
+    OUTER=""; CHAINED=""
     if [[ -f "$FILE" && -z "$(find "$FILE" -mmin +1440 2>/dev/null)" ]]; then
       OC="$(sed -n 's/.*"cmd":"\([^"]*\)".*/\1/p' "$FILE")"; OA="$(sed -n 's/.*"app":"\([^"]*\)".*/\1/p' "$FILE")"
       OS="$(sed -n 's/.*"started":"\([^"]*\)".*/\1/p' "$FILE")"
       [[ -n "$OC" && -n "$OS" && "$OC" != "$CMD" && "$OC" != "goal" && "$OS" != "$NOW" ]] \
         && OUTER="\"outer\":{\"cmd\":\"$OC\",\"app\":\"$OA\",\"started\":\"$OS\"},"
+      # A command the task files run inside another one keeps the outer command's document baseline
+      # (TrBlazeUI TF-002: *triage-and-fix started verify-phase and metrics-report, each wrote a new
+      # baseline, and the rows the triage had just added had their findings relabelled OLD). The pairs
+      # are the chains the task files name: build-phase, fix-issues and triage-and-fix run verify-phase;
+      # triage-and-fix runs metrics-report. The marker is never ended, so a standalone verify after a
+      # fix also keeps the fix's baseline: that can only make the gate stricter, never hide a finding.
+      OOC="$(sed -n 's/^{"outer":{"cmd":"\([^"]*\)".*/\1/p' "$FILE")"
+      case "$CMD" in
+        verify-phase|metrics-report)
+          for c in "$OC" "$OOC"; do
+            case "$c" in build-phase|fix-issues|triage-and-fix) CHAINED="$c"; break ;; esac
+          done ;;
+      esac
     fi
     printf '{%s"cmd":"%s","app":"%s","started":"%s"}\n' "$OUTER" "$CMD" "$APP" "$NOW" > "$FILE"
     echo "$NOW"
@@ -56,7 +69,9 @@ case "${1:-}" in
     # status file already carry when the command starts are recorded, so the gate and the Stop
     # hook block only on findings this command introduces (Schemas §7.1 decision 8: old projects
     # are repaired through *amend-docs, never by whichever command happens to run next).
-    if [[ -x "$ROOT/.tfcore/utils/tf-doc-check.sh" || -f "$ROOT/.tfcore/utils/tf-doc-check.sh" ]]; then
+    if [[ -n "$CHAINED" ]]; then
+      echo "tf-phase: $CMD runs inside $CHAINED — keeping its document baseline (findings since $CHAINED started stay FAIL)" >&2
+    elif [[ -x "$ROOT/.tfcore/utils/tf-doc-check.sh" || -f "$ROOT/.tfcore/utils/tf-doc-check.sh" ]]; then
       docs=(); for f in "$ROOT"/docs/*-Checklist.md "$ROOT"/PROJECT-STATUS.md; do [[ -f "$f" ]] && docs+=("$f"); done
       if [[ ${#docs[@]} -gt 0 ]]; then
         ( cd "$ROOT" && bash .tfcore/utils/tf-doc-check.sh --root "$ROOT" --baseline-write "${docs[@]}" 2>/dev/null | tail -1 >&2 ) || true

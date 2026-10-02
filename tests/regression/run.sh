@@ -3391,6 +3391,44 @@ m=json.load(open(sys.argv[1]))['misses']; print('%s|%s|%s' % (m['misses_total'],
     || bad tb_001c "a withdrawn miss still counts (total|open|voided = $v, open-miss '$open')"
 }
 
+# --- TrBlazeUI TF-002: a chained start relabelled the outer command's findings as OLD ------------
+# *triage-and-fix runs verify-phase and metrics-report with their own step 0; each start wrote a new
+# document baseline, so the findings on the two rows the triage had just added (106 old → 114 old)
+# stopped blocking. A chained start now keeps the outer baseline; a start with no such outer rewrites it.
+# The baseline file starts without the checklist's entry: a rewrite adds it, a kept baseline does not.
+tb_002() {
+  local d; d="$(_metrics_fx tb002)"; mkdir -p "$d/.tfcore/.session"; cp -r "$UTILS" "$d/.tfcore/utils"; cp -r "$ROOT/.tfcore/templates" "$d/.tfcore/"
+  printf '# Fx — Checklist\n' > "$d/docs/Fx-Checklist.md"
+  local B="$d/.tfcore/.session/doc-check-baseline.json" P="$d/.tfcore/.session/phase.json" now
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  st() { ( cd "$d" && TF_SKIP_SELFCHECK=1 bash .tfcore/utils/tf-phase.sh start "$@" ) 2>&1; }
+  # kept = the start ran and said it kept the baseline, AND the file has no rewrite in it; a start that
+  # never ran (no script in the fixture) must not count as keeping it
+  keeps() { local out; out="$(st "$1" Fx)"; grep -q "runs inside .* keeping its document baseline" <<<"$out" && ! grep -q 'Fx-Checklist' "$B"; }
+  local kept=0 c
+  for c in "triage-and-fix verify-phase" "fix-issues verify-phase" "build-phase verify-phase" "triage-and-fix metrics-report"; do
+    set -- $c
+    printf '{"cmd":"%s","app":"Fx","started":"2026-10-01T08:00:00Z"}\n' "$1" > "$P"; echo '{"outer-baseline":[]}' > "$B"
+    keeps "$2" && kept=$((kept+1)) || note "$2 inside $1 did not keep the baseline"
+  done
+  # the second chained start: triage-and-fix → verify-phase → metrics-report (outer read from "outer")
+  printf '{"outer":{"cmd":"triage-and-fix","app":"Fx","started":"2026-10-01T08:00:00Z"},"cmd":"verify-phase","app":"Fx","started":"%s"}\n' "$now" > "$P"
+  echo '{"outer-baseline":[]}' > "$B"
+  keeps metrics-report && kept=$((kept+1)) || note "metrics-report after a chained verify did not keep the baseline"
+  [[ $kept -eq 5 ]] && ok tb_002a "a start chained inside build-phase, fix-issues or triage-and-fix keeps the outer baseline" \
+                    || bad tb_002a "$((5-kept)) chained start(s) did not keep the outer baseline"
+  local fresh=0
+  for c in "mockups verify-phase" "verify-phase verify-phase" "triage-and-fix build-phase"; do
+    set -- $c
+    printf '{"cmd":"%s","app":"Fx","started":"2026-10-01T08:00:00Z"}\n' "$1" > "$P"; echo '{"outer-baseline":[]}' > "$B"
+    st "$2" Fx >/dev/null; ! grep -q 'Fx-Checklist' "$B" && note "$2 after $1 kept a baseline it should rewrite" || fresh=$((fresh+1))
+  done
+  rm -f "$P"; echo '{"outer-baseline":[]}' > "$B"; st verify-phase Fx >/dev/null
+  ! grep -q 'Fx-Checklist' "$B" && note "verify-phase with no marker kept the old baseline" || fresh=$((fresh+1))
+  [[ $fresh -eq 4 ]] && ok tb_002b "a start that is not chained still writes its own baseline" \
+                     || bad tb_002b "$((4-fresh)) unchained start(s) kept a stale baseline"
+}
+
 # --- Lekhak TF-001: the web head's secrets were in the Windows store, the copy ran in WSL ---------
 # `dotnet user-secrets set` on Windows writes %APPDATA%\Microsoft\UserSecrets; the published copy run
 # on the WSL side looked in ~/.microsoft/usersecrets and stopped: "Required configuration value(s) not
@@ -3975,7 +4013,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 tb_001 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 tb_001 tb_002 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

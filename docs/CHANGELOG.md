@@ -14,6 +14,18 @@ Everything below this section from 2026-09-11 onward is also unreleased: it reac
 v1.0.4 tag (2026-09-10) and is in no published package yet. This section lists what those dated entries
 do not.
 
+- **A command started inside another one keeps the outer command's document baseline (TrBlazeUI
+  TF-002, 2026-10-02).** `*triage-and-fix` runs `verify-phase` and `metrics-report` with their own
+  step 0, and each `tf-phase.sh start` wrote a new baseline. The findings on the rows the triage had
+  just added became "old" and stopped blocking. A start of `verify-phase` or `metrics-report` while
+  the marker names `build-phase`, `fix-issues` or `triage-and-fix` (as the command or as its "outer")
+  now keeps the baseline and says so. Because the marker is never ended, a standalone verify right
+  after a fix also keeps the fix's baseline. That makes the gate stricter, never looser. Regression
+  case `tb_002`.
+- **The release workflow no longer fails a good publish (2026-10-01).** v1.1.0 published, but the
+  "Confirm the version is on npm" step gave up after one minute; npm listed the version three minutes
+  after accepting it. The step now waits up to ten minutes and asks the registry directly
+  (`--prefer-online`). The version still comes only from the release tag; nothing else changed.
 - **The framework runs on a stock Mac** (pull request #6). Every shell script runs on Apple's own bash
   3.2 and the BSD `sed`, `date`, `stat` and `xargs`, with no Homebrew, newer bash or GNU coreutils, and
   behaves as before on Linux and WSL. GNU-only and bash-4-only spellings go through a new shim library,
