@@ -223,15 +223,30 @@ const PROBE = (wanted = []) => {
   };
 
   const ICON = 'svg, img, i[class*="icon"], span[class*="icon"], [class*="bi-"], [class*="fa-"]';
-  const hasIcon = (el) => !!el.querySelector(ICON);
+  // A box the mockup marks as another state of the screen is left out of the comparison (Lekhak
+  // TF-011), and so is everything inside it when a box around it is counted: the download icon in a
+  // "newer build" banner was reported on the card holding the banner (Chatur TF-001).
+  // data-tf-state="sample-data" is not another state: it is sample data, the data-tf-sample rule
+  // (Chatur TF-005). Left out here, a list the app fills with real rows read "app carries an icon the
+  // mockup does not" on every row.
+  const STATE = '[data-tf-state]:not([data-tf-state="sample-data"]),[data-state-testid]';
+  const SAMPLE = '[data-tf-sample],[data-tf-state="sample-data"]';
+  const own = (el, sel) => [...el.querySelectorAll(sel)].filter((x) => !x.closest(STATE) || el.closest(STATE));
+  const ownText = (el) => {
+    if (!el.querySelector(STATE) || el.closest(STATE)) return el.textContent || '';
+    const c = el.cloneNode(true);
+    for (const x of c.querySelectorAll(STATE)) x.remove();
+    return c.textContent || '';
+  };
+  const hasIcon = (el) => own(el, ICON).length > 0;
   // how many icons the element carries at any depth: a component library that wraps an icon
   // one element deeper than the mockup moves it to another path key without removing it (TF-027)
-  const iconCount = (el) => [...el.querySelectorAll(ICON)].filter((i) => !i.parentElement || !i.parentElement.closest('svg')).length;
+  const iconCount = (el) => own(el, ICON).filter((i) => !i.parentElement || !i.parentElement.closest('svg')).length;
   // Every icon on the page by number, so the node side can tell that an anchor and the wrappers
   // above it hold the same icon as the element it sits in: the icon clause asks "any icon inside?",
   // and one Select chevron was reported at four levels of TfLens /misses (TF-046).
   const iconNo = new Map([...document.querySelectorAll(ICON)].map((i, n) => [i, n]));
-  const iconIds = (el) => [...el.querySelectorAll(ICON)].map((i) => iconNo.get(i));
+  const iconIds = (el) => own(el, ICON).map((i) => iconNo.get(i));
   const depthOf = (el) => { let n = 0; for (let p = el.parentElement; p; p = p.parentElement) n++; return n; };
 
   // "Chrome" = a badge / pill / chip: a small element with its own fill or ring and
@@ -386,15 +401,22 @@ const PROBE = (wanted = []) => {
         stroke: near.map(strokeOf).find((s) => s.visible) || null,
       },
       tag: el.tagName.toLowerCase(),
-      text: (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 60),
+      text: ownText(el).trim().replace(/\s+/g, ' ').slice(0, 60),
       badge: chrome ? chrome.badge : null,
-      full: (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 400),
+      full: ownText(el).trim().replace(/\s+/g, ' ').slice(0, 400),
+      // a box the mockup marks as sample data, drawn only when the app has data there (Chatur TF-002)
+      sample: el.matches(SAMPLE),
       icon: hasIcon(el),
       icons: iconCount(el),
       icon_ids: iconIds(el),   // which icons, so a finding repeated at a container can be told apart (TF-046)
+      // the anchors inside and the icons each holds, so a row graded on its own can be taken off
+      // the box around it (Chatur TF-006)
+      nested: own(el, '[data-testid]').filter((x) => !isHidden(x))
+        .map((x) => ({ id: x.getAttribute('data-testid'), ids: iconIds(x),
+          top: x.parentElement?.closest('[data-testid]') === el })).slice(0, 200),
       depth: depthOf(el),
       // badges drawn anywhere inside, so a badge one wrapper deeper still counts under its parent (TF-045)
-      badges: [...el.querySelectorAll('*')].filter((c) => !isHidden(c) && chromeOn(c)?.badge).length,
+      badges: own(el, '*').filter((c) => !isHidden(c) && chromeOn(c)?.badge).length,
       color: semanticColor(el),
       stroke: strokeOf(el),
       wrap: lineCount(el),
@@ -418,7 +440,7 @@ const PROBE = (wanted = []) => {
   // data-state-testid="<id>") is not on the first view, so it is neither walked nor counted when its
   // siblings are numbered: a database-down alert first in a card moved every row below it one place,
   // and the Host/Port row was compared with the alert (Lekhak TF-011).
-  const stateOnly = (el) => el.hasAttribute('data-tf-state') || el.hasAttribute('data-state-testid');
+  const stateOnly = (el) => el.matches(STATE);
   const keyOf = (el, parentKey) => {
     const tag = el.tagName.toLowerCase();
     let n = 0;
@@ -447,7 +469,7 @@ const PROBE = (wanted = []) => {
   for (const a of anchors) {
     const id = a.getAttribute('data-testid');
     if (!id || index[id]) continue;
-    if (isHidden(a) || a.closest('[data-tf-state],[data-state-testid]')) continue;   // TF-011
+    if (isHidden(a) || a.closest(STATE)) continue;   // TF-011
     index[id] = sigOf(a);
     let budget = MAX_PER_ANCHOR;
     const walk = (el, key, depth) => {
@@ -571,6 +593,106 @@ const CLAUSES = {
 const CONTENT_CLAUSES = new Set(['badge', 'icon', 'wrap', 'token']);
 
 function diff(mock, app, screen, width) {
+  // --- Chatur TF-002: sample data the app is not showing. A mockup draws a list full of sample rows
+  // and a fresh app has none, so every icon on a sample row read as missing. A box the mockup marks
+  // data-tf-sample is compared when the app draws something at its place; when it draws nothing
+  // there, the box and everything in it are "not measured", and its icons and badges are taken off
+  // the boxes around it. A seed script (tests/verify/seed/) puts the app in the drawn state instead.
+  const notMeasured = [];
+  const mockAll = mock.index;   // before anything is dropped (Chatur TF-007)
+  // the mockup's sample rows that carry their own anchor (commit-row-N), read before any is dropped
+  const fold = (id) => id.replace(/\d+/g, '#');
+  const sampleRows = new Set(Object.keys(mock.index).filter((k) => !k.includes(' > ') && mock.index[k].sample));
+  const sampleShapes = new Set([...sampleRows].map(fold));
+  const idx = { ...mock.index };
+  for (const key of Object.keys(mock.index)) {
+    const m = mock.index[key];
+    if (!m.sample || app.index[key] || notMeasured.some((k) => key.startsWith(k + ' > '))) continue;
+    notMeasured.push(key);
+    for (const k of Object.keys(idx)) if (k === key || k.startsWith(key + ' > ')) delete idx[k];
+    const gone = new Set(m.icon_ids || []);
+    for (let up = key; up.includes(' > ');) {
+      up = up.slice(0, up.lastIndexOf(' > '));
+      const a = idx[up];
+      if (!a) continue;
+      const icons = Math.max(0, (a.icons ?? 0) - (m.icons ?? 0));
+      idx[up] = { ...a, icons, icon: a.icon && icons > 0, icon_ids: (a.icon_ids || []).filter((i) => !gone.has(i)),
+        badges: Math.max(0, (a.badges ?? 0) - (m.badges ?? 0) - (m.badge === true ? 1 : 0)) };
+    }
+  }
+  mock = { ...mock, index: idx };
+  // --- Chatur TF-006: a sample row graded on its own is not the box's icon too. The mockup's table
+  // lost its sample rows' icons when their tbody was not measured, while the app's table still counted
+  // every row's: "app carries an icon the mockup does not" on a box whose rows were each compared. A
+  // row anchored as a mockup sample row, or as more of the same (commit-row-7 beside commit-row-1), is
+  // left out of every box around it on both sides; an icon of the box's own is still counted.
+  const strip = (index, goneOf) => Object.fromEntries(Object.entries(index).map(([k, s]) => {
+    const gone = goneOf(k, s);
+    const ids = (s.icon_ids || []).filter((i) => !gone.has(i));
+    const cut = (s.icon_ids || []).length - ids.length;
+    if (!cut) return [k, s];
+    const icons = Math.max(0, (s.icons ?? 0) - cut);
+    return [k, { ...s, icons, icon: icons > 0, icon_ids: ids }];
+  }));
+  const dropRows = (index, isRow) => strip(index, (k, s) => new Set((s.nested || []).filter((n) => isRow(n.id)).flatMap((n) => n.ids)));
+  if (sampleRows.size) {
+    mock = { ...mock, index: dropRows(mock.index, (id) => sampleRows.has(id)) };
+    app = { ...app, index: dropRows(app.index, (id) => sampleRows.has(id) || (!(id in mock.index) && sampleShapes.has(fold(id)))) };
+  }
+  // --- Chatur TF-007: the app's rows in the place of sample rows not measured. The mockup's list box
+  // lost the icons of sample rows the app does not draw (recent-tflens, tools-table > tbody[0]), while
+  // the app's box kept the icons of the real rows it draws there instead (recent-chatur, a wrapped
+  // tbody): "app carries an icon the mockup does not" on Start, Prerequisites, Providers, Corrections and
+  // the file tree. The app's rows in that place — the children and anchors of the box holding the sample
+  // rows that the mockup does not have — are left out of every box around them, as the sample rows are
+  // on the mockup's side, there taken off every box too, anchors around the list included.
+  // A row's icons come off the boxes AROUND it only: an element above it that holds all of them. A
+  // button inside the row keeps its own icon, or it reads as one the mockup does not carry.
+  const appAll = app.index;
+  const rowsGone = (rows, all) => (k, s) => {
+    const had = new Set(all[k]?.icon_ids || s.icon_ids || []);
+    return new Set(rows.filter((r) => (s.depth ?? 0) < r.depth && r.ids.every((i) => had.has(i))).flatMap((r) => r.ids));
+  };
+  const inPlace = [];
+  // The app's rows in that place are what the mockup does not have under the same box and of the
+  // same kind as the sample row (a tbody for a tbody, an <a> for an <a>), the outermost of them; only
+  // when there is none of that kind, every child of the box the mockup does not have. A heading or a
+  // toolbar of the box's own is not a row.
+  const takeRows = (box, tag) => {
+    const a = appAll[box];
+    if (!a) return;
+    const tagOf = (k) => k.slice(k.lastIndexOf(' > ') + 3).replace(/\[\d+\]$/, '');
+    const same = Object.keys(appAll).filter((k) => k.startsWith(box + ' > ') && !(k in mockAll) && tagOf(k) === tag);
+    const rows = same.filter((k) => !same.some((o) => o !== k && k.startsWith(o + ' > ')))
+      .map((k) => ({ ids: appAll[k].icon_ids || [], depth: appAll[k].depth ?? 0 }));
+    for (const n of a.nested || []) {
+      if (!(n.id in mockAll) && appAll[n.id]?.tag === tag) rows.push({ ids: n.ids, depth: appAll[n.id].depth ?? 0 });
+    }
+    if (!rows.length) {
+      for (const k of Object.keys(appAll)) {
+        if (k.startsWith(box + ' > ') && !k.slice(box.length + 3).includes(' > ') && !(k in mockAll)) {
+          rows.push({ ids: appAll[k].icon_ids || [], depth: appAll[k].depth ?? 0 });
+        }
+      }
+      // and the box's own anchors the mockup does not have: a scroll area holding the rows
+      for (const n of a.nested || []) {
+        if (n.top && !(n.id in mockAll) && appAll[n.id]) rows.push({ ids: n.ids, depth: appAll[n.id].depth ?? 0 });
+      }
+    }
+    inPlace.push(...rows);
+  };
+  const sampleGone = [];
+  for (const k of notMeasured) {
+    sampleGone.push({ ids: mockAll[k].icon_ids || [], depth: mockAll[k].depth ?? 0 });
+    if (k.includes(' > ')) { takeRows(k.slice(0, k.lastIndexOf(' > ')), mockAll[k].tag); continue; }
+    // an anchored sample row: the nearest mockup box holding it
+    const box = Object.keys(mockAll).filter((b) => (mockAll[b].nested || []).some((n) => n.id === k))
+      .sort((x, y) => (mockAll[y].depth ?? 0) - (mockAll[x].depth ?? 0))[0];
+    if (box) takeRows(box, mockAll[k].tag);
+  }
+  const some = (rows) => rows.filter((r) => r.ids.length);
+  if (some(sampleGone).length) mock = { ...mock, index: strip(mock.index, rowsGone(some(sampleGone), mockAll)) };
+  if (some(inPlace).length) app = { ...app, index: strip(app.index, rowsGone(some(inPlace), appAll)) };
   const findings = [];
   const clauseCoverage = Object.fromEntries(Object.keys(CLAUSES).map((k) => [k, 0]));
   clauseCoverage.missing = 0;
@@ -694,7 +816,7 @@ function diff(mock, app, screen, width) {
       .flatMap((y) => y.side.icon_ids || []));
     if (ids.length && ids.every((i) => below.has(i))) repeat.add(x.f);
   }
-  return { findings: findings.filter((f) => !repeat.has(f)), compared, contentGraded, clauseCoverage, relocated };
+  return { findings: findings.filter((f) => !repeat.has(f)), compared, contentGraded, clauseCoverage, relocated, notMeasured };
 }
 
 // ---------------------------------------------------------------------- main
@@ -862,6 +984,8 @@ for (const s of SCREENS) {
       compared, content_graded: contentGraded, ungradeable,
       // badges found by their text at another depth than the mockup's (TF-045)
       relocated: ok.reduce((n, w) => n + (w.relocated || 0), 0),
+      // sample boxes the app drew nothing at, so not compared (Chatur TF-002)
+      not_measured: [...new Set(ok.flatMap((w) => w.notMeasured || []))],
       app_controls: appAnchors, mockup_anchors: mockAnchors,
       ratio: appAnchors ? +(compared / appAnchors).toFixed(2) : null,
       thin: appAnchors > 0 && compared / appAnchors < THIN_RATIO,
@@ -879,6 +1003,7 @@ for (const s of SCREENS) {
     },
     widths: perWidth.map((w) => ({ width: w.width, error: w.error || null,
       compared: w.compared || 0, content_graded: w.contentGraded || 0, findings: (w.findings || []).length,
+      not_measured: (w.notMeasured || []).length,
       ...(w.reached ? { reached: w.reached } : {}),       // how a 401 screen was reached signed in (TF-011)
       ...(w.theme ? { theme: w.theme } : {}) })),          // the app was drawn in the mockup's theme (Lekhak TF-010)
   });

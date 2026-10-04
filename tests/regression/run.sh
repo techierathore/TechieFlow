@@ -1112,7 +1112,8 @@ cased = {("TF-%03d" % int(c[3:])) for c in cased}
 own = {"AppManager": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^am_0?(\d{2,3})\(\)", suite)},
        "Chatur": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^ch_0?(\d{2,3})\(\)", suite)},
        "TrBlazeUI": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^tb_0?(\d{2,3})\(\)", suite)},
-       "Lekhak": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^lk_0?(\d{2,3})\(\)", suite)}}
+       "Lekhak": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^lk_0?(\d{2,3})\(\)", suite)},
+       "Sevak": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^sv_0?(\d{2,3})\(\)", suite)}}
 for f in sorted(glob.glob(os.path.join(root, "docs", "*-TechieFlow-Feedback.md"))):
     app = os.path.basename(f).split("-")[0]
     for e in tf_feedback.entries(f):
@@ -3343,16 +3344,384 @@ am_027() {
 # the status gate's "every human document this command wrote" left a *-Feedback.html behind
 # that the owner had to ask, more than once, to have deleted. Now it is refused like the
 # checklist; an ordinary document that merely ends in -Feedback.md still renders.
-ch_001() {
-  local d="$SCRATCH/ch001" out rc1 rc2
+ch_render() {
+  local d="$SCRATCH/chrender" out rc1 rc2
   mkdir -p "$d/docs"
   printf '# TrBlazeUI feedback — found while building Fx\n\n| | |\n|---|---|\n| App | Fx |\n| Upstream | TrBlazeUI |\n| Updated | 2026-09-19 |\n\n## Summary\n\nx\n\n## Entries\n\n### TR-001 — a gap\n\n- **Blocks:** no\n' > "$d/docs/Fx-TrBlazeUI-Feedback.md"
   printf '# What customers said\n\n## Survey\n\nThey liked it.\n' > "$d/docs/Customer-Feedback.md"
   out="$(cd "$d" && python3 "$UTILS/tf-render-html.py" --quiet docs/Fx-TrBlazeUI-Feedback.md 2>&1)"; rc1=$?
   (cd "$d" && python3 "$UTILS/tf-render-html.py" --quiet docs/Customer-Feedback.md >/dev/null 2>&1); rc2=$?
   [[ $rc1 -eq 2 && ! -f "$d/docs/Fx-TrBlazeUI-Feedback.html" && $rc2 -eq 0 && -f "$d/docs/Customer-Feedback.html" ]] \
-    && ok ch_001 "an upstream feedback file is refused by the renderer; a document merely named *-Feedback.md still renders" \
-    || { bad ch_001 "feedback render: rc=$rc1 (want 2), plain doc rc=$rc2 (want 0)"; note "$(head -1 <<<"$out" | cut -c1-160)"; }
+    && ok ch_render "an upstream feedback file is refused by the renderer; a document merely named *-Feedback.md still renders" \
+    || { bad ch_render "feedback render: rc=$rc1 (want 2), plain doc rc=$rc2 (want 0)"; note "$(head -1 <<<"$out" | cut -c1-160)"; }
+}
+
+# --- Chatur TF-001: an icon inside a box marked as another state was counted on the box around it ---
+# The download icon in Prerequisites' "newer build" banner (data-tf-state="newer-build") was reported
+# on This Chatur's row: "mockup carries an icon here; the app does not". The app had no newer build.
+ch_001() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip ch_001 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/ch001"; mkdir -p "$d/site/pre" "$d/docs/mockups"
+  local css='<style>body{margin:0;font:14px/20px system-ui} .row{display:flex;gap:8px;padding:8px} svg{width:16px;height:16px}</style>'
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="this-chatur"><div class="row"><svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg>Version 1.4</div><div class="row">Up to date<div data-tf-state="newer-build"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="8"/></svg> Download 1.5</div></div></div></body></html>\n' "$css" > "$d/docs/mockups/pre.html"
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="this-chatur"><div class="row"><svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg>Version 1.4</div><div class="row">Up to date</div></div></body></html>\n' "$css" > "$d/site/pre/index.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  local out
+  out="$( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen pre=/pre/ --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1; python3 -c "
+import json
+for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], s['verdict'], '|'.join(f['key'] + ': ' + f['detail'][:40] for f in s.get('findings', [])))" 2>&1 )"
+  kill "$srv" 2>/dev/null
+  grep -q '^pre PASS $' <<<"$out" \
+    && ok ch_001 "an icon inside a box marked as another state is not counted on the box around it" \
+    || { bad ch_001 "the state box's icon was still reported on its parent"; note "$(tr '\n' ' ' <<<"$out" | cut -c1-200)"; }
+}
+
+# --- Chatur TF-002: a fresh app's empty list was graded against a mockup full of sample rows ------
+# Repository's check-ins table draws sample rows with an icon each; a fresh app has none, and every
+# icon read as missing. A row marked data-tf-sample is now "not measured" when the app draws nothing in
+# its place, and still graded when it does. A seed script under tests/verify/seed/ is found by the
+# list, run before the screen is driven, given TF_BASE, and a failing one is the screen's finding.
+ch_002() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip ch_002 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/ch002"; mkdir -p "$d/site/repo" "$d/site/full" "$d/site/bad" "$d/docs/mockups" "$d/tests/verify/seed" "$d/.tfcore"
+  local css='<style>body{margin:0;font:14px/20px system-ui} td{padding:4px} svg{width:16px;height:16px}</style>'
+  local rows='<tr data-tf-sample><td><svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg></td><td>run/REQ-FN-047</td></tr><tr data-tf-sample><td><svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg></td><td>run/REQ-FN-048</td></tr>'
+  for m in repo full bad; do
+    printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="agent-checkins"><h3><svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg> Check-ins</h3><table><tbody>%s</tbody></table></div></body></html>\n' "$css" "$rows" > "$d/docs/mockups/$m.html"
+  done
+  # a fresh app: no rows yet; and one with a row whose icon is really missing
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="agent-checkins"><h3><svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg> Check-ins</h3><table><tbody></tbody></table></div></body></html>\n' "$css" | tee "$d/site/repo/index.html" > "$d/site/bad/index.html"
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="agent-checkins"><h3><svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg> Check-ins</h3><table><tbody><tr><td></td><td>run/REQ-FN-050</td></tr></tbody></table></div></body></html>\n' "$css" > "$d/site/full/index.html"
+  printf 'echo "$TF_BASE" > "%s/seeded.txt"\n' "$d" > "$d/tests/verify/seed/repo.sh"
+  printf 'echo "no such commit" >&2; exit 3\n' > "$d/tests/verify/seed/bad.sh"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-UIDesign.md" <<'MD'
+# Fx — UI Design
+
+## Screens
+
+### Screen: Repo (`/repo/`)
+
+**Mockup:** [mockups/repo.html](mockups/repo.html)
+
+### Screen: Bad (`/bad/`)
+
+**Mockup:** [mockups/bad.html](mockups/bad.html)
+MD
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Details |
+|---|---|---|---|---|---|
+| REQ-UI-042 | Check-ins | Implemented | 75% | | [view](#d-req-ui-042) |
+| REQ-UI-043 | Bad | Implemented | 75% | | [view](#d-req-ui-043) |
+
+## Page: Repo
+
+<a id="d-req-ui-042"></a>
+- **REQ-UI-042** — Check-ins. *Mockup:* mockups/repo.html
+  - *Acceptance:* When the owner opens Repo, then the check-ins show.
+
+## Page: Bad
+
+<a id="d-req-ui-043"></a>
+- **REQ-UI-043** — Bad. *Mockup:* mockups/bad.html
+  - *Acceptance:* When the owner opens Bad, then the check-ins show.
+MD
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  local out lst scr
+  out="$( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen repo=/repo/ --screen full=/full/ --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1; python3 -c "
+import json
+for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], s['verdict'], len(s['coverage'].get('not_measured') or []))" 2>&1 )"
+  lst="$(cd "$d" && python3 "$UTILS/tf-verify-list.py" Fx ui --json-out "$d/list.json" 2>&1)"
+  ( cd "$d" && tf_timeout 120 node tf-verify-screens.mjs --list "$d/list.json" --base "http://127.0.0.1:$port" --widths 1280 --render-wait 500 --json-out "$d/screens.json" --shots-dir "$d/shots" >/dev/null 2>&1 )
+  scr="$(python3 -c "
+import json
+for s in json.load(open('$d/screens.json'))['screens']: print(s['name'], s['render'], (s.get('seed') or {}).get('ok'))" 2>&1)"
+  kill "$srv" 2>/dev/null
+  grep -q '^repo PASS 2$' <<<"$out" && grep -q '^full FAIL' <<<"$out" \
+    && ok ch_002a "sample rows the app has no data for are not measured; a row it does draw is still graded" \
+    || { bad ch_002a "sample rows: $(tr '\n' ' ' <<<"$out" | cut -c1-160)"; }
+  grep -q "seed tests/verify/seed/repo.sh" <<<"$lst" && grep -q '^Repo OK True$' <<<"$scr" && grep -q "127.0.0.1:$port" "$d/seeded.txt" 2>/dev/null \
+    && grep -q '^Bad EMPTY False$' <<<"$scr" \
+    && ok ch_002b "a screen's seed is found, run with TF_BASE before it is driven, and a failing seed is the screen's finding" \
+    || { bad ch_002b "seed: $(tr '\n' ' ' <<<"$scr" | cut -c1-160)"; note "$(grep -i seed <<<"$lst" | head -2)"; }
+}
+
+# --- Chatur TF-003: a screen whose route takes a value was never driven, and its rows passed ---
+# /settings/{tab} links one mockup per tab. It was one screen, skipped for want of a value, and its
+# rows were Verified on their tests alone. Now it is one screen per mockup, a row goes to the tab its
+# mockup names, and a row whose screen was not driven is never Verified.
+ch_003() {
+  local d="$SCRATCH/ch003" out
+  mkdir -p "$d/docs" "$d/.tfcore" "$d/tests/.artifacts/verify"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-UIDesign.md" <<'MD'
+# Fx — UI Design
+
+## Screens
+
+### Screen: Settings (`/settings/{tab}`)
+
+**Mockup:** [mockups/settings-providers.html](mockups/settings-providers.html)
+
+| Region | Control | Shows or binds |
+|---|---|---|
+| `settings-tabs` | Tabs | [providers](mockups/settings-providers.html) · [agents](mockups/settings-agents.html) |
+
+### Screen: Run (`/runs/{id}`)
+
+**Mockup:** [mockups/run.html](mockups/run.html)
+MD
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Details |
+|---|---|---|---|---|---|
+| REQ-UI-019 | Test a provider | Implemented | 75% | | [view](#d-req-ui-019) |
+| REQ-UI-025 | Roles | Implemented | 75% | | [view](#d-req-ui-025) |
+| REQ-UI-050 | Run detail | Implemented | 75% | | [view](#d-req-ui-050) |
+
+## Page: Settings (`/settings/{tab}`)
+
+<a id="d-req-ui-019"></a>
+- **REQ-UI-019** — Test a provider. *Mockup:* mockups/settings-providers.html
+  - *Acceptance:* When the owner presses Test on Settings, then the row says it answered.
+<a id="d-req-ui-025"></a>
+- **REQ-UI-025** — Roles. *Mockup:* mockups/settings-agents.html
+  - *Acceptance:* When the owner opens Settings, then the four roles show.
+
+## Page: Run (`/runs/{id}`)
+
+<a id="d-req-ui-050"></a>
+- **REQ-UI-050** — Run detail. *Mockup:* mockups/run.html
+  - *Acceptance:* When the owner opens Run, then the steps show.
+MD
+  (cd "$d" && python3 "$UTILS/tf-verify-list.py" Fx ui >/dev/null 2>&1)
+  out="$(python3 -c "
+import json
+l = json.load(open('$d/tests/.artifacts/verify/list.json'))
+for s in l['screens']: print('S', s['name'], s['route'])
+for r in l['rows']: print('R', r['id'], r['route'])" 2>&1)"
+  grep -q '^S Settings / providers /settings/providers$' <<<"$out" && grep -q '^S Settings / agents /settings/agents$' <<<"$out" \
+    && grep -q '^R REQ-UI-019 /settings/providers$' <<<"$out" && grep -q '^R REQ-UI-025 /settings/agents$' <<<"$out" \
+    && ok ch_003a "a route that takes one value is one screen per mockup it links, and each row goes to its own tab" \
+    || { bad ch_003a "the parameterised screen was not split"; note "$(tr '\n' ' ' <<<"$out" | cut -c1-200)"; }
+  printf '{"head":"web","mode":"base","url":"http://localhost:1","rung":"dotnet","reason":"","reason_kind":""}\n' > "$d/tests/.artifacts/verify/boot.json"
+  printf '{"screens":[],"skipped":[{"name":"Run","route":"/runs/{id}","rows":["REQ-UI-050"],"needs":["id"]}]}\n' > "$d/tests/.artifacts/verify/screens.json"
+  printf '{"reqs":{"REQ-UI-050":{"result":"PASS","source":"browser","tests":["REQ-UI-050 run detail"],"skipped":[],"passed":1,"failed":0,"reason":"","screenshot":""}}}\n' > "$d/tests/.artifacts/verify/tests.json"
+  (cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --apply >/dev/null 2>&1)
+  grep -q '^| REQ-UI-050 | Run detail | Verified' "$d/docs/Fx-Checklist.md" \
+    && { bad ch_003b "a row whose screen was not driven was Verified on its test alone"; note "$(grep 'REQ-UI-050 |' "$d/docs/Fx-Checklist.md")"; } \
+    || ok ch_003b "a row whose screen was not driven is not Verified, however its test went"
+}
+
+# --- Chatur TF-004: one screen's defect went to two builders at once -------------------------
+# The Workbench's UI rows went to trblazeui and its backend rows to the builder, both carrying the same
+# mockup defect; both edited EditorArea.razor in parallel and one left it half-written. A page whose
+# rows carry a defect is one cluster.
+ch_004() {
+  local d="$SCRATCH/ch004" out
+  mkdir -p "$d/docs" "$d/.tfcore/templates/v4custom"
+  cp "$ROOT/.tfcore/templates/v4custom/build-subagent-prompt.md" "$d/.tfcore/templates/v4custom/"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  printf '# Fx — Architecture\n\nUI library: TrBlazeUI 2.0.9\n' > "$d/docs/Fx-Architecture.md"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Details |
+|---|---|---|---|---|---|
+| REQ-UI-012 | Editor pane | FAIL | 75% | ⚠ mockup-parity: icon on editor: mockup carries an icon here; the app does not | [view](#d-req-ui-012) |
+| REQ-FN-013 | Save the file | FAIL | 75% | ⚠ mockup-parity: icon on editor: mockup carries an icon here; the app does not | [view](#d-req-fn-013) |
+| REQ-UI-020 | Theme cards | Not Started | 0% | | [view](#d-req-ui-020) |
+| REQ-FN-021 | Theme file | Not Started | 0% | | [view](#d-req-fn-021) |
+
+## Page: Workbench
+
+<a id="d-req-ui-012"></a>
+- **REQ-UI-012** — Editor pane.
+  - *Acceptance:* When the owner opens a file on Workbench, then it shows with syntax colour.
+<a id="d-req-fn-013"></a>
+- **REQ-FN-013** — Save the file.
+  - *Acceptance:* When the owner saves on Workbench, then the file on disk changes.
+
+## Page: Appearance
+
+<a id="d-req-ui-020"></a>
+- **REQ-UI-020** — Theme cards.
+  - *Acceptance:* When the owner opens Appearance, then four themes show.
+<a id="d-req-fn-021"></a>
+- **REQ-FN-021** — Theme file.
+  - *Acceptance:* When the owner adds a theme file on Appearance, then it is listed.
+MD
+  out="$(cd "$d" && python3 "$UTILS/tf-build-list.py" Fx 2>&1)"
+  grep -q 'REQ-UI-012, REQ-FN-013  (Workbench' <<<"$out" && [[ "$(grep -c '^Cluster .*(Workbench' <<<"$out")" == 1 ]] \
+    && [[ "$(grep -c '^Cluster .*(Appearance' <<<"$out")" == 2 ]] \
+    && ok ch_004 "a page whose rows carry a defect is one cluster; a page with none still splits by builder" \
+    || { bad ch_004 "the defect went to more than one builder"; note "$(grep '^Cluster' <<<"$out" | tr '\n' ' ' | cut -c1-200)"; }
+}
+
+# --- Chatur TF-005: real rows read as icons the mockup does not carry ------------------------------
+# Chatur marks its sample rows data-tf-state="sample-data". The TF-001 fix left everything inside a
+# state box out of the box around it, so once a seed made the app draw real rows, each list read "app
+# carries an icon the mockup does not". sample-data is now sample data: graded when the app draws rows,
+# not measured when it draws none. A real state box (the TF-001 banner) is still left out.
+ch_005() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip ch_005 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/ch005"; mkdir -p "$d/site/full" "$d/site/empty" "$d/site/bare" "$d/docs/mockups"
+  local css='<style>body{margin:0;font:14px/20px system-ui} a{display:flex;gap:6px;padding:4px} svg{width:16px;height:16px}</style>'
+  local ic='<svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg>'
+  local mock="<!doctype html><html><head><meta charset=\"utf-8\">$css</head><body><nav data-testid=\"recent-list\"><h3>Recent</h3><a data-tf-state=\"sample-data\">${ic}TfLens</a><a data-tf-state=\"sample-data\">${ic}TechieBlog</a></nav></body></html>"
+  for m in full empty bare; do printf '%s\n' "$mock" > "$d/docs/mockups/$m.html"; done
+  # real rows with icons; no rows yet; real rows without their icons
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><nav data-testid="recent-list"><h3>Recent</h3><a>%sChatur</a><a>%sSevak</a></nav></body></html>\n' "$css" "$ic" "$ic" > "$d/site/full/index.html"
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><nav data-testid="recent-list"><h3>Recent</h3></nav></body></html>\n' "$css" > "$d/site/empty/index.html"
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><nav data-testid="recent-list"><h3>Recent</h3><a>Chatur</a><a>Sevak</a></nav></body></html>\n' "$css" > "$d/site/bare/index.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  local out
+  out="$( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen full=/full/ --screen empty=/empty/ --screen bare=/bare/ --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1; python3 -c "
+import json
+for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], s['verdict'], len(s['coverage'].get('not_measured') or []), '|'.join(f['key'] + ': ' + f['detail'][:40] for f in s.get('findings', [])))" 2>&1 )"
+  kill "$srv" 2>/dev/null
+  grep -q '^full PASS 0 $' <<<"$out" && grep -q '^empty PASS 2 $' <<<"$out" && grep -q '^bare FAIL 0 ' <<<"$out" \
+    && ok ch_005 "sample-data rows are graded against the app's real rows, not measured when there are none, and a missing icon still fails" \
+    || { bad ch_005 "sample-data rows: $(tr '\n' ' ' <<<"$out" | cut -c1-220)"; }
+}
+
+# --- Chatur TF-006: a table counted the app's row icons against a mockup count without its sample rows --
+# Repository's history-table: the mockup's sample rows (commit-row-N) sit in a sample-data tbody the app
+# draws inside a wrapper, so the tbody was "not measured" and its icons taken off the mockup's table,
+# while the app's table still counted every row icon — "app carries an icon the mockup does not" on a
+# box whose rows were each compared on their own. Rows anchored as the mockup's sample rows (and more of
+# the same, commit-row-3) are now left out of the box's count on both sides; an icon the app adds to
+# the box outside its rows is still reported.
+ch_006() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip ch_006 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/ch006"; mkdir -p "$d/site/rows" "$d/site/extra" "$d/docs/mockups"
+  local css='<style>body{margin:0;font:14px/20px system-ui} td{padding:4px} svg{width:16px;height:16px}</style>'
+  local ic='<svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg>'
+  local row='<tr data-testid="commit-row-%s" data-tf-state="sample-data"><td>%s</td><td>a1b2c3%s</td></tr>'
+  local mrows; mrows="$(printf "$row" 1 "$ic" 1)$(printf "$row" 2 "$ic" 2)"
+  local mock="<!doctype html><html><head><meta charset=\"utf-8\">$css</head><body><table data-testid=\"history-table\"><thead><tr><th>Check-in</th><th>Message</th></tr></thead><tbody data-tf-state=\"sample-data\">$mrows</tbody></table></body></html>"
+  for m in rows extra; do printf '%s\n' "$mock" > "$d/docs/mockups/$m.html"; done
+  local arow='<tr data-testid="commit-row-%s"><td>%s</td><td>f3f99e%s</td></tr>'
+  local arows; arows="$(printf "$arow" 1 "$ic" 1)$(printf "$arow" 2 "$ic" 2)$(printf "$arow" 3 "$ic" 3)"
+  # the app wraps the table, as a component library does; one more row than the mockup draws
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="history-table"><table><thead><tr><th>Check-in</th><th>Message</th></tr></thead><tbody>%s</tbody></table></div></body></html>\n' "$css" "$arows" > "$d/site/rows/index.html"
+  # the same, with an icon of the box's own that the mockup does not draw
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="history-table"><p>%s Filter</p><table><thead><tr><th>Check-in</th><th>Message</th></tr></thead><tbody>%s</tbody></table></div></body></html>\n' "$css" "$ic" "$arows" > "$d/site/extra/index.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  local out
+  out="$( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen rows=/rows/ --screen extra=/extra/ --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1; python3 -c "
+import json
+for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], s['verdict'], '|'.join(f['key'] + ': ' + f['detail'][:40] for f in s.get('findings', [])))" 2>&1 )"
+  kill "$srv" 2>/dev/null
+  grep -q '^rows PASS $' <<<"$out" && grep -q '^extra FAIL history-table: app carries an icon' <<<"$out" \
+    && ok ch_006 "rows matched to the mockup's sample rows are left out of the table's own icon count on both sides; the table's own extra icon still fails" \
+    || { bad ch_006 "sample rows in a box: $(tr '\n' ' ' <<<"$out" | cut -c1-220)"; }
+}
+
+# --- Chatur TF-007: the app's real rows kept their icons where the mockup's sample rows lost theirs ----
+# Start's recent-list draws sample rows anchored after sample data (recent-tflens); the app's rows are
+# anchored after real projects (recent-chatur). The sample rows were not measured and their icons taken
+# off the list, the app's rows kept theirs: "app carries an icon the mockup does not". The same on a
+# table whose sample tbody the app draws inside a wrapper (tools-table). Both sides now leave the rows in
+# that place out; the list's own extra icon still fails.
+ch_007() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip ch_007 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/ch007"; mkdir -p "$d/site/start" "$d/site/extra" "$d/site/tools" "$d/docs/mockups"
+  local css='<style>body{margin:0;font:14px/20px system-ui} a{display:flex;gap:6px;padding:4px} td{padding:4px} svg{width:16px;height:16px}</style>'
+  local ic='<svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg>'
+  local h='<!doctype html><html><head><meta charset="utf-8">'"$css"'</head><body>'
+  local mlist="$h<aside data-testid=\"recent-side\"><nav data-testid=\"recent-list\"><h3>Recent</h3><a data-testid=\"recent-tflens\" data-tf-state=\"sample-data\">${ic}TfLens</a><a data-testid=\"recent-astrolyfe\" data-tf-state=\"sample-data\">${ic}AstroLyfe</a></nav></aside></body></html>"
+  for m in start extra; do printf '%s\n' "$mlist" > "$d/docs/mockups/$m.html"; done
+  printf '%s<aside data-testid="recent-side"><nav data-testid="recent-list"><h3>Recent</h3><a data-testid="recent-chatur">%sChatur</a><a data-testid="recent-sevak">%sSevak</a><a data-testid="recent-xpenser">%sXpenser</a></nav></aside></body></html>\n' "$h" "$ic" "$ic" "$ic" > "$d/site/start/index.html"
+  printf '%s<aside data-testid="recent-side"><nav data-testid="recent-list"><h3>%sRecent</h3><a data-testid="recent-chatur">%sChatur</a></nav></aside></body></html>\n' "$h" "$ic" "$ic" > "$d/site/extra/index.html"
+  printf '%s<table data-testid="tools-table"><tbody data-tf-state="sample-data"><tr><td>%s</td><td>git</td></tr><tr><td>%s</td><td>dotnet</td></tr></tbody></table></body></html>\n' "$h" "$ic" "$ic" > "$d/docs/mockups/tools.html"
+  printf '%s<div data-testid="tools-table"><table><tbody><tr><td>%s</td><td>node</td></tr></tbody></table></div></body></html>\n' "$h" "$ic" > "$d/site/tools/index.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  local out
+  out="$( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen start=/start/ --screen extra=/extra/ --screen tools=/tools/ --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1; python3 -c "
+import json
+for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], s['verdict'], '|'.join(f['key'] + ': ' + f['detail'][:40] for f in s.get('findings', [])))" 2>&1 )"
+  kill "$srv" 2>/dev/null
+  grep -q '^start PASS $' <<<"$out" && grep -q '^tools PASS $' <<<"$out" && grep -q '^extra FAIL .*app carries an icon' <<<"$out" \
+    && ok ch_007 "the app's rows in the place of unmeasured sample rows are left out of the list's icon count, anchored or not; the list's own extra icon still fails" \
+    || { bad ch_007 "rows in place of sample rows: $(tr '\n' ' ' <<<"$out" | cut -c1-220)"; }
+}
+
+# --- Sevak TF-001: raising the size rewrote AGENTS.md, CLAUDE.md and the document list ----------
+# *amend-docs runs `tf-day1-files.sh Sevak --size L --kind app` to grow past Medium. That archived the
+# project's own AGENTS.md and CLAUDE.md and wrote blank templates, and cut customTechnicalDocuments to
+# three entries, one of them a file Sevak does not have. --size, --kind and --phase now set their keys
+# (and the Phases file for Large) and nothing else; --prefix, day-1 stage 2, writes the files and adds
+# missing document paths, keeping every entry already listed.
+sv_001() {
+  local d="$SCRATCH/sv001" out
+  mkdir -p "$d/docs" "$d/.tfcore/templates/v4custom"
+  cp "$ROOT"/.tfcore/templates/v4custom/{app-phases-tmpl.md,app-agents-md-tmpl.md,app-claude-md-tmpl.md,app-editorconfig-tmpl.editorconfig} "$d/.tfcore/templates/v4custom/"
+  cat > "$d/.tfcore/core-config.yaml" <<'YML'
+appSize: M
+appKind: app
+customTechnicalDocuments:
+  brd: docs/Fx-BRD.md
+  architecture: docs/Fx-Architecture.md
+  uiDesign: docs/Fx-UIDesign.md
+  usageGuide: docs/Fx-UsageGuide.md
+  checklist: docs/Fx-Checklist.md
+devLoadAlwaysFiles:
+  - docs/Fx-Architecture.md
+  - docs/Fx-Standards.md
+YML
+  printf '# Fx agents\n\nHard rule 5: stored identifiers never change.\n' > "$d/AGENTS.md"
+  printf '# Fx for Claude\n\n@AGENTS.md\n' > "$d/CLAUDE.md"
+  local cfg0; cfg0="$(grep -v '^appSize' "$d/.tfcore/core-config.yaml")"
+  out="$(cd "$d" && python3 "$UTILS/tf-day1-files.py" Fx --size L --kind app 2>&1)"
+  grep -q '^appSize: L$' "$d/.tfcore/core-config.yaml" && [[ -f "$d/docs/Fx-Phases.md" ]] \
+    && [[ "$(grep -v '^appSize' "$d/.tfcore/core-config.yaml")" == "$cfg0" ]] \
+    && grep -q 'Hard rule 5' "$d/AGENTS.md" && grep -q '^# Fx for Claude' "$d/CLAUDE.md" \
+    && [[ ! -e "$d/docs/OldDocs" && ! -e "$d/.editorconfig" ]] \
+    && ok sv_001a "--size L changes appSize and writes the Phases file; AGENTS.md, CLAUDE.md and the document list are untouched" \
+    || { bad sv_001a "--size rewrote more than the size"; note "$(tr '\n' ' ' <<<"$out" | cut -c1-200)"; }
+  out="$(cd "$d" && python3 "$UTILS/tf-day1-files.py" Fx --prefix obj 2>&1)"
+  grep -q '^  uiDesign: docs/Fx-UIDesign.md$' "$d/.tfcore/core-config.yaml" && grep -q '^  checklist: docs/Fx-Checklist.md$' "$d/.tfcore/core-config.yaml" \
+    && grep -q '^  codingStandards: docs/Fx-Coding-Standards.md$' "$d/.tfcore/core-config.yaml" \
+    && grep -q '^  - docs/Fx-Standards.md$' "$d/.tfcore/core-config.yaml" && grep -q '^  - docs/Fx-Coding-Standards.md$' "$d/.tfcore/core-config.yaml" \
+    && [[ "$(grep -c 'docs/Fx-Architecture.md' "$d/.tfcore/core-config.yaml")" == 2 ]] \
+    && [[ -f "$d/docs/OldDocs/AGENTS.md" && -f "$d/.editorconfig" ]] \
+    && ok sv_001b "--prefix (day-1 stage 2) writes the files and adds missing document paths, keeping every entry already listed" \
+    || { bad sv_001b "stage 2 dropped or duplicated a document entry"; note "$(sed -n '/customTechnicalDocuments/,$p' "$d/.tfcore/core-config.yaml" | tr '\n' ' ' | cut -c1-240)"; }
 }
 
 # --- TrBlazeUI TF-001: triage close logged last week's bugs again under today's run -------------
@@ -4013,7 +4382,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_001 tb_001 tb_002 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 sv_001 tb_001 tb_002 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

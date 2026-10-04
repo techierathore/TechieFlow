@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-09-28 (a private project's TF-001 to TF-007). |
+| Last updated | 2026-10-03 (Chatur TF-006, TF-007). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -114,18 +114,16 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | **Open misses** are listed with their outcome in `docs/TechieFlow-Misses.md` — 52 of 167 open (2026-09-12). The one this maintainer owes a fix for is 12 of 2026-09-07, that a hidden framework folder is invisible to search and nothing enforces the rule. | Maintainer |
 | **TrStudio is not on this machine.** It is a named fixture and could not be refreshed here. | Owner action |
 | **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` (that repository, not this one) and waiting on the owner's go-ahead. | Separate repo |
-| **TfLens's TF-013 to TF-052, AppManager's TF-001 to TF-027, Chatur's TF-001, TrBlazeUI's TF-001 and a private project's six are fixed and deployed everywhere.** Awaiting re-check: TfLens TF-051, TF-052; AppManager TF-025–027; Chatur TF-001; TrBlazeUI TF-001; the private project's six. `tf-feedback.sh <App>` prints each state. | Each project (close) |
+| **TfLens's TF-013 to TF-052, AppManager's TF-001 to TF-027, Chatur's TF-001 to TF-007, TrBlazeUI's TF-001 and two private projects' seven are fixed and deployed everywhere.** Awaiting re-check: TfLens TF-051, TF-052; AppManager TF-025–027; Chatur TF-007; TrBlazeUI TF-001; the private projects' seven. `tf-feedback.sh <App>` prints each state. | Each project (close) |
+| **Mockup parity pairs live rows with sample rows by position** (MISS-TechieFlow-20261003-02): row N of the app is graded against whatever kind of row the mockup drew at N, so data in another order gives row-level icon findings. Chatur's Repository rows are blocked on it. A fix would pair each app row with the best-matching sample row. | Maintainer |
 | **No Mac Catalyst driver** (MISS-TechieFlow-20260928-07): build and prove one on the Mac. | Maintainer |
 | **Eighteen `.gitignore` files carry repeated framework blocks** left by FR-76's defect: TechieBlog 50 copies, TfLens 30, one private project 10, fifteen others 2. Repeated lines ignore nothing extra, so nothing is wrong, only untidy; the updater no longer adds them, and removes none. | Owner decision |
-| **286 misses predate the `sort` field** (2026-09-07). Nothing is backfilled, nothing is edited, and a reader labels what it derives; no action, by anyone. See `docs/CHANGELOG.md`. | Closed |
 | **TrSetup has thousands of tracked build-output files.** Its ignore rules are correct and inert until the index entries go. `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the commands. Agents never run version control. | Owner action |
 | **Both library packages need republishing** so the persona fixes reach consumers (TR-002, TR-RAG-002). | Owner action |
 | **TechieRag holds two products in one repository**, which the one-checklist assumption cannot resolve: split the repo, or teach telemetry about it. | Owner decision |
 | **Mockup parity needs anchored mockups.** A project whose mockups carry no `data-testid` is reported ungradeable, never passed. Per-project work. | Per project |
 | **The scripts are not technology-neutral, though the personas and tasks are** (checked by `tests/mirror/run.sh`). `tf-build.sh` is .NET's and the browser layer is Playwright's, with no stack question behind either, so another stack gets the documents and telemetry and none of the build or verify scripts (MISS-TechieFlow-20260912-06). | Owner decision |
 | Two owner-owned HTML documents still name the pre-2026 layout; the updater reports them and never edits them. | Owner action |
-
-| **Impossible run records on three streams cannot be repaired**, and no longer need to be. TechieBlog holds 13 whose `started` is after their `ended`, TfLens 1, and TechieRag 1 record no elapsed time. The emitter refuses new ones, the reader discards them and prints how many (`duration_measured_n` / `duration_impossible_n` / `duration_absent_n` / `duration_recomputed_n`), and the streams are append-only, so nothing is deleted. | Closed |
 
 The last five predate the reset and were not re-checked.
 

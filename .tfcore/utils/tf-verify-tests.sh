@@ -209,7 +209,9 @@ PY
       --report-*) UARGS+=("-p:TestingPlatformCommandLineArguments=$MTP") ;;
       mixed) echo "unit tests: note  the Testing Platform projects here take different report switches, so none was passed; their tests are not mapped to rows" ;;
     esac
-    STAMP="$(mktemp)"
+    # the stamp sits on the project's own drive: one in /tmp takes its time from WSL's clock and the
+    # report on /mnt/c from Windows', which drift apart, so a fresh report could read as older (2026-10-02)
+    mkdir -p tests/.artifacts; STAMP="$(mktemp tests/.artifacts/.unit-stamp.XXXXXX)"
     UNITLINE="$(bash "$HERE/tf-build.sh" test ${TARGET:+"$TARGET"} -- "${UARGS[@]}" 2>&1 | grep -m1 -E '^(PASS|FAIL|NOT-RUN)' || true)"
     UNITLOG="$(sed -n 's/.*log \(tests\/\.artifacts\/build\/[^ ;]*\).*/\1/p' <<<"$UNITLINE" | head -1)"
     TRX="$(find . -name '*.trx' -newer "$STAMP" -not -path '*/node_modules/*' 2>/dev/null)"; rm -f "$STAMP"

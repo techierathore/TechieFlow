@@ -23,6 +23,7 @@
 import { chromium } from 'playwright';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 const argv = process.argv.slice(2);
 const arg = (n, d = null) => { const i = argv.indexOf(n); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d; };
@@ -68,7 +69,7 @@ let listValues = {};
 if (LIST) {
   const l = JSON.parse(readFileSync(LIST, 'utf8'));
   listValues = l.route_values || {};
-  screens = (l.screens || []).map((s) => ({ name: s.name, route: s.route, mockup: s.mockup || '', rows: s.rows || [], route_values: s.route_values || {} }));
+  screens = (l.screens || []).map((s) => ({ name: s.name, route: s.route, mockup: s.mockup || '', rows: s.rows || [], route_values: s.route_values || {}, seed: s.seed || '' }));
 }
 for (const s of args('--screen')) {
   const m = s.match(/^([^=]+)=(.+)$/);
@@ -146,7 +147,8 @@ async function hiddenByWidth(b, mockup, anchors) {
 // The anchors a mockup marks as belonging to another state of the screen (Lekhak TF-005): a reason
 // shown only while the database is down, a result shown only after "Test". The mockup says so with
 // data-tf-state="<state>" (or data-state-testid="<id>", Lekhak TF-011) on the control or on a box around it. Such a control is not owed on the
-// first view; when it is drawn and visible it is graded like any other.
+// first view; when it is drawn and visible it is graded like any other. A control on a box marked
+// data-tf-sample (a sample row a fresh app has no data for) is treated the same way (Chatur TF-002).
 async function stateOnlyOf(b, mockup, anchors) {
   if (!mockup || !existsSync(mockup) || !anchors || !anchors.length) return [];
   if (b) {
@@ -157,12 +159,25 @@ async function stateOnlyOf(b, mockup, anchors) {
       await p.goto('file://' + resolve(mockup), { waitUntil: 'load', timeout: 15000 });
       return await p.evaluate(({ anchors, attr }) => anchors.filter((id) => {
         const el = document.querySelector(`[${attr}="${CSS.escape(id)}"]`);
-        return !!el && !!el.closest('[data-tf-state],[data-state-testid]');
+        return !!el && !!el.closest('[data-tf-state],[data-state-testid],[data-tf-sample]');
       }), { anchors, attr: ATTR });
     } catch (e) { /* fall through to the mark on the control itself */ } finally { if (ctx) await ctx.close().catch(() => {}); }
   }
   const html = readFileSync(mockup, 'utf8');
-  return anchors.filter((id) => new RegExp(`<[^>]*\\bdata-(?:tf-state|state-testid)\\b[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']|<[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*\\bdata-(?:tf-state|state-testid)\\b`).test(html));
+  return anchors.filter((id) => new RegExp(`<[^>]*\\bdata-(?:tf-state|state-testid|tf-sample)\\b[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']|<[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*\\bdata-(?:tf-state|state-testid|tf-sample)\\b`).test(html));
+}
+
+// A screen whose mockup draws sample data the app has none of is compared against an empty view
+// (Chatur TF-002). Its seed, tests/verify/seed/<mockup name>.sh (tf-verify-list.py finds it), puts the
+// running app in the state the mockup draws, once, before the screen is first opened. It is given the
+// app's address as TF_BASE. A seed that fails is the screen's render finding: the screen was not in
+// the state it is graded in.
+function runSeed(seed) {
+  if (!seed) return null;
+  if (!existsSync(seed)) return { path: seed, ok: false, output: 'the seed script is not on disk at that path' };
+  const r = spawnSync('bash', [seed], { env: { ...process.env, TF_BASE: BASE || CDP }, encoding: 'utf8', timeout: 120000 });
+  const output = `${r.stdout || ''}${r.stderr || ''}`.trim().split('\n').slice(-3).join(' | ').slice(0, 300);
+  return { path: seed, ok: r.status === 0, exit: r.status, output: r.error ? String(r.error.message) : output };
 }
 
 // ---------------------------------------------------------------- browser
@@ -436,6 +451,7 @@ for (const width of WIDTHS) {
       r.hidden_by_width = await hiddenByWidth(mockBrowser, s.mockup, r.anchors);
       r.state_only = await stateOnlyOf(mockBrowser, s.mockup, r.anchors);
       if (s.route_pattern) r.route_pattern = s.route_pattern;
+      if (s.seed) r.seed = runSeed(s.seed);
     }
     const excused = (r.hidden_by_width || {})[width] || [];
     const stateOnly = r.state_only || [];
@@ -467,6 +483,10 @@ for (const width of WIDTHS) {
       entry.render_wait_ms = await waitForRender(page, (r.anchors || []).filter((id) => !excused.includes(id) && !stateOnly.includes(id)), ATTR);
       const info = await inspect(page, r.anchors || [], ATTR, ERROR_SELECTORS);
       const g = grade(info, consoleErrors, width, excused, stateOnly);
+      if (r.seed && !r.seed.ok) {
+        g.findings.unshift({ check: 'render', class: 'other', detail: `seed ${r.seed.path} failed (exit ${r.seed.exit ?? '?'}): ${r.seed.output}` });
+        if (g.render === 'OK') g.render = 'EMPTY';
+      }
       if (excused.length) entry.hidden_in_mockup = excused;
       if (stateOnly.length) entry.state_only = stateOnly;
       Object.assign(entry, g);

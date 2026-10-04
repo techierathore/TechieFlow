@@ -117,12 +117,41 @@ def screens_of_uidesign(path):
         m = re.match(r"###\s+Screen:\s*(.+?)\s*\(`?([^)`]+)`?\)\s*$", p.splitlines()[0] if p.strip() else "")
         if not m:
             continue
-        mk = re.search(r"((?:docs/)?mockups/[\w./-]+\.html)", p)
-        mock = mk.group(1) if mk else ""
-        if mock and not mock.startswith("docs/"):
-            mock = "docs/" + mock
-        out.append({"name": m.group(1).strip(), "route": m.group(2).strip(), "mockup": mock})
+        mocks = []
+        for mk in re.findall(r"((?:docs/)?mockups/[\w./-]+\.html)", p):
+            mk = mk if mk.startswith("docs/") else "docs/" + mk
+            if mk not in mocks:
+                mocks.append(mk)
+        name, route = m.group(1).strip(), m.group(2).strip()
+        tabs = split_by_mockup(name, route, mocks)
+        out.extend(tabs or [{"name": name, "route": route, "mockup": mocks[0] if mocks else ""}])
     return out
+
+
+def split_by_mockup(name, route, mocks):
+    """One screen per mockup when the route takes one value and the entry links a mockup per value:
+    `/settings/{tab}` with settings-providers.html, settings-agents.html … is seven screens,
+    `/settings/providers` and so on. Kept as one screen it was never driven, and its rows were
+    Verified on their tests alone (Chatur TF-003). [] when the route or the mockups do not fit."""
+    params = re.findall(r"\{[^}]+\}", route)
+    if len(params) != 1 or len(mocks) < 2:
+        return []
+    stems = [os.path.basename(m)[:-5] for m in mocks]
+    prefix = os.path.commonprefix(stems)
+    prefix = prefix[:prefix.rfind("-") + 1] if "-" in prefix else ""
+    values = [s[len(prefix):] for s in stems]
+    if not prefix or not all(re.fullmatch(r"[a-z0-9][a-z0-9-]*", v) for v in values):
+        return []
+    return [{"name": f"{name} / {v}", "route": route.replace(params[0], v), "mockup": mk,
+             "route_pattern": route, "parent": name} for v, mk in zip(values, mocks)]
+
+
+def seed_of(screen):
+    """tests/verify/seed/<mockup name>.sh, when the project has one: it puts the running app in the
+    state the mockup draws before the screen is driven (Chatur TF-002). tf-verify-screens runs it."""
+    stem = os.path.basename(screen.get("mockup") or "")[:-5] or re.sub(r"[^a-z0-9]+", "-", screen["name"].lower()).strip("-")
+    p = os.path.join("tests", "verify", "seed", f"{stem}.sh")
+    return p if os.path.isfile(p) else ""
 
 
 def screens_of_checklist(text, ent):
@@ -252,6 +281,9 @@ def main(argv):
     dialogs = dialogs_of_brd(os.path.join("docs", f"{pfx}BRD.md"))
     users = test_users(usage_guide(app))
     by_name = {norm_name(s["name"]): s for s in screens}
+    for s in screens:                   # a split screen's own name reaches its first tab (Chatur TF-003)
+        if s.get("parent"):
+            by_name.setdefault(norm_name(s["parent"]), s)
     by_mock = {s["mockup"]: s for s in screens if s["mockup"]}
     by_route = {s["route"].lower(): s for s in screens}
     by_section = {s["section"]: s for s in screens if s.get("section")}
@@ -285,6 +317,10 @@ def main(argv):
         if not row["screen"] and e["mockup"] in by_mock:
             s = by_mock[e["mockup"]]
             row["screen"], row["route"] = s["name"], s["route"]
+        # a row on a split screen belongs to the tab whose mockup it names
+        tab = by_mock.get(e["mockup"])
+        if row["screen"] and tab and tab.get("parent") and by_name.get(norm_name(row["screen"]), {}).get("parent") == tab["parent"]:
+            row["screen"], row["route"] = tab["name"], tab["route"]
         if not row["screen"] and row["class"] != "NFR":
             unresolved.append(row["id"])
         work.append(row)
@@ -293,7 +329,7 @@ def main(argv):
     for s in screens:
         owned = [r["id"] for r in work if r["screen"] == s["name"]]
         if owned:
-            screen_list.append(dict(s, rows=owned))
+            screen_list.append(dict(s, rows=owned, seed=seed_of(s)))
 
     print(f"# tf-verify-list — {app} — {cl} — phase {phase} — scope {scope}")
     counts = {}
@@ -305,7 +341,12 @@ def main(argv):
     print()
     print(f"## Screens to drive ({len(screen_list)} of {len(screens)} in the {source})")
     for s in screen_list:
-        print(f"- {s['name']} ({s['route']}) — mockup {s['mockup'] or 'none'} — rows {', '.join(s['rows'])}")
+        print(f"- {s['name']} ({s['route']}) — mockup {s['mockup'] or 'none'}"
+              + (f" — seed {s['seed']}" if s["seed"] else "") + f" — rows {', '.join(s['rows'])}")
+    par = [f"--screen {os.path.basename(s['mockup'])[:-5]}={s['route']}" for s in screen_list
+           if s["mockup"] and "{" not in s["route"]]
+    if par:
+        print(f"Mockup parity: {' '.join(par)}")
     print()
     print("## Rows")
     for r in work:

@@ -211,11 +211,26 @@ def main(argv):
     if any(r["id"].upper().startswith("REQ-UI-") for r in work):
         builder["UI"], why = ui_builder(app)
         print(f"UI rows go to: {builder['UI']} — {why}")
+    # A defect on a screen goes to one builder. Split by builder, the UI and the backend clusters of one
+    # page both carried its mockup defect, both edited the same files at once, and one left a component
+    # half-written that broke every other builder's boot for an hour (Chatur TF-004). Such a page is
+    # one cluster, built by the UI builder when one of its UI rows carries the defect.
+    cls_of = {r["id"]: re.match(r"REQ-(UI|FN|RAG|NFR)-", r["id"]).group(1) for r in work}
+    sec_of = {r["id"]: ent.get(r["id"].upper(), ("Other", "", "", ""))[0] for r in work}
+    fixed = {}
+    for r in work:
+        s, cls = sec_of[r["id"]], cls_of[r["id"]]
+        if r["defects"] and cls in ("UI", "FN") and (cls == "UI" or s not in fixed):
+            fixed[s] = builder[cls]
     for r in work:
         sec, acc, mock, brd = ent.get(r["id"].upper(), ("Other", "", "", ""))
         cls = re.match(r"REQ-(UI|FN|RAG|NFR)-", r["id"]).group(1)
-        key = ("Non-functional" if cls == "NFR" else "RAG" if cls == "RAG" else sec, builder[cls])
+        who = fixed[sec] if cls in ("UI", "FN") and sec in fixed else builder[cls]
+        key = ("Non-functional" if cls == "NFR" else "RAG" if cls == "RAG" else sec, who)
         clusters.setdefault(key, []).append((r, acc, mock, brd))
+    for s in sorted(fixed):
+        if builder["UI"] != builder["FN"] and {"UI", "FN"} <= {cls_of[r["id"]] for r in work if sec_of[r["id"]] == s}:
+            print(f"One builder for {s}: it carries a defect, so its UI and backend rows go to {fixed[s]} together")
     print()
     print("## Clusters (one sub-agent each; spawn them all in one turn)")
     letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"

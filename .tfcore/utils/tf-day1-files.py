@@ -4,15 +4,17 @@
     bash .tfcore/utils/tf-day1-files.sh <App> [--size S|M|L] [--kind app|library] [--prefix obj|none] [--phase N]
     bash .tfcore/utils/tf-day1-files.sh --archive <file> [<file> ...]
 
-Default mode, for <App>:
-  - .tfcore/core-config.yaml: customTechnicalDocuments (brd, architecture, codingStandards),
-    devLoadAlwaysFiles, and appSize / appKind / appPhase when given.
+Default mode, for <App>. Each flag does its own part and nothing else:
+  - --size, --kind, --phase set appSize, appKind, appPhase in .tfcore/core-config.yaml; --phase is the
+    phase being worked (handoff moves it on).
   - --size L also writes docs/<App>-Phases.md from app-phases-tmpl.md when it does not exist
     (the Large layout: docs/TechieFlow-Document-Schemas.md §2, §3.11). The agent fills the table.
-  - --phase N sets appPhase, the phase being worked (handoff moves it on).
-  - .editorconfig from app-editorconfig-tmpl.editorconfig (overwritten; machine config).
-  - AGENTS.md and CLAUDE.md from their templates with {AppName} substituted and the
-    field-prefix line resolved (--prefix, default obj). An existing copy is archived first.
+  - --prefix obj|none (day-1 stage 2) writes .editorconfig (overwritten; machine config), AGENTS.md and
+    CLAUDE.md from their templates with {AppName} substituted and the field-prefix line resolved, an
+    existing copy archived first; and adds the brd, architecture and codingStandards paths to
+    customTechnicalDocuments and devLoadAlwaysFiles where missing, keeping every entry already there.
+Raising the size of a project with *amend-docs (--size L) once replaced Sevak's AGENTS.md and CLAUDE.md
+with blank templates and cut its document list to three entries (Sevak TF-001). tests/regression sv_001.
 --archive: move each file (and its sibling .html) to docs/OldDocs/, date-suffixed when a
 file of that name is already there. Never asks; never writes a -v2 variant.
 
@@ -86,22 +88,45 @@ def set_key(text, key, value_lines):
     return "\n".join(out) + "\n"
 
 
-def update_config(app, size, kind, phase):
+def block_of(text, key):
+    """The indented lines under a top-level YAML key, [] when the key is absent or empty."""
+    lines, out, inside = text.splitlines(), [], False
+    for line in lines:
+        if re.match(rf"^{re.escape(key)}:", line):
+            inside = True
+            continue
+        if inside:
+            if line.startswith((" ", "\t")):
+                out.append(line)
+            elif line.strip():
+                break
+    return out
+
+
+def add_documents(s, app):
+    """The day-1 document paths, added where missing; every entry already listed is kept."""
+    docs = block_of(s, "customTechnicalDocuments")
+    have = {m.group(1) for m in (re.match(r"^\s+([\w-]+):", l) for l in docs) if m}
+    for k, v in (("brd", f"docs/{app}-BRD.md"), ("architecture", f"docs/{app}-Architecture.md"),
+                 ("codingStandards", f"docs/{app}-Coding-Standards.md")):
+        if k not in have:
+            docs.append(f"  {k}: {v}")
+    s = set_key(s, "customTechnicalDocuments", ["customTechnicalDocuments:"] + docs)
+    files = block_of(s, "devLoadAlwaysFiles")
+    listed = {l.strip().lstrip("-").strip() for l in files}
+    for f in (f"docs/{app}-Coding-Standards.md", f"docs/{app}-Architecture.md"):
+        if f not in listed:
+            files.append(f"  - {f}")
+    return set_key(s, "devLoadAlwaysFiles", ["devLoadAlwaysFiles:"] + files)
+
+
+def update_config(app, size, kind, phase, documents):
     p = os.path.join(".tfcore", "core-config.yaml")
     if not os.path.isfile(p):
         die(f"{p} does not exist at its literal path; is the framework installed here?")
     s = read(p)
-    s = set_key(s, "customTechnicalDocuments", [
-        "customTechnicalDocuments:",
-        f"  brd: docs/{app}-BRD.md",
-        f"  architecture: docs/{app}-Architecture.md",
-        f"  codingStandards: docs/{app}-Coding-Standards.md",
-    ])
-    s = set_key(s, "devLoadAlwaysFiles", [
-        "devLoadAlwaysFiles:",
-        f"  - docs/{app}-Coding-Standards.md",
-        f"  - docs/{app}-Architecture.md",
-    ])
+    if documents:
+        s = add_documents(s, app)
     if size:
         s = set_key(s, "appSize", [f"appSize: {size}"])
     if kind:
@@ -109,9 +134,9 @@ def update_config(app, size, kind, phase):
     if phase:
         s = set_key(s, "appPhase", [f"appPhase: {phase}"])
     write(p, s)
-    print(f"tf-day1-files: .tfcore/core-config.yaml updated (documents for {app}"
-          + (f", appSize {size}" if size else "") + (f", appKind {kind}" if kind else "")
-          + (f", appPhase {phase}" if phase else "") + ")")
+    done = ([f"documents for {app}"] if documents else []) + ([f"appSize {size}"] if size else []) \
+        + ([f"appKind {kind}"] if kind else []) + ([f"appPhase {phase}"] if phase else [])
+    print(f"tf-day1-files: .tfcore/core-config.yaml updated ({', '.join(done)})")
 
 
 def write_phases_doc(app):
@@ -161,8 +186,7 @@ def main(argv):
     app = argv[1]
     if not re.fullmatch(r"[A-Z][A-Za-z0-9]*", app):
         die(f"app name {app!r} must be PascalCase with no spaces")
-    size = kind = phase = None
-    prefix = "obj"
+    size = kind = phase = prefix = None
     args = argv[2:]
     i = 0
     while i < len(args):
@@ -190,12 +214,15 @@ def main(argv):
             i += 2
         else:
             die(f"unknown argument {a!r}")
-    update_config(app, size, kind, phase)
+    if not (size or kind or phase or prefix):
+        die("nothing to do: give --size, --kind, --phase or --prefix")
+    update_config(app, size, kind, phase, documents=bool(prefix))
     if size == "L":
         write_phases_doc(app)
-    write_from_template(app, "app-editorconfig-tmpl.editorconfig", ".editorconfig", None)
-    write_from_template(app, "app-agents-md-tmpl.md", "AGENTS.md", prefix)
-    write_from_template(app, "app-claude-md-tmpl.md", "CLAUDE.md", prefix)
+    if prefix:     # day-1 stage 2 only: a size, kind or phase change never rewrites these (Sevak TF-001)
+        write_from_template(app, "app-editorconfig-tmpl.editorconfig", ".editorconfig", None)
+        write_from_template(app, "app-agents-md-tmpl.md", "AGENTS.md", prefix)
+        write_from_template(app, "app-claude-md-tmpl.md", "CLAUDE.md", prefix)
     return 0
 
 

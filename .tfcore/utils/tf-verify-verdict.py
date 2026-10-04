@@ -179,6 +179,10 @@ def main(argv):
                                os.path.join(d, "parity.json")))
             elif v == "UNGRADEABLE":
                 notes.append("mockup-parity UNGRADEABLE (add data-testid anchors to the mockup)")
+            nm = (ps.get("coverage") or {}).get("not_measured") or []
+            if nm:   # sample rows the app had no data for (Chatur TF-002)
+                notes.append(f"mockup-parity: {len(nm)} sample box(es) not measured, the app drew no data there "
+                             "(a tests/verify/seed/ script puts it in the drawn state)")
             elif v == "NO-MOCKUP":
                 notes.append("no mockup to compare")
         # 7 speed
@@ -215,9 +219,15 @@ def main(argv):
                 verdict = "NOT-TESTED"
                 detail = (f"every test named {rid} was skipped" if skipped_only else f"no test named {rid} ran") \
                     + (f"; screen {r['screen']} renders and looks right" if driven else "")
-            elif r.get("screen") and not driven and not booted:
+            elif r.get("screen") and not driven:
+                # a passing test is not a screen check: a row on a screen that was not driven is never
+                # Verified, booted or not. The Settings rows of /settings/{tab} were (Chatur TF-003).
                 verdict = "NOT-DRIVEN"
-                detail = f"test passed but {boot.get('head', 'the app')} was not driven: {boot.get('reason')}"
+                sk = scr_skipped.get(r["screen"])
+                detail = ("test passed but " + (f"{boot.get('head', 'the app')} was not driven: {boot.get('reason')}" if not booted
+                          else f"screen {r['screen']} was not driven: its route {sk['route']} needs --route-value "
+                               + ", ".join(f"{n}=<id>" for n in sk.get("needs", [])) if sk
+                          else f"screen {r['screen']} was not driven in this run"))
             else:
                 verdict = "PASS"
                 parts = [f"test {quoted(t['tests'][0], 60)}" if t and t.get("tests") else "test passed"]

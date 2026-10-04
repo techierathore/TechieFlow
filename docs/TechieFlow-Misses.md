@@ -3,16 +3,17 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 227 logged: 53 open, 173 fixed, 1 will not fix |
+| Count | 237 logged: 54 open, 182 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-09-30 |
+| Updated | 2026-10-03 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
-## Open (53)
+## Open (54)
 
 | Miss | Found | Whose gap | What went wrong |
 |---|---|---|---|
+| MISS-TechieFlow-20261003-02 | 2026-10-03 by owner | the check was too weak | Chatur Repository after the TF-006 fix: tf-mockup-parity pairs live rows with the mockup's sample rows by position, so app row N is graded against whatever kind of row the mockup happened to draw at N (commit-row-1 a process check-in with an icon against a hand check-in without one); five 'commit-ro |
 | MISS-TechieFlow-20260928-07 | 2026-09-28 by owner | the framework never said it | Lekhak TF-003: no Mac Catalyst driver ships, so a Mac head can never get a verdict; the project drove it by hand with Appium mac2 |
 | MISS-TechieFlow-20260910-03 | 2026-09-10 by owner | the check was too weak | tf-metrics.sh --phases crashes with UnboundLocalError on any phase that touched no REQ and wrote no file, because by_mode was read outside the branch that assigned it. |
 | MISS-TechieFlow-20260910-02 | 2026-09-10 by owner | the framework never said it | Every model's cost is recorded the same way, so a run on a flat-fee subscription, a run on a metered API key and a run on a local model all land in one cost_usd figure — a zero on a subscription reads as free and money that was really spent cannot be told from money that was not. |
@@ -67,10 +68,19 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (173)
+## Fixed (182)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261003-03 | 2026-10-03 by owner | 2026-10-03 by log-miss | the check was too weak | Chatur TF-007: the maintainer's own TF-006 fix took anchored sample rows (recent-tflens) off the mockup's list box but left the app's real rows in their place (recent-chatur, a wrapped tbody) on the app's, and the older TF-002 rule did the same for unanchored sample rows; recent-list, file-tree, too |
+| MISS-TechieFlow-20261003-01 | 2026-10-03 by owner | 2026-10-03 by log-miss | the check was too weak | Chatur TF-006: tf-mockup-parity took a sample-data tbody's row icons off the mockup's table when the tbody was not measured, but the app's table kept counting every row icon, though each row (commit-row-N) was compared on its own; history-table and process-branches-table read 'app carries an icon th |
+| MISS-TechieFlow-20261002-07 | 2026-10-02 by owner | 2026-10-02 by log-miss | the check was too weak | Chatur TF-005: the maintainer's own TF-001 fix left everything inside any data-tf-state box out of the box around it, including Chatur's data-tf-state="sample-data" rows, so every list the app filled with real rows read 'app carries an icon the mockup does not' and 29 rows stayed Needs re-verify; th |
+| MISS-TechieFlow-20261002-06 | 2026-10-02 by owner | 2026-10-02 by log-miss | the check was too weak | tf-verify-tests made its start stamp in /tmp and compared it with a TRX report on /mnt/c; the two drives take their times from WSL's and Windows' clocks, which were 0.66 s apart, so a fresh report could read as older and be skipped: am_005b failed 3 runs in 20 and failed the requirements grade inter |
+| MISS-TechieFlow-20261002-05 | 2026-10-02 by owner | 2026-10-02 by log-miss | the check was too weak | Sevak TF-001: tf-day1-files.sh --size L, the step *amend-docs gives for growing past Medium, also rewrote AGENTS.md and CLAUDE.md from blank templates and cut customTechnicalDocuments to three entries, because every call wrote every file whatever flag it was given |
+| MISS-TechieFlow-20261002-04 | 2026-10-02 by owner | 2026-10-02 by log-miss | the framework never said it | Chatur TF-004: tf-build-list split one page's rows by builder even when they carried the same defect, so two builders edited the same component at once and one left it half-written |
+| MISS-TechieFlow-20261002-03 | 2026-10-02 by owner | 2026-10-02 by log-miss | the check was too weak | Chatur TF-003: a screen whose route takes a value was skipped, and tf-verify-verdict still passed its rows on their tests alone while the app was booted; /settings/{tab} with one mockup per tab was never split into its tabs |
+| MISS-TechieFlow-20261002-02 | 2026-10-02 by owner | 2026-10-02 by log-miss | the framework never said it | Chatur TF-002: the mockup check had no way to tell sample data from structure, so a fresh app's empty table and conversation were reported missing every icon on the mockup's sample rows, and 45 working rows could not reach Verified |
+| MISS-TechieFlow-20261002-01 | 2026-10-02 by owner | 2026-10-02 by log-miss | the check was too weak | Chatur TF-001: the Lekhak TF-011 fix stopped the mockup check walking a box marked as another state, but the icon count of the box around it still included that box's icons, so This Chatur's row was reported missing a download icon the app only shows when a newer build exists |
 | MISS-TechieFlow-20260930-05 | 2026-09-30 by owner | 2026-09-30 by log-miss | the check was too weak | The TF-019 fix shipped tf-ci-repro.py needing PyYAML and rsync --filter, which a stock Mac lacks, so CI's stock-Mac job failed on lk_019 (run 36747578406); the portability check reads shell scripts only and nobody checked the Python dependencies |
 | MISS-TechieFlow-20260930-04 | 2026-09-30 by owner | 2026-09-30 by log-miss | the framework never said it | Lekhak TF-019: no task said to reproduce a CI failure on a clean copy with empty package caches, so triage-and-fix reproduced NETSDK1112 with a warm NuGet cache, saw a pass and called the CI failure fixed; the next CI run failed again |
 | MISS-TechieFlow-20260930-03 | 2026-09-30 by owner | 2026-09-30 by log-miss | the framework never said it | Lekhak TF-016: amend-docs and the status gate ran no test, so an amendment deleted a UsageGuide paragraph a unit test guards and closed green; only CI caught it |

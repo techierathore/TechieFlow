@@ -8,12 +8,12 @@
 90335b9659bc  .tfcore/agents/flow-master.md,.tfcore/agents/verifier.md  - everything the owner reads is plain, simple english, a question for 
 f11866779761  .tfcore/agents/flow-master.md,.tfcore/agents/verifier.md  - on activation, say who you are and print the command table below onc
 f474cb804cb7  .tfcore/agents/flow-master.md,.tfcore/agents/verifier.md  yes|no" first, and never stopping the run when the answer is no:
+03b76928f584  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  bash .tfcore/utils/tf-day1-files.sh {app} --size {s|m|l} --kind {app|l
 15cf9a2aeac2  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  any untracking commands it prints go into your summary for the owner t
 34dcdb7ea088  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  one row per phase, each within medium, every screen in exactly one pha
 6b9306bd463b  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  one "how to test" section per screen in navigation order, naming the u
 6e1b2f8966e7  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  if the count would pass the size cap, propose a phase split instead of
 96e418a1dd2d  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  this phase's screens and requirements only, linking back to phase 1 an
-b7922c7d3615  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  bash .tfcore/utils/tf-day1-files.sh {app} --size {s|m|l} --kind {app|l
 f1a21d1f6f5d  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md,docs/TechieFlow-Document-Schemas.md  a dialog is a row under its parent screen with on /route in the route 
 a4c93b38f04e  .tfcore/tasks/fix-issues.md,.tfcore/tasks/triage-and-fix.md,.tfcore/tasks/verify-phase.md  when this run is the last step of a goal, write the sentinel .tfcore/t
 1d93367cb06a  .tfcore/tasks/generate-html.md,.tfcore/tasks/render-workflow-docs.md  every non-trivial label double-quoted, no end node ids, bare labels fi

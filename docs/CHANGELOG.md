@@ -14,6 +14,28 @@ Everything below this section from 2026-09-11 onward is also unreleased: it reac
 v1.0.4 tag (2026-09-10) and is in no published package yet. This section lists what those dated entries
 do not.
 
+- **The TF-006 fix broke five Chatur screens; fixed (Chatur TF-007, 2026-10-03).** TF-006 took
+  anchored sample rows (`recent-tflens`) off the mockup's list box. It left the app's real rows in their
+  place (`recent-chatur`) on the app's box, and the older TF-002 rule did the same for unanchored sample
+  rows (`tools-table > tbody[0]`). Start, Workbench, Prerequisites, Providers and Corrections read "app
+  carries an icon the mockup does not", and 55 rows stayed off Verified. `ch_006` had tried only rows
+  numbered like the mockup's. Now, when sample rows are not measured, their icons come off every box
+  that holds the whole row, never off a button inside it. On the app's side the same goes for the rows
+  in that place: unknown elements of the same kind under that box, or, when there are none, the box's
+  unknown children and its own anchors (a scroll area). Proved on Chatur's twelve screens with its own
+  data, old against new: five FAIL to PASS, no new finding. A first draft stripped too widely (six new
+  findings on Repository buttons, and a table's own icon lost), caught by the same run and by `ch_006`.
+  Regression case `ch_007`; MISS-TechieFlow-20261003-03.
+- **A table no longer counts its sample rows' icons on one side only (Chatur TF-006, 2026-10-03).**
+  When a mockup's sample-data `tbody` was "not measured", its row icons came off the mockup's table,
+  while the app's table still counted every row icon. Yet each row (`commit-row-N`) was compared on its
+  own. `history-table` and `process-branches-table` read "app carries an icon the mockup does not".
+  `tf-mockup-parity` now records the anchors inside each box. The icons of a mockup sample row, and of
+  an app row with the same anchor or more of the same (`commit-row-7`), are left out of every box
+  around them on both sides. A box's own icon is still counted. Proved on Chatur's Repository screen
+  (the old script's `process-branches-table` finding at both widths is gone) and by regression case
+  `ch_006`. Still open: rows are paired with sample rows by position, so live data in another order
+  than the mockup's sample gives row-level icon findings (MISS-TechieFlow-20261003-02).
 - **A command started inside another one keeps the outer command's document baseline (TrBlazeUI
   TF-002, 2026-10-02).** `*triage-and-fix` runs `verify-phase` and `metrics-report` with their own
   step 0, and each `tf-phase.sh start` wrote a new baseline. The findings on the rows the triage had
@@ -70,6 +92,79 @@ do not.
 - **FR-84.** The phase-document requirement in `docs/TechieFlow-Requirements.md` shared the number FR-73
   with the browser-lock requirement. The miss stream names FR-73 for the lock, and a stream is never
   edited, so the phase-document one is now FR-84.
+
+## 2026-10-02 — Chatur TF-005: the TF-001 fix failed every list the app fills with real rows
+
+A regression from this morning's Chatur TF-001 fix. That fix left everything inside a `data-tf-state` box
+out of the box around it. Chatur marks its sample rows `data-tf-state="sample-data"`, so once a seed made
+the app draw real rows, each list read "app carries an icon the mockup does not": 29 rows on Register,
+Start, Workbench, Prerequisites and Repository stayed Needs re-verify, and TF-002 could not be confirmed.
+`tf-mockup-parity` now reads `data-tf-state="sample-data"` exactly as `data-tf-sample`: walked and
+numbered like any box, compared when the app draws something in its place, listed in
+`coverage.not_measured` and taken off the boxes around it when it draws nothing. Every other state value
+keeps the TF-001 rule. Case `ch_005` covers all three outcomes: real rows pass, no rows are not
+measured, and rows without their icons still fail. The case fails on the script Chatur had, with
+Chatur's own message. Proved on Chatur's six affected mockups served with the mark removed, as an app
+would draw them: the old script gave its seven findings, the new one passes all six. Register's
+`password-typed` box, which the app shows before typing, is a mockup-or-app question for Chatur, and the
+reply says so. Miss `MISS-TechieFlow-20261002-07`, sorted `weak-check`: the TF-001 case covered only a
+state the app does not draw.
+
+## 2026-10-02 — Sevak TF-001: raising the size rewrote AGENTS.md and CLAUDE.md
+
+`*amend-docs` step 4 runs `tf-day1-files.sh <App> --size M|L` when a project grows. The script wrote
+every file on every call, so Sevak's `--size L --kind app` archived its own AGENTS.md and CLAUDE.md and
+replaced them with blank templates, and cut `customTechnicalDocuments` to three entries, one of them a
+coding standards file Sevak does not have. Each flag now does only its own part. `--size`, `--kind` and
+`--phase` set their keys, plus the Phases file for Large. `--prefix`, day-1 stage 2, writes
+`.editorconfig`, AGENTS.md and CLAUDE.md, and adds the day-1 document paths where missing, keeping every
+entry already listed, so a stage-2 re-run cannot drop entries either. A call with no flag is refused.
+The two day-1 tasks say which call writes what; the duplicate-sentence baseline is refreshed for their
+shared line. Case `sv_001` fails on the script Sevak had and passes now; `replies_complete` reads Sevak's
+numbers from `sv_` cases. Miss `MISS-TechieFlow-20261002-05` is logged as fixed. The reply is in Sevak's
+feedback file, copied here. Proved on Sevak itself: `--size L --kind app` left its config byte-identical
+and AGENTS.md and CLAUDE.md unchanged.
+
+Found on the way: the requirements grade failed 14 lines at random, all through one regression case,
+`am_005b`. `tf-verify-tests` made its start stamp with `mktemp` in `/tmp` and kept only TRX reports newer
+than it; on `/mnt/c` the report's time comes from the Windows clock, here 0.66 s apart from WSL's, so a
+report written a second after the stamp could read as older and be dropped. The stamp is now made under
+the project's `tests/.artifacts/`, on the report's own drive. `am_005` failed 3 runs in 20 on the old
+script and 0 in 20 now. Miss `MISS-TechieFlow-20261002-06`.
+
+## 2026-10-02 — Chatur TF-001 to TF-004: state boxes, sample data, tab routes, one builder per defect
+
+Chatur's build left about 45 working rows short of Verified because of the mockup check, and two of its
+Settings rows were Verified without their screen being driven.
+
+- **TF-001.** The Lekhak TF-011 fix stopped `tf-mockup-parity` walking a box marked `data-tf-state` or
+  `data-state-testid`, but the box around it still counted that box's icons, badges and text, so
+  This Chatur's row read "mockup carries an icon here; the app does not" for a download icon shown only
+  when a newer build exists. The probe's icon, badge and text readers now skip anything inside a state
+  box. Case `ch_001`.
+- **TF-002.** A mockup full of sample rows was graded against a fresh, empty app. Two answers. A box
+  marked `data-tf-sample` that the app draws nothing in place of is listed in `coverage.not_measured`
+  and its icons and badges come off the boxes around it; when the app does draw it, it is graded as
+  before. `tf-verify-screens` treats an anchor on such a box like a state anchor. And a screen can have
+  `tests/verify/seed/<mockup name>.sh`: `tf-verify-list` records it, `tf-verify-screens` runs it once
+  with `TF_BASE` before driving the screen, and a failing seed is that screen's render finding. The
+  verdict notes the not-measured count. Cases `ch_002a`, `ch_002b`.
+- **TF-003.** `/settings/{tab}` was one screen, skipped for want of a value, and `tf-verify-verdict` still
+  passed its rows on their tests because the app was booted. `tf-verify-list` now splits a route with one
+  value into one screen per mockup its UIDesign entry links (`Settings / agents`, `/settings/agents`),
+  each row going to the tab its mockup names, and prints a ready `Mockup parity:` line. A row whose
+  screen was not driven is NOT-DRIVEN whether or not the app booted. This tightens every project: a row
+  on a route that still needs `--route-value` is no longer Verified on its test. Cases `ch_003a`, `ch_003b`.
+- **TF-004.** `tf-build-list` clustered by page and builder, so a page's UI and backend rows both carried
+  its defect to two builders at once. A page with a defect row is now one cluster, given to the UI
+  builder when a UI row carries the defect. Case `ch_004`.
+
+The 2026-09-19 Chatur case `ch_001` is now `ch_render`: Chatur's new file numbers from TF-001 again, and
+`replies_complete` reads Chatur's numbers from `ch_NNN`. `mockups.md` says how to mark a state box and a
+sample row; `verify-phase.md` says when a seed is written and points step 5 at the printed parity line.
+Every new case fails against the scripts Chatur had and passes now; the regression, verify, bugs,
+mirror and portability suites pass. Misses `MISS-TechieFlow-20261002-01` to `-04` are logged as fixed.
+The reply is in Chatur's feedback file, copied here.
 
 ## 2026-09-30 — CI's stock-Mac job failed on the TF-019 regression case
 

@@ -15,7 +15,11 @@
 #   <html> and <body>, and a light/dark mode class there (class="dark", Lekhak TF-013), are set on the
 #   app page for the comparison and put back after (Lekhak TF-010);
 #   --keep-app-theme compares the theme the app shows. A mockup box marked data-tf-state or
-#   data-state-testid (another state of the screen) is left out of the comparison (Lekhak TF-011).
+#   data-state-testid (another state of the screen) is left out of the comparison (Lekhak TF-011),
+#   and so are its icons, badges and text when a box around it is compared (Chatur TF-001).
+#   A box marked data-tf-sample, or data-tf-state="sample-data" (Chatur TF-005), is sample data: compared
+#   when the app draws something in its place,
+#   otherwise listed in coverage.not_measured and taken off the boxes around it (Chatur TF-002).
 #
 # WHAT IT ASKS: "does the built screen carry the structure its approved mockup
 # draws?" — at the same viewports, comparing STRUCTURE, never pixels. Pixel diffing
@@ -58,7 +62,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-case "${1:-}" in -h|--help) sed -n '2,48p' "$0"; exit 0 ;; esac
+case "${1:-}" in -h|--help) sed -n '2,52p' "$0"; exit 0 ;; esac
 
 command -v node >/dev/null 2>&1 || {
   echo "tf-mockup-parity: node is required (verify-phase §1 installs the verify environment)." >&2
