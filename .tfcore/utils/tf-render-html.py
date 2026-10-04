@@ -101,6 +101,20 @@ class Slugger(object):
         self.seen[s] = c
         return s if c == 1 else "%s-%d" % (s, c)
 
+    def github(self, text):
+        """The id GitHub gives the same heading, which a markdown table of contents links to: digits
+        kept, punctuation dropped, spaces to hyphens, a repeat suffixed -1, -2 (AppManager TF-029:
+        `### 3.7 Group Service (GroupSvc)` is #37-group-service-groupsvc there, #group-service-groupsvc
+        here, so every numbered TOC link in the rendered guide went nowhere)."""
+        if not hasattr(self, "gh_seen"):
+            self.gh_seen = {}
+        s = re.sub(r"<[^>]+>", "", text)
+        s = re.sub(r"[*`~]", "", s).strip().lower()
+        s = re.sub(r"[^\w\- ]", "", s, flags=re.UNICODE).replace(" ", "-")
+        c = self.gh_seen.get(s, 0)
+        self.gh_seen[s] = c + 1
+        return s if c == 0 else "%s-%d" % (s, c)
+
 
 # ----------------------------------------------------------------------------
 # Inline conversion
@@ -205,11 +219,13 @@ class Renderer(object):
 
     def heading(self, level, text):
         slug = self.sl.slug(text)
+        gh = self.sl.github(text)      # every level, so its repeat count matches GitHub's
         if level in (2, 3, 4):
-            self.emit('<h%d id="%s">%s<a class="anchor-link" href="#%s">#</a></h%d>'
-                      % (level, slug, inline(text), slug, level))
+            alias = '<a id="%s"></a>' % gh if gh and gh != slug else ""
+            self.emit('<h%d id="%s">%s%s<a class="anchor-link" href="#%s">#</a></h%d>'
+                      % (level, slug, alias, inline(text), slug, level))
         else:
-            self.emit("<h%d>%s</h%d>" % (level, inline(text), level))
+            self.emit("<h%d%s>%s</h%d>" % (level, ' id="%s"' % gh if gh else "", inline(text), level))
         if level == 2:
             self.h2 += 1
         if level in (2, 3):

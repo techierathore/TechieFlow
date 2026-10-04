@@ -1519,6 +1519,11 @@ def _shape_ok(rec):
     if kind == "run" and rec.get("build_result") not in (None, "pass", "fail", "not-run"):
         sys.stdout.write("tf-emit: REFUSED — build_result must be pass, fail or not-run (SCHEMA.md §2); got %r. Put the detail in the checklist Remarks or Known blockers, not here. Nothing was appended.\n" % (rec.get("build_result"),))
         return False
+    # one REQ's verdict, never a suite note: Lekhak hand-wrote four {"gate":"verify-suite","result":…}
+    # records with neither, and the report counted each as a failure (TF-020)
+    if kind == "gate" and not rec.get("backfilled") and not (rec.get("req_id") and rec.get("verdict")):
+        sys.stdout.write("tf-emit: REFUSED — a gate record is one REQ's verdict and needs both req_id and verdict (SCHEMA.md §3). A suite result (unit tests, the whole browser run) belongs in the run record's notes, not here. Nothing was appended.\n")
+        return False
     if kind == "miss" and not rec.get("miss_id"):
         sys.stdout.write("tf-emit: REFUSED — a miss record needs a miss_id; get one with: bash .tfcore/utils/tf-emit.sh --next-miss-id. Nothing was appended.\n")
         return False

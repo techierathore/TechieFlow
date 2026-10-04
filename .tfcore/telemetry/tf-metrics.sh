@@ -1251,8 +1251,17 @@ def analyse(repos):
     voided_runs = 0
     void_reasons = []
     void_orphans = 0
+    gates_malformed = []
     for repo in repos:
         g = read_stream(repo, "gates")
+        # A gate record is one REQ verdict (SCHEMA.md §3). A suite-level note with no req_id or no
+        # verdict ({"gate":"verify-suite","result":"pass"}) was counted as a failure, passes
+        # included (Lekhak TF-020). It is scored nowhere and listed as malformed instead.
+        bad_g = [x for x in g if not x.get("req_id") or not x.get("verdict")]
+        if bad_g:
+            g = [x for x in g if x.get("req_id") and x.get("verdict")]
+            gates_malformed += [{"app": app_name(repo), "ts": x.get("ts"), "gate": x.get("gate"),
+                                 "result": x.get("result")} for x in bad_g]
         r, vn, vr, vo = apply_voids(read_stream(repo, "runs"), app_name(repo))
         voided_runs += vn; void_reasons += vr; void_orphans += vo
         repo_misses = read_stream(repo, "misses")
@@ -1273,6 +1282,7 @@ def analyse(repos):
         per_repo.append({"repo": repo, "app": app_name(repo),
                          "project_type": project_type(repo)[0],
                          "gates": len(g), "gates_backfilled": sum(1 for x in g if x.get("backfilled")),
+                         "gates_malformed": len(bad_g),
                          "runs": len(r), "sessions": len(s), "commits": len(c),
                          "misses": sum(1 for x in repo_misses if x.get("kind") == "miss" and x.get("miss_id") not in
                                        {v.get("miss_id") for v in repo_misses if v.get("kind") == "miss-void"}),
@@ -1338,6 +1348,8 @@ def analyse(repos):
            "runs_voided_n": voided_runs,
            "runs_voided": void_reasons,
            "run_voids_orphaned_n": void_orphans,
+           "gates_malformed_n": len(gates_malformed),
+           "gates_malformed": gates_malformed,
            "misses": analyse_misses(misses),
            "phases": analyse_phases(runs)}
 
@@ -1446,6 +1458,13 @@ def print_report(a, repos):
         print("    Commit telemetry is not being written here. Fix it for good with")
         print("    update-framework.sh <repo>, or reconcile what is already in the log:")
         print("      .tfcore/telemetry/tf-metrics.sh --backfill-commits <repo>")
+    if a.get("gates_malformed"):
+        print("")
+        print("  ⚠ %d gate record(s) carry no req_id or no verdict, so they are not one REQ's"
+              % a["gates_malformed_n"])
+        print("    verdict and are left out of every figure below (SCHEMA.md §3):")
+        for x in a["gates_malformed"]:
+            print("      %s %s gate=%s result=%s" % (x["app"], x["ts"], x["gate"], x["result"]))
     print("")
 
     for label in ("live", "backfilled"):

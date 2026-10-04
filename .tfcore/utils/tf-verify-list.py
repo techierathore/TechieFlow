@@ -346,7 +346,9 @@ def main(argv):
     par = [f"--screen {os.path.basename(s['mockup'])[:-5]}={s['route']}" for s in screen_list
            if s["mockup"] and "{" not in s["route"]]
     if par:
-        print(f"Mockup parity: {' '.join(par)}")
+        # --list carries each screen's mockup path: the --screen name is the file's stem only, so
+        # docs/mockups/admin/prompt-manager.html read as NO-MOCKUP (Lekhak TF-022)
+        print(f"Mockup parity: {' '.join(par)} --list {out_path}")
     print()
     print("## Rows")
     for r in work:

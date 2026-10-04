@@ -72,9 +72,14 @@ case "${1:-}" in
     if [[ -n "$CHAINED" ]]; then
       echo "tf-phase: $CMD runs inside $CHAINED — keeping its document baseline (findings since $CHAINED started stay FAIL)" >&2
     elif [[ -x "$ROOT/.tfcore/utils/tf-doc-check.sh" || -f "$ROOT/.tfcore/utils/tf-doc-check.sh" ]]; then
+      # Every file `tf-doc-check.sh --app` reads, not only the checklists and the status file: *amend-docs
+      # and day-1 close on `--app`, so the BRD's, the Architecture's and the mockups' old findings read
+      # as new and blocked the run (Lekhak TF-023, 131 of them). A baseline only relabels what was
+      # already there, so a finding the command introduces still FAILs.
       docs=(); for f in "$ROOT"/docs/*-Checklist.md "$ROOT"/PROJECT-STATUS.md; do [[ -f "$f" ]] && docs+=("$f"); done
-      if [[ ${#docs[@]} -gt 0 ]]; then
-        ( cd "$ROOT" && bash .tfcore/utils/tf-doc-check.sh --root "$ROOT" --baseline-write "${docs[@]}" 2>/dev/null | tail -1 >&2 ) || true
+      appargs=(); [[ -n "$APP" && -d "$ROOT/docs" ]] && appargs=(--app "$APP")
+      if [[ ${#docs[@]} -gt 0 || ${#appargs[@]} -gt 0 ]]; then
+        ( cd "$ROOT" && bash .tfcore/utils/tf-doc-check.sh --root "$ROOT" --baseline-write ${appargs[@]+"${appargs[@]}"} ${docs[@]+"${docs[@]}"} 2>/dev/null | tail -1 >&2 ) || true
       fi
     fi
     # The framework's own scripts, against THIS project's real files, before the command

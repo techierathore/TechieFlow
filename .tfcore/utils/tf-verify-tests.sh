@@ -20,6 +20,8 @@
 # When tf-verify-list.sh was given a list of ids, the browser run keeps only the tests carrying them
 # (`--grep`), and is skipped when no row has a screen and no browser test names one (Lekhak TF-017).
 # `--list` names another list.json; `--all-specs` runs every browser test whatever the scope.
+# A desktop head's debugging address (--base answering /json/version, or boot.json mode=cdp) also
+# reaches the tests as CDP_URL; a suite that reads it nowhere is refused, not run (Lekhak TF-021).
 # Exit 0 ran (whatever the results) · 2 nothing could run.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,7 +39,7 @@ while [[ $# -gt 0 ]]; do
     --all-specs) ALLSPECS=1; shift ;;
     --merge) shift; while [[ $# -gt 0 && "$1" != --* ]]; do MERGE+=("$1"); shift; done ;;
     --json-out) OUT="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "tf-verify-tests: unknown argument $1" >&2; exit 2 ;;
   esac
 done
@@ -121,12 +123,28 @@ PWJSON="tests/.artifacts/verify/playwright${PART:+-$PART}.json"; PWLOG="tests/.a
 ran_any=0
 
 if [[ $BROWSER -eq 1 ]]; then
+  # A desktop head is reached over its debugging address (tf-verify-boot.sh prints mode=cdp). The tests
+  # get it as CDP_URL as well as BASE_URL: Lekhak's helper fell back to its own default port and every
+  # desktop test failed after ten minutes (Lekhak TF-021). --base is that address when it answers
+  # /json/version; without --base, boot.json's url when its mode is cdp.
+  CDPURL=""
+  if [[ -n "$BASE" ]]; then
+    curl -s -m 3 "${BASE%/}/json/version" 2>/dev/null | grep -q webSocketDebuggerUrl && CDPURL="${BASE%/}"
+  elif [[ -f tests/.artifacts/verify/boot.json ]]; then
+    CDPURL="$(python3 -c 'import json,sys
+b = json.load(open(sys.argv[1]))
+print(b.get("url", "") if b.get("mode") == "cdp" and not b.get("stopped") else "")' tests/.artifacts/verify/boot.json 2>/dev/null)"
+    [[ -n "$CDPURL" ]] && BASE="$CDPURL"
+  fi
   if ls tests/verify/*.spec.* >/dev/null 2>&1 || ls tests/verify/**/*.spec.* >/dev/null 2>&1; then
     # --base reaches the tests only as BASE_URL, which Playwright never reads by itself. When neither
     # the config nor a spec reads it, every test opens the config's own address, where an older build
     # may still be running and pass in the new one's name (TfLens TF-031, 2026-09-11): refuse instead.
     if [[ -n "$BASE" ]] && ! grep -qs "BASE_URL" playwright.config.* tests/verify/*.spec.* tests/verify/**/*.spec.*; then
       echo "browser tests: NOT RUN — nothing reads BASE_URL, so the tests would open another address than --base $BASE; run bash .tfcore/utils/tf-verify-env.sh, which makes playwright.config.ts read it"
+      rm -f "$PWJSON"
+    elif [[ -n "$CDPURL" ]] && ! grep -qsE "env(\.|\[['\"])CDP_URL" playwright.config.* tests/verify/*.ts tests/verify/**/*.ts; then
+      echo "browser tests: NOT RUN — $CDPURL is a desktop app's debugging address and no test reads CDP_URL, so they would attach to another address; make the connectOverCDP helper read process.env.CDP_URL first"
       rm -f "$PWJSON"
     elif node -e "require.resolve('@playwright/test')" >/dev/null 2>&1; then
       PWARGS=(--reporter=json); [[ -n "$SHARD" ]] && PWARGS+=("--shard=$SHARD")
@@ -155,7 +173,7 @@ SCOPEPY
         rm -f "$PWJSON"
       else
         [[ -n "$SCOPE" ]] && PWARGS+=(--grep "${SCOPE#* }")
-        BASE_URL="$BASE" PLAYWRIGHT_JSON_OUTPUT_NAME="$PWJSON" npx playwright test "${PWARGS[@]}" ${SPECS[@]+"${SPECS[@]}"} > "$PWLOG" 2>&1
+        CDP_URL="$CDPURL" BASE_URL="$BASE" PLAYWRIGHT_JSON_OUTPUT_NAME="$PWJSON" npx playwright test "${PWARGS[@]}" ${SPECS[@]+"${SPECS[@]}"} > "$PWLOG" 2>&1
         echo "browser tests: ran${SHARD:+ shard $SHARD}${SPECS:+ (${#SPECS[@]} spec argument(s))}${SCOPE:+ only the tests carrying ${SCOPE#* } (the scope in $LIST)} (log $PWLOG)"; ran_any=1
       fi
     else

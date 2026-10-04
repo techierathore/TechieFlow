@@ -14,6 +14,56 @@ Everything below this section from 2026-09-11 onward is also unreleased: it reac
 v1.0.4 tag (2026-09-10) and is in no published package yet. This section lists what those dated entries
 do not.
 
+- **The validate run on `main` was red, plus Lekhak TF-023 and AppManager TF-029 (2026-10-04).**
+  Misses MISS-TechieFlow-20261004-05 to -07.
+  - *CI (run 37197177120, commit `dc61ca7`, both jobs).* Two causes, both the maintainer's, found by
+    running every CI step on a Linux-filesystem copy. (1) `tests/portability/run.sh` refused a line in
+    `sv_001b` that held a `sed` and a `tr '\n'`; the `sed` is now an `awk`. (2) `test:install` found the
+    installer's `opencode.jsonc` executable where the shell's was not: on a legacy update, `copyFileSync`
+    copies the template's mode onto the existing file, while `cp` keeps that file's. The installer now
+    writes the content only, in both places it replaces the root config. Proved with the template file
+    both executable and not. The four requirement lines that run `test:install` (FR-48, 49, 51, 63)
+    pass again. Not run here: the stock-Mac job itself.
+  - *Lekhak TF-023.* `tf-phase.sh start` baselined only the checklists and the status file, while
+    `*amend-docs` and day-1 close on `tf-doc-check.sh --app`: 128 old findings on a copy of Lekhak's
+    documents read as new. It now baselines every file `--app` reads. `--baseline-write` also keeps
+    findings filed under another name (the mockup-folder checks, 60 on Lekhak). A size finding whose
+    count has not grown stays old. A new finding, or growth past the maximum, still FAILs. On the copy:
+    128 FAIL to 0, 691 OLD. Case `lk_023`; `tb_002` still holds.
+  - *AppManager TF-029.* `tf-render-html` strips leading numbers from heading ids, so a markdown table
+    of contents linking GitHub's ids (`#37-group-service-groupsvc`) went nowhere: 35 of 235 in-page links
+    in AppManager's API guide. A heading now also carries GitHub's id when it differs, and H1, H5 and H6
+    get it as their only id. The spec (`html-render-shell.md` §1) says so. On the real guide: 35 dead to
+    0. Case `am_029`.
+  Deployed to all 18 projects.
+- **Four script defects from AppManager and Lekhak (AppManager TF-028, Lekhak TF-020 to TF-022,
+  2026-10-04).** All four were logged as this maintainer's misses (MISS-TechieFlow-20261004-01 to -04):
+  each reached a project after the reset, three as checks too weak to see the case, one as a thing the
+  framework never said.
+  - *TF-028.* `tf-mockup-parity` took Bootstrap's `.table-responsive` for the app shell's scroll
+    container at 390px (`overflow-x: auto` alone makes the browser compute `overflow-y: auto`), and
+    reported a page escape that did not exist. The AppManager TF-014 rule had been tested on a long
+    report and a real shell, never on a wide table. A box whose only child is a table, and a box that
+    is wider inside than out while its height fits its content, are no longer candidates. `am_014b`
+    still holds. Case `am_028`, proved against AppManager's deployed copy (it gave the project's exact
+    finding) and the new one (no finding).
+  - *TF-020.* `tf-metrics.sh` counted gate records with no `req_id` or `verdict` as failures, passes
+    included. They are now scored nowhere and named in the report as malformed, and `tf-emit.sh gates`
+    refuses such a record. On Lekhak's real stream: 72 failures to 68, `build` 4 to 3, the four records
+    listed. Only Lekhak's four, across all 18 projects' streams, have this shape. `tf_020`'s fixture
+    carried `result` in place of `verdict`, and now carries a verdict. Case `lk_020`.
+  - *TF-021.* `tf-verify-tests.sh` never passed a desktop head's debugging address to the tests. When
+    `--base` answers `/json/version`, or `boot.json` says `mode: cdp` with no `--base`, the tests now
+    get it as `CDP_URL`. A suite that reads `process.env.CDP_URL` nowhere is refused at once, not run
+    for ten minutes into a wrong port. Lekhak must change two lines to read it. Case `lk_021`.
+  - *TF-022.* `tf-verify-list` printed each parity screen by its mockup's file name only, and
+    `tf-mockup-parity` looked only at the top of `docs/mockups/`, so `admin/prompt-manager.html` read
+    `NO-MOCKUP`. The parity line now carries `--list <list.json>`, which gives each screen its resolved
+    mockup; without a list, a single match in a subfolder is used and two of one name are never guessed
+    between. Case `lk_022`.
+  Not proved on a running app: TF-021 and TF-028 need Lekhak's desktop head and AppManager's site
+  booted; the cases reproduce each project's own output instead. Lekhak filed TF-023 during this pass;
+  it is not answered yet. Deployed to all 18 projects.
 - **The TF-006 fix broke five Chatur screens; fixed (Chatur TF-007, 2026-10-03).** TF-006 took
   anchored sample rows (`recent-tflens`) off the mockup's list box. It left the app's real rows in their
   place (`recent-chatur`) on the app's box, and the older TF-002 rule did the same for unanchored sample

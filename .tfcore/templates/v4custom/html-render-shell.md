@@ -48,6 +48,8 @@ The same slug function MUST produce the `id="..."` on each heading AND the `href
 
 The MD inline TOC and the HTML sidebar TOC use the SAME slug. The heading `id` uses the SAME slug. No exceptions.
 
+**A second id, GitHub's.** A markdown table of contents written by hand links to the id GitHub gives the heading: digits kept, punctuation dropped, spaces to hyphens, a repeat suffixed `-1`, `-2` (`### 3.7 Group Service (GroupSvc)` → `#37-group-service-groupsvc`). When that id differs from the slug above, the heading also carries `<a id="{github-id}"></a>`, so those links land too (AppManager TF-029). A heading with no slug (H1, H5, H6) carries the GitHub id as its own.
+
 ---
 
 ## 2. CSS (inline at top of `<head>`, verbatim)

@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 237 logged: 54 open, 182 fixed, 1 will not fix |
+| Count | 244 logged: 54 open, 189 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-10-03 |
+| Updated | 2026-10-04 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -68,10 +68,17 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (182)
+## Fixed (189)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261004-07 | 2026-10-04 by production | 2026-10-04 by log-miss | the check was too weak | The validate run on main failed on both Ubuntu and the stock Mac: a regression case had a GNU-only sed spelling on one line, and the installer copied opencode.jsonc's executable mode where the shell keeps the old file's, so the delivery-route comparison failed; the maintainer had not run npm run val |
+| MISS-TechieFlow-20261004-06 | 2026-10-04 by production | 2026-10-04 by log-miss | the check was too weak | AppManager TF-029: the HTML renderer gave numbered headings an id without the number, so the 35 table-of-contents links GitHub-style markdown makes in the API guide went nowhere; the renderer's link check compared only its own sidebar. |
+| MISS-TechieFlow-20261004-05 | 2026-10-04 by production | 2026-10-04 by log-miss | the check was too weak | Lekhak TF-023: a command's start baselined only the checklist and the status file while *amend-docs closes on every document, so 131 findings older than the run blocked it as new; a size finding also turned new on any edit because its count is in its text. |
+| MISS-TechieFlow-20261004-04 | 2026-10-04 by production | 2026-10-04 by log-miss | the check was too weak | Lekhak TF-022: the verify list printed each mockup by file name only and the mockup check looked only at the top of docs/mockups, so a mockup in a subfolder read NO-MOCKUP and the design comparison silently did not run. |
+| MISS-TechieFlow-20261004-03 | 2026-10-04 by production | 2026-10-04 by log-miss | the framework never said it | Lekhak TF-021: the framework never passed a booted desktop app's debugging address to the browser tests, so Lekhak's helper used its own default port and every desktop test failed after ten minutes. |
+| MISS-TechieFlow-20261004-02 | 2026-10-04 by production | 2026-10-04 by log-miss | the check was too weak | Lekhak TF-020: the emitter accepted gate records with no requirement and no verdict, and the metrics report then counted all four of Lekhak's suite-level records as failures, passes included (72 instead of 68). |
+| MISS-TechieFlow-20261004-01 | 2026-10-04 by production | 2026-10-04 by log-miss | the check was too weak | AppManager TF-028: the mockup check took a Bootstrap table wrapper, which only scrolls sideways, for the app's scroll container at phone width and reported a page escape that did not exist; the AppManager TF-014 fix had tested only a long report and a real shell, never a wide table. |
 | MISS-TechieFlow-20261003-03 | 2026-10-03 by owner | 2026-10-03 by log-miss | the check was too weak | Chatur TF-007: the maintainer's own TF-006 fix took anchored sample rows (recent-tflens) off the mockup's list box but left the app's real rows in their place (recent-chatur, a wrapped tbody) on the app's, and the older TF-002 rule did the same for unanchored sample rows; recent-list, file-tree, too |
 | MISS-TechieFlow-20261003-01 | 2026-10-03 by owner | 2026-10-03 by log-miss | the check was too weak | Chatur TF-006: tf-mockup-parity took a sample-data tbody's row icons off the mockup's table when the tbody was not measured, but the app's table kept counting every row icon, though each row (commit-row-N) was compared on its own; history-table and process-branches-table read 'app carries an icon th |
 | MISS-TechieFlow-20261002-07 | 2026-10-02 by owner | 2026-10-02 by log-miss | the check was too weak | Chatur TF-005: the maintainer's own TF-001 fix left everything inside any data-tf-state box out of the box around it, including Chatur's data-tf-state="sample-data" rows, so every list the app filled with real rows read 'app carries an icon the mockup does not' and 29 rows stayed Needs re-verify; th |

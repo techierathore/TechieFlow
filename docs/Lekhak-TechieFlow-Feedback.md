@@ -4,16 +4,16 @@
 |---|---|
 | App | Lekhak |
 | Upstream | TechieFlow |
-| Updated | 2026-09-30 |
+| Updated | 2026-10-04 |
 
 ## Summary
 
-19 entries: 0 blocking now, 2 open and not blocking (TF-003, TF-008), 1 fixed upstream and not yet re-checked here (TF-019), 16 closed after a re-check here (TF-001, TF-002, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018).
+23 entries: 0 blocking now, 2 open and not blocking (TF-003, TF-008), 2 fixed upstream and not yet re-checked here (TF-022, TF-023), 19 closed after a re-check here (TF-001, TF-002, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018, TF-019, TF-020, TF-021).
 
 Nothing is blocked.
 
-- 0 blockers, 6 majors, 13 minors, 0 nice-to-haves.
-- Last consolidated: 2026-09-30.
+- 0 blockers, 6 majors, 17 minors, 0 nice-to-haves.
+- Last consolidated: 2026-10-04.
 
 ## Entries
 
@@ -306,6 +306,8 @@ Nothing is blocked.
 
 ### TF-019 — Nothing says to reproduce a CI failure with an empty package cache, so a local "pass" can hide the real error
 
+> ✅ **Closed 2026-09-30** — re-checked here: Closed 2026-09-30: bash .tfcore/utils/tf-ci-repro.sh --list planned steps 6-9 (Restore, Build, Locate test project, Test) with empty caches and skipped the uses:/secret/setup steps; bash .tfcore/utils/tf-ci-repro.sh printed 'PASS job build: 4 run step(s) passed on a clean copy with empty caches' in 240 s (logs tests/.artifacts/ci-repro/20260930T162834Z).
+
 - **Severity:** minor
 - **Blocks:** no — the failure was reproduced with an empty cache and fixed on 2026-09-30.
 - **Repro:**
@@ -318,9 +320,88 @@ Nothing is blocked.
 - **Workaround:** set `NUGET_PACKAGES` to an empty folder for the reproduction.
 - **Suggested fix:** a `tf-ci-repro.sh` that reads the workflow's `run:` steps and runs them with an empty `NUGET_PACKAGES` (and the npm equivalent), named by `triage-issues` when the evidence is a CI run.
 
+### TF-020 — The metrics script counts suite-level gate records as failures
+
+> ✅ **Closed 2026-10-04** — re-checked here: Closed 2026-10-04: ran bash .tfcore/telemetry/tf-metrics.sh --report . --json and --report . on this stream. gate_distribution_n is now 68 (was 72) and build is 3 (was 4); gates_malformed_n is 4. The text report prints '4 gate record(s) carry no req_id or no verdict' and names them by date and gate: 2026-08-17T14:45:30Z verify-suite/unit-tests/build and 2026-08-18T07:24:18Z verify-suite (gates.jsonl lines 76-79). They are left out of every figure. METRICS.md no longer describes the defect as open.
+
+- **Severity:** minor
+- **Blocks:** no — only the gate-catch table in METRICS.md is off by four records; nothing in the build or verify depends on it.
+- **Repro:**
+  ```
+  bash .tfcore/telemetry/tf-metrics.sh --report . --json
+  # docs/metrics/gates.jsonl lines 76-79 (2026-08-17/18): no req_id, no verdict, gate "verify-suite" / "unit-tests"
+  ```
+- **Expected:** a record without a `req_id` and verdict is skipped or reported as malformed. A pass is never counted as a failure.
+- **Actual:** all four count as failures (72 in all), and three of them recorded a pass. One lands in the `build` row. The other three use gate names outside the schema, so they appear in no row.
+- **Encountered in:** triage-and-fix, 2026-10-04 (metrics step)
+- **Workaround:** METRICS.md §2 and §7 name the four records.
+- **Suggested fix:** in `tf-metrics.sh`, count a gate record as a failure only when it carries a `req_id` and a verdict other than `Verified`, and list the rest as malformed.
+
+### TF-021 — The test runner does not pass the booted desktop app's debugging address to the browser tests
+
+> ✅ **Closed 2026-10-04** — re-checked here: Closed 2026-10-04: tf-verify-tests.sh --base http://172.18.144.1:9223 (desktop head) exported CDP_URL; with tests/verify/_admin-transport.ts reading CDP_URL first, phase8-admin.spec.ts ran 19/19 tests against the booted app with no ADMIN_CDP set.
+
+- **Severity:** minor
+- **Blocks:** no — setting `ADMIN_CDP` by hand makes the same run pass.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-verify-boot.sh start --head windows        # BOOTED … url=http://172.18.144.1:9223
+  ADMIN_TRANSPORT=cdp bash .tfcore/utils/tf-verify-tests.sh --base http://172.18.144.1:9223 --spec tests/verify/all-admin.spec.ts
+  ```
+- **Expected:** the tests reach the app on the address the boot printed.
+- **Actual:** every desktop test fails with `connectOverCDP: connect ECONNREFUSED 172.18.144.1:9334`, the test helper's built-in default, and the run took more than ten minutes to fail.
+- **Encountered in:** triage-and-fix, 2026-10-04 (verify step)
+- **Workaround:** `export ADMIN_CDP=<the boot URL>` before `tf-verify-tests.sh`.
+- **Suggested fix:** when `--base` (or `boot.json`) is a CDP address, `tf-verify-tests.sh` exports it to the test process under a documented name.
+
+### TF-022 — The mockup check looks for `docs/mockups/<screen>.html` only, so a mockup in a subfolder is reported as missing
+
+- **Severity:** minor
+- **Blocks:** no — passing `--mockups docs/mockups/admin` grades the screen.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-mockup-parity.sh --cdp http://172.18.144.1:9223 --screen prompt-manager=/admin/prompt-manager --json-out parity.json
+  # the scoped list.json names docs/mockups/admin/prompt-manager.html
+  ```
+- **Expected:** the check uses the mockup path that `tf-verify-list.sh` resolved for the screen.
+- **Actual:** verdict `NO-MOCKUP` ("no docs/mockups/<screen>.html"), so the design comparison silently does not run.
+- **Encountered in:** triage-and-fix, 2026-10-04 (verify step)
+- **Workaround:** pass `--mockups` with the subfolder, one screen group at a time.
+- **Suggested fix:** accept `--list list.json` and read each screen's mockup path from it.
+
+### TF-023 — The document baseline covers only two files, so `*amend-docs` sees ~130 old findings as new
+
+- **Severity:** minor
+- **Blocks:** no — the amendment's own text was checked line by line; the old findings are about the pre-template shape of the 2026-08 documents.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-phase.sh start amend-docs Lekhak      # "baseline written for 2 file(s)"
+  bash .tfcore/utils/tf-doc-check.sh --app Lekhak             # 131 FAIL not marked OLD (BRD, Architecture, UIDesign, Coding Standards, mockups index)
+  ```
+- **Expected:** a command that owns every document (`*amend-docs`, day-1) baselines every document it may check, so only findings it introduced block it.
+- **Actual:** only `docs/Lekhak-Checklist.md` and `PROJECT-STATUS.md` are baselined; header, section-name, word-count and size-cap findings that pre-date the run print as new FAILs.
+- **Encountered in:** amend-docs, 2026-09-26 and 2026-10-04
+- **Workaround:** compare against a check run before editing and fix only new findings.
+- **Suggested fix:** `tf-phase.sh start amend-docs` baselines every file `tf-doc-check.sh --app` reads.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### Resolution status (TechieFlow team, 2026-10-04, second reply)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-023 | Fixed upstream, with three changes. (1) `tf-phase.sh start` now baselines every file `tf-doc-check.sh --app <App>` reads, as well as the checklists and `PROJECT-STATUS.md`. (2) The baseline now also keeps findings filed under a name that is not one of those files, such as the mockup-folder checks on `docs/mockups/index.html`. Before, those 60 were never kept, even for a file that was baselined. (3) A size finding has its count in its text (`20,677 words; the Small maximum is 8,000`), so any edit to an over-limit document, even a cut, made it read as new. The same finding now stays old while the count has not grown. A document that grows past its maximum still FAILs, and so does any finding the command adds. A command started inside another one still keeps the outer command's baseline (TrBlazeUI TF-002). Regression case `lk_023` fails against the scripts you had and passes now. Miss `MISS-TechieFlow-20261004-05`. | Proved on a copy of your `docs/` (without `PROJECT-STATUS.md`). Your scripts: `baseline written for 2 file(s)`, then 128 FAIL. New: `baseline written for 12 file(s)`, then 0 FAIL and 691 OLD. Adding a section the template does not have printed one FAIL, and adding 1,200 words to the BRD printed the size FAIL; cutting a line printed none. Here: `bash .tfcore/utils/tf-phase.sh start amend-docs Lekhak` reports about 12 files, then `bash .tfcore/utils/tf-doc-check.sh --app Lekhak` prints only OLD lines until you change something. |
+
+### Resolution status (TechieFlow team, 2026-10-04)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-020 | Fixed upstream, in two places. `tf-metrics.sh` now scores a gate record only when it carries both a `req_id` and a `verdict`. Any other record is left out of every figure, and the report names it under "gate record(s) carry no req_id or no verdict". The emitter (`tf-emit.sh gates`) now refuses such a record, so a suite result can no longer be written to `gates.jsonl`; it belongs in the run record. Your four records stay in the stream as they are (it is append-only) and are simply not counted. Regression case `lk_020` fails against the scripts you had and passes now. Miss `MISS-TechieFlow-20261004-02`. | Proved on your stream here. Old: 72 failures, `build` 4. New: 68 failures, `build` 3, and the four records from 2026-08-17/18 listed by date and gate name. Run `bash .tfcore/telemetry/tf-metrics.sh --report .` and look for the "4 gate record(s) carry no req_id or no verdict" lines. The note about the four records in METRICS.md §2 and §7 can go at the next `*metrics`. |
+| TF-021 | Fixed upstream in `tf-verify-tests.sh`. When `--base` is a desktop app's debugging address (it answers `/json/version`), or there is no `--base` and `boot.json` says `mode: cdp`, the tests now get that address as `CDP_URL`, beside `BASE_URL`. `CDP_URL` is the documented name. If no test file reads `process.env.CDP_URL`, the browser run is refused at once with a line saying so, instead of failing after ten minutes. A web `--base` gets no `CDP_URL`. Regression case `lk_021` fails against the script you had and passes now. Miss `MISS-TechieFlow-20261004-03`. | **Your tests need one change first.** Two lines read `ADMIN_CDP` only: `tests/verify/_admin-transport.ts:66` and `tests/verify/connection-settings.spec.ts:28`. Make each read `process.env.CDP_URL ?? process.env.ADMIN_CDP ?? 'http://172.18.144.1:9334'`. Until then the framework refuses the desktop run (the refusal names `CDP_URL`). Then boot with `bash .tfcore/utils/tf-verify-boot.sh start --head windows` and run `ADMIN_TRANSPORT=cdp bash .tfcore/utils/tf-verify-tests.sh --base <the boot url> --spec tests/verify/all-admin.spec.ts` with no `export ADMIN_CDP`. The tests reach the app on the boot's address. |
+| TF-022 | Fixed upstream, on both sides. `tf-verify-list.sh` now ends its `Mockup parity:` line with `--list tests/.artifacts/verify/list.json`. `tf-mockup-parity.sh --list <list.json>` takes each screen's mockup path from the list, matched by the mockup's file name or the screen's name. With `--list` and no `--screen`, it drives every listed screen whose route needs no value. Without a list, a mockup missing at the top of `docs/mockups/` is looked for in its subfolders and used when exactly one file has that name. Two files with one name in different folders are never guessed between: that screen stays `NO-MOCKUP`. Regression case `lk_022` fails against the script you had and passes now. Miss `MISS-TechieFlow-20261004-04`. | On your checklist, `tf-verify-list.sh Lekhak REQ-UI-134` now prints `Mockup parity: --screen prompt-manager=/admin/prompt-manager --list tests/.artifacts/verify/list.json`. With the desktop head booted, run `bash .tfcore/utils/tf-mockup-parity.sh --cdp <the boot url> --screen prompt-manager=/admin/prompt-manager --list tests/.artifacts/verify/list.json --json-out tests/.artifacts/verify/parity.json`. Prompt Manager is graded against `docs/mockups/admin/prompt-manager.html` and no longer reads `NO-MOCKUP`. You no longer need `--mockups docs/mockups/admin`. |
+
 
 ### Resolution status (TechieFlow team, 2026-09-30, second reply)
 

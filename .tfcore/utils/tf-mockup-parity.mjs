@@ -40,8 +40,8 @@
 // means for a REQ.
 
 import { chromium } from 'playwright';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { signIn, reach } from './tf-login.mjs';
 
@@ -76,6 +76,51 @@ for (let i = 0; i < argv.length; i++) {
     SCREENS.push({ name: name.trim(), route: rest.join('=').trim() || '/' + name.trim() });
   }
 }
+// Where each screen's mockup is (Lekhak TF-022). --list names the list.json tf-verify-list.sh wrote,
+// which holds the path it resolved per screen (docs/mockups/admin/prompt-manager.html); a --screen is
+// matched to a listed screen by its mockup's stem or its name, and with no --screen every listed screen
+// that has a mockup and a route without a {value} is driven. Without a list, a mockup missing at the top
+// of --mockups is looked for in its subfolders, and used when exactly one file has that name.
+const MOCK_OF = {};
+const LIST = arg('--list');
+if (LIST) {
+  const slug = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  let listed = [];
+  try { listed = JSON.parse(readFileSync(LIST, 'utf8')).screens || []; }
+  catch (e) { console.error(`tf-mockup-parity: --list ${LIST} unreadable (${String(e.message).slice(0, 80)})`); }
+  const byKey = {};
+  for (const ls of listed) {
+    if (!ls.mockup) continue;
+    byKey[basename(ls.mockup).replace(/\.html$/, '')] ??= ls;
+    byKey[slug(ls.name)] ??= ls;
+  }
+  if (!SCREENS.length) {
+    for (const ls of listed) {
+      if (ls.mockup && ls.route && !ls.route.includes('{')) SCREENS.push({ name: basename(ls.mockup).replace(/\.html$/, ''), route: ls.route });
+    }
+  }
+  for (const s of SCREENS) {
+    const ls = byKey[s.name] || byKey[slug(s.name)];
+    if (ls) MOCK_OF[s.name] = ls.mockup;
+  }
+}
+const findMockup = (name) => {
+  if (MOCK_OF[name]) return resolve(MOCK_OF[name]);
+  const top = resolve(MOCKUPS, `${name}.html`);
+  if (existsSync(top)) return top;
+  const hits = [];
+  const walk = (dir, depth) => {
+    if (depth > 4) return;
+    let ents = [];
+    try { ents = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) {
+      if (e.isDirectory() && !e.name.startsWith('.')) walk(join(dir, e.name), depth + 1);
+      else if (e.isFile() && e.name === `${name}.html` && dir !== resolve(MOCKUPS)) hits.push(join(dir, e.name));
+    }
+  };
+  walk(resolve(MOCKUPS), 0);
+  return hits.length === 1 ? hits[0] : top;
+};
 const THIN_RATIO = parseFloat(arg('--thin-ratio', '0.25'));
 // --keep-app-theme compares the app in the theme it is showing, not the mockup's (Lekhak TF-010)
 const KEEP_APP_THEME = flag('--keep-app-theme');
@@ -510,9 +555,15 @@ const PROBE = (wanted = []) => {
   // taller than the viewport (a table wrapper that grows with its rows is not one), at least 60% of
   // its width and half its height, and across the viewport's centre (a side menu, or a drawer parked
   // off screen, is not one). Without one the document is the app's scroller (AppManager TF-014).
+  // A box that only scrolls sideways is not one either: `overflow-x: auto` alone makes the browser
+  // compute overflow-y as auto too, so Bootstrap's .table-responsive looked like a shell at 390px
+  // (AppManager TF-028). Skipped: a box whose only child is a table, and a box wider inside than
+  // out whose height fits its content.
   const scroller = [...document.querySelectorAll('body *')].find((el) => {
     const o = getComputedStyle(el).overflowY;
     if (o !== 'auto' && o !== 'scroll') return false;
+    if (el.children.length === 1 && el.children[0].tagName === 'TABLE') return false;
+    if (el.scrollWidth > el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1) return false;
     const r = el.getBoundingClientRect(), cx = de.clientWidth / 2;
     return r.height <= de.clientHeight + 2 && r.width >= de.clientWidth * 0.6 && r.height >= de.clientHeight / 2
       && r.left <= cx && r.right >= cx;
@@ -875,12 +926,12 @@ for (const width of WIDTHS) {
 if (loginResult && loginResult.attempted && !loginResult.ok) console.error(`tf-mockup-parity: LOGIN failed at ${BASE}${LOGIN_PATH}: ${loginResult.error || 'still on the sign-in page'}`);
 
 for (const s of SCREENS) {
-  const mockPath = resolve(MOCKUPS, `${s.name}.html`);
+  const mockPath = findMockup(s.name);
   // TF-008 §3: a screen with no mockup is reported, never silently passed — the
   // same discipline `⚠ STATIC-ONLY` already uses. Silence is not evidence.
   if (!existsSync(mockPath)) {
     results.push({ screen: s.name, route: s.route, verdict: 'NO-MOCKUP', mockup: mockPath,
-      note: 'no docs/mockups/<screen>.html — this screen was NOT graded against a design. It must not license a Verified on design grounds.' });
+      note: `no ${s.name}.html under ${MOCKUPS} (or several in its subfolders)${LIST ? ` and none named for it in ${LIST}` : '; pass --list tests/.artifacts/verify/list.json'} — this screen was NOT graded against a design. It must not license a Verified on design grounds.` });
     continue;
   }
 

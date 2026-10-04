@@ -9,6 +9,9 @@
 #        --login-path /login --user <u> --password <p>   (or --storage-state <file>)
 #   and each screen is opened in a tab that signed in through the form, the way
 #   tf-verify-screens.sh does; `widths[].reached` in the JSON says how a 401 screen was reached.
+#   --list tests/.artifacts/verify/list.json takes each screen's mockup path from the list
+#   tf-verify-list.sh wrote, so a mockup in a subfolder is found (Lekhak TF-022); with no --screen
+#   it drives every listed screen. Without a list, a mockup in a subfolder is used when it is the only one.
 #   A desktop head (Lekhak TF-006): --cdp http://<host>:9223 in place of --base attaches to the
 #   running app, as tf-verify-screens.sh --cdp does, and opens each route by pushState.
 #   The app is compared in the mockup's theme: the mockup's data-*theme/mode/scheme attributes on

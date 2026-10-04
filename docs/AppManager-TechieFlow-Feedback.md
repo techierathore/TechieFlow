@@ -4,16 +4,16 @@
 |---|---|
 | App | AppManager |
 | Upstream | TechieFlow |
-| Updated | 2026-09-19 |
+| Updated | 2026-10-04 |
 
 ## Summary
 
-- 0 blockers, 7 majors, 20 minors, 0 nice-to-haves
-- Last consolidated: 2026-09-19
+- 0 blockers, 7 majors, 22 minors, 0 nice-to-haves
+- Last consolidated: 2026-10-04
 
-27 entries: 0 blocking now, 0 open, 3 fixed upstream and waiting to be re-checked here (TF-025 to TF-027, fixed 2026-09-19), 24 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-014 on 2026-09-14, TF-015 and TF-016 on 2026-09-16, TF-017 to TF-022 on 2026-09-17, TF-023 and TF-024 on 2026-09-18.
+29 entries: 0 blocking now, 0 open, 1 fixed upstream and waiting to be re-checked here (TF-029, fixed 2026-10-04), 28 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-014 on 2026-09-14, TF-015 and TF-016 on 2026-09-16, TF-017 to TF-022 on 2026-09-17, TF-023 and TF-024 on 2026-09-18, TF-025 to TF-027 on 2026-09-19, TF-028 on 2026-10-04.
 
-Nothing is blocked. TF-025 to TF-027 are fixed upstream: a quoted `&` no longer reads as a background run, the app's log files no longer count as code, and `*triage-and-fix` may run a migration. TF-024 is closed: the API reference is no longer graded as the usage guide. TF-023 is closed: a DevGuide's word limit grows with each screen past 20, so the guide is one file again. TF-022 is closed: the builder prompt names the usage guide that exists. TF-020 is closed: a fix prompt carries each row's defect. TF-021 is closed: a verify keeps a defect it cannot see and sends the row to a fix.
+Nothing is blocked. TF-029 is fixed upstream: a rendered heading also carries GitHub's id, so links to numbered headings land. TF-028 is closed: a table wrapper that only scrolls sideways is no longer taken for the app's scroll container. TF-025 to TF-027 are closed: a quoted `&` no longer reads as a background run, the app's log files no longer count as code, and `*triage-and-fix` may run a migration. TF-024 is closed: the API reference is no longer graded as the usage guide. TF-023 is closed: a DevGuide's word limit grows with each screen past 20, so the guide is one file again. TF-022 is closed: the builder prompt names the usage guide that exists. TF-020 is closed: a fix prompt carries each row's defect. TF-021 is closed: a verify keeps a defect it cannot see and sends the row to a fix.
 ## Entries
 
 ### TF-001 — `tf-split-brd.sh --add-missing` re-appended a row for every BRD item, not just the new ones, and emitted stray markup
@@ -117,6 +117,19 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 - **Encountered in:** `*verify all AppManager`, step 5, while driving the three screens that have mockups.
 - **Workaround:** none for the tool; render and layout of those screens are covered only by the acceptance tests.
 - **Suggested fix:** sign in and drive every screen inside one browser context (in-app navigation after the login, not a fresh document load per screen), and judge reachability by what renders rather than by the first document's status code.
+
+### TF-020 — `tf-build-list.sh --prompts` in FIX mode leaves out the defects the rows are being fixed for
+
+> ✅ **Closed 2026-09-17** — re-checked here: Re-checked 2026-09-17. Ran bash .tfcore/utils/tf-build-list.sh AppManager --prompts: 'Mode: FIX — 1 row(s) to build; 88 terminal, 0 Blocked, 0 roadmap, 89 total — REQ-NFR-009'. The working list and the cluster A prompt both show REQ-NFR-009 with 'Defect: ⚠ acceptance — Error: https://appmgrapi.techierathore.com/healthz' under its acceptance line, and the prompt ends with 'A row with a Defect line is on this list for that defect. Fix every one at the file and line it names, keep the acceptance line true…'.
+
+- **Severity:** major
+- **Blocks:** no — the defects are passed to each builder alongside the printed prompt.
+- **Repro:** with rows at `Needs re-verify` whose Remarks carry `⚠ DevGuide 2026-09-16: … (File.razor:NN)` defects, run `bash .tfcore/utils/tf-build-list.sh AppManager --prompts`.
+- **Expected:** in FIX mode, each row in a cluster prompt carries the defect text from its Remarks (the file and line to fix), since that defect is the reason the row is on the list.
+- **Actual:** `Mode: FIX — 22 row(s) to build`, but each prompt row carries only its title, BRD ids and acceptance line. Most of these acceptance lines do not mention the defect (for example REQ-UI-007 "manager view filtered to assigned apps" for a dashboard whose "Expiring (7 days)" count is always 0), so a builder that follows the prompt finds the row already working and re-smokes it without fixing anything. Build-phase step 2 says to pass the prompt unchanged.
+- **Encountered in:** `*build-phase AppManager`, step 1, on 2026-09-17.
+- **Workaround:** each builder gets the printed prompt unchanged, followed by a separate block quoting its rows' Remarks defects.
+- **Suggested fix:** in FIX mode, print the row's current Remarks (or the `⚠` part of it) under its acceptance line in the prompt, with one line saying every listed defect must be fixed and the acceptance line still hold.
 
 ### TF-007 — `tf-verify-tests.sh` finds no test project when the solution is `.slnx` only and the tests sit two folders under `tests/`
 
@@ -287,19 +300,6 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 - **Workaround:** named `*build-phase AppManager` to the owner; the status file carries the printed command.
 - **Suggested fix:** when a `Needs re-verify` row's Remarks carry a dated defect (`⚠ DevGuide`, `⚠ visual`, a FAIL note), name `*build-phase` (fix mode) as the next command; name `*verify` only when the rows were changed and not yet graded.
 
-### TF-020 — `tf-build-list.sh --prompts` in FIX mode leaves out the defects the rows are being fixed for
-
-> ✅ **Closed 2026-09-17** — re-checked here: Re-checked 2026-09-17. Ran bash .tfcore/utils/tf-build-list.sh AppManager --prompts: 'Mode: FIX — 1 row(s) to build; 88 terminal, 0 Blocked, 0 roadmap, 89 total — REQ-NFR-009'. The working list and the cluster A prompt both show REQ-NFR-009 with 'Defect: ⚠ acceptance — Error: https://appmgrapi.techierathore.com/healthz' under its acceptance line, and the prompt ends with 'A row with a Defect line is on this list for that defect. Fix every one at the file and line it names, keep the acceptance line true…'.
-
-- **Severity:** major
-- **Blocks:** no — the defects are passed to each builder alongside the printed prompt.
-- **Repro:** with rows at `Needs re-verify` whose Remarks carry `⚠ DevGuide 2026-09-16: … (File.razor:NN)` defects, run `bash .tfcore/utils/tf-build-list.sh AppManager --prompts`.
-- **Expected:** in FIX mode, each row in a cluster prompt carries the defect text from its Remarks (the file and line to fix), since that defect is the reason the row is on the list.
-- **Actual:** `Mode: FIX — 22 row(s) to build`, but each prompt row carries only its title, BRD ids and acceptance line. Most of these acceptance lines do not mention the defect (for example REQ-UI-007 "manager view filtered to assigned apps" for a dashboard whose "Expiring (7 days)" count is always 0), so a builder that follows the prompt finds the row already working and re-smokes it without fixing anything. Build-phase step 2 says to pass the prompt unchanged.
-- **Encountered in:** `*build-phase AppManager`, step 1, on 2026-09-17.
-- **Workaround:** each builder gets the printed prompt unchanged, followed by a separate block quoting its rows' Remarks defects.
-- **Suggested fix:** in FIX mode, print the row's current Remarks (or the `⚠` part of it) under its acceptance line in the prompt, with one line saying every listed defect must be fixed and the acceptance line still hold.
-
 ### TF-021 — `tf-verify-verdict.sh --apply` erases a `⚠` defect note from a row that passes its acceptance test
 
 > ✅ **Closed 2026-09-17** — re-checked here: Re-checked 2026-09-17 on a copy only. Copied docs/AppManager-Checklist.md and tests/.artifacts/verify/*.json into tests/.artifacts/tf021-recheck/ (docs/, ev/), added '⚠ DevGuide 2026-09-17: test note (X.razor:1)' to REQ-UI-002 (Verified) in the copied checklist and in ev/list.json, then ran tf-verify-verdict.sh AppManager --apply --dir ev from that folder. Output: 'Rows: 4 DEFECT-OPEN, 1 FAIL, 5 NOT-OBSERVABLE, 22 NOT-TESTED, 56 PASS' and '| REQ-UI-002 | DEFECT-OPEN | - | Needs re-verify |'. The copied row now reads 'Needs re-verify | 75% | 2026-09-17 verify: checks pass, defect open — test REQ-UI-002 role rows persist … ⚠ DevGuide 2026-09-17: test note (X.razor:1)'. The other three DEFECT-OPEN rows (REQ-UI-004, 006, 028) kept their 2026-09-16 DevGuide notes from the older list.json. The real checklist and docs/.last-verify.json were unchanged (byte compare and 08:41 timestamp).
@@ -355,6 +355,8 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 
 ### TF-025 — the background-run guard refuses a foreground command whose screen name contains `&`
 
+> ✅ **Closed 2026-09-19** — re-checked here: Re-checked 2026-09-19 in YOLO: ran tf-mockup-parity.sh against the booted admin app with the original screen argument for Scorecard and Portfolio, written with the ampersand, route /reports/portfolio. The guard let it through and it ran to a result: the screen was graded NO-MOCKUP (exit 6, no mockup exists for it), where before the fix the same command was refused as a background run.
+
 - **Severity:** minor
 - **Blocks:** no — the screen was renamed "Scorecard and Portfolio" on the command line and the comparison ran.
 - **Repro:** in YOLO, `bash .tfcore/utils/tf-mockup-parity.sh --base http://localhost:5041 --screen "Scorecard & Portfolio=/reports/portfolio" …` (the name `tf-verify-list.sh` itself prints for that screen).
@@ -365,6 +367,8 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 - **Suggested fix:** strip quoted strings before looking for a background `&`, or match only an `&` that ends a command (followed by end of line, `;` or a newline) and is not `&&`.
 
 ### TF-026 — triage reports "code untouched: NO" when the only changed files are the running app's own log files
+
+> ✅ **Closed 2026-09-19** — re-checked here: Re-checked 2026-09-19: noted 10:47:42Z, booted AppManagerWeb with tf-verify-boot.sh, which wrote src/AppManagerWeb/logs/appmanager-20260919.log at 10:49:04, then ran tf-triage.sh AppManager close --started 2026-09-19T10:47:42Z --cmd fix-issues with the earlier triage log set aside so nothing was re-emitted. It printed code untouched: yes. Before the fix the same situation printed NO.
 
 - **Severity:** minor
 - **Blocks:** no — nothing was logged against the run for it (`--cmd fix-issues`); only the summary line is wrong.
@@ -377,6 +381,8 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 
 ### TF-027 — `*triage-and-fix` runs the fix-issues steps, but the database guard refuses its migrations
 
+> ✅ **Closed 2026-09-19** — re-checked here: Re-checked 2026-09-19: tf-phase.sh start triage-and-fix AppManager, then the AppManagerDB migrator with --migrate. The database guard allowed it and DbUp reported No new scripts need to be executed and Migrations completed successfully. Before the fix the same migration under that marker was refused.
+
 - **Severity:** minor
 - **Blocks:** no — the phase marker was restarted as `fix-issues` for step 3 (as fix-issues step 0 does) and migration 123 was applied.
 - **Repro:** `tf-phase.sh start triage-and-fix AppManager`, then in step 3 a fix that adds a migration: `dotnet run --project src/AppManagerDB -- "<connection>" --migrate`.
@@ -386,9 +392,67 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 - **Workaround:** `bash .tfcore/utils/tf-phase.sh start fix-issues AppManager` before the migration; the original start time is still passed to the close scripts with `--started`.
 - **Suggested fix:** add `triage-and-fix` to the allowed list in `guard-db.sh`, or have `triage-and-fix.md` step 3 say to restart the marker as `fix-issues`.
 
+### TF-028 — mockup parity takes a tall Bootstrap `.table-responsive` for the app's scroll container at 390px
+
+> ✅ **Closed 2026-10-04** — re-checked here: Re-checked 2026-10-04: tf-mockup-parity.mjs line 560 carries the TF-028 skip (a box whose only child is a table, or wider inside than outside). Booted the web app and ran tf-mockup-parity.sh --screen application-groups=/applications/1/groups: PASS with 0 findings at 1280 and 390, no document-scroll finding. The page's overflow-y: hidden stays (correct CSS), so this run confirms the deployed script and the page together, not the bare table case.
+
+- **Severity:** minor
+- **Blocks:** no — the page's three table wrappers were given `overflow-y: hidden`, which is correct for a table that only scrolls sideways, and the finding went away.
+- **Repro:** `bash .tfcore/utils/tf-mockup-parity.sh --base <url> --login-path /login --user … --password … --screen application-groups=/applications/1/groups` on a page whose `div.table-responsive` is between half and one viewport tall at 390px.
+- **Expected:** no `document-scroll` finding; the document is the page's scroller, as it is in the mockup.
+- **Actual:** `document.scrollHeight 2413 exceeds clientHeight 844 — the page has escaped the app shell's scroll container (div.table-responsive)`. Bootstrap's `.table-responsive` sets only `overflow-x: auto`, but the browser then computes `overflow-y` as `auto` too, so `tf-mockup-parity.mjs` near line 513 picks the table wrapper as the app shell's scroller.
+- **Encountered in:** `*build-phase AppManager` step 6 (chained verify), REQ-UI-030, 2026-10-03.
+- **Workaround:** `style="overflow-y: hidden;"` on each `.table-responsive` of the page.
+- **Suggested fix:** skip an element whose `overflow-x` is `auto`/`scroll` and whose own `scrollHeight` equals its `clientHeight` (it scrolls sideways only), or skip `.table-responsive` and any element containing a `table` as its only child, as the comment's "a table wrapper that grows with its rows is not one" intends.
+
+### TF-029 — the HTML renderer drops the numbers from heading ids, so links to numbered headings go nowhere
+
+- **Severity:** minor
+- **Blocks:** no — the Markdown files' links work; only the rendered HTML copies have dead in-page links.
+- **Repro:** `bash .tfcore/utils/tf-render-html.sh docs/AppManager-api-usage-guide.md`, then follow the table-of-contents link `#37-group-service-groupsvc` (heading `### 3.7 Group Service (GroupSvc)`).
+- **Expected:** the link lands on the heading, as it does on GitHub, whose heading id keeps the number (`37-group-service-groupsvc`).
+- **Actual:** the rendered heading's id has no number, so every link to a numbered heading in the guide (its whole table of contents) goes nowhere.
+- **Encountered in:** checking the API Usage Guide's links after its 2026-10-04 rewrite.
+- **Workaround:** none in the HTML; readers use the Markdown file or the sidebar.
+- **Suggested fix:** build heading ids the way GitHub does (keep digits, drop the dots), or give each heading both ids.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### TF-029 — fixed 2026-10-04
+
+- **Fix.** `tf-render-html` now gives every heading GitHub's id as well as its own. GitHub keeps the
+  digits, drops the punctuation and turns spaces into hyphens, so `### 3.7 Group Service (GroupSvc)` gets
+  `#37-group-service-groupsvc`. When that differs from the renderer's own id
+  (`#group-service-groupsvc`), the heading carries both, so links written either way land. The
+  sidebar, its links and hand-written `<a id>` anchors are unchanged. A repeated heading is numbered
+  `-1`, `-2` as GitHub numbers it. The rule is in the renderer's spec, `html-render-shell.md` §1.
+  Case `am_029`; miss `MISS-TechieFlow-20261004-06`. Deployed here.
+- **Proof.** Rendered your `docs/AppManager-api-usage-guide.md` into a scratch folder with both
+  scripts and counted in-page links with no matching id. Your copy: 35 dead of 235, among them
+  `#37-group-service-groupsvc`, `#62-common-error-codes`, `#211-installed-apps-public-keys`.
+  New: 0 dead of 235.
+- **Verify from here.** `bash .tfcore/utils/tf-render-html.sh docs/AppManager-api-usage-guide.md`, open
+  the HTML and click the table-of-contents entry for 3.7 Group Service: it lands on the heading. Then
+  `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-029 "<what you ran and what it showed>"`.
+
+### TF-028 — fixed 2026-10-04
+
+- **Fix.** `tf-mockup-parity.mjs` no longer takes a box that only scrolls sideways for the app shell's
+  scroll container. Two kinds of box are skipped: a box whose only child is a table (Bootstrap's
+  `.table-responsive`), and a box that is wider inside than outside while its height fits its
+  content. A real shell that scrolls up and down is still found, so a page that escapes it is still
+  reported (case `am_014b` still holds). Case `am_028`; miss `MISS-TechieFlow-20261004-01`.
+  Deployed here.
+- **Proof.** A 390px page with a 900px-wide table in `.table-responsive`, more than half a viewport
+  tall, and a long document. Your copy of the script reported `document.scrollHeight 2534 exceeds
+  clientHeight 844 — the page has escaped the app shell's scroll container (div.table-responsive)`.
+  The new script reports no `document-scroll` finding, with or without a caption beside the table.
+- **Verify from here.** Remove `style="overflow-y: hidden;"` from one `.table-responsive` on
+  Application groups (or leave it; it is correct CSS either way), boot the app, and run your repro
+  with `--screen application-groups=/applications/1/groups`: no `document-scroll` finding at 390. Then
+  `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-028 "<what you ran and what it showed>"`.
 
 ### TF-025 — fixed 2026-09-19
 

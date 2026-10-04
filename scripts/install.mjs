@@ -723,7 +723,9 @@ function migrateLegacyLayout() {
   const rootConfig = join(target, "opencode.jsonc");
   if (existsSync(rootConfig) && legacyConfigPattern.test(read(rootConfig))) {
     copyFileSync(rootConfig, `${rootConfig}.bak`);
-    copyFileSync(join(sourceRoot, "opencode.jsonc"), rootConfig);
+    // the content only, as the shell's `cp` onto an existing file does: copyFileSync also copies the
+    // template's mode, so an executable checkout of opencode.jsonc gave a different file (CI, 2026-10-04)
+    writeFileSync(rootConfig, readFileSync(join(sourceRoot, "opencode.jsonc")));
     say("  opencode.jsonc — legacy version backed up to opencode.jsonc.bak, replaced with current template");
   }
   say("");
@@ -742,7 +744,7 @@ function refreshRootOpenCodeConfig() {
     if (dryRun) say("  opencode.jsonc — WOULD refresh from template (no project-only content; old file → .bak)");
     else {
       copyFileSync(rootConfig, `${rootConfig}.bak`);
-      copyFileSync(join(sourceRoot, "opencode.jsonc"), rootConfig);
+      writeFileSync(rootConfig, readFileSync(join(sourceRoot, "opencode.jsonc")));   // keeps its mode, as `cp` does
       say("  opencode.jsonc — refreshed from template (no project-only content; old file → opencode.jsonc.bak)");
       replaced = true;
     }

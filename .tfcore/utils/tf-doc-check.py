@@ -1420,6 +1420,7 @@ def main(argv=None):
     if a.app:
         root = root or os.getcwd()
         files += app_files(root, a.app)
+        files = list(dict.fromkeys(os.path.abspath(f) for f in files))   # a file given and listed by --app once
         if not files:
             print(f"tf-doc-check: no documents for app {a.app} under {root}", file=sys.stderr)
             return 2
@@ -1452,9 +1453,16 @@ def main(argv=None):
                 base = json.load(fh) or {}
         except Exception:
             base = {}
-        for f in files:
-            r = os.path.relpath(f, root)
-            base[r] = sorted({l.split(": ", 1)[1] for l in rep.lines if l.startswith("FAIL ") and l.split(": ", 1)[0].endswith(" " + r)})
+        # every finding, under whatever it names: the mockup-folder and cross-document checks name
+        # docs/mockups/index.html or another document, not one of the files given, and were never
+        # recorded, so ~60 old findings read as new on every *amend-docs (Lekhak TF-023)
+        new = {os.path.relpath(f, root): set() for f in files}
+        for l in rep.lines:
+            if l.startswith("FAIL ") and ": " in l:
+                head, msg = l.split(": ", 1)
+                new.setdefault(head[len("FAIL "):], set()).add(msg)
+        for r, msgs in new.items():
+            base[r] = sorted(msgs)
         os.makedirs(os.path.dirname(base_path), exist_ok=True)
         with open(base_path, "w", encoding="utf-8") as fh:
             json.dump(base, fh, indent=1)
@@ -1468,11 +1476,23 @@ def main(argv=None):
                 with open(base_path, encoding="utf-8") as fh:
                     base = json.load(fh) or {}
                 relined = []
+                # A size finding carries its count ("20,677 words; the Small maximum is 8,000"), so any
+                # edit to an over-limit document, a cut included, changed the text and read as new
+                # (Lekhak TF-023). The same finding with a count no larger than the old one is old;
+                # a document that grew past its maximum still FAILs.
+                def _shape(m):
+                    return re.sub(r"\d[\d,]*", "#", m)
+                def _first(m):
+                    n = re.search(r"\d[\d,]*", m)
+                    return int(n.group(0).replace(",", "")) if n else None
                 for l in rep.lines:
                     if l.startswith("FAIL "):
                         head, msg = l.split(": ", 1)
                         r = head[len("FAIL "):]
-                        if msg in set(base.get(r, [])):
+                        was = base.get(r, [])
+                        same = msg in set(was) or (re.match(r"^\d[\d,]* (words|lines|rows|KB|screens)", msg) and any(
+                            _shape(o) == _shape(msg) and _first(o) is not None and _first(msg) <= _first(o) for o in was))
+                        if same:
                             relined.append("OLD  " + l[5:])
                             rep.fails -= 1
                             old += 1

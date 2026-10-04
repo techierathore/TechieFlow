@@ -23,7 +23,7 @@ UTILS="${TF_REGRESSION_UTILS:-$ROOT/.tfcore/utils}"
 # tf_timeout, tf_sed_inplace, tf_date_from: the GNU-only commands, so a stock Mac runs this suite
 source "$ROOT/.tfcore/utils/tf-portable.sh"
 HOOKS="${TF_REGRESSION_HOOKS:-$ROOT/.tfcore/hooks}"
-TELEM="$ROOT/.tfcore/telemetry"
+TELEM="${TF_REGRESSION_TELEM:-$ROOT/.tfcore/telemetry}"
 SCRATCH="$ROOT/tests/.artifacts/regression.$$"
 mkdir -p "$SCRATCH"
 trap 'rm -rf "$SCRATCH"' EXIT
@@ -371,11 +371,11 @@ tf_019() {
 tf_020() {
   local d; d="$(_metrics_fx segfx)"
   cat > "$d/docs/metrics/gates.jsonl" <<'JS'
-{"kind":"gate","app":"Fx","req_id":"REQ-UI-001","req_class":"UI","project_type":"app","gate":"acceptance","result":"fail","attempt":1,"ts":"2026-09-08T10:00:00Z"}
-{"kind":"gate","app":"Fx","req_id":"REQ-UI-001","req_class":"UI","project_type":"app","gate":"acceptance","result":"pass","attempt":2,"ts":"2026-09-08T11:00:00Z"}
-{"kind":"gate","app":"TechieFlow","req_id":"FR-01","req_class":"FR","project_type":"app","gate":"acceptance","result":"pass","attempt":1,"ts":"2026-09-08T12:00:00Z"}
-{"kind":"gate","app":"TechieFlow","req_id":"FR-02","req_class":"FR","project_type":"app","gate":"acceptance","result":"pass","attempt":1,"ts":"2026-09-08T12:01:00Z"}
-{"kind":"gate","app":"TechieFlow","req_id":"FR-03","req_class":"FR","project_type":"app","gate":"acceptance","result":"pass","attempt":1,"ts":"2026-09-08T12:02:00Z"}
+{"kind":"gate","app":"Fx","req_id":"REQ-UI-001","req_class":"UI","project_type":"app","gate":"acceptance","verdict":"FAIL","attempt":1,"ts":"2026-09-08T10:00:00Z"}
+{"kind":"gate","app":"Fx","req_id":"REQ-UI-001","req_class":"UI","project_type":"app","gate":"acceptance","verdict":"Verified","attempt":2,"ts":"2026-09-08T11:00:00Z"}
+{"kind":"gate","app":"TechieFlow","req_id":"FR-01","req_class":"FR","project_type":"app","gate":"acceptance","verdict":"Verified","attempt":1,"ts":"2026-09-08T12:00:00Z"}
+{"kind":"gate","app":"TechieFlow","req_id":"FR-02","req_class":"FR","project_type":"app","gate":"acceptance","verdict":"Verified","attempt":1,"ts":"2026-09-08T12:01:00Z"}
+{"kind":"gate","app":"TechieFlow","req_id":"FR-03","req_class":"FR","project_type":"app","gate":"acceptance","verdict":"Verified","attempt":1,"ts":"2026-09-08T12:02:00Z"}
 JS
   bash "$TELEM/tf-metrics.sh" --rollup "$d" --json > "$d/out.json" 2>/dev/null
   local verdict; verdict="$(python3 - "$d/out.json" <<'PY'
@@ -3339,6 +3339,61 @@ am_027() {
     || bad am_027 "database guard: triage-and-fix rc=$a (want 0), triage-issues rc=$b (want 2)"
 }
 
+# --- AppManager TF-028: a Bootstrap .table-responsive was taken for the shell's scroll container ---
+# At 390px Application groups' table wrapper (overflow-x: auto only, so the browser computes overflow-y
+# auto too) was over half a viewport tall, so the parity check picked it as the shell's scroller and
+# reported the long document as "escaped (div.table-responsive)". A box that only scrolls sideways is
+# not a shell; a real shell beside a scrolling document is still reported (am_014b).
+am_028() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip am_028 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/am028"; mkdir -p "$d/docs/mockups"
+  local rows; rows="$(printf '<tr><td>group %s</td><td>owner name that is long</td><td>2026-10-03</td><td>active</td></tr>' $(seq 1 14))"
+  local css='<style>body{margin:0;font:14px/20px system-ui} .table-responsive{overflow-x:auto} table{width:900px} td{padding:4px}</style>'
+  local tail; tail="$(printf '<p>note %s</p>' $(seq 1 60))"
+  # the mockup: the same page, the document scrolls
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><h1 data-testid="groups-title">Groups</h1><div data-testid="groups-table"><table>%s</table></div>%s</body></html>\n' "$css" "$rows" "$tail" > "$d/docs/mockups/groups.html"
+  cp "$d/docs/mockups/groups.html" "$d/docs/mockups/groups2.html"
+  # the app: the table in Bootstrap's wrapper (its only child), and a wrapper holding a caption too
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><h1 data-testid="groups-title">Groups</h1><div class="table-responsive" data-testid="groups-table"><table>%s</table></div>%s</body></html>\n' "$css" "$rows" "$tail" > "$d/groups.html"
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><h1 data-testid="groups-title">Groups</h1><div class="table-responsive" data-testid="groups-table"><p>14 groups</p><table>%s</table></div>%s</body></html>\n' "$css" "$rows" "$tail" > "$d/groups2.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  ( cd "$d" && tf_timeout 180 node parity.mjs --base "http://127.0.0.1:$port" --screen groups=/groups.html --screen groups2=/groups2.html \
+      --widths 390 --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$srv" 2>/dev/null
+  local f; f="$(python3 -c "import json
+for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], ' '.join(x['class'] + ':' + x['detail'][:90] for x in s['findings']))" 2>&1)"
+  ! grep -q 'document-scroll' <<<"$f" && grep -q '^groups ' <<<"$f" && grep -q '^groups2 ' <<<"$f" \
+    && ok am_028 "a table wrapper that only scrolls sideways is not taken for the shell's scroll container" \
+    || { bad am_028 "a sideways-scrolling table wrapper was read as the shell's scroller"; note "$(tr '\n' ' ' <<<"$f" | cut -c1-220)"; }
+}
+
+# --- AppManager TF-029: the rendered heading ids lost their numbers, so a numbered TOC went nowhere ----
+# The API usage guide's table of contents links #37-group-service-groupsvc, GitHub's id for
+# `### 3.7 Group Service (GroupSvc)`; the renderer's slug strips leading numbers (#group-service-groupsvc),
+# and 35 of 235 in-page links were dead. A heading now also carries GitHub's id; the slug, the sidebar
+# links and hand-written anchors are unchanged.
+am_029() {
+  local d="$SCRATCH/am029"; mkdir -p "$d"
+  printf '# Fx API\n\n- [Groups](#37-group-service-groupsvc)\n- [Errors](#62-common-error-codes)\n- [Again](#notes-1)\n- [Detail](#d-req-fn-001)\n\n## Notes\n\n## Notes\n\n### 3.7 Group Service (GroupSvc)\n\n### 6.2 Common error codes\n\n<a id="d-req-fn-001"></a>Detail.\n' > "$d/Fx-api-usage-guide.md"
+  ( cd "$d" && python3 "$UTILS/tf-render-html.py" --quiet Fx-api-usage-guide.md ) >/dev/null 2>&1
+  local got; got="$(python3 - "$d/Fx-api-usage-guide.html" <<'PY'
+import re, sys
+h = open(sys.argv[1], encoding="utf-8").read()
+ids = set(re.findall(r'\bid="([^"]+)"', h))
+dead = [r for r in re.findall(r'href="#([^"]+)"', h) if r not in ids]
+print("dead:" + ",".join(dead) if dead else ("ok" if 'id="group-service-groupsvc"' in h else "slug changed"))
+PY
+)"
+  [[ "$got" == "ok" ]] \
+    && ok am_029 "a numbered heading also carries GitHub's id, so a markdown TOC's links land; the slug is unchanged" \
+    || { bad am_029 "in-page links to numbered headings go nowhere"; note "$got"; }
+}
+
 # --- Chatur TF-001: a feedback file was rendered to HTML ----------------------------------
 # The render shell listed "a feedback file" as a human document and the renderer drew it, so
 # the status gate's "every human document this command wrote" left a *-Feedback.html behind
@@ -3721,7 +3776,7 @@ YML
     && [[ "$(grep -c 'docs/Fx-Architecture.md' "$d/.tfcore/core-config.yaml")" == 2 ]] \
     && [[ -f "$d/docs/OldDocs/AGENTS.md" && -f "$d/.editorconfig" ]] \
     && ok sv_001b "--prefix (day-1 stage 2) writes the files and adds missing document paths, keeping every entry already listed" \
-    || { bad sv_001b "stage 2 dropped or duplicated a document entry"; note "$(sed -n '/customTechnicalDocuments/,$p' "$d/.tfcore/core-config.yaml" | tr '\n' ' ' | cut -c1-240)"; }
+    || { bad sv_001b "stage 2 dropped or duplicated a document entry"; note "$(awk '/customTechnicalDocuments/{p=1} p' "$d/.tfcore/core-config.yaml" | tr '\n' ' ' | cut -c1-240)"; }
 }
 
 # --- TrBlazeUI TF-001: triage close logged last week's bugs again under today's run -------------
@@ -4119,6 +4174,152 @@ jobs:
     || bad lk_019c "a CI failure can still be 'fixed' on the strength of a warm-cache local run"
 }
 
+# --- Lekhak TF-020: suite-level gate records were counted as failures, passes included ----------------
+# gates.jsonl lines 76-79: {"gate":"verify-suite"|"unit-tests"|"build","result":"pass"|"fail"}, no req_id,
+# no verdict. The report counted all four as failures (72 instead of 68), one in the build row. They are
+# now scored nowhere and named as malformed, and the emitter refuses a gate record without both fields.
+lk_020() {
+  local d; d="$(_metrics_fx lk020)"
+  cat > "$d/docs/metrics/gates.jsonl" <<'JS'
+{"kind":"gate","app":"Fx","req_id":"REQ-UI-001","req_class":"UI","project_type":"app","verdict":"FAIL","gate":"acceptance","attempt":1,"ts":"2026-08-17T10:00:00Z"}
+{"kind":"gate","app":"Fx","req_id":"REQ-UI-001","req_class":"UI","project_type":"app","verdict":"Verified","gate":null,"attempt":2,"ts":"2026-08-17T11:00:00Z"}
+{"kind":"gate","app":"Fx","gate":"unit-tests","result":"pass","detail":"409 passed","project_type":"app","ts":"2026-08-17T14:45:30Z"}
+{"kind":"gate","app":"Fx","gate":"build","result":"pass","detail":"0 errors","project_type":"app","ts":"2026-08-17T14:45:30Z"}
+JS
+  local got; got="$(bash "$TELEM/tf-metrics.sh" --report "$d" --json 2>/dev/null | python3 -c "import json,sys
+a = json.load(sys.stdin); m = a['live'].get('app', {})
+print(m.get('gate_distribution_n'), dict(m.get('gate_distribution', {})), a.get('gates_malformed_n'))" 2>&1)"
+  [[ "$got" == "1 {'acceptance': 1} 2" ]] \
+    && ok lk_020a "a gate record with no req_id or verdict is left out of the failure count and named as malformed" \
+    || { bad lk_020a "suite-level records were counted as gate failures"; note "$got"; }
+  local e; e="$SCRATCH/lk020e"; mkdir -p "$e/docs/metrics" "$e/.tfcore"; printf 'appName: Fx\n' > "$e/.tfcore/core-config.yaml"
+  local o1 o2
+  o1="$(cd "$e" && echo '{"kind":"gate","app":"Fx","gate":"verify-suite","result":"pass"}' | bash "$UTILS/tf-emit.sh" gates 2>&1)"
+  o2="$(cd "$e" && echo '{"kind":"gate","app":"Fx","run_id":"2026-10-04T00:00:00Z","req_id":"REQ-UI-001","req_class":"UI","verdict":"Verified","gate":null}' | bash "$UTILS/tf-emit.sh" gates 2>&1)"
+  local n; n="$(grep -c '"kind": *"gate"' "$e/docs/metrics/gates.jsonl" 2>/dev/null)"
+  grep -q 'REFUSED' <<<"$o1" && [[ "$n" == "1" ]] && grep -q 'REQ-UI-001' "$e/docs/metrics/gates.jsonl" \
+    && ok lk_020b "the emitter refuses a suite-level gate record and still writes a REQ verdict" \
+    || { bad lk_020b "the emitter wrote a gate record with no req_id or verdict (records written: ${n:-0})"; note "$(head -1 <<<"$o1$o2" | cut -c1-160)"; }
+}
+
+# --- Lekhak TF-021: the booted desktop app's debugging address never reached the browser tests -------
+# `tf-verify-tests.sh --base http://<host>:9223` (the address tf-verify-boot.sh printed for the Windows
+# head) set only BASE_URL; Lekhak's connectOverCDP helper read ADMIN_CDP and fell back to :9334, and every
+# desktop test failed after ten minutes. A debugging address now reaches the tests as CDP_URL; a suite
+# that reads CDP_URL nowhere is refused at once; a web --base gets no CDP_URL. npx is replaced.
+lk_021() {
+  local d="$SCRATCH/lk021"; mkdir -p "$d/bin" "$d/cdp/json" "$d/web"
+  printf '{"Browser":"Edg/1","webSocketDebuggerUrl":"ws://x/devtools/browser/1"}\n' > "$d/cdp/json/version"
+  cat > "$d/bin/npx" <<'SH'
+#!/usr/bin/env bash
+echo "CDP_URL=${CDP_URL:-} BASE_URL=${BASE_URL:-}" > npx.env
+echo '{"suites":[]}' > "$PLAYWRIGHT_JSON_OUTPUT_NAME"
+SH
+  chmod +x "$d/bin/npx"
+  local cport wport
+  cport="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  wport="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$cport" --bind 127.0.0.1 --directory "$d/cdp" >/dev/null 2>&1 & local s1=$!
+  python3 -m http.server "$wport" --bind 127.0.0.1 --directory "$d/web" >/dev/null 2>&1 & local s2=$!
+  sleep 1
+  _lk021_fx() {   # $1 folder, $2 the helper's line, $3 --base
+    local p="$d/$1"; mkdir -p "$p/tests/verify" "$p/node_modules/@playwright/test"
+    printf '{"name":"@playwright/test","main":"index.js"}\n' > "$p/node_modules/@playwright/test/package.json"
+    : > "$p/node_modules/@playwright/test/index.js"
+    printf "export default { use: { baseURL: process.env.BASE_URL } };\n" > "$p/playwright.config.ts"
+    printf '%s\n' "$2" > "$p/tests/verify/_admin.ts"
+    printf "import { test } from '@playwright/test';\ntest('REQ-UI-001 opens', async () => {});\n" > "$p/tests/verify/admin.spec.ts"
+    ( cd "$p" && PATH="$d/bin:$PATH" bash "$UTILS/tf-verify-tests.sh" --no-unit --base "$3" 2>&1 )
+  }
+  local out
+  out="$(_lk021_fx a "const CDP = process.env.CDP_URL ?? process.env.ADMIN_CDP ?? 'http://172.18.144.1:9334';" "http://127.0.0.1:$cport")"
+  grep -qx "CDP_URL=http://127.0.0.1:$cport BASE_URL=http://127.0.0.1:$cport" "$d/a/npx.env" 2>/dev/null \
+    && ok lk_021a "a desktop head's debugging address reaches the browser tests as CDP_URL" \
+    || { bad lk_021a "the tests did not get the booted app's debugging address"; note "$(cat "$d/a/npx.env" 2>/dev/null) $(grep 'browser tests' <<<"$out" | cut -c1-120)"; }
+  out="$(_lk021_fx b "const CDP_URL = process.env.ADMIN_CDP ?? 'http://172.18.144.1:9334';" "http://127.0.0.1:$cport")"
+  [[ ! -f "$d/b/npx.env" ]] && grep -q 'NOT RUN .*CDP_URL' <<<"$out" \
+    && ok lk_021b "a suite whose helper reads its own variable, not CDP_URL, is refused at once instead of failing after ten minutes" \
+    || { bad lk_021b "a suite that cannot reach the debugging address was run"; note "$(grep 'browser tests' <<<"$out" | cut -c1-160)"; }
+  out="$(_lk021_fx c "const CDP = process.env.CDP_URL;" "http://127.0.0.1:$wport")"
+  grep -qx "CDP_URL= BASE_URL=http://127.0.0.1:$wport" "$d/c/npx.env" 2>/dev/null \
+    && ok lk_021c "a web --base is not taken for a debugging address" \
+    || { bad lk_021c "a web address was passed as CDP_URL"; note "$(cat "$d/c/npx.env" 2>/dev/null)"; }
+  kill "$s1" "$s2" 2>/dev/null
+}
+
+# --- Lekhak TF-022: a mockup in a subfolder of docs/mockups/ was reported as missing ------------------
+# list.json named docs/mockups/admin/prompt-manager.html, but the parity line tf-verify-list printed was
+# `--screen prompt-manager=…` and the parity check looked only at docs/mockups/prompt-manager.html:
+# NO-MOCKUP, so the design comparison silently did not run. --list now gives each screen its mockup, a
+# single match in a subfolder is found without one, and two files of one name are never guessed between.
+lk_022() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip lk_022 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/lk022"; mkdir -p "$d/site/admin/prompt-manager" "$d/site/story/editor" "$d/docs/mockups/admin" "$d/docs/mockups/story" "$d/docs/mockups/reader" "$d/tests/.artifacts/verify"
+  local page='<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font:14px/20px system-ui}</style></head><body><h1 data-testid="pm-title">%s</h1><table data-testid="pm-table"><tr><th>Template</th></tr><tr><td>Opening</td></tr></table></body></html>\n'
+  printf "$page" "Prompt Manager" > "$d/docs/mockups/admin/prompt-manager.html"
+  printf "$page" "Prompt Manager" > "$d/site/admin/prompt-manager/index.html"
+  # the same file name in two folders: a guess could grade the wrong design
+  printf "$page" "Editor" > "$d/docs/mockups/story/editor.html"; printf "$page" "Editor" > "$d/docs/mockups/reader/editor.html"
+  printf "$page" "Editor" > "$d/site/story/editor/index.html"
+  printf '{"screens":[{"name":"Prompt Manager","route":"/admin/prompt-manager/","mockup":"docs/mockups/admin/prompt-manager.html"},{"name":"Story editor","route":"/story/editor/","mockup":"docs/mockups/story/editor.html"}]}\n' > "$d/tests/.artifacts/verify/list.json"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  _lk022_run() {   # $1 json name, then the parity arguments
+    local j="$d/$1.json"; shift
+    ( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --widths 1280 --json-out "$j" "$@" >/dev/null 2>&1 )
+    python3 -c "import json,sys
+for s in json.load(open(sys.argv[1]))['screens']: print(s['screen'], s['verdict'])" "$j" 2>&1
+  }
+  local a b c
+  a="$(_lk022_run a --screen prompt-manager=/admin/prompt-manager/ --screen editor=/story/editor/ --list tests/.artifacts/verify/list.json)"
+  b="$(_lk022_run b --screen prompt-manager=/admin/prompt-manager/)"
+  c="$(_lk022_run c --screen editor=/story/editor/)"
+  kill "$srv" 2>/dev/null
+  grep -qx 'prompt-manager PASS' <<<"$a" && grep -qx 'editor PASS' <<<"$a" \
+    && ok lk_022a "--list gives each screen the mockup tf-verify-list resolved, subfolder included" \
+    || { bad lk_022a "a mockup the list names in a subfolder was not graded"; note "$(tr '\n' ' ' <<<"$a")"; }
+  grep -qx 'prompt-manager PASS' <<<"$b" \
+    && ok lk_022b "without a list, the only file of that name in a subfolder is graded" \
+    || { bad lk_022b "a mockup in a subfolder read as NO-MOCKUP"; note "$(tr '\n' ' ' <<<"$b")"; }
+  grep -qx 'editor NO-MOCKUP' <<<"$c" \
+    && ok lk_022c "two mockups of one name in different folders are not guessed between" \
+    || { bad lk_022c "an ambiguous mockup name was graded against a guess"; note "$(tr '\n' ' ' <<<"$c")"; }
+}
+
+# --- Lekhak TF-023: *amend-docs saw ~130 old document findings as new ----------------------------------
+# tf-phase.sh start baselined only the checklists and PROJECT-STATUS.md, while *amend-docs closes on
+# `tf-doc-check.sh --app`: the BRD's old header, section and size findings printed as FAIL. Every file
+# --app reads is now baselined, a size finding whose count did not grow stays old, and a finding the
+# command adds, or a document grown past its maximum, still FAILs.
+lk_023() {
+  local d="$SCRATCH/lk023"; mkdir -p "$d/docs" "$d/.tfcore/.session"
+  cp -r "$UTILS" "$d/.tfcore/utils"; cp -r "$ROOT/.tfcore/templates" "$d/.tfcore/"
+  printf 'appSize: S\nappKind: app\nappPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  printf '# Fx — Checklist\n' > "$d/docs/Fx-Checklist.md"
+  python3 -c "print('# Fx — BRD\n\n## Old Odd Section\n\n' + 'filler word '*4500)" > "$d/docs/Fx-BRD.md"
+  ( cd "$d" && TF_SKIP_SELFCHECK=1 bash .tfcore/utils/tf-phase.sh start amend-docs Fx ) >/dev/null 2>&1
+  local f0 f1 f2
+  f0="$(cd "$d" && bash .tfcore/utils/tf-doc-check.sh --app Fx 2>&1 | grep -c '^FAIL')"
+  python3 -c "
+p='$d/docs/Fx-BRD.md'; s=open(p).read(); open(p,'w').write(s.replace('filler word '*200, '', 1) + '\n## Brand New Section\n')"
+  f1="$(cd "$d" && bash .tfcore/utils/tf-doc-check.sh --app Fx 2>&1 | grep '^FAIL')"
+  python3 -c "open('$d/docs/Fx-BRD.md','a').write('more words here '*400)"
+  f2="$(cd "$d" && bash .tfcore/utils/tf-doc-check.sh --app Fx 2>&1 | grep '^FAIL')"
+  [[ "$f0" == "0" ]] \
+    && ok lk_023a "every document --app reads is baselined at the start, so old findings do not block *amend-docs" \
+    || { bad lk_023a "$f0 old finding(s) still read as new"; }
+  [[ "$(grep -c . <<<"$f1")" == "1" ]] && grep -q 'Brand New Section' <<<"$f1" \
+    && ok lk_023b "a cut to an over-limit document stays old; a section the command adds still FAILs" \
+    || { bad lk_023b "the baseline hid a new finding or failed an old one"; note "$(tr '\n' ' ' <<<"$f1" | cut -c1-200)"; }
+  grep -q 'words; the Small maximum' <<<"$f2" \
+    && ok lk_023c "a document grown past its maximum still FAILs" \
+    || { bad lk_023c "growth past the maximum was hidden by the baseline"; }
+}
+
 # --- Lekhak TF-018: a passing unit test was given the reason "unit test skipped" ---------------------
 # The console-log reader wrote "unit test skipped: <name>" for every outcome that was not a failure, so
 # REQ-NFR-042's passing test carried a skip reason in tests.json. A pass has no reason; a skip and a
@@ -4382,7 +4583,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 sv_001 tb_001 tb_002 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 sv_001 tb_001 tb_002 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done
