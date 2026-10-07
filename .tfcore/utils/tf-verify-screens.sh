@@ -9,6 +9,9 @@
 #                                           # (repeatable; defaults cover one framework's id and [data-error-ui])
 #   … --route-value ProviderId=21           # a sample for /x/{ProviderId:long} (repeatable; or "route_values"
 #                                           # in the list); a screen whose route still needs one is SKIPped
+#   bash .tfcore/utils/tf-verify-screens.sh --list … --appium http://localhost:4723   # a MAUI Mac Catalyst head
+#        (tf-verify-native.mjs: AutomationId for data-testid, the app's window for the screenshot; the
+#        bundle id comes from boot.json or --bundle; no Playwright needed)
 #   A mockup control marked data-tf-state="<state>" (on it or a box around it) belongs to another state
 #   of the screen: it is not owed on the first view.
 #
@@ -26,10 +29,14 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # `--help` is a request and exits 0; no argument at all is a mistake and exits 3. (The one-line
 # form this replaces computed "0--help" as its exit code and printed a bash error under the help.)
 case "${1:-}" in
-  -h|--help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-  "")        sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 3 ;;
+  -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  "")        sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 3 ;;
 esac
 command -v node >/dev/null 2>&1 || { echo "tf-verify-screens: node is required (bash .tfcore/utils/tf-verify-env.sh)" >&2; exit 4; }
+case " $* " in *" --appium "*)
+  source "$HERE/tf-lock.sh"; tf_take_lock verify-screens
+  node "$HERE/tf-verify-native.mjs" "$@"; exit $? ;;
+esac
 node -e "import('playwright').then(()=>process.exit(0)).catch(()=>process.exit(1))" 2>/dev/null || {
   echo "tf-verify-screens: the 'playwright' package is not resolvable from this folder; run bash .tfcore/utils/tf-verify-env.sh" >&2; exit 4; }
 source "$HERE/tf-lock.sh"; tf_take_lock verify-screens   # one browser check at a time (TF-048)

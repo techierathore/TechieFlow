@@ -1,0 +1,4 @@
+<XCUIElementTypeApplication elementType="2" identifier="" label="" title="Fx" x="0" y="0" width="0" height="0"><XCUIElementTypeWindow elementType="4" identifier="" label="" title="Fx" x="0" y="30" width="1000" height="700"><XCUIElementTypeStaticText elementType="48" identifier="" label="" value="Fx" title="" x="80" y="35" width="40" height="16"></XCUIElementTypeStaticText><XCUIElementTypeWebView elementType="58" identifier="" label="" title="" x="0" y="60" width="1000" height="670">
+<XCUIElementTypeStaticText elementType="48" identifier="" label="" value="Home" title="" x="20" y="80" width="100" height="30"></XCUIElementTypeStaticText>
+<XCUIElementTypeStaticText elementType="48" identifier="" label="" value="An unhandled error has occurred." title="" x="20" y="700" width="300" height="20"></XCUIElementTypeStaticText>
+</XCUIElementTypeWebView></XCUIElementTypeWindow></XCUIElementTypeApplication>

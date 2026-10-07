@@ -22,6 +22,7 @@
 # `--list` names another list.json; `--all-specs` runs every browser test whatever the scope.
 # A desktop head's debugging address (--base answering /json/version, or boot.json mode=cdp) also
 # reaches the tests as CDP_URL; a suite that reads it nowhere is refused, not run (Lekhak TF-021).
+# A Mac Catalyst head (boot.json mode=appium) reaches them as APPIUM_URL, TF_BUNDLE_ID and TF_APP_PATH.
 # Exit 0 ran (whatever the results) · 2 nothing could run.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -39,7 +40,7 @@ while [[ $# -gt 0 ]]; do
     --all-specs) ALLSPECS=1; shift ;;
     --merge) shift; while [[ $# -gt 0 && "$1" != --* ]]; do MERGE+=("$1"); shift; done ;;
     --json-out) OUT="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "tf-verify-tests: unknown argument $1" >&2; exit 2 ;;
   esac
 done
@@ -145,6 +146,12 @@ b = json.load(open(sys.argv[1]))
 print(b.get("url", "") if b.get("mode") == "cdp" and not b.get("stopped") else "")' tests/.artifacts/verify/boot.json 2>/dev/null)"
     [[ -n "$CDPURL" ]] && BASE="$CDPURL"
   fi
+  # A Mac Catalyst head (boot.json mode=appium) is reached through Appium: its tests get APPIUM_URL
+  # TF_BUNDLE_ID and TF_APP_PATH, and open their session with .tfcore/utils/tf-appium.mjs.
+  APPIUMURL=""; BUNDLEID=""; APPPATH=""
+  [[ -f tests/.artifacts/verify/boot.json ]] && read -r APPIUMURL BUNDLEID APPPATH < <(python3 -c 'import json,sys
+b = json.load(open(sys.argv[1]))
+print(b.get("url", ""), b.get("bundle_id", ""), b.get("app_path", "")) if b.get("mode") == "appium" and not b.get("stopped") else print()' tests/.artifacts/verify/boot.json 2>/dev/null)
   if ls tests/verify/*.spec.* >/dev/null 2>&1 || ls tests/verify/**/*.spec.* >/dev/null 2>&1; then
     # --base reaches the tests only as BASE_URL, which Playwright never reads by itself. When neither
     # the config nor a spec reads it, every test opens the config's own address, where an older build
@@ -182,7 +189,7 @@ SCOPEPY
         rm -f "$PWJSON"
       else
         [[ -n "$SCOPE" ]] && PWARGS+=(--grep "${SCOPE#* }")
-        CDP_URL="$CDPURL" BASE_URL="$BASE" PLAYWRIGHT_JSON_OUTPUT_NAME="$PWJSON" npx playwright test "${PWARGS[@]}" ${SPECS[@]+"${SPECS[@]}"} > "$PWLOG" 2>&1
+        APPIUM_URL="$APPIUMURL" TF_BUNDLE_ID="$BUNDLEID" TF_APP_PATH="$APPPATH" CDP_URL="$CDPURL" BASE_URL="$BASE" PLAYWRIGHT_JSON_OUTPUT_NAME="$PWJSON" npx playwright test "${PWARGS[@]}" ${SPECS[@]+"${SPECS[@]}"} > "$PWLOG" 2>&1
         echo "browser tests: ran${SHARD:+ shard $SHARD}${SPECS:+ (${#SPECS[@]} spec argument(s))}${SCOPE:+ only the tests carrying ${SCOPE#* } (the scope in $LIST)} (log $PWLOG)"; ran_any=1
       fi
     else

@@ -54,4 +54,5 @@ slashPrefix: TechieFlow
 #       url: http://192.168.1.50:4723     # the LAN Mac (stable IP via DHCP reservation); Appium bound to 0.0.0.0
 #       simulator: "iPhone 15"
 #     maccatalyst:
-#       url: http://192.168.1.50:4723     # same Mac, mac2 driver
+#       url: http://localhost:4723        # this Mac (the default when unset); mac2 driver. tf-verify-boot.sh
+#                                         # starts a local Appium when none answers. A Blazor Hybrid Mac head is checked without control names.

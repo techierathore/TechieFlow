@@ -69,13 +69,23 @@ Controller actions: the `a` prefix applies to `[FromRoute]`, `[FromQuery]` and `
 ## 7. Testability
 
 - Blazor: a stable `data-testid` (or element id) on every control the verifier must reach.
-- MAUI: a stable, unique `AutomationId` on every interactive or data-bound control, named by intent (`LoginSubmitButton`, `ClientsGrid`), set on the element whose data the gate asserts.
+- MAUI: a stable, unique `AutomationId` on every interactive or data-bound control, named by intent (`LoginSubmitButton`, `ClientsGrid`), set on the element whose data the gate asserts. The tab, menu item or button that opens a screen carries `AutomationId="nav-<screen>"` (the screen's name, lower case, words joined by `-`), or a label equal to the screen's name; the Mac check reaches screens that way.
 
 ## 8. Security
 
 - No credentials in code. Parameterised queries. Validate inputs. Log security events.
 
-## 9. Enforcement
+## 9. Mac Catalyst heads
+
+Every MAUI project with a `net*-maccatalyst` target, Blazor Hybrid included:
+
+- **Scene manifest.** `Platforms/MacCatalyst/Info.plist` carries `UIApplicationSceneManifest` with a `UIWindowSceneSessionRoleApplication` configuration named `__MAUI_DEFAULT_SCENE_CONFIGURATION__` whose `UISceneDelegateClassName` is `SceneDelegate`, and the project has `[Register("SceneDelegate")] public class SceneDelegate : MauiUISceneDelegate { }` beside the `AppDelegate`. On macOS 27 an app without it quits at its first window; the stock `dotnet new maui` template has none, so add it when the project is created.
+- **Keychain and signing.** An app that asks for `keychain-access-groups` (MAUI `SecureStorage` needs it) must be signed with a development certificate and provisioning profile (`CodesignKey`, `CodesignProvisioningProfile`), or give Debug builds a second entitlements file without it and a Debug credential store that does not use the keychain. macOS refuses to start a locally signed build that asks for it. Decide which before the first Mac build.
+- **Clean after an update.** After a .NET SDK or MAUI workload update, build the Mac head from clean (`--no-incremental`, or delete its `bin/` and `obj/`): an old precompiled build stops at start in `load_aot_module`.
+- **Launching it.** Open the built `.app` with `open`, never its binary: macOS kills a sandboxed app started from its binary.
+- **Blazor Hybrid.** On a Mac, `data-testid` and HTML `id` do not reach the test driver, so the Mac screens are checked without control names (blank window, error bar, overlap, screenshot) and the control-by-control check is the Windows head's. Keep the stock error bar (`#blazor-error-ui`, "An unhandled error has occurred"), or pass its text with `--error-text`.
+
+## 10. Enforcement
 
 `.editorconfig` at the repository root (created at day-1) enforces: file-scoped namespaces (warning), `Async` suffix (warning), `var` for locals (warning), nullable enabled, no `_` prefix on private fields (custom naming rule, warning). `StyleCop.Analyzers` is optional and off by default.
 
@@ -90,4 +100,12 @@ grep -rE "public\s+(async\s+)?Task\s+\w+_\w+\s*\(" tests/ 2>/dev/null
 grep -rPE "private(\s+readonly)?\s+\w+\s+(?!obj)[A-Z]\w+\s*[;=]" src/ 2>/dev/null | grep -v "static\|const"
 ```
 
-Severity: error for file-scoped namespace and underscore field prefix; warning for nullable and the `Async` suffix; the rest informational.
+A project with a Mac Catalyst target also runs, on any host (it only reads files):
+
+```bash
+bash .tfcore/utils/tf-maccatalyst-check.sh    # FAIL: scene manifest or delegate missing; WARN: keychain on a local build
+```
+
+`tf-verify-boot.sh --head maccatalyst` runs it first and stops on a FAIL on macOS 27 or later.
+
+Severity: error for file-scoped namespace and underscore field prefix; error for a Mac Catalyst FAIL; warning for nullable and the `Async` suffix; the rest informational.

@@ -128,6 +128,7 @@ def main(argv):
         notes = []
         scr = scr_by_name.get(r.get("screen") or "")
         driven = bool(scr) and scr.get("render") != "UNREACHABLE"
+        nonames = " (names not measured on a Mac)" if scr and scr.get("anchors_not_measured") else ""
         t = tests.get(rid)
         # A row whose every clause was SKIPPED is NOT-TESTED: the acceptance gate did not run on
         # it. It is neither a pass nor a defect, so it grades exactly like a row with no test at
@@ -154,6 +155,10 @@ def main(argv):
                 w, f = bad[0] if bad else (None, None)
                 checks.append(("render", True, bool(bad), "RENDER-FAIL", f["class"] if f else None,
                                f"{f['detail']} on {r['screen']} @{w['width']}" if f else "", w.get("screenshot", "") if w else ""))
+            # a Mac web view head: blank, error bar, overlap and the picture were checked, the
+            # controls by name were not (owner decision A, 2026-10-07): said, never counted as a pass
+            if scr.get("anchors_not_measured") and bad:
+                notes.append(f"control names not measured on {r['screen']} (a Mac web view does not show them)")
         # 4 assets
         pg = pages.get(norm_route(r.get("route"))) if r.get("route") else None
         if pg and pg.get("graded", 0) > 0:
@@ -218,7 +223,7 @@ def main(argv):
             elif not t:
                 verdict = "NOT-TESTED"
                 detail = (f"every test named {rid} was skipped" if skipped_only else f"no test named {rid} ran") \
-                    + (f"; screen {r['screen']} renders and looks right" if driven else "")
+                    + (f"; screen {r['screen']} renders and looks right{nonames}" if driven else "")
             elif r.get("screen") and not driven:
                 # a passing test is not a screen check: a row on a screen that was not driven is never
                 # Verified, booted or not. The Settings rows of /settings/{tab} were (Chatur TF-003).
@@ -232,7 +237,7 @@ def main(argv):
                 verdict = "PASS"
                 parts = [f"test {quoted(t['tests'][0], 60)}" if t and t.get("tests") else "test passed"]
                 if driven:
-                    parts.append(f"{r['screen']} renders and looks right @{'/'.join(str(w['width']) for w in scr['widths'])}")
+                    parts.append(f"{r['screen']} renders and looks right @{'/'.join(str(w['width']) for w in scr['widths'])}{nonames}")
                 if "mockup-parity" in ran:
                     parts.append("matches its mockup")
                 if "perf" in ran:

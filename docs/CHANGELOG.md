@@ -14,6 +14,36 @@ Everything below this section from 2026-09-11 onward is also unreleased: it reac
 v1.0.4 tag (2026-09-10) and is in no published package yet. This section lists what those dated entries
 do not.
 
+- **Mac Catalyst rules in the .NET standards, and a check for them (2026-10-07).** `coding-standards-dotnet.md`
+  gains §9 Mac Catalyst heads (Enforcement becomes §10): the scene manifest and `SceneDelegate`, keychain and signing,
+  a clean build after an SDK or workload update, opening the `.app` with `open`, and how Blazor Hybrid screens are
+  checked on a Mac; §7 adds the `nav-<screen>` AutomationId for the control that opens a screen. New
+  `tf-maccatalyst-check.sh` reads the project only, so it runs on Windows too: FAIL for a missing manifest or
+  delegate, WARN for `keychain-access-groups` with no profile and no Debug entitlements file without it.
+  `tf-verify-boot.sh --head maccatalyst` runs it first and stops on a FAIL from macOS 27 on: Lekhak's BlogAdmin now
+  stops in 0.15 s with the reason instead of after a 30 s build. On the stock `dotnet new maui` template it FAILs.
+  Six cases in `tests/maccatalyst/run.sh` (34 cases in all), one of which found the check missing a
+  `<CodesignEntitlements Condition=…>` element. `docs/Lekhak-Mac-Launch-Fixes.md` is the note for the Lekhak team.
+- **A Mac Catalyst head is driven (2026-10-07, part of Lekhak TF-003).** MISS-TechieFlow-20260928-07 stays open
+  for Blazor Hybrid Mac heads. `tf-verify-boot.sh start --head maccatalyst` (picked unasked on a Mac when
+  there is no web head) builds the head with `tf-build.sh`, starts the `.app`, and reaches it over Appium
+  `mac2` at `runtimeVerification.appium.maccatalyst.url` or `http://localhost:4723`, starting a local Appium
+  when none answers. `tf-verify-screens.sh --appium <url>` runs the new `tf-verify-native.mjs`: each screen
+  reached by clicking `nav-<screen>` or the tab named after it, anchors matched as `AutomationId`, render
+  (present, filled, list rows, blank window) and visual (overlap, zero size, outside the window), a
+  screenshot of the app's window only, and the same `screens.json` the verdict reads. `tf-appium.mjs` is a
+  package-free WebDriver client for it and for acceptance tests, which now get `APPIUM_URL`,
+  `TF_BUNDLE_ID` and `TF_APP_PATH`. Found on the way and handled: the session opens the app by its path
+  (by bundle id it was "not found" outside /Applications); Appium relaunches the app under a new pid, so
+  `stop` also ends whatever runs from the boot's `.app`; a .NET Mac Catalyst SDK made for an older Xcode is
+  built again with `-p:ValidateXcodeVersion=false` and the state says so; an app that quits on start is a
+  build failure, with the scene-manifest fix named when macOS 27 stopped it for having none (the stock
+  `dotnet new maui` template has none). A Blazor Hybrid Mac head is refused as `kind=no-driver`: probed
+  three ways, neither `data-testid` nor an HTML `id` reaches mac2 or the macOS accessibility tree;
+  the owner chose (same day) to check it without control names: blank window, error bar, overlap of controls only, the screenshot, and "names not measured on a Mac" in its Remark. The Windows, web and static heads
+  are unchanged. Self-test `tests/maccatalyst/run.sh` (16 cases, a generated four-screen fixture app;
+  skips off a Mac or without Appium and mac2); `tests/verify`, `tests/regression`, `tests/portability` and
+  `tests/mirror` pass on the Mac.
 - **Test projects run one at a time (TechieRag TF-004, 2026-10-06).** MISS-TechieFlow-20261006-07.
   `tf-doc-tests.sh` ran `tf-build.sh test` on the whole solution. On a 7.8 GB WSL machine TechieRag's
   local-model tests took the memory while TechieRag.Tests walked folders, and a test that passes alone

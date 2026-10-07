@@ -4,16 +4,16 @@
 |---|---|
 | App | Lekhak |
 | Upstream | TechieFlow |
-| Updated | 2026-10-04 |
+| Updated | 2026-10-07 |
 
 ## Summary
 
-23 entries: 0 blocking now, 2 open and not blocking (TF-003, TF-008), 2 fixed upstream and not yet re-checked here (TF-022, TF-023), 19 closed after a re-check here (TF-001, TF-002, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018, TF-019, TF-020, TF-021).
+23 entries: 0 blocking now, 1 open and not blocking (TF-008), 3 fixed upstream and not yet re-checked here (TF-003, TF-022, TF-023), 19 closed after a re-check here (TF-001, TF-002, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018, TF-019, TF-020, TF-021).
 
 Nothing is blocked.
 
 - 0 blockers, 6 majors, 17 minors, 0 nice-to-haves.
-- Last consolidated: 2026-10-04.
+- Last consolidated: 2026-10-07.
 
 ## Entries
 
@@ -387,6 +387,12 @@ Nothing is blocked.
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### Resolution status (TechieFlow team, 2026-10-07)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-003 | Built upstream, not yet proven on this app. `tf-verify-boot.sh start --head maccatalyst` builds and opens the Mac head, and `tf-verify-screens.sh --appium <url>` checks it over mac2. A Blazor Hybrid head is checked without control names (blank, error bar, overlap, screenshot; owner decision 2026-10-07), because on a Mac `data-testid` never reaches mac2. On this Mac BlogAdmin does not start, for two reasons in this project: macOS refuses an ad-hoc build that asks for `keychain-access-groups`, and on macOS 27 the app quits at its first window without a scene manifest (`UIApplicationSceneManifest` plus a `SceneDelegate : MauiUISceneDelegate`). | Fix those two, then run `bash .tfcore/utils/tf-verify-boot.sh start --head maccatalyst` and `bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --appium http://localhost:4723`. |
 
 ### Resolution status (TechieFlow team, 2026-10-04, second reply)
 

@@ -18,10 +18,19 @@
 #            relayed to every interface by tf-cdp-relay.ps1, and reached from WSL over CDP. Prints
 #            BOOTED mode=cdp url=http://<host>:9223. Proven on MyDiary, 2026-09-06.
 #   static   a folder of HTML served by python3 (the framework self-test, a mockup set).
-#   android, ios, maccatalyst: no driver ships in this framework version. NONE with that reason;
-#            their rows are recorded as not verified, never as static-only passes.
-# Without --head the script picks web when a web project exists, else windows when a MAUI project
-# with a windows target exists, else NONE. --project names the project when there are several.
+#   maccatalyst  a MAUI project with a net*-maccatalyst target, on a Mac only: built by tf-build.sh,
+#            its .app started here, and reached over Appium's mac2 driver at the address in
+#            core-config.yaml runtimeVerification.appium.maccatalyst.url (default
+#            http://localhost:4723; a local Appium that is down is started and later stopped).
+#            Prints BOOTED mode=appium url=<appium> bundle=<id>. An SDK that names an older Xcode
+#            is built again with -p:ValidateXcodeVersion=false, and the state says so. A Blazor Hybrid
+#            head is driven without control names (its data-testid is not readable on a Mac): the
+#            state says webview, and those rows say the name check was not measured.
+#   android, ios: no driver ships in this framework version. NONE with that reason; their rows
+#            are recorded as not verified, never as static-only passes.
+# Without --head the script picks web when a web project exists, else (on a Mac) maccatalyst when a
+# MAUI project with that target exists, else windows when a MAUI project with a windows target
+# exists, else NONE. --project names the project when there are several.
 # The state goes to tests/.artifacts/verify/boot-<port>.json and the app log to app-<port>.log, one pair
 # per app, so builders booting side by side never empty or stop each other's (TF-034); boot.json is a
 # copy of the latest start's, which the verdict reads. `stop --port N` stops that app only; a bare
@@ -71,6 +80,7 @@ find_projects() { # prints csproj paths under src/, source/, the root and one le
 }
 is_web()  { grep -qE 'Microsoft\.NET\.Sdk\.Web|Microsoft\.NET\.Sdk\.BlazorWebAssembly' "$1"; }
 is_maui_win() { grep -qiE '<UseMaui>[[:space:]]*true|Microsoft\.NET\.Sdk\.Maui' "$1" && grep -qE 'net[0-9.]+-windows' "$1"; }
+is_maui_mac() { grep -qiE '<UseMaui>[[:space:]]*true|Microsoft\.NET\.Sdk\.Maui' "$1" && grep -qE 'net[0-9.]+-maccatalyst' "$1"; }
 
 poll_http() { # url seconds pid-to-watch(optional) -> 0 when it answers
   local url="$1" secs="$2" pid="${3:-}" i=0 code
@@ -164,8 +174,12 @@ if s.get("win_port"):
 # port and its files. The published copy names it: stop whatever runs from run-<port>/ (TF-043).
 m = re.search(r":(\d+)$", s.get("url") or "")
 run_port = port or (m.group(1) if m else "")
-if run_port:
-    mark = os.path.join(os.getcwd(), d, f"run-{run_port}") + os.sep
+marks = [os.path.join(os.getcwd(), d, f"run-{run_port}") + os.sep] if run_port else []
+# A Mac Catalyst head: opening an Appium session starts the app again under a new process, so the
+# pid written at boot is gone and the app is not; stop whatever runs from this boot's .app.
+if s.get("app_path"):
+    marks.append(os.path.join(s["app_path"], "Contents", "MacOS") + os.sep)
+if marks:
     try:
         procs = [p for p in os.listdir("/proc") if p.isdigit()]
     except Exception:
@@ -188,7 +202,7 @@ if run_port:
             if pid.isdigit():
                 cmds.append((int(pid), cmd))
     for pid, cmd in cmds:
-        if mark in cmd and pid != os.getpid():
+        if any(mk in cmd for mk in marks) and pid != os.getpid():
             try:
                 os.kill(pid, signal.SIGKILL)
             except Exception:
@@ -209,7 +223,7 @@ print(f"STOPPED head={s.get('head')} mode={s.get('mode')} pids={s.get('pids')}")
 PY
     exit 0 ;;
   start) ;;
-  *) sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 3 ;;
+  *) sed -n '2,39p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 3 ;;
 esac
 
 HEAD=""; PROJECT=""; PORT=""; CONFIG=""; STATIC=""; PROBE="/"; DRYRUN=0; ENVNAME=""
@@ -247,8 +261,10 @@ fi
 
 # ---- pick the project and the head ------------------------------------------------------
 tf_read_lines ALL < <(find_projects)
-WEB=(); WIN=()
-for p in ${ALL[@]+"${ALL[@]}"}; do is_web "$p" && WEB+=("$p"); is_maui_win "$p" && WIN+=("$p"); done
+WEB=(); WIN=(); MAC=()
+for p in ${ALL[@]+"${ALL[@]}"}; do is_web "$p" && WEB+=("$p"); is_maui_win "$p" && WIN+=("$p"); is_maui_mac "$p" && MAC+=("$p"); done
+# a Mac Catalyst head is picked unasked only on a Mac, the one host that runs it
+[[ "$PLATFORM" == "macos" ]] || MAC=()
 # Several web projects: the one that serves screens. The first in sorted order booted AppManager's
 # external API, which has no screens, in front of its admin site (AppManager TF-010). A project
 # serves screens when its own folder holds .razor or .cshtml pages, or it references a project
@@ -278,18 +294,26 @@ pick_web() { # sets PROJECT from WEB, or prints NONE and exits
 }
 if [[ -n "$PROJECT" ]]; then
   [[ -f "$PROJECT" ]] || { echo "NONE reason=--project $PROJECT does not exist"; exit 3; }
-  if [[ -z "$HEAD" ]]; then is_web "$PROJECT" && HEAD=web; [[ -z "$HEAD" ]] && is_maui_win "$PROJECT" && HEAD=windows; fi
+  if [[ -z "$HEAD" ]]; then
+    is_web "$PROJECT" && HEAD=web
+    [[ -z "$HEAD" && "$PLATFORM" == "macos" ]] && is_maui_mac "$PROJECT" && HEAD=maccatalyst
+    [[ -z "$HEAD" ]] && is_maui_win "$PROJECT" && HEAD=windows
+  fi
 elif [[ -z "$HEAD" ]]; then
   if [[ ${#WEB[@]} -gt 0 ]]; then HEAD=web; pick_web
+  elif [[ ${#MAC[@]} -gt 0 ]]; then HEAD=maccatalyst; PROJECT="${MAC[0]}"
   elif [[ ${#WIN[@]} -gt 0 ]]; then HEAD=windows; PROJECT="${WIN[0]}"; fi
 else
-  case "$HEAD" in web) pick_web ;; windows) PROJECT="${WIN[0]:-}" ;; esac
+  case "$HEAD" in web) pick_web ;; windows) PROJECT="${WIN[0]:-}" ;; maccatalyst) PROJECT="${MAC[0]:-}" ;; esac
 fi
 if [[ $DRYRUN -eq 1 ]]; then echo "PICK head=${HEAD:-none} project=${PROJECT:-none}"; exit 0; fi
 case "$HEAD" in
-  android|ios|maccatalyst)
+  android|ios)
     write_state "$HEAD" none "" "" "" "${PROJECT:-}" "no driver for the $HEAD head ships in this framework version" no-driver "$PLATFORM"
     echo "NONE head=$HEAD reason=no driver for the $HEAD head ships in this framework version; its rows are recorded as not verified"; exit 2 ;;
+  maccatalyst)
+    [[ "$PLATFORM" == "macos" ]] || { write_state maccatalyst none "" "" "" "${PROJECT:-}" "a Mac Catalyst head runs only on a Mac" host "$PLATFORM"
+      echo "NONE head=maccatalyst kind=host reason=a Mac Catalyst head runs only on a Mac, this is $PLATFORM"; exit 2; } ;;
   web|windows) ;;
   "") write_state none none "" "" "" "" "no web project and no MAUI project with a windows target found under src/, source/ or the root" host "$PLATFORM"
       echo "NONE head=none reason=no web project (Microsoft.NET.Sdk.Web) and no MAUI project with a windows target found; name one with --project"; exit 2 ;;
@@ -299,6 +323,115 @@ esac
 PDIR="$(dirname "$PROJECT")"; PNAME="$(basename "$PROJECT" .csproj)"
 ASM="$(grep -oE '<AssemblyName>[^<]+' "$PROJECT" 2>/dev/null | head -1 | sed 's/<AssemblyName>//')"; ASM="${ASM:-$PNAME}"
 CFGARGS=(); [[ -n "$CONFIG" ]] && CFGARGS=(-c "$CONFIG")
+
+# ---- maccatalyst (MAUI on this Mac, reached over Appium's mac2 driver) -----------------------
+if [[ "$HEAD" == "maccatalyst" ]]; then
+  # A Blazor Hybrid head draws its screens in a web view, and on a Mac neither data-testid nor an
+  # HTML id reaches mac2 or the macOS accessibility tree (probed 2026-10-07). It is driven all the
+  # same, without control names (owner decision A): the state says webview, the screen check skips
+  # the name check, and the verdict writes it as not measured.
+  WEBVIEW=0; grep -q 'Microsoft\.AspNetCore\.Components\.WebView\.Maui' "$PROJECT" && WEBVIEW=1
+  TFM="$(grep -oE 'net[0-9.]+-maccatalyst[0-9.]*' "$PROJECT" | head -1)"
+  # the endpoint the app registers (an uncommented maccatalyst: entry with a url), else this Mac
+  AURL="$(python3 - <<'PY'
+import re
+try:
+    t = open(".tfcore/core-config.yaml", encoding="utf-8").read()
+except Exception:
+    t = ""
+m = re.search(r"(?m)^[ \t]+maccatalyst:[ \t]*(?:\{[^}\n]*url:[ \t]*([^,}\s]+)|\n[ \t]+url:[ \t]*(\S+))", t)
+print((m.group(1) or m.group(2)) if m else "")
+PY
+)"
+  AURL="${AURL:-http://localhost:4723}"; AURL="${AURL%/}"
+  APORT="${AURL##*:}"; [[ "$APORT" =~ ^[0-9]+$ ]] || APORT=4723
+  keyed "$APORT"
+  ready() { curl -s -m 3 "$AURL/status" 2>/dev/null | grep -q '"ready":true'; }
+  APPIUM_PID=""
+  if ! ready; then
+    # boot it yourself: a local Appium that is down is started here and stopped by `stop`
+    if [[ "$AURL" =~ ^http://(localhost|127\.0\.0\.1): ]] && command -v appium >/dev/null 2>&1; then
+      nohup appium --address 127.0.0.1 --port "$APORT" > "$DIR/appium-$APORT.log" 2>&1 < /dev/null &
+      APPIUM_PID=$!; i=0
+      while [[ $i -lt 60 ]] && ! ready; do sleep 2; i=$((i+2)); done
+    fi
+    if ! ready; then
+      [[ -n "$APPIUM_PID" ]] && kill "$APPIUM_PID" 2>/dev/null
+      write_state maccatalyst none "" "" "" "$PROJECT" "Appium did not answer at $AURL/status" host "$PLATFORM"
+      echo "NONE head=maccatalyst kind=host reason=Appium did not answer at $AURL/status$([[ -z "$APPIUM_PID" ]] && ! command -v appium >/dev/null 2>&1 && echo '; appium is not installed (docs/TechieFlow-Setup.md §0b step 3)')"; exit 2
+    fi
+  fi
+  stop_appium() { [[ -n "$APPIUM_PID" ]] && kill "$APPIUM_PID" 2>/dev/null; }
+  # the Mac rules first (coding-standards-dotnet.md §9): a missing scene manifest is stopped here,
+  # before a build that macOS 27 would end at the first window; a WARN is printed and the boot goes on
+  chk="$(bash "$HERE/tf-maccatalyst-check.sh" "$PROJECT" 2>&1)"; crc=$?
+  printf '%s\n' "$chk" >> "$LOG"; grep -E '^WARN' <<<"$chk" >&2
+  OSMAJOR="$(sw_vers -productVersion 2>/dev/null | cut -d. -f1)"
+  if [[ $crc -eq 1 && "${OSMAJOR:-0}" -ge 27 ]]; then
+    stop_appium; first="$(grep -m1 -E '^FAIL' <<<"$chk" | sed -E 's/^FAIL [^:]+: //')"
+    write_state maccatalyst none "" "" "tf-maccatalyst-check.sh" "$PROJECT" "$first" build-error "$PLATFORM"
+    echo "NONE head=maccatalyst kind=build-error reason=$first (bash .tfcore/utils/tf-maccatalyst-check.sh)"; exit 2
+  fi
+  [[ $crc -eq 1 ]] && grep -E '^FAIL' <<<"$chk" | sed 's/^FAIL/WARN (fatal from macOS 27)/' >&2
+  BARGS=(-f "$TFM" -c "${CONFIG:-Debug}")
+  echo "### build $PROJECT -f $TFM" >> "$LOG"
+  out="$(bash "$HERE/tf-build.sh" build "$PROJECT" -- "${BARGS[@]}" 2>&1)"; brc=$?
+  # A Mac Catalyst SDK names the one Xcode it was made for, and refuses a newer one with an error
+  # tf-build.sh reads as a missing workload (NOT-RUN). Built again with the check off; the state says so.
+  XNOTE=""; blog="$(grep -oE 'log [^ ]+[.]log' <<<"$out" | tail -1 | cut -c5-)"
+  if [[ $brc -ne 0 && -n "$blog" ]] && grep -qs 'requires Xcode' "$blog"; then
+    XNOTE="$(grep -ohE 'requires Xcode [0-9.]+[.] The current version of Xcode is [0-9.]+' "$blog" | head -1)"
+    printf '%s\n### again with -p:ValidateXcodeVersion=false (%s)\n' "$out" "$XNOTE" >> "$LOG"
+    out="$(bash "$HERE/tf-build.sh" build "$PROJECT" -- "${BARGS[@]}" -p:ValidateXcodeVersion=false 2>&1)"; brc=$?
+  fi
+  printf '%s\n' "$out" >> "$LOG"
+  verdict="$(grep -E '^(PASS|FAIL|NOT-RUN)' <<<"$out" | tail -1)"
+  if [[ $brc -ne 0 ]]; then
+    stop_appium
+    kind=host; [[ $brc -eq 1 ]] && kind=build-error
+    write_state maccatalyst none "" "" "tf-build.sh build -f $TFM" "$PROJECT" "${verdict:-the build failed}" "$kind" "$PLATFORM"
+    echo "NONE head=maccatalyst kind=$kind reason=${verdict:-the build failed} (log $LOG)"; exit 2
+  fi
+  APP="$(ls -td "$PDIR/bin/${CONFIG:-Debug}/$TFM"/*.app "$PDIR/bin/${CONFIG:-Debug}/$TFM"/*/*.app 2>/dev/null | head -1)"
+  if [[ -z "$APP" ]]; then
+    stop_appium; write_state maccatalyst none "" "" "tf-build.sh build -f $TFM" "$PROJECT" "the build wrote no .app under $PDIR/bin/${CONFIG:-Debug}/$TFM" host "$PLATFORM"
+    echo "NONE head=maccatalyst kind=host reason=the build wrote no .app under $PDIR/bin/${CONFIG:-Debug}/$TFM (log $LOG)"; exit 2
+  fi
+  APP="$(cd "$APP" && pwd)"
+  BUNDLE="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Contents/Info.plist" 2>/dev/null)"
+  EXE="$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$APP/Contents/Info.plist" 2>/dev/null)"
+  if OLD="$(pgrep -f "$APP/Contents/MacOS/$EXE" | head -1)" && [[ -n "$OLD" ]]; then
+    stop_appium; write_state maccatalyst none "" "" "" "$PROJECT" "another copy of $EXE is already running (pid $OLD)" host "$PLATFORM"
+    echo "NONE head=maccatalyst kind=host reason=another copy of $EXE is already running (pid $OLD), and mac2 would attach to either; stop it first"; exit 2
+  fi
+  MARK="$DIR/.launch-$APORT"; : > "$MARK"; ROOT_LOG="$PWD/$LOG"
+  # Opened the way Finder opens it: macOS kills a sandboxed app started from its binary directly
+  # ("Killed: 9", Lekhak BlogAdmin, 2026-10-07). Its output goes to the log through open's own options.
+  OPENERR="$(open -n -o "$ROOT_LOG" --stderr "$ROOT_LOG" "$APP" 2>&1)"; printf '%s\n' "$OPENERR" >> "$LOG"
+  APP_PID=""; i=0
+  while [[ $i -lt 10 && -z "$APP_PID" ]]; do sleep 1; i=$((i+1)); APP_PID="$(pgrep -f "$APP/Contents/MacOS/$EXE" | head -1)"; done
+  i=0; while [[ -n "$APP_PID" && $i -lt 8 ]] && kill -0 "$APP_PID" 2>/dev/null; do sleep 1; i=$((i+1)); done
+  if [[ -z "$APP_PID" ]] || ! kill -0 "$APP_PID" 2>/dev/null; then
+    stop_appium
+    crash="$(find "$HOME/Library/Logs/DiagnosticReports" -name "$EXE-*.ips" -newer "$MARK" 2>/dev/null | head -1)"
+    hint=""; grep -qs NoSceneLifecycleAdoption "$crash" && hint="; macOS stops a UIKit app that has not adopted scenes: add UIApplicationSceneManifest to Platforms/MacCatalyst/Info.plist and a SceneDelegate : MauiUISceneDelegate"
+    # macOS refused to start it at all (Lekhak BlogAdmin, 2026-10-07: "Launch failed", POSIX 163): a
+    # locally signed build that asks for keychain-access-groups, which needs a provisioning profile
+    if grep -q 'Launch failed' <<<"$OPENERR"; then
+      hint="; macOS refused to start it ($(grep -oE 'Code=[0-9]+ "[^"]*"' <<<"$OPENERR" | tail -1))"
+      codesign -d --entitlements :- "$APP" 2>/dev/null | grep -q keychain-access-groups && hint="$hint: the build is signed locally (ad hoc) and asks for keychain-access-groups, which needs a provisioning profile; leave that entitlement out of Debug builds or set CodesignProvisioningProfile"
+    fi
+    write_state maccatalyst none "" "" "tf-build.sh build -f $TFM" "$PROJECT" "the app quit on start${crash:+ (crash report $crash)}$hint" build-error "$PLATFORM"
+    echo "NONE head=maccatalyst kind=build-error reason=the app quit on start${crash:+ (crash report $crash)}$hint (log $LOG)"; exit 2
+  fi
+  write_state maccatalyst appium "$AURL" "$APP_PID $APPIUM_PID" "tf-build.sh build -f $TFM" "$PROJECT" "" "" "$PLATFORM"
+  set_state bundle_id "$(json_escape "$BUNDLE")"
+  set_state app_path "$(json_escape "$APP")"
+  [[ -n "$XNOTE" ]] && set_state xcode_check "$(json_escape "off: $XNOTE")"
+  [[ $WEBVIEW -eq 1 ]] && set_state webview true
+  echo "BOOTED head=maccatalyst mode=appium url=$AURL bundle=$BUNDLE project=$PROJECT tfm=$TFM$([[ $WEBVIEW -eq 1 ]] && echo ' webview=yes (control names not measured)') pid=$APP_PID${APPIUM_PID:+ appium-pid=$APPIUM_PID}${XNOTE:+ xcode-check=off ($XNOTE)} log=$LOG stop=\"bash .tfcore/utils/tf-verify-boot.sh stop --port $APORT\""
+  exit 0
+fi
 
 # ---- web ------------------------------------------------------------------------------
 if [[ "$HEAD" == "web" ]]; then

@@ -1,0 +1,6 @@
+<XCUIElementTypeApplication elementType="2" identifier="" label="" title="Fx" x="0" y="0" width="0" height="0"><XCUIElementTypeWindow elementType="4" identifier="" label="" title="Fx" x="0" y="30" width="1000" height="700"><XCUIElementTypeStaticText elementType="48" identifier="" label="" value="Fx" title="" x="80" y="35" width="40" height="16"></XCUIElementTypeStaticText><XCUIElementTypeWebView elementType="58" identifier="" label="" title="" x="0" y="60" width="1000" height="670">
+<XCUIElementTypeGroup elementType="3" identifier="" label="" title="" x="240" y="260" width="80" height="50">
+<XCUIElementTypeStaticText elementType="48" identifier="" label="" value="A long comment cut off by its cell" title="" x="250" y="269" width="56" height="170"></XCUIElementTypeStaticText>
+</XCUIElementTypeGroup>
+<XCUIElementTypeButton elementType="9" identifier="" label="Bulk actions" title="" x="200" y="380" width="120" height="33"></XCUIElementTypeButton>
+</XCUIElementTypeWebView></XCUIElementTypeWindow></XCUIElementTypeApplication>
