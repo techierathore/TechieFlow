@@ -12,7 +12,9 @@ gnu-only-tool .tfcore/hooks/guard-status.sh r"|(\b(truncate|dd)\b[^|;&]*PROJECT-
 # Python tokenizers listing the shell's own separators, |& among them; not a redirection.
 amp-redirect .tfcore/hooks/block-git.sh SEPS = {";", "&&", "||", "|", "&", "(", ")", "{", "}", "\n", "|&"}
 amp-redirect .tfcore/hooks/block-git.sh if t in SEPS or t in (";;", "&&", "||", "|&"):
-amp-redirect .tfcore/hooks/guard-db.sh low = re.sub(r"\b(echo|printf)\s+(\"[^\"]*\"|'[^']*'|[^\n;|&]*)", r"\1", low)
+amp-redirect .tfcore/hooks/guard-db.sh low = re.sub(r"\b(echo|printf)\s+(?:\"[^\"]*\"|'[^']*'|[^\n;|&>]*)(?!\s*>)", r"\1", low)
+amp-redirect .tfcore/hooks/guard-db.sh for m in re.finditer(INTERP_AT + r"[^\n;|&]*?\s(?:-c|-e|--eval|-p|-command)\s+(\"(?:[^\"\\]|\\.)*\"|'[^']*')", low):
+amp-redirect .tfcore/hooks/guard-db.sh for seg in re.finditer(INTERP_AT + r"([^\n;|&]*)", cmd, flags=re.I):
 amp-redirect .tfcore/hooks/guard-verify-deps.sh for seg in re.split(r"(?:\|\||&&|;|\||\n)", cmd):
 amp-redirect .tfcore/hooks/guard-verify-deps.sh ASSIGN = r"(?:\bexport\s+|\bset\s+|^|\s|;|&&)
 # A message string in guard-status.sh's Python that names sed -i as a way around the guard.

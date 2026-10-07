@@ -15,6 +15,10 @@
 #   - a migration runner: dotnet ef database update, dotnet run --project <…Db|…Migration(s)…>,
 #     dbup, flyway migrate, liquibase update, alembic upgrade, prisma migrate, knex migrate,
 #     rails db:migrate, sequelize db:migrate
+#   - code a python / node / deno / bun / ruby / perl / pwsh run executes, inline or from a script
+#     file, that uses a database library and holds a SQL write, unless every database path it names
+#     is a throw-away (tests/.artifacts/, /tmp, :memory:) (Sevak TF-002)
+# A client or a SQL verb that is only mentioned (a grep pattern, a note written to a file) passes.
 # Reads (SELECT, \d, .tables, dumps to stdout) pass. YOLO does not relax this.
 #
 # Wired in .claude/settings.json → hooks.PreToolUse (matcher "Bash"); OpenCode via
@@ -55,17 +59,110 @@ def phase():
     except Exception:
         return None
 
-# Words inside an echo/printf string or a comment line are not commands: an echo naming the
-# migration tool refused a verify run's read on 2026-09-06 (MISS-TechieFlow-20260906-20).
-# Strip them before matching, so only a command that runs a migrator or writes through a
-# client is refused.
+# What counts is what RUNS, not what a command mentions (Sevak TF-002, 2026-10-06).
+#  - A client is a write only when it is the command word of a segment (after a start, ; & | ( or
+#    a backtick, past sudo / env / `exec <container>`), so a grep or a note naming a client and a
+#    SQL verb passes, while `<client> app.db "<write>"` does not.
+#  - A heredoc's body is SQL when it feeds a client, code when it feeds an interpreter, and data
+#    (dropped) when it feeds anything else (`cat > notes.md <<EOF`).
+#  - An interpreter (python, node, deno, bun, ruby, perl, pwsh) running inline code or a script
+#    file has that code read: a database library together with a SQL write is refused unless every
+#    database path it names is a throw-away one (tests/.artifacts/, /tmp, :memory:). A sub-agent's
+#    script deleted four owner settings from Sevak's app database because the guard saw only
+#    `python3 x.py`.
+# Words inside an echo/printf string or a comment line are not commands (MISS-TechieFlow-20260906-20),
+# unless the string is redirected into a file, which may then be run.
+SEG = (r"(?:^|[;&|(`\n]|\$\()\s*(?:sudo\s+(?:-\S+\s+)*)?(?:env\s+(?:\S+=\S*\s+)*)?"
+       r"(?:[\w./\\-]*\bexec\s+(?:-\S+\s+)*\S+\s+)?")
+CLIENT_AT = SEG + r"(?:\S*/)?" + CLIENTS
+INTERP = r"(?:python3?|py|node|deno|bun|ruby|perl|pwsh|powershell(?:\.exe)?|tsx|ts-node)"
+INTERP_AT = SEG + r"(?:\S*/)?" + INTERP + r"\b"
+DB_LIBS = (r"\bsqlite3\b|better-sqlite3|\bsql\.js\b|node:sqlite|\bpsycopg|\bpymysql\b|mysql\.connector|\bmysql2\b"
+           r"|require\(\s*['\"]pg['\"]\s*\)|from\s+['\"]pg['\"]|\bsqlalchemy\b|microsoft\.data\.sqlite|system\.data\.sqlite"
+           r"|\bpymongo\b|\bmongodb\b|\baiosqlite\b|\bduckdb\b|invoke-sqlcmd")
+SQL_WRITE = (r"\binsert\s+(?:or\s+\w+\s+)?into\b|\bupdate\s+[\w\"`\[\].]+\s+set\b|\bdelete\s+from\b"
+             r"|\bdrop\s+(?:table|index|view|database)\b|\bcreate\s+(?:table|index|view|trigger)\b|\balter\s+table\b"
+             r"|\btruncate\b|\breplace\s+into\b|\bexecutescript\b"
+             r"|\.(?:delete_many|delete_one|insert_one|insert_many|update_one|update_many|replace_one|drop)\s*\(")
+DB_PATH = r"['\"]([^'\"\n]*\.(?:db|sqlite3?|mdf)|:memory:)['\"]"
+SCRIPT_EXT = r"\.(?:py|js|mjs|cjs|ts|mts|rb|pl|ps1)\b"
+
+
+def throwaway(path):
+    q = path.replace("\\", "/").lower()
+    return q == ":memory:" or "tests/.artifacts/" in q or q.startswith("/tmp/") or "/tmp/" in q or q.startswith("tmp/")
+
+
+def code_writes(code):
+    """A database library and a SQL write in the same code, against a database that is not a throw-away."""
+    c = code.lower()
+    if not (re.search(DB_LIBS, c) and re.search(SQL_WRITE, c)):
+        return False
+    paths = re.findall(DB_PATH, c)
+    return not paths or not all(throwaway(x) for x in paths)
+
+
 low = cmd.lower()
 low = re.sub(r"(?m)^\s*#.*$", "", low)
-low = re.sub(r"\b(echo|printf)\s+(\"[^\"]*\"|'[^']*'|[^\n;|&]*)", r"\1", low)
-direct_write = (re.search(CLIENTS, low)
-                and (re.search(WRITE_VERBS, low)
-                     or re.search(r"\s-(f|i)\s+\S+\.sql\b", low)
-                     or re.search(r"<\s*\S+\.sql\b", low)))
+
+# heredocs first: keep the body only where it is SQL (fed to a client) or code (fed to an interpreter)
+code_bits, body_sql = [], []
+
+
+runs_code = bool(re.search(INTERP_AT, low))
+
+
+def _heredoc(m):
+    head, body = m.group(1), m.group(4)
+    if re.search(CLIENT_AT, head):
+        body_sql.append(body)
+    elif re.search(INTERP_AT, head) or runs_code:
+        # fed to an interpreter, or written to a file in a command that also runs one
+        # (`cat > s.py <<EOF … EOF; python3 s.py`): the file does not exist when this hook runs
+        code_bits.append(body)
+    return head + "\n"
+
+
+low = re.sub(r"(?ms)^([^\n]*?)<<-?\s*(['\"]?)(\w+)\2[^\n]*\n(.*?)^\s*\3\s*$", _heredoc, low)
+if runs_code:
+    code_bits.append(low)   # printf '…' > s.py && python3 s.py: the code is in the command itself
+# an echo/printf string is dropped unless it is redirected into a file
+low = re.sub(r"\b(echo|printf)\s+(?:\"[^\"]*\"|'[^']*'|[^\n;|&>]*)(?!\s*>)", r"\1", low)
+
+direct_write = bool(re.search(CLIENT_AT, low)
+                    and (re.search(WRITE_VERBS, low)
+                         or re.search(r"\s-(f|i)\s+\S+\.sql\b", low)
+                         or re.search(r"<\s*\S+\.sql\b", low))) or any(re.search(WRITE_VERBS, b) for b in body_sql)
+
+# inline code (-c / -e / --eval / -Command) and script files run by an interpreter
+script_write, script_name = False, ""
+if re.search(INTERP_AT, low) or code_bits:
+    for m in re.finditer(INTERP_AT + r"[^\n;|&]*?\s(?:-c|-e|--eval|-p|-command)\s+(\"(?:[^\"\\]|\\.)*\"|'[^']*')", low):
+        code_bits.append(m.group(1))
+    roots = [data.get("cwd") or "", os.environ.get("TF_ROOT", ".")]
+    # `cd tools && python3 seed.py`: the script is found from the folder the command moved to
+    for cdir in re.findall(r"(?:^|[;&|(]\s*)cd\s+(['\"]?)([^\s'\";&|]+)\1", cmd):
+        roots += [os.path.join(r, cdir[1]) for r in list(roots) if r] + [cdir[1]]
+    for seg in re.finditer(INTERP_AT + r"([^\n;|&]*)", cmd, flags=re.I):
+        for tok in re.findall(r"[^\s'\"]+" + SCRIPT_EXT, seg.group(1), flags=re.I):
+            for cand in [tok] + [os.path.join(r, tok) for r in roots if r]:
+                try:
+                    if os.path.isfile(cand) and os.path.getsize(cand) < 2_000_000:
+                        with open(cand, encoding="utf-8", errors="replace") as fh:
+                            if code_writes(fh.read()):
+                                script_write, script_name = True, tok
+                        break
+                except Exception:
+                    pass
+    script_write = script_write or any(code_writes(b) for b in code_bits)
+
+if script_write:
+    print("BLOCKED by TechieFlow policy: this runs code that writes to a database directly "
+          f"({script_name or 'inline code'}: a database library and an INSERT / UPDATE / DELETE / DROP / CREATE). "
+          "The app's database changes only through its migration path or through the app itself. For a "
+          "smoke or a seed, point the script at a throw-away copy whose path names tests/.artifacts/, /tmp "
+          "or :memory:, written literally in the script. Owner rule 2026-09-05; Sevak TF-002.", file=sys.stderr)
+    sys.exit(2)
 if direct_write or re.search(DROP_DB, low):
     print("BLOCKED by TechieFlow policy: a direct database write (SQL through a client, or dropping "
           "a database) is not allowed from any command. Schema and data changes go through the "

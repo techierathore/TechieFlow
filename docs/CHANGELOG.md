@@ -14,6 +14,73 @@ Everything below this section from 2026-09-11 onward is also unreleased: it reac
 v1.0.4 tag (2026-09-10) and is in no published package yet. This section lists what those dated entries
 do not.
 
+- **Test projects run one at a time (TechieRag TF-004, 2026-10-06).** MISS-TechieFlow-20261006-07.
+  `tf-doc-tests.sh` ran `tf-build.sh test` on the whole solution. On a 7.8 GB WSL machine TechieRag's
+  local-model tests took the memory while TechieRag.Tests walked folders, and a test that passes alone
+  failed "Cannot allocate memory", twice in a day. `tf-doc-tests.sh` now runs only the test projects
+  holding a file that reads the document, each on its own. `tf-build.sh test` on a solution with
+  several test projects (by test-SDK reference) runs each alone and merges the verdicts into one line
+  with a joined log; `TF_TEST_TOGETHER=1` keeps the single run. On TechieRag for real: the document
+  check ran TechieRag.Tests only and passed in 110 s; the split solution run took 193 s, and
+  TechieRag.Local.Tests failed on its own because the library's memory check refused the model with
+  3.0 GB free, now contained to that project. Case `tr_004`. A first real run failed with a syntax
+  error because the maintainer edited the script while bash was still reading it; re-run untouched.
+- **The previous phase's handoff counted for a newly built one (TechieRag TF-003, 2026-10-06).**
+  MISS-TechieFlow-20261006-06. `tf-status-facts.py` treated any Verification log row naming handoff
+  as this phase's. TechieRag at phase 3, all rows Verified, read "UAT — handoff done" from phase 2's
+  handoff and sent the owner to set Released with no guide describing phase 3. A handoff row now
+  counts only when its status-table cell names this phase's checklist; an older row naming none
+  counts in phase 1 only. On all 18 projects only TechieRag's facts change, now pointing at
+  `*handoff-phase TechieRag`. Case `tr_003`.
+- **A quoted "all others fixed" was still applied (TechieRag TF-002, 2026-10-06).**
+  MISS-TechieFlow-20261006-05. The TF-001 fix removed code and double-quoted text only from entry
+  headings and bodies, not from replies, and its reply claimed otherwise. A reply that quoted the July
+  line (`…only because of the July "All others fixed app-side" line`) named no id, so it covered every
+  id its block named, and 13 entries the block called open read fixed. Every mark in a reply (the
+  blanket sentence, the fixed and the open words) is now tested on the text without code and quotes;
+  ids are still read from the full text. On Sevak's file with the quote restored: 36 fixed · 1 open
+  becomes 23 fixed · 14 open, the same entry for entry as the reworded file. No other feedback file
+  changes. Case `tr_002` is the reported repro, with an unquoted blanket line as the control.
+- **The feedback-file reader called entries fixed that nothing had fixed (TechieRag TF-001,
+  2026-10-06).** MISS-TechieFlow-20261006-04. `tf_feedback.py` read a whole "## Replies from …"
+  section as one reply, and marked every id a line named once the line said "fixed". An old summary's
+  "Open: TR-RAG-001 …; TR-RAG-002. All others fixed app-side", kept verbatim in a private project's
+  TechieRag file, reached every entry up to the highest id named anywhere in that section. Each new
+  reply moved the line further. A fixed or closed mark in an entry's heading was never read. Now each
+  dated "### " block is its own reply. "All others" is bounded by its own line and never covers the
+  ids it names. A line that says both open and fixed is read clause by clause, and a "fixed" clause
+  with no id answers the clause before it. Shorthand (`028/029/030`, `031..034`, `027…030`) names every
+  id it covers. The heading's mark counts, and code or quoted text is never a mark. Across all 46
+  feedback files in the 18 projects, only that file changes (1 open · 38 fixed · 7 closed to 22 open ·
+  15 fixed · 9 closed; the 21 reopened entries have no fix written anywhere, five of them say OPEN in
+  their own heading), plus its copy in TechieRag and two `TR-001` entries headed "✅ RESOLVED", now
+  closed. Case `tr_001`, which fails 10 of 10 against the old reader; `replies_complete` reads
+  TechieRag's numbering from `tr_` cases.
+- **Three Sevak defects: the database guard, two Windows heads, and a unit pass standing in for a
+  skipped app test (Sevak TF-002 to TF-004, 2026-10-06).** Misses MISS-TechieFlow-20261006-01 to -03.
+  - *TF-002.* `guard-db.sh` matched a database client named anywhere in the command, so it missed a
+    sub-agent's `python3 <script>` that deleted four owner settings from Sevak's app database. It also
+    refused a `grep` or a written note that only named a client and a SQL verb; the maintainer's own
+    grep was refused while triaging this. It now reads the code an interpreter runs (inline, heredoc,
+    a file written in the same command, or a script file, including after a `cd`). Code that uses a
+    database library and holds a SQL write is refused unless every database path it names is under
+    `tests/.artifacts/`, `/tmp` or `:memory:`. A client counts only as the command being run, and a
+    heredoc feeding anything else is data. Sevak's copy got 5 of 13 real command shapes wrong, the new
+    one none (`sv_002`). No framework script and no Sevak script run directly is refused. Sevak's
+    outage spec writes its app database directly; it runs under `npx playwright`, which the guard
+    does not open, and the reply says so.
+  - *TF-003.* Every Windows head started WebView2 on DevTools port 9222, and `--port` moved only the
+    relay. `stop` (and a failed boot) ran `taskkill /IM`, closing every copy of the app. The DevTools
+    port now follows the relay port (9223 keeps 9222, any other is relay + 20000). A second head while
+    one is up gets its own WebView2 data folder, because two copies of one app share a browser
+    process. The boot records its own Windows process ids and `stop` kills those alone. Proved on
+    MyDiary with two copies up: one page per relay, separate browser ids, and stopping one left the
+    other answering (`sv_003`, which tests `stop` and the port rule's shape off Windows).
+  - *TF-004.* Outcomes did not record where they ran, so a unit pass made a row whose on-app tests were
+    all skipped read PASS. Each outcome now carries its source, in one run and in `--merge`. Such a row
+    is NOT-TESTED with the skip's reason, for every row class. On Sevak's own result files: 24 PASS to
+    16, and exactly the eight rows they named changed (`sv_004`).
+  Deployed to all 18 projects.
 - **The validate run on `main` was red, plus Lekhak TF-023 and AppManager TF-029 (2026-10-04).**
   Misses MISS-TechieFlow-20261004-05 to -07.
   - *CI (run 37197177120, commit `dc61ca7`, both jobs).* Two causes, both the maintainer's, found by

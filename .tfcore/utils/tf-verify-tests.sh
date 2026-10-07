@@ -54,7 +54,7 @@ mkdir -p "$(dirname "$OUT")" tests/.artifacts/verify
 # ---- --merge: the parts into one tests.json, no test run ------------------------------------------
 if [[ ${#MERGE[@]} -gt 0 ]]; then
   TF_OUT="$OUT" python3 - "${MERGE[@]}" <<'PY'
-import json, os, sys
+import json, os, re, sys
 # Lekhak TF-007. The parts are read oldest first (by the time each ran, else in the order given), and
 # a later run of the SAME test stands for it: a test that failed because its service was not started,
 # run again once it was, clears the row. A later skip never replaces a run that happened. A part
@@ -78,6 +78,9 @@ for d, _i, p in loaded:
             oc.update({t: {"outcome": "skip", "reason": r.get("reason", ""), "screenshot": ""} for t in r.get("skipped", [])})
         o = outs.setdefault(rid, {})
         for name, rec in oc.items():
+            # a part written before outcomes carried their source: the row's, when it had only one
+            if "source" not in rec:
+                rec = dict(rec, source=r.get("source") if r.get("source") in ("browser", "unit") else "")
             old = o.get(name)
             if old and rec["outcome"] == "skip" and old["outcome"] != "skip":
                 continue
@@ -100,6 +103,12 @@ for rid, o in outs.items():
     skips = [(n, x) for n, x in o.items() if x["outcome"] == "skip"]
     result = "FAIL" if fails else "PASS" if npass else "NOT-TESTED"
     reason = fails[0][1]["reason"] if fails else (skips[0][1]["reason"] if skips and not npass else "")
+    # Sevak TF-004: a unit pass does not stand in for a row's on-app tests when they were all skipped
+    app = [x for x in o.values() if x.get("source") == "browser"]
+    if result == "PASS" and app and all(x["outcome"] == "skip" for x in app):
+        why = next((x["reason"] for x in app if x["reason"]), "the test was skipped")
+        result = "NOT-TESTED"
+        reason = ("on-app test skipped (" + why + "); a unit test does not measure on-app acceptance")[:200]
     reqs[rid] = {"result": result, "source": sources.get(rid, ""), "tests": [n for n, x in o.items() if x["outcome"] != "skip"],
                  "skipped": [n for n, _ in skips], "passed": npass, "failed": len(fails), "reason": reason,
                  "screenshot": fails[0][1].get("screenshot", "") if fails else "", "outcomes": o}
@@ -260,8 +269,11 @@ def add(rid, outcome, name, source, reason="", shot=""):
     r = reqs.setdefault(rid.upper(), {"result": "NOT-TESTED", "source": source, "tests": [],
                                       "skipped": [], "passed": 0, "failed": 0,
                                       "reason": "", "screenshot": "", "outcomes": {}})
-    # each test's own outcome, so a merge can let a later run of the same test stand (Lekhak TF-007)
-    r["outcomes"][name] = {"outcome": outcome, "reason": (reason or "")[:200], "screenshot": shot}
+    # each test's own outcome, so a merge can let a later run of the same test stand (Lekhak TF-007),
+    # and where it ran, so a unit pass never stands in for a skipped on-app test (Sevak TF-004)
+    r["outcomes"][name] = {"outcome": outcome, "reason": (reason or "")[:200], "screenshot": shot, "source": source}
+    if r["source"] != source:
+        r["source"] = "browser+unit"
     if outcome == "skip":
         r["skipped"].append(name)
         if not r["reason"]:
@@ -365,6 +377,16 @@ if ul and os.path.isfile(ul):
             add(rid, outcome, name, "unit",
                 "unit test failed: " + name[:120] if outcome == "fail"
                 else "unit test skipped: " + name[:120] if outcome == "skip" else "")
+# Sevak TF-004: a row that has an on-app test is accepted on the app. When every on-app test of the
+# row was skipped (`test.skip()`: not observable on this host) and none failed, a passing unit test
+# with the same id does not measure it: the row is NOT-TESTED, with the skip's reason. A failure, from
+# either side, still makes it FAIL; a row with no on-app test is graded on its unit tests as before.
+for rid, r in reqs.items():
+    app = [x for x in r["outcomes"].values() if x.get("source") == "browser"]
+    if app and all(x["outcome"] == "skip" for x in app) and r["result"] == "PASS":
+        why = next((x["reason"] for x in app if x["reason"]), "the test was skipped")
+        r["result"] = "NOT-TESTED"
+        r["reason"] = ("on-app test skipped (" + why + "); a unit test does not measure on-app acceptance")[:200]
 unit["passed"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r["result"] == "PASS")
 unit["failed"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r["result"] == "FAIL")
 unit["not_tested"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r["result"] == "NOT-TESTED")

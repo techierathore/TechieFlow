@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 244 logged: 54 open, 189 fixed, 1 will not fix |
+| Count | 251 logged: 54 open, 196 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-10-04 |
+| Updated | 2026-10-06 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -68,10 +68,17 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (189)
+## Fixed (196)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261006-07 | 2026-10-06 by production | 2026-10-06 by log-miss | the check was too weak | TechieRag TF-004: the document-test step and tf-build.sh test ran every test project of a solution at once, so on a small WSL machine the local-model tests took the memory and a test that passes alone failed with Cannot allocate memory, twice in one day. |
+| MISS-TechieFlow-20261006-06 | 2026-10-06 by production | 2026-10-06 by log-miss | the check was too weak | TechieRag TF-003: the status facts took any handoff row in the Verification log as this phase's, so phase 2's handoff made a newly built phase 3 read handoff done and sent the owner to UAT with guides that did not describe it. |
+| MISS-TechieFlow-20261006-05 | 2026-10-06 by production | 2026-10-06 by log-miss | the check was too weak | TechieRag TF-002: the TF-001 fix stripped code and double-quoted text only from entry headings and bodies, not from replies, while its reply told TechieRag that quoted text is never a mark; a reply quoting the July 'all others fixed' line then marked 13 entries it called open as fixed, and tr_001 ha |
+| MISS-TechieFlow-20261006-04 | 2026-10-06 by production | 2026-10-06 by log-miss | the check was too weak | TechieRag TF-001: the feedback-file reader read a whole Replies section as one reply and marked every id an item named once the item said fixed, so an old 'all others fixed' made 22 of Sevak's TechieRag entries read fixed that nothing had fixed, and a fixed or closed mark in an entry's heading was n |
+| MISS-TechieFlow-20261006-03 | 2026-10-06 by production | 2026-10-06 by log-miss | the check was too weak | Sevak TF-004: a test outcome did not record where it ran, so a passing unit test with the same id turned a row whose on-app tests were all skipped into an acceptance pass; eight Sevak rows could have reached Verified unseen. |
+| MISS-TechieFlow-20261006-02 | 2026-10-06 by production | 2026-10-06 by log-miss | the framework never said it | Sevak TF-003: every Windows head started its embedded browser on one fixed debugging port and stop killed the program by name, so with two heads up a smoke drove the other agent's window and one stop closed both apps. |
+| MISS-TechieFlow-20261006-01 | 2026-10-06 by production | 2026-10-06 by log-miss | the check was too weak | Sevak TF-002: the database guard looked for a client named in the command, so a sub-agent's script run as python3 x.py deleted four owner settings from the app database, while a grep or a note that merely named a client and a write verb was refused. |
 | MISS-TechieFlow-20261004-07 | 2026-10-04 by production | 2026-10-04 by log-miss | the check was too weak | The validate run on main failed on both Ubuntu and the stock Mac: a regression case had a GNU-only sed spelling on one line, and the installer copied opencode.jsonc's executable mode where the shell keeps the old file's, so the delivery-route comparison failed; the maintainer had not run npm run val |
 | MISS-TechieFlow-20261004-06 | 2026-10-04 by production | 2026-10-04 by log-miss | the check was too weak | AppManager TF-029: the HTML renderer gave numbered headings an id without the number, so the 35 table-of-contents links GitHub-style markdown makes in the API guide went nowhere; the renderer's link check compared only its own sidebar. |
 | MISS-TechieFlow-20261004-05 | 2026-10-04 by production | 2026-10-04 by log-miss | the check was too weak | Lekhak TF-023: a command's start baselined only the checklist and the status file while *amend-docs closes on every document, so 131 findings older than the run blocked it as new; a size finding also turned new on any edit because its count is in its text. |

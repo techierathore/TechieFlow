@@ -140,8 +140,23 @@ for pid in s.get("pids", []):
             pass
         time.sleep(1)
 image = s.get("win_image") or ""
-if image:
-    subprocess.run(["taskkill.exe", "/F", "/T", "/IM", image], capture_output=True)
+if s.get("win_pids"):
+    # this boot's own processes only (Sevak TF-003: /IM stopped every copy, another agent's included)
+    for wp in s["win_pids"]:
+        subprocess.run(["taskkill.exe", "/F", "/T", "/PID", str(wp)], capture_output=True)
+elif image:
+    # a state written before win_pids: by name, as before, unless another start of it is still up
+    others = []
+    for f in os.listdir(d):
+        if f.startswith("boot-") and f.endswith(".json") and os.path.join(d, f) != path:
+            try:
+                o = json.load(open(os.path.join(d, f)))
+                if o.get("win_image") == image and not o.get("stopped") and o.get("pids") != s.get("pids"):
+                    others.append(f)
+            except Exception:
+                pass
+    if not others:
+        subprocess.run(["taskkill.exe", "/F", "/T", "/IM", image], capture_output=True)
 if s.get("win_port"):
     ps = f"Get-NetTCPConnection -LocalPort {s['win_port']} -State Listen -ErrorAction SilentlyContinue | ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}"
     subprocess.run(["powershell.exe", "-NoProfile", "-Command", ps], capture_output=True)
@@ -432,10 +447,41 @@ fi
 [[ "$PLATFORM" == "wsl" || "$PLATFORM" == "windows" ]] || { write_state windows none "" "" "" "$PROJECT" "a Windows head runs only from WSL or Windows" host "$PLATFORM"; echo "NONE head=windows reason=a Windows head runs only from WSL or Windows, this is $PLATFORM"; exit 2; }
 command -v cmd.exe >/dev/null 2>&1 || { write_state windows none "" "" "" "$PROJECT" "cmd.exe not reachable" host "$PLATFORM"; echo "NONE head=windows reason=cmd.exe is not reachable from this shell"; exit 2; }
 TFM="$(grep -oE 'net[0-9.]+-windows[0-9.]*' "$PROJECT" | head -1)"
-CDP_PORT=9222; RELAY_PORT="${PORT:-9223}"; keyed "$RELAY_PORT"
+RELAY_PORT="${PORT:-9223}"; keyed "$RELAY_PORT"
+# Each boot drives its own embedded browser (Sevak TF-003). The DevTools port was 9222 for every
+# head, so with two up the relay on 9223 listed pages of both apps and a smoke drove the other
+# agent's window. The port now follows the relay port (9223 keeps 9222). A second head while one is
+# up also gets its own WebView2 data folder: two copies of one app would otherwise share one browser
+# process, whose single DevTools port lists both.
+if [[ "$RELAY_PORT" == "9223" ]]; then CDP_PORT=9222; else CDP_PORT=$((RELAY_PORT + 20000)); fi
+OTHERS="$(python3 - "$DIR" "$RELAY_PORT" <<'PY'
+import glob, json, os, sys
+n = 0
+for f in glob.glob(os.path.join(sys.argv[1], "boot-*.json")):
+    if f.endswith(f"boot-{sys.argv[2]}.json"):
+        continue
+    try:
+        s = json.load(open(f))
+    except Exception:
+        continue
+    if s.get("head") == "windows" and s.get("mode") == "cdp" and not s.get("stopped"):
+        n += 1
+print(n)
+PY
+)"
+UDF_SET=""
+if [[ "${OTHERS:-0}" -gt 0 ]]; then
+  UDF="$DIR/webview-$RELAY_PORT"; mkdir -p "$UDF"
+  UDF_SET="set WEBVIEW2_USER_DATA_FOLDER=$(wslpath -w "$UDF")&& "
+  echo "tf-verify-boot: $OTHERS other Windows head(s) up — this one gets DevTools port $CDP_PORT and its own WebView2 data folder ($UDF), so neither sees the other's pages" >&2
+fi
 WP="$(winarg "$(wslpath -w "$PROJECT")")"; RELAY="$(wslpath -w "$HERE/tf-cdp-relay.ps1")"
-echo "### windows head: $PROJECT -f $TFM" >> "$LOG"
-nohup cmd.exe /c "set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=$CDP_PORT&& dotnet run --project $WP -f $TFM ${CFGARGS[*]:-}" >> "$LOG" 2>&1 < /dev/null &
+echo "### windows head: $PROJECT -f $TFM (DevTools $CDP_PORT, relay $RELAY_PORT)" >> "$LOG"
+# this start's own Windows processes: the app's ids before it, so the new ones are this boot's and
+# stop kills them alone, never every copy of the program (taskkill /IM stopped another agent's app)
+win_ids() { powershell.exe -NoProfile -Command "Get-Process -Name '$ASM' -ErrorAction SilentlyContinue | ForEach-Object { \$_.Id }" 2>/dev/null | tr -d '\r' | grep -E '^[0-9]+$' | sort; }
+BEFORE_IDS="$(win_ids)"
+nohup cmd.exe /c "${UDF_SET}set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=$CDP_PORT&& dotnet run --project $WP -f $TFM ${CFGARGS[*]:-}" >> "$LOG" 2>&1 < /dev/null &
 APP_PID=$!
 nohup powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$RELAY" -ListenPort "$RELAY_PORT" -TargetPort "$CDP_PORT" >> "$DIR/relay.log" 2>&1 < /dev/null &
 RELAY_PID=$!
@@ -458,13 +504,16 @@ while [[ $i -lt 300 && -z "$URL" ]]; do
   fi
   sleep 3; i=$((i+3))
 done
+MINE="$(comm -13 <(printf '%s\n' "$BEFORE_IDS") <(win_ids) | tr '\n' ' ')"
 if [[ -z "$URL" ]]; then
   pkill -P "$APP_PID" 2>/dev/null; kill "$APP_PID" "$RELAY_PID" 2>/dev/null
-  taskkill.exe /F /T /IM "$ASM.exe" >/dev/null 2>&1
+  for w in $MINE; do taskkill.exe /F /T /PID "$w" >/dev/null 2>&1; done
   write_state windows none "" "" "cmd.exe /c dotnet run -f $TFM" "$PROJECT" "the DevTools port $RELAY_PORT never answered within 300 s" host "$PLATFORM"
   echo "NONE head=windows kind=host reason=the app's DevTools port never answered on ${HOSTS[*]}:$RELAY_PORT within 300 s (log $LOG, relay $DIR/relay.log)"; exit 2
 fi
 write_state windows cdp "$URL" "$APP_PID $RELAY_PID" "cmd.exe /c dotnet run -f $TFM" "$PROJECT" "" "" "$PLATFORM"
 set_state win_image "\"$ASM.exe\""
+set_state win_pids "[$(tr ' ' '\n' <<<"$MINE" | grep -E '^[0-9]+$' | paste -sd, -)]"
+set_state cdp_port "$CDP_PORT"
 echo "BOOTED head=windows mode=cdp url=$URL project=$PROJECT tfm=$TFM pids=$APP_PID,$RELAY_PID image=$ASM.exe log=$LOG"
 exit 0

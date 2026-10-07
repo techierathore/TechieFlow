@@ -1113,7 +1113,8 @@ own = {"AppManager": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^am_0?(\d{2,3
        "Chatur": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^ch_0?(\d{2,3})\(\)", suite)},
        "TrBlazeUI": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^tb_0?(\d{2,3})\(\)", suite)},
        "Lekhak": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^lk_0?(\d{2,3})\(\)", suite)},
-       "Sevak": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^sv_0?(\d{2,3})\(\)", suite)}}
+       "Sevak": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^sv_0?(\d{2,3})\(\)", suite)},
+       "TechieRag": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^tr_0?(\d{2,3})\(\)", suite)}}
 for f in sorted(glob.glob(os.path.join(root, "docs", "*-TechieFlow-Feedback.md"))):
     app = os.path.basename(f).split("-")[0]
     for e in tf_feedback.entries(f):
@@ -3779,6 +3780,125 @@ YML
     || { bad sv_001b "stage 2 dropped or duplicated a document entry"; note "$(awk '/customTechnicalDocuments/{p=1} p' "$d/.tfcore/core-config.yaml" | tr '\n' ' ' | cut -c1-240)"; }
 }
 
+# --- Sevak TF-002: a python script wiped four owner settings past the database guard ---------------
+# A build sub-agent's smoke ran `python3 <script>` whose sqlite3 code deleted UserName, Language,
+# DayStart and EveningTime from the app database; the guard looked for a client named in the command
+# and saw none. And it refused a feedback entry, and a grep, that only named a client and a SQL verb.
+# Now the code an interpreter runs is read (inline, heredoc, written in the same command, or a script
+# file); a throw-away database under tests/.artifacts/, /tmp or :memory: is allowed; a mention is not
+# a command.
+sv_002() {
+  local d="$SCRATCH/sv002"; mkdir -p "$d/tools" "$d/tests/smoke"
+  local lib='sqlite3' verb='DELETE FROM'
+  printf 'import os, %s\ncon = %s.connect(os.path.join(os.environ["APPDATA"], "TechieDesk", "sevak.db"))\ncon.execute("%s Settings WHERE Key = ?", ("UserName",))\ncon.commit()\n' "$lib" "$lib" "$verb" > "$d/tools/seed.py"
+  printf 'import %s\ncon = %s.connect("tests/.artifacts/smoke/app.db")\ncon.execute("%s Settings")\n' "$lib" "$lib" "$verb" > "$d/tests/smoke/smoke.py"
+  printf 'import %s\nprint(%s.connect("app.db").execute("SELECT * FROM Settings").fetchall())\n' "$lib" "$lib" > "$d/tools/report.py"
+  _g() { python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","cwd":sys.argv[2],"tool_input":{"command":sys.argv[1]}}))' "$1" "$d" \
+           | CLAUDE_PROJECT_DIR="$d" bash "$HOOKS/guard-db.sh" >/dev/null 2>&1; echo $?; }
+  local want got bad_n=0 c i=0
+  # expected exit, then the command (2 refused, 0 allowed)
+  while IFS=$'\t' read -r want c; do
+    [[ -z "$c" ]] && continue
+    c="${c//\\n/$'\n'}"; i=$((i+1))
+    got="$(_g "$c")"
+    [[ "$got" == "$want" ]] || { bad_n=$((bad_n+1)); note "case $i: exit $got, want $want: $(head -c 110 <<<"$c" | tr '\n' ' ')"; }
+  done <<CASES
+2	python3 tools/seed.py
+2	cd tools && python3 seed.py --all
+2	printf 'import $lib\\nc=$lib.connect("app.db")\\nc.execute("delete from settings")\\n' > s.py && python3 s.py
+2	cat > s.py <<'EOF'\nimport $lib\n$lib.connect('app.db').execute('drop table settings')\nEOF\npython3 s.py
+2	python3 - <<'EOF'\nimport $lib\n$lib.connect('app.db').execute("update Settings set Value = '' where Key = 'Language'")\nEOF
+2	node -e "const D=require('better-sqlite3'); new D('C:/Users/x/AppData/Roaming/TechieDesk/sevak.db').prepare('$verb settings').run()"
+2	$lib data/app.db "$verb settings"
+2	cd src && sudo $lib app.db < wipe.sql
+0	grep -nE "$lib|$verb" tests/.artifacts/build/x.log
+0	cat >> docs/Fx-TechieFlow-Feedback.md <<'EOF'\n- a python3 script with $lib ran $verb Settings and the guard missed it\nEOF
+0	python3 tests/smoke/smoke.py
+0	python3 tools/report.py
+0	$lib app.db "SELECT * FROM settings"
+CASES
+  [[ $bad_n -eq 0 && $i -eq 13 ]] \
+    && ok sv_002 "code an interpreter runs is read for database writes; a throw-away database and a mere mention pass" \
+    || bad sv_002 "the database guard got $bad_n of $i commands wrong"
+}
+
+# --- Sevak TF-003: two Windows heads shared one DevTools port, and stop killed both ------------------
+# Every Windows head started its WebView2 on 9222 (--port moved only the relay), so with two up a
+# smoke drove the other agent's window; stop ran `taskkill /IM <app>.exe` and closed every copy. Now
+# each boot's DevTools port follows its relay port (a second head also gets its own WebView2 data
+# folder), the boot records its own Windows process ids, and stop kills those alone. The boot half
+# needs Windows: proved on MyDiary 2026-10-06 (two copies up, each relay one page, stopping one left
+# the other running). Here: stop, against a stand-in taskkill.exe, and the port rule's shape.
+sv_003() {
+  local d="$SCRATCH/sv003"; mkdir -p "$d/bin" "$d/tests/.artifacts/verify"
+  printf '#!/usr/bin/env bash\necho "$*" >> %s/taskkill.args\n' "$d" > "$d/bin/taskkill.exe"; chmod +x "$d/bin/taskkill.exe"
+  printf '{"head":"windows","mode":"cdp","url":"http://h:9283","pids":[999991],"win_image":"Fx.exe","win_pids":[580]}\n' > "$d/tests/.artifacts/verify/boot-9283.json"
+  printf '{"head":"windows","mode":"cdp","url":"http://h:9281","pids":[999992],"win_image":"Fx.exe","win_pids":[25116]}\n' > "$d/tests/.artifacts/verify/boot-9281.json"
+  cp "$d/tests/.artifacts/verify/boot-9283.json" "$d/tests/.artifacts/verify/boot.json"
+  ( cd "$d" && PATH="$d/bin:$PATH" bash "$UTILS/tf-verify-boot.sh" stop --port 9283 ) >/dev/null 2>&1
+  local args; args="$(cat "$d/taskkill.args" 2>/dev/null | tr '\n' ';')"
+  [[ "$args" == "/F /T /PID 580;" ]] \
+    && ok sv_003a "stop kills this boot's own Windows process, never every copy of the program" \
+    || { bad sv_003a "stop reached past its own app"; note "taskkill $args"; }
+  local B="$UTILS/tf-verify-boot.sh"
+  ! grep -qE '^CDP_PORT=9222;' "$B" && grep -q 'CDP_PORT=\$((RELAY_PORT + 20000))' "$B" && grep -q 'WEBVIEW2_USER_DATA_FOLDER' "$B" \
+    && ok sv_003b "each Windows boot gets its own DevTools port, and a second one its own WebView2 data folder" \
+    || bad sv_003b "every Windows head still starts its WebView2 on one fixed DevTools port"
+}
+
+# --- Sevak TF-004: a unit pass stood in for an on-app test that was skipped ---------------------------
+# Eight Sevak rows had an on-app test that called test.skip() (not observable on that host) and a unit
+# test with the same id. The merge counted the unit pass, so each read PASS on acceptance and could
+# reach Verified. A row with on-app tests that were all skipped is now NOT-TESTED, in one run and in a
+# merge; a row with no on-app test, or one whose on-app test ran, is graded as before.
+sv_004() {
+  local d="$SCRATCH/sv004"; mkdir -p "$d"
+  cat > "$d/browser.json" <<'JS'
+{"reqs":{"REQ-UI-065":{"result":"NOT-TESTED","source":"browser","tests":[],"skipped":["REQ-UI-065 opens Places"],"passed":0,"failed":0,"reason":"skipped: not measurable here: no place named in setup","outcomes":{"REQ-UI-065 opens Places":{"outcome":"skip","reason":"skipped: not measurable here: no place named in setup","screenshot":""}}},
+ "REQ-RAG-056":{"result":"NOT-TESTED","source":"browser","tests":[],"skipped":["REQ-RAG-056 answers"],"passed":0,"failed":0,"reason":"skipped: no model on this host","outcomes":{"REQ-RAG-056 answers":{"outcome":"skip","reason":"skipped: no model on this host","screenshot":""}}},
+ "REQ-UI-070":{"result":"PASS","source":"browser","tests":["REQ-UI-070 saves"],"skipped":[],"passed":1,"failed":0,"reason":"","outcomes":{"REQ-UI-070 saves":{"outcome":"pass","reason":"","screenshot":""}}}},
+ "browser":{"ran":true,"passed":1,"failed":0,"skipped":2,"tests":3},"unit":{"ran":false},"ran_at":"2026-10-05T14:00:00Z"}
+JS
+  cat > "$d/unit.json" <<'JS'
+{"reqs":{"REQ-UI-065":{"result":"PASS","source":"unit","tests":["REQ-UI-065 PlacesVm lists"],"skipped":[],"passed":1,"failed":0,"reason":""},
+ "REQ-RAG-056":{"result":"PASS","source":"unit","tests":["REQ-RAG-056 prompt built"],"skipped":[],"passed":1,"failed":0,"reason":""},
+ "REQ-UI-070":{"result":"PASS","source":"unit","tests":["REQ-UI-070 vm saves"],"skipped":[],"passed":1,"failed":0,"reason":""},
+ "REQ-FN-080":{"result":"PASS","source":"unit","tests":["REQ-FN-080 parses"],"skipped":[],"passed":1,"failed":0,"reason":""}},
+ "browser":{"ran":false},"unit":{"ran":true},"ran_at":"2026-10-05T13:00:00Z"}
+JS
+  ( cd "$d" && bash "$UTILS/tf-verify-tests.sh" --merge browser.json unit.json --json-out merged.json ) >/dev/null 2>&1
+  local got; got="$(python3 -c "import json,sys
+r = json.load(open(sys.argv[1]))['reqs']
+print(' '.join(k + '=' + r[k]['result'] for k in ('REQ-UI-065','REQ-RAG-056','REQ-UI-070','REQ-FN-080')))" "$d/merged.json" 2>&1)"
+  [[ "$got" == "REQ-UI-065=NOT-TESTED REQ-RAG-056=NOT-TESTED REQ-UI-070=PASS REQ-FN-080=PASS" ]] \
+    && ok sv_004a "a merge does not let a unit pass stand in for on-app tests that were all skipped" \
+    || { bad sv_004a "a skipped on-app test was graded on its unit test in the merge"; note "$got"; }
+  # one run: the browser report and the unit log together
+  local p="$d/one"; mkdir -p "$p/tests/verify" "$p/tests/.artifacts/verify" "$p/node_modules/@playwright/test" "$p/bin" "$p/.tfcore" "$p/tests/Fx.Tests"
+  cp -r "$UTILS" "$p/.tfcore/"
+  printf '{"name":"@playwright/test","main":"index.js"}\n' > "$p/node_modules/@playwright/test/package.json"; : > "$p/node_modules/@playwright/test/index.js"
+  printf "test('REQ-UI-065 opens Places', () => {});\n" > "$p/tests/verify/fx.spec.ts"
+  printf '<Project Sdk="Microsoft.NET.Sdk"></Project>\n' > "$p/tests/Fx.Tests/Fx.Tests.csproj"
+  cat > "$p/bin/npx" <<'SH'
+#!/usr/bin/env bash
+cat > "$PLAYWRIGHT_JSON_OUTPUT_NAME" <<'J'
+{"suites":[{"title":"fx","specs":[{"title":"REQ-UI-065 opens Places","tests":[{"status":"skipped","annotations":[{"type":"skip","description":"not measurable here"}],"results":[{"status":"skipped"}]}]}]}]}
+J
+SH
+  chmod +x "$p/bin/npx"
+  cat > "$p/.tfcore/utils/tf-build.sh" <<SH
+#!/usr/bin/env bash
+mkdir -p $p/tests/.artifacts/build
+printf '  Passed REQ-UI-065 PlacesVm lists [3 ms]\n' > $p/tests/.artifacts/build/unit.log
+echo "PASS  tests passed on wsl via dotnet (rung 1); log tests/.artifacts/build/unit.log"
+SH
+  ( cd "$p" && PATH="$p/bin:$PATH" bash .tfcore/utils/tf-verify-tests.sh ) >/dev/null 2>&1
+  got="$(python3 -c "import json,sys; x = json.load(open(sys.argv[1]))['reqs']['REQ-UI-065']; print(x['result'], x['source'])" "$p/tests/.artifacts/verify/tests.json" 2>&1)"
+  [[ "$got" == "NOT-TESTED browser+unit" ]] \
+    && ok sv_004b "in one run, a skipped on-app test and a passing unit test leave the row NOT-TESTED" \
+    || { bad sv_004b "one run graded a skipped on-app test on its unit test"; note "$got"; }
+}
+
 # --- TrBlazeUI TF-001: triage close logged last week's bugs again under today's run -------------
 # triage.json kept every action ever taken, so each close wrote them all again: 13 phantom escaped
 # checks and 5 misses on 2026-09-19, one more on 2026-09-22. And a wrong miss could not be withdrawn.
@@ -4568,6 +4688,191 @@ JS
     || bad lk_012b "the not-present rule no longer fires on an agent's own words"
 }
 
+# --- TechieRag TF-001: a July "all others fixed" marked entries fixed that nothing had replied to ------
+# Sevak's TechieRag file keeps its old summary verbatim under "## Replies from TechieRag": "Open:
+# TR-RAG-001 …; TR-RAG-002 … All others fixed app-side", then a running log naming entries up to 038.
+# The reader took the whole section as one reply, so a new block naming TR-RAG-048 made TR-RAG-047
+# fixed; the log's "all others" reached 026 and 035, whose own headings say OPEN; "1 OPEN: TR-RAG-001;
+# 2 FIXED: TR-RAG-005" fixed 001; and a "fixed upstream" or a ✅ in a heading was never read. Each dated
+# "### " block is now its own reply, "all others" is bounded by its own item, a fixed mark is read
+# clause by clause with shorthand (028/029/030, 031..034) expanded, and the heading's mark counts.
+tr_001() {
+  local d="$SCRATCH/tr001"; mkdir -p "$d/docs"
+  cat > "$d/docs/Fx-TechieRag-Feedback.md" <<'MD'
+# Fx — TechieRag feedback
+
+## Entries
+
+### TR-RAG-001 — streaming cannot return sources
+### TR-RAG-002 — streamed usage is zero
+### TR-RAG-003 — literal length unbounded
+### TR-RAG-004 — timeout ignored
+### TR-RAG-005 — depth cap discards content — **OPEN, needs a product decision**
+### TR-RAG-006 — no fit check before the download
+### TR-RAG-007 — mail connector cannot move — **fixed upstream 2026-10-03, not yet re-checked**
+### TR-RAG-008 — ✅ RESOLVED (app config) — overlays fail on a static root
+### TR-RAG-009 — repro names a test
+
+- **Repro:** `dotnet test --filter "fixed upstream"` prints nothing.
+
+### TR-RAG-010 — assembly versioned 1.0.0.0
+
+## Replies from TechieRag
+
+### Summary as it stood before 2026-09-24 (kept verbatim)
+
+- 0 blockers · 2 major (1 OPEN: TR-RAG-001 streaming sources; 1 FIXED: TR-RAG-003 bound) · 1 minor
+- **Open for the TechieRag team: TR-RAG-001**; TR-RAG-002 (minor). All others fixed app-side.
+- 2026-07-28: TR-RAG-003/004 appended (all major, all FIXED). TR-RAG-005 (minor, **OPEN** — needs a decision).
+
+### 2026-10-06 — TR-RAG-010 delivered
+
+TR-RAG-010: every assembly now carries its real version. Fixed in 1.1.2.
+MD
+  local got; got="$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import tf_feedback as t
+st = {e["id"]: e["state"] for e in t.entries(sys.argv[2])}
+print(" ".join(k[-3:] + "=" + st.get(k, "?") for k in sorted(st)))' "$UTILS" "$d/docs/Fx-TechieRag-Feedback.md" 2>&1)"
+  local want="001=open 002=open 003=fixed 004=fixed 005=open 006=open 007=fixed 008=closed 009=open 010=fixed"
+  [[ "$got" == "$want" ]] \
+    && ok tr_001 "an old 'all others fixed' stays in its own reply and item; a heading's fixed or closed mark is read; quoted text is not a mark" \
+    || { bad tr_001 "the feedback reader marked entries no reply fixed, or missed a heading's mark"; note "got  $got"; note "want $want"; }
+}
+
+# --- TechieRag TF-002: a quoted "all others fixed" was still applied to its whole reply block ----------
+# The TF-001 follow-up block in Sevak's TechieRag file opened with a paragraph naming no id that quoted
+# the July line — `only because of the July "All others fixed app-side" line` — then listed entries
+# still open. The blanket rule matched inside the quotes and, the paragraph naming no id, covered every
+# id in the block: 13 entries the block called open read fixed. Quoted and code text is never a mark in
+# a reply now; an unquoted "Everything else is now fixed." still covers its block.
+tr_002() {
+  local d="$SCRATCH/tr002"; mkdir -p "$d/docs"
+  cat > "$d/docs/Fx-TechieRag-Feedback.md" <<'MD'
+# Fx — TechieRag feedback
+
+## Entries
+
+### TR-RAG-010 — one search per pinned document
+### TR-RAG-011 — no batch embed
+### TR-RAG-012 — reranker cold start
+### TR-RAG-003 — connector retries
+### TR-RAG-004 — connector paging
+
+## Replies from TechieRag
+
+### 2026-10-06 — the 21 entries re-read
+
+Until now they read as settled only because of the July "All others fixed app-side" line, and `all others fixed` in an old note.
+
+- TR-RAG-010 (one search per pinned document) is still open.
+- TR-RAG-011 (no batch embed) is still open.
+- TR-RAG-012 (reranker cold start) is fixed in 1.1.2.
+
+### 2026-10-07 — connectors
+
+- TR-RAG-004: paging now follows the cursor.
+
+Everything else is now fixed.
+MD
+  local got; got="$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import tf_feedback as t
+st = {e["id"]: e["state"] for e in t.entries(sys.argv[2])}
+print(" ".join(k[-3:] + "=" + st.get(k, "?") for k in sorted(st)))' "$UTILS" "$d/docs/Fx-TechieRag-Feedback.md" 2>&1)"
+  local want="003=fixed 004=fixed 010=open 011=open 012=fixed"
+  [[ "$got" == "$want" ]] \
+    && ok tr_002 "a quoted or code 'all others fixed' is not applied; entries a reply calls open stay open; a real blanket line still works" \
+    || { bad tr_002 "a quoted blanket sentence was read as the reply's own"; note "got  $got"; note "want $want"; }
+}
+
+# --- TechieRag TF-003: phase 2's handoff counted for phase 3 -------------------------------------------
+# TechieRag at phase 3, all 11 rows Verified; the Verification log's only handoff row was phase 2's
+# (its status-table cell names TechieRag-P2-Checklist.md). The facts read "UAT — handoff done" and sent
+# the owner to set Released, though no guide described phase 3. A handoff counts only for the phase
+# whose checklist its row names; an old row naming no checklist still counts in phase 1.
+tr_003() {
+  local d="$SCRATCH/tr003" out; mkdir -p "$d/docs" "$d/.tfcore"
+  printf 'appPhase: 3\nappSize: L\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-P3-Checklist.md" <<'MD'
+# Fx — Phase 3 Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Details |
+|---|---|---|---|---|---|
+| REQ-RAG-120 | Version stamp | Verified | 100% | — | [view](#d-req-rag-120) |
+
+## Rows
+
+<a id="d-req-rag-120"></a>
+- **REQ-RAG-120** — Version stamp.
+  - *Acceptance:* When a host loads the package, then each assembly reports its real version.
+MD
+  local log='## Verification log
+
+| Date | Phase | Result | Status table |
+|---|---|---|---|
+| 2026-10-04 | handoff-phase | 89/89 Verified | docs/Fx-P2-Checklist.md#requirements-status |
+| 2026-10-06 | build-phase | 1/1 Verified | docs/Fx-P3-Checklist.md#requirements-status |
+'
+  printf '# Fx — Project status\n\n%s\n' "$log" > "$d/PROJECT-STATUS.md"
+  out="$(cd "$d" && python3 "$UTILS/tf-status-facts.py" Fx build-phase 2>&1)"
+  grep -q '^/TechieFlow:agents:flow-master \*handoff-phase Fx$' <<<"$out" && ! grep -q 'handoff done' <<<"$out" \
+    && ok tr_003a "a newly built phase whose only handoff row is the previous phase's points to *handoff-phase" \
+    || { bad tr_003a "the previous phase's handoff counted for this one"; note "$(grep -E '^(current_phase|/)' <<<"$out" | head -2)"; }
+  printf '| 2026-10-07 | handoff-phase | 1/1 Verified | docs/Fx-P3-Checklist.md#requirements-status |\n' >> "$d/PROJECT-STATUS.md"
+  out="$(cd "$d" && python3 "$UTILS/tf-status-facts.py" Fx handoff-phase 2>&1)"
+  grep -q 'UAT — handoff done' <<<"$out" \
+    && ok tr_003b "this phase's own handoff row still reads handoff done" \
+    || { bad tr_003b "this phase's handoff was not counted"; note "$(grep -E '^current_phase' <<<"$out")"; }
+  local p="$d/p1"; mkdir -p "$p/docs" "$p/.tfcore"; printf 'appPhase: 1\n' > "$p/.tfcore/core-config.yaml"
+  sed 's/Fx — Phase 3 Checklist/Fx — Checklist/' "$d/docs/Fx-P3-Checklist.md" > "$p/docs/Fx-Checklist.md"
+  printf '# Fx — Project status\n\n## Verification log\n\n| Date | Phase | Result | Status table |\n|---|---|---|---|\n| 2026-09-01 | handoff-phase | 1/1 Verified | — |\n' > "$p/PROJECT-STATUS.md"
+  out="$(cd "$p" && python3 "$UTILS/tf-status-facts.py" Fx handoff-phase 2>&1)"
+  grep -q 'UAT — handoff done' <<<"$out" \
+    && ok tr_003c "an older handoff row naming no checklist still counts in phase 1" \
+    || { bad tr_003c "an older phase-1 handoff row stopped counting"; note "$(grep -E '^current_phase' <<<"$out")"; }
+}
+
+# --- TechieRag TF-004: every test project ran at once, and memory pressure failed a sound test --------
+# tf-doc-tests.sh ran `tf-build.sh test` on the solution, so TechieRag's three test projects ran together;
+# the local-model project took the memory and TechieRag.Tests failed "Cannot allocate memory" on a test
+# that passes alone. A stand-in dotnet fails when handed the whole solution and passes one project at a
+# time. tf-build.sh test on a solution now runs each test project on its own (TF_TEST_TOGETHER=1 keeps
+# the old run), and tf-doc-tests.sh runs only the test projects that hold a reader.
+tr_004() {
+  local d="$SCRATCH/tr004"; mkdir -p "$d/bin" "$d/src/Fx" "$d/tests/A.Tests" "$d/tests/B.Tests" "$d/docs" "$d/.tfcore"
+  cp -r "$UTILS" "$d/.tfcore/"
+  printf '<Solution>\n  <Project Path="src/Fx/Fx.csproj" />\n  <Project Path="tests/A.Tests/A.Tests.csproj" />\n  <Project Path="tests/B.Tests/B.Tests.csproj" />\n</Solution>\n' > "$d/Fx.slnx"
+  printf '<Project Sdk="Microsoft.NET.Sdk"></Project>\n' > "$d/src/Fx/Fx.csproj"
+  for t in A B; do printf '<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.0.0" /></ItemGroup></Project>\n' > "$d/tests/$t.Tests/$t.Tests.csproj"; done
+  printf 'var g = File.ReadAllText("docs/Fx-AI-Reference.md");\n' > "$d/tests/A.Tests/RefDocTests.cs"
+  printf '# ref\n' > "$d/docs/Fx-AI-Reference.md"
+  cat > "$d/bin/dotnet" <<SH
+#!/usr/bin/env bash
+echo "\$*" >> $d/dotnet.calls
+case "\$2" in
+  *.slnx) echo "  Failed REQ-FN-006 SevakConsumesReleasedPackages: System.IO.IOException : Cannot allocate memory"; echo "Failed!  - Failed:     1, Passed:    40"; exit 1 ;;
+  *) echo "Passed!  - Failed:     0, Passed:    20"; exit 0 ;;
+esac
+SH
+  chmod +x "$d/bin/dotnet"
+  local out
+  out="$(cd "$d" && PATH="$d/bin:$PATH" TF_BUILD_PLATFORM=linux bash .tfcore/utils/tf-build.sh test Fx.slnx 2>&1 | head -1)"
+  local calls; calls="$(cut -d' ' -f1-2 "$d/dotnet.calls" 2>/dev/null | tr '\n' ';')"
+  [[ "$out" == PASS* ]] && [[ "$calls" == "test tests/A.Tests/A.Tests.csproj;test tests/B.Tests/B.Tests.csproj;" ]] \
+    && ok tr_004a "a solution's test projects run one at a time, the library is not run as a test, and the verdicts merge" \
+    || { bad tr_004a "the test projects ran together"; note "$out"; note "calls: $calls"; }
+  rm -f "$d/dotnet.calls"
+  out="$(cd "$d" && PATH="$d/bin:$PATH" TF_BUILD_PLATFORM=linux bash .tfcore/utils/tf-doc-tests.sh docs/Fx-AI-Reference.md 2>&1)"
+  calls="$(cut -d' ' -f1-2 "$d/dotnet.calls" 2>/dev/null | tr '\n' ';')"
+  grep -q '^PASS' <<<"$out" && [[ "$calls" == "test tests/A.Tests/A.Tests.csproj;" ]] \
+    && ok tr_004b "the document check runs only the test project that reads the document" \
+    || { bad tr_004b "the document check ran more than the project holding the reader"; note "$(head -1 <<<"$out" | cut -c1-160)"; note "calls: $calls"; }
+  rm -f "$d/dotnet.calls"
+  out="$(cd "$d" && PATH="$d/bin:$PATH" TF_BUILD_PLATFORM=linux TF_TEST_TOGETHER=1 bash .tfcore/utils/tf-build.sh test Fx.slnx 2>&1 | head -1)"
+  [[ "$out" == FAIL* ]] && grep -q 'Fx.slnx' "$d/dotnet.calls" \
+    && ok tr_004c "TF_TEST_TOGETHER=1 still runs the solution in one go" \
+    || { bad tr_004c "the opt-out no longer runs the solution together"; note "$out"; }
+}
+
 # --- the ignore file that grew by one block per update -----------------------------------
 # `tr -d '\r' < .gitignore | grep -qE …` under `set -o pipefail`: grep -q stops at the first
 # match, tr dies writing the rest, the pipeline reports failure, and the framework block is
@@ -4583,7 +4888,7 @@ gitignore_once() {
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 sv_001 tb_001 tb_002 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 sv_001 sv_002 sv_003 sv_004 tb_001 tb_002 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

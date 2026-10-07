@@ -39,7 +39,32 @@ EVERYTHING = re.compile(r"(?i)\beverything else is (?:now )?fixed\b|\ball (?:the
 CLOSED = re.compile(r"(?i)(✅|\bclosed (?:on )?\d{4}-\d{2}-\d{2}|is \*\*closed\*\*|\bwill not fix\b|\bwont-fix\b)")
 MERGED = re.compile(r"(?i)^\s*merged into\b")
 FIXED_IN_BODY = re.compile(r"(?i)\bfixed upstream\b")
+STILL_OPEN = re.compile(r"(?i)\bopen\b|\bnot (?:yet )?(?:fixed|resolved)\b|\bunfixed\b")
 BLOCKS = re.compile(r"(?im)^\s*[-*]\s*\*\*Blocks:?\*\*:?\s*(yes|no)\b")
+
+
+def ids_in(t):
+    """Every id the text names, shorthand included: "TR-RAG-028/029/030" and "TR-RAG-031..034"
+    (or "031–034") name each id they cover, not only the first."""
+    out = []
+    for m in re.finditer(r"(?<![\w-])([A-Z][A-Z0-9]*(?:-[A-Z]+)*)-(\d{2,})(?!\d)((?:/\d{2,})+|(?:\.\.|…|–|—)\d{2,})?", t):
+        pre, n, tail = m.group(1), m.group(2), m.group(3) or ""
+        out.append(f"{pre}-{n}")
+        w = len(n)
+        if tail.startswith("/"):
+            out += [f"{pre}-{x.zfill(w)}" for x in tail.strip("/").split("/")]
+        elif tail:
+            hi = int(re.sub(r"^\D+", "", tail))
+            if int(n) < hi <= int(n) + 50:
+                out += [f"{pre}-{str(x).zfill(w)}" for x in range(int(n) + 1, hi + 1)]
+    return out
+
+
+def unquoted(t):
+    """The text without fenced code, inline code and double-quoted phrases."""
+    t = re.sub(r"(?ms)^[ \t]*```.*?^[ \t]*```", "", t)
+    t = re.sub(r"`[^`\n]*`", "", t)
+    return re.sub(r"[\"“][^\"”\n]*[\"”]", "", t)
 
 
 def entries(path):
@@ -51,9 +76,12 @@ def entries(path):
         end = heads[i + 1].start() if i + 1 < len(heads) else len(text)
         nxt = re.search(r"(?m)^#{1,%d}\s" % len(m.group(1)), text[m.end():end])
         body = text[m.end(): m.end() + nxt.start()] if nxt else text[m.end():end]
-        head = body[:2500]
-        state = ("closed" if CLOSED.search(head) or MERGED.search(m.group(3))
-                 else "fixed" if FIXED_IN_BODY.search(head) else "open")
+        # quoted or code text is somebody's words, not a mark: `fixed upstream` in a repro, a test name
+        head = unquoted(body[:2500])
+        title = unquoted(m.group(3))
+        # the mark is read in the heading as well (TechieRag TF-001: "— **fixed upstream 2026-10-03**")
+        state = ("closed" if CLOSED.search(head) or CLOSED.search(title) or MERGED.search(m.group(3))
+                 else "fixed" if FIXED_IN_BODY.search(head) or FIXED_IN_BODY.search(title) else "open")
         b = BLOCKS.search(body)
         out.setdefault(m.group(2), {"id": m.group(2), "title": m.group(3).strip(" `"), "state": state,
                                     "since": "", "blocks": b.group(1).lower() if b else "",
@@ -73,18 +101,33 @@ def reply_blocks(text):
     "## Resolution status (TechieFlow team, 2026-09-09)", "## Replies from …", or a quoted
     "> ## ✅ RESOLVED LIBRARY-SIDE 2026-08-31" — and runs to the next heading of its level,
     or, when quoted, to the end of the quote."""
-    out = []
+    out, seen = [], set()
+    date_of = lambda h: (re.search(r"\d{4}-\d{2}-\d{2}", h) or [""])[0]
     for m in REPLY_HEAD.finditer(text):
+        if m.start() in seen:
+            continue
         rest = text[m.end():]
         if m.group(1):   # quoted: the block is the run of '>' lines after the heading's own line
             rest = rest[1:] if rest.startswith("\n") else rest
             q = re.match(r"(?:[ \t]*>[^\n]*\n?)*", rest)
-            body = re.sub(r"(?m)^[ \t]*>[ \t]?", "", q.group(0))
+            out.append((date_of(m.group(0)), re.sub(r"(?m)^[ \t]*>[ \t]?", "", q.group(0))))
+            continue
+        level = len(re.match(r"[ \t]*(#+)", m.group(0)).group(1))
+        nxt = re.search(r"(?m)^#{1,%d}\s" % level, rest)
+        section = rest[: nxt.start()] if nxt else rest
+        if level == 2:
+            # A "## Replies from …" section holds dated "### " blocks, written months apart. Each is its
+            # own reply: an "all others fixed" kept in an old one must not reach entries a newer block
+            # merely names (TechieRag TF-001: Sevak's TR-RAG-047 read fixed when TR-RAG-048 was replied to).
+            subs = list(re.finditer(r"(?m)^###[ \t]+[^\n]*", section))
+            out.append((date_of(m.group(0)), section[: subs[0].start()] if subs else section))
+            for j, sm in enumerate(subs):
+                end = subs[j + 1].start() if j + 1 < len(subs) else len(section)
+                seen.add(m.end() + sm.start())
+                # the heading line stays in: "### TF-025 — fixed 2026-09-19" names the entry it answers
+                out.append((date_of(sm.group(0)) or date_of(m.group(0)), section[sm.start(): end]))
         else:
-            nxt = re.search(r"(?m)^##\s", rest)
-            body = rest[: nxt.start()] if nxt else rest
-        d = re.search(r"\d{4}-\d{2}-\d{2}", m.group(0))
-        out.append((d.group(0) if d else "", body))
+            out.append((date_of(m.group(0)), section))
     return out
 
 
@@ -98,24 +141,44 @@ def replied_fixed(text, known):
         items = re.split(r"\n\s*\n|\n(?=\s*[-*]\s)|\n(?=\s*\|)", body)
         mentioned = []
         for it in items:
-            ids = ANY_ID.findall(it)
+            ids = ids_in(it)
             mentioned += ids
             if not ids:
                 continue
             if it.lstrip().startswith("|"):
-                first = ANY_ID.findall(it.split("|")[1] if it.count("|") > 1 else "")
+                first = ids_in(it.split("|")[1] if it.count("|") > 1 else "")
                 out += [(i, date) for i in first]
-            elif FIXED_WORDS.search(it):
-                out += [(i, date) for i in ids]
+            elif FIXED_WORDS.search(unquoted(it)) and not EVERYTHING.search(unquoted(it)):
+                # "Open: TR-RAG-001, TR-RAG-002. All others fixed": the ids are the exceptions.
+                # Read clause by clause: "1 OPEN: TR-RAG-001 …; 2 FIXED: TR-RAG-005 …" fixes 005 only,
+                # and "TR-RAG-035 (minor, OPEN)" beside "TR-RAG-034 (minor, FIXED)" stays open.
+                # A "fixed" clause naming no id answers the clause before it: "TR-RAG-010: every
+                # assembly carries its version. Fixed in 1.1.2." And "TR-RAG-017/019 → BRD-126 (fixed);
+                # TR-RAG-020…022 → BRD-127" fixes 017 and 019 only.
+                prev = []
+                for cl in re.split(r"(?<=[.;])\s+|\s+·\s+", it):
+                    own_ids = ids_in(cl)
+                    bare = unquoted(cl)
+                    if FIXED_WORDS.search(bare) and not STILL_OPEN.search(bare):
+                        out += [(i, date) for i in (own_ids or prev)]
+                    if own_ids:
+                        prev = [] if STILL_OPEN.search(bare) else own_ids
         for it in items:
-            if EVERYTHING.search(it) and mentioned:
+            # a quoted or code "all others fixed" is somebody's words being cited, not this reply's
+            # claim: "…only because of the July "All others fixed app-side" line" fixed 13 entries the
+            # same block listed as still open (TechieRag TF-002)
+            if EVERYTHING.search(unquoted(it)) and mentioned:
+                # bounded by the ids of its own item, which it never covers ("all others"); an item
+                # naming none takes the block's. A running log in one block once let a July "all
+                # others fixed" reach every entry its later lines named (TechieRag TF-001).
+                own = ids_in(it)
                 top = {}
-                for i in mentioned:
+                for i in own or mentioned:
                     p, n = i.rsplit("-", 1)
                     top[p] = max(top.get(p, 0), int(n))
                 for k in known:
                     p, n = k.rsplit("-", 1)
-                    if p in top and int(n) <= top[p]:
+                    if p in top and int(n) <= top[p] and k not in own:
                         out.append((k, date))
     return out
 

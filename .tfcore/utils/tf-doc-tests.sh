@@ -7,7 +7,8 @@
 # docs/Lekhak-UsageGuide.md and fails when the REQ-NFR-042 paragraph is gone. *amend-docs removed that
 # paragraph, ran no test, closed green, and only CI noticed. This script looks for test source files
 # (a path containing "test") that name one of the documents, by file name or by name without ".md".
-# When one does, it runs the unit tests through tf-build.sh test. Prints ONE line:
+# When one does, it runs the test projects holding those files, each on its own through tf-build.sh
+# test (TechieRag TF-004), or the solution's tests one project at a time. Prints ONE line:
 #   NONE     no test reads <docs>; nothing to run                             exit 0
 #   PASS     <n> test file(s) read <docs> (<files>); the unit tests pass — <build line>   exit 0
 #   FAIL     <n> test file(s) read <docs> (<files>); the unit tests fail — <build line>   exit 1
@@ -20,7 +21,7 @@ DOCS=(); TARGET=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --target) TARGET="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) DOCS+=("$1"); shift ;;
   esac
 done
@@ -71,7 +72,43 @@ if [[ -z "$TARGET" && -z "$ROOTSLN" ]]; then
   fi
   exit 2
 fi
-LINE="$(bash "$HERE/tf-build.sh" test ${TARGET:+"$TARGET"} 2>&1 | grep -m1 -E '^(PASS|FAIL|NOT-RUN)' || true)"
+# Only the test projects that hold a reader, each on its own (TechieRag TF-004): the whole solution at
+# once let the local-model tests take the memory, and TechieRag.Tests failed with "Cannot allocate
+# memory" on a test that passes alone. A reader in no .NET test project (a browser spec) falls back to
+# the solution run, which tf-build.sh also splits into one test project at a time.
+OWNERS="$(TF_READERS="$READERS" python3 - <<'PY'
+import glob, os, sys
+out = []
+for r in os.environ.get("TF_READERS", "").split("\n"):
+    if not r.strip():
+        continue
+    d = os.path.dirname(r)
+    while d and d not in (".", "/"):
+        projs = glob.glob(os.path.join(d, "*.csproj"))
+        if projs:
+            p = projs[0]
+            if p not in out:
+                out.append(p)
+            break
+        d = os.path.dirname(d)
+print("\n".join(out))
+PY
+)"
+if [[ -n "$OWNERS" && -z "$TARGET" ]]; then
+  fails=(); notrun=(); passed=0; vl=()
+  while IFS= read -r p; do
+    [[ -z "$p" ]] && continue
+    v="$(bash "$HERE/tf-build.sh" test "$p" 2>&1 | grep -m1 -E '^(PASS|FAIL|NOT-RUN)' || true)"
+    vl+=("$(basename "$p" .csproj): ${v:-no verdict}")
+    case "$v" in PASS*) passed=$((passed+1)) ;; FAIL*) fails+=("$(basename "$p" .csproj)") ;; *) notrun+=("$(basename "$p" .csproj)") ;; esac
+  done <<<"$OWNERS"
+  k="$(grep -c . <<<"$OWNERS")"
+  if [[ ${#fails[@]} -gt 0 ]]; then LINE="FAIL  ${fails[*]} failed ($k test project(s) holding a reader, each run on its own) — ${vl[*]}"
+  elif [[ ${#notrun[@]} -gt 0 ]]; then LINE="NOT-RUN ${notrun[*]} could not run — ${vl[*]}"
+  else LINE="PASS  $k test project(s) holding a reader, each run on its own — ${vl[*]}"; fi
+else
+  LINE="$(bash "$HERE/tf-build.sh" test ${TARGET:+"$TARGET"} 2>&1 | grep -m1 -E '^(PASS|FAIL|NOT-RUN)' || true)"
+fi
 case "$LINE" in
   PASS*)    echo "PASS     $N test file(s) read ${DOCS[*]} ($LIST); the unit tests pass — $LINE"; exit 0 ;;
   FAIL*)    echo "FAIL     $N test file(s) read ${DOCS[*]} ($LIST); the unit tests fail — $LINE"; exit 1 ;;

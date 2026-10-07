@@ -170,8 +170,19 @@ def existing_log_rows(status_text):
     return rows
 
 
-def handoff_ran(log_rows):
-    return any("handoff" in r.lower() for r in log_rows)
+def handoff_ran(log_rows, app="", phase=1):
+    """A handoff of THIS phase: a log row naming handoff whose status-table cell names this phase's
+    checklist. Phase 2's handoff counted for phase 3, so a newly built phase read "handoff done" and
+    sent the owner to UAT with guides that did not describe it (TechieRag TF-003). A row naming no
+    checklist (an older log) counts in phase 1 only, where nothing else could be meant."""
+    own = f"{phase_prefix(app, phase)}Checklist.md" if app else ""
+    for r in log_rows:
+        if "handoff" not in r.lower():
+            continue
+        named = re.findall(r"[\w.-]+-Checklist\.md", r)
+        if (own in named) if named and own else (phase <= 1):
+            return True
+    return False
 
 
 def feedback_lines(root, app):
@@ -279,14 +290,14 @@ def next_command(app, rows, log_rows, phase=1, verdicts=None):
                 f"{CC}verifier *verify {scope} {app}", f"{OC}flow-verifier *verify {scope} {app}",
                 reason)
     if owner:
-        if handoff_ran(log_rows):
+        if handoff_ran(log_rows, app, phase):
             line = f"(owner-run) {usage_guide(app)} — {ids(owner)}"
             return ("UAT", f"{len(owner)} owner-run, {q}", line, line,
                     f"{len(owner)} rows are Owner-UAT and handoff has run; the owner closes them")
         return ("Handoff", f"{len(owner)} owner-run, {q}",
                 f"{CC}flow-master *handoff-phase {app}", f"{OC}flow-master *handoff-phase {app}",
                 f"{len(owner)} rows are Owner-UAT and handoff has not run yet")
-    if handoff_ran(log_rows):
+    if handoff_ran(log_rows, app, phase):
         line = "(owner) set current_phase to Released after UAT — no agent command"
         return ("UAT", f"handoff done, {q}", line, line,
                 "every row in this phase's scope is terminal and handoff has run; waiting on the owner")

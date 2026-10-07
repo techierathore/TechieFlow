@@ -108,6 +108,47 @@ if [[ "$MODE" == "probe" ]]; then
 fi
 [[ -z "$TARGET" && "$MODE" != "run" ]] && { echo "NOT-RUN no .sln, .slnx or .csproj here; name the target"; exit 2; }
 
+# ---- test on a solution: one test project at a time (TechieRag TF-004) ----------------------------
+# `dotnet test <solution>` runs every test project at once. On a 7.8 GB WSL machine TechieRag's local-
+# model tests took the memory while TechieRag.Tests walked folders, and a test that passes alone failed
+# with "Cannot allocate memory", twice in one day. Each test project now runs on its own, through this
+# same script, and the verdicts are merged into one line naming one joined log: FAIL if any failed
+# (naming which), else NOT-RUN if any could not run, else PASS. TF_TEST_TOGETHER=1 runs them together.
+if [[ "$MODE" == "test" && "${TF_TEST_TOGETHER:-0}" != "1" && "$TARGET" == *.sln* ]]; then
+  tests=()
+  for p in ${projects[@]+"${projects[@]}"}; do
+    f="$p"; [[ -f "$f" ]] || f="$base/$p"
+    [[ -f "$f" ]] || continue
+    grep -qiE 'Microsoft\.NET\.Test\.Sdk|<IsTestProject>[[:space:]]*true|"(xunit|xunit\.v3|NUnit|MSTest(\.TestFramework)?|TUnit)"|Include="(xunit|xunit\.v3|NUnit|MSTest|TUnit)' "$f" && tests+=("$f")
+  done
+  if [[ ${#tests[@]} -gt 1 ]]; then
+    if [[ $PRINT -eq 1 ]]; then
+      for t in "${tests[@]}"; do echo "dotnet test $t ${EXTRA[*]:-}"; done; exit 0
+    fi
+    mkdir -p tests/.artifacts/build
+    JOINED="tests/.artifacts/build/$(date -u +%Y%m%dT%H%M%SZ)-test-split-$$.log"; : > "$JOINED"
+    fails=(); notrun=(); passed=0; lines=(); pass=()
+    [[ ${#EXTRA[@]} -gt 0 ]] && pass=(-- "${EXTRA[@]}")
+    for t in "${tests[@]}"; do
+      out="$(TF_TEST_TOGETHER=1 bash "${BASH_SOURCE[0]}" test "$t" ${pass[@]+"${pass[@]}"} 2>&1)"
+      v="$(grep -m1 -E '^(PASS|FAIL|NOT-RUN)' <<<"$out")"
+      lg="$(sed -n 's/.*log \(tests\/\.artifacts\/build\/[^ ;]*\).*/\1/p' <<<"$v" | head -1)"
+      { echo "### test project: $t"; [[ -n "$lg" && -f "$lg" ]] && cat "$lg" || echo "$out"; } >> "$JOINED"
+      lines+=("  $(basename "$t" .csproj): $v")
+      case "$v" in PASS*) passed=$((passed+1)) ;; FAIL*) fails+=("$(basename "$t" .csproj)") ;; *) notrun+=("$(basename "$t" .csproj)") ;; esac
+    done
+    if [[ ${#fails[@]} -gt 0 ]]; then
+      echo "FAIL  tests failed in ${fails[*]} (${#tests[@]} test projects, each run on its own; $passed passed); log $JOINED"; rc=1
+    elif [[ ${#notrun[@]} -gt 0 ]]; then
+      echo "NOT-RUN ${notrun[*]} could not run (${#tests[@]} test projects, each run on its own; $passed passed); log $JOINED"; rc=2
+    else
+      echo "PASS  test on $PLATFORM — ${#tests[@]} test projects, each run on its own, all passed; log $JOINED"; rc=0
+    fi
+    printf '%s\n' "${lines[@]}"
+    exit $rc
+  fi
+fi
+
 # ---- the dotnet verb -------------------------------------------------------------------
 verb="$MODE"
 args=("$verb")
