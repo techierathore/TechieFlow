@@ -40,7 +40,9 @@ metrics:
 """)
 os.makedirs(os.path.join(APP, "docs", "metrics"), exist_ok=True)
 
-CSS = "body{font-family:sans-serif;margin:0} header{padding:12px;background:#223;color:#fff} main{padding:16px} table{border-collapse:collapse} td,th{border:1px solid #999;padding:4px 8px} button{padding:6px 12px}"
+# header a: a readable link on the dark bar; the browser default blue was 1.66 : 1, and the screen check
+# measures contrast since 2026-10-08 (Lekhak TF-024), so the clean Home screen failed it.
+CSS = "body{font-family:sans-serif;margin:0} header{padding:12px;background:#223;color:#fff} header a{color:#cde} main{padding:16px} table{border-collapse:collapse} td,th{border:1px solid #999;padding:4px 8px} button{padding:6px 12px}"
 w("site/site.css", CSS)
 w("site/index.html", """
 <!doctype html><html><head><meta charset="utf-8"><title>Home</title><link rel="stylesheet" href="site.css"><script src="app.js"></script></head>

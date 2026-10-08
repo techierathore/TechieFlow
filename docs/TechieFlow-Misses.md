@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 254 logged: 55 open, 198 fixed, 1 will not fix |
+| Count | 255 logged: 55 open, 199 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
 | Updated | 2026-10-08 |
 
@@ -69,10 +69,11 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (198)
+## Fixed (199)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261008-04 | 2026-10-08 by owner | 2026-10-08 by log-miss | said and ignored | Today's framework changes were tested with the regression and mirror suites only; CI runs every tests/*/run.sh plus the portability check, and the push failed on three macOS-only shell constructs, a changed result line and a test fixture with an unreadable link that the new contrast rule rightly fai |
 | MISS-TechieFlow-20261008-03 | 2026-10-08 by owner | 2026-10-08 by log-miss | the check was too weak | OpenCode 2 moved its sessions to new tables (session_v2, session_message) on 2026-09-27 and the emitter kept reading the old ones, so every OpenCode run record since has tokens_scope none; and a new session per phase was missed because the plugin's pointer kept the first one. Found by the develop-en |
 | MISS-TechieFlow-20261008-02 | 2026-10-08 by owner | 2026-10-08 by log-miss | the check was too weak | tf-develop.sh accepted a folder inside another repository as the app's repository, and its first test run staged the whole TechieFlow repository with git add -A (the commit was refused); it now requires the folder to be the top of its own repository. |
 | MISS-TechieFlow-20261006-07 | 2026-10-06 by production | 2026-10-06 by log-miss | the check was too weak | TechieRag TF-004: the document-test step and tf-build.sh test ran every test project of a solution at once, so on a small WSL machine the local-model tests took the memory and a test that passes alone failed with Cannot allocate memory, twice in one day. |

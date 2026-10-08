@@ -10,7 +10,9 @@ Refuse, with one line saying what is missing, when: the folder is not a git repo
 
 ## Steps
 
-1. Write the brief to `docs/{App}-Brief.md` when it was given as text.
+First: `bash .tfcore/utils/tf-phase.sh start develop-end-to-end {App}` prints the start time; keep it.
+
+1. Write the brief to `docs/{App}-Brief.md` when it was given as text. Then record this launch, before the run starts, so its record never overlaps the phases' own (`.tfcore/tasks/_metrics-emit-gate.md`): `tf-emit.sh runs` with `"cmd":"develop-end-to-end","mode":"launch"`, the start time and no rows, then `bash .tfcore/utils/tf-phase.sh end`. The phases record themselves; the Build Report adds them up.
 2. Start the supervisor detached, so it outlives this session, with the harness this session runs in:
    `bash .tfcore/utils/tf-develop.sh . --app {App} --brief docs/{App}-Brief.md --harness <claude|opencode> --detach`
    (`--model <id>` when the owner named one; `--no-push` only when the owner said not to push.)

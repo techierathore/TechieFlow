@@ -40,6 +40,14 @@ do not.
   command's tokens twice; every attempt is kept, nested records are dropped, and working time is the union of
   the windows (`dev_001`). (5) OpenCode tokens were unmeasured; see the next entry. New `--report` rewrites
   the report from the saved state.
+- **CI red after the 2026-10-08 push, fixed the same day.** Three findings of the macOS portability check:
+  `setsid` in `tf-develop.sh` (now `tf_setsid`), `sed -i` in a regression case (now `tf_sed_inplace`), and a
+  pattern in `guard-verify-deps.sh` that read as bash-4 `|&`. Two in `tests/verify`: the screen check's result
+  line had moved its anchor count (the themes now come after it again), and the fixture's "clean" Home
+  screen had a default-blue link on a dark bar at 1.66 : 1, which the new contrast rule rightly failed (the
+  fixture link is now readable). One in `tests/requirements` (FR-34): `develop-end-to-end.md` wrote no run
+  record; its launch now records itself before the phases start. Only the regression and mirror suites had
+  been run before the push; every suite CI runs now passes here in both time zones. Miss logged.
 - **OpenCode 2 tokens are measured again (2026-10-08).** OpenCode 2 keeps sessions in `session_v2` and
   messages in `session_message`; the old tables stopped on 2026-09-27, so every OpenCode run record since carries
   `tokens_scope: none`, in every project. `tf-emit.sh` now reads both. It counts every root session OpenCode

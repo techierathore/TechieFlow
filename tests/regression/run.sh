@@ -5163,7 +5163,7 @@ dev_003() {
   grep -q '^| REQ-FN-001 | Add | FAIL .*requires Acme.Ui.Components' "$d/docs/Fx-Checklist.md" && n=$((n+1)) \
     || note "verdict: $(grep 'REQ-FN-001 |' "$d/docs/Fx-Checklist.md" | cut -c1-160)"
   printf '<Project><ItemGroup><PackageReference Include="Acme.Ui.Components" Version="1.0.0" /></ItemGroup></Project>\n' > "$d/src/Fx/Fx.csproj"
-  sed -i 's/^| REQ-FN-001 .*/| REQ-FN-001 | Add | Implemented | 75% | | |/' "$d/docs/Fx-Checklist.md"
+  tf_sed_inplace 's/^| REQ-FN-001 .*/| REQ-FN-001 | Add | Implemented | 75% | | |/' "$d/docs/Fx-Checklist.md"
   out="$(cd "$d" && bash "$UTILS/tf-stack-check.sh" Fx 2>&1)"
   (cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --apply >/dev/null 2>&1)
   [[ "$out" == PASS* ]] && grep -q '^| REQ-FN-001 | Add | Verified' "$d/docs/Fx-Checklist.md" && n=$((n+1)) || note "referenced: $out"

@@ -107,7 +107,7 @@ dev = os.path.join(root, ".tfcore", ".session", "develop.json")
 if os.path.isfile(dev):
     try: app = (json.load(open(dev)).get("app") or "").lower()
     except Exception: app = ""
-    one = not re.search(r"(?:\|\||&&|;|\||\n|\$\(|`)", cmd)
+    one = not re.search(r"(?:&&|\|\||;|\||\n|\$\(|`)", cmd)   # && first: the portability check reads a pipe-ampersand pair as bash 4
     if app and one and re.match(r"\s*docker\s+(?:run|create)\b", cmd, re.I) \
             and re.search(r"--name[ =]%s-db(?:\s|$)" % re.escape(app), cmd):
         sys.exit(0)

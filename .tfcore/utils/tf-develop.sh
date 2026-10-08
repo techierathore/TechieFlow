@@ -51,12 +51,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 # --detach: start this same run in its own session and return at once, so it outlives the agent session
-# that started it (the flow-master's *develop-end-to-end). setsid where there is one, nohup on macOS.
+# that started it (the flow-master's *develop-end-to-end), in a session of its own (tf_setsid, portable).
 if [[ $DETACH -eq 1 ]]; then
   mkdir -p "$DIR/.tfcore/.session"
   rest=(); for a in "${ARGS_IN[@]}"; do [[ "$a" != --detach ]] && rest+=("$a"); done
-  if command -v setsid >/dev/null 2>&1; then setsid bash "$0" "$DIR" "${rest[@]}" > "$DIR/.tfcore/.session/develop.out" 2>&1 < /dev/null &
-  else nohup bash "$0" "$DIR" "${rest[@]}" > "$DIR/.tfcore/.session/develop.out" 2>&1 < /dev/null & fi
+  source "$HERE/tf-portable.sh"   # tf_setsid works on macOS too (a python3 or perl stand-in)
+  tf_setsid bash "$0" "$DIR" "${rest[@]}" > "$DIR/.tfcore/.session/develop.out" 2>&1 < /dev/null &
   echo "tf-develop: started (pid $!) — follow .tfcore/.session/develop.log; the result is docs/<App>-Build-Report.md"
   exit 0
 fi
