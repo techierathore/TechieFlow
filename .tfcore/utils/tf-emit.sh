@@ -1015,16 +1015,34 @@ def _window_opencode(t0, t1):
         return None
     dbp = ptr.get("db_path")
     sid = ptr.get("session_id")
-    if not dbp or not sid or not os.path.isfile(dbp):
+    if not dbp or not os.path.isfile(dbp):
         return None
     try:
         import sqlite3
         db = sqlite3.connect("file:%s?mode=ro" % dbp, uri=True)
-        pairs = db.execute("SELECT id, parent_id FROM session").fetchall()
+        # OpenCode 2 keeps sessions in session_v2 and messages in session_message; the old tables
+        # stopped on 2026-09-27, so every OpenCode record since read tokens_scope "none". Both are read.
+        tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        pairs = db.execute("SELECT id, parent_id FROM session").fetchall() if "session" in tables else []
+        if "session_v2" in tables:
+            pairs += db.execute("SELECT id, parent_id FROM session_v2").fetchall()
         kids = {}
         for i, p in pairs:
             kids.setdefault(p, []).append(i)
-        tree, queue = {sid}, [sid]
+        # The roots: the pointer's session, and every root session OpenCode 2 recorded in THIS project's
+        # folder. Each *develop-end-to-end phase runs in a new session and the plugin's pointer kept the
+        # first one, so the later phases read "none" (2026-10-08). Messages are still taken only inside
+        # the record's own window.
+        roots = {sid} if sid else set()
+        if "session_v2" in tables:
+            here = os.path.realpath(root)
+            for i, p_, dr in db.execute("SELECT id, parent_id, directory FROM session_v2"):
+                if not p_ and dr and os.path.realpath(dr) == here:
+                    roots.add(i)
+        if not roots:
+            db.close()
+            return None
+        tree, queue = set(roots), list(roots)
         while queue:
             for c in kids.get(queue.pop(), []):
                 if c not in tree:
@@ -1036,15 +1054,20 @@ def _window_opencode(t0, t1):
         # Same rule as the Claude branch: a CHILD session counts as a subagent run
         # for THIS window only if it produced output inside it.
         child_out = {}
-        q = "SELECT session_id, data FROM message WHERE time_created BETWEEN ? AND ?"
-        for msid, data in db.execute(q, (t0, t1)):
+        rows = []
+        if "message" in tables:
+            rows += db.execute("SELECT session_id, data FROM message WHERE time_created BETWEEN ? AND ?", (t0, t1)).fetchall()
+        if "session_message" in tables:
+            rows += [(a, b) for a, b in db.execute(
+                "SELECT session_id, data FROM session_message WHERE type = 'assistant' AND time_created BETWEEN ? AND ?", (t0, t1))]
+        for msid, data in rows:
             if msid not in tree:
                 continue
             try:
                 d = json.loads(data)
             except Exception:
                 continue
-            if d.get("role") != "assistant":
+            if d.get("role") not in (None, "assistant"):
                 continue
             t = d.get("tokens") or {}
             cache = t.get("cache") or {}
@@ -1054,9 +1077,11 @@ def _window_opencode(t0, t1):
             tot["cr"] += cache.get("read") or 0
             tot["cw"] += cache.get("write") or 0
             cost += d.get("cost") or 0
-            if msid != sid and o:
+            if msid not in roots and o:
                 child_out[msid] = child_out.get(msid, 0) + o
-            m = (d.get("providerID", "") + "/" if d.get("providerID") else "") + (d.get("modelID") or "")
+            mo = d.get("model") if isinstance(d.get("model"), dict) else {}
+            prov = d.get("providerID") or mo.get("providerID") or ""
+            m = (prov + "/" if prov else "") + (d.get("modelID") or mo.get("id") or "")
             if m:
                 models[m] = models.get(m, 0) + o
         db.close()

@@ -22,6 +22,9 @@ rule: decisions-log
 <!-- Authoring notes (agent only; never visible text).
      Sections and order are fixed by the schema above. The Stack decisions table answers the stack
      questions (.tfcore/templates/stack-questions.md); answers taken from an answer set cite it.
+     The "Required packages:" line copies the answer set's own line, keeping only the packages that
+     apply to this project's heads; tf-stack-check.sh fails the build check when the code references
+     none of a listed package (a model once replaced the mandated UI library with plain components).
      No Deployment section: hosting is decided after UAT and lives in the Deployment Checklist; how a
      developer runs the app lives in the UsageGuide. Detailed per-screen flows live in the DevGuide.
      A brownfield project describes the code as it is; a planned change is a Decisions log row with
@@ -53,6 +56,8 @@ One row per stack question. "Source" says where the answer came from: the answer
 | Q7 | Layout and naming | {…} | {…} |
 | Q8 | User interface | {…} | {…} |
 | Q11 | Standing rules | {…} | {…} |
+
+Required packages: {each package the answer set requires for this project's heads, in backticks, or "none"}
 
 ## 2. Solution structure
 

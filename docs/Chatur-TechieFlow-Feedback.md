@@ -8,9 +8,9 @@
 
 ## Summary
 
-7 entries: 0 open, 1 fixed upstream and waiting to be re-checked here (TF-007), 6 closed (TF-001 to TF-006).
+9 entries: 2 open (TF-009 blocking: a progress bar is always reported empty, 8 End-to-end run rows; TF-008 not blocking, worked around), 0 fixed upstream and not yet re-checked, 7 closed (TF-001 to TF-007).
 
-TF-007 is fixed upstream; the TF-006 fix caused it. With the update, Start, Workbench, Prerequisites, Providers and Corrections pass mockup parity on this project's own data.
+TF-007 was re-checked here on 2026-10-03: no list box on Start, Workbench, Prerequisites, Providers or Corrections reports "app carries an icon the mockup does not" at either width, and Start, Prerequisites, Providers and Corrections now pass mockup parity outright.
 
 TF-006 was re-checked here on 2026-10-03: after the seed, neither table box reports a finding at either width. The three Repository rows still will not reach Verified on mockup parity, though. The rows themselves are paired with the mockup's sample rows by position, and the seeded rows come in a different order of process and hand check-ins than the mockup draws. The TechieFlow side tracks that as MISS-TechieFlow-20261003-02 (see the TF-006 reply).
 
@@ -104,6 +104,8 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 
 ### TF-007 — Since the TF-006 fix, a list whose sample rows are named after sample data fails as "app carries an icon the mockup does not"
 
+> ✅ **Closed 2026-10-03** — re-checked here: 2026-10-03 15:2x, *verify ui Chatur on a fresh web head (App Manager restarted on 32769 after it went down mid-run): tf-mockup-parity.sh with the verify list's 11 screens gave no 'app carries an icon the mockup does not' finding on recent-list (start), file-tree (main), tools-table (prerequisites), providers-table (settings-providers) or corrections-table (settings-corrections) at 1280 or 390. Start, Prerequisites, Providers and Corrections now pass parity with 0 findings (tests/.artifacts/verify/parity.json).
+
 - **Severity:** major
 - **Blocks:** yes — 55 screen rows on Start, Workbench, Prerequisites, Providers and Corrections cannot reach Verified; every other check passes
 - **Repro:** `bash .tfcore/utils/tf-mockup-parity.sh --base <url> --screen start=/start?all=1` with any real projects listed
@@ -112,6 +114,30 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 - **Encountered in:** `*verify all Chatur`, 2026-10-03 11:28, after the TF-006 update; Start's code did not change in between
 - **Workaround:** none; the rows stay Needs re-verify
 - **Suggested fix:** when a list box's sample rows are not measured, leave out the app's rows in their place from the box's count too, the way TF-006 does for anchored rows
+
+### TF-008 — A screen whose route takes a value is graded Verified with its mockup comparison silently left out
+
+- **Status:** open, filed 2026-10-07
+- **Severity:** major
+- **Blocks:** no — giving the comparison each screen's checklist name (`--screen "Process run=/processes/6/run"` with `--list`) makes it count, and Chatur now runs it that way; the danger is a false Verified for anyone who does not.
+- **Repro:** `tf-mockup-parity.sh --screen process-run=/processes/6/run --screen agent-workspace=/workspace/verifier …`, then `tf-verify-verdict.sh Chatur --apply`, with the verify list's routes `/processes/{id}/run` and `/workspace/{agent}`
+- **Expected:** the verdict matches a filled-in route to its `{id}` pattern, or refuses to grade a screen row whose comparison it cannot find
+- **Actual:** 2026-10-07 13:01 run: both screens' comparisons said FAIL (16 and 2 findings), yet all 11 of their rows were written Verified, because the verdict looks parity up by screen name or by the literal route and neither matched; no note was written. Re-run keyed by name, all 11 went to Needs re-verify.
+- **Encountered in:** `*verify all Chatur`, phase 2, rows REQ-FN-052..055, 058..060, REQ-UI-047, 048, 053, 054
+- **Workaround:** pass each screen to the comparison by its checklist name together with `--list`
+- **Suggested fix:** in `tf-verify-verdict.py`, match a parity route against the row's route pattern (`{…}` = one path segment), and write "mockup-parity not found" as a failing check for a driven screen row with no comparison
+
+### TF-009 — A progress bar is always reported empty by the screen check
+
+- **Status:** open, filed 2026-10-08
+- **Severity:** major
+- **Blocks:** yes — all 8 End-to-end run rows (REQ-FN-061..066, REQ-UI-055, REQ-UI-056) are written RENDER-FAIL and cannot reach Verified while the bar is drawn correctly.
+- **Repro:** `tf-verify-screens.sh --list tests/.artifacts/verify/list.json …` on `/auto` with a run going (seed `tests/verify/seed/auto-run.sh`); the mockup's `progress-bar` is a track `div` holding a fill `div`, and the app's is TrBlazeUI `Progress` (`role="progressbar"`, `aria-valuenow`) at 50%.
+- **Expected:** a progress bar counts as filled, as the mockup's own bar does; e.g. an element with `role="progressbar"` and an `aria-valuenow`, or a box with a child of non-zero width, is not blank.
+- **Actual:** `anchored control "progress-bar" (div) is empty` at 1280 and 390 — `tf-verify-screens.mjs` line ~335 counts a control filled only for text, a form field, an image/svg/canvas, a button or a link.
+- **Encountered in:** `*verify all Chatur`, phase 3, 2026-10-08 03:30
+- **Workaround:** none; adding text the mockup does not draw would be a fake.
+- **Suggested fix:** in `tf-verify-screens.mjs`, treat `[role=progressbar][aria-valuenow]`, `progress`, `meter`, and a box whose child has a measured non-zero width, as filled.
 
 ## Replies from TechieFlow
 
@@ -136,3 +162,9 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 | ID | Fix | Check it here |
 |---|---|---|
 | TF-007 | Fixed upstream; the TF-006 fix caused it, and an older rule did the same for rows without their own anchor. When the mockup's sample rows in a list box are not measured, `tf-mockup-parity` now takes their icons off every box around them. It does the same on the app's side for the rows the app draws in their place: what the mockup does not have under that box and is the same kind of element (a `tbody` for a `tbody`), or, when there is none of that kind, the box's own children and anchors the mockup lacks, such as the `project-scroll` area holding your `project-N` items. A button or link inside a row keeps its own icon, and an icon that belongs to the box itself is still counted. Proved on this project: a web head with the data of your 11:28 verify run, signed in as the YOLO test user, all twelve screens with the old and the new script. Start, Workbench (`main`), Prerequisites, Providers and Corrections go from FAIL to PASS, and no screen gains a finding. Still failing, and not TF-007: `auto-routing-switch` border (Routing), `misses-refused` and `sessions-refused` colour (Measurements), both design differences for you to settle; and the Repository row order (MISS-TechieFlow-20261003-02, ours). | After the framework update, run `*verify ui Chatur`. Start, Workbench, Prerequisites, Providers and Corrections have no `app carries an icon the mockup does not` finding on `recent-list`, `file-tree`, `tools-table`, `providers-table` or `corrections-table`. |
+
+### Resolution status (TechieFlow team, 2026-10-08, TF-008)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-008 | Fixed upstream, both ways you suggested. `tf-verify-verdict` now finds a row's mockup comparison by the screen's name, by its mockup's file name (`process-run`), or by its route, where `{id}` in the row's route stands for any one path segment. So `/processes/6/run` counts for `/processes/{id}/run`, and `/start?all=1` counts for `/start`. When several comparisons match, the worst one counts. A screen that was driven, has a mockup and has no comparison now fails the mockup check with "mockup-parity not found", and the Remark names the `--screen` to add. A comparison that could not open its screen fails it too. A screen with no mockup is not held to one. Proved on this project's own phase-2 evidence (the verify list's Process run and Agent workspace rows, `screens-213.json`, `parity-p2fix2.json`). The old script gives all 11 rows PASS. The new one fails the 6 Process run rows on the comparison's icon finding and passes the 5 Agent workspace rows, whose comparison passed in that file. Regression case `ch_008` fails against the script you had and passes now. | After the framework update, run the comparison as the repro does (`--screen process-run=/processes/6/run --screen agent-workspace=/workspace/verifier`, without the checklist names), then `tf-verify-verdict.sh Chatur --apply`. Rows on a screen whose comparison FAILed go to Needs re-verify. Leave one screen out of the comparison: its rows fail with "mockup-parity not found" instead of passing. |

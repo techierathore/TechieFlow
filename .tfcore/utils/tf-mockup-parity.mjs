@@ -44,6 +44,7 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { signIn, reach } from './tf-login.mjs';
+import { parseThemes, useTheme, surface, differs, looksDark } from './tf-theme.mjs';
 
 // ---------------------------------------------------------------- arguments
 const argv = process.argv.slice(2);
@@ -124,6 +125,15 @@ const findMockup = (name) => {
 const THIN_RATIO = parseFloat(arg('--thin-ratio', '0.25'));
 // --keep-app-theme compares the app in the theme it is showing, not the mockup's (Lekhak TF-010)
 const KEEP_APP_THEME = flag('--keep-app-theme');
+// Lekhak TF-024: a screen is compared in the mockup's own theme and then in the other one. --themes
+// light,dark runs both; light or dark alone runs only that one; auto (the default) runs the other one
+// once the app shows it has it (what it paints changes when that theme is put on it). In the other
+// theme the mockup is drawn in it too; when the mockup does not change under it (no dark styles in the
+// mockup), the app is compared with the mockup as drawn and colour is left out, since the mockup says
+// nothing about it; every other class is compared.
+const THEMES = parseThemes(arg('--themes', 'auto'));
+const wantTheme = (t) => !THEMES || THEMES.includes(t);
+let otherSeen = false;    // auto: has any screen shown the other theme yet?
 // The theme a page declares: data-* attributes on <html> and <body> whose name says theme, mode or
 // scheme (data-theme, data-bs-theme, data-site-theme, data-color-mode …), and the class tokens there
 // that name a light or dark mode (dark, light, theme-dark, dark-mode …), which a class-driven dark mode
@@ -643,7 +653,7 @@ const CLAUSES = {
 // as coverage is what let a screen the gate never really looked at read as clean.
 const CONTENT_CLAUSES = new Set(['badge', 'icon', 'wrap', 'token']);
 
-function diff(mock, app, screen, width) {
+function diff(mock, app, screen, width, skip = null) {
   // --- Chatur TF-002: sample data the app is not showing. A mockup draws a list full of sample rows
   // and a fresh app has none, so every icon on a sample row read as missing. A box the mockup marks
   // data-tf-sample is compared when the app draws something at its place; when it draws nothing
@@ -842,6 +852,7 @@ function diff(mock, app, screen, width) {
     }
     compared++;
     for (const [name, fn] of Object.entries(CLAUSES)) {
+      if (skip && skip.has(name)) continue;     // a clause the mockup says nothing about in this theme (TF-024)
       const r = fn(m, a);
       if (r === null) continue;
       clauseCoverage[name]++;
@@ -936,9 +947,10 @@ for (const s of SCREENS) {
   }
 
   const perWidth = [];
+  const notOffered = new Set();
   for (const width of WIDTHS) {
     const { app: page, mock: mockPage } = tabs[width];
-    let mock, app, docFindings = [], reached = '', theme = null;
+    let mock, app, docFindings = [], reached = '', theme = null, own = 'light', ownSurface = null, mockSurface = null, wanted = [];
     try {
       await mockPage.goto(pathToFileURL(mockPath).href, { waitUntil: 'load' });
       mock = await mockPage.evaluate(PROBE);
@@ -955,7 +967,7 @@ for (const s of SCREENS) {
       }
       reached = nav.reached || '';
       await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-      const wanted = [...new Set(Object.values(mock.index).filter((x) => x.badge === true && x.text).map((x) => x.text))];
+      wanted = [...new Set(Object.values(mock.index).filter((x) => x.badge === true && x.text).map((x) => x.text))];
       // Lekhak TF-010: the app is drawn in the mockup's theme for the comparison. The app kept the
       // viewer's saved dark theme, the mockup was light, and every primary button read "mockup accent,
       // app neutral". The mockup's theme attributes on <html> and <body> are copied onto the app page
@@ -964,10 +976,20 @@ for (const s of SCREENS) {
       // dark mode (class="dark") kept its dark colours under the mockup's light data-theme.
       const mockRead = KEEP_APP_THEME ? null : await mockPage.evaluate(READ_THEME);
       const mockTheme = DECLARES_THEME(mockRead) ? mockRead : null;
+      // The mockup's own theme: what it declares, or, declaring none, what it paints (TF-024). A mockup
+      // that declares none now has the app put in that theme too (its colour scheme as well as its
+      // attributes), so a viewer's saved dark theme no longer decides what a light mockup is compared with.
+      mockSurface = await surface(mockPage);
+      own = mockTheme ? (Object.values(mockTheme).some((v) => /dark/i.test(String(v || ''))) ? 'dark' : 'light')
+        : looksDark(mockSurface) ? 'dark' : 'light';
       const saved = mockTheme ? await page.evaluate(APPLY_THEME, mockTheme).catch(() => null) : null;
       if (saved && saved.changed) { theme = { mockup: mockTheme, app_had: saved.before }; await page.waitForTimeout(400); }
-      try { app = await page.evaluate(PROBE, wanted); }
-      finally { if (saved && saved.changed) await page.evaluate(APPLY_THEME, saved.before).catch(() => {}); }
+      const putBack = KEEP_APP_THEME ? null : await useTheme(page, own);
+      try { app = await page.evaluate(PROBE, wanted); ownSurface = await surface(page); }
+      finally {   // in the reverse order they were put on
+        if (putBack) await putBack();
+        if (saved && saved.changed) await page.evaluate(APPLY_THEME, saved.before).catch(() => {});
+      }
 
       // TF-008 §2. Cheap, no false positives in a shell-scrolled app, and it would
       // have caught the /routing void on its own: 2607px of document against a
@@ -988,8 +1010,38 @@ for (const s of SCREENS) {
     }
     const d = diff(mock, app, s.name, width);
     d.findings.push(...docFindings);
-    perWidth.push({ width, ...d, mockAnchors: mock.anchors, appAnchors: app.anchors,
-      appTestIds: app.testids, mockTestIds: mock.testids, ...(reached ? { reached } : {}), ...(theme ? { theme } : {}) });
+    if (wantTheme(own)) {
+      perWidth.push({ width, mode: own, ...d, mockAnchors: mock.anchors, appAnchors: app.anchors,
+        appTestIds: app.testids, mockTestIds: mock.testids, ...(reached ? { reached } : {}), ...(theme ? { theme } : {}) });
+    }
+
+    // --- Lekhak TF-024: the other theme. Both pages are drawn in it and put back after, so an
+    // attached app is left in the viewer's theme. Every finding here says which theme it is in.
+    const other = own === 'dark' ? 'light' : 'dark';
+    if (KEEP_APP_THEME || !wantTheme(other)) continue;
+    let backApp = null, backMock = null;
+    try {
+      backApp = await useTheme(page, other);
+      backMock = await useTheme(mockPage, other, 0);
+      if (!THEMES && !otherSeen && !differs(ownSurface, await surface(page))) { notOffered.add(other); continue; }
+      otherSeen = true;
+      // A mockup that does not change under the other theme does not draw it: forcing it there only
+      // strips the styles it keys on its own theme (a badge losing its fill). The app in the other theme
+      // is then compared with the mockup as drawn, colour left out.
+      const mockDraws = differs(mockSurface, await surface(mockPage));
+      if (!mockDraws) { await backMock(); backMock = null; }
+      const mockO = mockDraws ? await mockPage.evaluate(PROBE) : mock;
+      const appO = await page.evaluate(PROBE, wanted);
+      const d2 = diff(mockO, appO, s.name, width, mockDraws ? null : new Set(['color']));
+      for (const f of d2.findings) f.theme = other;
+      perWidth.push({ width, mode: other, mockup_draws_theme: mockDraws, ...d2, mockAnchors: mockO.anchors, appAnchors: appO.anchors,
+        appTestIds: appO.testids, mockTestIds: mockO.testids, ...(reached ? { reached } : {}) });
+    } catch (e) {
+      perWidth.push({ width, mode: other, error: String(e).slice(0, 200) });
+    } finally {
+      if (backMock) await backMock();
+      if (backApp) await backApp();
+    }
   }
 
   const ok = perWidth.filter((w) => !w.error);
@@ -1052,7 +1104,11 @@ for (const s of SCREENS) {
       // Named so the fix is a mechanical edit to the mockup, not a research task.
       add_data_testid_to_mockup: unanchored.slice(0, 30),
     },
-    widths: perWidth.map((w) => ({ width: w.width, error: w.error || null,
+    // the themes it was compared in, and one the app showed no sign of having (TF-024)
+    themes: [...new Set(ok.map((w) => w.mode).filter(Boolean))],
+    ...(notOffered.size ? { themes_not_offered: [...notOffered] } : {}),
+    widths: perWidth.map((w) => ({ width: w.width, ...(w.mode ? { mode: w.mode } : {}),
+      ...(w.mockup_draws_theme === false ? { colour_not_compared: 'the mockup draws no ' + w.mode + ' theme' } : {}), error: w.error || null,
       compared: w.compared || 0, content_graded: w.contentGraded || 0, findings: (w.findings || []).length,
       not_measured: (w.notMeasured || []).length,
       ...(w.reached ? { reached: w.reached } : {}),       // how a 401 screen was reached signed in (TF-011)

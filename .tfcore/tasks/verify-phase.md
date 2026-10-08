@@ -10,11 +10,11 @@ Applied to every row in this order; the first that fails is the row's verdict.
 
 | Check | Question | Tool |
 |---|---|---|
-| build | does the application build and boot | `tf-verify-boot.sh` |
+| build | does the application build and boot, and does its code reference every package the Architecture's `Required packages:` line lists | `tf-verify-boot.sh`; the verdict runs `tf-stack-check.sh` itself |
 | acceptance | does the test carrying the row's id pass | `tf-verify-tests.sh` |
 | render | does every control the mockup anchors show something, no header-only table, no blank page, no error | `tf-verify-screens.sh` |
 | assets | did every stylesheet and script the screen declares arrive | `tf-assets.sh` |
-| visual | nothing overlaps, nothing clipped or off-screen, no sideways scroll, a stylesheet loaded | `tf-verify-screens.sh` |
+| visual | nothing overlaps, nothing clipped or off-screen, no sideways scroll, a stylesheet loaded, text readable (3.0 : 1) in light and in dark mode, no light panel in dark mode | `tf-verify-screens.sh` |
 | mockup | does the built screen carry the structure its mockup draws | `tf-mockup-parity.sh` |
 | speed | within the row's `perf-budget:` line, only when the row declares one | `tf-perf.sh`, `tf-perf-grade.sh` |
 
@@ -34,7 +34,7 @@ The phase's checklist, UIDesign and `docs/mockups/` (`appPhase` in `core-config.
    - `bash .tfcore/utils/tf-verify-tests.sh --base <url>`
    - `bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --base <url>` (or `--cdp <url>`; or `--appium <url>` for a Mac desktop head, whose anchors are the controls' accessibility identifiers and whose mockup and asset checks do not run; `--login-path /login --user … --password …` when the app has a sign-in page)
    - `bash .tfcore/utils/tf-assets.sh --base <url> --paths "<every screen route, comma-separated>" --json-out tests/.artifacts/verify/assets.json`
-   - `bash .tfcore/utils/tf-mockup-parity.sh --base <url> --screen <name>=<route> … --json-out tests/.artifacts/verify/parity.json` (the `Mockup parity:` line step 1 printed; skip on a project with no mockups)
+   - `bash .tfcore/utils/tf-mockup-parity.sh --base <url> --screen <name>=<route> … --json-out tests/.artifacts/verify/parity.json` (the `Mockup parity:` line step 1 printed; a screen whose route takes a value is added with the value filled in, `--screen <mockup name>=/processes/6/run`; skip on a project with no mockups). Screens and parity both run in light and, when the app has one, dark mode (`--themes` forces it). A driven screen with a mockup and no comparison fails the mockup check
    - for each row with a `perf-budget:` line: `bash .tfcore/utils/tf-perf.sh --base <url> --paths "<its screen's route>" --levels <its concurrency> --requests 24 --build-config <Release or Debug, as booted> --json-out tests/.artifacts/verify/perf/<REQ>.json`
    Open every failing screenshot under `tests/.artifacts/verify/screens/` and look at it before step 6.
 6. `bash .tfcore/utils/tf-verify-verdict.sh {App} --apply --started <the step-0 time>` applies the seven checks in order, writes the ledger and rewrites the Status, % and Remarks cells of every graded row, and prints the verdict table. Then `bash .tfcore/utils/tf-verify-emit.sh {App} --started <the step-0 time>` appends the gate records, one miss per newly failing row, and this run's record.

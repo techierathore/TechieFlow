@@ -14,6 +14,72 @@ Everything below this section from 2026-09-11 onward is also unreleased: it reac
 v1.0.4 tag (2026-09-10) and is in no published package yet. This section lists what those dated entries
 do not.
 
+- **`*develop-end-to-end`: a brief to a UAT-ready app, unattended (2026-10-08, owner request).** A new
+  flow-master command for greenfield apps. The owner gives a brief and a git repository with a remote. The new
+  `tf-develop.sh` then runs four phases, each an unattended `tf-goal.sh` run that waits out a usage limit and
+  resumes: Day 1 stage 1, Day 1 stage 2, build with inline verify and fixes, and handoff. The new rule
+  `_develop-mode.md` answers every Day 1 question from the brief, or else from the .NET answer set; the
+  stack, sign-in and database choices are written into the Architecture. It skips the owner review between the
+  stages, the one command allowed to (`_yolo-mode.md` and `day1-greenfield.md` say so), and creates the
+  database server locally when none is reachable. Git: the agent's git guard is unchanged; the supervisor
+  commits and pushes after each phase from its own shell, for this command only, and only in a folder that
+  is the top of its own repository. After each phase it writes `docs/<App>-Build-Report.md` and
+  `docs/metrics/develop-report.json`: elapsed time (limit waits included), the agent's working time and
+  tokens per phase, summed from the run records, and the totals. A Large brief builds its phase 1.
+  Regression case `dev_001`; `tests/develop/prove.sh` runs the real thing on a small brief in either harness.
+  Two misses logged on the way: the contrast rule shipped without measuring its effect across projects,
+  and `tf-develop.sh`'s first test run staged the TechieFlow repository from a folder inside it.
+  **Proved for real on a small brief (TinyTodo), in both harnesses.** Claude Code (Sonnet): UAT-ready in
+  30 min, 23 of 23 rows Verified, 426,294 tokens out. OpenCode (gpt-5.6-terra, then mimo-v2.5 after a usage limit):
+  UAT-ready in 1 h 43 min, 17 of 17 Verified, 69,296 tokens out plus 160,917 reasoning. Each phase was committed and
+  pushed. The runs found five faults, all fixed with a regression case. (1) `guard-verify-deps.sh` refused the
+  database container the rule asks for; during a develop run one `docker run|create --name <app>-db` now passes
+  (`dev_002`). (2) The agent stopped "blocked" on a mockup it had drawn itself; the rule now says the mockups are
+  its own to redraw. (3) With no `--model`, OpenCode fell back to the machine's local model server; the tier's
+  routed model is used now. (4) The report overwrote a phase's earlier attempts and counted a chained
+  command's tokens twice; every attempt is kept, nested records are dropped, and working time is the union of
+  the windows (`dev_001`). (5) OpenCode tokens were unmeasured; see the next entry. New `--report` rewrites
+  the report from the saved state.
+- **OpenCode 2 tokens are measured again (2026-10-08).** OpenCode 2 keeps sessions in `session_v2` and
+  messages in `session_message`; the old tables stopped on 2026-09-27, so every OpenCode run record since carries
+  `tokens_scope: none`, in every project. `tf-emit.sh` now reads both. It counts every root session OpenCode
+  recorded in the project's folder, with its sub-agents, inside the record's window, because the plugin's
+  pointer keeps only the first session of an instance. Records already written stay as they are (append-only).
+  Regression case `oc_v2` fails on the old emitter.
+- **The code must use the packages the Architecture requires (2026-10-08, owner yes).** The OpenCode proof
+  searched NuGet for `TrBlazeUI` instead of `TrBlazeUI.Components`, decided the library was unpublished, built
+  plain components and had every row Verified. The .NET answer set now names the exact packages and has a
+  `Required packages:` line, which the Architecture template copies. New `tf-stack-check.sh` finds each listed
+  package in the project files of any stack, and `tf-verify-verdict.py` runs it itself: a missing package fails
+  every row's build check. No line checks nothing, so the 18 existing projects are unaffected until their
+  Architecture names packages. On the two proofs it passes the Claude Code app and fails the OpenCode one.
+  Regression case `dev_003`.
+- **Chatur TF-008: a filled-in route finds its mockup comparison, and a missing one fails (2026-10-08).**
+  `tf-verify-verdict.py` looked a comparison up by the screen's name or its literal route, so
+  `process-run=/processes/6/run` never met the row's `/processes/{id}/run` and 11 rows were Verified past a FAIL.
+  It now matches by screen name, mockup file name or route (`{…}` is one path segment, a query string is
+  ignored), takes the worst when several match, and fails the mockup check, as `other`, for a driven screen that has a
+  mockup and no comparison. A comparison that could not open its screen (ERROR) fails it too. On Chatur's own
+  phase-2 evidence the old script gives 11 PASS; the new one fails the 6 Process run rows on the FAIL.
+  Regression case `ch_008`.
+- **Lekhak TF-024: screens and mockups are checked in light and dark mode (2026-10-08).** New
+  `tf-theme.mjs`, shared by `tf-verify-screens` and `tf-mockup-parity`, sets a theme two ways: the browser
+  colour scheme, and the light/dark value of `data-*theme` attributes and mode classes on `<html>`/`<body>`.
+  It always puts the page back as it was. The screen check runs light, then dark once a screen shows the app has a dark theme
+  (`--themes` forces it). Its visual check now measures text against the colour painted behind it (3.0 : 1,
+  `--min-contrast`, disabled controls exempt, text over an image skipped) and, in dark mode, flags a box over
+  2% of the window painted lighter than 0.8 luminance. The mockup check compares a second time in the other
+  theme. When the mockup draws no such theme, that pass compares with the mockup as drawn and leaves colour out.
+  New failure classes `low-contrast` and `light-surface` (SCHEMA §3.3). Proved on Lekhak's desktop head: four
+  admin screens graded in both themes, the dark screenshots really dark. Regression case `lk_024`, which fails against the old scripts.
+- **TrBlazeUI TF-003 to TF-005: a library is treated as a library (2026-10-08).** `tf-doc-check.py` and
+  `tf-triage.py new` no longer ask a UI row for a mockup link when `metrics.project_type` is `library` or
+  `docs`; a link that is there must still resolve (28 findings gone on TrBlazeUI, nothing else changed).
+  `tf-fix-close.sh --cmd triage-and-fix` files the run under that command, and `triage-and-fix.md` no longer
+  asks for a second, refused record. `fix-issues.md` step 5a: on a library the shipped documents (UsageGuide,
+  DevGuide, AI reference, feedback replies) are brought up to date before the gate, and `tf-status-facts.py`
+  then offers the release instead of `*handoff-phase`. `tf-devguide-list.py` reads `project_type` when `appKind`
+  is unset: TrBlazeUI's list went from NOTHING to 368 components. Regression cases `tb_003` to `tb_005`.
 - **Mac Catalyst rules in the .NET standards, and a check for them (2026-10-07).** `coding-standards-dotnet.md`
   gains §9 Mac Catalyst heads (Enforcement becomes §10): the scene manifest and `SceneDelegate`, keychain and signing,
   a clean build after an SDK or workload update, opening the `.app` with `open`, and how Blazor Hybrid screens are

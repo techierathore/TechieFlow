@@ -62,6 +62,17 @@ def cfg_phase():
     return 1
 
 
+def cfg_project_type():
+    """metrics.project_type from core-config.yaml: a library or docs project has no mockups."""
+    p = os.path.join(".tfcore", "core-config.yaml")
+    if os.path.isfile(p):
+        import re
+        m = re.search(r"(?m)^\s+project_type:\s*(\S+)", open(p, encoding="utf-8").read())
+        if m:
+            return m.group(1).strip("'\"").lower()
+    return "app"
+
+
 def phase_checklist(app, ph):
     return os.path.join("docs", f"{app}-Checklist.md" if ph <= 1 else f"{app}-P{ph}-Checklist.md")
 
@@ -167,7 +178,7 @@ def main(argv):
         cl = checklist(app, argv, ce)
         prefix = opt(argv, "--prefix", "FN").upper(); section = opt(argv, "--section"); ev = opt(argv, "--evidence")
         src = opt(argv, "--source", "owner"); mockup = opt(argv, "--mockup")
-        if prefix == "UI" and not mockup:
+        if prefix == "UI" and not mockup and cfg_project_type() not in ("library", "docs"):   # TrBlazeUI TF-003
             print("note: a UI row needs a mockup link; pass --mockup docs/mockups/<screen>.html or the checker will flag it")
         rid = ce.add_row(cl, prefix, title, acc, section=section, mockup=mockup,
                          remark=f"logged from {'production' if src == 'production' else 'UAT'} {ce.TODAY}" + (f" (evidence: {ev})" if ev else ""))

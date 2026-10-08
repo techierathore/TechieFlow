@@ -204,6 +204,13 @@ def config_phase(root):
     return 1
 
 
+def config_library(root):
+    """metrics.project_type: library (or appKind: library): the documents ship inside the package."""
+    p = os.path.join(root, ".tfcore", "core-config.yaml")
+    t = read(p) if os.path.isfile(p) else ""
+    return bool(re.search(r"(?m)^\s+project_type:\s*['\"]?lib", t) or re.search(r"(?m)^appKind:\s*['\"]?lib", t))
+
+
 def phase_prefix(app, phase):
     return f"{app}-" if phase <= 1 else f"{app}-P{phase}-"
 
@@ -233,7 +240,7 @@ def usage_guide(app):
     return vl.usage_guide(app)
 
 
-def next_command(app, rows, log_rows, phase=1, verdicts=None):
+def next_command(app, rows, log_rows, phase=1, verdicts=None, library=False):
     """Returns (phase, qualifier, cc_line, oc_line, reason)."""
     verdicts = verdicts or {}
 
@@ -298,6 +305,12 @@ def next_command(app, rows, log_rows, phase=1, verdicts=None):
                 f"{CC}flow-master *handoff-phase {app}", f"{OC}flow-master *handoff-phase {app}",
                 f"{len(owner)} rows are Owner-UAT and handoff has not run yet")
     if handoff_ran(log_rows, app, phase):
+        if library:
+            # a library's fix runs the handoff steps itself, before the gate, so the package ships with
+            # its documents; *handoff-phase after the release was the wrong order (TrBlazeUI TF-005)
+            line = "(owner) commit, then build and publish the package — its shipped documents are current; no agent command"
+            return ("Release", f"handoff done, {q}", line, line,
+                    "every row in this phase's scope is terminal and the shipped documents were brought up to date")
         line = "(owner) set current_phase to Released after UAT — no agent command"
         return ("UAT", f"handoff done, {q}", line, line,
                 "every row in this phase's scope is terminal and handoff has run; waiting on the owner")
@@ -331,7 +344,7 @@ def main(argv):
     st_text = read(st_path) if os.path.isfile(st_path) else ""
     log_rows = existing_log_rows(st_text)
     vdate, vresult = last_verify(root, app)
-    phase, qual, cc, oc, reason = next_command(app, rows, log_rows, phase_n, ledger_verdicts(root))
+    phase, qual, cc, oc, reason = next_command(app, rows, log_rows, phase_n, ledger_verdicts(root), config_library(root))
     roadmap = [r["id"] for r in rows if r["roadmap"]]
     if roadmap:
         reason += (f"; {len(roadmap)} roadmap row(s) are not in this phase's scope and are left for the owner "

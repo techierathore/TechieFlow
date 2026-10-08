@@ -11,6 +11,10 @@
 //           so a wide table inside a horizontal scroller is not read as covering its neighbour.
 // Measurement waits for the screen's first render (--render-wait, default 5000 ms) before reading
 // the page: it waits for content to appear, knowing nothing about how the page is built.
+// Themes (Lekhak TF-024): every screen is graded in light mode, then in dark mode when the app has
+// one (its painted surface changes when dark is put on it; --themes light,dark|light|dark forces the
+// choice). In both, the visual check measures text contrast (3.0 : 1 against what is painted behind
+// it, disabled controls exempt) and, in dark mode, large light panels. tf-theme.mjs does both.
 // At every width it saves a full-page screenshot. Verdicts: render OK | EMPTY | ERROR | UNREACHABLE,
 // visual OK | FAIL, each with its findings. Findings use the telemetry classes (blank-data,
 // zero-rows, exception, overlap, clipped, offscreen, other). It writes a JSON file the verdict
@@ -24,6 +28,7 @@ import { chromium } from 'playwright';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { parseThemes, useTheme, surface, differs, audit } from './tf-theme.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (n, d = null) => { const i = argv.indexOf(n); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d; };
@@ -55,6 +60,9 @@ const ATTR = arg('--testid-attr', 'data-testid');
 // own banner. A project on neither still gets every other render check; it simply cannot be
 // told about a banner nobody named.
 const ERROR_SELECTORS = [...args('--error-selector'), '#blazor-error-ui', '[data-error-ui]'];
+// null = auto: light, and dark when the app has a dark theme (Lekhak TF-024)
+const THEMES = parseThemes(arg('--themes', 'auto'));
+const MIN_CONTRAST = parseFloat(arg('--min-contrast', '3'));
 
 if (!BASE && !CDP) { console.error('tf-verify-screens: --base URL or --cdp URL is required'); process.exit(3); }
 
@@ -197,6 +205,7 @@ const mockBrowser = CDP ? await chromium.launch().catch(() => null) : browser;
 function writeOut(extra, results = [], login = null) {
   const summary = {
     mode: CDP ? 'cdp' : 'base', base: BASE || CDP, widths: WIDTHS, login,
+    themes: THEMES || (darkOffered ? ['light', 'dark'] : ['light']),
     screens: results,
     skipped,   // screens not driven because their route needs a value (TF-005)
     summary: {
@@ -427,6 +436,14 @@ function grade(info, consoleErrors, width, excused = [], stateOnly = []) {
     const nm = (e) => e.id || `${e.tag} "${e.text || ''}"`;
     findings.push({ check: 'visual', class: 'overlap', detail: `${nm(a)} overlaps ${nm(b)} at ${width}px` });
   }
+  // Lekhak TF-024: text a reader cannot read, and a white panel left in a dark shell
+  const c = info.contrast;
+  if (c) {
+    for (const x of c.low) findings.push({ check: 'visual', class: 'low-contrast',
+      detail: `text "${x.text}" in ${x.where} is ${x.ratio} : 1 against its background (${x.fg} on ${x.bg}; ${MIN_CONTRAST} : 1 is the minimum)${c.low_n > c.low.length ? `, one of ${c.low_n}` : ''}` });
+    for (const x of c.light) findings.push({ check: 'visual', class: 'light-surface',
+      detail: `${x.where} paints a light panel (${x.bg}, ${x.share}% of the window) in dark mode${x.text ? ` ("${x.text}")` : ''}${c.light_n > c.light.length ? `, one of ${c.light_n}` : ''}` });
+  }
   const render = findings.some((f) => f.check === 'render' && f.class === 'exception') ? 'ERROR'
     : findings.some((f) => f.check === 'render') ? 'EMPTY' : 'OK';
   const visual = findings.some((f) => f.check === 'visual') ? 'FAIL' : 'OK';
@@ -438,6 +455,7 @@ mkdirSync(SHOTS, { recursive: true });
 const results = [];
 let loginResult = null;
 let firstUnreachable = false;
+let darkOffered = false;  // auto mode: has any screen shown a dark theme yet? (Lekhak TF-024)
 for (const width of WIDTHS) {
   const { page, close } = await contextFor(width);
   const consoleErrors = [];
@@ -479,22 +497,45 @@ for (const width of WIDTHS) {
       entry.render = 'UNREACHABLE'; entry.visual = 'n/a';
       entry.findings = [{ check: 'render', class: 'other', detail: nav.status === 0 ? `could not open ${s.route}: ${nav.error || 'no response'}` : redirectedToLogin ? `${s.route} redirected to the sign-in page (not signed in)` : `${s.route} answered HTTP ${nav.status}` }];
       if (nav.status === 0 && results.length === 1 && width === WIDTHS[0]) firstUnreachable = true;
-    } else {
-      entry.render_wait_ms = await waitForRender(page, (r.anchors || []).filter((id) => !excused.includes(id) && !stateOnly.includes(id)), ATTR);
-      const info = await inspect(page, r.anchors || [], ATTR, ERROR_SELECTORS);
-      const g = grade(info, consoleErrors, width, excused, stateOnly);
-      if (r.seed && !r.seed.ok) {
-        g.findings.unshift({ check: 'render', class: 'other', detail: `seed ${r.seed.path} failed (exit ${r.seed.exit ?? '?'}): ${r.seed.output}` });
-        if (g.render === 'OK') g.render = 'EMPTY';
-      }
-      if (excused.length) entry.hidden_in_mockup = excused;
-      if (stateOnly.length) entry.state_only = stateOnly;
-      Object.assign(entry, g);
-      entry.console_errors = consoleErrors.slice(0, 5);
-      entry.anchors_present = (info.anchors || []).filter((a) => a.present).length;
+      try { await page.screenshot({ path: shot, fullPage: !CDP }); } catch (e) { entry.screenshot = ''; }
+      r.widths.push(entry);
+      continue;
     }
-    try { await page.screenshot({ path: shot, fullPage: !CDP }); } catch (e) { entry.screenshot = ''; }
-    r.widths.push(entry);
+    entry.render_wait_ms = await waitForRender(page, (r.anchors || []).filter((id) => !excused.includes(id) && !stateOnly.includes(id)), ATTR);
+    // one pass per theme on the same opened screen; each pass puts the page back as it found it, so an
+    // attached desktop head is left in the viewer's theme (Lekhak TF-024)
+    let lightSurface = null;
+    for (const theme of THEMES || ['light', 'dark']) {
+      const restore = await useTheme(page, theme);
+      try {
+        if (theme === 'light') lightSurface = await surface(page);
+        if (theme === 'dark' && !THEMES && !darkOffered) {
+          // auto: the app has a dark theme when dark changes what it paints. Asked screen by screen until
+          // one answers yes; from then on every screen is graded in dark, so a screen that ignores the
+          // dark theme altogether is graded in it too, and fails.
+          darkOffered = differs(lightSurface, await surface(page));
+          if (!darkOffered) { r.dark = 'not offered'; continue; }
+        }
+        const te = theme === 'light' ? entry : { ...entry, screenshot: `${SHOTS}/${slug(s.name)}-${width}-${theme}.png` };
+        te.theme = theme;
+        const info = await inspect(page, r.anchors || [], ATTR, ERROR_SELECTORS);
+        info.contrast = await audit(page, theme === 'dark', MIN_CONTRAST);
+        const g = grade(info, theme === 'light' ? consoleErrors : [], width, excused, stateOnly);
+        if (r.seed && !r.seed.ok) {
+          g.findings.unshift({ check: 'render', class: 'other', detail: `seed ${r.seed.path} failed (exit ${r.seed.exit ?? '?'}): ${r.seed.output}` });
+          if (g.render === 'OK') g.render = 'EMPTY';
+        }
+        if (theme === 'dark') for (const f of g.findings) { f.theme = 'dark'; f.detail += ' in dark mode'; }
+        if (excused.length) te.hidden_in_mockup = excused;
+        if (stateOnly.length) te.state_only = stateOnly;
+        Object.assign(te, g);
+        te.console_errors = theme === 'light' ? consoleErrors.slice(0, 5) : [];
+        te.anchors_present = (info.anchors || []).filter((a) => a.present).length;
+        try { await page.screenshot({ path: te.screenshot, fullPage: !CDP }); } catch (e) { te.screenshot = ''; }
+        r.widths.push(te);
+        if (theme === 'dark') r.dark = 'graded';
+      } finally { await restore(); }
+    }
   }
   await close();
 }
@@ -504,7 +545,8 @@ for (const r of results) {
   r.visual = r.widths.some((w) => w.visual === 'FAIL') ? 'FAIL' : r.render === 'UNREACHABLE' ? 'n/a' : 'OK';
   r.anchors_n = (r.anchors || []).length;
   const notes = r.widths.flatMap((w) => (w.findings || []).map((f) => `${f.detail}`)).slice(0, 4);
-  console.log(`${r.render === 'OK' && r.visual === 'OK' ? 'OK  ' : 'FAIL'} ${r.name} (${r.route}) — render ${r.render}, visual ${r.visual}, ${r.anchors_n} anchors${r.mockup && !existsSync(r.mockup) ? ' (no mockup file)' : ''}${notes.length ? ' — ' + notes.join('; ') : ''}`);
+  r.themes = [...new Set(r.widths.map((w) => w.theme).filter(Boolean))];
+  console.log(`${r.render === 'OK' && r.visual === 'OK' ? 'OK  ' : 'FAIL'} ${r.name} (${r.route}) — render ${r.render}, visual ${r.visual}, ${r.themes.join(' + ') || 'no'} theme${r.themes.length === 1 ? '' : 's'}${r.dark === 'not offered' ? ' (the app has no dark theme)' : ''}, ${r.anchors_n} anchors${r.mockup && !existsSync(r.mockup) ? ' (no mockup file)' : ''}${notes.length ? ' — ' + notes.join('; ') : ''}`);
 }
 const out = writeOut({}, results, loginResult);
 if (loginResult && loginResult.attempted && !loginResult.ok) console.log(`LOGIN failed at ${BASE}${LOGIN_PATH}: ${loginResult.error || 'still on the sign-in page'}`);

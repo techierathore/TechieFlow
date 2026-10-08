@@ -14,7 +14,10 @@ For each row, the seven checks in order, and the first that fails is the verdict
   render      every anchored control on its screen shows something — screens.json
   assets      every stylesheet and script its screen declares arrived — assets.json
   visual      nothing overlaps, nothing clipped or off-screen — screens.json
-  mockup      the screen carries the structure its mockup draws — parity.json
+  mockup      the screen carries the structure its mockup draws — parity.json, found by the screen's
+              name, its mockup's file name or its route ({id} in the row's route = one path segment, so
+              /processes/6/run counts for /processes/{id}/run); a driven screen with a mockup and no
+              comparison found FAILs this check, it is never skipped (Chatur TF-008)
   speed       within the row's perf-budget, only when it declares one — perf/<REQ>.json
   (standards has no script yet and is never listed as run)
 
@@ -42,6 +45,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import tf_defect  # noqa: E402
+import tf_stack_check  # noqa: E402
 FAILING = {"BUILD-FAIL": "build", "FAIL": "acceptance", "RENDER-FAIL": "render", "ASSET-FAIL": "assets",
            "VISUAL-FAIL": "visual", "MOCKUP-FAIL": "mockup-parity", "PERF-FAIL": "perf"}
 STATUS = {"PASS": "Verified", "FAIL": "FAIL", "BUILD-FAIL": "FAIL", "RENDER-FAIL": "Needs re-verify", "ASSET-FAIL": "Needs re-verify",
@@ -73,6 +77,34 @@ def perf_grader():
 def norm_route(r):
     r = (r or "").strip().lower().rstrip("/")
     return r or "/"
+
+
+def route_matches(pattern, route):
+    """A filled-in route against its pattern: /processes/6/run matches /processes/{id}/run, one path
+    segment per {…} (Chatur TF-008). A pattern with no {…} matches only itself. A query string on the
+    opened route (/start?all=1) is not part of the screen."""
+    p, r = norm_route(pattern), norm_route((route or "").split("?")[0].split("#")[0])
+    if "{" not in p:
+        return p == r
+    rx = "".join("[^/]+" if part.startswith("{") else re.escape(part) for part in re.split(r"(\{[^}]*\})", p))
+    return re.fullmatch(rx, r) is not None
+
+
+def stem(path):
+    return os.path.basename(path or "")[:-5].lower() if (path or "").lower().endswith(".html") else ""
+
+
+def parity_for(r, mockup, comparisons):
+    """The mockup comparison that graded a row's screen: named for the screen, for its mockup file
+    (the Mockup parity: line names each screen by its mockup's stem), or opened at the screen's route,
+    a {value} in it standing for any one segment. The worst one when several match: one per value
+    (Chatur TF-008)."""
+    screen, route = (r.get("screen") or "").lower(), r.get("route") or ""
+    hits = [s for s in comparisons
+            if (s.get("screen") or "").lower() in (screen, stem(mockup))
+            or (route and s.get("route") and route_matches(route, s.get("route")))]
+    order = {"FAIL": 0, "ERROR": 1, "UNGRADEABLE": 2, "NO-MOCKUP": 3, "PASS": 4}
+    return min(hits, key=lambda s: order.get(s.get("verdict"), 5)) if hits else None
 
 
 def quoted(s, n=None):
@@ -109,12 +141,20 @@ def main(argv):
     assets = load(os.path.join(d, "assets.json")) or {}
     pages = {norm_route(p.get("path")): p for p in assets.get("pages", [])}
     parity = load(os.path.join(d, "parity.json")) or {}
-    par_by_name = {s.get("screen"): s for s in parity.get("screens", [])}
-    par_by_route = {norm_route(s.get("route")): s for s in parity.get("screens", [])}
+    comparisons = parity.get("screens", []) or []
+    # the mockup each listed screen is graded against; a row's own *Mockup:* line when its screen has none
+    mock_of = {s.get("name"): s.get("mockup") or "" for s in lst.get("screens", []) or []}
     grade = perf_grader()
 
     booted = boot.get("mode") not in (None, "none")
     build_failed = boot.get("reason_kind") == "build-error"
+    # the packages the Architecture requires are in the code (tf_stack_check.py): a model once replaced the
+    # mandated UI library with plain components and had every row Verified
+    stack = tf_stack_check.check(os.getcwd(), app)
+    if stack["verdict"] == "FAIL":
+        build_failed = True
+        boot = dict(boot, reason=f"the Architecture requires {', '.join(stack['missing'])} and no project file references "
+                    + ("it" if len(stack["missing"]) == 1 else "them") + " (tf-stack-check.sh): add the package, never a workaround")
     boot_text = (f"{boot.get('head')} via {boot.get('rung')} at {boot.get('url')}" if booted
                  else f"not booted: {boot.get('reason')}")
     checks_ran = set()
@@ -174,13 +214,29 @@ def main(argv):
             checks.append(("visual", True, bool(bad), "VISUAL-FAIL", f["class"] if f else None,
                            f"{f['detail']} on {r['screen']}" if f else "", w.get("screenshot", "") if w else ""))
         # 6 mockup parity
-        ps = (par_by_name.get(r.get("screen")) or par_by_route.get(norm_route(r.get("route")))) if r.get("screen") else None
+        mockup = mock_of.get(r.get("screen")) or r.get("mockup") or ""
+        ps = parity_for(r, mockup, comparisons) if r.get("screen") else None
+        if not ps and driven and mockup:
+            # Chatur TF-008: /processes/6/run was compared and FAILed, but the row's route reads
+            # /processes/{id}/run and the comparison was named process-run, so it was never found and
+            # 11 rows were Verified without it. A driven screen that has a mockup and no comparison fails.
+            checks.append(("mockup-parity", True, True, "MOCKUP-FAIL", "other",
+                           f"mockup-parity not found: {r['screen']} ({r.get('route')}) has mockup {mockup} and "
+                           + ("parity.json has no comparison for it" if comparisons else "no mockup comparison ran")
+                           + f"; run tf-mockup-parity.sh --screen {stem(mockup) or 'name'}={r.get('route')} with its value filled in",
+                           os.path.join(d, "parity.json") if comparisons else ""))
         if ps:
             v = ps.get("verdict")
             if v in ("PASS", "FAIL"):
                 f = (ps.get("findings") or [{}])[0]
                 checks.append(("mockup-parity", True, v == "FAIL", "MOCKUP-FAIL", "mockup-drift",
-                               f"{f.get('class', 'drift')} on {f.get('key', ps.get('screen'))} @{f.get('width', '')}: {str(f.get('detail', ''))[:80]}",
+                               f"{f.get('class', 'drift')} on {f.get('key', ps.get('screen'))} @{f.get('width', '')}"
+                               + (f" in {f['theme']} mode" if f.get("theme") else "") + f": {str(f.get('detail', ''))[:80]}",
+                               os.path.join(d, "parity.json")))
+            elif v == "ERROR":
+                checks.append(("mockup-parity", True, True, "MOCKUP-FAIL", "other",
+                               f"mockup-parity could not open {ps.get('route')}: "
+                               + str(next((w.get("error") for w in ps.get("widths", []) if w.get("error")), "every width failed"))[:80],
                                os.path.join(d, "parity.json")))
             elif v == "UNGRADEABLE":
                 notes.append("mockup-parity UNGRADEABLE (add data-testid anchors to the mockup)")
@@ -237,7 +293,9 @@ def main(argv):
                 verdict = "PASS"
                 parts = [f"test {quoted(t['tests'][0], 60)}" if t and t.get("tests") else "test passed"]
                 if driven:
-                    parts.append(f"{r['screen']} renders and looks right @{'/'.join(str(w['width']) for w in scr['widths'])}{nonames}")
+                    ws = list(dict.fromkeys(str(w['width']) for w in scr['widths']))
+                    th = list(dict.fromkeys(w['theme'] for w in scr['widths'] if w.get('theme')))
+                    parts.append(f"{r['screen']} renders and looks right @{'/'.join(ws)}" + (f" in {' and '.join(th)} mode" if len(th) > 1 else "") + nonames)
                 if "mockup-parity" in ran:
                     parts.append("matches its mockup")
                 if "perf" in ran:

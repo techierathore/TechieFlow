@@ -331,7 +331,7 @@ def read_core_config(root: str) -> dict:
     if os.path.exists(p):
         with open(p, encoding="utf-8") as fh:
             for line in fh:
-                m = re.match(r"^(appSize|appKind|appPhase):\s*(\S+)", line)
+                m = re.match(r"^(appSize|appKind|appPhase):\s*(\S+)", line) or re.match(r"^\s+(project_type):\s*(\S+)", line)
                 if m and m.group(2) not in ("null", "~", "''", '""'):
                     out[m.group(1)] = m.group(2).strip("'\"")
     return out
@@ -1100,7 +1100,10 @@ def check_checklist(c, rep):
         brd_refs.update(refs)
         if rid.startswith("REQ-UI"):
             links = links_to(entry, "mockups")
-            if not links:
+            # a library or docs project (metrics.project_type, or kind: library) has no screens and no
+            # docs/mockups/: its UI rows map to components, so a missing link is not a finding there; a
+            # link it does carry must still resolve (TrBlazeUI TF-003)
+            if not links and c.get("kind") == "app" and read_core_config(root).get("project_type", "app").lower() not in ("library", "docs"):
                 rep.fail(rel, f"{rid} is a UI row without a mockup link")
             for l in sorted(links):
                 if not resolve(root, path, l):

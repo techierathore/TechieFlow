@@ -14,6 +14,14 @@ Last consolidated: 2026-10-07. Entries are sorted by severity.
 
 Nothing is blocked. TF-002 was re-checked on 2026-10-07 and is closed. TF-004 and TF-005 were found on the 2026-10-07 run for Chatur TR-015 to TR-017.
 
+## Resolution status (TechieFlow team, 2026-10-08)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-003 | Fixed upstream. `tf-doc-check` no longer asks a UI row for a mockup link when `core-config.yaml` says `metrics.project_type: library` (or `docs`). A link a row does carry must still point at a file that exists. `tf-triage.sh new` no longer prints "a UI row needs a mockup link" there either. Proved on this project: 28 "UI row without a mockup link" findings are gone, and no other finding appeared or went. The consumer mockups you copied in (`process-run.html`, `sevak-*.html`) are no longer needed; you may keep or remove them. Regression case `tb_003`. | After the framework update, `bash .tfcore/utils/tf-doc-check.sh docs/TrBlazeUI-Checklist.md` prints no "without a mockup link" line. |
+| TF-004 | Fixed upstream, as you suggested. `tf-fix-close.sh` takes `--cmd` (default `fix-issues`), and `triage-and-fix.md` step 3 passes `--cmd triage-and-fix`. The run record it writes around the chained verify is filed under `triage-and-fix`, and step 5 no longer asks for a second record (that one was refused). The miss-fix records keep `fix_cmd: fix-issues`, the only value the schema allows for a fix. Regression case `tb_004`. | On your next `*triage-and-fix`, the close prints `triage-and-fix: run record written`, and `docs/metrics/runs.jsonl` gains a `cmd: triage-and-fix` record and no `fix-issues` one. |
+| TF-005 | Fixed upstream. `fix-issues.md` has a step 5a, which `triage-and-fix.md` step 3 also runs. On a library it brings the documents the package ships up to date before the status gate: `handoff-phase.md` steps 1, 3, 3a and 4 (UsageGuide, HTMLs, DevGuide with `--update`, feedback replies), and `docs/TrBlazeUI-AI-Reference.md` for every component or option the run changed. No separate handoff record is written. The log row's Phase reads `triage-and-fix + handoff`. When that row is there and every row is terminal, the gate offers "commit, then build and publish the package" and never `*handoff-phase` after a release. `tf-devguide-list.sh` now reads `metrics.project_type` when `appKind` is not set: here it went from "NOTHING: no routed page found" to 368 components with their demo pages. Regression case `tb_005`. | `bash .tfcore/utils/tf-devguide-list.sh TrBlazeUI --update` prints `kind ui-library` and the component list. On your next `*triage-and-fix`, the documents are updated before the gate, and the next command it prints is the release. |
+
 ## Resolution status (TechieFlow team, 2026-09-22)
 
 | ID | Fix | Check it here |
@@ -85,11 +93,11 @@ Nothing is blocked. TF-002 was re-checked on 2026-10-07 and is closed. TF-004 an
   → FAIL docs/TrBlazeUI-Checklist.md: REQ-UI-029 is a UI row without a mockup link
   ```
 - **Expected:** a project whose `core-config.yaml` says `metrics.project_type: library` has no screens and no `docs/mockups/`, so a UI row is not asked for a mockup link (or the rule is a warning there). `tf-triage.sh new` already prints "a UI row needs a mockup link" for the same row.
-- **Actual:** `tf-doc-check.py` line ~1101 fails every `REQ-UI` detail entry without a link into `docs/mockups/`. In this repo that is every UI row: 27 of them sit in the `OLD` list for this reason alone, and each new one (REQ-UI-026, -027, -029) fails the gate. The checklist says why at line 72: "UI REQs map to component families, not mockups (this library predates the mockup flow)."
+- **Actual:** `tf-doc-check.py` fails every `REQ-UI` detail entry without a link into `docs/mockups/`. Here that is every UI row: 27 sit in the `OLD` list for this alone, and each new one fails the gate. The checklist says why: "UI REQs map to component families, not mockups."
 - **Encountered in:** `*triage-and-fix TrBlazeUI` for Chatur TR-014, 2026-10-03, status gate step 3.
-- **Workaround:** for REQ-UI-029 the design really came from a consumer's mockup, so Chatur's `settings-agents.html` and `chatur.css` were copied unchanged into `docs/mockups/` and linked. A link outside the repo does not work: the checker keeps only the `mockups/…` tail and looks for it under `docs/`. Rows with no consumer mockup have no honest workaround.
-- **Suggested fix:** skip the mockup-link check (and the matching `tf-triage.sh new` note) when `project_type` is `library` or `docs`, the same way the verifier already skips mockup parity for a project with no mockups.
-- **Still happening 2026-10-07.** REQ-UI-030, -031 and -032 failed the gate the same way. Chatur's `process-run.html` draws all three asks, so it was copied into `docs/mockups/` and linked.
+- **Workaround:** the consumer's mockup is copied unchanged into `docs/mockups/` and linked (a link outside the repo does not work: the checker keeps only the `mockups/…` tail). A row with no consumer mockup has no honest workaround.
+- **Suggested fix:** skip the mockup-link check (and the matching `tf-triage.sh new` note) when `project_type` is `library` or `docs`, as the verifier already skips mockup parity without mockups.
+- **Still happening 2026-10-07:** REQ-UI-030 to -032 (Chatur's `process-run.html` copied in), then REQ-UI-034 to -043 (eight Sevak mockups copied in as `sevak-*.html`). That run also hit the 50-row Small cap; `appSize: Medium` was set.
 
 ### TF-004 — A triage-and-fix run cannot write its own run record
 

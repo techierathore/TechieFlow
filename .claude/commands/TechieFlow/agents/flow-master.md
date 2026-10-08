@@ -25,6 +25,7 @@ Each rule lives in one place; these lines only point at it.
 
 | Command | What it does | Task file |
 |---|---|---|
+| `*develop-end-to-end {App} {brief}` | a new app from a brief to UAT, unattended: Day 1, build and verify, handoff; commits and pushes each phase; reports time and tokens per phase (greenfield only) | `develop-end-to-end.md` |
 | `*build-phase {App}` | builds every open row of the phase's checklist, smokes, chains the verifier, fixes what fails | `build-phase.md` |
 | `*fix-issues {App} {folder}` | reproduces reported bugs from screenshots and notes, fixes, re-verifies | `fix-issues.md` |
 | `*triage-issues {App} {evidence} [verify]` | reproduces and logs reported bugs; no code | `triage-issues.md` |

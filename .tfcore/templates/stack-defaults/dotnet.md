@@ -20,10 +20,12 @@
 | Q5 | Logging | Serilog, always, with file logging wired at startup before anything else can fail. | No |
 | Q6 | Tests | xUnit, always. A test project exists from day-1. | No |
 | Q7 | Layout and naming | `src/` and `tests/` at the root. The primary executable project is named exactly `<App>`; `<App>.App` is banned. Secondary heads take a descriptive suffix (`<App>.Api`, `<App>.Desktop`). | No |
-| Q8 | User interface | TrBlazeUI for every Blazor head and every MAUI Blazor Hybrid head. Native controls for WinForms, WPF and non-Blazor MAUI heads. Rendering mode is chosen per project and recorded. | Rendering mode only |
+| Q8 | User interface | TrBlazeUI for every Blazor head and every MAUI Blazor Hybrid head: NuGet package `TrBlazeUI.Components` (it brings `TrBlazeUI.Primitives`), icons from `TrBlazeUI.Icons.Lucide`. Native controls for WinForms, WPF and non-Blazor MAUI heads. Rendering mode is chosen per project and recorded. | Rendering mode only |
 | Q9 | Hosting | Web applications run containerised on a Bluehost VPS. The owner supplies a pipeline guidance document at UAT go-ahead, and a deployment checklist is produced from it. | Asked at UAT go-ahead, as the questionnaire specifies |
 | Q10 | Production secrets | Decided when the owner asks for the production pipeline, after UAT. Until then no document states where production secrets live. | Asked after UAT |
 | Q11 | Standing rules and prohibitions | 1. Never add a NuGet package without a line in the Architecture document saying why. 2. Never create a second configuration mechanism. 3. When TechieFlow, TrBlazeUI, TechieRag or any other internal library lacks something, record it in that library's feedback file and hold the feature until the library is fixed. Never implement a workaround. 4. Data access is always Dapper. 5. Database migrations live in a dedicated project named `<App>Db` (console or library) using the DbUp package. The web application runs the migration at startup, or the pipeline runs it after deployment. Never a `database` folder of loose scripts at the repository root. 6. Log files are written under the build output folder (`bin/`), which is git-ignored. Never at the repository root. 7. No unnecessary folders at the repository root (`data`, `database`, `scripts` and the like). Everything sits under `src/` or `tests/` according to what it belongs to. | No |
+
+Required packages: `TrBlazeUI.Components` — for a project with a Blazor or MAUI Blazor Hybrid head. The Architecture copies this line into its Stack decisions for each package that applies, and `tf-stack-check.sh` fails the build check when no project file references one of them.
 
 ---
 

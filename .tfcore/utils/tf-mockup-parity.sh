@@ -17,7 +17,11 @@
 #   The app is compared in the mockup's theme: the mockup's data-*theme/mode/scheme attributes on
 #   <html> and <body>, and a light/dark mode class there (class="dark", Lekhak TF-013), are set on the
 #   app page for the comparison and put back after (Lekhak TF-010);
-#   --keep-app-theme compares the theme the app shows. A mockup box marked data-tf-state or
+#   Then the screen is compared again in the other theme (Lekhak TF-024), the mockup drawn in it too:
+#   --themes light,dark runs both, light or dark alone only that one, and auto (the default) runs the
+#   other once the app shows it has it. Colour is not compared in a theme the mockup does not draw.
+#   Each finding of that pass carries "theme"; the result lists "themes" it was compared in.
+#   --keep-app-theme compares the theme the app shows, and only that one. A mockup box marked data-tf-state or
 #   data-state-testid (another state of the screen) is left out of the comparison (Lekhak TF-011),
 #   and so are its icons, badges and text when a box around it is compared (Chatur TF-001).
 #   A box marked data-tf-sample, or data-tf-state="sample-data" (Chatur TF-005), is sample data: compared
@@ -65,7 +69,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-case "${1:-}" in -h|--help) sed -n '2,52p' "$0"; exit 0 ;; esac
+case "${1:-}" in -h|--help) sed -n '2,56p' "$0"; exit 0 ;; esac
 
 command -v node >/dev/null 2>&1 || {
   echo "tf-mockup-parity: node is required (verify-phase §1 installs the verify environment)." >&2

@@ -3,16 +3,17 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 251 logged: 54 open, 196 fixed, 1 will not fix |
+| Count | 254 logged: 55 open, 198 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-10-06 |
+| Updated | 2026-10-08 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
-## Open (54)
+## Open (55)
 
 | Miss | Found | Whose gap | What went wrong |
 |---|---|---|---|
+| MISS-TechieFlow-20261008-01 | 2026-10-08 by owner | said and ignored | The Lekhak TF-024 contrast rule was shipped to 18 projects proved only on a fixture, without measuring how many screens already Verified it will fail; and the summary left the full regression re-run to the owner. |
 | MISS-TechieFlow-20261003-02 | 2026-10-03 by owner | the check was too weak | Chatur Repository after the TF-006 fix: tf-mockup-parity pairs live rows with the mockup's sample rows by position, so app row N is graded against whatever kind of row the mockup happened to draw at N (commit-row-1 a process check-in with an icon against a hand check-in without one); five 'commit-ro |
 | MISS-TechieFlow-20260928-07 | 2026-09-28 by owner | the framework never said it | Lekhak TF-003: no Mac Catalyst driver ships, so a Mac head can never get a verdict; the project drove it by hand with Appium mac2 |
 | MISS-TechieFlow-20260910-03 | 2026-09-10 by owner | the check was too weak | tf-metrics.sh --phases crashes with UnboundLocalError on any phase that touched no REQ and wrote no file, because by_mode was read outside the branch that assigned it. |
@@ -68,10 +69,12 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (196)
+## Fixed (198)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261008-03 | 2026-10-08 by owner | 2026-10-08 by log-miss | the check was too weak | OpenCode 2 moved its sessions to new tables (session_v2, session_message) on 2026-09-27 and the emitter kept reading the old ones, so every OpenCode run record since has tokens_scope none; and a new session per phase was missed because the plugin's pointer kept the first one. Found by the develop-en |
+| MISS-TechieFlow-20261008-02 | 2026-10-08 by owner | 2026-10-08 by log-miss | the check was too weak | tf-develop.sh accepted a folder inside another repository as the app's repository, and its first test run staged the whole TechieFlow repository with git add -A (the commit was refused); it now requires the folder to be the top of its own repository. |
 | MISS-TechieFlow-20261006-07 | 2026-10-06 by production | 2026-10-06 by log-miss | the check was too weak | TechieRag TF-004: the document-test step and tf-build.sh test ran every test project of a solution at once, so on a small WSL machine the local-model tests took the memory and a test that passes alone failed with Cannot allocate memory, twice in one day. |
 | MISS-TechieFlow-20261006-06 | 2026-10-06 by production | 2026-10-06 by log-miss | the check was too weak | TechieRag TF-003: the status facts took any handoff row in the Verification log as this phase's, so phase 2's handoff made a newly built phase 3 read handoff done and sent the owner to UAT with guides that did not describe it. |
 | MISS-TechieFlow-20261006-05 | 2026-10-06 by production | 2026-10-06 by log-miss | the check was too weak | TechieRag TF-002: the TF-001 fix stripped code and double-quoted text only from entry headings and bodies, not from replies, while its reply told TechieRag that quoted text is never a mark; a reply quoting the July 'all others fixed' line then marked 13 entries it called open as fixed, and tr_001 ha |

@@ -281,7 +281,9 @@ Get this right; everything else on the record is secondary.
 
 ### 3.3 `failure_class` — controlled vocabulary, no free text
 
-`blank-data` · `zero-rows` · `overlap` · `clipped` · `offscreen` · `slow-ttfb` · `slow-load` · `timeout` · `exception` · `assert-fail` · `naming` · `build-error` · `missing-asset` · `mockup-drift` · `other`
+`blank-data` · `zero-rows` · `overlap` · `clipped` · `offscreen` · `low-contrast` · `light-surface` · `slow-ttfb` · `slow-load` · `timeout` · `exception` · `assert-fail` · `naming` · `build-error` · `missing-asset` · `mockup-drift` · `other`
+
+`low-contrast` and `light-surface` (added 2026-10-07, Lekhak TF-024) are visual findings: text below the contrast floor against the colour painted behind it, in either theme, and a large light panel in dark mode. The ratio and the colours stay in the run JSON and the Remark.
 
 `missing-asset` (added 2026-08-31) names an asset the page **declared** and never received — a 404, a non-200, or a 200 with an empty body on a `<link rel=stylesheet>` or `<script src>`. It says only that; **never** the URL, which is a file path inside the app and is exactly what constraint 7 keeps out of these streams. The path belongs in the checklist Remark a human reads.
 

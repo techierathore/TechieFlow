@@ -14,12 +14,18 @@
 #        bundle id comes from boot.json or --bundle; no Playwright needed)
 #   A mockup control marked data-tf-state="<state>" (on it or a box around it) belongs to another state
 #   of the screen: it is not owed on the first view.
+#   … --themes light,dark | light | dark   # default auto: light, then dark once the app shows it has a
+#                                           # dark theme (what it paints changes when dark is put on it)
+#   … --min-contrast 3                      # the text contrast floor, ratio : 1 (Lekhak TF-024)
 #
 # For every screen, at 1280 and 390 px: every control the mockup anchors is present and shows
 # something, no header-only table, no blank page, no Blazor or console error (render); nothing
 # overlaps, nothing has zero size or sits off-screen, no sideways scroll, a stylesheet is loaded
-# (visual). Overlap and off-screen are measured on the rectangle an element paints in, clipped by
-# every scrolling ancestor, and the page is read only after its first render (--render-wait,
+# (visual); every text run reaches 3.0 : 1 against the colour painted behind it (disabled controls
+# exempt) and, in dark mode, no box over 2% of the window paints a light panel (visual). Each theme is
+# put on the page through prefers-color-scheme and the light/dark value of its data-*theme attributes
+# and mode classes, and taken off again after. Overlap and off-screen are measured on the rectangle an
+# element paints in, clipped by every scrolling ancestor, and the page is read only after its first render (--render-wait,
 # default 5000 ms). Saves a screenshot per screen and width under tests/.artifacts/verify/screens/ and
 # writes tests/.artifacts/verify/screens.json; that JSON is the evidence a smoke names before a
 # row is written Implemented, and what the verdict script reads. It decides no row's status.
@@ -29,8 +35,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # `--help` is a request and exits 0; no argument at all is a mistake and exits 3. (The one-line
 # form this replaces computed "0--help" as its exit code and printed a bash error under the help.)
 case "${1:-}" in
-  -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-  "")        sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 3 ;;
+  -h|--help) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  "")        sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 3 ;;
 esac
 command -v node >/dev/null 2>&1 || { echo "tf-verify-screens: node is required (bash .tfcore/utils/tf-verify-env.sh)" >&2; exit 4; }
 case " $* " in *" --appium "*)

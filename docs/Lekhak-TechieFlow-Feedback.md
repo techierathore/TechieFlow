@@ -4,16 +4,16 @@
 |---|---|
 | App | Lekhak |
 | Upstream | TechieFlow |
-| Updated | 2026-10-07 |
+| Updated | 2026-10-04 |
 
 ## Summary
 
-23 entries: 0 blocking now, 1 open and not blocking (TF-008), 3 fixed upstream and not yet re-checked here (TF-003, TF-022, TF-023), 19 closed after a re-check here (TF-001, TF-002, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018, TF-019, TF-020, TF-021).
+24 entries: 0 blocking now, 3 open and not blocking (TF-003, TF-008, TF-024), 2 fixed upstream and not yet re-checked here (TF-022, TF-023), 19 closed after a re-check here (TF-001, TF-002, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018, TF-019, TF-020, TF-021).
 
 Nothing is blocked.
 
-- 0 blockers, 6 majors, 17 minors, 0 nice-to-haves.
-- Last consolidated: 2026-10-07.
+- 0 blockers, 7 majors, 17 minors, 0 nice-to-haves.
+- Last consolidated: 2026-10-04.
 
 ## Entries
 
@@ -384,15 +384,29 @@ Nothing is blocked.
 - **Workaround:** compare against a check run before editing and fix only new findings.
 - **Suggested fix:** `tf-phase.sh start amend-docs` baselines every file `tf-doc-check.sh --app` reads.
 
+### TF-024 — The screen and mockup checks only ever look at the light theme, so a dark mode that is unusable passes verify
+
+- **Severity:** major
+- **Blocks:** no — Lekhak now carries its own two-theme contrast test (`tests/verify/theme-contrast.spec.ts`), which the verify runs as a normal acceptance test.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-verify-screens.sh --cdp http://172.18.144.1:9223 --screen ai-story-studio=/admin/ai-story-studio   # light theme only; no option for dark
+  ```
+- **Expected:** for an app with a light/dark switch, the render, visual and mockup checks run in both themes, and the visual check measures text contrast (text against the colour actually painted behind it) and flags large light surfaces in dark mode.
+- **Actual:** every screen was graded in light mode only. On 2026-10-07 the owner found 20 of 20 desktop admin screens with unreadable text in dark mode (contrast down to 1.03 : 1, white panels inside a dark shell). All of them were `Verified`.
+- **Encountered in:** triage-and-fix, 2026-10-07 (UAT)
+- **Workaround:** the project-level Playwright test named above.
+- **Suggested fix:** `tf-verify-screens.sh --themes light,dark` (default: both when the app declares a theme switch in its UIDesign), a contrast rule in the visual check (3.0 : 1 minimum, disabled controls exempt), and the mockup parity check run per theme.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
 
-### Resolution status (TechieFlow team, 2026-10-07)
+### Resolution status (TechieFlow team, 2026-10-08)
 
 | ID | Fix | Check it here |
 |---|---|---|
-| TF-003 | Built upstream, not yet proven on this app. `tf-verify-boot.sh start --head maccatalyst` builds and opens the Mac head, and `tf-verify-screens.sh --appium <url>` checks it over mac2. A Blazor Hybrid head is checked without control names (blank, error bar, overlap, screenshot; owner decision 2026-10-07), because on a Mac `data-testid` never reaches mac2. On this Mac BlogAdmin does not start, for two reasons in this project: macOS refuses an ad-hoc build that asks for `keychain-access-groups`, and on macOS 27 the app quits at its first window without a scene manifest (`UIApplicationSceneManifest` plus a `SceneDelegate : MauiUISceneDelegate`). | Fix those two, then run `bash .tfcore/utils/tf-verify-boot.sh start --head maccatalyst` and `bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --appium http://localhost:4723`. |
+| TF-024 | Fixed upstream. `tf-verify-screens` grades every screen in light mode, then in dark mode. In the default (auto), dark runs once a screen shows the app has a dark theme: what it paints changes when dark is put on it. `--themes light,dark`, `light` or `dark` forces the choice. A theme is put on the page the way your toggle does it, through the light/dark value of `data-theme` on `<html>` (any `data-*theme`, `data-*mode` or `data-*scheme` attribute, and a `dark` or `light` class). The browser's colour scheme is set too. Both are put back after each screen, so the desktop app is left in the theme you had. The visual check now measures every visible piece of text, and every field's value, against the colour actually painted behind it, layers blended. Below 3.0 : 1 is a `low-contrast` finding (`--min-contrast` changes the floor). Disabled controls are exempt, and text over an image or a gradient is not measured. In dark mode, a box over 2% of the window painted lighter than 0.8 luminance is a `light-surface` finding. Each finding says "in dark mode", and dark screenshots are saved as `<screen>-<width>-dark.png`. `tf-mockup-parity` compares each screen a second time in the other theme. When the mockup has no dark styles, the app's dark screen is compared with the mockup as drawn, colour left out. Proved here on BlogAdmin over CDP, signed in as the admin: AI Story Studio, Dashboard, LLM Providers and Prompt Manager were graded in light and dark, all four pass, the dark screenshots are really dark, and the app was back in light afterwards. A planted white panel in dark mode could not be tried on the live app, because the database on port 5550 was down by then. It was tried in regression case `lk_024`: a white card and pale text in dark mode fail, light passes, and a disabled button is exempt. The case fails against the scripts you had and passes now. | After the framework update, boot the desktop head and run `bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --cdp <the boot url>`. Each screen's line reads `light + dark themes`, and `tests/.artifacts/verify/screens/` holds a `-dark.png` per screen. Your own `tests/verify/theme-contrast.spec.ts` can stay as REQ-NFR-027's acceptance test. |
 
 ### Resolution status (TechieFlow team, 2026-10-04, second reply)
 

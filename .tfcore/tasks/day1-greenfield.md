@@ -1,12 +1,12 @@
 # day1-greenfield
 
-`*day1-greenfield {App}` starts a product that has no code. It runs in two stages with one owner review between them. Stage 1 produces the Architecture, the mockups and the BRD, then stops for review. `*day1-greenfield {App} --stage2` runs only after the owner has approved them and produces the checklist and the remaining documents. No mode skips the review: YOLO runs one stage to completion, never both.
+`*day1-greenfield {App}` starts a product that has no code. It runs in two stages with one owner review between them. Stage 1 produces the Architecture, the mockups and the BRD, then stops for review. `*day1-greenfield {App} --stage2` runs only after the owner has approved them and produces the checklist and the remaining documents. No mode skips the review: YOLO runs one stage to completion, never both. The one exception is `*develop-end-to-end`, which runs both stages itself (`.tfcore/tasks/_develop-mode.md`).
 
 First, before anything else: `bash .tfcore/utils/tf-phase.sh start day1-greenfield {App}` prints the start time and marks the command running.
 
 ## Stage 1 — Architecture, mockups, BRD
 
-Ask once each, and nothing per section:
+Ask once each, and nothing per section (in develop mode ask nothing: `_develop-mode.md` gives every answer):
 
 1. `{App}` if missing. PascalCase, no spaces.
 2. The concept: "Describe the app, any length: a sentence, paragraphs, bullets, half-baked notes, comparisons to other apps. You will edit the document afterwards." Read all of it. Never cap or summarise the owner's input.

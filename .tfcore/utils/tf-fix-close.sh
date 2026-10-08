@@ -3,6 +3,7 @@
 #
 #   bash .tfcore/utils/tf-fix-close.sh <App> [--started <ISO>] [--reqs REQ-UI-009,REQ-FN-014]
 #                                            [--subagents trblazeui,builder] [--build pass|fail|not-run] [--files N]
+#                                            [--cmd triage-and-fix]   # the command the run record is filed under
 #   bash .tfcore/utils/tf-fix-close.sh <App> --misses MISS-App-20260901-06,MISS-App-20260830-03 \
 #                                            --fix-cmd amend-docs [--verdict Verified]
 #
@@ -24,13 +25,16 @@
 #      re-verify). A row no verify graded gets no miss-fix and is listed. A row with no open miss is listed,
 #      not invented: a fix on a defect nobody logged is a triage gap, so open it first with tf-triage.sh
 #      demote or tf-log-miss.sh, then re-run this.
+# --cmd names the command the run record is filed under (default fix-issues): *triage-and-fix passes
+# --cmd triage-and-fix, so its run is counted as itself and no second record over the same window is
+# needed, which the overlap rule refused (TrBlazeUI TF-004). The miss-fix records keep fix_cmd fix-issues.
 # --reqs defaults to every row those verifies graded. The start defaults to the fix's marker, or its
 # "outer" entry when a chained verify replaced it. Telemetry never blocks: refusals are printed, exit 0.
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [[ $# -ge 1 && "$1" != "-h" && "$1" != "--help" ]] || { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 3; }
 APP="$1"; shift
-STARTED=""; REQS=""; SUBS=""; BUILD="pass"; FILES=""; MISSES=""; FIXCMD="fix-issues"; VERDICT=""
+STARTED=""; REQS=""; SUBS=""; BUILD="pass"; FILES=""; MISSES=""; FIXCMD="fix-issues"; VERDICT=""; RUNCMD="fix-issues"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --started) STARTED="${2:-}"; shift 2 ;;
@@ -41,6 +45,7 @@ while [[ $# -gt 0 ]]; do
     --misses) MISSES="${2:-}"; shift 2 ;;
     --fix-cmd) FIXCMD="${2:-}"; shift 2 ;;
     --verdict) VERDICT="${2:-}"; shift 2 ;;
+    --cmd) RUNCMD="${2:-}"; shift 2 ;;
     *) echo "tf-fix-close: unknown argument $1" >&2; exit 3 ;;
   esac
 done
@@ -51,9 +56,10 @@ except Exception: m={}
 o=m.get('outer') or {}
 print(m.get('started','') if m.get('cmd')!='verify-phase' or not o.get('started') else o['started'])" 2>/dev/null)"
 TF_APP="$APP" TF_STARTED="$STARTED" TF_REQS="$REQS" TF_SUBS="$SUBS" TF_BUILD="$BUILD" TF_FILES="$FILES" \
-TF_MISSES="$MISSES" TF_FIXCMD="$FIXCMD" TF_VERDICT="$VERDICT" TF_EMIT="$HERE/tf-emit.sh" python3 - <<'PY'
+TF_MISSES="$MISSES" TF_FIXCMD="$FIXCMD" TF_RUNCMD="$RUNCMD" TF_VERDICT="$VERDICT" TF_EMIT="$HERE/tf-emit.sh" python3 - <<'PY'
 import datetime, json, os, subprocess
 EMIT = os.environ["TF_EMIT"]; app = os.environ["TF_APP"]; started = os.environ["TF_STARTED"]
+cmd = os.environ.get("TF_RUNCMD") or "fix-issues"
 now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 def q(*a): return subprocess.run(["bash", EMIT, *a], capture_output=True, text=True).stdout.strip()
 def emit(stream, rec):
@@ -121,7 +127,7 @@ inner, voided = [], set()
 for r in jsonl("runs.jsonl"):
     if r.get("kind") == "run-void":
         voided.add((r.get("cmd"), r.get("started")))
-    elif r.get("kind", "run") == "run" and r.get("app") == app and r.get("cmd") != "fix-issues" and not r.get("backfilled") \
+    elif r.get("kind", "run") == "run" and r.get("app") == app and r.get("cmd") not in ("fix-issues", cmd) and not r.get("backfilled") \
             and started and (r.get("started") or "") >= started and (r.get("ended") or "") and r["ended"] <= now:
         inner.append((r["started"], r["ended"], r.get("cmd")))
 inner = sorted(w for w in inner if (w[2], w[0]) not in voided)
@@ -130,11 +136,11 @@ for s, e, _c in inner:
     if t and s > t: gaps.append((t, s))
     t = max(t, e) if t else e
 if not started or not gaps or t < now: gaps.append((t, now))
-existing = {r.get("started") for r in jsonl("runs.jsonl") if r.get("kind", "run") == "run" and r.get("cmd") == "fix-issues"}
+existing = {r.get("started") for r in jsonl("runs.jsonl") if r.get("kind", "run") == "run" and r.get("cmd") == cmd}
 wrote = had = 0
 for i, (s, e) in enumerate(gaps):
     first = i == 0
-    run = {"kind": "run", "app": app, "cmd": "fix-issues", "mode": "fix", "ended": e, "reqs_touched": reqs if first else [],
+    run = {"kind": "run", "app": app, "cmd": cmd, "mode": "fix", "ended": e, "reqs_touched": reqs if first else [],
            "reqs_count": len(reqs) if first else 0, "subagents": subs if first else [],
            "files_written": (int(files) if files.isdigit() else len(reqs)) if first else 0, "build_result": os.environ["TF_BUILD"]}
     if s: run["started"] = s
@@ -143,7 +149,7 @@ for i, (s, e) in enumerate(gaps):
         had += 1; continue
     wrote += emit("runs", run)
 if inner:
-    print(f"fix-issues: recorded around {len(inner)} chained run(s) ({', '.join(sorted({c for _s, _e, c in inner}))}) in {len(gaps)} segment(s)")
+    print(f"{cmd}: recorded around {len(inner)} chained run(s) ({', '.join(sorted({c for _s, _e, c in inner}))}) in {len(gaps)} segment(s)")
 closed, none, unverified = 0, [], []
 for rid in reqs:
     if rid not in rows:
@@ -158,7 +164,7 @@ for rid in reqs:
     if started: rec["fix_run_id"] = started
     if emit("misses", rec): closed += 1
 state = "already there" if had == len(gaps) else "written" if wrote + had == len(gaps) else "not written"
-print(f"fix-issues: run record {state}; {closed} miss-fix record(s) with the verifier's verdict"
+print(f"{cmd}: run record {state}; {closed} miss-fix record(s) with the verifier's verdict"
       + (f"; no open miss on {', '.join(none)} (log it first, then re-run)" if none else "")
       + (f"; no verify graded {', '.join(unverified)} during this fix, so its miss stays open with no miss-fix" if unverified else ""))
 PY

@@ -1,6 +1,6 @@
 # _yolo-mode (shared rule — YOLO / goal mode: run unattended to completion)
 
-YOLO means all permissions and all access are granted: run one command to completion and never stop to check in. It never crosses an owner review into the next phase; `*day1-greenfield` runs one stage, and stage 2 needs `--stage2`. `*build-phase` and `*verify` are in YOLO by default; every other command honours it when it is on.
+YOLO means all permissions and all access are granted: run one command to completion and never stop to check in. It never crosses an owner review into the next phase; `*day1-greenfield` runs one stage, and stage 2 needs `--stage2`. The one command that does is `*develop-end-to-end`, under its own rule (`_develop-mode.md`). `*build-phase` and `*verify` are in YOLO by default; every other command honours it when it is on.
 
 ## When it is on
 

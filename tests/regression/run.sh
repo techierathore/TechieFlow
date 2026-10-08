@@ -485,7 +485,7 @@ HTML
     > "$d/docs/mockups/late.html"
   # the shipped script, run where playwright resolves; the bytes are the shipped ones
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1205,7 +1205,7 @@ HTML
 <h1 data-testid="page-title">Misses</h1><div data-testid="miss-table">rows of misses</div></body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1251,7 +1251,7 @@ HTML
 <div data-testid="kpi-rework" class="tile">Rework 12</div></body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1485,7 +1485,7 @@ HTML
 <input data-testid="login-pass" name="p" type="password"><button data-testid="login-submit" type="submit">Sign in</button></form></body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1657,7 +1657,7 @@ HTML
 </body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1798,7 +1798,7 @@ HTML
 </body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1938,7 +1938,7 @@ HTML
 </body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1998,7 +1998,7 @@ tf_045() {
     printf '<div class="tile" data-testid="tile-warn" style="background:#b45309">3 open</div></body></html>\n'
   } > "$d/misses.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2054,7 +2054,7 @@ tf_046() {
     printf '</body></html>\n'
   } > "$d/misses.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2130,7 +2130,7 @@ tf_047() {
     printf '</body></html>\n'
   } > "$d/misses.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2325,7 +2325,7 @@ tf_036() {
 </body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2581,7 +2581,7 @@ class H(http.server.BaseHTTPRequestHandler):
 http.server.ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 PY
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 "$d/server.py" "$port" "$d/app.html" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2797,7 +2797,7 @@ am_011() {
   local d="$SCRATCH/am011"; mkdir -p "$d/docs/mockups"
   printf '<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font:14px/20px system-ui} .badge{display:inline-block;border-radius:8px;background:#2563eb;color:#fff;padding:2px 8px;height:20px}</style></head><body><div data-testid="dash-header"><h1>Dashboard</h1><span class="badge">3 open</span></div><table data-testid="dash-table"><tr><th>Name</th><th>Count</th></tr><tr><td>Alpha</td><td>12</td></tr></table></body></html>\n' > "$d/docs/mockups/dashboard.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-assets-browser.mjs" "$UTILS/tf-assets.sh" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-assets-browser.mjs" "$UTILS/tf-assets.sh" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   _inpage_server "$d" "$port"
   local out
@@ -2823,7 +2823,7 @@ am_012() {
   fi
   local d="$SCRATCH/am012"; mkdir -p "$d/tests/.artifacts/verify"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   _inpage_server "$d" "$port"
   local out
@@ -2889,7 +2889,7 @@ am_014() {
   printf '<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0}</style></head><body><main style="height:600px;overflow-y:auto">%s</main><div style="height:900px"></div></body></html>\n' "$page" > "$d/escaped.html"
   cp "$d/docs/mockups/report.html" "$d/docs/mockups/escaped.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2923,7 +2923,7 @@ am_015() {
   printf '%s%s</style></head><body><div data-testid="note"><span class="w">Not adopted on any device</span></div></body></html>\n' "$head" \
     '.w{display:inline-block;width:40px;padding:4px;line-height:1;font-size:10px}' > "$d/wrapped.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -3359,7 +3359,7 @@ am_028() {
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><h1 data-testid="groups-title">Groups</h1><div class="table-responsive" data-testid="groups-table"><table>%s</table></div>%s</body></html>\n' "$css" "$rows" "$tail" > "$d/groups.html"
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><h1 data-testid="groups-title">Groups</h1><div class="table-responsive" data-testid="groups-table"><p>14 groups</p><table>%s</table></div>%s</body></html>\n' "$css" "$rows" "$tail" > "$d/groups2.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -3423,7 +3423,7 @@ ch_001() {
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="this-chatur"><div class="row"><svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg>Version 1.4</div><div class="row">Up to date<div data-tf-state="newer-build"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="8"/></svg> Download 1.5</div></div></div></body></html>\n' "$css" > "$d/docs/mockups/pre.html"
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="this-chatur"><div class="row"><svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg>Version 1.4</div><div class="row">Up to date</div></div></body></html>\n' "$css" > "$d/site/pre/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -3493,7 +3493,7 @@ MD
   - *Acceptance:* When the owner opens Bad, then the check-ins show.
 MD
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -3651,7 +3651,7 @@ ch_005() {
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><nav data-testid="recent-list"><h3>Recent</h3></nav></body></html>\n' "$css" > "$d/site/empty/index.html"
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><nav data-testid="recent-list"><h3>Recent</h3><a>Chatur</a><a>Sevak</a></nav></body></html>\n' "$css" > "$d/site/bare/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -3689,7 +3689,7 @@ ch_006() {
   # the same, with an icon of the box's own that the mockup does not draw
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="history-table"><p>%s Filter</p><table><thead><tr><th>Check-in</th><th>Message</th></tr></thead><tbody>%s</tbody></table></div></body></html>\n' "$css" "$ic" "$arows" > "$d/site/extra/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -3723,7 +3723,7 @@ ch_007() {
   printf '%s<table data-testid="tools-table"><tbody data-tf-state="sample-data"><tr><td>%s</td><td>git</td></tr><tr><td>%s</td><td>dotnet</td></tr></tbody></table></body></html>\n' "$h" "$ic" "$ic" > "$d/docs/mockups/tools.html"
   printf '%s<div data-testid="tools-table"><table><tbody><tr><td>%s</td><td>node</td></tr></tbody></table></div></body></html>\n' "$h" "$ic" > "$d/site/tools/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -3973,6 +3973,81 @@ tb_002() {
                      || bad tb_002b "$((4-fresh)) unchained start(s) kept a stale baseline"
 }
 
+# --- TrBlazeUI TF-003: a library's UI rows were asked for a mockup link -------------------------
+# A library has no screens and no docs/mockups/; its UI rows map to components. Every one failed
+# "a UI row without a mockup link" (27 old, each new one blocking), and the workaround was copying a
+# consumer's mockup in. metrics.project_type: library now skips that finding; an app still gets it.
+tb_003() {
+  local d="$SCRATCH/tb003" kind out n=0
+  for kind in app library; do
+    mkdir -p "$d/$kind/docs" "$d/$kind/.tfcore"
+    printf 'appPhase: 1\nmetrics:\n  project_type: %s\n' "$kind" > "$d/$kind/.tfcore/core-config.yaml"
+    cat > "$d/$kind/docs/Fx-Checklist.md" <<'MD'
+# Fx — Requirements Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Detail |
+|---|---|---|---|---|---|
+| REQ-UI-001 | Switch | Verified | 100% | — | [view](#d-req-ui-001) |
+
+## Coverage
+
+<a id="d-req-ui-001"></a>
+- **REQ-UI-001** — Switch (BRD-1)
+  - Acceptance: When a consumer toggles the Switch on the Switch demo screen, then it changes state.
+MD
+    out="$(python3 "$UTILS/tf-doc-check.py" --root "$d/$kind" --quiet "$d/$kind/docs/Fx-Checklist.md" 2>&1)"
+    if [[ $kind == app ]]; then grep -q 'REQ-UI-001 is a UI row without a mockup link' <<<"$out" && n=$((n+1)) || note "an app's UI row was not asked for its mockup"
+    else ! grep -q 'without a mockup link' <<<"$out" && n=$((n+1)) || note "a library's UI row was asked for a mockup"; fi
+  done
+  local tri; tri="$(cd "$d/library" && bash "$UTILS/tf-triage.sh" Fx new "Switch label" "When a consumer … on the Switch demo screen, then …" --prefix UI 2>&1)"
+  ! grep -q 'needs a mockup link' <<<"$tri" && n=$((n+1)) || note "tf-triage new still told a library to add a mockup"
+  [[ $n -eq 3 ]] && ok tb_003 "a library's UI rows need no mockup link, in the checker and in tf-triage new; an app's still do" \
+                 || bad tb_003 "the mockup-link rule ignores the project type"
+}
+
+# --- TrBlazeUI TF-004: a triage-and-fix run could not write its own run record --------------------
+# tf-fix-close.sh always filed the run as fix-issues, then triage-and-fix step 5 asked for a
+# triage-and-fix record over the same window and the overlap rule refused it. --cmd files it as itself.
+tb_004() {
+  local d; d="$(_metrics_fx tb004)"; mkdir -p "$d/.tfcore"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"; printf '# Fx — Checklist\n' > "$d/docs/Fx-Checklist.md"
+  local out; out="$(cd "$d" && bash "$UTILS/tf-fix-close.sh" Fx --started 2026-10-07T05:59:51Z --reqs REQ-UI-030 --build pass --cmd triage-and-fix 2>&1)"
+  local cmds; cmds="$(python3 -c "import json,sys; print(','.join(json.loads(l).get('cmd','') for l in open(sys.argv[1]) if l.strip()))" "$d/docs/metrics/runs.jsonl" 2>&1)"
+  [[ "$cmds" == "triage-and-fix" ]] && grep -q '^triage-and-fix: run record written' <<<"$out" \
+    && ok tb_004 "tf-fix-close --cmd triage-and-fix files the run under triage-and-fix, so no second record is needed" \
+    || { bad tb_004 "the run was not filed under triage-and-fix (runs: $cmds)"; note "$(head -2 <<<"$out")"; }
+}
+
+# --- TrBlazeUI TF-005: a library's fix ended before the documents it ships were updated -----------
+# The gate offered *handoff-phase after the run, so the owner released a package whose guides did not
+# describe the fix, or rebuilt it. A library's fix now runs the handoff steps itself; once they ran, the
+# gate offers the release. And the DevGuide list read the library as an app and found nothing.
+tb_005() {
+  local d="$SCRATCH/tb005" n=0; mkdir -p "$d/.tfcore" "$d/docs" "$d/src/Fx/Components" "$d/demos/Pages"
+  printf 'appPhase: 1\nmetrics:\n  project_type: library\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Detail |
+|---|---|---|---|---|---|
+| REQ-UI-001 | Switch | Verified | 100% | — | |
+MD
+  local st="$d/PROJECT-STATUS"
+  printf '# Fx — Project status\n\n## Verification log\n\n| Date | Phase | Result | Status table |\n|---|---|---|---|\n| 2026-10-07 | triage-and-fix + handoff | 1/1 Verified | docs/Fx-Checklist.md#requirements-status |\n' > "$st.md"
+  local facts; facts="$(cd "$d" && python3 "$UTILS/tf-status-facts.py" Fx triage-and-fix 2>&1)"
+  grep -q 'build and publish the package' <<<"$facts" && ! grep -q 'handoff-phase Fx' <<<"$facts" && n=$((n+1)) || note "the gate still offered *handoff-phase: $(grep -A3 'Next command' <<<"$facts" | tr '\n' ' ' | cut -c1-160)"
+  printf '<p>switch</p>\n' > "$d/src/Fx/Components/Switch.razor"; printf '@page "/switch"\n<Switch />\n' > "$d/demos/Pages/SwitchDemo.razor"
+  local dg; dg="$(cd "$d" && python3 "$UTILS/tf-devguide-list.py" Fx --update 2>&1)"
+  grep -q 'kind ui-library' <<<"$dg" && ! grep -q '^NOTHING' <<<"$dg" && n=$((n+1)) || note "devguide list: $(head -3 <<<"$dg" | tr '\n' ' ')"
+  grep -q 'project_type: library' "$ROOT/.tfcore/tasks/fix-issues.md" && grep -q -- '--cmd triage-and-fix' "$ROOT/.tfcore/tasks/triage-and-fix.md" && n=$((n+1)) || note "the tasks do not name the library step"
+  [[ $n -eq 3 ]] && ok tb_005 "a library's fix updates its shipped documents before the gate, the gate then offers the release, and the DevGuide list reads it as a library" \
+                 || bad tb_005 "$((3-n)) of 3 library-handoff checks failed"
+}
+
 # --- Lekhak TF-001: the web head's secrets were in the Windows store, the copy ran in WSL ---------
 # `dotnet user-secrets set` on Windows writes %APPDATA%\Microsoft\UserSecrets; the published copy run
 # on the WSL side looked in ~/.microsoft/usersecrets and stopped: "Required configuration value(s) not
@@ -4020,7 +4095,7 @@ lk_002() {
   printf '<!doctype html><html><head><meta charset="utf-8"><style>body{font:14px system-ui}</style></head><body><h1 data-testid="page-title">Home</h1><p>Signed-in home of the development head.</p></body></html>\n' > "$d/site/index.html"
   cp "$d/site/index.html" "$d/docs/mockups/home.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 - "$d" "$port" >/dev/null 2>&1 <<'PY' &
 import functools, http.server, ssl, sys
@@ -4085,7 +4160,7 @@ lk_005() {
  {"name":"Post","route":"/posts/{PostId:int}","mockup":"","rows":["REQ-UI-003"]}]}
 JS
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-login.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -4134,7 +4209,7 @@ class H(http.server.BaseHTTPRequestHandler):
 http.server.ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 PY
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-assets-browser.mjs" "$UTILS/tf-assets.sh" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-assets-browser.mjs" "$UTILS/tf-assets.sh" "$d/"
   local port cport exe
   port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   cport="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
@@ -4221,7 +4296,7 @@ lk_010() {
   printf '<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><style>%s</style></head><body><div id="root"></div><script>function draw(){document.getElementById("root").innerHTML=location.pathname==="/dashboard"?%s:"<p>Home</p>";}window.addEventListener("popstate",draw);draw();</script></body></html>\n' \
     "$css" "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$body")" > "$d/site/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port cport exe
   port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   cport="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
@@ -4384,7 +4459,7 @@ lk_022() {
   printf "$page" "Editor" > "$d/site/story/editor/index.html"
   printf '{"screens":[{"name":"Prompt Manager","route":"/admin/prompt-manager/","mockup":"docs/mockups/admin/prompt-manager.html"},{"name":"Story editor","route":"/story/editor/","mockup":"docs/mockups/story/editor.html"}]}\n' > "$d/tests/.artifacts/verify/list.json"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -4408,6 +4483,106 @@ for s in json.load(open(sys.argv[1]))['screens']: print(s['screen'], s['verdict'
   grep -qx 'editor NO-MOCKUP' <<<"$c" \
     && ok lk_022c "two mockups of one name in different folders are not guessed between" \
     || { bad lk_022c "an ambiguous mockup name was graded against a guess"; note "$(tr '\n' ' ' <<<"$c")"; }
+}
+
+# --- Chatur TF-008: a filled-in route never found its mockup comparison, so its rows were Verified ----
+# The comparison ran as process-run=/processes/6/run and FAILed, but the verdict looked it up by the
+# screen's name (Process run) and by the literal route /processes/{id}/run, found neither and wrote all
+# 11 rows Verified. A comparison now counts for the row whose route pattern it fills, and a driven
+# screen with a mockup and no comparison fails the mockup check instead of skipping it.
+ch_008() {
+  local d="$SCRATCH/ch008" v="$SCRATCH/ch008/tests/.artifacts/verify"
+  mkdir -p "$d/docs" "$v"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+| ID | Title | Status | % | Remarks | Details |
+|---|---|---|---|---|---|
+| REQ-UI-047 | Run steps | Implemented | 75% | | |
+| REQ-UI-053 | Workspace | Implemented | 75% | | |
+| REQ-UI-060 | Start | Implemented | 75% | | |
+| REQ-UI-070 | About | Implemented | 75% | | |
+MD
+  python3 - "$v" <<'PY'
+import json, sys
+v = sys.argv[1]
+rows = [("REQ-UI-047", "Process run", "/processes/{id}/run", "docs/mockups/process-run.html"),
+        ("REQ-UI-053", "Agent workspace", "/workspace/{agent}", "docs/mockups/agent-workspace.html"),
+        ("REQ-UI-060", "Start", "/", "docs/mockups/start.html"),
+        ("REQ-UI-070", "About", "/about", "")]
+json.dump({"app": "Fx", "scope": "ui", "checklist": "docs/Fx-Checklist.md",
+           "rows": [{"id": i, "class": "UI", "title": t, "status_raw": "Implemented", "pct": 75, "remarks": "",
+                     "screen": t, "route": r, "mockup": m, "perf_budget": ""} for i, t, r, m in rows],
+           "screens": [{"name": t, "route": r, "mockup": m, "rows": [i]} for i, t, r, m in rows]}, open(f"{v}/list.json", "w"))
+ok = lambda w: {"width": w, "render": "OK", "visual": "OK", "findings": [], "screenshot": ""}
+json.dump({"screens": [{"name": t, "route": r.replace("{id}", "6").replace("{agent}", "verifier"), "render": "OK", "visual": "OK",
+                        "widths": [ok(1280), ok(390)]} for i, t, r, m in rows], "skipped": []}, open(f"{v}/screens.json", "w"))
+json.dump({"reqs": {i: {"result": "PASS", "tests": [f"{i} {t}"], "skipped": []} for i, t, r, m in rows}}, open(f"{v}/tests.json", "w"))
+json.dump({"screens": [
+    {"screen": "process-run", "route": "/processes/6/run", "verdict": "FAIL",
+     "findings": [{"class": "icon", "key": "steps", "width": 1280, "detail": "mockup carries an icon here; the app does not"}]},
+    {"screen": "agent-workspace", "route": "/workspace/verifier", "verdict": "PASS", "findings": []}]}, open(f"{v}/parity.json", "w"))
+json.dump({"head": "web", "mode": "base", "url": "http://localhost:1", "rung": "dotnet", "reason": "", "reason_kind": ""}, open(f"{v}/boot.json", "w"))
+PY
+  (cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --apply >/dev/null 2>&1)
+  local cl="$d/docs/Fx-Checklist.md"
+  grep -q '^| REQ-UI-047 | Run steps | Needs re-verify .*mockup-parity — icon on steps' "$cl" \
+    && grep -q '^| REQ-UI-053 | Workspace | Verified .*matches its mockup' "$cl" \
+    && ok ch_008a "a comparison opened at /processes/6/run counts for the row whose route is /processes/{id}/run" \
+    || { bad ch_008a "a filled-in route did not find its row's comparison"; note "$(grep -E 'REQ-UI-0(47|53) ' "$cl" | cut -c1-200 | tr '\n' ' ')"; }
+  grep -q '^| REQ-UI-060 | Start | Needs re-verify .*mockup-parity not found' "$cl" \
+    && grep -q '^| REQ-UI-070 | About | Verified' "$cl" \
+    && ok ch_008b "a driven screen with a mockup and no comparison fails the mockup check; a screen with no mockup is not held to one" \
+    || { bad ch_008b "a missing comparison was skipped, or a screen without a mockup failed"; note "$(grep -E 'REQ-UI-0(60|70) ' "$cl" | cut -c1-200 | tr '\n' ' ')"; }
+}
+
+# --- Lekhak TF-024: every screen was graded in light mode only ----------------------------------------
+# 20 of 20 admin screens had unreadable text in dark mode (1.03 : 1, white panels in a dark shell) and
+# all were Verified. The screen check now runs light and, when the app has one, dark; it measures text
+# against the colour painted behind it and flags a large light panel in dark mode. The mockup check
+# runs per theme too. An app with no dark theme is graded in light only, with nothing invented.
+lk_024() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip lk_024 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/lk024"; mkdir -p "$d/site/studio" "$d/site/plain" "$d/docs/mockups"
+  local base='body{margin:0;font:16px/24px system-ui} .card{padding:16px;margin:16px;width:600px;height:240px;border-radius:8px} .muted{color:#666}'
+  # the app: a dark theme on data-theme whose card forgot its dark colours, and a disabled button
+  local dark='[data-theme="dark"] body{background:#111;color:#eee} [data-theme="dark"] .card{background:#fff} [data-theme="dark"] .card h2{color:#f4f4f4} .card{background:#f8f8f8}'
+  local body='<div class="card" data-testid="studio-card"><h2>AI Story Studio</h2><p class="muted">Write a story</p><button disabled style="color:#ddd;background:#eee">Off</button></div>'
+  printf '<!doctype html><html data-theme="light"><head><meta charset="utf-8"><style>%s %s</style></head><body>%s</body></html>\n' "$base" "$dark" "$body" > "$d/site/studio/index.html"
+  printf '<!doctype html><html data-theme="light"><head><meta charset="utf-8"><style>%s .card{background:#f8f8f8}</style></head><body>%s</body></html>\n' "$base" "$body" > "$d/docs/mockups/studio.html"
+  # an app with no dark theme at all, readable in light
+  printf '<!doctype html><html><head><meta charset="utf-8"><style>%s .card{background:#f8f8f8}</style></head><body><div class="card" data-testid="plain-card"><h2>Plain</h2><p class="muted">Readable</p></div></body></html>\n' "$base" > "$d/site/plain/index.html"
+  cp "$d/site/plain/index.html" "$d/docs/mockups/plain.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  local out
+  out="$( cd "$d" && tf_timeout 180 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen studio=/studio/ --widths 1280 --json-out "$d/s1.json" --shots-dir "$d/shots" >/dev/null 2>&1; python3 -c "
+import json
+for s in json.load(open('$d/s1.json'))['screens']:
+  for w in s['widths']:
+    print(w.get('theme'), w['visual'], '|'.join(f['class'] for f in w.get('findings', [])))" 2>&1 )"
+  grep -q '^light OK $' <<<"$out" && grep -q '^dark FAIL .*low-contrast' <<<"$out" && grep -q '^dark FAIL .*light-surface' <<<"$out" \
+    && ok lk_024a "a screen is graded in light and in dark: text on a white card in dark mode and the white card itself fail; light passes, the disabled button is exempt" \
+    || { bad lk_024a "the dark theme was not graded, or light was flagged"; note "$(tr '\n' ' ' <<<"$out" | cut -c1-220)"; }
+  out="$( cd "$d" && tf_timeout 180 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen plain=/plain/ --widths 1280 --json-out "$d/s2.json" --shots-dir "$d/shots" >/dev/null 2>&1; python3 -c "
+import json
+j = json.load(open('$d/s2.json')); s = j['screens'][0]
+print(j['themes'], s.get('dark'), s['visual'], len(s['widths']))" 2>&1 )"
+  [[ "$out" == "['light'] not offered OK 1" ]] \
+    && ok lk_024b "an app with no dark theme is graded in light only, and nothing is reported against it" \
+    || { bad lk_024b "an app without a dark theme was graded in dark, or failed"; note "$out"; }
+  out="$( cd "$d" && tf_timeout 180 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen studio=/studio/ --widths 1280 --json-out "$d/p.json" >/dev/null 2>&1; python3 -c "
+import json
+s = json.load(open('$d/p.json'))['screens'][0]
+print(s['verdict'], ','.join(s.get('themes', [])), '|'.join(w.get('colour_not_compared', '') for w in s['widths']))" 2>&1 )"
+  [[ "$out" == "PASS light,dark |the mockup draws no dark theme" ]] \
+    && ok lk_024c "the mockup check runs in both themes, and leaves colour out where the mockup draws no dark theme" \
+    || { bad lk_024c "the mockup check did not run per theme"; note "$out"; }
+  kill "$srv" 2>/dev/null
 }
 
 # --- Lekhak TF-023: *amend-docs saw ~130 old document findings as new ----------------------------------
@@ -4598,7 +4773,7 @@ lk_013() {
   printf '<!doctype html><html data-theme="dark" class="dark bg-light"><head><meta charset="utf-8"><style>%s</style></head><body><div id="root"></div><script>function draw(){document.getElementById("root").innerHTML=location.pathname==="/dashboard"?%s:"<p>Home</p>";}window.addEventListener("popstate",draw);draw();</script></body></html>\n' \
     "$css" "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$body")" > "$d/site/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port cport exe
   port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   cport="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
@@ -4635,7 +4810,7 @@ lk_011() {
   # the app's first view: the database answers, so there is no alert
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="conn-card">%s</div></body></html>\n' "$css" "$row" | tee "$d/site/conn/index.html" > "$d/site/conn2/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -4886,9 +5061,160 @@ gitignore_once() {
                    || { bad gitignore_once "a delivery script can append its block again on every run"; note "$(head -2 <<<"$hits")"; }
 }
 
+# --- *develop-end-to-end: a brief to UAT, commits and pushes each phase, reports time and tokens ----
+# The owner asked (2026-10-08) for one command that develops a new app from a brief to UAT with no
+# question, commits and pushes after every phase, and reports how long each phase took and its tokens.
+# tf-develop.sh runs the four phases through tf-goal.sh; here a stand-in goal runner plays the agent:
+# it writes a file and a run record per phase. The supervisor must commit and push each phase to the
+# remote, write the report with the summed tokens, skip finished phases on --resume, and stop with
+# exit 3 and a "blocked" report when a phase is declared blocked.
+dev_001() {
+  local d="$SCRATCH/dev001" n=0; mkdir -p "$d"
+  local repo="$d/app" remote="$d/remote.git" fake="$d/fake-goal.sh"
+  git init -q --bare "$remote"
+  git init -q "$repo"; git -C "$repo" config user.email t@t; git -C "$repo" config user.name t
+  git -C "$repo" remote add origin "$remote"
+  mkdir -p "$repo/.tfcore/utils" "$repo/docs/metrics"; cp "$UTILS/tf-develop.sh" "$repo/.tfcore/utils/"
+  printf '.tfcore/.session/\n' > "$repo/.gitignore"
+  printf 'A to-do app with one list screen.\n' > "$d/brief.md"
+  cat > "$fake" <<'SH'
+#!/usr/bin/env bash
+# stand-in for tf-goal.sh: the last argument is the goal; the one before it the app dir
+dir="${@: -2:1}"; goal="${@: -1}"
+case "$goal" in *--stage2*) p=day1-2 ;; *day1-greenfield*) p=day1 ;; *build-phase*) p=build ;; *handoff-phase*) p=handoff ;; esac
+grep -q "develop mode" <<<"$goal" || exit 9
+[[ -n "${TF_FAKE_BLOCK:-}" && "$p" == "$TF_FAKE_BLOCK" ]] && exit 3
+now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "$p" > "$dir/docs/$p.txt"
+printf '{"kind":"run","app":"Fx","cmd":"%s","started":"%s","ended":"%s","duration_s":60,"tokens_in":10,"tokens_out":1000,"tokens_cache_read":5,"tokens_cache_write":1,"model":"m1"}\n' "$p" "$now" "$now" >> "$dir/docs/metrics/runs.jsonl"
+sleep 1
+SH
+  chmod +x "$fake"
+  local out rc
+  out="$(cd "$repo" && TF_DEVELOP_GOAL_SH="$fake" bash .tfcore/utils/tf-develop.sh . --app Fx --brief "$d/brief.md" 2>&1)"; rc=$?
+  local commits; commits="$(git -C "$remote" log --oneline 2>/dev/null | grep -c 'develop-end-to-end')"
+  [[ $rc -eq 0 && $commits -eq 5 ]] && n=$((n+1)) || note "run: rc=$rc, $commits develop commits on the remote (want 5): $(tail -2 <<<"$out" | tr '\n' ' ')"
+  local rep; rep="$(python3 -c "
+import json; r=json.load(open('$repo/docs/metrics/develop-report.json'))
+print(r['status'], r['totals']['tokens_out'], r['totals']['runs'], ','.join(p['phase'] for p in r['phases']), all(p['pushed']=='yes' for p in r['phases']))" 2>&1)"
+  [[ "$rep" == "uat-ready 4000 4 day1,day1-2,build,handoff True" ]] && grep -q 'Ready for UAT' "$repo/docs/Fx-Build-Report.md" \
+    && git -C "$remote" show HEAD:docs/Fx-Build-Report.md >/dev/null 2>&1 && [[ ! -f "$repo/.tfcore/.session/develop.json" ]] && n=$((n+1)) \
+    || note "report: $rep"
+  # a second app, blocked in the build, then resumed: the done phases are not run again
+  local r2="$d/app2"; git init -q "$r2"; git -C "$r2" config user.email t@t; git -C "$r2" config user.name t
+  mkdir -p "$r2/.tfcore/utils" "$r2/docs/metrics"; cp "$UTILS/tf-develop.sh" "$r2/.tfcore/utils/"; printf '.tfcore/.session/\n' > "$r2/.gitignore"
+  out="$(cd "$r2" && TF_FAKE_BLOCK=build TF_DEVELOP_GOAL_SH="$fake" bash .tfcore/utils/tf-develop.sh . --app Fx --brief "$d/brief.md" --no-push 2>&1)"; rc=$?
+  local st; st="$(python3 -c "import json; print(json.load(open('$r2/docs/metrics/develop-report.json'))['status'])" 2>&1)"
+  [[ $rc -eq 3 && "$st" == blocked ]] && n=$((n+1)) || note "blocked: rc=$rc status=$st"
+  out="$(cd "$r2" && TF_DEVELOP_GOAL_SH="$fake" bash .tfcore/utils/tf-develop.sh . --resume 2>&1)"; rc=$?
+  local runs; runs="$(grep -c '"cmd":"day1"' "$r2/docs/metrics/runs.jsonl")"
+  local att; att="$(python3 -c "
+import json; r=json.load(open('$r2/docs/metrics/develop-report.json'))
+b=[p for p in r['phases'] if p['phase']=='build'][0]; print(b['attempts'], r['totals']['runs'], r['totals']['tokens_out'])" 2>&1)"
+  [[ $rc -eq 0 && $runs -eq 1 && "$att" == "2 4 4000" ]] && grep -q 'day1 already done' <<<"$out" && n=$((n+1)) \
+    || note "resume: rc=$rc, day1 ran $runs time(s), build attempts/runs/tokens: $att (want 2 4 4000)"
+  # refusals: no repository, no remote
+  local r3="$d/norepo"; mkdir -p "$r3/.tfcore"
+  out="$(bash "$UTILS/tf-develop.sh" "$r3" --app Fx --brief "$d/brief.md" 2>&1)"; rc=$?
+  [[ $rc -eq 2 ]] && grep -q 'not a git repository' <<<"$out" && n=$((n+1)) || note "no-repo: rc=$rc $out"
+  [[ $n -eq 5 ]] && ok dev_001 "a brief runs four phases, each committed and pushed, the report sums their tokens, a blocked phase stops it, --resume skips what is done" \
+                 || bad dev_001 "$((5-n)) of 5 develop-end-to-end checks failed"
+}
+
+# --- *develop-end-to-end may create its one database container, and nothing else -----------------
+# The first proof run stopped "blocked": guard-verify-deps.sh refused the database container the develop
+# rule tells the agent to create. During a develop run one `docker run|create --name <app>-db` passes;
+# another name, a chained command, a volume or a bare compose up are still refused, and with no develop
+# run the container is refused as before.
+dev_002() {
+  local r="$SCRATCH/dev002" h="$HOOKS/guard-verify-deps.sh" got=""
+  mkdir -p "$r/.tfcore/.session"
+  t() { printf '{"tool_input":{"command":%s}}' "$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$1")" \
+        | CLAUDE_PROJECT_DIR="$r" bash "$h" >/dev/null 2>&1; got+="$?"; }
+  t "docker run -d --name fx-db -p 5561:5432 postgres:17"
+  echo '{"app":"Fx"}' > "$r/.tfcore/.session/develop.json"
+  t "docker run -d --name fx-db -p 5561:5432 postgres:17"
+  t "docker create --name=fx-db postgres:17"
+  t "docker run -d --name other-db postgres:17"
+  t "docker run -d --name fx-db postgres && docker run evil"
+  t "docker volume create x"
+  t "docker compose up -d"
+  [[ "$got" == "2002222" ]] && ok dev_002 "a develop run may create its own <app>-db container and nothing else; outside one, no container" \
+                            || bad dev_002 "guard exits $got (want 2002222)"
+}
+
+# --- the code must use the packages the Architecture requires -----------------------------------
+# The first OpenCode proof of *develop-end-to-end searched for the UI library by the wrong name, decided
+# it was not published, built the screen with plain components, and every row was Verified. The
+# Architecture's "Required packages:" line is now checked by the verdict itself: a listed package no
+# project file references fails every row's build check. No line, or "none", checks nothing.
+dev_003() {
+  local d="$SCRATCH/dev003" n=0 v="$SCRATCH/dev003/tests/.artifacts/verify"
+  mkdir -p "$d/docs" "$d/src/Fx" "$v"
+  printf '# Fx — Architecture\n\n## 1. Stack decisions\n\nRequired packages: `Acme.Ui.Components`\n' > "$d/docs/Fx-Architecture.md"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Web"><ItemGroup><PackageReference Include="Acme.Ui.Components.Extra" Version="1.0.0" /></ItemGroup></Project>\n' > "$d/src/Fx/Fx.csproj"
+  printf '# Fx — Checklist\n\n| ID | Title | Status | %% | Remarks | Details |\n|---|---|---|---|---|---|\n| REQ-FN-001 | Add | Implemented | 75%% | | |\n' > "$d/docs/Fx-Checklist.md"
+  printf '{"app":"Fx","scope":"all","checklist":"docs/Fx-Checklist.md","rows":[{"id":"REQ-FN-001","class":"FN","title":"Add","status_raw":"Implemented","pct":75,"remarks":"","screen":"","route":"","mockup":"","perf_budget":""}],"screens":[]}\n' > "$v/list.json"
+  printf '{"reqs":{"REQ-FN-001":{"result":"PASS","tests":["REQ-FN-001 add"],"skipped":[]}}}\n' > "$v/tests.json"
+  printf '{"head":"web","mode":"base","url":"http://localhost:1","rung":"dotnet","reason":"","reason_kind":""}\n' > "$v/boot.json"
+  local out; out="$(cd "$d" && bash "$UTILS/tf-stack-check.sh" Fx 2>&1)"
+  [[ "$out" == FAIL* ]] && grep -q 'Acme.Ui.Components;' <<<"$out" && n=$((n+1)) || note "a longer package name counted as the required one: $out"
+  (cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --apply >/dev/null 2>&1)
+  grep -q '^| REQ-FN-001 | Add | FAIL .*requires Acme.Ui.Components' "$d/docs/Fx-Checklist.md" && n=$((n+1)) \
+    || note "verdict: $(grep 'REQ-FN-001 |' "$d/docs/Fx-Checklist.md" | cut -c1-160)"
+  printf '<Project><ItemGroup><PackageReference Include="Acme.Ui.Components" Version="1.0.0" /></ItemGroup></Project>\n' > "$d/src/Fx/Fx.csproj"
+  sed -i 's/^| REQ-FN-001 .*/| REQ-FN-001 | Add | Implemented | 75% | | |/' "$d/docs/Fx-Checklist.md"
+  out="$(cd "$d" && bash "$UTILS/tf-stack-check.sh" Fx 2>&1)"
+  (cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --apply >/dev/null 2>&1)
+  [[ "$out" == PASS* ]] && grep -q '^| REQ-FN-001 | Add | Verified' "$d/docs/Fx-Checklist.md" && n=$((n+1)) || note "referenced: $out"
+  printf '# Fx — Architecture\n\nRequired packages: none\n' > "$d/docs/Fx-Architecture.md"
+  out="$(cd "$d" && bash "$UTILS/tf-stack-check.sh" Fx 2>&1)"
+  [[ "$out" == NONE* ]] && n=$((n+1)) || note "none: $out"
+  [[ $n -eq 4 ]] && ok dev_003 "a package the Architecture requires and no project file references fails every row's build check; referenced passes; none checks nothing" \
+                 || bad dev_003 "$((4-n)) of 4 required-package checks failed"
+}
+
+# --- OpenCode 2 tokens: the new session tables, and every session of the project ------------------
+# OpenCode 2 keeps sessions in session_v2 and messages in session_message; the old tables stopped on
+# 2026-09-27, so every OpenCode run record since read tokens_scope "none". And each *develop-end-to-end
+# phase runs in a new session while the plugin's pointer kept the first. The emitter now reads both
+# table sets and counts every root session OpenCode recorded in this project's folder, with its
+# sub-agents, inside the record's window: not another folder's session, not a message outside it.
+oc_v2() {
+  local d="$SCRATCH/ocv2" db="$SCRATCH/ocv2-opencode.db"
+  mkdir -p "$d/docs/metrics" "$d/.tfcore/.session"; for s in runs gates sessions commits misses; do : > "$d/docs/metrics/$s.jsonl"; done
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  python3 - "$db" "$(cd "$d" && pwd -P)" <<'PY'
+import sqlite3, sys, json, datetime
+db, here = sys.argv[1], sys.argv[2]
+c = sqlite3.connect(db)
+c.execute("create table session_v2 (id text, parent_id text, directory text)")
+c.execute("create table session_message (id text, session_id text, type text, time_created integer, data text)")
+ms = lambda h, m: int(datetime.datetime(2026, 10, 8, h, m, tzinfo=datetime.timezone.utc).timestamp() * 1000)
+c.executemany("insert into session_v2 values (?,?,?)", [("ses_a", None, here), ("ses_b", None, here), ("ses_kid", "ses_b", here), ("ses_other", None, "/elsewhere")])
+def msg(i, s, t, out): return (i, s, "assistant", t, json.dumps({"tokens": {"input": 10, "output": out, "cache": {"read": 0, "write": 0}}, "model": {"id": "m1", "providerID": "p"}}))
+c.executemany("insert into session_message values (?,?,?,?,?)", [
+    msg("1", "ses_a", ms(10, 5), 100),       # in the window, the pointer's session
+    msg("2", "ses_b", ms(10, 30), 200),      # in the window, a later phase's new session
+    msg("3", "ses_kid", ms(10, 31), 50),     # its sub-agent
+    msg("4", "ses_other", ms(10, 20), 999),  # another folder
+    msg("5", "ses_b", ms(12, 0), 777)])      # outside the window
+c.commit()
+PY
+  printf '{"session_id":"ses_a","db_path":"%s","ts":"2026-10-08T10:00:00Z"}\n' "$db" > "$d/.tfcore/.session/opencode.json"
+  (cd "$d" && echo '{"kind":"run","app":"Fx","cmd":"build-phase","started":"2026-10-08T10:00:00Z","ended":"2026-10-08T11:00:00Z","reqs_touched":[],"reqs_count":0,"subagents":[],"files_written":0,"build_result":"pass"}' \
+     | TF_HARNESS=opencode CLAUDE_PROJECT_DIR= bash "$UTILS/tf-emit.sh" runs >/dev/null 2>&1)
+  local got; got="$(python3 -c "
+import json; r=[json.loads(l) for l in open('$d/docs/metrics/runs.jsonl') if l.strip()][-1]
+print(r.get('tokens_scope'), r.get('tokens_out'), r.get('subagent_runs'), r.get('model_tokens_out'))" 2>&1)"
+  [[ "$got" == "tree 350 1 {'p/m1': 350}" ]] \
+    && ok oc_v2 "OpenCode 2 tokens are read from its new tables, across every session of the project in the window, sub-agents included" \
+    || bad oc_v2 "OpenCode 2 tokens: got '$got' (want 'tree 350 1 {'p/m1': 350}')"
+}
+
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 sv_001 sv_002 sv_003 sv_004 tb_001 tb_002 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 sv_001 sv_002 sv_003 sv_004 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

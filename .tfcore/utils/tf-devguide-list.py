@@ -3,7 +3,7 @@
 
     bash .tfcore/utils/tf-devguide-list.sh <App> [--phase N] [--update]
 
-Reads appKind and appPhase from .tfcore/core-config.yaml and prints:
+Reads appKind (or metrics.project_type) and appPhase from .tfcore/core-config.yaml and prints:
   app             every routed page found in the code (route, file), matched to the phase's
                   UIDesign screens and to the roles in the UsageGuide's Test users table;
                   UIDesign screens with no code (a defect), routes with no UIDesign screen
@@ -151,7 +151,11 @@ def main(argv):
     app = argv[1]
     update = "--update" in argv
     phase = int(argv[argv.index("--phase") + 1]) if "--phase" in argv and argv.index("--phase") + 1 < len(argv) else int(cfg("appPhase", "1"))
-    kind = cfg("appKind", "app").lower()
+    kind = cfg("appKind", "").lower()
+    if not kind:   # metrics.project_type: library says it when appKind is not set (TrBlazeUI TF-005)
+        pt = re.search(r"(?m)^\s+project_type:\s*(\S+)", read(os.path.join(".tfcore", "core-config.yaml"))) \
+            if os.path.isfile(os.path.join(".tfcore", "core-config.yaml")) else None
+        kind = pt.group(1).strip("'\"").lower() if pt else "app"
     if "--kind" in argv and argv.index("--kind") + 1 < len(argv):
         kind = argv[argv.index("--kind") + 1].lower()   # override for a project whose config lacks it
     sub = "app"
