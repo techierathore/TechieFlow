@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 256 logged: 55 open, 200 fixed, 1 will not fix |
+| Count | 257 logged: 55 open, 201 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
 | Updated | 2026-10-09 |
 
@@ -69,10 +69,11 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (200)
+## Fixed (201)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261009-02 | 2026-10-09 by owner | 2026-10-09 by log-miss | the check was too weak | tf-develop.sh keyed each phase attempt by its start second, so on the fast CI runner a blocked build and its resume started in the same second, the resume overwrote the blocked attempt and dev_001 failed validate three pushes running (4b39c84, 818c7a6, e51afba); on the slow Windows mount the two alw |
 | MISS-TechieFlow-20261009-01 | 2026-10-09 by owner | 2026-10-09 by log-miss | the check was too weak | Chatur TF-009: tf-verify-screens counted an anchored control filled only for text, a form field, an image or a link, so a progress bar (role=progressbar with aria-valuenow, or a track holding a fill) was always 'empty' and 8 End-to-end run rows were RENDER-FAIL; a native progress or meter crashed th |
 | MISS-TechieFlow-20261008-04 | 2026-10-08 by owner | 2026-10-08 by log-miss | said and ignored | Today's framework changes were tested with the regression and mirror suites only; CI runs every tests/*/run.sh plus the portability check, and the push failed on three macOS-only shell constructs, a changed result line and a test fixture with an unreadable link that the new contrast rule rightly fai |
 | MISS-TechieFlow-20261008-03 | 2026-10-08 by owner | 2026-10-08 by log-miss | the check was too weak | OpenCode 2 moved its sessions to new tables (session_v2, session_message) on 2026-09-27 and the emitter kept reading the old ones, so every OpenCode run record since has tokens_scope none; and a new session per phase was missed because the plugin's pointer kept the first one. Found by the develop-en |

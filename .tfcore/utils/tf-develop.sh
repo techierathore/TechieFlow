@@ -79,10 +79,13 @@ if op == "get": print(d.get(a[0], ""))
 elif op == "init":
     d = {"app": a[0], "brief": a[1], "harness": a[2], "model": a[3], "tier": a[4], "push": a[5] == "1", "started": a[6], "phases": []}
 elif op == "done": print("yes" if any(x["name"] == a[0] and x["status"] == "done" for x in d.get("phases", [])) else "")
-elif op == "phase":   # name status started ended exit commit pushed — one entry per attempt, keyed by its start
+elif op == "attempts": print(sum(1 for x in d.get("phases", []) if x["name"] == a[0]))
+elif op == "phase":   # name status started ended exit commit pushed attempt — one entry per attempt, keyed by its number:
+    # a blocked attempt and its resume can start in the same second on a fast machine, and keying by the
+    # start made the second overwrite the first (dev_001 on the CI runner, 2026-10-09)
     ph = d.get("phases", [])
-    new = dict(zip(("name", "status", "started", "ended", "goal_exit", "commit", "pushed"), a))
-    hit = [i for i, x in enumerate(ph) if x["name"] == a[0] and x.get("started") == a[2]]
+    new = dict(zip(("name", "status", "started", "ended", "goal_exit", "commit", "pushed", "attempt"), a))
+    hit = [i for i, x in enumerate(ph) if x["name"] == a[0] and str(x.get("attempt", "")) == a[7]]
     if hit: ph[hit[0]] = new
     else: ph.append(new)
     d["phases"] = ph
@@ -242,15 +245,15 @@ GOAL_ARGS=(--harness "$HARNESS" --tier "$TIER"); [[ -n "$MODEL" ]] && GOAL_ARGS+
 for phase in day1 day1-2 build handoff; do
   if [[ $DRY -eq 1 ]]; then echo "$phase: bash $GOAL_SH ${GOAL_ARGS[*]} $DIR \"$(goal_of "$phase" | cut -c1-90)…\"; then commit$([[ $PUSH -eq 1 ]] && echo ' and push')"; continue; fi
   [[ -n "$(st done "$phase")" ]] && { log "$phase already done — skipped"; continue; }
-  start="$(ts)"; log "$phase started"
-  st phase "$phase" running "$start" "" "" "" ""
+  start="$(ts)"; log "$phase started"; attempt=$(( $(st attempts "$phase") + 1 ))
+  st phase "$phase" running "$start" "" "" "" "" "$attempt"
   bash "$GOAL_SH" "${GOAL_ARGS[@]}" "$DIR" "$(goal_of "$phase")"; rc=$?
   status=done; [[ $rc -eq 3 ]] && status=blocked; [[ $rc -ne 0 && $rc -ne 3 ]] && status="failed (exit $rc)"
   end="$(ts)"
-  st phase "$phase" "$status" "$start" "$end" "$rc" "" ""
+  st phase "$phase" "$status" "$start" "$end" "$rc" "" "" "$attempt"
   report >/dev/null                                    # the phase's figures go into its own commit
   read -r sha pushed <<<"$(commit_phase "$phase")"
-  st phase "$phase" "$status" "$start" "$end" "$rc" "$sha" "$pushed"
+  st phase "$phase" "$status" "$start" "$end" "$rc" "$sha" "$pushed" "$attempt"
   log "$phase $status — commit $sha, pushed $pushed"
   if [[ $rc -ne 0 ]]; then report; commit_phase "report" >/dev/null; exit "$rc"; fi
 done

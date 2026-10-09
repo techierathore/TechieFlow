@@ -14,6 +14,14 @@ Everything below this section from 2026-09-11 onward is also unreleased: it reac
 v1.0.4 tag (2026-09-10) and is in no published package yet. This section lists what those dated entries
 do not.
 
+- **Validate on Ubuntu was red since 4b39c84: a same-second resume lost an attempt (2026-10-09).**
+  `tf-develop.sh` keyed each phase attempt by its start second. On the CI runner a blocked build and its
+  `--resume` started in the same second, the second entry overwrote the first, and `dev_001` read 1
+  attempt where it wants 2 (runs 37789251857, 37820115510, 37900781161; the stock-Mac job passed). On the
+  Windows mount the two always fell in different seconds, so local runs passed. Attempts are now numbered
+  and keyed by number. `dev_001` gains a sixth check that holds the clock still, so it fails every time
+  against the old keying instead of 2 runs in 5. Reproduced and proved on a tarball of e51afba outside the
+  mount, with no Playwright, in UTC and Asia/Kolkata. Deployed to the 18 projects. MISS-TechieFlow-20261009-02.
 - **Chatur TF-009: a progress bar counts as filled (2026-10-09).** `tf-verify-screens.mjs` counted an
   anchored control filled only for text, a form field, an image or a link, so a bar showing its value as a
   width was always `empty` and Chatur's 8 End-to-end run rows were RENDER-FAIL. It now also counts a

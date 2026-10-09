@@ -5155,8 +5155,19 @@ b=[p for p in r['phases'] if p['phase']=='build'][0]; print(b['attempts'], r['to
   local r3="$d/norepo"; mkdir -p "$r3/.tfcore"
   out="$(bash "$UTILS/tf-develop.sh" "$r3" --app Fx --brief "$d/brief.md" 2>&1)"; rc=$?
   [[ $rc -eq 2 ]] && grep -q 'not a git repository' <<<"$out" && n=$((n+1)) || note "no-repo: rc=$rc $out"
-  [[ $n -eq 5 ]] && ok dev_001 "a brief runs four phases, each committed and pushed, the report sums their tokens, a blocked phase stops it, --resume skips what is done" \
-                 || bad dev_001 "$((5-n)) of 5 develop-end-to-end checks failed"
+  # a blocked attempt and its resume starting in the same second (a fast CI runner, 2026-10-09) are two
+  # attempts, not one: the clock is held still so the case fails every time against the old keying
+  local r4="$d/app4" bin="$d/stillclock"; git init -q "$r4"; git -C "$r4" config user.email t@t; git -C "$r4" config user.name t
+  mkdir -p "$r4/.tfcore/utils" "$r4/docs/metrics" "$bin"; cp "$UTILS/tf-develop.sh" "$r4/.tfcore/utils/"; printf '.tfcore/.session/\n' > "$r4/.gitignore"
+  printf '#!/usr/bin/env bash\n[[ "$*" == *%%Y-%%m-%%dT%%H:%%M:%%SZ* ]] && { echo 2026-10-09T07:00:00Z; exit 0; }\nexec /bin/date "$@"\n' > "$bin/date"; chmod +x "$bin/date"
+  (cd "$r4" && PATH="$bin:$PATH" TF_FAKE_BLOCK=build TF_DEVELOP_GOAL_SH="$fake" bash .tfcore/utils/tf-develop.sh . --app Fx --brief "$d/brief.md" --no-push >/dev/null 2>&1)
+  (cd "$r4" && PATH="$bin:$PATH" TF_DEVELOP_GOAL_SH="$fake" bash .tfcore/utils/tf-develop.sh . --resume >/dev/null 2>&1)
+  local a4; a4="$(python3 -c "
+import json; r=json.load(open('$r4/docs/metrics/develop-report.json'))
+print([p for p in r['phases'] if p['phase']=='build'][0]['attempts'], r['status'])" 2>&1)"
+  [[ "$a4" == "2 uat-ready" ]] && n=$((n+1)) || note "same-second resume: build attempts/status $a4 (want 2 uat-ready)"
+  [[ $n -eq 6 ]] && ok dev_001 "a brief runs four phases, each committed and pushed, the report sums their tokens, a blocked phase stops it, --resume skips what is done, also within the same second" \
+                 || bad dev_001 "$((6-n)) of 6 develop-end-to-end checks failed"
 }
 
 # --- *develop-end-to-end may create its one database container, and nothing else -----------------

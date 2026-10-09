@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-10-09 (Chatur TF-009: a progress bar counts as filled in the screen check). |
+| Last updated | 2026-10-09 (Chatur TF-009: a progress bar counts as filled; validate red since 4b39c84 fixed: tf-develop.sh lost a same-second resume attempt). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
