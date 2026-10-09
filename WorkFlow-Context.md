@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-10-06 (TechieRag TF-001 to TF-004; three private-project fixes: database guard, two Windows heads, skipped app tests). |
+| Last updated | 2026-10-09 (Chatur TF-009: a progress bar counts as filled in the screen check). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---

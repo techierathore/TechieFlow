@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 255 logged: 55 open, 199 fixed, 1 will not fix |
+| Count | 256 logged: 55 open, 200 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-10-08 |
+| Updated | 2026-10-09 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -69,10 +69,11 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (199)
+## Fixed (200)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261009-01 | 2026-10-09 by owner | 2026-10-09 by log-miss | the check was too weak | Chatur TF-009: tf-verify-screens counted an anchored control filled only for text, a form field, an image or a link, so a progress bar (role=progressbar with aria-valuenow, or a track holding a fill) was always 'empty' and 8 End-to-end run rows were RENDER-FAIL; a native progress or meter crashed th |
 | MISS-TechieFlow-20261008-04 | 2026-10-08 by owner | 2026-10-08 by log-miss | said and ignored | Today's framework changes were tested with the regression and mirror suites only; CI runs every tests/*/run.sh plus the portability check, and the push failed on three macOS-only shell constructs, a changed result line and a test fixture with an unreadable link that the new contrast rule rightly fai |
 | MISS-TechieFlow-20261008-03 | 2026-10-08 by owner | 2026-10-08 by log-miss | the check was too weak | OpenCode 2 moved its sessions to new tables (session_v2, session_message) on 2026-09-27 and the emitter kept reading the old ones, so every OpenCode run record since has tokens_scope none; and a new session per phase was missed because the plugin's pointer kept the first one. Found by the develop-en |
 | MISS-TechieFlow-20261008-02 | 2026-10-08 by owner | 2026-10-08 by log-miss | the check was too weak | tf-develop.sh accepted a folder inside another repository as the app's repository, and its first test run staged the whole TechieFlow repository with git add -A (the commit was refused); it now requires the folder to be the top of its own repository. |

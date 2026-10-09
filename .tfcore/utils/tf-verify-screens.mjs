@@ -340,8 +340,21 @@ async function inspect(page, anchors, attr, errorSelectors) {
       if (!el) { out.anchors.push({ id, present: false }); continue; }
       const tag = el.tagName.toLowerCase();
       const r = el.getBoundingClientRect();
-      const text = (el.innerText || el.value || el.getAttribute('aria-label') || '').trim();
-      const filled = text.length > 0 || ['input', 'select', 'textarea', 'img', 'svg', 'canvas', 'video', 'iframe'].includes(tag) || el.querySelector('img,svg,canvas,input,select,textarea,button,a') !== null;
+      const text = String(el.innerText || el.value || el.getAttribute('aria-label') || '').trim();
+      // A progress bar shows its value as a filled width, not as text (Chatur TF-009): a native
+      // progress or meter, a role="progressbar" carrying aria-valuenow, or a track holding a fill
+      // that has size and paints something (a background, an image or a border).
+      const bar = '[role="progressbar"][aria-valuenow],progress,meter';
+      const paints = (c) => {
+        const cr = c.getBoundingClientRect();
+        if (cr.width <= 0 || cr.height <= 0) return false;
+        const cs = getComputedStyle(c);
+        return !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(cs.backgroundColor) || cs.backgroundImage !== 'none'
+          || ['Top', 'Right', 'Bottom', 'Left'].some((s) => parseFloat(cs[`border${s}Width`]) > 0 && cs[`border${s}Style`] !== 'none');
+      };
+      const filled = text.length > 0 || ['input', 'select', 'textarea', 'img', 'svg', 'canvas', 'video', 'iframe', 'progress', 'meter'].includes(tag)
+        || el.matches(bar) || el.querySelector(`img,svg,canvas,input,select,textarea,button,a,${bar}`) !== null
+        || [...el.children].some(paints);
       const c = clipRect(el);
       out.anchors.push({ id, present: true, visible: vis(el), filled, tag, w: Math.round(r.width), h: Math.round(r.height), x: Math.round(r.left), y: Math.round(r.top),
         cx: Math.round(c.x), cy: Math.round(c.y), cw: Math.round(c.w), ch: Math.round(c.h), clipped: c.clipped });
@@ -370,7 +383,7 @@ async function inspect(page, anchors, attr, errorSelectors) {
         }).filter((f) => f.w > 0 && f.h > 0);
         if (fs.length > 1) frags = fs;
       }
-      out.boxes.push({ i, id: el.getAttribute(attr) || '', tag: el.tagName.toLowerCase(), text: (el.innerText || el.value || '').trim().slice(0, 40),
+      out.boxes.push({ i, id: el.getAttribute(attr) || '', tag: el.tagName.toLowerCase(), text: String(el.innerText || el.value || '').trim().slice(0, 40),
         x: c.x, y: c.y, w: c.w, h: c.h, raw_w: r.width, raw_h: r.height, clipped: c.clipped, anchored: el.hasAttribute(attr), frags });
     });
     // ancestry so a button inside its card is never an "overlap"

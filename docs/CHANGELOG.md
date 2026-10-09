@@ -14,6 +14,13 @@ Everything below this section from 2026-09-11 onward is also unreleased: it reac
 v1.0.4 tag (2026-09-10) and is in no published package yet. This section lists what those dated entries
 do not.
 
+- **Chatur TF-009: a progress bar counts as filled (2026-10-09).** `tf-verify-screens.mjs` counted an
+  anchored control filled only for text, a form field, an image or a link, so a bar showing its value as a
+  width was always `empty` and Chatur's 8 End-to-end run rows were RENDER-FAIL. It now also counts a
+  `role="progressbar"` with `aria-valuenow`, a `progress` or `meter` (on the control or inside it), and a box
+  with a child that has size and paints a background, background image or border; an empty track is still
+  empty. A native `progress`/`meter` crashed the check (its `value` is a number, and `.trim()` was called on
+  it); both text reads now go through `String()`. Regression case `ch_009`; MISS-TechieFlow-20261009-01.
 - **`*develop-end-to-end`: a brief to a UAT-ready app, unattended (2026-10-08, owner request).** A new
   flow-master command for greenfield apps. The owner gives a brief and a git repository with a remote. The new
   `tf-develop.sh` then runs four phases, each an unattended `tf-goal.sh` run that waits out a usage limit and

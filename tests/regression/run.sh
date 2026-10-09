@@ -4536,6 +4536,44 @@ PY
     || { bad ch_008b "a missing comparison was skipped, or a screen without a mockup failed"; note "$(grep -E 'REQ-UI-0(60|70) ' "$cl" | cut -c1-200 | tr '\n' ' ')"; }
 }
 
+# --- Chatur TF-009: a progress bar was always reported empty -------------------------------------------
+# The mockup's progress-bar is a track holding a fill; the app's is a role="progressbar" with
+# aria-valuenow at 50%. Neither has text, so the screen check said `anchored control "progress-bar"
+# (div) is empty` and all 8 End-to-end run rows were RENDER-FAIL. A progressbar with a value, a native
+# progress or meter, and a track whose child has size and paints now count as filled; an empty track
+# is still empty.
+ch_009() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip ch_009 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/ch009" s
+  mkdir -p "$d/docs/mockups"
+  local css='<style>body{margin:0;font:14px/20px system-ui;padding:16px} .track{width:300px;height:8px;background:#eee}</style>'
+  local mock='<div class="track" data-testid="progress-bar"><div style="width:50%;height:8px;background:#36c"></div></div>'
+  for s in aria track native blank; do
+    mkdir -p "$d/site/$s"
+    printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><h1>Run in progress</h1>%s</body></html>\n' "$css" "$mock" > "$d/docs/mockups/$s.html"
+  done
+  local page='<!doctype html><html><head><meta charset="utf-8">%s</head><body><h1>Run in progress</h1>%s</body></html>\n'
+  printf "$page" "$css" '<div class="track" data-testid="progress-bar" role="progressbar" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"><div style="width:50%;height:8px"></div></div>' > "$d/site/aria/index.html"
+  printf "$page" "$css" "$mock" > "$d/site/track/index.html"
+  printf "$page" "$css" '<progress data-testid="progress-bar" max="100" value="50"></progress>' > "$d/site/native/index.html"
+  printf "$page" "$css" '<div class="track" data-testid="progress-bar"><div></div></div>' > "$d/site/blank/index.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  ( cd "$d" && tf_timeout 120 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen aria=/aria/ --screen track=/track/ --screen native=/native/ --screen blank=/blank/ --widths 1280 --themes light --render-wait 500 --json-out "$d/screens.json" --shots-dir "$d/shots" > "$d/run.log" 2>&1; echo "rc=$?" >> "$d/run.log" )
+  kill "$srv" 2>/dev/null
+  local out; out="$(python3 -c "
+import json
+for s in json.load(open('$d/screens.json'))['screens']: print(s['name'], s['render'], '|'.join(f['detail'][:60] for w in s['widths'] for f in w.get('findings', [])))" 2>&1)"
+  grep -q '^aria OK $' <<<"$out" && grep -q '^track OK $' <<<"$out" && grep -q '^native OK $' <<<"$out" \
+    && grep -q '^blank EMPTY anchored control "progress-bar" (div) is empty' <<<"$out" \
+    && ok ch_009 "a progressbar with a value, a native progress and a track holding a painted fill are filled; an empty track is not" \
+    || { bad ch_009 "progress bar: $(tr '\n' ' ' <<<"$out" | cut -c1-240)"; }
+}
+
 # --- Lekhak TF-024: every screen was graded in light mode only ----------------------------------------
 # 20 of 20 admin screens had unreadable text in dark mode (1.03 : 1, white panels in a dark shell) and
 # all were Verified. The screen check now runs light and, when the app has one, dark; it measures text
@@ -5214,7 +5252,7 @@ print(r.get('tokens_scope'), r.get('tokens_out'), r.get('subagent_runs'), r.get(
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 sv_001 sv_002 sv_003 sv_004 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 sv_001 sv_002 sv_003 sv_004 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done
