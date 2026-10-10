@@ -14,6 +14,37 @@ Everything below this section from 2026-09-11 onward is also unreleased: it reac
 v1.0.4 tag (2026-09-10) and is in no published package yet. This section lists what those dated entries
 do not.
 
+- **Lekhak TF-027: the Mac screen check graded screens it never showed (2026-10-10, on the Mac).**
+  On BlogAdmin 13 of 18 screens were unreachable and Search results passed on the Dashboard.
+  `tf-verify-native` no longer grades a screen nothing reached (only route `/` may be the screen on view).
+  `tf-verify-list` reads from the code which project serves each screen (`@page`) and the
+  labels that reach it (`href`/`Href` with visible text; layout links on every screen, page links on that
+  page; only the screen's own project and its references). The native check skips another head's screens
+  and clicks that path. Each screen is measured at `--widths` (1280,390): System Events resizes the window
+  and the width it took is recorded (BlogAdmin's minimum is 616). Pictures are the window alone
+  (`screencapture -l`, window number from CGWindowList), the boot picture included. Test users are plain
+  text, and a missing list.json names `tf-verify-list.sh`. Proved live on BlogAdmin: 9 website pages
+  SKIP, 7 admin screens OK at 1280/616 with the right pictures, Connection settings UNREACHABLE (its link
+  shows only when signed out), and no false pass. `lk_027` fails 3/3 against the deployed scripts. The Mac
+  self-test gains four hybrid checks. MISS-TechieFlow-20261010-04.
+- **Lekhak TF-025, TF-026, TF-008 (2026-10-10, on the Mac).** TF-025: `tf-mockup-parity` took the
+  mockup's site theme off the app after the first pass, so the TF-024 dark pass compared the app in the
+  viewer's site theme (minimal, grey primary) with the mockup's (fluent-modern, blue). The site theme now
+  stays on through both passes, and the app gets its own light/dark class back for the dark pass so a
+  class-driven dark mode still switches. TF-026, the Mac head: `tf-verify-boot.sh` printed BOOTED with no
+  mac2 session possible. It now checks Automation Mode (`automationmodetool`) and the mac2 driver version
+  against Xcode (4.1.1 is the first that builds with Xcode 27, per the driver's change log) before the
+  build, and names each fix. It says BOOTED only after `firstScreen` (new in `tf-appium.mjs`) opens a session and
+  finds the app's own window, not a dialog, saving it as `boot-<port>-window.png`. It launches with
+  `-ApplePersistenceIgnoreState YES` and answers a reopen dialog with Don't Reopen. `stop` quits through
+  AppleScript and kills only after 15 s. `tf-appium.mjs` gains `s.type()` (click, then W3C key actions:
+  the only input a Blazor Hybrid `@bind` took). `tf-build.sh` clears a Mac Catalyst target's bin/obj when
+  a `Platforms/MacCatalyst` plist or entitlements file is newer than the built bundle. TF-008 (unanswered
+  since 2026-09-28): `tf-doc-check` resolves a mockup link from the mockup's folder at any depth. On
+  Lekhak's docs this removes its 60 false FAILs and adds none. Regression cases `lk_008`, `lk_025`, `lk_026`, each failing
+  against Lekhak's deployed scripts. Every change is Mac-only or platform-neutral: the boot changes sit
+  inside the maccatalyst head or behind a Mac state's `bundle_id`, and the build change only acts on a
+  `-maccatalyst` target. MISS-TechieFlow-20261010-01 to -03.
 - **Validate on Ubuntu was red since 4b39c84: a same-second resume lost an attempt (2026-10-09).**
   `tf-develop.sh` keyed each phase attempt by its start second. On the CI runner a blocked build and its
   `--resume` started in the same second, the second entry overwrote the first, and `dev_001` read 1

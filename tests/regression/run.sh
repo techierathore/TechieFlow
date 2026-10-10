@@ -4623,6 +4623,157 @@ print(s['verdict'], ','.join(s.get('themes', [])), '|'.join(w.get('colour_not_co
   kill "$srv" 2>/dev/null
 }
 
+# --- Lekhak TF-025: the dark pass compared the app in the viewer's site theme ------------------------
+# The mockup's site theme (data-site-theme="fluent-modern", blue primary) was put on the app for the
+# first pass and taken off before the dark pass, so the app was drawn dark in the viewer's own site
+# theme (minimal, grey primary) and every primary control read "mockup accent, app neutral". The site
+# theme now stays on through both passes, the app's own class-driven dark switch is used for the dark
+# pass, and the app is left as the viewer had it.
+lk_025() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip lk_025 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/lk025"; mkdir -p "$d/site" "$d/docs/mockups"
+  local css='body{margin:0;font:14px/20px system-ui} .badge{display:inline-block;border-radius:8px;padding:2px 8px;height:20px;color:#fff}
+[data-site-theme="fluent-modern"] .badge{background:#2563eb} [data-site-theme="minimal"] .badge{background:#6b7280}'
+  local body='<div data-testid="crawler-header"><h1>Story crawler</h1><span class="badge">Auto-save</span></div><table data-testid="crawler-table"><tr><th>Name</th><th>Count</th></tr><tr><td>Alpha</td><td>12</td></tr></table>'
+  # the mockup draws its dark theme on data-theme; the app's dark mode is class-driven (TF-013)
+  printf '<!doctype html><html data-site-theme="fluent-modern" data-theme="light"><head><meta charset="utf-8"><style>%s [data-theme="dark"] body{background:#111;color:#eee}</style></head><body>%s</body></html>\n' "$css" "$body" > "$d/docs/mockups/crawler.html"
+  printf '<!doctype html><html data-site-theme="minimal" data-theme="dark" class="dark"><head><meta charset="utf-8"><style>%s html.dark body{background:#111;color:#eee}</style></head><body><div id="root"></div><script>function draw(){document.getElementById("root").innerHTML=location.pathname==="/crawler"?%s:"<p>Home</p>";}window.addEventListener("popstate",draw);draw();</script></body></html>\n' \
+    "$css" "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$body")" > "$d/site/index.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  local port cport exe
+  port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  cport="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  exe="$(cd "$d" && node -e "import('playwright').then(p=>console.log(p.chromium.executablePath()))" 2>/dev/null)"
+  "$exe" --headless=new --no-sandbox --remote-debugging-port="$cport" --user-data-dir="$d/profile" "http://127.0.0.1:$port/" >/dev/null 2>&1 & local br=$!
+  local i=0; while [[ $i -lt 30 ]] && ! curl -s -m 2 "http://127.0.0.1:$cport/json/version" | grep -q webSocketDebuggerUrl; do sleep 1; i=$((i+1)); done
+  local out
+  out="$( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --cdp "http://127.0.0.1:$cport" --mockups docs/mockups --screen crawler=/crawler --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1; python3 -c "
+import json; s=json.load(open('$d/parity.json'))['screens'][0]
+print(s['verdict'], ','.join(s.get('themes', [])), '|'.join(f['detail'][:50] for f in s.get('findings', [])))" 2>&1 )"
+  [[ "$out" == "PASS light,dark " ]] \
+    && ok lk_025a "the dark pass draws the app in the mockup's site theme too, through the app's own dark switch" \
+    || { bad lk_025a "the dark pass graded the app in the viewer's site theme, or was not run"; note "$(tail -1 <<<"$out" | cut -c1-200)"; }
+  local after; after="$(cd "$d" && node -e "
+import('playwright').then(async ({chromium}) => { const b = await chromium.connectOverCDP('http://127.0.0.1:$cport');
+  const h = await b.contexts()[0].pages()[0].evaluate(() => { const e = document.documentElement; return [e.getAttribute('data-site-theme'), e.getAttribute('data-theme'), e.className].join(' '); });
+  console.log(h); process.exit(0); })" 2>&1)"
+  [[ "$after" == "minimal dark dark" ]] \
+    && ok lk_025b "the attached app is left in the viewer's site theme and dark mode" \
+    || { bad lk_025b "the check left the app in another theme"; note "$after"; }
+  kill "$br" "$srv" 2>/dev/null; wait "$br" 2>/dev/null
+}
+
+# --- Lekhak TF-008: a working mockup link into a subfolder was failed ----------------------------------
+# Lekhak keeps its two heads' mockups in docs/mockups/admin/ and docs/mockups/web/. index.html links
+# to admin/connection-settings.html, which opens, and the checker failed all 60 such links ("does not
+# open from docs/mockups/"), hiding real findings. A link is now resolved from the mockup's folder and
+# accepted when the file is there at any depth; a missing file, a leading slash and a path out of
+# docs/mockups/ still fail.
+lk_008() {
+  local d="$SCRATCH/lk008"; mkdir -p "$d/docs/mockups/admin" "$d/.tfcore"
+  printf 'appKind: app\nappPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  printf '<html><body><div data-testid="idx"><a href="admin/connection-settings.html">Conn</a> <a href="web/missing.html">Gone</a> <a href="/abs.html">Abs</a> <a href="../outside.html">Out</a> <a href="other.html">Other</a></div></body></html>\n' > "$d/docs/mockups/index.html"
+  printf '<html><body><div data-testid="o"><a href="index.html">Back</a></div></body></html>\n' > "$d/docs/mockups/other.html"
+  printf '<html><body><div data-testid="c"><a href="../index.html">Back</a></div></body></html>\n' > "$d/docs/mockups/admin/connection-settings.html"
+  touch "$d/docs/outside.html"
+  local out; out="$(python3 - "$UTILS/tf-doc-check.py" "$d" <<'PY' 2>&1 | grep 'does not open from'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("dc", sys.argv[1]); dc = importlib.util.module_from_spec(spec); spec.loader.exec_module(dc)
+rep = dc.Report(False); dc.check_mockups(sys.argv[2], rep); print("\n".join(rep.lines))
+PY
+)"
+  ! grep -q 'admin/connection-settings.html' <<<"$out" \
+    && ok lk_008a "a link to a mockup in a subfolder that exists passes" \
+    || { bad lk_008a "a working subfolder link was failed"; note "$(head -1 <<<"$out" | cut -c1-160)"; }
+  grep -q '"web/missing.html"' <<<"$out" && grep -q '"/abs.html"' <<<"$out" && grep -q '"../outside.html"' <<<"$out" \
+    && ok lk_008b "a missing file, a leading slash and a path out of docs/mockups/ still fail" \
+    || { bad lk_008b "a broken link was let through"; note "$(tr '\n' ' ' <<<"$out" | cut -c1-200)"; }
+}
+
+# --- Lekhak TF-026: the Mac boot said BOOTED on a machine no mac2 session could drive ------------------
+# On a fresh macOS 27 / Xcode 27 machine every mac2 session failed: Automation Mode wanted a password,
+# and mac2 4.0.4 could not build its helper under Xcode 27. The boot checked neither and printed
+# BOOTED. It now stops before the build and names each fix. Stubbed tools stand in for the Mac's own,
+# so this runs on any Mac; it skips elsewhere, since the head runs only on a Mac. And a Mac build after
+# Platforms/MacCatalyst/Info.plist changed kept the .app's old Info.plist: tf-build.sh now clears that
+# target first (any machine).
+lk_026() {
+  local d="$SCRATCH/lk026"; mkdir -p "$d/src/A/Platforms/MacCatalyst" "$d/src/A/bin/Debug/net10.0-maccatalyst/maccatalyst-arm64/A.app/Contents" "$d/src/A/obj/Debug/net10.0-maccatalyst"
+  printf '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFrameworks>net10.0-maccatalyst</TargetFrameworks><UseMaui>true</UseMaui></PropertyGroup></Project>\n' > "$d/src/A/A.csproj"
+  touch -t 202610070000 "$d/src/A/bin/Debug/net10.0-maccatalyst/maccatalyst-arm64/A.app/Contents/Info.plist"
+  touch "$d/src/A/obj/Debug/net10.0-maccatalyst/stale.marker" "$d/src/A/Platforms/MacCatalyst/Info.plist"
+  # a stand-in dotnet on any host (a WSL machine would otherwise send a Mac build to Windows)
+  local fake="$SCRATCH/lk026-dotnet"; mkdir -p "$fake"; printf '#!/bin/sh\nexit 0\n' > "$fake/dotnet"; chmod +x "$fake/dotnet"
+  local out
+  out="$(cd "$d" && PATH="$fake:$PATH" TF_BUILD_PLATFORM=linux bash "$UTILS/tf-build.sh" build src/A/A.csproj -- -f net10.0-maccatalyst 2>&1)"
+  [[ ! -e "$d/src/A/bin/Debug/net10.0-maccatalyst/maccatalyst-arm64/A.app/Contents/Info.plist" && ! -e "$d/src/A/obj/Debug/net10.0-maccatalyst/stale.marker" ]] && grep -q '^note .*Info.plist is newer than the built app' <<<"$out" \
+    && ok lk_026a "a Mac build after Info.plist changed clears that target's bin/ and obj/ first" \
+    || { bad lk_026a "the stale bundle was kept"; note "$(head -1 <<<"$out" | cut -c1-160)"; }
+  if [[ "$(uname -s)" != Darwin* ]]; then printf 'skip lk_026b-c — the Mac boot runs only on a Mac\n'; return; fi
+  local stub="$SCRATCH/lk026-stub"; mkdir -p "$stub"
+  printf '#!/bin/sh\necho "Automation Mode is disabled."\necho "This device REQUIRES user authentication to enable Automation Mode."\n' > "$stub/automationmodetool"
+  printf '#!/bin/sh\necho "{\\"mac2\\": {\\"version\\": \\"4.0.4\\"}}"\n' > "$stub/appium"
+  printf '#!/bin/sh\necho "Xcode 27.0"\n' > "$stub/xcodebuild"
+  chmod +x "$stub"/*
+  out="$(cd "$d" && PATH="$stub:$PATH" bash "$UTILS/tf-verify-boot.sh" start --head maccatalyst --project src/A/A.csproj 2>&1)"
+  grep -q '^NONE head=maccatalyst kind=host reason=.*sudo automationmodetool enable-automationmode-without-authentication' <<<"$out" \
+    && ok lk_026b "Automation Mode that needs a password stops the boot, naming the command that allows it" \
+    || { bad lk_026b "the boot went on without Automation Mode"; note "$(tail -1 <<<"$out" | cut -c1-200)"; }
+  printf '#!/bin/sh\necho "This device DOES NOT REQUIRE user authentication to enable Automation Mode."\n' > "$stub/automationmodetool"
+  out="$(cd "$d" && PATH="$stub:$PATH" bash "$UTILS/tf-verify-boot.sh" start --head maccatalyst --project src/A/A.csproj 2>&1)"
+  grep -q '^NONE head=maccatalyst kind=host reason=the mac2 driver 4.0.4 cannot build its helper with Xcode 27.*appium driver uninstall mac2; appium driver install mac2' <<<"$out" \
+    && ok lk_026c "a mac2 driver too old for Xcode 27 stops the boot, naming the reinstall" \
+    || { bad lk_026c "the boot went on with a driver that cannot run"; note "$(tail -1 <<<"$out" | cut -c1-200)"; }
+}
+
+# --- Lekhak TF-027: the Mac screen check graded screens it never showed -------------------------------
+# On BlogAdmin's Mac head 13 of 18 screens were unreachable and one passed on the Dashboard: the list
+# did not say which project serves a screen (9 website pages were driven on the desktop app), and a
+# screen was reached only by a control labelled with its exact name ("Manage Images" is "Images" in
+# the menu; Add User is a button on Users). The list now reads both from the code. Its test users
+# also kept stray Markdown backticks ("Tharki@tksories.com` (username `tharki`"), and the screen check
+# crashed with a stack trace when list.json had not been made.
+lk_027() {
+  local d="$SCRATCH/lk027"
+  mkdir -p "$d/source/Site/Pages" "$d/source/Admin/Layout" "$d/source/Admin/Pages" "$d/source/Shared" "$d/docs"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Web"></Project>\n' > "$d/source/Site/Site.csproj"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Razor"><ItemGroup><ProjectReference Include="..\\Shared\\Shared.csproj" /></ItemGroup></Project>\n' > "$d/source/Admin/Admin.csproj"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Razor"></Project>\n' > "$d/source/Shared/Shared.csproj"
+  printf '@page "/search"\n<h1>Search</h1>\n' > "$d/source/Site/Pages/Search.razor"
+  printf '@inherits LayoutComponentBase\n<NavLink href="/admin/images" class="x"><span class="i">&#128247;</span><span class="nav-menu__label">Images</span></NavLink>\n<NavLink href="/admin/users">Users</NavLink>\n<a href="/search">Search the site</a>\n' > "$d/source/Admin/Layout/AdminLayout.razor"
+  printf '@page "/admin/images"\n<h1>Images</h1>\n' > "$d/source/Admin/Pages/ManageImages.razor"
+  printf '@page "/admin/users"\n<Button Href="/AddUser">+ Add New User</Button>\n@foreach (var p in ps) { <a href="/admin/llm-signin/@p.Id">@p.Name</a> }\n' > "$d/source/Admin/Pages/Users.razor"
+  printf '@page "/AddUser"\n<h1>Add</h1>\n' > "$d/source/Admin/Pages/AddUser.razor"
+  printf '@page "/admin/llm-signin/{ProviderId:long}"\n<h1>Sign in</h1>\n' > "$d/source/Shared/LlmSignin.razor"
+  printf '## Test users\n\n| # | User | Password source | Role |\n|---|---|---|---|\n| 1 | `Tharki@tksories.com` (username `tharki`) | `admin_password` — seed `003-SeedData.sql` | Admin |\n' > "$d/docs/Fx-UsageGuide.md"
+  local out
+  out="$(cd "$d" && python3 - "$UTILS/tf-verify-list.py" <<'PY' 2>&1
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("vl", sys.argv[1]); vl = importlib.util.module_from_spec(spec); spec.loader.exec_module(vl)
+sc = [{"name": n, "route": r} for n, r in [("Search results", "/search"), ("Manage Images", "/admin/images"), ("Add User", "/AddUser"), ("LLM sign-in", "/admin/llm-signin/{ProviderId:long}")]]
+nav = getattr(vl, "navigation", None)
+if nav: nav(sc)
+for s in sc: print(s["name"], "|", s.get("project", "-"), "|", " > ".join(s.get("nav", [])) or "-")
+u = vl.test_users("docs/Fx-UsageGuide.md")[0]
+print("USER", u["user"], "|", u["password_source"])
+PY
+)"
+  grep -q '^Search results | source/Site | -$' <<<"$out" && grep -q '^Manage Images | source/Admin | Images$' <<<"$out" \
+    && grep -q '^Add User | source/Admin | Users > + Add New User$' <<<"$out" && grep -q '^LLM sign-in | source/Shared | -$' <<<"$out" \
+    && ok lk_027a "each screen's project and the clicks that reach it come from the code: a menu label, then a button on that page" \
+    || { bad lk_027a "the list did not say which head serves a screen or how it is reached"; note "$(tr '\n' ';' <<<"$out" | cut -c1-220)"; }
+  grep -q '^USER Tharki@tksories.com | admin_password — seed 003-SeedData.sql$' <<<"$out" \
+    && ok lk_027b "test users are plain text, with no stray Markdown backticks" \
+    || { bad lk_027b "a test user kept its Markdown"; note "$(grep USER <<<"$out")"; }
+  out="$(cd "$d" && node "$UTILS/tf-verify-native.mjs" --appium http://127.0.0.1:9 --app-path /nowhere.app --list tests/.artifacts/verify/list.json 2>&1)"
+  grep -q 'does not exist; make it first with bash .tfcore/utils/tf-verify-list.sh' <<<"$out" && ! grep -q 'at .*tf-verify-native.mjs' <<<"$out" \
+    && ok lk_027c "with no list.json the Mac screen check names the script that makes it, no stack trace" \
+    || { bad lk_027c "a missing list.json still crashed"; note "$(head -1 <<<"$out" | cut -c1-160)"; }
+}
+
 # --- Lekhak TF-023: *amend-docs saw ~130 old document findings as new ----------------------------------
 # tf-phase.sh start baselined only the checklists and PROJECT-STATUS.md, while *amend-docs closes on
 # `tf-doc-check.sh --app`: the BRD's old header, section and size findings printed as FAIL. Every file
@@ -5263,7 +5414,7 @@ print(r.get('tokens_scope'), r.get('tokens_out'), r.get('subagent_runs'), r.get(
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 sv_001 sv_002 sv_003 sv_004 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 sv_001 sv_002 sv_003 sv_004 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_026 lk_027 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

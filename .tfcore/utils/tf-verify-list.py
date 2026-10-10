@@ -10,10 +10,13 @@ Reads the phase's checklist, the UIDesign, the BRD screens table and the UsageGu
   - the screens to drive, each with its route, its mockup and the rows it owns; a dialog row
     is listed under its parent screen (Schemas §2: a dialog is verified on its page)
   - rows whose screen could not be resolved (graded by their test only)
-  - the test users from the UsageGuide
+  - the test users from the UsageGuide, as plain text (no Markdown)
+  - for each screen, from the code: the page file that serves its route, that file's project, and
+    the labels of the links or buttons to click from the app's menu to reach it (Lekhak TF-027)
 Writes the same as JSON (default tests/.artifacts/verify/list.json) for the other verify scripts.
 Python 3 standard library only. Exit 0 printed, 2 could not run.
 """
+import html
 import json
 import os
 import re
@@ -201,6 +204,114 @@ def usage_guide(app):
     return os.path.join("docs", f"{app}-UsageGuide.md")
 
 
+def plain(cell):
+    """A Markdown table cell as plain text: code spans, emphasis and links unwrapped."""
+    t = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", cell)
+    t = re.sub(r"`([^`]*)`", r"\1", t).replace("`", "")
+    return re.sub(r"(\*\*|__|\*)", "", t).strip()
+
+
+# --- how each screen is reached, read from the code (Lekhak TF-027) ---------------------------------
+# A Blazor Hybrid head on a Mac shows mac2 no data-testid and no URL, so its screens are reached by
+# clicking what a person clicks. The code says what that is: a page declares its route with @page, and
+# a link or button anywhere names a route in href/Href with its visible text. A link in a file that is
+# not a page (a layout, the menu) is on every screen; a link on a page is on that page only. Only the
+# code of the screen's own project and the projects it references counts, so a website page is never
+# looked for in the desktop app's menu.
+CODE_DIRS = ("src", "source")
+SKIP_DIRS = {"bin", "obj", "node_modules", ".git", ".tfbuild", "tests", "wwwroot"}
+LINK = re.compile(r"<([A-Za-z][\w.]*)\b([^>]*?)\b[Hh]ref\s*=\s*\"([^\"]+)\"([^>]*)>(.*?)</\1\s*>", re.S)
+
+
+def route_key(r):
+    """'/admin/llm-signin/{ProviderId:long}' and 'admin/llm-signin/@p.Id' -> ('admin', 'llm-signin', '*')"""
+    r = re.split(r"[?#]", r.strip())[0].strip("/").lower()
+    return tuple("*" if ("{" in seg or "@" in seg) else seg for seg in r.split("/")) if r else ()
+
+
+def label_of(inner):
+    t = re.sub(r"<[^>]+>", " ", inner)
+    if "@" in t:
+        return ""                                    # a label the code computes is not known here
+    t = html.unescape(t)
+    t = "".join(ch for ch in t if ch.isalnum() or ch in " +-'&/.,()")   # icon glyphs out
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def code_map():
+    """-> projects {dir: [referenced dirs]}, pages {route_key: (file, project dir)}, links [(file, own keys, project, key, label)]"""
+    projects, pages, links, files = {}, {}, [], []
+    for top in CODE_DIRS:
+        for d, subs, names in os.walk(top):
+            subs[:] = [x for x in subs if x not in SKIP_DIRS and not x.startswith(".")]
+            for n in names:
+                p = os.path.join(d, n)
+                if n.endswith(".csproj"):
+                    refs = re.findall(r'<ProjectReference\s+Include="([^"]+)"', read(p))
+                    projects[d] = [os.path.normpath(os.path.join(d, os.path.dirname(x.replace("\\", "/")))) for x in refs]
+                elif n.endswith(".razor") or n.endswith(".cshtml"):
+                    files.append(p)
+    def project_of(f):
+        d = os.path.dirname(f)
+        while d and d not in projects:
+            nd = os.path.dirname(d)
+            if nd == d:
+                return ""
+            d = nd
+        return d
+    for f in files:
+        t = read(f)
+        own = [route_key(r) for r in re.findall(r'(?m)^\s*@page\s+"([^"]+)"', t)]
+        for k in own:
+            pages.setdefault(k, (f, project_of(f)))
+        for m in LINK.finditer(t):
+            lab = label_of(m.group(5))
+            if lab and not m.group(3).startswith(("http:", "https:", "mailto:", "#")):
+                links.append((f, own, project_of(f), route_key(m.group(3)), lab))
+    return projects, pages, links
+
+
+def closure(projects, d):
+    seen, todo = [], [d]
+    while todo:
+        x = todo.pop()
+        if x in seen:
+            continue
+        seen.append(x)
+        todo.extend(projects.get(x, []))
+    return seen
+
+
+def matches(a, b):
+    return len(a) == len(b) and all(x == y or "*" in (x, y) for x, y in zip(a, b))
+
+
+def navigation(screens):
+    """Adds page, project and nav (labels to click, in order) to each screen the code serves."""
+    projects, pages, links = code_map()
+    for s in screens:
+        k = route_key(s["route"])
+        hit = next(((f, pr) for pk, (f, pr) in pages.items() if matches(pk, k)), None)
+        if not hit:
+            continue
+        s["page"], s["project"] = hit[0], hit[1]
+        scope = set(closure(projects, hit[1]))
+        mine = [l for l in links if l[2] in scope]
+        # breadth first, from the links on every screen (a layout, the menu: files that are not pages)
+        paths, todo = {}, []
+        for f, own, _, to, lab in mine:
+            if not own and to not in paths:
+                paths[to] = [lab]; todo.append(to)
+        while todo:
+            cur = todo.pop(0)
+            for f, own, _, to, lab in mine:
+                if any(matches(o, cur) for o in own) and to not in paths:
+                    paths[to] = paths[cur] + [lab]; todo.append(to)
+        nav = next((p for to, p in paths.items() if matches(to, k)), None)
+        if nav is not None:
+            s["nav"] = nav
+
+
 def test_users(path):
     """The rows of the guide's Test users table. The heading may sit at ## or ### (a guide that
     numbers its chapters nests it one level down), and the table may be the template's
@@ -216,7 +327,7 @@ def test_users(path):
     for line in m.group(1).splitlines():
         if not line.strip().startswith("|"):
             continue
-        c = [x.strip().strip("`* ") for x in line.strip().strip("|").split("|")]
+        c = [x.strip() for x in line.strip().strip("|").split("|")]
         if cols is None:
             low = [x.lower() for x in c]
             def col(*names):
@@ -227,10 +338,13 @@ def test_users(path):
             continue
         if set("".join(c)) <= set("-: "):
             continue                                        # the header rule
-        if len(c) > max(cols["user"], cols["role"]) and c[cols["user"]] and not c[cols["user"]].isdigit():
-            users.append({"user": c[cols["user"]],
-                          "password_source": c[cols["pw"]] if cols["pw"] is not None and len(c) > cols["pw"] else "",
-                          "role": c[cols["role"]]})
+        if len(c) > max(cols["user"], cols["role"]) and plain(c[cols["user"]]) and not plain(c[cols["user"]]).isdigit():
+            # The cell is Markdown. The user is its first code span when it has one ("`a@b.c` (username
+            # `a`)" is a@b.c); every field is plain text, never with a stray backtick (Lekhak TF-027).
+            u = re.match(r"\s*`([^`]+)`", c[cols["user"]])
+            users.append({"user": u.group(1).strip() if u else plain(c[cols["user"]]),
+                          "password_source": plain(c[cols["pw"]]) if cols["pw"] is not None and len(c) > cols["pw"] else "",
+                          "role": plain(c[cols["role"]])})
     return users
 
 
@@ -330,6 +444,7 @@ def main(argv):
         owned = [r["id"] for r in work if r["screen"] == s["name"]]
         if owned:
             screen_list.append(dict(s, rows=owned, seed=seed_of(s)))
+    navigation(screen_list)
 
     print(f"# tf-verify-list — {app} — {cl} — phase {phase} — scope {scope}")
     counts = {}
@@ -342,7 +457,10 @@ def main(argv):
     print(f"## Screens to drive ({len(screen_list)} of {len(screens)} in the {source})")
     for s in screen_list:
         print(f"- {s['name']} ({s['route']}) — mockup {s['mockup'] or 'none'}"
-              + (f" — seed {s['seed']}" if s["seed"] else "") + f" — rows {', '.join(s['rows'])}")
+              + (f" — seed {s['seed']}" if s["seed"] else "")
+              + (f" — served by {s['project']}" if s.get("project") else "")
+              + (f" — reached by clicking {' > '.join(repr(x) for x in s['nav'])}" if s.get("nav") else "")
+              + f" — rows {', '.join(s['rows'])}")
     par = [f"--screen {os.path.basename(s['mockup'])[:-5]}={s['route']}" for s in screen_list
            if s["mockup"] and "{" not in s["route"]]
     if par:

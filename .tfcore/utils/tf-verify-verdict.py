@@ -273,6 +273,7 @@ def main(argv):
                 verdict = "NOT-DRIVEN"
                 sk = scr_skipped.get(r["screen"])
                 detail = (f"{boot.get('head', 'the app')} not driven: {boot.get('reason')}" if not booted
+                          else f"screen {r['screen']} was not driven: {sk['reason']}" if sk and sk.get("reason")
                           else f"screen {r['screen']} was not driven: its route {sk['route']} needs --route-value "
                                + ", ".join(f"{n}=<id>" for n in sk.get("needs", [])) if sk
                           else f"screen {r['screen']} was not driven in this run")
@@ -286,6 +287,7 @@ def main(argv):
                 verdict = "NOT-DRIVEN"
                 sk = scr_skipped.get(r["screen"])
                 detail = ("test passed but " + (f"{boot.get('head', 'the app')} was not driven: {boot.get('reason')}" if not booted
+                          else f"screen {r['screen']} was not driven: {sk['reason']}" if sk and sk.get("reason")
                           else f"screen {r['screen']} was not driven: its route {sk['route']} needs --route-value "
                                + ", ".join(f"{n}=<id>" for n in sk.get("needs", [])) if sk
                           else f"screen {r['screen']} was not driven in this run"))

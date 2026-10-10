@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 257 logged: 55 open, 201 fixed, 1 will not fix |
+| Count | 261 logged: 55 open, 205 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-10-09 |
+| Updated | 2026-10-10 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -69,10 +69,14 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (201)
+## Fixed (205)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261010-04 | 2026-10-10 by owner | 2026-10-10 by log-miss | the check was too weak | Lekhak TF-027: tf-verify-native graded a screen nothing reached on whatever the app showed (Search results passed on BlogAdmin's Dashboard), drove 9 website pages on the desktop head because the list named no serving project, reached a screen only by a label equal to its name, measured one width, an |
+| MISS-TechieFlow-20261010-03 | 2026-10-10 by owner | 2026-10-10 by log-miss | the check was too weak | Lekhak TF-008: tf-doc-check failed every mockup link into a subfolder (index.html to admin/connection-settings.html, which opens), 60 false FAILs that hid real findings; the entry stood unanswered from 2026-09-28 |
+| MISS-TechieFlow-20261010-02 | 2026-10-10 by owner | 2026-10-10 by log-miss | the check was too weak | Lekhak TF-026: tf-verify-boot.sh --head maccatalyst printed BOOTED once the process and Appium were up, while no mac2 session could open (Automation Mode needing a password, mac2 4.0.4 under Xcode 27) and once behind the reopen-windows dialog its own kill-on-stop caused; a Mac build also kept a stal |
+| MISS-TechieFlow-20261010-01 | 2026-10-10 by owner | 2026-10-10 by log-miss | the check was too weak | Lekhak TF-025: the TF-024 dark pass of tf-mockup-parity ran after the mockup's site theme had been taken off the app, so the app was compared dark in the viewer's site theme (minimal, grey primary) against the mockup's (fluent-modern, blue) and three rows failed for a theme choice |
 | MISS-TechieFlow-20261009-02 | 2026-10-09 by owner | 2026-10-09 by log-miss | the check was too weak | tf-develop.sh keyed each phase attempt by its start second, so on the fast CI runner a blocked build and its resume started in the same second, the resume overwrote the blocked attempt and dev_001 failed validate three pushes running (4b39c84, 818c7a6, e51afba); on the slow Windows mount the two alw |
 | MISS-TechieFlow-20261009-01 | 2026-10-09 by owner | 2026-10-09 by log-miss | the check was too weak | Chatur TF-009: tf-verify-screens counted an anchored control filled only for text, a form field, an image or a link, so a progress bar (role=progressbar with aria-valuenow, or a track holding a fill) was always 'empty' and 8 End-to-end run rows were RENDER-FAIL; a native progress or meter crashed th |
 | MISS-TechieFlow-20261008-04 | 2026-10-08 by owner | 2026-10-08 by log-miss | said and ignored | Today's framework changes were tested with the regression and mirror suites only; CI runs every tests/*/run.sh plus the portability check, and the push failed on three macOS-only shell constructs, a changed result line and a test fixture with an unreadable link that the new contrast rule rightly fai |

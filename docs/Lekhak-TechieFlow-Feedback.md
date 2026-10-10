@@ -4,16 +4,16 @@
 |---|---|
 | App | Lekhak |
 | Upstream | TechieFlow |
-| Updated | 2026-10-04 |
+| Updated | 2026-10-10 |
 
 ## Summary
 
-24 entries: 0 blocking now, 3 open and not blocking (TF-003, TF-008, TF-024), 2 fixed upstream and not yet re-checked here (TF-022, TF-023), 19 closed after a re-check here (TF-001, TF-002, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018, TF-019, TF-020, TF-021).
+27 entries: 0 blocking now, 1 open and not blocking (TF-003), 5 fixed upstream and not yet re-checked here (TF-008, TF-022, TF-023, TF-025, TF-027), 21 closed after a re-check here (TF-001, TF-002, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018, TF-019, TF-020, TF-021, TF-024, TF-026).
 
 Nothing is blocked.
 
-- 0 blockers, 7 majors, 17 minors, 0 nice-to-haves.
-- Last consolidated: 2026-10-04.
+- 0 blockers, 9 majors, 18 minors, 0 nice-to-haves.
+- Last consolidated: 2026-10-10.
 
 ## Entries
 
@@ -386,6 +386,8 @@ Nothing is blocked.
 
 ### TF-024 — The screen and mockup checks only ever look at the light theme, so a dark mode that is unusable passes verify
 
+> ✅ **Closed 2026-10-09** — re-checked here: 2026-10-09: tf-verify-screens.sh graded every screen in light + dark themes with a 3:1 contrast rule and a dark light-panel rule (it caught the header avatar at 2.56:1 and two light panels on the desktop head), and tf-mockup-parity.sh graded colour in dark mode. Fixed.
+
 - **Severity:** major
 - **Blocks:** no — Lekhak now carries its own two-theme contrast test (`tests/verify/theme-contrast.spec.ts`), which the verify runs as a normal acceptance test.
 - **Repro:**
@@ -398,9 +400,107 @@ Nothing is blocked.
 - **Workaround:** the project-level Playwright test named above.
 - **Suggested fix:** `tf-verify-screens.sh --themes light,dark` (default: both when the app declares a theme switch in its UIDesign), a contrast rule in the visual check (3.0 : 1 minimum, disabled controls exempt), and the mockup parity check run per theme.
 
+### TF-025 — The mockup check compares the app in the user's site theme against the mockup in its own, so a themed colour reads as a mismatch
+
+- **Severity:** minor
+- **Blocks:** no — for the 2026-10-09 verify the desktop app's stored site theme was switched to the mockup's (`fluent-modern`) for the comparison and restored to `minimal` after; the comparison then passed.
+- **Repro:**
+  ```
+  # desktop app with localStorage techieblog-theme = minimal; mockup <html data-site-theme="fluent-modern">
+  bash .tfcore/utils/tf-mockup-parity.sh --cdp http://172.18.144.1:9223 --screen story-crawler=/admin/story-crawler --list tests/.artifacts/verify/list.json
+  ```
+- **Expected:** the check renders the app and the mockup in the same site theme (the mockup's `data-site-theme`), or grades colour per site theme.
+- **Actual:** `color on crawler-auto-save @1280 in dark mode: semantic colour differs — mockup accent, app neutral` — the minimal theme's dark primary is grey, the mockup's is blue. Three rows failed for a theme choice, not a defect.
+- **Encountered in:** fix-issues, 2026-10-09 (REQ-UI-051, REQ-FN-065, REQ-FN-137)
+- **Workaround:** switch the app's stored site theme to the mockup's for the comparison, then restore it.
+- **Suggested fix:** have `tf-mockup-parity.sh` set the app's `data-site-theme` (and any stored theme key the UIDesign names) to the mockup's before comparing, and put it back after.
+
+### TF-026 — The Mac boot says BOOTED without reaching the app, and the Mac driver cannot run on a fresh macOS 27 / Xcode 27 machine
+
+> ✅ **Closed 2026-10-10** — re-checked here: Closed 2026-10-10: on this Mac (macOS 27.0, Xcode 27.0) tf-verify-boot.sh start --head maccatalyst printed BOOTED ... window=tests/.artifacts/verify/boot-4723-window.png and the picture shows BlogAdmin's Dashboard (signed in as Tharak Chand). stop left no app or Appium process; the second start opened one window with no reopen-windows dialog and no Don't Reopen line. After touch Platforms/MacCatalyst/Info.plist the build log line 3 read 'note ... Info.plist is newer than the built app ...; cleared bin/... and obj/...'.
+
+- **Severity:** major
+- **Blocks:** no, since 2026-10-10. Before the driver was reinstalled and Automation Mode was switched on, it blocked every automated check of BlogAdmin's Mac screens; the Mac sign-in has since been driven to the Dashboard.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-maccatalyst-check.sh        # OK after the Lekhak fixes
+  bash .tfcore/utils/tf-verify-boot.sh start --head maccatalyst
+  ```
+- **Expected:** `BOOTED` means the app's first screen is on view and a mac2 session can drive it.
+- **Actual (macOS 27.0, Xcode 27.0, Appium 3.5.2, .NET MacCatalyst pack 26.5.10315):**
+
+| Problem | What it affects | Does it block or break anything |
+|---|---|---|
+| `start --head maccatalyst` printed `BOOTED … mode=appium` while no mac2 session could be opened, and once while the app's only window was macOS's "unexpectedly quit while reopening windows" dialog. The boot only checks that the process and Appium are up. | Every Mac verify: a boot that reached nothing reads as a good boot. | Breaks: a false pass is possible. Does not block. |
+| `stop` kills the app instead of quitting it, so the next start opens behind the "reopen windows" dialog. Quitting through `osascript -e 'tell application id "<bundle>" to quit'` avoids it. | Every Mac start after the first in a run. | Blocks the first-screen check until someone clicks **Don't Reopen**. |
+| The installed mac2 driver (4.0.4) cannot build WebDriverAgentMac under Xcode 27: `MACOSX_DEPLOYMENT_TARGET 10.15` is below Xcode 27's 12.0 minimum (xcodebuild exit 65). `appium driver update mac2` to 4.3.6 then left the driver unloadable (`Cannot find package 'appium'`); `appium driver uninstall mac2` + `appium driver install mac2` fixed it. | Any Mac driven over Appium on Xcode 27. | Blocked every Mac session until fixed by hand (done on this Mac, 2026-10-10). |
+| macOS 27 needs Automation Mode switched on once (`sudo automationmodetool enable-automationmode-without-authentication`, admin password). Without it every mac2 session fails with "Timed out while enabling automation mode". The boot neither checks nor reports it. | Every mac2 session on a machine where it was never switched on. | Blocked until the owner switched it on (done 2026-10-10). |
+| Typing into a Blazor Hybrid form on the Mac: setting a field's value through Accessibility, keyboard events posted to the app's process, and mac2's element "set value" all left Blazor's `@bind` empty or partly filled (`The text must have valid value`). What worked: mac2 click on the field, then W3C key actions (`POST /session/{id}/actions`, key down/up per character). | Any Mac check that fills a form: sign-in first of all. | Broke the first automated sign-in tries. Not blocking once key actions are used: user 1 signed in to the Dashboard on 2026-10-10. |
+| After `Platforms/MacCatalyst/Info.plist` changed, an incremental `dotnet build` refreshed the DLLs but left the `.app`'s Info.plist from 2026-10-07, so the app still crashed for want of the scene manifest the source already had. Only a clean build (`rm -rf bin obj`) produced the right bundle. | A Mac fix that lives in Info.plist or entitlements looks as if it failed. | Breaks: a false failure (crash at first window) until a clean build. |
+
+- **Encountered in:** Mac set-up for UAT, 2026-10-10.
+- **Workaround:** driver reinstalled as above; app quit through `osascript`, never killed; first screen proved with a window-only screenshot (`screencapture -l <window id>`); the Mac build cleaned after any Info.plist or entitlements change.
+- **Suggested fix:** `BOOTED` only after a mac2 session opens and a screenshot of the app's window shows no system dialog; `stop` quits through AppleScript first and kills only on timeout; the boot checks `automationmodetool` and the mac2 driver version against the Xcode version, and names the exact fix; `tf-build.sh` cleans the Mac head when `Platforms/MacCatalyst/*.plist` is newer than the built bundle.
+
+### TF-027 — The Mac screen check passes a website screen on BlogAdmin's Dashboard, and reaches only screens whose menu label equals the screen name
+
+- **Severity:** major
+- **Blocks:** no for UAT (TF-003 stays open); yes for closing TF-003. A Mac screen verdict cannot be trusted yet: one OK is false and 13 of 18 screens are not graded.
+- **Repro (macOS 27.0, Xcode 27.0, framework as of the 2026-10-10 reply):**
+  ```
+  bash .tfcore/utils/tf-verify-boot.sh start --head maccatalyst
+  bash .tfcore/utils/tf-verify-list.sh Lekhak ui
+  bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --appium http://localhost:4723
+  ```
+- **Expected:** every BlogAdmin screen in the list is reached and graded at 1280 and 390 px; a screen BlogAdmin does not serve (a website page) is skipped as "other head", never graded.
+- **Actual:** exit 5. The exact summary and the lines that matter:
+  ```
+  OK   Search results (/search) — render OK, visual OK, names not measured (web view)
+  FAIL Category archive (/category/{slug}) — render UNREACHABLE, visual n/a, names not measured (web view) — no control reaches Category archive: give its tab, flyout item, link or button AutomationId="nav-category-archive", or the label "Category archive"
+  FAIL Connection settings (/connection-settings) — render UNREACHABLE, visual n/a, names not measured (web view) — no control reaches Connection settings: give its tab, flyout item, link or button AutomationId="nav-connection-settings", or the label "Connection
+  FAIL Manage Images (/admin/images) — render UNREACHABLE, visual n/a, names not measured (web view) — no control reaches Manage Images: give its tab, flyout item, link or button AutomationId="nav-manage-images", or the label "Manage Images"
+  FAIL Manage Profile (/admin/profile) — render UNREACHABLE, visual n/a, names not measured (web view) — no control reaches Manage Profile: give its tab, flyout item, link or button AutomationId="nav-manage-profile", or the label "Manage Profile"
+  FAIL LLM sign-in (/admin/llm-signin/{ProviderId:long}) — render UNREACHABLE, visual n/a, names not measured (web view) — no control reaches LLM sign-in: give its tab, flyout item, link or button AutomationId="nav-llm-sign-in", or the label "LLM sign-in"
+  OK   Story Crawler (/admin/story-crawler) — render OK, visual OK, names not measured (web view)
+  screens 18: render 5 OK / 0 failed / 13 unreachable; visual 5 OK / 0 failed; control names not measured (web view); screenshots tests/.artifacts/verify/screens; JSON tests/.artifacts/verify/screens.json
+  ```
+  `screens.json` for Search results: `"reached": "the screen the app opens on (no control named it)"`, and `search-results-mac.png` is BlogAdmin's Dashboard.
+
+| Problem | What it affects | Does it block or break anything |
+|---|---|---|
+| A screen no control reaches is graded on whatever screen the app opened on. "Search results" is a website page (`source/Lekhak`), and it passed on BlogAdmin's Dashboard. | Any Mac verdict: a screen can pass without ever being shown. | Breaks: a false pass. |
+| The list does not say which head serves a screen, so 9 website pages (Category archive, Tag archive, Access denied, Login, Forgot Password, Reset Password, My Favorites, Author Profile, and Search results above) are driven on BlogAdmin. | Every Mac run for an app with a web head and a desktop head. | Breaks: 8 false UNREACHABLE failures and the false pass above. |
+| A screen is reached only through a control whose label equals the screen's name, or an `AutomationId`. BlogAdmin's menu says "Images" and "My Profile" (screens "Manage Images", "Manage Profile"); Add User is a button on Users; Connection settings is a link on the sign-in screen; LLM sign-in needs a provider id. A Blazor Hybrid page cannot carry an `AutomationId` that the Mac driver reads (coding-standards-dotnet.md §9), so the fix the message suggests is impossible here. | 5 real BlogAdmin screens are never graded on the Mac. | Blocks grading them; does not block UAT. |
+| Each screen is measured once, at the window's own size (1715 × 1121), not at 1280 and 390 px. | Every Mac screen verdict. | Breaks: the narrow-width checks never run on the Mac. |
+| The screenshots, and `boot-4723-window.png`, are a crop of the screen, not the window alone: a Chrome notification banner is in the top-right corner of each. | The visual check and the evidence pictures. | Could break: an overlapping system banner is graded as part of the app. |
+| `tf-verify-list.py` keeps stray Markdown backticks in the test users it reads from the UsageGuide, e.g. password ``admin_password` `` and email ``Tharki@tksories.com` ``. | Any check that signs in with those users. | Breaks a scripted sign-in that uses them as printed. |
+| With no `list.json` (none had been made on this Mac), `tf-verify-screens.sh --appium` crashed with a Node stack trace (`Error: ENOENT: no such file or directory, open 'tests/.artifacts/verify/list.json'` at `tf-verify-native.mjs:51:33`) instead of naming `tf-verify-list.sh`. | First Mac run on a new machine. | Does not block; confusing. |
+
+- **Encountered in:** TF-026 / TF-003 re-check on the Mac, 2026-10-10.
+- **Workaround:** none for a verdict. The four BlogAdmin screens reached through their menu label (Story Crawler, AI Story Studio, Prompt Manager, AI Setup) were graded correctly; their screenshots show the right screens.
+- **Suggested fix:** grade a screen only when the driver reached it, otherwise mark it UNREACHABLE; carry the serving head in `list.json` (from the project that holds the `@page`) and skip other-head screens; let the list name a navigation path per screen for a Blazor Hybrid head (menu label, then button), and route-only screens as not drivable; resize the window to 1280 and 390 px; capture the window by its window id; strip Markdown from test-user fields; a missing list prints which script makes it.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### Resolution status (TechieFlow team, 2026-10-10, second reply)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-027 | Fixed upstream, one change per problem in your table. (1) A screen the check did not reach is never graded. Only a screen whose route is `/` may be the one the app opens on. Any other screen nothing reached is `UNREACHABLE`, and the line says why. (2) `tf-verify-list.sh` now reads, from the code, which project serves each screen: the project holding the `@page` for its route. A screen served by a project the booted head does not include is skipped as another head's (`SKIP … served by source/Lekhak`). The verdict writes those rows as not driven, with that reason. (3) The list also reads, from the code, how each screen is reached: the links and buttons whose `href`/`Href` names its route, with their visible text. A link in the layout or menu is on every screen; a link on a page is only on that page. So "Manage Images" is reached by clicking "Images", and "Add User" by "Users" then "+ Add New User". You don't need to add anything to the app. A route that takes a value, with no link that reaches it, is skipped and says so. (4) Each screen is measured at 1280 and 390 px. macOS resizes the window, and the width it really took is recorded: BlogAdmin stops at 616 px, so its line reads `@1280/616 (asked 390)`. (5) Screenshots, and `boot-4723-window.png`, are the window alone, taken by macOS by its window number, so no banner gets in. Each width has its own picture (`<screen>-1280-mac.png`, `<screen>-390-mac.png`). (6) Test users are plain text: `Tharki@tksories.com`, password source `admin_password — seed 003-SeedData.sql`. (7) With no `list.json`, the check says to run `tf-verify-list.sh` first, without a stack trace. Regression case `lk_027` fails 3 of 3 against the scripts you have and passes now. The Mac self-test now covers a screen reached by a menu label, another head's screen, a screen nothing links to, and both widths. Miss `MISS-TechieFlow-20261010-04`. | Proved here on BlogAdmin, on this Mac, signed in as Tharak Chand. The 9 website pages are `SKIP`. LLM sign-in is `SKIP` (its route takes a value). Add User, Manage Images, Manage Profile, Story Crawler, AI Story Studio, Prompt Manager and AI Setup are all `OK` at 1280 and 616, and each picture shows the right screen. Connection settings is `UNREACHABLE`: the code reaches it through "Go to Sign in", which only shows when signed out. It is not graded as some other screen. Nothing passed on the wrong screen. To re-check, update the framework, then run `bash .tfcore/utils/tf-verify-list.sh Lekhak ui`, boot with `bash .tfcore/utils/tf-verify-boot.sh start --head maccatalyst`, and run `bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --appium http://localhost:4723`. Expect the same lines. |
+
+TF-003 stays open until it is re-checked here. The run above grades 7 of BlogAdmin's 8 Mac screens; Connection settings needs a signed-out start, which this check does not do yet.
+
+### Resolution status (TechieFlow team, 2026-10-10)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-025 | Fixed upstream in `tf-mockup-parity`. The cause was the order of the two passes. The TF-010 fix put the mockup's site theme (`data-site-theme="fluent-modern"`) on the app for the first pass, then took it off before the dark pass that TF-024 added. So the dark pass drew the app in your stored `minimal` theme, whose dark primary is grey, against the mockup's blue. The mockup's site theme now stays on the app through both passes, and comes off once both are done. For the dark pass the app also gets its own light/dark class back (BlogAdmin's `class="dark"`), so it is switched to dark the way your toggle does it. The app is left in the theme you had. Regression case `lk_025` builds your exact case: it fails against the script you have, with your finding (`semantic colour differs — mockup accent, app neutral`), and passes now. Miss `MISS-TechieFlow-20261010-01`. | After the framework update, with the desktop app on its stored `minimal` theme and no workaround, run `bash .tfcore/utils/tf-mockup-parity.sh --cdp <the boot url> --screen story-crawler=/admin/story-crawler --list tests/.artifacts/verify/list.json`. Expect PASS with no `crawler-auto-save … in dark mode` finding, and the app still on `minimal` afterwards. Then re-grade REQ-UI-051, REQ-FN-065 and REQ-FN-137 with a normal `*verify`. You no longer need to switch the stored site theme by hand. |
+| TF-026 | Fixed upstream, one change per problem in your table. (1) `tf-verify-boot.sh start --head maccatalyst` says `BOOTED` only after a mac2 session has opened and found the app's own window on view, not a dialog. That window is saved as `tests/.artifacts/verify/boot-4723-window.png`, and the `BOOTED` line names it. Otherwise it prints `NONE` with the reason, and stops the app. (2) `stop` now quits the app the way Cmd-Q does, and kills it only if it has not quit within 15 seconds. The app is also started with `-ApplePersistenceIgnoreState YES`, so macOS never offers to reopen old windows. If that dialog shows anyway, the boot answers **Don't Reopen** and says so. (3) Before the build, the boot checks the mac2 driver against Xcode. Under Xcode 27, a driver older than 4.1.1 stops it with the fix: `appium driver uninstall mac2; appium driver install mac2`. (The driver's own change log says 4.1.1 is the first that builds with Xcode 27.) (4) It also checks Automation Mode. When macOS would ask for a password, the boot stops and names `sudo automationmodetool enable-automationmode-without-authentication`. (5) `tf-appium.mjs` has `s.type(el, text)`: a click on the field, then W3C key actions, one key down and up per character. That is the way you found works. Your own Mac tests can import it. (6) `tf-build.sh` checks a Mac Catalyst build before it starts. When a `.plist` or `.entitlements` file in `Platforms/MacCatalyst/` is newer than the built app, it clears that target's `bin/` and `obj/` folders first, and says so in a `note` line. Regression case `lk_026` fails against the scripts you have and passes now, for (3), (4) and (6). (1) and (2) were proved by the framework's Mac self-test on two fixture apps, one native and one Blazor Hybrid, on macOS 27 with Xcode 27: each boot opened a mac2 session and saved its window, and each `stop` left nothing running. They were not proved on BlogAdmin itself. Miss `MISS-TechieFlow-20261010-02`. | After the framework update: `bash .tfcore/utils/tf-verify-boot.sh start --head maccatalyst`. Expect `BOOTED … window=tests/.artifacts/verify/boot-4723-window.png`, and that picture shows BlogAdmin's first screen. Then run `bash .tfcore/utils/tf-verify-boot.sh stop`, then `start` again. The second start opens with no "reopen windows" dialog and no "answered Don't Reopen" line. To check (6), touch `Platforms/MacCatalyst/Info.plist` and boot again. The build log starts with `note … is newer than the built app`. |
+| TF-008 | Fixed upstream in `tf-doc-check`. A link in a mockup is now read from that mockup's own folder, as a browser reads it. It passes when the file exists anywhere inside `docs/mockups/`. A missing file still fails, and so do a link that starts with `/` and a link that leads out of `docs/mockups/`. Each of those failures now says which of the three it is. This entry went unanswered from 2026-09-28; sorry for the wait. Regression case `lk_008` fails against the script you have and passes now. Miss `MISS-TechieFlow-20261010-03`. | Proved here on your own `docs/`. Your script: 687 FAIL, 60 of them `does not open from docs/mockups/`. New script: 627 FAIL, none of those, and no new ones. After the framework update, `bash .tfcore/utils/tf-doc-check.sh --app Lekhak` prints no `admin/…` or `web/…` link failure. |
+
+TF-003 stays open, but it is closer. Since 2026-10-07 the framework drives a Mac head (`tf-verify-boot.sh --head maccatalyst`, `tf-verify-screens.sh --appium`). With TF-026 above, a `BOOTED` now means a mac2 session really reached the first screen. What is left is one real run on BlogAdmin. Once TF-026 checks out, boot as above, then run `bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --appium http://localhost:4723`. When the Mac screens are graded, re-check TF-003 here.
 
 ### Resolution status (TechieFlow team, 2026-10-08)
 

@@ -951,6 +951,11 @@ for (const s of SCREENS) {
   for (const width of WIDTHS) {
     const { app: page, mock: mockPage } = tabs[width];
     let mock, app, docFindings = [], reached = '', theme = null, own = 'light', ownSurface = null, mockSurface = null, wanted = [];
+    // Lekhak TF-025: the mockup's site theme stays on the app through the other-theme pass too, and is
+    // taken off only after it. It used to come off after the first pass, so the dark pass compared the
+    // app in the viewer's site theme (minimal, grey primary) with the mockup in its own (blue primary).
+    let saved = null;
+    const unSite = async () => { if (saved && saved.changed) await page.evaluate(APPLY_THEME, saved.before).catch(() => {}); saved = null; };
     try {
       await mockPage.goto(pathToFileURL(mockPath).href, { waitUntil: 'load' });
       mock = await mockPage.evaluate(PROBE);
@@ -982,14 +987,12 @@ for (const s of SCREENS) {
       mockSurface = await surface(mockPage);
       own = mockTheme ? (Object.values(mockTheme).some((v) => /dark/i.test(String(v || ''))) ? 'dark' : 'light')
         : looksDark(mockSurface) ? 'dark' : 'light';
-      const saved = mockTheme ? await page.evaluate(APPLY_THEME, mockTheme).catch(() => null) : null;
+      saved = mockTheme ? await page.evaluate(APPLY_THEME, mockTheme).catch(() => null) : null;
       if (saved && saved.changed) { theme = { mockup: mockTheme, app_had: saved.before }; await page.waitForTimeout(400); }
       const putBack = KEEP_APP_THEME ? null : await useTheme(page, own);
+      // the mockup's site theme is put back after the other-theme pass below (TF-025)
       try { app = await page.evaluate(PROBE, wanted); ownSurface = await surface(page); }
-      finally {   // in the reverse order they were put on
-        if (putBack) await putBack();
-        if (saved && saved.changed) await page.evaluate(APPLY_THEME, saved.before).catch(() => {});
-      }
+      finally { if (putBack) await putBack(); }
 
       // TF-008 §2. Cheap, no false positives in a shell-scrolled app, and it would
       // have caught the /routing void on its own: 2607px of document against a
@@ -1006,6 +1009,7 @@ for (const s of SCREENS) {
       }
     } catch (e) {
       perWidth.push({ width, error: String(e).slice(0, 200) });
+      await unSite();
       continue;
     }
     const d = diff(mock, app, s.name, width);
@@ -1018,9 +1022,15 @@ for (const s of SCREENS) {
     // --- Lekhak TF-024: the other theme. Both pages are drawn in it and put back after, so an
     // attached app is left in the viewer's theme. Every finding here says which theme it is in.
     const other = own === 'dark' ? 'light' : 'dark';
-    if (KEEP_APP_THEME || !wantTheme(other)) continue;
+    if (KEEP_APP_THEME || !wantTheme(other)) { await unSite(); continue; }
     let backApp = null, backMock = null;
     try {
+      // The app keeps the mockup's site theme, but gets its own light/dark classes back, so that the
+      // switch below flips them as the app's toggle would (a class-driven dark mode, TF-013).
+      if (saved && saved.changed) {
+        const cls = Object.fromEntries(Object.entries(saved.before).filter(([k]) => k.endsWith('|class')));
+        if (Object.keys(cls).length) await page.evaluate(APPLY_THEME, cls).catch(() => {});
+      }
       backApp = await useTheme(page, other);
       backMock = await useTheme(mockPage, other, 0);
       if (!THEMES && !otherSeen && !differs(ownSurface, await surface(page))) { notOffered.add(other); continue; }
@@ -1041,6 +1051,7 @@ for (const s of SCREENS) {
     } finally {
       if (backMock) await backMock();
       if (backApp) await backApp();
+      await unSite();
     }
   }
 

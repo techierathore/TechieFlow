@@ -15,16 +15,21 @@
 // was not measured (owner decision A, 2026-10-07).
 // A screen is reached by clicking, inside the app, the control whose AutomationId is
 // nav-<screen name> or, failing that, the tab, button, link or list item labelled with the screen's
-// name; the first screen in the list may be the one the app opens on. The session opens the app by
-// its .app path (boot.json app_path, or --app-path) when known, else by bundle id. A screen with no
-// such control is UNREACHABLE and says what to add. The screenshot is the app's window alone (mac2's
-// own screenshot is the whole display, other windows included). One window size: the app's own.
+// name, or by clicking in turn the labels the list read from the code for it (list.json `nav`, from
+// tf-verify-list.sh: "Images", or "Users" then "+ Add New User"). Only a screen whose route is "/" may be
+// the one the app opens on; any other screen nothing reached is UNREACHABLE and is never graded on
+// whatever was on view (Lekhak TF-027: Search results passed on BlogAdmin's Dashboard). A screen the
+// list says another project serves (a website page, when the Mac head is the desktop app) is skipped
+// as another head's. The session opens the app by its .app path (boot.json app_path, or --app-path)
+// when known, else by bundle id. Each screen is measured at every --widths (default 1280,390): the
+// window is resized through macOS, the width it really took is recorded (an app's minimum size holds),
+// and the screenshot is that window alone, taken by macOS by its window number.
 // --from-source a.xml,b.xml grades saved page sources instead of a running app (one screen per
 // file, no screenshot): how the self-tests check the grading where there is no Mac.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, dirname, resolve } from 'node:path';
-import { openSession, parseSource, descendants } from './tf-appium.mjs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, normalize, resolve } from 'node:path';
+import { openSession, parseSource, descendants, appPid, resizeWindow, windowShot, macWindow } from './tf-appium.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (n, d = null) => { const i = argv.indexOf(n); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d; };
@@ -48,7 +53,9 @@ const ERROR_TEXTS = [...args('--error-text'), 'An unhandled error has occurred',
 if (!FROM_SOURCE.length && (!APPIUM || !(BUNDLE || APP_PATH))) { console.error('tf-verify-native: --appium URL and the app (boot.json from tf-verify-boot.sh, --bundle or --app-path) are required'); process.exit(3); }
 
 let screens = [];
-if (LIST) screens = (JSON.parse(readFileSync(LIST, 'utf8')).screens || []).map((s) => ({ name: s.name, route: s.route, mockup: s.mockup || '', rows: s.rows || [] }));
+if (LIST && !existsSync(LIST)) { console.error(`tf-verify-native: ${LIST} does not exist; make it first with bash .tfcore/utils/tf-verify-list.sh <App> ui`); process.exit(3); }
+if (LIST) screens = (JSON.parse(readFileSync(LIST, 'utf8')).screens || []).map((s) => ({ name: s.name, route: s.route, mockup: s.mockup || '', rows: s.rows || [],
+  nav: s.nav || null, project: s.project || '' }));
 for (const s of args('--screen')) {
   const m = s.match(/^([^=]+)=(.*)$/);
   if (m) screens.push({ name: m[1], route: m[2], mockup: `${MOCKUPS}/${m[1].toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`, rows: [] });
@@ -56,6 +63,21 @@ for (const s of args('--screen')) {
 if (FROM_SOURCE.length && !screens.length) screens = FROM_SOURCE.map((f) => ({ name: basename(f).replace(/\.xml$/, ''), route: '', mockup: '', rows: [] }));
 if (!screens.length) { console.error('tf-verify-native: no screens (--list <json> or --screen name=route)'); process.exit(3); }
 
+const WIDTHS = String(arg('--widths', '1280,390')).split(',').map((x) => parseInt(x, 10)).filter((x) => x > 0);
+// The booted project and every project it references: a screen another project serves is another head's.
+const heads = (() => {
+  const out = new Set(); const todo = boot.project ? [dirname(boot.project)] : [];
+  while (todo.length) {
+    const d = todo.pop().replace(/\/$/, '');
+    if (out.has(d)) continue; out.add(d);
+    try {
+      const proj = readdirSync(d).find((f) => f.endsWith('.csproj'));
+      for (const m of readFileSync(`${d}/${proj}`, 'utf8').matchAll(/<ProjectReference\s+Include="([^"]+)"/g))
+        todo.push(normalize(join(d, dirname(m[1].replace(/\\/g, '/')))));
+    } catch { /* not a project folder */ }
+  }
+  return out;
+})();
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const anchorsOf = (mockup) => {   // as tf-verify-screens.mjs: an attribute on an element, not in a style or script
   if (!mockup || !existsSync(mockup)) return null;
@@ -148,12 +170,13 @@ function grade(nodes, anchors) {
   return { render, visual, findings, anchors_present: out.anchors.filter((a) => a.present).length, window: win ? { w: win.w, h: win.h } : null };
 }
 
+const skipped = [];
 function writeOut(results, extra = {}, width = 0) {
   const summary = {
-    mode: 'appium', base: APPIUM, bundle_id: BUNDLE, widths: width ? [width] : [], login: null, screens: results, skipped: [],
+    mode: 'appium', base: APPIUM, bundle_id: BUNDLE, widths: width ? [width] : [], login: null, screens: results, skipped,
     anchors_not_measured: NO_NAMES,
     summary: {
-      screens: results.length, skipped: 0,
+      screens: results.length, skipped: skipped.length,
       render_ok: results.filter((r) => r.render === 'OK').length,
       render_fail: results.filter((r) => r.render === 'EMPTY' || r.render === 'ERROR').length,
       unreachable: results.filter((r) => r.render === 'UNREACHABLE').length,
@@ -180,58 +203,105 @@ if (!FROM_SOURCE.length) {
 
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const q = (t) => t.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-async function reach(name, first) {
-  const win = await s.find('-ios predicate string', 'elementType == 4').catch(() => null);
-  // Button 9, RadioButton 10, Link 42 (a web view's menu), Cell 75
-  for (const [using, value] of [['accessibility id', `nav-${slug(name)}`],
-    ['-ios predicate string', `elementType IN {9, 10, 42, 75} AND label ==[c] '${q(name)}'`]]) {
-    const el = await s.find(using, value, win).catch(() => null);
-    if (el) { await s.click(el); await sleep(SETTLE); return { how: using === 'accessibility id' ? `clicked nav-${slug(name)}` : `clicked the control labelled "${name}"`, win }; }
+// Button 9, RadioButton 10, Link 42 (a web view's menu), Cell 75: the control labelled `text`, else
+// the one whose label holds it (a menu link reads "📷 Images" for the code's "Images")
+async function control(win, text) {
+  for (const value of [`elementType IN {9, 10, 42, 75} AND (label ==[c] '${q(text)}' OR title ==[c] '${q(text)}')`,
+    `elementType IN {9, 10, 42, 75} AND label CONTAINS[c] '${q(text)}'`]) {
+    const el = await s.find('-ios predicate string', value, win).catch(() => null);
+    if (el) return el;
   }
-  return first ? { how: 'the screen the app opens on (no control named it)', win } : { how: '', win };
+  return null;
+}
+async function reach(sc, first) {
+  const name = sc.name;
+  const win = await s.find('-ios predicate string', 'elementType == 4').catch(() => null);
+  if (sc.nav && sc.nav.length) {          // the path the code gives (Lekhak TF-027)
+    for (const [i, label] of sc.nav.entries()) {
+      const el = await control(win, label);
+      if (!el) return { how: '', win, why: `the code links "${label}" to it${i ? ` (after ${sc.nav.slice(0, i).map((x) => `"${x}"`).join(', ')})` : ''}, and no such control was on view` };
+      await s.click(el); await sleep(SETTLE);
+    }
+    return { how: `clicked ${sc.nav.map((x) => `"${x}"`).join(' > ')}`, win };
+  }
+  const el = await s.find('accessibility id', `nav-${slug(name)}`, win).catch(() => null) || await control(win, name);
+  if (el) { await s.click(el); await sleep(SETTLE); return { how: `clicked the control for "${name}"`, win }; }
+  // only the start screen may be the one on view without a click; any other was never shown
+  if (first && ['', '/'].includes(String(sc.route || '').trim())) return { how: 'the screen the app opens on', win };
+  return { how: '', win };
 }
 
 mkdirSync(SHOTS, { recursive: true });
 const results = []; let width = 0;
+const PID = !FROM_SOURCE.length && APP_PATH ? appPid(APP_PATH) : 0;
+const before = PID ? macWindow(PID) : null;            // put back at the end
+let firstDrawn = false;
 for (const [i, sc] of screens.entries()) {
+  // another head's screen: the list says a project the booted one does not include serves it
+  if (sc.project && heads.size && !heads.has(normalize(sc.project))) {
+    skipped.push({ name: sc.name, route: sc.route, rows: sc.rows, reason: `it is served by ${sc.project}, not by the booted head (${boot.project})` });
+    console.log(`SKIP ${sc.name} (${sc.route}) — another head's screen: served by ${sc.project}`);
+    continue;
+  }
+  if (/\{/.test(sc.route || '') && !(sc.nav && sc.nav.length)) {
+    skipped.push({ name: sc.name, route: sc.route, rows: sc.rows, reason: `its route ${sc.route} takes a value and no link in the code reaches it` });
+    console.log(`SKIP ${sc.name} (${sc.route}) — its route takes a value and no link in the code reaches it`);
+    continue;
+  }
   const r = { name: sc.name, route: sc.route, mockup: sc.mockup, rows: sc.rows, anchors: anchorsOf(sc.mockup), widths: [] };
   if (NO_NAMES) r.anchors_not_measured = true;
   results.push(r);
-  const shot = `${SHOTS}/${slug(sc.name)}-mac.png`;
-  let entry;
+  const want = NO_NAMES ? [] : r.anchors || [];
+  let nav;
   try {
-    // the first screen: opening the session starts the app again, and a web view took about eight
+    // the first look: opening the session starts the app again, and a web view took about eight
     // seconds to draw its first page, menu included (2026-10-07). Wait for it before looking for the menu.
-    if (s && i === 0) { const t1 = Date.now(); while (Date.now() - t1 < Math.max(RENDER_WAIT, 20000) && !hasContent(parseSource(await s.source()))) await sleep(300); }
-    const nav = FROM_SOURCE.length ? { how: `saved source ${FROM_SOURCE[i]}` } : await reach(sc.name, i === 0);
-    if (!nav.how) {
-      entry = { width, url: '', status: 0, screenshot: '', render: 'UNREACHABLE', visual: 'n/a',
-        findings: [{ check: 'render', class: 'other', detail: `no control reaches ${sc.name}: give its tab, flyout item, link or button AutomationId="nav-${slug(sc.name)}", or the label "${sc.name}"` }] };
-    } else {
-      const t0 = Date.now();
-      const src = async () => parseSource(FROM_SOURCE.length ? readFileSync(FROM_SOURCE[i], 'utf8') : await s.source());
-      let nodes = await src();
-      const want = NO_NAMES ? [] : r.anchors || [];
-      while (!FROM_SOURCE.length && Date.now() - t0 < RENDER_WAIT && !(want.length ? nodes.some((n) => want.includes(n.id)) : hasContent(nodes))) {
-        await sleep(300); nodes = await src();
+    if (s && !firstDrawn) { const t1 = Date.now(); while (Date.now() - t1 < Math.max(RENDER_WAIT, 20000) && !hasContent(parseSource(await s.source()))) await sleep(300); firstDrawn = true; }
+    nav = FROM_SOURCE.length ? { how: `saved source ${FROM_SOURCE[i]}` } : await reach(sc, results.length === 1);
+  } catch (e) { nav = { how: '', why: `Appium: ${e.message}` }; }
+  if (!nav.how) {
+    const detail = nav.why ? `${sc.name} was not reached: ${nav.why}`
+      : `no control reaches ${sc.name}: no link to ${sc.route} was found in the code${NO_NAMES ? '' : `; give its tab, flyout item, link or button AutomationId="nav-${slug(sc.name)}"`}, or the label "${sc.name}"`;
+    r.widths.push({ width, url: '', status: 0, screenshot: '', render: 'UNREACHABLE', visual: 'n/a', findings: [{ check: 'render', class: 'other', detail }] });
+  } else {
+    for (const w of PID ? WIDTHS : [0]) {
+      const shot = `${SHOTS}/${slug(sc.name)}${w ? `-${w}` : ''}-mac.png`;
+      let entry;
+      try {
+        const size = w ? resizeWindow(PID, w, w < 700 ? 844 : 800) : null;
+        if (w) await sleep(SETTLE);
+        const t0 = Date.now();
+        const src = async () => parseSource(FROM_SOURCE.length ? readFileSync(FROM_SOURCE[i], 'utf8') : await s.source());
+        let nodes = await src();
+        while (!FROM_SOURCE.length && Date.now() - t0 < RENDER_WAIT && !(want.length ? nodes.some((n) => want.includes(n.id)) : hasContent(nodes))) {
+          await sleep(300); nodes = await src();
+        }
+        const g = grade(nodes, want);
+        if (g.window) width = g.window.w;
+        entry = { width: g.window ? g.window.w : 0, height: g.window ? g.window.h : 0, url: '', status: 200, reached: nav.how, render_wait_ms: Date.now() - t0,
+          screenshot: FROM_SOURCE.length ? '' : shot, render: g.render, visual: g.visual, findings: g.findings, anchors_present: g.anchors_present, console_errors: [] };
+        if (w) { entry.requested_width = w; if (!size || Math.abs(size.w - w) > 8) entry.width_note = size ? `the window stayed ${size.w} px wide (the app's minimum)` : 'macOS did not resize the window (Accessibility for the terminal)'; }
+        if (NO_NAMES) entry.anchors_not_measured = true;
+        if (s) {
+          if (!(PID && windowShot(PID, shot))) {
+            try { writeFileSync(shot, Buffer.from(await s.shot(nav.win), 'base64')); } catch (e) { entry.screenshot = ''; }
+          }
+        }
+      } catch (e) {
+        entry = { width, url: '', status: 0, screenshot: '', render: 'UNREACHABLE', visual: 'n/a', findings: [{ check: 'render', class: 'other', detail: `Appium: ${e.message}` }] };
       }
-      const g = grade(nodes, want);
-      if (g.window) width = g.window.w;
-      entry = { width: g.window ? g.window.w : 0, height: g.window ? g.window.h : 0, url: '', status: 200, reached: nav.how, render_wait_ms: Date.now() - t0,
-        screenshot: FROM_SOURCE.length ? '' : shot, render: g.render, visual: g.visual, findings: g.findings, anchors_present: g.anchors_present, console_errors: [] };
-      if (NO_NAMES) entry.anchors_not_measured = true;
-      if (s) { try { writeFileSync(shot, Buffer.from(await s.shot(nav.win), 'base64')); } catch (e) { entry.screenshot = ''; } }
+      r.widths.push(entry);
     }
-  } catch (e) {
-    entry = { width, url: '', status: 0, screenshot: '', render: 'UNREACHABLE', visual: 'n/a', findings: [{ check: 'render', class: 'other', detail: `Appium: ${e.message}` }] };
   }
-  r.widths.push(entry);
-  r.render = entry.render; r.visual = entry.visual; r.anchors_n = (r.anchors || []).length;
-  const notes = (entry.findings || []).map((f) => f.detail).slice(0, 4);
+  const worst = r.widths.find((e) => e.render !== 'OK') || r.widths[0];
+  r.render = worst.render; r.visual = r.widths.some((e) => e.visual === 'FAIL') ? 'FAIL' : worst.visual; r.anchors_n = (r.anchors || []).length;
+  const notes = [...new Set(r.widths.flatMap((e) => (e.findings || []).map((f) => f.detail + (e.requested_width ? ` @${e.width}` : ''))))].slice(0, 4);
+  const sizes = r.widths.filter((e) => e.requested_width).map((e) => `${e.width}${e.width_note ? ` (asked ${e.requested_width})` : ''}`);
   const names = NO_NAMES ? 'names not measured (web view)' : `${r.anchors_n} anchors${r.mockup && !existsSync(r.mockup) ? ' (no mockup file)' : ''}`;
-  console.log(`${r.render === 'OK' && r.visual === 'OK' ? 'OK  ' : 'FAIL'} ${r.name} (${r.route}) — render ${r.render}, visual ${r.visual}, ${names}${notes.length ? ' — ' + notes.join('; ') : ''}`);
+  console.log(`${r.render === 'OK' && r.visual === 'OK' ? 'OK  ' : 'FAIL'} ${r.name} (${r.route}) — render ${r.render}, visual ${r.visual}, ${names}${sizes.length ? `, @${sizes.join('/')}` : ''}${r.widths[0].reached ? ` — ${r.widths[0].reached}` : ''}${notes.length ? ' — ' + notes.join('; ') : ''}`);
 }
+if (PID && before) resizeWindow(PID, before.w, before.h);
 if (s) await s.close();
 const out = writeOut(results, {}, width);
-console.log(`screens ${out.summary.screens}: render ${out.summary.render_ok} OK / ${out.summary.render_fail} failed / ${out.summary.unreachable} unreachable; visual ${out.summary.visual_ok} OK / ${out.summary.visual_fail} failed${NO_NAMES ? '; control names not measured (web view)' : ''}; screenshots ${SHOTS}; JSON ${OUT}`);
-process.exit(out.summary.unreachable === out.summary.screens ? 2 : (out.summary.render_fail + out.summary.visual_fail + out.summary.unreachable) ? 5 : 0);
+console.log(`screens ${out.summary.screens}${skipped.length ? ` (+${skipped.length} skipped)` : ''}: render ${out.summary.render_ok} OK / ${out.summary.render_fail} failed / ${out.summary.unreachable} unreachable; visual ${out.summary.visual_ok} OK / ${out.summary.visual_fail} failed${NO_NAMES ? '; control names not measured (web view)' : ''}; screenshots ${SHOTS}; JSON ${OUT}`);
+process.exit(out.summary.screens && out.summary.unreachable === out.summary.screens ? 2 : (out.summary.render_fail + out.summary.visual_fail + out.summary.unreachable) ? 5 : 0);

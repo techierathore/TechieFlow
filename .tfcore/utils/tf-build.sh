@@ -203,6 +203,26 @@ cross_side() { # side: clear what another side built with its own paths in it, t
 }
 WRONG_RUNG='NETSDK1178|Microsoft\.(iOS|Android|MacCatalyst|tvOS)\.Sdk|Workload ID|not recognized|WindowsAppSDK|command not found|No such file or directory|is not recognized as an internal or external command|The term .* is not recognized|workload.*not installed|Inadequate permissions'
 
+# A Mac Catalyst build after Platforms/MacCatalyst/Info.plist (or an .entitlements file) changed: the
+# incremental build refreshed the DLLs and kept the .app's old Info.plist, so a fix that lives there
+# looked as if it had failed (Lekhak TF-026: the scene manifest was in the source and not in the
+# bundle). When such a file is newer than the bundle, that target's bin/ and obj/ are cleared first.
+mac_tfm="$(printf '%s\n' ${EXTRA[@]+"${EXTRA[@]}"} | grep -oE '^net[0-9.]+-maccatalyst[0-9.]*$' | head -1)"
+if [[ -n "$mac_tfm" && "$MODE" == build && "$TARGET" == *.csproj ]]; then
+  pd="$(dirname "$TARGET")"
+  for cfgdir in "$pd"/bin/*/"$mac_tfm"; do
+    [[ -d "$cfgdir" ]] || continue
+    plist="$(ls -t "$cfgdir"/*.app/Contents/Info.plist "$cfgdir"/*/*.app/Contents/Info.plist 2>/dev/null | head -1)"
+    [[ -n "$plist" ]] || continue
+    newer="$(find "$pd/Platforms/MacCatalyst" -maxdepth 1 \( -name '*.plist' -o -name '*.entitlements' \) -newer "$plist" 2>/dev/null | head -1)"
+    if [[ -n "$newer" ]]; then
+      cfg="$(basename "$(dirname "$cfgdir")")"
+      rm -rf "$cfgdir" "$pd/obj/$cfg/$mac_tfm"
+      echo "note  $newer is newer than the built app ($plist); cleared bin/$cfg/$mac_tfm and obj/$cfg/$mac_tfm so the bundle is built again"
+    fi
+  done
+fi
+
 tried=()
 n=0
 for r in "${rungs[@]}"; do

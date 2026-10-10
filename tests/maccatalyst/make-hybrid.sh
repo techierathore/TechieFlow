@@ -151,7 +151,17 @@ names = ["Home", "Crowded", "Broken"]
 s = lambda i, n: {"name": n, "route": "/" if n == "Home" else f"/{n.lower()}", "mockup": f"docs/mockups/{n.lower()}.html", "rows": [f"REQ-UI-10{i}"]}
 r = lambda i, n: {"id": f"REQ-UI-10{i}", "title": f"{n} screen", "class": "UI", "screen": n, "route": "/" if n == "Home" else f"/{n.lower()}",
                   "status_raw": "Implemented", "perf_budget": "", "remarks": ""}
-json.dump({"scope": "ui", "screens": [s(i, n) for i, n in enumerate(names, 1)], "rows": [r(i, n) for i, n in enumerate(names, 1)]},
-          open(sys.argv[1], "w"), indent=1)
+# Lekhak TF-027: a screen reached by a menu label that is not its name (the code's nav path), a
+# website page another project serves, and a screen nothing links to, which is never graded on
+# whatever the app shows
+extra = [("Manage Crowd", "/crowded", {"nav": ["Crowded"], "project": "src/TfMacHybrid"}),
+         ("Website Search", "/search", {"project": "src/TfWebSite"}),
+         ("Never Linked", "/never", {})]
+screens = [s(i, n) for i, n in enumerate(names, 1)]
+rows = [r(i, n) for i, n in enumerate(names, 1)]
+for i, (n, route, more) in enumerate(extra, len(names) + 1):
+    screens.append(dict(s(i, n), route=route, mockup="", **more))
+    rows.append(dict(r(i, n), route=route))
+json.dump({"scope": "ui", "screens": screens, "rows": rows}, open(sys.argv[1], "w"), indent=1)
 PY
 echo "src/TfMacHybrid/TfMacHybrid.csproj"

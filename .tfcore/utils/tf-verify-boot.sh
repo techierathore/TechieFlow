@@ -26,6 +26,11 @@
 #            is built again with -p:ValidateXcodeVersion=false, and the state says so. A Blazor Hybrid
 #            head is driven without control names (its data-testid is not readable on a Mac): the
 #            state says webview, and those rows say the name check was not measured.
+#            BOOTED only once a mac2 session has opened and the app shows a window of its own, not a
+#            system dialog; that window is saved as boot-<port>-window.png (Lekhak TF-026). Before the
+#            build it checks the two things a fresh macOS 27 / Xcode 27 machine lacks, and names the fix:
+#            Automation Mode allowed without a password, and a mac2 driver new enough for this Xcode.
+#            `stop` quits the app as Cmd-Q does, and kills it only when it has not quit in 15 s.
 #   android, ios: no driver ships in this framework version. NONE with that reason; their rows
 #            are recorded as not verified, never as static-only passes.
 # Without --head the script picks web when a web project exists, else (on a Mac) maccatalyst when a
@@ -139,6 +144,24 @@ d, port = sys.argv[1], sys.argv[2]
 main = os.path.join(d, "boot.json")
 path = os.path.join(d, f"boot-{port}.json") if port else main
 s = json.load(open(path))
+# A Mac Catalyst head is quit the way Cmd-Q quits it. Killed, macOS offered at the next start to reopen
+# the windows of a run that "quit unexpectedly", and that dialog stood in front of the first screen
+# (Lekhak TF-026). It is killed below only when it has not quit within 15 s.
+if s.get("bundle_id") and s.get("app_path") and not s.get("stopped"):
+    exe_dir = os.path.join(s["app_path"], "Contents", "MacOS") + os.sep
+    def mac_running():
+        out = subprocess.run(["ps", "-A", "-ww", "-o", "command="], capture_output=True).stdout.decode(errors="replace")
+        return any(exe_dir in line for line in out.splitlines())
+    if mac_running():
+        bid = s["bundle_id"].replace('"', "")
+        try:
+            subprocess.run(["osascript", "-e", f'if application id "{bid}" is running then tell application id "{bid}" to quit'], capture_output=True, timeout=30)
+        except Exception:
+            pass
+        for _ in range(15):
+            if not mac_running():
+                break
+            time.sleep(1)
 for pid in s.get("pids", []):
     for sig in (signal.SIGTERM, signal.SIGKILL):
         try:
@@ -346,6 +369,34 @@ PY
   AURL="${AURL:-http://localhost:4723}"; AURL="${AURL%/}"
   APORT="${AURL##*:}"; [[ "$APORT" =~ ^[0-9]+$ ]] || APORT=4723
   keyed "$APORT"
+  mac_none() { # reason: a host fault found before anything was started
+    write_state maccatalyst none "" "" "" "$PROJECT" "$1" host "$PLATFORM"
+    echo "NONE head=maccatalyst kind=host reason=$1"; exit 2; }
+  # Lekhak TF-026: two set-up faults of a fresh macOS 27 / Xcode 27 machine, each of which stopped every
+  # mac2 session with an error that does not name its fix. Checked here, before a build of minutes.
+  # 1. mac2 turns Automation Mode on for each session; when that needs a password it never comes, and
+  #    the session fails with "Timed out while enabling automation mode".
+  if command -v automationmodetool >/dev/null 2>&1 && automationmodetool 2>&1 | grep -q '^This device REQUIRES user authentication'; then
+    mac_none "macOS asks for a password before Automation Mode comes on, so no mac2 session can open. Run once, with an administrator password: sudo automationmodetool enable-automationmode-without-authentication"
+  fi
+  # 2. mac2 builds its WebDriverAgentMac with the Xcode on this Mac. Before 4.1.1 that build fails
+  #    under Xcode 27 (deployment target 10.15 below its 12.0 minimum, xcodebuild exit 65). An
+  #    `appium driver update mac2` left the driver unloadable ("Cannot find package 'appium'");
+  #    uninstalling and installing again is what worked.
+  if command -v appium >/dev/null 2>&1; then
+    M2="$(appium driver list --installed --json 2>/dev/null | python3 -c 'import json,sys
+try: print(json.load(sys.stdin).get("mac2", {}).get("version", ""))
+except Exception: print("?")' 2>/dev/null)"
+    XMAJ="$(xcodebuild -version 2>/dev/null | sed -n 's/^Xcode \([0-9]*\).*/\1/p' | head -1)"
+    REINSTALL="appium driver uninstall mac2; appium driver install mac2"
+    if [[ -z "$M2" ]]; then
+      mac_none "Appium's mac2 driver is not installed. Run: appium driver install mac2"
+    elif [[ "$M2" != "?" && "${XMAJ:-0}" -ge 27 ]] && python3 -c 'import sys
+v = tuple(int(x) for x in sys.argv[1].split("-")[0].split(".")[:3])
+sys.exit(0 if v < (4, 1, 1) else 1)' "$M2"; then
+      mac_none "the mac2 driver $M2 cannot build its helper with Xcode $XMAJ (4.1.1 is the first that can). Run: $REINSTALL"
+    fi
+  fi
   ready() { curl -s -m 3 "$AURL/status" 2>/dev/null | grep -q '"ready":true'; }
   APPIUM_PID=""
   if ! ready; then
@@ -407,7 +458,8 @@ PY
   MARK="$DIR/.launch-$APORT"; : > "$MARK"; ROOT_LOG="$PWD/$LOG"
   # Opened the way Finder opens it: macOS kills a sandboxed app started from its binary directly
   # ("Killed: 9", Lekhak BlogAdmin, 2026-10-07). Its output goes to the log through open's own options.
-  OPENERR="$(open -n -o "$ROOT_LOG" --stderr "$ROOT_LOG" "$APP" 2>&1)"; printf '%s\n' "$OPENERR" >> "$LOG"
+  # -ApplePersistenceIgnoreState: never offer to reopen the windows of an earlier run (Lekhak TF-026)
+  OPENERR="$(open -n -o "$ROOT_LOG" --stderr "$ROOT_LOG" "$APP" --args -ApplePersistenceIgnoreState YES 2>&1)"; printf '%s\n' "$OPENERR" >> "$LOG"
   APP_PID=""; i=0
   while [[ $i -lt 10 && -z "$APP_PID" ]]; do sleep 1; i=$((i+1)); APP_PID="$(pgrep -f "$APP/Contents/MacOS/$EXE" | head -1)"; done
   i=0; while [[ -n "$APP_PID" && $i -lt 8 ]] && kill -0 "$APP_PID" 2>/dev/null; do sleep 1; i=$((i+1)); done
@@ -427,9 +479,35 @@ PY
   write_state maccatalyst appium "$AURL" "$APP_PID $APPIUM_PID" "tf-build.sh build -f $TFM" "$PROJECT" "" "" "$PLATFORM"
   set_state bundle_id "$(json_escape "$BUNDLE")"
   set_state app_path "$(json_escape "$APP")"
+  # Lekhak TF-026: a running process and an answering Appium are not a boot. A mac2 session has to open
+  # and find the app's own window on view, not a system dialog, before this says BOOTED.
+  SHOT="$PWD/$DIR/boot-$APORT-window.png"
+  FIRST="$(TF_A="$AURL" TF_B="$BUNDLE" TF_P="$APP" TF_S="$SHOT" node --input-type=module -e "
+import { firstScreen } from '$HERE/tf-appium.mjs';
+const r = await firstScreen(process.env.TF_A, { bundleId: process.env.TF_B, appPath: process.env.TF_P, shot: process.env.TF_S });
+console.log(JSON.stringify(r));" 2>&1 | tail -1)"
+  printf '### first screen: %s\n' "$FIRST" >> "$LOG"
+  fs() { python3 -c 'import json,sys
+try: print(json.loads(sys.argv[1]).get(sys.argv[2]) or "")
+except Exception: print("")' "$FIRST" "$1"; }
+  if [[ "$(fs ok)" != "True" ]]; then
+    why="$(fs reason)"; why="${why:-$(cut -c1-200 <<<"$FIRST")}"
+    fix=""
+    case "$why" in
+      *[Aa]utomation\ mode*) fix="; run once, with an administrator password: sudo automationmodetool enable-automationmode-without-authentication" ;;
+      *"Cannot find package"*|*"Could not find a driver"*|*xcodebuild*|*"code 65"*) fix="; the mac2 driver does not load or cannot build its helper: appium driver uninstall mac2; appium driver install mac2" ;;
+    esac
+    [[ "$(fs stage)" == session && -z "$fix" ]] && fix="; a mac2 session that cannot start is usually a permission: System Settings > Privacy & Security > Accessibility (the terminal, and WebDriverAgentRunner-Runner)"
+    bash "${BASH_SOURCE[0]}" stop --port "$APORT" >/dev/null 2>&1
+    write_state maccatalyst none "" "" "tf-build.sh build -f $TFM" "$PROJECT" "the app started but its first screen was not reached: $why$fix" host "$PLATFORM"
+    echo "NONE head=maccatalyst kind=host reason=the app started but its first screen was not reached: $why$fix (log $LOG)"; exit 2
+  fi
+  set_state first_screen "$(json_escape "$SHOT")"
+  DISMISSED="$(fs dismissed)"
+  [[ -n "$DISMISSED" ]] && { set_state dismissed "$(json_escape "$DISMISSED")"; echo "tf-verify-boot: $DISMISSED" >&2; }
   [[ -n "$XNOTE" ]] && set_state xcode_check "$(json_escape "off: $XNOTE")"
   [[ $WEBVIEW -eq 1 ]] && set_state webview true
-  echo "BOOTED head=maccatalyst mode=appium url=$AURL bundle=$BUNDLE project=$PROJECT tfm=$TFM$([[ $WEBVIEW -eq 1 ]] && echo ' webview=yes (control names not measured)') pid=$APP_PID${APPIUM_PID:+ appium-pid=$APPIUM_PID}${XNOTE:+ xcode-check=off ($XNOTE)} log=$LOG stop=\"bash .tfcore/utils/tf-verify-boot.sh stop --port $APORT\""
+  echo "BOOTED head=maccatalyst mode=appium url=$AURL bundle=$BUNDLE project=$PROJECT tfm=$TFM$([[ $WEBVIEW -eq 1 ]] && echo ' webview=yes (control names not measured)') pid=$APP_PID${APPIUM_PID:+ appium-pid=$APPIUM_PID}${XNOTE:+ xcode-check=off ($XNOTE)} window=$DIR/boot-$APORT-window.png log=$LOG stop=\"bash .tfcore/utils/tf-verify-boot.sh stop --port $APORT\""
   exit 0
 fi
 

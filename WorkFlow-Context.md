@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-10-09 (Chatur TF-009: a progress bar counts as filled; validate red since 4b39c84 fixed: tf-develop.sh lost a same-second resume attempt). |
+| Last updated | 2026-10-10 (Lekhak TF-008, TF-025, TF-026, TF-027). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -117,7 +117,7 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` (that repository, not this one) and waiting on the owner's go-ahead. | Separate repo |
 | **Every feedback entry answered so far is fixed and deployed everywhere.** Several wait for their project's re-check; `tf-feedback.sh <App> --waiting` lists them. | Each project (close) |
 | **Mockup parity pairs live rows with sample rows by position** (MISS-TechieFlow-20261003-02): row N of the app is graded against whatever kind of row the mockup drew at N, so data in another order gives row-level icon findings. Chatur's Repository rows are blocked on it. A fix would pair each app row with the best-matching sample row. | Maintainer |
-| **Mac Catalyst driver and rules built 2026-10-07** (MISS-TechieFlow-20260928-07 open). `tf-maccatalyst-check.sh` flags a private project's keychain and scene faults; prove it once fixed, then close its TF-003. | That project, then maintainer |
+| **Mac Catalyst driver built 2026-10-07** (MISS-TechieFlow-20260928-07 open). Since 2026-10-10 BOOTED means a mac2 session reached the first screen, and screens are reached by the clicks the code gives. 7 of 8 desktop screens graded live; its TF-003 waits for that project's re-check. | That project, then maintainer |
 | **Eighteen `.gitignore` files carry repeated framework blocks** left by FR-76's defect: TechieBlog 50 copies, TfLens 30, one private project 10, fifteen others 2. Harmless but untidy; the updater no longer adds them, and removes none. | Owner decision |
 | **TrSetup has thousands of tracked build-output files.** Its ignore rules are correct and inert until the index entries go. `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the commands. Agents never run version control. | Owner action |
 | **Both library packages need republishing** so the persona fixes reach consumers (TR-002, TR-RAG-002). | Owner action |

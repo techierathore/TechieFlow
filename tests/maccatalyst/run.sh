@@ -3,7 +3,8 @@
 # Writes the fixture app (tests/maccatalyst/make-app.sh: four Shell tabs, one good, one with a
 # list, one with an empty list, one with two buttons on top of each other) and checks:
 #   1. tf-verify-boot.sh   picks the maccatalyst head unasked on a Mac, builds, starts the app,
-#                          prints BOOTED mode=appium with the bundle id
+#                          prints BOOTED mode=appium with the bundle id, once a mac2 session has
+#                          reached the app's first screen (its window saved; Lekhak TF-026)
 #   2. tf-verify-screens.sh --appium  Home and Posts OK; Empty render EMPTY (zero-rows); Overlap
 #                          visual FAIL (overlap) and render EMPTY (an empty label); a screenshot per
 #                          screen the size of the app's window, not of the display
@@ -12,7 +13,9 @@
 #   5. tf-verify-boot.sh stop  no copy of the app is left running (Appium relaunches it under a
 #                          new pid, so this proves stop goes by the .app, not the boot pid)
 #   6. a Blazor Hybrid head (make-hybrid.sh): boots with webview=yes; the check runs without control
-#      names, Home OK, Crowded visual FAIL, Broken render ERROR (the error bar); the verdict writes
+#      names, Home OK, Crowded visual FAIL, Broken render ERROR (the error bar); a screen reached by the
+#      code's menu label, another head's screen skipped, an unlinked screen UNREACHABLE, both widths
+#      measured (Lekhak TF-027); the verdict writes
 #      "control names not measured"; stop leaves nothing running
 # Before all that, on any machine with node (Linux CI included): the grading itself, over the saved
 # element trees in tests/maccatalyst/sources/ (--from-source): overlap found, the error bar found,
@@ -91,6 +94,7 @@ check "boot picks the maccatalyst head unasked" "$(has "$out" "PICK head=maccata
 out="$(bash $U/tf-verify-boot.sh start 2>&1)"; rc=$?; echo "     $out" | cut -c1-200
 check "boot reports BOOTED mode=appium (exit $rc)" "$(has "$out" "BOOTED head=maccatalyst mode=appium")"
 check "boot names the bundle id" "$(has "$out" "bundle=com.techieflow.macfixture")"
+check "boot reached the first screen in a mac2 session and saved its window (Lekhak TF-026)" "$([[ -s tests/.artifacts/verify/boot-4723-window.png ]] && has "$out" "window=tests/.artifacts/verify/boot-4723-window.png" || echo 1)"
 AURL="$(python3 -c 'import json;print(json.load(open("tests/.artifacts/verify/boot.json"))["url"])')"
 
 # ---- 2. screens -------------------------------------------------------------------------------
@@ -142,10 +146,18 @@ export TF_METRICS_ROOT="$H" TF_PROJECT_DIR="$H"
 trap 'bash $U/tf-verify-boot.sh stop >/dev/null 2>&1' EXIT
 out="$(bash $U/tf-verify-boot.sh start 2>&1)"; rc=$?; echo "     $out" | cut -c1-200
 check "hybrid: boots with webview=yes (exit $rc)" "$(has "$out" "BOOTED head=maccatalyst mode=appium .*webview=yes")"
+check "hybrid: BOOTED waited for the web view's first page and saved it" "$([[ -s tests/.artifacts/verify/boot-4723-window.png ]] && grep -q '\"ok\":true' "$(python3 -c 'import json;print(json.load(open("tests/.artifacts/verify/boot.json"))["log"])')"; echo $?)"
 out="$(bash $U/tf-verify-screens.sh --list $V/list.json --appium "$AURL" 2>&1)"; echo "$out" | sed 's/^/     /' | cut -c1-200
 check "hybrid: Home OK without names" "$(has "$out" "^OK   Home .*names not measured")"
 check "hybrid: Crowded's buttons are visual FAIL" "$(has "$out" "Crowded .*visual FAIL.*Button \"Save\" overlaps Button \"Cancel\"")"
 check "hybrid: Broken shows the error bar, render ERROR" "$(has "$out" "Broken .*render ERROR.*error bar is showing")"
+check "hybrid: a screen is reached by the menu label the code gives (Lekhak TF-027)" "$(has "$out" "Manage Crowd .*visual FAIL.*clicked \"Crowded\"")"
+check "hybrid: a screen another project serves is skipped, not driven" "$(has "$out" "^SKIP Website Search .*another head's screen: served by src/TfWebSite")"
+check "hybrid: a screen nothing reaches is UNREACHABLE, never graded on the screen on view" "$(has "$out" "Never Linked .*render UNREACHABLE")"
+check "hybrid: each screen is measured at 1280 and 390, window shots" "$(python3 -c 'import json,sys,os
+s=[x for x in json.load(open(sys.argv[1]))["screens"] if x["name"]=="Home"][0]
+ok = [w.get("requested_width") for w in s["widths"]] == [1280, 390] and all(os.path.getsize(w["screenshot"]) > 0 for w in s["widths"])
+sys.exit(0 if ok else 1)' $V/screens.json; echo $?)"
 out="$(bash $U/tf-verify-verdict.sh FxHybrid 2>&1)"; echo "$out" | grep -E "REQ-UI" | sed 's/^/     /' | cut -c1-200
 check "hybrid verdict: the Remark says the names were not measured" "$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));r=[x for x in d["rows"] if x["id"]=="REQ-UI-101"][0];sys.exit(0 if "Home renders and looks right (names not measured on a Mac)" in r["remark"] else 1)' $V/verdicts.json; echo $?)"
 check "hybrid verdict: REQ-UI-103 RENDER-FAIL" "$(has "$out" "REQ-UI-103.*RENDER-FAIL")"

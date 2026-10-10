@@ -1278,14 +1278,18 @@ NAV_ITEM = re.compile(r"""<(div|li|span|button)\b[^>]*\bclass\s*=\s*["'][^"']*(?
 
 
 def _mock_target(mock_dir: str, t: str):
-    """Resolve a link the way a browser opening docs/mockups/<file> would. Returns the file
-    name when it lands on an existing file inside the mockup folder, else None."""
+    """Resolve a link the way a browser opening docs/mockups/<file> would. Returns the path
+    relative to the mockup folder when it lands on an existing file inside it, at any depth
+    (Lekhak TF-008: index.html linking to admin/connection-settings.html opens, and was
+    failed), else None. A leading slash, or a path that leaves docs/mockups/, is still None."""
     if re.match(r"^(https?:|mailto:|tel:|javascript:|data:)", t, re.I) or t.startswith("/"):
         return None
+    t = re.split(r"[?#]", t, maxsplit=1)[0]
+    base = os.path.normpath(mock_dir)
     p = os.path.normpath(os.path.join(mock_dir, t))
-    if os.path.dirname(p) != os.path.normpath(mock_dir) or not os.path.isfile(p):
+    if not (p == base or p.startswith(base + os.sep)) or not os.path.isfile(p):
         return None
-    return os.path.basename(p)
+    return os.path.relpath(p, base).replace(os.sep, "/")
 
 
 def check_mockups(root: str, rep: Report):
@@ -1318,7 +1322,8 @@ def check_mockups(root: str, rep: Report):
                 continue
             name = _mock_target(mock_dir, t)
             if name is None:
-                hint = "write the file name alone, not a folder or a leading slash" if ("/" in t) else "the file does not exist"
+                hint = ("a leading slash opens from the disk's root; write the path from docs/mockups/" if t.startswith("/")
+                        else "the file does not exist inside docs/mockups/")
                 rep.fail(rel, f'links to "{t}", which does not open from docs/mockups/ ({hint})')
             else:
                 targets.append(name)
