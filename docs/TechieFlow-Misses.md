@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 264 logged: 56 open, 207 fixed, 1 will not fix |
+| Count | 268 logged: 56 open, 211 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
 | Updated | 2026-10-11 |
 
@@ -70,10 +70,14 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (207)
+## Fixed (211)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261011-05 | 2026-10-11 by owner | 2026-10-11 by log-miss | the check was too weak | Lekhak TF-032: tf-build.sh and the unit rung of tf-verify-tests.sh read the Mac Catalyst SDK's Xcode-version refusal as a wrong rung and said NOT-RUN, while tf-verify-boot.sh already built the same head with the check off, so build-phase asked the owner to install an older Xcode |
+| MISS-TechieFlow-20261011-04 | 2026-10-11 by owner | 2026-10-11 by log-miss | the framework never said it | Lekhak TF-030: no standard, check or verify step asked a Blazor Hybrid head for OS zoom, so BlogAdmin's Mac head shipped to UAT with Cmd+= doing nothing and text too small on a high-resolution screen |
+| MISS-TechieFlow-20261011-03 | 2026-10-11 by owner | 2026-10-11 by log-miss | the framework never said it | Lekhak TF-029: tf-doc-check failed a phase over the size cap with no way to record the owner's decision to keep a finished phase whole, so the status gate could never pass on Lekhak |
+| MISS-TechieFlow-20261011-02 | 2026-10-11 by owner | 2026-10-11 by log-miss | the check was too weak | Lekhak TF-028: amend-docs step 7 told the agent to write N/A (removed {date}), which tf-doc-check refuses, and the check asked a removed N/A row for an acceptance line, BRD item, mockup and detail entry it cannot have |
 | MISS-TechieFlow-20261011-01 | 2026-10-11 by owner | 2026-10-11 by log-miss | the framework never said it | Sevak TF-005: *verify all graded only the appPhase checklist (Sevak-P3) because verify-phase.md never passed --phase to tf-verify-list.sh, so 86 built rows of phases 1 and 2 were never graded; a scope-all pass would also have wiped other phases' ledger rows and a second pass's run record was refused |
 | MISS-TechieFlow-20261010-04 | 2026-10-10 by owner | 2026-10-10 by log-miss | the check was too weak | Lekhak TF-027: tf-verify-native graded a screen nothing reached on whatever the app showed (Search results passed on BlogAdmin's Dashboard), drove 9 website pages on the desktop head because the list named no serving project, reached a screen only by a label equal to its name, measured one width, an |
 | MISS-TechieFlow-20261010-03 | 2026-10-10 by owner | 2026-10-10 by log-miss | the check was too weak | Lekhak TF-008: tf-doc-check failed every mockup link into a subfolder (index.html to admin/connection-settings.html, which opens), 60 false FAILs that hid real findings; the entry stood unanswered from 2026-09-28 |

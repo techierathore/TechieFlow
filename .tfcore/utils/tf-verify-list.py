@@ -91,7 +91,7 @@ def entries_of(text):
             h = re.match(r"^#{2,3}\s+(?:page|screen)\s*:\s*(.+)$", nxt, re.I)
             if h:
                 current = h.group(1).strip()
-            e = {"section": current, "acceptance": "", "mockup": "", "brd": "", "perf_budget": ""}
+            e = {"section": current, "acceptance": "", "mockup": "", "brd": "", "perf_budget": "", "zoom_check": ""}
             for j in range(i, min(i + 14, len(lines))):
                 l = lines[j]
                 if re.search(r"\*Acceptance:?\*|^\s*[-*]\s*Acceptance:", l, re.I) and not e["acceptance"]:
@@ -105,6 +105,9 @@ def entries_of(text):
                 pb = re.search(r"perf-budget:\s*([^|`]+)", l)
                 if pb and not e["perf_budget"]:
                     e["perf_budget"] = pb.group(1).strip()
+                zc = re.search(r"zoom-check:\s*(keys|kept)\b", l)   # coding-standards-dotnet.md §9b
+                if zc and not e["zoom_check"]:
+                    e["zoom_check"] = zc.group(1)
                 if j > i and re.match(r"^\s*(?:[-*]\s*)?<a id=|^## ", l):
                     break   # the next entry starts: nothing below belongs to this row
             out[rid] = e
@@ -440,8 +443,9 @@ def main(argv):
         if r["status"] in NA:
             skipped += 1
             continue
-        e = ent.get(r["id"], {"section": "", "acceptance": "", "mockup": "", "brd": "", "perf_budget": ""})
+        e = ent.get(r["id"], {"section": "", "acceptance": "", "mockup": "", "brd": "", "perf_budget": "", "zoom_check": ""})
         row = dict(r, acceptance=e["acceptance"], mockup=e["mockup"], brd=e["brd"], perf_budget=e["perf_budget"],
+                   zoom_check=e.get("zoom_check", ""),
                    section=e["section"], screen="", route="", dialog="")
         cand = [screen_from_acceptance(e["acceptance"]), e["section"], r["title"]]
         if e["section"] in by_section:     # a screen read from the checklist: the heading the row sits under
@@ -502,7 +506,10 @@ def main(argv):
     print("## Rows")
     for r in work:
         where = f"{r['screen']} {r['route']}" + (f" — dialog {r['dialog']}" if r["dialog"] else "") if r["screen"] else "no screen resolved"
-        extra = f" — perf-budget: {r['perf_budget']}" if r["perf_budget"] else ""
+        extra = (f" — perf-budget: {r['perf_budget']}" if r["perf_budget"] else "") \
+            + (f" — zoom-check: {r['zoom_check']} (bash .tfcore/utils/tf-verify-zoom.sh --appium|--cdp <url>"
+               + (" --expect-restored 1.3, after a run with --leave 3 and a restart" if r.get("zoom_check") == "kept" else "")
+               + f" --json-out tests/.artifacts/verify/zoom/{r['id']}.json)" if r.get("zoom_check") else "")
         print(f"- {r['id']} [{r['status_raw']}] {r['title']} — {where}{extra}")
         print(f"    acceptance: {r['acceptance'] or 'MISSING — the row cannot be graded; fix the checklist'}")
     if unresolved:

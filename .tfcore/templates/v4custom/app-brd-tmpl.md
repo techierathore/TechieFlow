@@ -94,8 +94,9 @@ One item per thing the verifier will test. Each names its screen, links the mock
 | BRD-{N} | Performance | {…} | perf-budget: p95 load <= 2000ms @ concurrency 1 |
 | BRD-{N} | Security | {…} | {…} |
 | BRD-{N} | Logging | {from the Stack answer set} | {…} |
+| BRD-{N} | Zoom (a desktop head drawn in a web view) | Cmd/Ctrl+=, - and 0 zoom 50% to 300% in 10% steps; the level is kept across restarts | zoom-check: keys · zoom-check: kept |
 
-The `perf-budget:` measure is machine-read by the verifier, in exactly this form: `perf-budget: <p50|p95|max> <ttfb|load> <= <N>ms [@ concurrency <N>]`. Write one only where the owner stated a number.
+The `perf-budget:` measure is machine-read by the verifier, in exactly this form: `perf-budget: <p50|p95|max> <ttfb|load> <= <N>ms [@ concurrency <N>]`. Write one only where the owner stated a number. The zoom row is for an app whose desktop head draws its screens in a web view (the stack's coding standards say how), and is deleted otherwise; its two checklist rows end `zoom-check: keys` and `zoom-check: kept`, which the verifier grades with `tf-verify-zoom.sh`.
 
 ## 7. Development status
 

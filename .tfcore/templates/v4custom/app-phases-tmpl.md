@@ -13,7 +13,8 @@ rule: phases-table
      phases and are never reused, so the ranges never overlap. An item added to an earlier phase after a
      later phase exists takes the next free id and the row gets a second range: "BRD-1 to BRD-73, BRD-111 to BRD-118". Every screen sits in exactly one phase;
      the screens of a phase are exactly the "### Screen:" entries of that phase's UIDesign.
-     Status is planned, building or done. The phase being worked is appPhase in core-config.yaml
+     Status is planned, building, done or kept-whole. kept-whole is only for a phase finished before the
+     size cap that the owner chose to keep as one document: its cap and word maximum then WARN, not FAIL. The phase being worked is appPhase in core-config.yaml
      (bash .tfcore/utils/tf-day1-files.sh {App} --phase N); handoff moves it on.
      tf-doc-check.sh --app {App} refuses a screen in two phases, an id in two phases, a BRD id outside
      its phase's range, and a phase row without its BRD file. -->

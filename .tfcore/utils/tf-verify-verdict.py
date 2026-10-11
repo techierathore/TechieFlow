@@ -177,6 +177,21 @@ def main(argv):
         if skipped_only:
             notes.append(f"acceptance not measured ({len(t.get('skipped') or [])} test(s) skipped, none ran)")
             t = None
+        # the OS zoom keys (coding-standards-dotnet.md §9b): a row whose acceptance carries "zoom-check: keys"
+        # or "zoom-check: kept" is graded by tf-verify-zoom.sh --json-out zoom/<REQ>.json, which stands as its
+        # test; a failing zoom outranks a passing test, and "kept" counts only a run made after a restart
+        if r.get("zoom_check"):
+            zf = load(os.path.join(d, "zoom", f"{rid}.json"))
+            if zf is None:
+                notes.append("zoom not measured (no tf-verify-zoom run for this row)")
+            elif r["zoom_check"] == "kept" and not zf.get("kept_checked"):
+                notes.append("zoom kept across a restart not measured (run with --expect-restored after a restart)")
+            else:
+                zfail = [c for c in zf.get("checks", []) if not c.get("ok")]
+                zt = {"result": "FAIL" if zfail else "PASS", "tests": [f"tf-verify-zoom {zf.get('head', '')}".strip()],
+                      "reason": f"zoom: {zfail[0]['text']}" if zfail else "", "screenshot": zf.get("evidence", "")}
+                if not t or (zfail and t.get("result") == "PASS"):
+                    t = zt
         # every check on its own: (name, ran, failed, verdict, class, detail, evidence); the first failure wins
         checks = []
 
@@ -216,7 +231,11 @@ def main(argv):
         # 6 mockup parity
         mockup = mock_of.get(r.get("screen")) or r.get("mockup") or ""
         ps = parity_for(r, mockup, comparisons) if r.get("screen") else None
-        if not ps and driven and mockup:
+        if not ps and driven and mockup and boot.get("mode") == "appium":
+            # a Mac head: tf-mockup-parity does not run there (verify-phase step 5), so no comparison is
+            # expected, and the row is never failed for its absence; said, not counted as a pass
+            notes.append("mockup not compared on a Mac head (compare it on the web or Windows head)")
+        elif not ps and driven and mockup:
             # Chatur TF-008: /processes/6/run was compared and FAILed, but the row's route reads
             # /processes/{id}/run and the comparison was named process-run, so it was never found and
             # 11 rows were Verified without it. A driven screen that has a mockup and no comparison fails.

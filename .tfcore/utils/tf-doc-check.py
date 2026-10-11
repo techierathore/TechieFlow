@@ -70,7 +70,9 @@ DOC_NAME = re.compile(
     r"^(.+?)(?:-P(\d+))?-(BRD|Deployment-Checklist(?:-[\w]+)?|Checklist|UIDesign|DevGuide|Architecture|Coding-Standards|UsageGuide|Usage-Guide|ProductGuide|Phases)\.md$",
     re.I)
 PHASE_FORM = re.compile(r"^(\d+)\s+of\s+(\d+)$", re.I)
-PHASE_STATUS = {"planned", "building", "done"}
+# kept-whole: a phase finished before the size cap that the owner chose to keep as one document;
+# its cap and word maximum are reported as WARN, not FAIL (Lekhak TF-029)
+PHASE_STATUS = {"planned", "building", "done", "kept-whole"}
 BRD_RANGE = re.compile(r"(?:BRD-)?(\d+)\s*(?:to|-|–|—)\s*(?:BRD-)?(\d+)", re.I)
 
 SIZE_NAMES = {"s": "S", "small": "S", "m": "M", "medium": "M", "l": "L", "large": "L"}
@@ -96,9 +98,10 @@ NAMES_SCREEN = re.compile(r"\b(on|opens?|from|in)\b", re.I)
 
 
 def acceptance_words(line: str) -> int:
-    """Words in an acceptance line, without the "Acceptance:" label and without a perf-budget tail."""
+    """Words in an acceptance line, without the "Acceptance:" label and without a perf-budget or
+    zoom-check tail (the markers the verifier reads)."""
     t = re.sub(r"^\s*[-*]\s*\*?Acceptance:?\*?:?\s*", "", line)
-    t = re.split(r"perf-budget:", t, flags=re.I)[0]
+    t = re.split(r"perf-budget:|zoom-check:", t, flags=re.I)[0]
     return len(re.findall(r"\S+", t))
 
 
@@ -356,6 +359,24 @@ def foreign_prefix(path: str):
     return app if app and apps and app.lower() not in apps else None
 
 
+def phase_status(path: str, app: str, phase: int):
+    """The Status cell of this phase's row in docs/{App}-Phases.md beside it, lower-cased; None when
+    there is no Phases document or no row for the phase."""
+    p = os.path.join(os.path.dirname(path), f"{app}-Phases.md")
+    if not app or not os.path.isfile(p):
+        return None
+    with open(p, encoding="utf-8") as fh:
+        txt = strip_noise(fh.read())
+    for header, rows in tables_in(txt):
+        low = [h.lower() for h in header]
+        if "phase" in low and "status" in low:
+            ip, ist = low.index("phase"), low.index("status")
+            for r in rows:
+                if len(r) > max(ip, ist) and r[ip].strip("`* ") == str(phase):
+                    return r[ist].strip("`* ").lower()
+    return None
+
+
 def phase_file(app: str, phase: int, suffix: str) -> str:
     return f"{app}-{suffix}.md" if phase <= 1 else f"{app}-P{phase}-{suffix}.md"
 
@@ -450,6 +471,10 @@ def check_document(path: str, rep: Report, cli_size=None, root=None):
             rep.fail(rel, f'a phase-{phase} file needs the header row "Phase | {phase} of <m>"')
         elif os.path.exists(phases_doc):
             rep.fail(rel, f'the project has phases ({os.path.relpath(phases_doc, root)}); this file needs the header row "Phase | 1 of <m>"')
+    # a phase the owner kept whole past the cap: its size findings are WARN, never a gate failure (Lekhak TF-029)
+    kept = doc in PHASED_DOCS and bool(app) and phase_status(path, app, phase) == "kept-whole"
+    size_finding = rep.warn if kept else rep.fail
+    kept_why = f"; phase {phase} is kept-whole in {app}-Phases.md, so this is reported, not blocking" if kept else ""
 
     # 2. sections: strangers, order, presence
     present = [(norm_heading(h), h, txt) for h, txt in split_sections(clean, 2) if h is not None]
@@ -502,7 +527,7 @@ def check_document(path: str, rep: Report, cli_size=None, root=None):
             target, mx = target + extra * schema.per_entry[0], mx + extra * schema.per_entry[1]
             why = f", with {extra} entries past the cap of {SCREEN_CAP[size]}" if extra else ""
         if total > mx:
-            rep.fail(rel, f"{total:,} words; the {SIZE_LONG[size]} maximum is {mx:,} (target {target:,}{why}). Shorten prose; never drop a screen, field or requirement to fit")
+            size_finding(rel, f"{total:,} words; the {SIZE_LONG[size]} maximum is {mx:,} (target {target:,}{why}). Shorten prose; never drop a screen, field or requirement to fit{kept_why}")
         elif total > target:
             rep.warn(rel, f"{total:,} words; the {SIZE_LONG[size]} target is {target:,} (maximum {mx:,}{why})")
     for key, h, txt in present:
@@ -564,7 +589,7 @@ def check_document(path: str, rep: Report, cli_size=None, root=None):
     # 5. document rules
     ctx = dict(doc=doc, body=body, clean=clean, nocomment=nocomment, present=present, header=header,
                size=size, kind=kind, root=root, path=path, rel=rel, entry_names=entry_names,
-               app=app, phase=phase)
+               app=app, phase=phase, size_finding=size_finding, kept_why=kept_why)
     for rule in schema.rules:
         if not rule.startswith("entry-"):
             check_doc_rule(rule, ctx, rep)
@@ -653,7 +678,7 @@ def check_doc_rule(rule, c, rep):
         if dupes:
             rep.fail(rel, "duplicate requirement ids: " + ", ".join(f"BRD-{d}" for d in sorted(dupes, key=int)))
         if len(seen) > REQ_CAP[size]:
-            rep.fail(rel, f"{len(seen)} requirements; the {SIZE_LONG[size]} cap is {REQ_CAP[size]}. Split into phases (each phase its own BRD) instead of growing this one")
+            c["size_finding"](rel, f"{len(seen)} requirements; the {SIZE_LONG[size]} cap is {REQ_CAP[size]}. Split into phases (each phase its own BRD) instead of growing this one{c['kept_why']}")
         c["brd_ids"] = seen
         req = section_text(present, "Requirements") or ""
         cur = None
@@ -986,7 +1011,7 @@ def check_doc_rule(rule, c, rep):
                             rep.fail(rel, f"phase {n} BRD range runs backwards ({x} to {y})")
                 st = r[ist].strip("`* ").lower()
                 if st not in PHASE_STATUS:
-                    rep.fail(rel, f'phase {n} status "{r[ist]}" must be planned, building or done')
+                    rep.fail(rel, f'phase {n} status "{r[ist]}" must be planned, building, done or kept-whole')
                 rows_out.append(dict(n=n, name=r[iname].strip("`* "), screens=screens, lo=lo, hi=hi, ranges=ranges, status=st))
         nums = [p["n"] for p in rows_out]
         if nums != list(range(1, len(nums) + 1)):
@@ -1033,10 +1058,12 @@ def check_checklist(c, rep):
         row_status[rid] = status.strip("`* ").lower()
         if not re.fullmatch(r"REQ-(UI|FN|RAG|NFR)-\d{3}", rid):
             rep.fail(rel, f'id "{rid}" is not REQ-UI/FN/RAG/NFR- plus three digits')
+        removed = " A removed row reads N/A with % 0, and the date goes in Remarks"
         if status.strip("`* ").lower() not in STATUS_VALUES:
-            rep.fail(rel, f'{rid} status "{status}" is not one of the fixed values')
+            rep.fail(rel, f'{rid} status "{status}" is not one of the fixed values.'
+                          + (removed if status.strip("`* ").lower().startswith("n/a") else ""))
         if pct.strip("`* ").rstrip("%").strip() not in ("0", "25", "50", "75", "100"):
-            rep.fail(rel, f'{rid} % "{pct}" must be 0, 25, 50, 75 or 100')
+            rep.fail(rel, f'{rid} % "{pct}" must be 0, 25, 50, 75 or 100.' + removed)
         n = len(re.findall(r"\S+", remarks))
         if n > 60:
             rep.fail(rel, f"{rid} Remarks is {n} words; at most 60, current state only (history lives in the telemetry streams)")
@@ -1046,6 +1073,10 @@ def check_checklist(c, rep):
         said = re.sub(r"`[^`]*(?:`|$)", " ", remarks)
         if NOT_PRESENT.search(said) and not NAMES_PATH.search(remarks):
             rep.fail(rel, f"{rid} Remarks says something is not present without naming the path that was tried; search tools skip .tfcore/, so read the literal path first")
+        if row_status[rid] == "n/a":
+            # a removed or reserved row is kept for traceability; it has no screen, mockup or BRD item to
+            # point at, so the detail-entry rules do not apply to it (Lekhak TF-028)
+            continue
         m = re.search(r"\(#([^)]+)\)", details)
         if not m:
             rep.fail(rel, f"{rid} Details cell has no link to its detail entry")
@@ -1054,7 +1085,7 @@ def check_checklist(c, rep):
     if not ids:
         rep.fail(rel, "the Requirements Status table has no REQ- rows")
     if len(ids) > REQ_CAP[size]:
-        rep.fail(rel, f"{len(ids)} rows; the {SIZE_LONG[size]} cap is {REQ_CAP[size]}. Split into phases instead of growing this checklist")
+        c["size_finding"](rel, f"{len(ids)} rows; the {SIZE_LONG[size]} cap is {REQ_CAP[size]}. Split into phases instead of growing this checklist{c['kept_why']}")
     dupes = sorted({i for i in ids if ids.count(i) > 1})
     if dupes:
         rep.fail(rel, "duplicate rows: " + ", ".join(dupes))
@@ -1076,6 +1107,9 @@ def check_checklist(c, rep):
             start = pos + own.end()
         nxt = re.search(r"\n\s*(?:[-*]\s*)?<a id=|\n## |\n### ", body[start:])   # an entry is a list item: the dash precedes the anchor (miss 21)
         entry = body[pos: start + nxt.start()] if nxt else body[pos:]
+        if row_status.get(rid) == "n/a":
+            brd_refs.update(re.findall(r"BRD-(\d+)", entry))   # a retired BRD item still has its row
+            continue
         acc = [l for l in entry.splitlines() if ACCEPT_LINE.search(l)]
         if len(acc) != 1:
             rep.fail(rel, f"{rid} must have exactly one acceptance line; found {len(acc)}")
@@ -1498,7 +1532,7 @@ def main(argv=None):
                         head, msg = l.split(": ", 1)
                         r = head[len("FAIL "):]
                         was = base.get(r, [])
-                        same = msg in set(was) or (re.match(r"^\d[\d,]* (words|lines|rows|KB|screens)", msg) and any(
+                        same = msg in set(was) or (re.match(r"^\d[\d,]* (words|lines|rows|requirements|KB|screens)", msg) and any(
                             _shape(o) == _shape(msg) and _first(o) is not None and _first(msg) <= _first(o) for o in was))
                         if same:
                             relined.append("OLD  " + l[5:])

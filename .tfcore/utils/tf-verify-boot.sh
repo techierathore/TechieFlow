@@ -427,14 +427,9 @@ sys.exit(0 if v < (4, 1, 1) else 1)' "$M2"; then
   BARGS=(-f "$TFM" -c "${CONFIG:-Debug}")
   echo "### build $PROJECT -f $TFM" >> "$LOG"
   out="$(bash "$HERE/tf-build.sh" build "$PROJECT" -- "${BARGS[@]}" 2>&1)"; brc=$?
-  # A Mac Catalyst SDK names the one Xcode it was made for, and refuses a newer one with an error
-  # tf-build.sh reads as a missing workload (NOT-RUN). Built again with the check off; the state says so.
-  XNOTE=""; blog="$(grep -oE 'log [^ ]+[.]log' <<<"$out" | tail -1 | cut -c5-)"
-  if [[ $brc -ne 0 && -n "$blog" ]] && grep -qs 'requires Xcode' "$blog"; then
-    XNOTE="$(grep -ohE 'requires Xcode [0-9.]+[.] The current version of Xcode is [0-9.]+' "$blog" | head -1)"
-    printf '%s\n### again with -p:ValidateXcodeVersion=false (%s)\n' "$out" "$XNOTE" >> "$LOG"
-    out="$(bash "$HERE/tf-build.sh" build "$PROJECT" -- "${BARGS[@]}" -p:ValidateXcodeVersion=false 2>&1)"; brc=$?
-  fi
+  # A Mac Catalyst SDK names the one Xcode it was made for and refuses a newer one; tf-build.sh builds
+  # again with the check off and says so in a note line (Lekhak TF-032), which the state carries.
+  XNOTE="$(grep -oE 'requires Xcode [0-9.]+[.] The current version of Xcode is [0-9.]+' <<<"$(grep '^note' <<<"$out")" | head -1)"
   printf '%s\n' "$out" >> "$LOG"
   verdict="$(grep -E '^(PASS|FAIL|NOT-RUN)' <<<"$out" | tail -1)"
   if [[ $brc -ne 0 ]]; then

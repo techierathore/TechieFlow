@@ -45,6 +45,8 @@ rule: checklist-rows
 | REQ-UI-001 | {short name} | Not Started | 0% | — | [view](#d-req-ui-001) |
 | REQ-FN-001 | {short name} | Not Started | 0% | — | [view](#d-req-fn-001) |
 | REQ-NFR-001 | {short name} | Not Started | 0% | — | [view](#d-req-nfr-001) |
+| REQ-NFR-002 | Zoom with the OS keys (web-view desktop head only) | Not Started | 0% | — | [view](#d-req-nfr-002) |
+| REQ-NFR-003 | Zoom level kept (web-view desktop head only) | Not Started | 0% | — | [view](#d-req-nfr-003) |
 
 **Status values:** `Not Started` · `In Progress` · `Implemented` · `Verified` · `Done (pre-existing)` · `Needs re-verify` · `PARTIAL` · `FAIL` · `Blocked` · `Owner-UAT` · `N/A`. `Owner-UAT` marks a row only the owner can close, by following the UsageGuide test plan; the verifier cannot reach it from this machine.
 
@@ -63,3 +65,12 @@ rule: checklist-rows
 <a id="d-req-nfr-001"></a>
 - **REQ-NFR-001** — {the requirement}. *BRD:* BRD-{N}
   - *Acceptance:* When {the measurement is taken}, then {the value within its limit}; perf-budget: p95 load <= 2000ms @ concurrency 1
+
+<!-- A desktop head drawn in a web view carries these two rows (the stack's coding standards say how it zooms); delete them otherwise. -->
+<a id="d-req-nfr-002"></a>
+- **REQ-NFR-002** — Zoom with the OS keys. *BRD:* BRD-{N}
+  - *Acceptance:* When a user presses Cmd+= (Mac) or Ctrl+= (Windows) three times on {first screen}, then the page is drawn at 130%; zoom-check: keys
+
+<a id="d-req-nfr-003"></a>
+- **REQ-NFR-003** — The zoom level is kept. *BRD:* BRD-{N}
+  - *Acceptance:* When a user zooms to 130% on {first screen} and restarts the app, then it opens at 130%; zoom-check: kept

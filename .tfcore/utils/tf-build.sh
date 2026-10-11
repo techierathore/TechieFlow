@@ -244,6 +244,20 @@ for r in "${rungs[@]}"; do
     [[ "$rc" != "0" ]] && grep -qE "$LOCKED" <<<"$seg" || break
     [[ $attempt -lt ${TF_BUILD_LOCK_RETRIES:-2} ]] && sleep "${TF_BUILD_LOCK_WAIT:-15}"
   done
+  # A Mac Catalyst SDK names the one Xcode it was made for and refuses a newer one ("requires Xcode
+  # 26.6. The current version of Xcode is 27.0"): not the code, not the rung, so it fell through to
+  # NOT-RUN, while tf-verify-boot.sh built the same head with the check off (Lekhak TF-032). The same
+  # rung runs once more with the check off, and a note line says so before the verdict.
+  if [[ "$rc" != "0" && "$PLATFORM" == macos ]] && grep -qE 'requires Xcode [0-9.]+[.] The current version of Xcode is' <<<"$seg" \
+     && [[ " ${cmd[*]} " != *ValidateXcodeVersion* ]]; then
+    xnote="$(grep -oE 'requires Xcode [0-9.]+[.] The current version of Xcode is [0-9.]+' <<<"$seg" | head -1 | sed 's/[.]$//')"
+    echo "note  the Mac Catalyst SDK $xnote; built again with -p:ValidateXcodeVersion=false (xcode-check=off)"
+    cmd+=(-p:ValidateXcodeVersion=false)
+    from=$(( $(wc -l < "$LOG") + 1 ))
+    { echo "### rung $n, Xcode check off: ${cmd[*]}"; "${cmd[@]}" 2>&1; echo "### exit $?"; } >> "$LOG" 2>&1
+    rc="$(tail -1 "$LOG" | sed 's/### exit //')"
+    seg="$(tail -n +"$from" "$LOG")"
+  fi
   if [[ "$rc" == "0" ]]; then
     warns="$(grep -cE 'warning [A-Z]+[0-9]+' <<<"$seg" || true)"
     echo "PASS  $MODE on $PLATFORM via $label (rung $n) — $warns warning line(s); log $LOG"

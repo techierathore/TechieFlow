@@ -12,10 +12,15 @@
 # WARN  the keychain: an entitlements file asks for keychain-access-groups and the project names no
 #       provisioning profile and no Debug entitlements file without it. macOS refuses to start a
 #       locally signed (ad hoc) build that asks for it ("Launch failed", POSIX 163).
-# Prints one line per finding and an OK line per clean project.
+# WARN  zoom (§9b): a project drawing its screens in a BlazorWebView, Mac or Windows head, whose code has
+#       no zoom wiring for that head: Mac, WKWebView.PageZoom and a "Zoom In" menu command; Windows,
+#       WebView2's IsZoomControlEnabled set by the app; either, the level kept through Preferences. Copy
+#       .tfcore/standards/blazor-zoom.cs.txt. A WARN, so tf-verify-boot.sh still boots such a head.
+# Prints one line per finding and an OK line per clean project. A Windows-only MAUI project is read
+# for the zoom rule alone.
 # Exit 0 no FAIL (WARNs allowed) · 1 a FAIL · 3 usage.
 set -u
-case "${1:-}" in -h|--help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+case "${1:-}" in -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
 
 PROJECTS=("$@")
 if [[ ${#PROJECTS[@]} -eq 0 ]]; then
@@ -26,9 +31,29 @@ fi
 fails=0; seen=0
 for P in ${PROJECTS[@]+"${PROJECTS[@]}"}; do
   [[ -f "$P" ]] || { echo "tf-maccatalyst-check: $P does not exist" >&2; exit 3; }
-  grep -qE 'net[0-9.]+-maccatalyst' "$P" || continue
   grep -qiE '<UseMaui>[[:space:]]*true|Microsoft\.NET\.Sdk\.Maui' "$P" || continue
+  mac=0; win=0
+  grep -qE 'net[0-9.]+-maccatalyst' "$P" && mac=1
+  grep -qE 'net[0-9.]+-windows' "$P" && win=1
+  [[ $mac -eq 1 || $win -eq 1 ]] || continue
   seen=$((seen+1)); D="$(dirname "$P")"; M="$D/Platforms/MacCatalyst"; found=0
+  # --- zoom in a Blazor Hybrid head (§9b): read before the Mac-only rules, which a Windows-only project skips
+  CODE=(-rqs --include='*.cs' --exclude-dir=bin --exclude-dir=obj)
+  if grep "${CODE[@]}" --include='*.xaml' -E '<BlazorWebView|new BlazorWebView' "$D" \
+     || grep -qs 'Microsoft.AspNetCore.Components.WebView.Maui' "$P"; then
+    heads=()
+    if [[ $mac -eq 1 ]] && ! { grep "${CODE[@]}" 'PageZoom' "$D" && grep "${CODE[@]}" '"Zoom In"' "$D"; }; then heads+=("Mac (no WKWebView.PageZoom and View › Zoom In)"); fi
+    if [[ $win -eq 1 ]] && ! grep "${CODE[@]}" 'IsZoomControlEnabled' "$D"; then heads+=("Windows (WebView2's zoom not handled)"); fi
+    if [[ ${#heads[@]} -eq 0 ]] && ! grep -rlis --include='*.cs' --exclude-dir=bin --exclude-dir=obj 'zoom' "$D" | xargs grep -ls 'Preferences' >/dev/null 2>&1; then heads+=("the level is not kept in Preferences"); fi
+    if [[ ${#heads[@]} -gt 0 ]]; then
+      echo "WARN $P: a Blazor Hybrid head without OS zoom: $(IFS=';'; echo "${heads[*]}" | sed 's/;/; /g'). Cmd/Ctrl+=, -, 0 must zoom 50% to 300% and keep the level; copy .tfcore/standards/blazor-zoom.cs.txt (coding-standards-dotnet.md §9b)"
+      found=1
+    fi
+  fi
+  if [[ $mac -eq 0 ]]; then
+    [[ $found -eq 0 ]] && echo "OK   $P: zoom wired (no Mac Catalyst target)"
+    continue
+  fi
   # --- the scene manifest and its delegate
   PL="$M/Info.plist"
   if [[ ! -f "$PL" ]]; then
@@ -61,7 +86,7 @@ for P in ${PROJECTS[@]+"${PROJECTS[@]}"}; do
     echo "WARN $P: the entitlements ask for keychain-access-groups and the project names no provisioning profile; macOS will not start a locally signed build that asks for it. Sign with a development certificate and profile, or give Debug builds an entitlements file without it (coding-standards-dotnet.md §9)"
     found=1
   fi
-  [[ $found -eq 0 ]] && echo "OK   $P: scene manifest and delegate in place; no keychain permission a local build cannot have"
+  [[ $found -eq 0 ]] && echo "OK   $P: scene manifest and delegate in place; no keychain permission a local build cannot have; zoom wired or not a Blazor Hybrid head"
 done
-[[ $seen -eq 0 ]] && echo "NONE no MAUI project with a Mac Catalyst target"
+[[ $seen -eq 0 ]] && echo "NONE no MAUI project with a Mac Catalyst or Windows target"
 [[ $fails -eq 0 ]]

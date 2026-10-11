@@ -4904,6 +4904,126 @@ p='$d/docs/Fx-BRD.md'; s=open(p).read(); open(p,'w').write(s.replace('filler wor
     || { bad lk_023c "growth past the maximum was hidden by the baseline"; }
 }
 
+# --- Lekhak TF-028: amend-docs wrote a removed row in a form the check refused -------------------------
+# Step 7 wrote `N/A (removed {date})`; the check allows only `N/A`. And a kept N/A row was still asked
+# for an acceptance line, a BRD item, a mockup and a detail entry it cannot have: 13 findings on
+# Lekhak that no edit could clear. The task now writes `N/A`, % 0, the date in Remarks, and the check
+# leaves the detail rules off N/A rows while a live row still gets them.
+lk_028() {
+  local d="$SCRATCH/lk028"; mkdir -p "$d/docs" "$d/.tfcore"
+  printf 'appSize: S\nappKind: app\nappPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Requirements Checklist
+
+## Requirements Status
+
+| ID | Requirement | Status | % | Remarks | Details |
+|---|---|---|---|---|---|
+| REQ-UI-034 | ~~Resume page~~ | N/A | 0 | removed 2026-08-06: resume dropped | [view](#d-req-ui-034) |
+| REQ-NFR-008 | *(reserved)* | N/A | 0 | number reserved; not used | — |
+| REQ-UI-040 | Live page | Not Started | 0 | — | [view](#d-req-ui-040) |
+
+## Coverage
+
+- <a id="d-req-ui-034"></a>**REQ-UI-034** — Resume page at `/resume` (BRD-53). *Acceptance:* every block renders.
+- <a id="d-req-ui-040"></a>**REQ-UI-040** — Live page. *Acceptance:* every block renders.
+MD
+  local out step7
+  out="$(cd "$d" && bash "$UTILS/tf-doc-check.sh" --strict docs/Fx-Checklist.md 2>&1)"
+  step7="$(grep -o 'REMOVE: set [^.]*' "$UTILS/../tasks/amend-docs.md" 2>/dev/null)"
+  ! grep -qE 'REQ-UI-034|REQ-NFR-008' <<<"$out" && grep -q 'REQ-UI-040 acceptance line' <<<"$out" && grep -q 'REQ-UI-040 is a UI row without a mockup' <<<"$out" \
+    && ok lk_028a "an N/A row is not asked for an acceptance line, BRD item, mockup or detail entry; a live row still is" \
+    || { bad lk_028a "an N/A row was checked like a live one, or a live row was let off"; note "$(grep -E 'REQ-' <<<"$out" | tr '\n' ';' | cut -c1-240)"; }
+  [[ -n "$step7" ]] && ! grep -q 'N/A (removed' <<<"$step7" \
+    && ok lk_028b "amend-docs writes a removed row as N/A, which the check accepts" \
+    || { bad lk_028b "amend-docs still writes a status the check refuses: $step7"; }
+}
+
+# --- Lekhak TF-029: the gate could never pass for a phase kept whole past the size cap ------------------
+# Lekhak's phase 1 (402 rows, 348 requirements) was built before the cap, and the owner chose to keep it
+# as one document. The check failed it on every command, with no way to record that decision. A Phases
+# row with status kept-whole now turns that phase's cap and word maximum into WARN; any other status
+# still FAILs.
+lk_029() {
+  local d="$SCRATCH/lk029"; mkdir -p "$d/docs" "$d/.tfcore"
+  printf 'appSize: L\nappKind: app\nappPhase: 2\n' > "$d/.tfcore/core-config.yaml"
+  python3 - "$d/docs/Fx-Checklist.md" <<'PY'
+import sys
+rows = "\n".join(f"| REQ-FN-{i:03d} | Item {i} | Verified | 100 | — | [view](#d-req-fn-{i:03d}) |" for i in range(1, 102))
+ents = "\n".join(f'- <a id="d-req-fn-{i:03d}"></a>**REQ-FN-{i:03d}** (BRD-{i}) — Acceptance: When a reader opens a story on Story page, then it shows.' for i in range(1, 102))
+open(sys.argv[1], "w").write(f"# Fx — Requirements Checklist\n\n| | |\n|---|---|\n| Phase | 1 of 2 |\n\n## Requirements Status\n\n| ID | Requirement | Status | % | Remarks | Details |\n|---|---|---|---|---|---|\n{rows}\n\n## Coverage\n\n{ents}\n")
+PY
+  phases() { printf '# Fx — Phases\n\n| | |\n|---|---|\n| App | Fx |\n| Kind | app |\n| Size | Large |\n| Date | 2026-10-11 |\n\n## Phases\n\n| Phase | Name | Screens | BRD range | Status |\n|---|---|---|---|---|\n| 1 | Core | Story page | BRD-1 to BRD-101 | %s |\n| 2 | Next | Other page | BRD-102 to BRD-110 | planned |\n' "$1" > "$d/docs/Fx-Phases.md"; }
+  local done kept bad_st
+  phases done;       done="$(cd "$d" && bash "$UTILS/tf-doc-check.sh" --strict docs/Fx-Checklist.md 2>&1 | grep 'cap is')"
+  phases kept-whole; kept="$(cd "$d" && bash "$UTILS/tf-doc-check.sh" --strict docs/Fx-Checklist.md docs/Fx-Phases.md 2>&1)"
+  grep -q '^FAIL.*101 rows; the Large cap is 100' <<<"$done" \
+    && ok lk_029a "a phase over the cap that is not kept whole still FAILs" \
+    || { bad lk_029a "the cap no longer fails an ordinary phase: $done"; }
+  grep -q '^WARN.*101 rows; the Large cap is 100.*kept-whole' <<<"$kept" && ! grep -q '^FAIL.*cap is' <<<"$kept" && ! grep -q 'status "kept-whole"' <<<"$kept" \
+    && ok lk_029b "a phase the owner kept whole reports its size as WARN, and kept-whole is an accepted status" \
+    || { bad lk_029b "a kept-whole phase still fails the gate"; note "$(grep -E 'cap is|kept-whole' <<<"$kept" | tr '\n' ';' | cut -c1-240)"; }
+}
+
+# --- Lekhak TF-030: Cmd+= did nothing in a Blazor Hybrid Mac head, and nothing asked for zoom -----------
+# BlogAdmin's WKWebView had no zoom, so text was too small on a high-resolution Mac. coding-standards-dotnet.md
+# §9b now asks every BlazorWebView head for OS zoom (snippet .tfcore/standards/blazor-zoom.cs.txt);
+# tf-maccatalyst-check.sh warns about a head without it, and a checklist row ending "zoom-check: keys|kept"
+# is graded from tf-verify-zoom.sh's JSON, which stands as its test.
+lk_030() {
+  local d="$SCRATCH/lk030"; mkdir -p "$d/src/App/Platforms/MacCatalyst" "$d/docs" "$d/tests/.artifacts/verify/zoom" "$d/.tfcore"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  echo '<Project Sdk="Microsoft.NET.Sdk.Razor"><PropertyGroup><TargetFrameworks>net10.0-maccatalyst;net10.0-windows10.0.19041.0</TargetFrameworks><UseMaui>true</UseMaui></PropertyGroup></Project>' > "$d/src/App/App.csproj"
+  printf '<plist><dict><key>UIApplicationSceneManifest</key><dict><key>UISceneDelegateClassName</key><string>SceneDelegate</string></dict></dict></plist>\n' > "$d/src/App/Platforms/MacCatalyst/Info.plist"
+  echo '[Register("SceneDelegate")] public class SceneDelegate : MauiUISceneDelegate { }' > "$d/src/App/Platforms/MacCatalyst/SceneDelegate.cs"
+  echo '<ContentPage><BlazorWebView HostPage="wwwroot/index.html" /></ContentPage>' > "$d/src/App/MainPage.xaml"
+  local chk; chk="$(cd "$d" && bash "$UTILS/tf-maccatalyst-check.sh" 2>&1)"
+  grep -q 'WARN .*without OS zoom: Mac .*; Windows' <<<"$chk" \
+    && ok lk_030a "a Blazor Hybrid head with no zoom wiring is reported, Mac and Windows named, without stopping a boot" \
+    || { bad lk_030a "a Blazor Hybrid head without zoom passed the check"; note "$(head -1 <<<"$chk" | cut -c1-160)"; }
+  cat > "$d/tests/.artifacts/verify/list.json" <<'JS'
+{"scope":"REQ-NFR-002,REQ-NFR-003","checklist":"docs/Fx-Checklist.md","rows":[
+ {"id":"REQ-NFR-002","class":"NFR","title":"Zoom with the OS keys","status_raw":"Implemented","pct":75,"screen":"","route":"","remarks":"—","perf_budget":"","zoom_check":"keys"},
+ {"id":"REQ-NFR-003","class":"NFR","title":"Zoom level kept","status_raw":"Implemented","pct":75,"screen":"","route":"","remarks":"—","perf_budget":"","zoom_check":"kept"}]}
+JS
+  printf '{"head":"maccatalyst","mode":"appium","url":"http://localhost:4723","rung":"dotnet","reason":"","reason_kind":""}\n' > "$d/tests/.artifacts/verify/boot.json"
+  printf '{"reqs":{}}\n' > "$d/tests/.artifacts/verify/tests.json"
+  printf '{"checks":[{"ok":true,"text":"zoom in 3 times (Cmd+=): 130%%, expected 130%%"}],"kept_checked":false,"head":"maccatalyst","verdict":"PASS"}\n' > "$d/tests/.artifacts/verify/zoom/REQ-NFR-002.json"
+  printf '{"checks":[{"ok":false,"text":"opened at 100%%, expected 130%% from the last run"}],"kept_checked":true,"head":"maccatalyst","verdict":"FAIL"}\n' > "$d/tests/.artifacts/verify/zoom/REQ-NFR-003.json"
+  local v; v="$(cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx 2>&1)"
+  grep -E 'REQ-NFR-002' <<<"$v" | grep -q 'PASS' && grep -E 'REQ-NFR-003' <<<"$v" | grep -q 'FAIL' \
+    && ok lk_030b "a zoom-check row is graded from tf-verify-zoom's result: 130% after Cmd+= PASS, a level not kept FAIL" \
+    || { bad lk_030b "a zoom-check row was not graded from the zoom result"; note "$(grep -E 'REQ-NFR-00[23]' <<<"$v" | tr '\n' ';' | cut -c1-220)"; }
+  local line='  - *Acceptance:* When a user presses Cmd+= (Mac) or Ctrl+= (Windows) three times on Dashboard, then the page is drawn at 130%; zoom-check: keys'
+  local n; n="$(python3 -c "import sys,importlib.util as u;s=u.spec_from_file_location('d','$UTILS/tf-doc-check.py');m=u.module_from_spec(s);s.loader.exec_module(m);print(m.acceptance_words(sys.argv[1]))" "$line" 2>/dev/null)"
+  [[ -n "$n" && "$n" -le 30 ]] \
+    && ok lk_030c "the zoom-check marker is not counted in the 30-word acceptance cap ($n words)" \
+    || bad lk_030c "the template's zoom acceptance line counts $n words"
+}
+
+# --- Lekhak TF-032: tf-build.sh said NOT-RUN on the Mac Catalyst Xcode check the boot already passed ---
+# The 26.5 Mac Catalyst SDK refuses Xcode 27 ("requires Xcode 26.6. The current version of Xcode is
+# 27.0"). tf-verify-boot.sh built again with -p:ValidateXcodeVersion=false; tf-build.sh, and the unit
+# rung of tf-verify-tests.sh that calls it, read the error as a wrong rung and stopped at NOT-RUN, so
+# *build-phase asked the owner to install Xcode 26.6. tf-build.sh now runs the rung once more with the
+# check off and says so in a note line. A stand-in dotnet plays the SDK here; macOS only.
+lk_032() {
+  if [[ "$(uname -s)" != Darwin ]]; then printf 'skip lk_032 — the Xcode check is a Mac host matter\n'; return; fi
+  local d="$SCRATCH/lk032"; mkdir -p "$d/bin" "$d/src/App"
+  echo '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0-maccatalyst</TargetFramework></PropertyGroup></Project>' > "$d/src/App/App.csproj"
+  cat > "$d/bin/dotnet" <<'SH'
+#!/usr/bin/env bash
+case " $* " in *ValidateXcodeVersion=false*) echo "Build succeeded."; exit 0 ;; esac
+echo "Xamarin.Shared.Sdk.targets(2570,3): error : This version of .NET for MacCatalyst (26.5.10315) requires Xcode 26.6. The current version of Xcode is 27.0. Either install Xcode 26.6, or use a different version of .NET for MacCatalyst."
+exit 1
+SH
+  chmod +x "$d/bin/dotnet"
+  local out; out="$(cd "$d" && PATH="$d/bin:$PATH" bash "$UTILS/tf-build.sh" build src/App/App.csproj 2>&1)"
+  grep -q '^note  the Mac Catalyst SDK requires Xcode 26.6. The current version of Xcode is 27.0;' <<<"$out" && grep -q '^PASS ' <<<"$out" \
+    && ok lk_032 "a build refused only by the Mac Catalyst Xcode check is built again with the check off, PASS, and a note says so" \
+    || { bad lk_032 "tf-build.sh still stops on the Xcode check"; note "$(grep -E '^(note|PASS|FAIL|NOT-RUN)' <<<"$out" | tr '\n' ';' | cut -c1-200)"; }
+}
+
 # --- Lekhak TF-018: a passing unit test was given the reason "unit test skipped" ---------------------
 # The console-log reader wrote "unit test skipped: <name>" for every outcome that was not a failure, so
 # REQ-NFR-042's passing test carried a skip reason in tests.json. A pass has no reason; a skip and a
@@ -5514,7 +5634,7 @@ print(r.get('tokens_scope'), r.get('tokens_out'), r.get('subagent_runs'), r.get(
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 sv_001 sv_002 sv_003 sv_004 sv_005 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 sv_001 sv_002 sv_003 sv_004 sv_005 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

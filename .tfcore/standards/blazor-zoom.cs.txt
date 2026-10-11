@@ -1,0 +1,182 @@
+// blazor-zoom.cs.txt — copy to the MAUI project's root as BlazorZoom.cs and set the namespace
+// (coding-standards-dotnet.md §9b). Kept as .txt so a project whose .csproj sits at the repository root
+// does not compile the framework's copy. Then two hooks:
+//   MainPage (the page holding the BlazorWebView):
+//     blazorWebView.BlazorWebViewInitialized += (sender, args) => BlazorZoom.Attach(args.WebView);
+//   Platforms/MacCatalyst/AppDelegate.cs (inside the MauiUIApplicationDelegate class):
+//     public override void BuildMenu(UIKit.IUIMenuBuilder builder) { base.BuildMenu(builder); BlazorZoom.BuildMenu(builder); }
+//     [Export("tfZoomIn:")] public void ZoomIn(NSObject aSender) => BlazorZoom.ZoomBy(1);
+//     [Export("tfZoomOut:")] public void ZoomOut(NSObject aSender) => BlazorZoom.ZoomBy(-1);
+//     [Export("tfZoomReset:")] public void ZoomReset(NSObject aSender) => BlazorZoom.Reset();
+// Optional: set BlazorZoom.FirstLevel before the page is built (for example from the screen size) to open
+// at more than 100% before anyone has zoomed; Cmd/Ctrl+0 still means 100%.
+// Proved on Lekhak's BlogAdmin (macOS 27, 2026-10-11): bash .tfcore/utils/tf-verify-zoom.sh checks it.
+
+#nullable enable
+#if MACCATALYST
+using Foundation;
+using UIKit;
+using WebKit;
+#endif
+
+namespace YourApp;
+
+/// <summary>
+/// Zoom in, zoom out and actual size for the BlazorWebView, with the operating system's keys.
+/// </summary>
+/// <remarks>
+/// <para><b>Purpose:</b> [coding-standards-dotnet.md §9b] On a high-resolution Mac the text was too small and
+/// Cmd+= did nothing: a Mac Catalyst WKWebView has no zoom of its own. Every Blazor Hybrid head zooms from 50% to
+/// 300% in 10% steps, and the level is kept in MAUI Preferences across restarts.</para>
+/// <para><b>Code Flow:</b> <c>MainPage</c> hands the platform web view to <see cref="Attach"/> once the BlazorWebView is
+/// initialised, which applies the saved level. Mac Catalyst: the View menu's Zoom In (Cmd+=), Zoom Out (Cmd+-) and
+/// Actual Size (Cmd+0), added by <see cref="BuildMenu"/> from the app delegate, call <see cref="ZoomBy"/> and
+/// <see cref="Reset"/>, which set <c>WKWebView.PageZoom</c>. Windows: WebView2's own zoom (25% to 500%, uneven steps,
+/// not kept) is turned off, and a script run on every page handles Ctrl+plus, Ctrl+minus, Ctrl+0 and Ctrl+wheel with
+/// the same steps, posting each new level back to be saved (and keeping it for the session, so a page reload keeps
+/// it). The WinUI WebView2 control does not expose WebView2's own ZoomFactor, so that cannot be saved instead.</para>
+/// </remarks>
+public static class BlazorZoom
+{
+    /// <summary>The Preferences key the zoom level is kept under.</summary>
+    public const string PreferenceKey = "tf.zoom";
+
+    /// <summary>Smallest zoom, 50%.</summary>
+    public const double Min = 0.5;
+
+    /// <summary>Largest zoom, 300%.</summary>
+    public const double Max = 3.0;
+
+    /// <summary>One step, 10%.</summary>
+    public const double Step = 0.1;
+
+    /// <summary>The level used until one is saved; 1.0 unless the app sets it before the page is built.</summary>
+    public static double FirstLevel { get; set; } = 1.0;
+
+    /// <summary>The zoom level now in use, 1.0 being actual size.</summary>
+    public static double Level { get; private set; } = 1.0;
+
+    /// <summary>Rounds to a whole step and keeps the level inside 50% to 300%.</summary>
+    /// <param name="aLevel">The level asked for.</param>
+    /// <returns>The level that will be used.</returns>
+    public static double Clamp(double aLevel) => Math.Round(Math.Clamp(aLevel, Min, Max) * 10) / 10;
+
+#if MACCATALYST
+    private static WKWebView? objWebView;
+    private static bool blnMenuSet;
+
+    /// <summary>Takes the platform web view and applies the saved level.</summary>
+    /// <param name="aPlatformWebView">The <c>BlazorWebViewInitializedEventArgs.WebView</c>.</param>
+    public static void Attach(object aPlatformWebView)
+    {
+        objWebView = aPlatformWebView as WKWebView;
+        Apply(Preferences.Default.Get(PreferenceKey, FirstLevel));
+        if (!blnMenuSet && OperatingSystem.IsMacCatalystVersionAtLeast(26))
+        {
+            // From macOS 26 the main menu is built here: what an app delegate's BuildMenu changes is ignored.
+            // Format is off because its Font › Bigger and Smaller already own Cmd+= and Cmd+-, and UIKit
+            // silently drops a menu whose shortcut repeats one; Inspector is off because the app has none.
+            blnMenuSet = true;
+            var objConfig = new UIMainMenuSystemConfiguration
+            {
+                TextFormattingPreference = UIMenuSystemElementGroupPreference.Removed,
+                InspectorPreference = UIMenuSystemElementGroupPreference.Removed,
+            };
+            UIMainMenuSystem.SharedSystem.SetBuildConfiguration(objConfig, AddCommands);
+        }
+    }
+
+    /// <summary>Adds Zoom In, Zoom Out and Actual Size to the top of the View menu, before macOS 26.</summary>
+    /// <param name="aBuilder">The builder the app delegate's <c>BuildMenu</c> receives.</param>
+    /// <remarks>The selectors are answered by <c>[Export]</c> methods on the app delegate, which is on the
+    /// responder chain whatever has focus inside the web view. From macOS 26 <see cref="Attach"/> does this.</remarks>
+    public static void BuildMenu(IUIMenuBuilder aBuilder)
+    {
+        if (!OperatingSystem.IsMacCatalystVersionAtLeast(26) && aBuilder.System?.Handle == UIMenuSystem.MainSystem.Handle)
+        {
+            aBuilder.RemoveMenu(UIMenuIdentifier.Format.GetConstant()!);
+            AddCommands(aBuilder);
+        }
+    }
+
+    /// <summary>Zooms in (a positive step) or out (a negative one).</summary>
+    /// <param name="aSteps">How many 10% steps.</param>
+    public static void ZoomBy(int aSteps) => Apply(Level + (aSteps * Step));
+
+    /// <summary>Back to actual size.</summary>
+    public static void Reset() => Apply(1.0);
+
+    private static void AddCommands(IUIMenuBuilder aBuilder)
+    {
+        var objView = aBuilder.GetMenu(UIMenuIdentifier.View.GetConstant()!);
+        if (objView == null || objView.Children.Any(c => c.Title == "Zoom In"))
+        {
+            return;
+        }
+
+        var objZoom = UIMenu.Create(string.Empty, null, UIMenuIdentifier.None, UIMenuOptions.DisplayInline, new UIMenuElement[]
+        {
+            UIKeyCommand.Create("Zoom In", null, new ObjCRuntime.Selector("tfZoomIn:"), "=", UIKeyModifierFlags.Command, null),
+            UIKeyCommand.Create("Zoom Out", null, new ObjCRuntime.Selector("tfZoomOut:"), "-", UIKeyModifierFlags.Command, null),
+            UIKeyCommand.Create("Actual Size", null, new ObjCRuntime.Selector("tfZoomReset:"), "0", UIKeyModifierFlags.Command, null),
+        });
+        aBuilder.ReplaceMenu(UIMenuIdentifier.View.GetConstant()!, objView.GetMenuByReplacingChildren(new UIMenuElement[] { objZoom }.Concat(objView.Children).ToArray()));
+    }
+
+    private static void Apply(double aLevel)
+    {
+        Level = Clamp(aLevel);
+        Preferences.Default.Set(PreferenceKey, Level);
+        if (objWebView != null)
+        {
+            objWebView.PageZoom = (nfloat)Level;
+        }
+    }
+#elif WINDOWS
+    private const string MessagePrefix = "tfzoom:";
+
+    /// <summary>Takes the platform web view, turns WebView2's own zoom off and installs the key and wheel handler.</summary>
+    /// <param name="aPlatformWebView">The <c>BlazorWebViewInitializedEventArgs.WebView</c>.</param>
+    public static async void Attach(object aPlatformWebView)
+    {
+        if (aPlatformWebView is not Microsoft.UI.Xaml.Controls.WebView2 objWebView || objWebView.CoreWebView2 == null)
+        {
+            return;
+        }
+
+        var objCore = objWebView.CoreWebView2;
+        Level = Clamp(Preferences.Default.Get(PreferenceKey, FirstLevel));
+        objCore.Settings.IsZoomControlEnabled = false;
+        objCore.WebMessageReceived += (sender, args) =>
+        {
+            var strMessage = args.TryGetWebMessageAsString();
+            if (strMessage != null && strMessage.StartsWith(MessagePrefix, StringComparison.Ordinal)
+                && double.TryParse(strMessage[MessagePrefix.Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dblLevel))
+            {
+                Level = Clamp(dblLevel);
+                Preferences.Default.Set(PreferenceKey, Level);
+            }
+        };
+        var strLevel = Level.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        await objCore.AddScriptToExecuteOnDocumentCreatedAsync(
+            "(function(){var z=parseFloat(sessionStorage.getItem('tfzoom'))||" + strLevel + ",min=0.5,max=3;"
+            + "function set(v){z=Math.round(Math.min(max,Math.max(min,v))*10)/10;document.documentElement.style.zoom=z;"
+            + "sessionStorage.setItem('tfzoom',z);window.chrome.webview.postMessage('" + MessagePrefix + "'+z);}"
+            + "function apply(){document.documentElement.style.zoom=z;}"
+            + "if(document.documentElement){apply();}document.addEventListener('DOMContentLoaded',apply);"
+            + "window.addEventListener('keydown',function(e){if(!e.ctrlKey||e.altKey||e.metaKey)return;"
+            + "if(e.key==='='||e.key==='+'){set(z+0.1);}else if(e.key==='-'){set(z-0.1);}else if(e.key==='0'){set(1);}else return;"
+            + "e.preventDefault();},true);"
+            + "window.addEventListener('wheel',function(e){if(!e.ctrlKey)return;e.preventDefault();set(z+(e.deltaY<0?0.1:-0.1));},{passive:false});"
+            + "})();");
+        // the page already loaded before the script was added: give it the level too
+        await objCore.ExecuteScriptAsync("document.documentElement.style.zoom=" + strLevel + ";");
+    }
+#else
+    /// <summary>No zoom on this head.</summary>
+    /// <param name="aPlatformWebView">Unused.</param>
+    public static void Attach(object aPlatformWebView)
+    {
+    }
+#endif
+}

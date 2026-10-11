@@ -85,6 +85,16 @@ Every MAUI project with a `net*-maccatalyst` target, Blazor Hybrid included:
 - **Launching it.** Open the built `.app` with `open`, never its binary: macOS kills a sandboxed app started from its binary.
 - **Blazor Hybrid.** On a Mac, `data-testid` and HTML `id` do not reach the test driver, so the Mac screens are checked without control names (blank window, error bar, overlap, screenshot) and the control-by-control check is the Windows head's. Keep the stock error bar (`#blazor-error-ui`, "An unhandled error has occurred"), or pass its text with `--error-text`.
 
+## 9b. Zoom in Blazor Hybrid heads
+
+Every head that draws its screens in a `BlazorWebView` (Mac Catalyst and Windows) zooms with the operating system's keys: Cmd on the Mac, Ctrl on Windows, `=` in, `-` out, `0` actual size, and Ctrl+wheel on Windows. The Mac menu bar shows View › Zoom In, Zoom Out, Actual Size. The level runs from 50% to 300% in 10% steps and is kept in MAUI `Preferences` (key `tf.zoom`) across restarts.
+
+- **Copy, do not rewrite.** `.tfcore/standards/blazor-zoom.cs.txt` is the code: copy it to the project as `BlazorZoom.cs`, set its namespace, and add the hooks its header names (one line in the page holding the `BlazorWebView`, four members on the Mac app delegate).
+- **Mac Catalyst.** It sets `WKWebView.PageZoom`. From macOS 26 the main menu ignores what an app delegate's `BuildMenu` changes, so the commands are added through `UIMainMenuSystem.SharedSystem.SetBuildConfiguration`, with the Format menu off: its Font › Bigger and Smaller own Cmd+= and Cmd+-, and UIKit silently drops a menu whose shortcut repeats one.
+- **Windows.** The WinUI `WebView2` control does not expose WebView2's `ZoomFactor`, and WebView2's own zoom steps unevenly from 25% to 500% and keeps nothing. So its zoom control is turned off and a script added to every page handles the keys and the wheel, and posts each level back to be saved.
+
+`tf-maccatalyst-check.sh` warns about a Blazor Hybrid head without this; `tf-verify-zoom.sh` presses the keys on a booted head.
+
 ## 10. Enforcement
 
 `.editorconfig` at the repository root (created at day-1) enforces: file-scoped namespaces (warning), `Async` suffix (warning), `var` for locals (warning), nullable enabled, no `_` prefix on private fields (custom naming rule, warning). `StyleCop.Analyzers` is optional and off by default.
@@ -100,10 +110,10 @@ grep -rE "public\s+(async\s+)?Task\s+\w+_\w+\s*\(" tests/ 2>/dev/null
 grep -rPE "private(\s+readonly)?\s+\w+\s+(?!obj)[A-Z]\w+\s*[;=]" src/ 2>/dev/null | grep -v "static\|const"
 ```
 
-A project with a Mac Catalyst target also runs, on any host (it only reads files):
+A MAUI project with a Mac Catalyst target or a Blazor Hybrid head also runs, on any host (it only reads files):
 
 ```bash
-bash .tfcore/utils/tf-maccatalyst-check.sh    # FAIL: scene manifest or delegate missing; WARN: keychain on a local build
+bash .tfcore/utils/tf-maccatalyst-check.sh    # FAIL: scene manifest or delegate missing; WARN: keychain on a local build, or a Blazor Hybrid head without zoom (§9b)
 ```
 
 `tf-verify-boot.sh --head maccatalyst` runs it first and stops on a FAIL on macOS 27 or later.

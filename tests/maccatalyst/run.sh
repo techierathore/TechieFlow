@@ -60,6 +60,23 @@ out="$(rules nodelegate)"; check "rules: a manifest naming an unregistered deleg
 out="$(rules keychain)";   check "rules: keychain with no profile is a WARN, exit 0" "$(grep -q "WARN .*keychain-access-groups" <<<"$out" && grep -q "exit=0" <<<"$out"; echo $?)"
 out="$(rules keydebug)";   check "rules: a Debug entitlements file without the keychain is OK" "$(has "$out" "^OK ")"
 out="$(rules keyprofile)"; check "rules: a provisioning profile is OK" "$(has "$out" "^OK ")"
+# zoom in a Blazor Hybrid head (coding-standards-dotnet.md §9b; Lekhak, 2026-10-11)
+mkhybrid() { # name targets zoom(yes|no)
+  local d="$K/$1/src/App"; mkdir -p "$d/Platforms/MacCatalyst"
+  echo "<Project Sdk=\"Microsoft.NET.Sdk.Razor\"><PropertyGroup><TargetFrameworks>$2</TargetFrameworks><UseMaui>true</UseMaui></PropertyGroup></Project>" > "$d/App.csproj"
+  printf '%s\n' '<plist><dict><key>UIApplicationSceneManifest</key><dict><key>UISceneConfigurations</key><dict>' \
+    '<key>UIWindowSceneSessionRoleApplication</key><array><dict><key>UISceneDelegateClassName</key>' '<string>SceneDelegate</string></dict></array></dict></dict></dict></plist>' > "$d/Platforms/MacCatalyst/Info.plist"
+  echo '[Register("SceneDelegate")] public class SceneDelegate : MauiUISceneDelegate { }' > "$d/Platforms/MacCatalyst/SceneDelegate.cs"
+  echo '<ContentPage><BlazorWebView x:Name="blazorWebView" HostPage="wwwroot/index.html" /></ContentPage>' > "$d/MainPage.xaml"
+  [[ "$3" == yes ]] && cp "$ROOT/.tfcore/standards/blazor-zoom.cs.txt" "$d/BlazorZoom.cs"
+  return 0
+}
+mkhybrid hybridbare "net10.0-maccatalyst;net10.0-windows10.0.19041.0" no; mkhybrid hybridzoom "net10.0-maccatalyst;net10.0-windows10.0.19041.0" yes
+mkhybrid winbare "net10.0-windows10.0.19041.0" no
+out="$(rules hybridbare)"; check "rules: a Blazor Hybrid head without zoom is a WARN naming both heads, exit 0" "$(grep -q "WARN .*without OS zoom: Mac .*; Windows" <<<"$out" && grep -q "exit=0" <<<"$out"; echo $?)"
+out="$(rules hybridzoom)"; check "rules: the standard's zoom snippet copied in is OK" "$(has "$out" "^OK   src/App/App.csproj")"
+out="$(rules winbare)";    check "rules: a Windows-only Blazor Hybrid project is read for zoom, and only Windows is named" "$(grep -q "WARN .*without OS zoom: Windows" <<<"$out" && ! grep -q "Mac (no" <<<"$out"; echo $?)"
+out="$(rules good)";       check "rules: a MAUI head with no BlazorWebView is not asked for zoom" "$(! grep -q "zoom" <<<"$(grep -v '^OK' <<<"$out")"; echo $?)"
 
 # ---- 0. the grading, from saved element trees (any machine with node) --------------------------
 if command -v node >/dev/null 2>&1; then
@@ -73,6 +90,22 @@ if command -v node >/dev/null 2>&1; then
   check "offline: every screen records the names as not measured" "$(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));sys.exit(0 if d['anchors_not_measured'] and all(s.get('anchors_not_measured') for s in d['screens']) else 1)" "$O/web.json"; echo $?)"
   out="$(node "$ROOT/.tfcore/utils/tf-verify-native.mjs" --from-source "$HERE/sources/clipped-text.xml" --boot /nonexistent --json-out "$O/native.json" --shots-dir "$O/shots" 2>&1)"
   check "offline: a text cut off by its cell is not an overlap (native rules, text compared)" "$(has "$out" "^OK   clipped-text")"
+  # the zoom measure (tf-verify-zoom.mjs): a drawn page and the same page at 130% and 90%, with a title bar
+  # that does not zoom and a header whose height does not follow the zoom (BlogAdmin's did not)
+  out="$(cd "$ROOT/.tfcore/utils" && node --input-type=module -e "
+import { scaleBetween } from './tf-verify-zoom.mjs';
+const w = 600, h = 300, top = 20;
+const page = (s) => { const g = new Float32Array(w * h).fill(255);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (y < top) { g[y * w + x] = 230; continue; }
+    const u = x / s; if (y < top + 30) { g[y * w + x] = u < 150 ? 40 : 200; continue; }   // header: fixed height
+    g[y * w + x] = (u < 150 ? 220 : 255) - ((Math.floor(u / 7) % 3 === 0 && (y % 11) < 6) ? 150 : 0) - (Math.abs(u - 150) < 1 ? 100 : 0);
+  } return { w, h, gray: g }; };
+const base = page(1);
+console.log([1.3, 0.9, 1].map((s) => scaleBetween(page(s), base).scale).join(' '));" 2>&1)"
+  check "offline: the zoom measure reads 130%, 90% and 100% from pictures (got $out)" "$([[ "$out" == "1.3 0.9 1" ]]; echo $?)"
+  out="$(cd "$O" && node "$ROOT/.tfcore/utils/tf-verify-zoom.mjs" --appium http://127.0.0.1:9 --app /nonexistent.app --out "$O/zoom" 2>&1; echo "exit=$?")"
+  check "offline: the zoom check with no app says so in one line, exit 2, no stack trace" "$(grep -q '^FAIL no session on the app' <<<"$out" && grep -q 'exit=2' <<<"$out" && ! grep -q 'at async' <<<"$out"; echo $?)"
 else
   echo "SKIP offline cases: node is not installed"
 fi

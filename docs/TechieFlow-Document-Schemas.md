@@ -251,7 +251,7 @@ What it is for: the one place that says which screens and requirements belong to
 | Order | Section | Content rule |
 |---|---|---|
 | 0 | Header table | App, Kind, Size (Large), Date |
-| 1 | Phases | One table: phase, name, screens, BRD range, status (planned, building, done). A range is `BRD-a to BRD-b`; an item added to an earlier phase after a later one exists takes the next free id and the row gets a second range, comma-separated (2026-09-06). |
+| 1 | Phases | One table: phase, name, screens, BRD range, status (planned, building, done, kept-whole). `kept-whole` marks a phase finished before the size cap that the owner chose to keep as one document; its requirement cap and word maximum are then WARN, not FAIL (Lekhak TF-029, 2026-10-11). A range is `BRD-a to BRD-b`; an item added to an earlier phase after a later one exists takes the next free id and the row gets a second range, comma-separated (2026-09-06). |
 
 Checks: every screen in the UIDesign files sits in exactly one phase; every phase row has its BRD and checklist files; each phase's BRD ids fall inside that phase's range; no `BRD-N` or `REQ-` id appears in two phases. Budget 300 target, 600 maximum.
 

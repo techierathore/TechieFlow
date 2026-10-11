@@ -14,6 +14,52 @@ Everything below this section from 2026-09-11 onward is also unreleased: it reac
 v1.0.4 tag (2026-09-10) and is in no published package yet. This section lists what those dated entries
 do not.
 
+- **Lekhak TF-032: the Xcode check no longer stops tf-build.sh (2026-10-11).** The 26.5 Mac Catalyst SDK
+  refuses Xcode 27; `tf-verify-boot.sh` built again with `-p:ValidateXcodeVersion=false`, but `tf-build.sh`
+  (and the unit rung of `tf-verify-tests.sh`, which calls it) read the refusal as a wrong rung and said
+  NOT-RUN, so `*build-phase` asked the owner to install Xcode 26.6. `tf-build.sh` now runs that rung once
+  more with the check off on a Mac and prints a `note` line; the boot reads the note instead of retrying
+  itself. Proved on Lekhak with no flag passed: BlogAdmin build PASS, `tf-build.sh test` PASS (913),
+  boot still `xcode-check=off`. `lk_032` fails against Lekhak's script. Miss `MISS-TechieFlow-20261011-05`.
+- **OS zoom applied to TrStudio and XVault (2026-10-11).** Both took the standard snippet, the page hook,
+  the four Mac app-delegate members, and a scene manifest with `SceneDelegate` (both quit at the first
+  window on macOS 27 without it). The snippet gained `#nullable enable` (both projects have nullable on;
+  BlogAdmin has not) and `BlazorZoom.FirstLevel`, the level used until one is saved: TrStudio keeps its
+  screen-width start (about 160% on a 4K panel, REQ-FN-072) and its in-page `WebViewZoom.cs` is gone, so
+  Cmd+0 now means 100% there, not that start. XVault proved live on this Mac: menu, 130/120/100%, and
+  130% kept across stop and start. TrStudio not built: its restore needs `TrBlazeUI.Components` 1.0.9
+  from GitHub Packages, which answered 401. `tf-verify-zoom` now prints one FAIL line, exit 2, when no
+  app or page answers, instead of a stack trace. TrSetup is the one Blazor Hybrid repo here still without zoom.
+- **Lekhak TF-030: OS zoom in every Blazor Hybrid head (2026-10-11).** BlogAdmin's Mac head ignored
+  Cmd+=; nothing in the framework asked for zoom. `coding-standards-dotnet.md` §9b: Cmd/Ctrl plus `=`, `-`,
+  `0` zoom 50% to 300% in 10% steps, kept in MAUI Preferences (`tf.zoom`), View › Zoom In / Zoom Out /
+  Actual Size on the Mac; the code is `.tfcore/standards/blazor-zoom.cs.txt` (`.txt` so a root-level
+  `.csproj` never compiles it). Two findings shaped it: from macOS 26 the main menu ignores an app
+  delegate's `BuildMenu`, so commands go through `UIMainMenuSystem`, with the Format menu off because its
+  Font › Bigger and Smaller own Cmd+= and Cmd+- and UIKit silently drops a menu repeating a shortcut; and
+  the WinUI WebView2 control exposes no `ZoomFactor`, so Windows turns WebView2's zoom off and a page
+  script handles Ctrl keys and wheel. `tf-maccatalyst-check.sh` now also reads Windows-only MAUI projects
+  and WARNs on a BlazorWebView head without zoom. New `tf-verify-zoom.sh` (`--appium` measures the
+  window's pictures from vertical-edge profiles, since the accessibility tree does not follow page zoom
+  and BlogAdmin's header height does not scale; `--cdp` reads the page). An acceptance line ending
+  `zoom-check: keys|kept` is carried by `tf-verify-list` and graded by the verdict from
+  `zoom/<REQ>.json`; the marker is outside the word cap. Templates carry the two rows. Proved on BlogAdmin
+  (macOS 27): menu, 130/120/100%, 130% kept across stop and start; Windows code compiled against WinUI
+  and run in Chromium (clamp, wheel, reload), not run on Windows. Also fixed: a Mac-head verify failed
+  every screen with a mockup ("mockup-parity not found"), since parity never runs on a Mac. `lk_030`
+  fails 2 of 3 against Lekhak's scripts. Miss `MISS-TechieFlow-20261011-04`.
+- **Lekhak TF-028 and TF-029: removed rows and kept-whole phases (2026-10-11).** TF-028: `amend-docs.md`
+  step 7 wrote `N/A (removed {date})`, a status `tf-doc-check` refuses, and the check asked an `N/A` row
+  for an acceptance line, BRD item, mockup and detail entry it cannot have (13 findings on Lekhak no edit
+  could clear). Step 7 now writes `N/A`, `%` 0, `removed {date}: <reason>` in Remarks; an `N/A` row keeps
+  its Remarks checks and skips the detail rules, and a retired BRD item it names still counts as having a
+  row. TF-029: a phase over the size cap could never pass the status gate, even after the owner chose to
+  keep a finished phase whole. New Phases status `kept-whole` (template, Schemas §3.11): that phase's
+  requirement cap, row cap and word maximum WARN instead of FAIL; any other status still FAILs. The
+  baseline now keeps a `N requirements` finding OLD while its count does not grow, as it did for words,
+  lines and rows. Proved on a copy of Lekhak's `docs/`: 13 findings gone, three size FAILs to WARN once
+  phase 1 reads `kept-whole`. `lk_028` and `lk_029` fail against Lekhak's scripts and pass now. Misses
+  `MISS-TechieFlow-20261011-02` and `-03`.
 - **Sevak TF-005: `*verify` grades any phase, or every phase (2026-10-11).** `*verify all Sevak` graded only
   `Sevak-P3-Checklist.md`: `verify-phase.md` read `appPhase` and never passed `--phase` to
   `tf-verify-list.sh`, so 86 built rows of phases 1 and 2 were never graded. `*verify {scope} {App}

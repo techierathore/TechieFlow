@@ -4,16 +4,16 @@
 |---|---|
 | App | Lekhak |
 | Upstream | TechieFlow |
-| Updated | 2026-10-10 |
+| Updated | 2026-10-11 |
 
 ## Summary
 
-27 entries: 0 blocking now, 1 open and not blocking (TF-003), 5 fixed upstream and not yet re-checked here (TF-008, TF-022, TF-023, TF-025, TF-027), 21 closed after a re-check here (TF-001, TF-002, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018, TF-019, TF-020, TF-021, TF-024, TF-026).
+32 entries: 0 blocking now, 0 open, 6 fixed upstream and not yet re-checked here (TF-008, TF-022, TF-023, TF-025, TF-030, TF-032), 26 closed after a re-check here (TF-001, TF-002, TF-003, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018, TF-019, TF-020, TF-021, TF-024, TF-026, TF-027, TF-028, TF-029, TF-031).
 
 Nothing is blocked.
 
-- 0 blockers, 9 majors, 18 minors, 0 nice-to-haves.
-- Last consolidated: 2026-10-10.
+- 0 blockers, 11 majors, 21 minors, 0 nice-to-haves.
+- Last consolidated: 2026-10-11.
 
 ## Entries
 
@@ -50,6 +50,8 @@ Nothing is blocked.
 - **Suggested fix:** Create the browser context with `ignoreHTTPSErrors: true` in `tf-verify-screens.mjs` and `tf-mockup-parity`, or add an `--insecure` option.
 
 ### TF-003 — The verifier has no Mac Catalyst driver, so a Mac head cannot get a verdict
+
+> ✅ **Closed 2026-10-10** — re-checked here: Closed 2026-10-10 (owner's decision): the Mac head is now driven and graded. On this Mac tf-verify-screens.sh --appium graded 7 of BlogAdmin's 8 screens OK at 1280 and 616 px (Add User, Manage Images, Manage Profile, Story Crawler, AI Story Studio, Prompt Manager, AI Setup), each picture on its own screen. One screen is not graded on the Mac: Connection settings, which is reached only through 'Go to Sign in' while signed out, and the check does not start the app signed out. Graded on the Windows head instead.
 
 - **Severity:** major
 - **Blocks:** no — the Mac head was driven by hand-written Appium mac2 scripts and the results written to the Remarks cells; Status was left to the verdict script.
@@ -444,6 +446,8 @@ Nothing is blocked.
 
 ### TF-027 — The Mac screen check passes a website screen on BlogAdmin's Dashboard, and reaches only screens whose menu label equals the screen name
 
+> ✅ **Closed 2026-10-10** — re-checked here: Closed 2026-10-10: on this Mac ran tf-verify-list.sh Lekhak ui, tf-verify-boot.sh start --head maccatalyst, tf-verify-screens.sh --list tests/.artifacts/verify/list.json --appium http://localhost:4723. Same lines as the reply: 9 website pages SKIP 'another head's screen: served by source/Lekhak'; LLM sign-in SKIP (route takes a value); Add User, Manage Images, Manage Profile, Story Crawler, AI Story Studio, Prompt Manager, AI Setup OK '@1280/616 (asked 390)'; Connection settings UNREACHABLE ('the code links "Go to Sign in" to it, and no such control was on view'). Summary: 'screens 8 (+10 skipped): render 7 OK / 0 failed / 1 unreachable; visual 7 OK / 0 failed'. Every picture shows its own screen, window only, no banner. Test users print as plain text; a missing list prints 'does not exist; make it first with bash .tfcore/utils/tf-verify-list.sh <App> ui'.
+
 - **Severity:** major
 - **Blocks:** no for UAT (TF-003 stays open); yes for closing TF-003. A Mac screen verdict cannot be trusted yet: one OK is false and 13 of 18 screens are not graded.
 - **Repro (macOS 27.0, Xcode 27.0, framework as of the 2026-10-10 reply):**
@@ -480,9 +484,136 @@ Nothing is blocked.
 - **Workaround:** none for a verdict. The four BlogAdmin screens reached through their menu label (Story Crawler, AI Story Studio, Prompt Manager, AI Setup) were graded correctly; their screenshots show the right screens.
 - **Suggested fix:** grade a screen only when the driver reached it, otherwise mark it UNREACHABLE; carry the serving head in `list.json` (from the project that holds the `@page`) and skip other-head screens; let the list name a navigation path per screen for a Blazor Hybrid head (menu label, then button), and route-only screens as not drivable; resize the window to 1280 and 390 px; capture the window by its window id; strip Markdown from test-user fields; a missing list prints which script makes it.
 
+### TF-028 — amend-docs writes a removed row's status in a form the document check refuses
+
+> ✅ **Closed 2026-10-11** — re-checked here: After update-framework.sh, tf-doc-check.sh --strict docs/Lekhak-Checklist.md | grep -E 'REQ-UI-03[4-9]|REQ-NFR-008' printed nothing (grep exit 1): no finding on the removed rows REQ-UI-034 to 039 or the reserved REQ-NFR-008.
+
+- **Severity:** minor
+- **Blocks:** no. Only findings in the check; the app is unaffected.
+- **Repro:**
+  ```
+  grep -n "N/A (removed" .tfcore/tasks/amend-docs.md
+  bash .tfcore/utils/tf-doc-check.sh docs/Lekhak-Checklist.md | grep "REQ-UI-034"
+  ```
+- **Expected:** what a TechieFlow task tells you to write passes TechieFlow's own check.
+- **Actual:** seen 2026-10-11, as below.
+
+| Problem | What it affects | Does it block or break anything |
+|---|---|---|
+| `amend-docs.md` step 7 writes `N/A (removed {date})`; the check allows only `N/A`, and refuses `%` = `—` without saying what a removed row takes. | Every removal through amend-docs. | Does not block. |
+| `N/A` rows are still checked like live rows: acceptance line, BRD item, mockup link, detail entry. A removed screen has no mockup; a reserved number (REQ-NFR-008) has no BRD item. | Lekhak REQ-UI-034 to 039 and REQ-NFR-008: 13 findings no edit can clear. | Does not block. |
+
+- **Encountered in:** `*amend-docs Lekhak`, 2026-10-11.
+- **Workaround:** status `N/A`, `%` 0, removal date in Remarks.
+- **Suggested fix:** align the task and the check on `N/A`; skip the acceptance, BRD, mockup and detail checks for `N/A` rows.
+
+### TF-029 — The status gate can never pass for a finished phase that is over the size cap, even after the owner decides to keep it
+
+> ✅ **Closed 2026-10-11** — re-checked here: Phase 1 set to kept-whole in docs/Lekhak-Phases.md; tf-doc-check.sh --strict on the checklist, BRD and Phases printed three WARN lines (402 rows, 21,754 words, 348 requirements), each ending 'phase 1 is kept-whole in Lekhak-Phases.md, so this is reported, not blocking', and no FAIL.
+
+- **Severity:** major
+- **Blocks:** no for the app; the end-of-command status gate fails on every command until fixed. The work carries on.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-doc-check.sh docs/Lekhak-Checklist.md | grep "cap is"
+  ```
+- **Expected:** an owner decision to keep an already-built phase as one document can be recorded, and the check then reports the cap as a warning.
+- **Actual:** seen 2026-10-11, as below.
+
+| Problem | What it affects | Does it block or break anything |
+|---|---|---|
+| `tf-doc-check.py` fails any checklist over `REQ_CAP` (100 on Large) and any BRD over its cap, with no exemption. Lekhak's phase 1 (402 rows, 348 requirements) was built and verified before the cap; the owner chose on 2026-10-11 to keep it whole (`docs/Lekhak-Phases.md`). The stop hook then refuses every command's end on `402 rows; the Large cap is 100`. | Every Lekhak command's status gate. | Blocks the gate on every command; not the app. |
+
+- **Encountered in:** `*amend-docs Lekhak`, 2026-10-11.
+- **Workaround:** none in the project; the failure is reported in each closing message.
+- **Suggested fix:** let the Phases page mark a phase as closed before the cap (e.g. a `kept-whole` status) and report its size as WARN.
+
+### TF-030 — BlogAdmin's Mac head cannot zoom: Cmd+= does nothing, and the text is too small on a high-resolution screen
+
+- **Severity:** major
+- **Blocks:** no. UAT carried on at the size the app opens at; the Windows head already zooms with Ctrl+plus/minus/0 and Ctrl+wheel.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-verify-boot.sh start --head maccatalyst
+  # in the app: press Cmd+=, Cmd+-, Cmd+0; open the View menu
+  ```
+- **Expected:** Cmd+= zooms in, Cmd+- zooms out, Cmd+0 resets, View › Zoom In / Zoom Out / Actual Size are in the menu bar, and the level is kept across restarts.
+- **Actual:** seen 2026-10-11 in UAT on the Mac, as below.
+
+| Problem | What it affects | Does it block or break anything |
+|---|---|---|
+| The Mac Catalyst WKWebView has no zoom of its own, and nothing in BlogAdmin adds one: the keys do nothing and View has no zoom items. | Reading BlogAdmin on a high-resolution Mac. | Does not block; hard to read. |
+| No TechieFlow standard, check or verify step asks a Blazor Hybrid head for zoom, so the owner found the gap, not the framework. | Every Blazor Hybrid app TechieFlow builds. | Does not block. |
+
+- **Encountered in:** UAT on the Mac, 2026-10-11.
+- **Workaround:** none in the app.
+- **Suggested fix:** a standard for OS zoom on every Blazor Hybrid head (Cmd on the Mac, Ctrl on Windows, 50% to 300% in 10% steps, kept in MAUI Preferences), a check that reports a head without it, and a verify step that presses the keys.
+
+### TF-031 — The status hook tells you to run tf-brd-status.sh with the phase file prefix, which looks for a file that cannot exist
+
+> ✅ **Closed 2026-10-11** — re-checked here: Closed by the owner's decision 2026-10-11: only the hook message's argument was wrong; bash .tfcore/utils/tf-brd-status.sh Lekhak (plain app name, reads appPhase) refreshed docs/Lekhak-P2-BRD.md to 5 of 7 verified. No upstream change needed.
+
+- **Severity:** minor
+- **Blocks:** no. `tf-brd-status.sh Lekhak` with `appPhase: 2` did the job.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-brd-status.sh Lekhak-P2
+  ```
+- **Expected:** the command the hook prints refreshes `docs/Lekhak-P2-BRD.md`.
+- **Actual:** seen 2026-10-11, as below.
+
+| Problem | What it affects | Does it block or break anything |
+|---|---|---|
+| `guard-status-html.sh` printed `Run: bash .tfcore/utils/tf-brd-status.sh Lekhak-P2`; that prints `docs/Lekhak-P2-P2-Checklist.md does not exist yet; nothing to do`, and the hook keeps blocking. | Any phase-2-or-later status gate. | Does not block once you know to pass the plain app name. |
+
+- **Encountered in:** `*amend-docs Lekhak`, 2026-10-11.
+- **Workaround:** `bash .tfcore/utils/tf-brd-status.sh Lekhak` (it reads `appPhase`).
+- **Suggested fix:** print the app name, not the file prefix, in the hook's message.
+
+### TF-032 — tf-build.sh and the verify test run stop on the Mac Catalyst Xcode version check, which the boot script already turns off
+
+- **Severity:** minor
+- **Blocks:** no. The build with the check off passes, and the boot script uses it.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-build.sh
+  bash .tfcore/utils/tf-verify-tests.sh --base http://localhost:4723
+  ```
+- **Expected:** the build, test and boot scripts treat the Xcode version check the same way.
+- **Actual:** seen 2026-10-11, as below.
+
+| Problem | What it affects | Does it block or break anything |
+|---|---|---|
+| `tf-verify-boot.sh` builds the Mac head with the check off (`xcode-check=off`), but `tf-build.sh` and the unit-test rung of `tf-verify-tests.sh` do not, so on Xcode 27 with the 26.5 Mac pack they stop with `requires Xcode 26.6. The current version of Xcode is 27.0` and print NOT-RUN. The 913 unit tests had passed in the same log. | `*build-phase` on a Mac: its builder stopped at PARTIAL and asked the owner to install Xcode 26.6. | Breaks the build step's verdict; does not block, since `dotnet build ... -p:ValidateXcodeVersion=false` passes. |
+
+- **Encountered in:** `*build-phase Lekhak`, 2026-10-11.
+- **Workaround:** build with `-p:ValidateXcodeVersion=false`, as the boot does.
+- **Suggested fix:** pass the same switch in `tf-build.sh` and the test rung whenever the boot would, and report it as a note.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### Resolution status (TechieFlow team, 2026-10-11, third reply)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-032 | Fixed upstream in `tf-build.sh`, so both places in your table get it. The unit rung of `tf-verify-tests.sh` runs `tf-build.sh test`. When a build or test run on a Mac fails only because the Mac Catalyst SDK asks for an older Xcode, `tf-build.sh` runs the same command once more with `-p:ValidateXcodeVersion=false`. Before the verdict it prints `note  the Mac Catalyst SDK requires Xcode 26.6. The current version of Xcode is 27.0; built again with -p:ValidateXcodeVersion=false (xcode-check=off)`. Any other failure is read as before. `tf-verify-boot.sh` no longer retries on its own: it takes that note from `tf-build.sh`, and its `BOOTED` line still ends `xcode-check=off (…)`. Regression case `lk_032` fails against the script you have (with your `NOT-RUN no rung could build on macos`) and passes now. Miss `MISS-TechieFlow-20261011-05`. | Proved here on your repo, with no flag passed. `bash .tfcore/utils/tf-build.sh build source/BlogAdmin/BlogAdmin.csproj -- -f net10.0-maccatalyst` printed the note, then `PASS`. `bash .tfcore/utils/tf-build.sh test` printed the note, then `PASS`: 913 passed, 1 skipped. `tf-verify-boot.sh start --head maccatalyst` printed `BOOTED … xcode-check=off (requires Xcode 26.6. The current version of Xcode is 27.0)`. After the framework update, run the same two `tf-build.sh` commands. Expect the note and `PASS`, never `NOT-RUN`. |
+
+### Resolution status (TechieFlow team, 2026-10-11, second reply)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-030 | Fixed upstream, and in BlogAdmin itself, at the owner's request. **Framework:** (1) `coding-standards-dotnet.md` §9b: every Blazor Hybrid head zooms with Cmd (Mac) or Ctrl (Windows) plus `=`, `-` and `0`, from 50% to 300% in 10% steps. The level is kept in MAUI Preferences (`tf.zoom`), and the Mac menu bar shows View › Zoom In, Zoom Out, Actual Size. The code to copy is `.tfcore/standards/blazor-zoom.cs.txt`. (2) `tf-maccatalyst-check.sh` warns about a Blazor Hybrid head without it, naming the head. It is a warning, so the boot still runs. (3) New `tf-verify-zoom.sh` presses the keys on a booted head and measures the result. On the Mac it measures the window's pictures, because the accessibility tree does not follow a web view's zoom. On Windows it reads the page over CDP. (4) Templates: an acceptance line ending `zoom-check: keys` or `zoom-check: kept` is graded from that script's result. Regression case `lk_030` fails 2 of 3 against the scripts you have and passes now. Miss `MISS-TechieFlow-20261011-04`. **BlogAdmin (not committed; the owner commits):** new `source/BlogAdmin/BlazorZoom.cs`, one line in `MainPage.xaml.cs`, and four members in `Platforms/MacCatalyst/AppDelegate.cs`. Two things were not as the request assumed. First, from macOS 26 the Mac menu ignores an app delegate's `BuildMenu`, so the commands go in through `UIMainMenuSystem`. That also needs the Format menu turned off, because its Font › Bigger and Smaller already own Cmd+= and Cmd+-. BlogAdmin's Format menu is gone. Second, the WinUI WebView2 control does not expose WebView2's `ZoomFactor`, and WebView2's own zoom steps unevenly (25% to 500%). So on Windows the app turns WebView2's zoom off, and a script on each page handles Ctrl+plus, Ctrl+minus, Ctrl+0 and Ctrl+wheel, saving each level. | **Proved on this Mac (macOS 27):** Mac head built and booted. `tf-verify-zoom.sh --appium http://localhost:4723 --leave 3` printed OK for the View menu, and 130%, 120%, 100% after the keys. After `stop` and `start`, `--expect-restored 1.3` printed `opened at 130%`. BlogAdmin was left at 100%. **Not proved here:** the Windows head. A Windows build cannot run on a Mac. The Windows code compiled against the real WinUI and MAUI packages. Its page script, run in Chromium, gave 130%/120%/100%, 110% for Ctrl+wheel, stopped at 300% and 50%, and kept 130% across a page reload. To re-check: on the Mac, after the framework update, `bash .tfcore/utils/tf-maccatalyst-check.sh` prints OK for BlogAdmin. Then boot as above and run `bash .tfcore/utils/tf-verify-zoom.sh --appium http://localhost:4723`. Expect four OK lines. On Windows, build the Windows head, boot with `--head windows`, and run `bash .tfcore/utils/tf-verify-zoom.sh --cdp <the boot url>`. Expect five OK lines. Add the two zoom rows to the checklist through `*amend-docs` (the BRD is the owner's), then `*verify` grades them. |
+
+Found on the way, and fixed: a Mac-head verify failed every screen that has a mockup with "mockup-parity not found", because the mockup comparison never runs on a Mac. A Mac head's rows now say "mockup not compared on a Mac head" instead; compare the mockups on the Windows head. Your next Mac `*verify` would have hit it.
+
+### Resolution status (TechieFlow team, 2026-10-11)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-028 | Fixed upstream, one change per problem in your table. (1) `amend-docs.md` step 7 now says: a removed row gets Status `N/A`, `%` `0`, and the Remark `removed {date}: <reason>`. That is the form the check accepts. When a row's status starts with `N/A` but has more after it, or its `%` is not a number, the finding now says what a removed row takes. (2) An `N/A` row is no longer asked for an acceptance line, a BRD item, a mockup link, a Details link or a detail entry. Its Remarks are still checked. A BRD item that an `N/A` row names still counts as having a row. Every other row is checked as before. Regression case `lk_028` fails against the scripts you have and passes now. Miss `MISS-TechieFlow-20261011-02`. | Proved on a copy of your `docs/`. Your script: 13 findings on REQ-UI-034 to 039 and REQ-NFR-008. New script: none on those rows. REQ-UI-111 to 113 still read "without a mockup link", because they are live rows. After the framework update, run `bash .tfcore/utils/tf-doc-check.sh --strict docs/Lekhak-Checklist.md \| grep -E "REQ-UI-03[4-9]\|REQ-NFR-008"`. Expect no output. Your rows already read `N/A` with `0`, so nothing in the checklist needs to change. |
+| TF-029 | Fixed upstream. A phase can now have the status `kept-whole` in `docs/<App>-Phases.md`. It means the phase was finished before the size cap, and the owner chose to keep it as one document. For that phase's BRD and checklist, these findings are now WARN, not FAIL: over the requirement cap, over the row cap, and over the word maximum. Each one ends "phase 1 is kept-whole in Lekhak-Phases.md, so this is reported, not blocking". Any other status still FAILs, so a phase no one decided on still gets split. The template and the document schema list the new status. Also, a "348 requirements" finding now stays OLD after an edit, as long as the count has not grown. Before, only a words, lines or rows finding did. Regression case `lk_029` fails against the scripts you have and passes now. Miss `MISS-TechieFlow-20261011-03`. | **One change in your docs first.** Phase 1's row in `docs/Lekhak-Phases.md` reads `building`. Make it `kept-whole`; the owner already decided this on 2026-10-11. Proved on a copy of your `docs/` with that change: the three size lines (402 rows, 348 requirements, 21,754 words) print as WARN, and the Phases document passes. After the framework update, run `bash .tfcore/utils/tf-doc-check.sh --strict docs/Lekhak-Checklist.md docs/Lekhak-BRD.md docs/Lekhak-Phases.md \| grep -E "cap is\|maximum is\|kept-whole"`. Expect three WARN lines and no FAIL among them. Your BRD's other old findings, such as its section names, are not part of this fix. |
 
 ### Resolution status (TechieFlow team, 2026-10-10, second reply)
 
