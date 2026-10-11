@@ -143,11 +143,11 @@ flowchart LR
 
 ### 3.5 Verify — verifier
 
-**`*verify {ui | functional | all | REQ-list}`**
+**`*verify {ui | functional | all | REQ-list} {App} [--phase N | all]`**
 
-- Reads: checklist rows in scope, DevGuide (which controls each screen must show), mockups.
+- Reads: checklist rows in scope, from the checklist of the phase named (`--phase 2` reads `{App}-P2-Checklist.md`; with no `--phase`, the phase in progress; `--phase all` reads each phase's checklist in turn, phase 1 first, on one start of the application), DevGuide (which controls each screen must show), mockups.
 - Does: starts the application, runs Playwright browser tests and `dotnet test`, and applies seven checks to each requirement in order: build, acceptance test, data present, visual correctness against the mockup, assets loaded, speed within a declared budget, coding standards. The first failing check is recorded.
-- Writes: checklist status (`Verified`, or `Needs re-verify` with a remark); `docs/.last-verify.json`, the proof that a real verify ran; one `gates.jsonl` line per requirement.
+- Writes: checklist status (`Verified`, or `Needs re-verify` with a remark) in that phase's checklist only; `docs/.last-verify.json`, the proof that a real verify ran, which keeps each row's phase so verifying one phase never erases another's results; one `gates.jsonl` line per requirement and one run record per phase, each naming its phase.
 - Scripts: `tf-assets.sh`, `tf-mockup-parity.sh`, `tf-perf.sh`.
 - **Defect:** D-8 (task size).
 

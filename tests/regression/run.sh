@@ -3899,6 +3899,78 @@ SH
     || { bad sv_004b "one run graded a skipped on-app test on its unit test"; note "$got"; }
 }
 
+# --- Sevak TF-005: *verify graded only appPhase's checklist ---------------------------------------
+# Sevak is on phase 3; phases 1 and 2 held 50 Needs re-verify and 36 built-not-verified rows, and the
+# status told the owner to run *verify all, which read appPhase and graded phase 3 again. --phase N now
+# grades that phase's checklist and --phase all each phase in turn; the verdicts, the ledger and the
+# telemetry follow the phase graded; and the status names the phase in the command it gives.
+sv_005() {
+  local d="$SCRATCH/sv005"; rm -rf "$d"; mkdir -p "$d/docs/metrics" "$d/.tfcore" "$d/tests/.artifacts/verify"
+  cp -r "$UTILS" "$d/.tfcore/"; for s in runs gates sessions commits misses; do : > "$d/docs/metrics/$s.jsonl"; done
+  printf 'appPhase: 3\nappKind: app\n' > "$d/.tfcore/core-config.yaml"
+  local hd='| ID | Title | Status | %% | Remarks | Details |\n|---|---|---|---|---|---|\n'
+  printf "# Fx — Checklist\n\n$hd| REQ-FN-001 | Add | Needs re-verify | 90%% | | |\n| REQ-FN-002 | Edit | Implemented | 75%% | | |\n" > "$d/docs/Fx-Checklist.md"
+  printf "# Fx — Checklist\n\n$hd| REQ-FN-010 | Share | Implemented | 75%% | | |\n" > "$d/docs/Fx-P2-Checklist.md"
+  printf "# Fx — Checklist\n\n$hd| REQ-FN-020 | Remind | Verified | 100%% | | |\n" > "$d/docs/Fx-P3-Checklist.md"
+  local p3; p3="$(cat "$d/docs/Fx-P3-Checklist.md")"
+  in5() { ( cd "$d" && CLAUDE_PROJECT_DIR= TF_METRICS_ROOT="$d" TF_SKIP_SELFCHECK=1 "$@" ) 2>&1; }
+  local out rc
+  out="$(in5 bash .tfcore/utils/tf-verify-list.sh Fx all --phase all)"
+  local all9; all9="$(in5 bash .tfcore/utils/tf-verify-list.sh Fx all --phase 9; echo "rc=$?")"
+  grep -q '^PHASES 1 2 3$' <<<"$out" && [[ ! -e "$d/tests/.artifacts/verify/list.json" ]] \
+    && grep -q 'rc=2' <<<"$all9" && grep -q 'phases with a checklist are 1, 2, 3' <<<"$all9" \
+    && ok sv_005a "--phase all names every phase with a checklist, phase 1 first, and writes nothing; a phase with no checklist is refused" \
+    || { bad sv_005a "the phases were not listed, or a missing phase was not refused"; note "$(tr '\n' ' ' <<<"$out $all9" | cut -c1-200)"; }
+  # phase 1, then phase 2, each graded and applied with the same step-0 time, as one *verify --phase all
+  local t1; t1="$(tf_date_from -u '-10 minutes' +%Y-%m-%dT%H:%M:%SZ)"
+  printf '{"head":"web","mode":"base","url":"http://localhost:1","rung":"x","reason":"","reason_kind":""}\n' > "$d/tests/.artifacts/verify/boot.json"
+  printf '{"reqs":{"REQ-FN-001":{"result":"PASS","tests":["REQ-FN-001 a"],"skipped":[]},"REQ-FN-002":{"result":"FAIL","tests":["REQ-FN-002 e"],"skipped":[],"failed":1},"REQ-FN-010":{"result":"PASS","tests":["REQ-FN-010 s"],"skipped":[]}}}\n' > "$d/tests/.artifacts/verify/tests.json"
+  local p
+  for p in 1 2; do
+    in5 bash .tfcore/utils/tf-verify-list.sh Fx all --phase $p >/dev/null
+    in5 bash .tfcore/utils/tf-verify-verdict.sh Fx --apply --started "$t1" >/dev/null
+    in5 bash .tfcore/utils/tf-verify-emit.sh Fx --started "$t1" > "$d/emit$p.txt"
+  done
+  grep -q '^| REQ-FN-001 | Add | Verified' "$d/docs/Fx-Checklist.md" && grep -q '^| REQ-FN-002 | Edit | FAIL' "$d/docs/Fx-Checklist.md" \
+    && grep -q '^| REQ-FN-010 | Share | Verified' "$d/docs/Fx-P2-Checklist.md" && [[ "$(cat "$d/docs/Fx-P3-Checklist.md")" == "$p3" ]] \
+    && ok sv_005b "each pass writes its verdicts into its own phase's checklist, and appPhase's is untouched" \
+    || { bad sv_005b "a verdict landed in the wrong checklist"; note "$(grep -h '^| REQ' "$d"/docs/Fx-*Checklist.md | cut -c1-60 | tr '\n' ';')"; }
+  out="$(python3 -c "
+import json; l=json.load(open('$d/docs/.last-verify.json'))
+print(sorted(l['rows'].items()), sorted(l['row_phases'].items()), l['phase'], l['checklist'])")"
+  [[ "$out" == "[('REQ-FN-001', 'PASS'), ('REQ-FN-002', 'FAIL'), ('REQ-FN-010', 'PASS')] [('REQ-FN-001', 1), ('REQ-FN-002', 1), ('REQ-FN-010', 2)] 2 docs/Fx-P2-Checklist.md" ]] \
+    && ok sv_005c "phase 2's scope-all pass keeps phase 1's verdicts in the ledger, each row with its phase" \
+    || { bad sv_005c "the ledger lost a phase's rows or their phase"; note "$out"; }
+  out="$(python3 -c "
+import json
+runs=[json.loads(l) for l in open('$d/docs/metrics/runs.jsonl') if l.strip()]
+gates=[json.loads(l) for l in open('$d/docs/metrics/gates.jsonl') if l.strip()]
+v=[r for r in runs if r.get('cmd')=='verify-phase']
+print(len(v), [r.get('app_phase') for r in v], v[0]['started']=='$t1', v[1]['started']==v[0]['ended'],
+      sorted((g['req_id'], g.get('app_phase')) for g in gates))")"
+  [[ "$out" == "2 [1, 2] True True [('REQ-FN-001', 1), ('REQ-FN-002', 1), ('REQ-FN-010', 2)]" ]] \
+    && ok sv_005d "each pass writes its own run record naming its phase, the second starting where the first ended; gate records name the phase" \
+    || { bad sv_005d "the telemetry of a two-phase verify is wrong: $out"; note "$(tail -1 "$d/emit2.txt")"; }
+  # the status: the command names the phase, and finds rows waiting in other phases
+  sf() { ( cd "$d" && python3 .tfcore/utils/tf-status-facts.py Fx 2>&1 | sed -n '/^Claude Code:/{n;n;p;}' ); }
+  rm -f "$d/docs/.last-verify.json"
+  printf "# Fx — Checklist\n\n$hd| REQ-FN-001 | Add | Needs re-verify | 90%% | | |\n| REQ-UI-002 | Edit | Implemented | 75%% | | |\n" > "$d/docs/Fx-Checklist.md"
+  printf "# Fx — Checklist\n\n$hd| REQ-FN-010 | Share | Implemented | 75%% | | |\n" > "$d/docs/Fx-P2-Checklist.md"
+  local s1 s2 s3 s4 s5
+  s1="$(sf)"
+  printf "# Fx — Checklist\n\n$hd| REQ-FN-010 | Share | Verified | 100%% | | |\n" > "$d/docs/Fx-P2-Checklist.md"; s2="$(sf)"
+  printf "# Fx — Checklist\n\n$hd| REQ-FN-001 | Add | Verified | 100%% | | |\n" > "$d/docs/Fx-Checklist.md"
+  printf "# Fx — Checklist\n\n$hd| REQ-FN-020 | Remind | Implemented | 75%% | | |\n" > "$d/docs/Fx-P3-Checklist.md"; s3="$(sf)"
+  printf "# Fx — Checklist\n\n$hd| REQ-FN-001 | Add | Implemented | 75%% | | |\n" > "$d/docs/Fx-Checklist.md"
+  printf "# Fx — Checklist\n\n$hd| REQ-FN-020 | Remind | Not Started | 0%% | | |\n" > "$d/docs/Fx-P3-Checklist.md"
+  s4="$(sf) | $(cd "$d" && python3 .tfcore/utils/tf-status-facts.py Fx 2>&1 | grep '^Why')"
+  rm "$d/docs/Fx-P2-Checklist.md" "$d/docs/Fx-P3-Checklist.md"; printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"; s5="$(sf)"
+  [[ "$s1" == *"*verify all Fx --phase all" && "$s2" == *"*verify all Fx --phase 1" && "$s3" == *"*verify functional Fx --phase 3" \
+     && "$s4" == *"*build-phase Fx | "*"phase 1: 1 (REQ-FN-001)"* && "$s5" == *"*verify functional Fx" ]] \
+    && ok sv_005e "the status names the phase: --phase all for several, --phase 1 for an earlier one, --phase 3 for its own; a build still goes first; one phase names none" \
+    || { bad sv_005e "the next command did not name the right phase"; note "$s1 / $s2 / $s3 / ${s4:0:120} / $s5"; }
+}
+
 # --- TrBlazeUI TF-001: triage close logged last week's bugs again under today's run -------------
 # triage.json kept every action ever taken, so each close wrote them all again: 13 phantom escaped
 # checks and 5 misses on 2026-09-19, one more on 2026-09-22. And a wrong miss could not be withdrawn.
@@ -4774,6 +4846,34 @@ PY
     || { bad lk_027c "a missing list.json still crashed"; note "$(head -1 <<<"$out" | cut -c1-160)"; }
 }
 
+# --- MISS-TechieFlow-20261009-04: a theme pass that throws was dropped, and the screen passed on the rest
+# Found while fixing Lekhak TF-025. This app breaks the page the moment it is put in dark mode.
+lk_025e() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip lk_025e — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/lk025e"; mkdir -p "$d/site/leaves" "$d/docs/mockups"
+  local css='body{margin:0;font:16px/24px system-ui;padding:24px;background:#fff;color:#111} .btn{border:0;padding:8px 16px;color:#fff;border-radius:6px;background:#2563eb}
+[data-theme="dark"] body{background:#111;color:#eee}'
+  local body='<h1>Story crawler</h1><label>Auto save <button class="btn" data-testid="crawler-auto-save">Save</button></label>'
+  printf '<!doctype html><html data-theme="light"><head><meta charset="utf-8"><style>%s</style></head><body>%s</body></html>\n' "$css" "$body" > "$d/docs/mockups/leaves.html"
+  sed 's|</body>|<script>new MutationObserver(() => { if (document.documentElement.dataset.theme === "dark") Element.prototype.getBoundingClientRect = () => { throw new Error("gone"); }; }).observe(document.documentElement, { attributes: true });</script></body>|' \
+    "$d/docs/mockups/leaves.html" > "$d/site/leaves/index.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  local out
+  out="$( cd "$d" && tf_timeout 180 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen leaves=/leaves/ --widths 1280 --themes light,dark --json-out "$d/p2.json" >/dev/null 2>&1; python3 -c "
+import json
+s = json.load(open('$d/p2.json'))['screens'][0]
+print(s['verdict'], ','.join(s.get('themes', [])), len(s.get('not_compared', [])))" 2>&1 )"
+  kill "$srv" 2>/dev/null
+  [[ "$out" == "ERROR light 1" ]] \
+    && ok lk_025e "a theme pass that throws is not compared, so the screen is ERROR with that pass named, never PASS on the rest" \
+    || { bad lk_025e "a thrown theme pass was dropped: $out (want 'ERROR light 1')"; }
+}
+
 # --- Lekhak TF-023: *amend-docs saw ~130 old document findings as new ----------------------------------
 # tf-phase.sh start baselined only the checklists and PROJECT-STATUS.md, while *amend-docs closes on
 # `tf-doc-check.sh --app`: the BRD's old header, section and size findings printed as FAIL. Every file
@@ -5414,7 +5514,7 @@ print(r.get('tokens_scope'), r.get('tokens_out'), r.get('subagent_runs'), r.get(
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 sv_001 sv_002 sv_003 sv_004 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_026 lk_027 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 sv_001 sv_002 sv_003 sv_004 sv_005 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

@@ -950,7 +950,7 @@ for (const s of SCREENS) {
   const notOffered = new Set();
   for (const width of WIDTHS) {
     const { app: page, mock: mockPage } = tabs[width];
-    let mock, app, docFindings = [], reached = '', theme = null, own = 'light', ownSurface = null, mockSurface = null, wanted = [];
+    let mock, app, docFindings = [], reached = '', theme = null, own = 'light', ownSurface = null, mockSurface = null, mockTheme = null, wanted = [];
     // Lekhak TF-025: the mockup's site theme stays on the app through the other-theme pass too, and is
     // taken off only after it. It used to come off after the first pass, so the dark pass compared the
     // app in the viewer's site theme (minimal, grey primary) with the mockup in its own (blue primary).
@@ -980,7 +980,7 @@ for (const s of SCREENS) {
       // Lekhak TF-013: a light/dark class on <html> or <body> is carried the same way, or a class-driven
       // dark mode (class="dark") kept its dark colours under the mockup's light data-theme.
       const mockRead = KEEP_APP_THEME ? null : await mockPage.evaluate(READ_THEME);
-      const mockTheme = DECLARES_THEME(mockRead) ? mockRead : null;
+      mockTheme = DECLARES_THEME(mockRead) ? mockRead : null;
       // The mockup's own theme: what it declares, or, declaring none, what it paints (TF-024). A mockup
       // that declares none now has the app put in that theme too (its colour scheme as well as its
       // attributes), so a viewer's saved dark theme no longer decides what a light mockup is compared with.
@@ -1079,9 +1079,13 @@ for (const s of SCREENS) {
   // not read as a thorough screen with one problem — `coverage.ungradeable` stays
   // true either way, so the report can say both things at once.
   const ungradeable = contentGraded === 0;
+  // A width or theme pass that threw was not compared, so it cannot be part of a PASS: a crash in the
+  // dark pass gave PASS on light alone, with nothing saying dark was missing (MISS-TechieFlow-20261009-04).
+  const failedPasses = perWidth.filter((w) => w.error);
   let verdict;
   if (ok.length === 0) verdict = 'ERROR';
   else if (findings.length) verdict = 'FAIL';
+  else if (failedPasses.length) verdict = 'ERROR';
   else if (ungradeable) verdict = 'UNGRADEABLE';
   else verdict = 'PASS';
 
@@ -1118,6 +1122,7 @@ for (const s of SCREENS) {
     // the themes it was compared in, and one the app showed no sign of having (TF-024)
     themes: [...new Set(ok.map((w) => w.mode).filter(Boolean))],
     ...(notOffered.size ? { themes_not_offered: [...notOffered] } : {}),
+    ...(failedPasses.length ? { not_compared: failedPasses.map((w) => `${w.width}${w.mode ? ' ' + w.mode : ''}: ${w.error}`) } : {}),
     widths: perWidth.map((w) => ({ width: w.width, ...(w.mode ? { mode: w.mode } : {}),
       ...(w.mockup_draws_theme === false ? { colour_not_compared: 'the mockup draws no ' + w.mode + ' theme' } : {}), error: w.error || null,
       compared: w.compared || 0, content_graded: w.contentGraded || 0, findings: (w.findings || []).length,

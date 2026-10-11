@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # tf-verify-list.sh — the working list of a verify run (Sitting 4c, 2026-09-06).
 #
-#   bash .tfcore/utils/tf-verify-list.sh <App> <scope> [--phase N] [--json-out <file>]
+#   bash .tfcore/utils/tf-verify-list.sh <App> <scope> [--phase N|all] [--json-out <file>]
 #
+# --phase N grades phase N's checklist (default appPhase); --phase all prints the phases to grade, in
+# order, and writes nothing (Sevak TF-005).
 # scope: ui · functional · all · a comma list of REQ ids. Prints every row to grade with its
 # acceptance line, screen, route, mockup and perf budget, the screens to drive, and the test
 # users; writes tests/.artifacts/verify/list.json for the other verify scripts. Skips N/A rows

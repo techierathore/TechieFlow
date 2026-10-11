@@ -86,7 +86,7 @@ flowchart TD
 
 **An existing application** is the same after day-1: `*day1-brownfield` reads the code, writes the same documents plus the DevGuide, and migrates any existing plan into the one checklist.
 
-**Which command next?** Pick by the weakest open row: anything unbuilt means `*build-phase`; all built but not verified means `*verify all`; all verified means `*handoff-phase`. When in doubt, build. If a session died mid-phase, the status file is stale — run `*refresh-status {App}` first, which rebuilds it from the checklist, the working tree and a fresh build.
+**Which command next?** Pick by the weakest open row: anything unbuilt means `*build-phase`; all built but not verified means `*verify all`; all verified means `*handoff-phase`. When in doubt, build. A project in phases verifies one phase at a time: `*verify all {App} --phase 1` grades phase 1's checklist, and `--phase all` grades every phase in turn. Without `--phase` it grades the phase in progress. PROJECT-STATUS prints the exact line to paste. If a session died mid-phase, the status file is stale — run `*refresh-status {App}` first, which rebuilds it from the checklist, the working tree and a fresh build.
 
 **Running unattended.** Do not start a long run as a bare harness command. The supervisor survives a usage limit, a crash and an agent that stops early:
 
@@ -110,7 +110,7 @@ Replace `{App}` with your application name. Claude Code takes the long persona p
 | A change to an existing project | `… analyst *amend-docs {App} "<what changed>"` | `/flow-analyst *amend-docs {App} "…"` |
 | Brainstorm, brief, research | `… analyst *brainstorm {topic}` · `*create-project-brief` · `*research-prompt {topic}` | same, on `/flow-analyst` |
 | Build everything open | `/TechieFlow:agents:flow-master *build-phase {App}` | `/flow-master *build-phase {App}` |
-| Verify | `/TechieFlow:agents:verifier *verify ui\|functional\|all` | `/flow-verifier *verify all` |
+| Verify | `/TechieFlow:agents:verifier *verify ui\|functional\|all {App} [--phase N\|all]` | `/flow-verifier *verify all {App} [--phase N\|all]` |
 | Bugs: log and analyse only | `… flow-master *triage-issues {App} {evidence} [verify]` | `/flow-master *triage-issues …` |
 | Bugs: fix them | `… flow-master *fix-issues {App} {folder}` | `/flow-master *fix-issues …` |
 | Bugs: the whole sequence unattended | `… flow-master *triage-and-fix {App} {evidence}` | `/flow-master *triage-and-fix …` |

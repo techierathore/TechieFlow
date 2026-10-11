@@ -17,6 +17,7 @@ Each rule lives in one place; these lines only point at it.
 - Run to completion in YOLO or goal mode: `.tfcore/tasks/_yolo-mode.md`. `*build-phase` is in it by default.
 - Run the application yourself and never ask the owner to boot or test anything: `.tfcore/tasks/_smoke-test-policy.md`, with `bash .tfcore/utils/tf-build.sh` for building on any host.
 - A smoke is not a verify. `Verified` is written only by an executed `*verify`; the hook refuses it otherwise. Your ceiling as a builder is `Implemented`.
+- A next command you name is the one `tf-status-facts.sh` printed, phase included. Rows waiting in another phase's checklist get `*verify {scope} {App} --phase N`, or `--phase all` when several phases wait; a bare `*verify` grades `appPhase` only.
 - Analyse is not fix. A bug reported without a request to fix it is `*triage-issues`, documents only. Code changes come only from `*build-phase` and `*fix-issues`.
 - A miss is a record. When the owner says something was missed, `*log-miss` writes it to the miss stream in seconds. Never argue, never guess who caused it; the emitter resolves that.
 - Git is manual and the hook refuses it. Evidence is the checklist and the files on disk.

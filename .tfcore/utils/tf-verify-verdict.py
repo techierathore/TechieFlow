@@ -344,23 +344,32 @@ def main(argv):
     # with the date and run it was graded in; the rest keep theirs. A scope-all run starts it afresh.
     # The verify guard unlocks a Verified only for a row graded today, and fix-close reads only the rows
     # graded since its fix began, by these dates.
+    # Sevak TF-005: every row carries the phase whose checklist it was graded in, and a scope-all run
+    # starts afresh only for its own phase. Phase 2's run used to wipe phase 1's verdicts. A row from an
+    # older ledger that names no phase is kept.
+    phase = lst.get("phase") or 1
     all_rows, row_dates, row_runs = dict(ledger_rows), {k: today for k in ledger_rows}, {k: started for k in ledger_rows}
+    row_phases = {k: phase for k in ledger_rows}
     prev = load(os.path.join("docs", ".last-verify.json")) if os.path.isfile(os.path.join("docs", ".last-verify.json")) else None
-    if lst.get("scope", "all") != "all" and isinstance(prev, dict) and prev.get("app") in (None, app) \
+    if isinstance(prev, dict) and prev.get("app") in (None, app) \
             and isinstance(prev.get("rows"), dict) and prev.get("mode") != "reconcile":
         for k, v in prev["rows"].items():
-            if k not in all_rows:
+            was = (prev.get("row_phases") or {}).get(k, prev.get("phase"))
+            if k not in all_rows and (lst.get("scope", "all") != "all" or was != phase):
                 all_rows[k] = v
                 row_dates[k] = (prev.get("row_dates") or {}).get(k, prev.get("date", ""))
                 row_runs[k] = (prev.get("row_runs") or {}).get(k, prev.get("run_id", ""))
-    ledger = {"date": today, "app": app, "scope": lst.get("scope", "all"), "booted": boot_text, "gates": checks,
+                if was is not None:
+                    row_phases[k] = was
+    ledger = {"date": today, "app": app, "scope": lst.get("scope", "all"), "phase": phase, "checklist": lst.get("checklist"),
+              "booted": boot_text, "gates": checks,
               "evidence": d, "run_id": started, "rows": all_rows, "row_dates": row_dates, "row_runs": row_runs,
-              "this_run": sorted(ledger_rows)}
+              "row_phases": row_phases, "this_run": sorted(ledger_rows)}
     os.makedirs("docs", exist_ok=True)
     with open(os.path.join("docs", ".last-verify.json"), "w", encoding="utf-8") as f:
         json.dump(ledger, f, indent=1)
     with open(os.path.join(d, "verdicts.json"), "w", encoding="utf-8") as f:
-        json.dump({"app": app, "scope": lst.get("scope", "all"), "date": today, "started": started, "booted": boot_text,
+        json.dump({"app": app, "scope": lst.get("scope", "all"), "phase": phase, "date": today, "started": started, "booted": boot_text,
                    "build_result": "fail" if build_failed else ("pass" if booted else "not-run"), "checks": checks,
                    "checklist": lst.get("checklist"), "rows": rows_out}, f, indent=1)
 
@@ -389,7 +398,7 @@ def main(argv):
     counts = {}
     for x in rows_out:
         counts[x["verdict"]] = counts.get(x["verdict"], 0) + 1
-    print(f"# tf-verify-verdict — {app} — scope {lst.get('scope')} — booted: {boot_text}")
+    print(f"# tf-verify-verdict — {app} — phase {phase} ({lst.get('checklist')}) — scope {lst.get('scope')} — booted: {boot_text}")
     print(f"Checks that ran: {', '.join(checks) or 'none'}. Rows: " + ", ".join(f"{v} {k}" for k, v in sorted(counts.items())))
     print()
     print("| ID | Verdict | First failing check | Status | Detail |")

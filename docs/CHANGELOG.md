@@ -14,6 +14,22 @@ Everything below this section from 2026-09-11 onward is also unreleased: it reac
 v1.0.4 tag (2026-09-10) and is in no published package yet. This section lists what those dated entries
 do not.
 
+- **Sevak TF-005: `*verify` grades any phase, or every phase (2026-10-11).** `*verify all Sevak` graded only
+  `Sevak-P3-Checklist.md`: `verify-phase.md` read `appPhase` and never passed `--phase` to
+  `tf-verify-list.sh`, so 86 built rows of phases 1 and 2 were never graded. `*verify {scope} {App}
+  [--phase N|all]`: `tf-verify-list.sh --phase all` prints `PHASES 1 2 3` and writes nothing, the task runs
+  steps 1 and 4 to 6 once per phase on one boot, and a phase with no checklist is refused. The ledger keeps
+  `row_phases` and a scope-all pass clears only its own phase (phase 2's used to wipe phase 1's verdicts).
+  Run and gate records carry `app_phase` (SCHEMA §2, §3), and a later pass of one command starts where
+  the earlier one ended (the second record used to be refused as an overlap). `tf-status-facts` names the
+  phase in a verify on a multi-phase project and finds built rows waiting in other phases' checklists
+  (`--phase N`, or `--phase all` for several; a build of this phase still first); flow-master names it
+  too. Measured on every project: the next command changes on three, Sevak (`--phase all`, 86 rows),
+  TfLens (`--phase all`, 8 rows) and Chatur (`--phase 1`, REQ-FN-012, which a phase-3 scope-all run had
+  dropped from the ledger). `sv_005` fails 4 of 5 against the deployed scripts. Also merged: the Mac's and
+  this machine's copies of Lekhak TF-025 (the Mac's fix kept; this machine's crash-pass case is `lk_025e`).
+  Documented in the README (which command next, the command table), How-It-Works §3.5 and a new
+  requirement line, FR-85, graded by `sv_005`. MISS-TechieFlow-20261011-01.
 - **Lekhak TF-027: the Mac screen check graded screens it never showed (2026-10-10, on the Mac).**
   On BlogAdmin 13 of 18 screens were unreachable and Search results passed on the Dashboard.
   `tf-verify-native` no longer grades a screen nothing reached (only route `/` may be the screen on view).

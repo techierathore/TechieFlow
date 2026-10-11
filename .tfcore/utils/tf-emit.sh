@@ -1488,7 +1488,7 @@ _ALLOWED = {
                       "routed", "tokens_in", "tokens_out", "tokens_cache_read", "tokens_cache_write",
                       "cost_usd", "tokens_scope", "attempt", "subagent_runs", "tokens_out_subagents",
                       "model_tokens_out", "session_id", "usage_start_event_ts", "usage_end_event_ts",
-                      "billing_mode", "cost_source", "fallback_from"},
+                      "billing_mode", "cost_source", "fallback_from", "app_phase"},
     # A correction, not a deletion: it names a run record that is wrong by the pair every
     # run carries (`cmd` + `started`) and says why, so every figure can skip it while the
     # record itself stays where it is. Written by --void-run, which refuses one that names
@@ -1499,7 +1499,7 @@ _ALLOWED = {
                         "tier", "tier_model", "model", "models", "tokens_in", "tokens_out", "tokens_cache_read",
                         "tokens_cache_write", "cost_usd", "tokens_scope", "model_tokens_out", "routed",
                         "subagent_runs", "tokens_out_subagents", "session_id",
-                        "billing_mode", "cost_source", "fallback_from"},
+                        "billing_mode", "cost_source", "fallback_from", "app_phase"},
     ("sessions", "session"): {"session_id", "model", "duration_s", "input_tokens", "output_tokens",
                               "cache_read_tokens", "cache_creation_tokens", "cost_usd", "children_sessions"},
     ("commits", "commit"): {"sha", "files", "insertions", "deletions", "subject_prefix", "branch"},

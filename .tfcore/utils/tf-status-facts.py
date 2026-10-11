@@ -14,7 +14,10 @@ into the template (.tfcore/templates/v4custom/app-project-status-tmpl.md):
   - the Open requirements section (counts by status, at most ten named rows)
   - the Verification log table with its new row (last five kept)
   - the Library feedback summary lines
-  - the Next command to run, in both harness forms, and why
+  - the Next command to run, in both harness forms, and why. On a project with more than one
+    phase a verify names its phase (`*verify ui <App> --phase 3`), and built rows waiting in
+    another phase's checklist are found too: `--phase N` for one, `--phase all` for several
+    (Sevak TF-005). A build of this phase still comes first.
 
 Writes nothing. The agent writes PROJECT-STATUS.md with the harness Write tool.
 Python 3 standard library only. Exit 0 printed, 2 could not run.
@@ -240,9 +243,39 @@ def usage_guide(app):
     return vl.usage_guide(app)
 
 
-def next_command(app, rows, log_rows, phase=1, verdicts=None, library=False):
-    """Returns (phase, qualifier, cc_line, oc_line, reason)."""
+def to_verify(rows, verdicts):
+    """(waiting, unmeasured): built rows a verify should grade, and built rows the last verify could
+    not measure (every test skipped). Roadmap rows and rows carrying a defect are neither."""
+    built = [r for r in rows if not r.get("roadmap") and r["status"].lower() in BUILT and not has_defect(r)]
+    unmeasured = [r for r in built if verdicts.get(r["id"]) == "NOT-TESTED"]
+    return [r for r in built if r not in unmeasured], unmeasured
+
+
+def scope_of(rows):
+    ui = [r for r in rows if r["id"].startswith("REQ-UI")]
+    return "ui" if len(ui) == len(rows) else ("functional" if not ui else "all")
+
+
+def other_phases(root, app, phase_n, verdicts):
+    """{phase: rows waiting for a verify} for every other phase with a checklist (Sevak TF-005: phases 1
+    and 2 held 86 rows waiting while the status read only phase 3's checklist)."""
+    found = {}
+    for f in sorted(os.listdir(os.path.join(root, "docs"))) if os.path.isdir(os.path.join(root, "docs")) else []:
+        m = re.fullmatch(re.escape(app) + r"-(?:P(\d+)-)?Checklist\.md", f)
+        p = int(m.group(1) or 1) if m else 0
+        if not p or p == phase_n:
+            continue
+        waiting, _ = to_verify(checklist_rows(read(os.path.join(root, "docs", f))), verdicts)
+        if waiting:
+            found[p] = waiting
+    return dict(sorted(found.items()))
+
+
+def next_command(app, rows, log_rows, phase=1, verdicts=None, library=False, multi=False):
+    """Returns (phase, qualifier, cc_line, oc_line, reason). multi: the project has more than one
+    phase, so a verify names the phase it grades."""
     verdicts = verdicts or {}
+    pflag = f" --phase {phase}" if multi else ""
 
     def ids(lst):
         return ", ".join(r["id"] for r in lst[:6]) + (" …" if len(lst) > 6 else "")
@@ -260,7 +293,8 @@ def next_command(app, rows, log_rows, phase=1, verdicts=None, library=False):
     now = [r for r in rows if not r.get("roadmap")]
     unbuilt = [r for r in now if r["status"].lower() not in TERMINAL | PASS_THROUGH | BUILT | OWNER]
     defects = [r for r in now if has_defect(r)]
-    built = [r for r in now if r["status"].lower() in BUILT and r not in defects]
+    waiting, unmeasured = to_verify(now, verdicts)
+    built = waiting + unmeasured
     owner = [r for r in now if r["status"].lower() in OWNER]
     verified, counted, na = figures(rows)
     q = f"{verified} of {counted} verified" + (f", {na} not applicable" if na else "")
@@ -280,21 +314,18 @@ def next_command(app, rows, log_rows, phase=1, verdicts=None, library=False):
         # loop that looks like progress. Say what it actually needs: data, a changed
         # acceptance line, or the row marked N/A. Only the owner can choose. FR-69's sibling
         # case; the verdicts come from the ledger the verifier already writes.
-        unmeasured = [r for r in built if verdicts.get(r["id"]) == "NOT-TESTED"]
-        waiting = [r for r in built if r not in unmeasured]
         if unmeasured and not waiting:
             line = (f"(owner) {len(unmeasured)} row(s) cannot be measured here — create the data, "
                     f"change the acceptance line, or mark the row N/A: {ids(unmeasured)}")
             return ("Verify", f"{len(unmeasured)} not measurable, {q}", line, line,
                     f"every test carrying these ids was skipped, so another verify run changes nothing: {ids(unmeasured)}")
-        ui = [r for r in waiting if r["id"].startswith("REQ-UI")]
-        scope = "ui" if len(ui) == len(waiting) else ("functional" if not ui else "all")
+        scope = scope_of(waiting)
         reason = f"{len(waiting)} rows are built and not verified: {ids(waiting)}"
         if unmeasured:
             reason += (f"; {len(unmeasured)} more could not be measured (every test skipped) "
                        f"and need the owner: {ids(unmeasured)}")
         return ("Verify", f"{len(waiting)} to verify, {q}",
-                f"{CC}verifier *verify {scope} {app}", f"{OC}flow-verifier *verify {scope} {app}",
+                f"{CC}verifier *verify {scope} {app}{pflag}", f"{OC}flow-verifier *verify {scope} {app}{pflag}",
                 reason)
     if owner:
         if handoff_ran(log_rows, app, phase):
@@ -344,12 +375,32 @@ def main(argv):
     st_text = read(st_path) if os.path.isfile(st_path) else ""
     log_rows = existing_log_rows(st_text)
     vdate, vresult = last_verify(root, app)
-    phase, qual, cc, oc, reason = next_command(app, rows, log_rows, phase_n, ledger_verdicts(root), config_library(root))
+    verdicts = ledger_verdicts(root)
+    others = other_phases(root, app, phase_n, verdicts)
+    pname, ptotal = phase_row(root, app, phase_n)
+    multi = phase_n > 1 or (ptotal or 0) > 1 or bool(others)
+    phase, qual, cc, oc, reason = next_command(app, rows, log_rows, phase_n, verdicts, config_library(root), multi)
+    if others:
+        # A verify of another phase names that phase, or --phase all when several phases wait; a build
+        # of this phase still goes first.
+        n = sum(len(w) for w in others.values())
+        where = "; ".join(f"phase {p}: {len(w)} ({', '.join(r['id'] for r in w[:4])}{' …' if len(w) > 4 else ''})"
+                          for p, w in others.items())
+        mine, _ = to_verify(rows, verdicts)
+        if phase == "Build":
+            reason += f"; after this build, {n} built rows of other phases wait for a verify — {where}"
+        else:
+            pick = list(others) + ([phase_n] if mine else [])
+            flag = f"--phase {pick[0]}" if len(pick) == 1 else "--phase all"
+            scope = scope_of([r for w in others.values() for r in w] + mine)
+            cc, oc = f"{CC}verifier *verify {scope} {app} {flag}", f"{OC}flow-verifier *verify {scope} {app} {flag}"
+            reason = (f"{n} rows of other phases are built and not verified — {where}"
+                      + (f"; and in this phase: {reason}" if phase == "Verify" else f"; this phase alone would be: {qual} ({reason})"))
+            phase, qual = "Verify", f"{n + len(mine)} to verify across phases {', '.join(map(str, sorted(pick)))}, {qual}"
     roadmap = [r["id"] for r in rows if r["roadmap"]]
     if roadmap:
         reason += (f"; {len(roadmap)} roadmap row(s) are not in this phase's scope and are left for the owner "
                    f"(*amend-docs): {', '.join(roadmap)}")
-    pname, ptotal = phase_row(root, app, phase_n)
     if ptotal or phase_n > 1:
         tag = f"Phase {phase_n} of {ptotal or '?'}" + (f" ({pname})" if pname else "")
         phase = f"{tag} · {phase}"

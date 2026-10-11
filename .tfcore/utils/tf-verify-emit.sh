@@ -11,6 +11,8 @@
 #                 the row, looked up in runs.jsonl, or left out when there is none
 #   runs.jsonl    one `run` record for the verify pass: cmd verify-phase, the rows touched, the build
 #                 result, whether YOLO was on
+# Run and gate records carry app_phase, the phase whose checklist was graded (list.json). A second pass
+# of one *verify --phase all starts where the first one's record ended (Sevak TF-005).
 # Rows the run could not grade (not tested, not observable, not driven) get no record. Telemetry
 # never blocks: a refused record is printed and the script still exits 0.
 set -u
@@ -59,6 +61,30 @@ if own and run_id and own > run_id:
     print(f"tf-verify-emit: {run_id} is when {caller} started; this verify started {own} and is recorded from then")
     run_id = own
 
+def q(*args):
+    p = subprocess.run(["bash", EMIT, *args], capture_output=True, text=True)
+    return p.stdout.strip()
+
+runs_path = os.path.join(q("--where") or "docs/metrics", "runs.jsonl")
+runs = []
+if os.path.isfile(runs_path):
+    for line in open(runs_path, encoding="utf-8", errors="replace"):
+        try:
+            runs.append(json.loads(line))
+        except Exception:
+            pass
+
+# Sevak TF-005: *verify --phase all is one pass per phase inside one command, all handed the same
+# step-0 time. A pass that finds a run of this app already recorded since that time starts where it
+# ended, so the second pass is not refused as an overlap (SCHEMA §2.7b) and no window is counted twice.
+if run_id:
+    after = [r.get("ended", "") for r in runs if r.get("kind") == "run" and not r.get("backfilled")
+             and r.get("app") in (None, app) and r.get("started", "") >= run_id and r.get("ended", "") > run_id]
+    if after:
+        print(f"tf-verify-emit: a run of {app} was recorded since {run_id}; this pass is recorded from its end, {max(after)}")
+        run_id = max(after)
+phase = v.get("phase")
+
 def emit(stream, rec):
     p = subprocess.run(["bash", EMIT, stream], input=json.dumps(rec), capture_output=True, text=True)
     msg = (p.stdout + p.stderr).strip()
@@ -67,24 +93,14 @@ def emit(stream, rec):
         return False
     return True
 
-def q(*args):
-    p = subprocess.run(["bash", EMIT, *args], capture_output=True, text=True)
-    return p.stdout.strip()
-
 # origin lookup: the last build-phase or fix-issues run that touched the row
-runs_path = os.path.join(q("--where") or "docs/metrics", "runs.jsonl")
 origin = {}
-if os.path.isfile(runs_path):
-    for line in open(runs_path, encoding="utf-8", errors="replace"):
-        try:
-            r = json.loads(line)
-        except Exception:
-            continue
-        if r.get("kind") != "run" or r.get("backfilled") or r.get("cmd") not in ("build-phase", "fix-issues"):
-            continue
-        for rid in r.get("reqs_touched") or []:
-            if r.get("started", "") >= origin.get(rid, ("", ""))[0]:
-                origin[rid] = (r.get("started", ""), r.get("cmd"), (r.get("subagents") or ["flow-master"])[0] if r.get("subagents") else "flow-master")
+for r in runs:
+    if r.get("kind") != "run" or r.get("backfilled") or r.get("cmd") not in ("build-phase", "fix-issues"):
+        continue
+    for rid in r.get("reqs_touched") or []:
+        if r.get("started", "") >= origin.get(rid, ("", ""))[0]:
+            origin[rid] = (r.get("started", ""), r.get("cmd"), (r.get("subagents") or ["flow-master"])[0] if r.get("subagents") else "flow-master")
 
 gates = misses = 0
 for row in v["rows"]:
@@ -95,6 +111,8 @@ for row in v["rows"]:
     rec = {"kind": "gate", "app": app, "run_id": run_id, "req_id": rid, "req_class": row["class"],
            "attempt": int(att) if att.isdigit() else 1, "verdict": row["status"], "gate": row["gate"],
            "gates_run": row["gates_run"], "failure_class": row["failure_class"], "prior_verdict": row["prior_verdict"]}
+    if phase:
+        rec["app_phase"] = phase
     if emit("gates", rec):
         gates += 1
     if not row["gate"]:
@@ -124,7 +142,9 @@ rec = {"kind": "run", "app": app, "cmd": "verify-phase", "mode": mode, "yolo": y
        "build_result": v.get("build_result", "not-run")}
 if run_id:
     rec["started"] = run_id
+if phase:
+    rec["app_phase"] = phase
 ok = emit("runs", rec)
-print(f"telemetry: {gates} gate record(s), {misses} new miss(es), run record {'written' if ok else 'not written'} (cmd verify-phase, yolo {str(yolo).lower()})")
+print(f"telemetry: {gates} gate record(s), {misses} new miss(es), run record {'written' if ok else 'not written'} (cmd verify-phase, phase {phase or '?'}, yolo {str(yolo).lower()})")
 PY
 exit 0

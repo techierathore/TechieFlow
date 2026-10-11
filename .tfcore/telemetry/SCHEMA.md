@@ -105,6 +105,7 @@ So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit 
 | `build_result` | string \| null | `pass` \| `fail` \| `not-run`. |
 | `harness` | string \| null | Injected by `tf-emit.sh` (§1). **Do not emit it yourself.** |
 | `yolo` | bool | Whether YOLO / goal mode was on for this run (D-12, FR-35; added 2026-09-05). Written by the task from the flag file at the status gate; wired into every task in Session 4c. |
+| `app_phase` | int | **`verify-phase` only, added 2026-10-11 (Sevak TF-005).** The phase whose checklist this pass graded: 1 is `docs/<App>-Checklist.md`, n is `docs/<App>-P<n>-Checklist.md`. Absent on older records, which graded `appPhase`. One `*verify --phase all` writes one run record per phase, each starting where the one before ended (§2.7b). |
 
 ---
 
@@ -236,6 +237,7 @@ Failure:
 | `gates_run` | string[] | Which gates actually executed this pass — subset of `["build","acceptance","render","assets","visual","mockup-parity","perf","standards"]`, in execution order. A gate absent here did **not** run and cannot be credited or blamed. For `perf`, `assets` and `mockup-parity` this carries real weight: see §3.5. |
 | `failure_class` | string \| null | Controlled vocabulary only, §3.3. `null` on a pass. |
 | `prior_verdict` | string \| null | The Status cell value **before** this run wrote over it. `null` if the row is new. |
+| `app_phase` | int | The phase whose checklist holds `req_id` and was written by this pass (added 2026-10-11, Sevak TF-005); see §2. Absent on older records. |
 | `proof` | string \| null | Optional, §3.4. |
 
 ### 3.1 `attempt` — the field first-pass rate depends on entirely

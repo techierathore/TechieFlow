@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """tf-verify-list.py — the working list of a verify run (see tf-verify-list.sh).
 
-    bash .tfcore/utils/tf-verify-list.sh <App> <scope> [--phase N] [--json-out <file>]
+    bash .tfcore/utils/tf-verify-list.sh <App> <scope> [--phase N|all] [--json-out <file>]
 
 scope: ui (REQ-UI rows) · functional (REQ-FN, REQ-NFR, REQ-RAG) · all · a comma list of ids.
+--phase N grades phase N's checklist (default appPhase); --phase all only prints the phases that have
+a checklist, phase 1 first, as "PHASES 1 2 3", and writes nothing: the task runs one pass per phase.
 Reads the phase's checklist, the UIDesign, the BRD screens table and the UsageGuide, and prints:
   - every row in scope with its status, acceptance line, screen, route, mockup and perf budget;
     N/A rows are skipped, every other status is graded (a Verified row is re-confirmed)
@@ -369,21 +371,50 @@ def screen_from_acceptance(acc):
     return hits[-1].strip() if hits else ""
 
 
+def checklist_of(app, phase):
+    return os.path.join("docs", f"{app}-Checklist.md" if phase <= 1 else f"{app}-P{phase}-Checklist.md")
+
+
+def phases_of(app):
+    """The phase numbers that have a checklist, phase 1 first."""
+    found = [1] if os.path.isfile(checklist_of(app, 1)) else []
+    for f in os.listdir("docs") if os.path.isdir("docs") else []:
+        m = re.fullmatch(re.escape(app) + r"-P(\d+)-Checklist\.md", f)
+        if m and int(m.group(1)) > 1:
+            found.append(int(m.group(1)))
+    return sorted(set(found))
+
+
 def main(argv):
     if len(argv) < 3 or argv[1] in ("-h", "--help"):
         print(__doc__)
         return 0
     app, scope = argv[1], argv[2]
+    # Sevak TF-005: *verify graded only appPhase's checklist, so phases 1 and 2 (86 rows waiting) were
+    # never graded. --phase N grades that phase's checklist; --phase all prints the phases to grade, in
+    # order, and the task runs one pass per phase. Every later script reads the checklist from list.json.
+    have = phases_of(app)
     phase = int(cfg("appPhase", "1"))
     if "--phase" in argv:
-        phase = int(argv[argv.index("--phase") + 1])
+        val = argv[argv.index("--phase") + 1] if argv.index("--phase") + 1 < len(argv) else ""
+        if val == "all":
+            if not have:
+                die(f"no checklist for {app} under docs/")
+            print(f"# tf-verify-list — {app} — phase all — scope {scope}")
+            print("PHASES " + " ".join(str(p) for p in have))
+            print("Grade them one at a time, in this order: steps 1 and 4 to 6 of verify-phase.md with "
+                  + ", then ".join(f"--phase {p} ({checklist_of(app, p)})" for p in have) + ". Nothing was written.")
+            return 0
+        if not val.isdigit() or int(val) < 1:
+            die(f"--phase takes a phase number or all, not {val or 'nothing'}")
+        phase = int(val)
     out_path = os.path.join("tests", ".artifacts", "verify", "list.json")
     if "--json-out" in argv:
         out_path = argv[argv.index("--json-out") + 1]
     pfx = f"{app}-" if phase <= 1 else f"{app}-P{phase}-"
-    cl = os.path.join("docs", f"{pfx}Checklist.md")
+    cl = checklist_of(app, phase)
     if not os.path.isfile(cl):
-        die(f"{cl} does not exist")
+        die(f"{cl} does not exist" + (f"; the phases with a checklist are {', '.join(map(str, have))}" if have else ""))
     text = read(cl)
     rows = rows_of(text)
     if not rows:

@@ -106,7 +106,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout">
   <nav class="side">
     <h1>TechieFlow — How It Works</h1>
-    <div class="sub">Last rendered: 2026-09-29</div>
+    <div class="sub">Last rendered: 2026-10-11</div>
     <div class="group">Contents</div>
     <ol>
         <li><a href="#overview">1. Overview</a></li>
@@ -136,7 +136,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
   </nav>
   <main>
     <h1>TechieFlow — How It Works</h1>
-    <div class="subtitle">Rendered 2026-09-29 &middot; source <code>TechieFlow-How-It-Works.md</code></div>
+    <div class="subtitle">Rendered 2026-10-11 &middot; source <code>TechieFlow-How-It-Works.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
@@ -176,13 +176,13 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </tbody>
 </table>
 <hr>
-<h2 id="overview">1. Overview<a class="anchor-link" href="#overview">#</a></h2>
+<h2 id="overview"><a id="1-overview"></a>1. Overview<a class="anchor-link" href="#overview">#</a></h2>
 <p>TechieFlow is a software development harness companion. It enables one person with domain knowledge of a product to take that product through the complete software development life cycle, with AI agents performing the work and the person acting as manager and reviewer of every output.</p>
 <p>The framework covers every phase. An idea is brainstormed with the analyst persona and condensed into a project brief. From the brief the framework produces the requirements document, the architecture, and the screen designs, and converts the requirements into a checklist of numbered items. The build command implements the checklist. A separate verify command starts the application, drives it with a browser robot, and marks each item passed or failed. Bugs found by a person are logged by one command and fixed by another. Developer and end-user guides are generated from the running application. Every command ends by rewriting a single status file, so the state of a project is always known.</p>
 <p>Alongside the work, the framework measures the work. Every command records the model used, the elapsed time, and the tokens consumed. Every verification records which check caught which failure. Every miss records its kind, the phase that let it through, who found it, and the cost of the fix. Over time this shows which model suits which kind of work, which is the basis for model routing, and it yields figures on AI-assisted development that have not been published elsewhere.</p>
 <p>The framework runs in two harnesses, Claude Code and OpenCode, and must work identically in both.</p>
 <hr>
-<h2 id="framework-terms">2. Framework terms<a class="anchor-link" href="#framework-terms">#</a></h2>
+<h2 id="framework-terms"><a id="2-framework-terms"></a>2. Framework terms<a class="anchor-link" href="#framework-terms">#</a></h2>
 <table>
 <thead><tr><th>Term</th><th>Meaning in TechieFlow</th><th>Software development equivalent</th></tr></thead>
 <tbody>
@@ -207,8 +207,8 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </tbody>
 </table>
 <hr>
-<h2 id="the-commands">3. The commands<a class="anchor-link" href="#the-commands">#</a></h2>
-<h3 id="command-nesting">3.1 Command nesting<a class="anchor-link" href="#command-nesting">#</a></h3>
+<h2 id="the-commands"><a id="3-the-commands"></a>3. The commands<a class="anchor-link" href="#the-commands">#</a></h2>
+<h3 id="command-nesting"><a id="31-command-nesting"></a>3.1 Command nesting<a class="anchor-link" href="#command-nesting">#</a></h3>
 <p>Several commands call others. The diagram shows which command invokes which, in life-cycle order. Solid arrows are automatic calls; dashed arrows are calls the owner makes.</p>
 <div class="diagram">
   <div class="dt">
@@ -254,7 +254,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
     end
     RS["*refresh-status"] -.-&gt; VP</pre>
 </div>
-<h3 id="idea-stage-analyst">3.2 Idea stage — analyst<a class="anchor-link" href="#idea-stage-analyst">#</a></h3>
+<h3 id="idea-stage-analyst"><a id="32-idea-stage--analyst"></a>3.2 Idea stage — analyst<a class="anchor-link" href="#idea-stage-analyst">#</a></h3>
 <table>
 <thead><tr><th>Command</th><th>Reads</th><th>Writes</th><th>Template</th><th>Owner usage</th></tr></thead>
 <tbody>
@@ -266,7 +266,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <tr><td><code>*create-brd {App} {topic}</code></td><td>Existing BRD</td><td>New numbered <code>BRD-N</code> items, each confirmed one at a time</td><td>none</td><td>Not used. Day-1 and <code>*amend-docs</code> cover the need.</td></tr>
 </tbody>
 </table>
-<h3 id="day-1-analyst">3.3 Day-1 — analyst<a class="anchor-link" href="#day-1-analyst">#</a></h3>
+<h3 id="day-1-analyst"><a id="33-day-1--analyst"></a>3.3 Day-1 — analyst<a class="anchor-link" href="#day-1-analyst">#</a></h3>
 <p><strong><code>*day1-greenfield {App}</code></strong>: the starting command for a product with no code.</p>
 <ul>
 <li>Reads: the project brief or concept text, any hint documents, the TrBlazeUI component catalogue.
@@ -315,7 +315,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <li>Owner usage: never run by hand; expected to be called automatically after the BRD is approved. <strong>Defect:</strong> D-6.
 </li>
 </ul>
-<h3 id="build-flow-master">3.4 Build — flow-master<a class="anchor-link" href="#build-flow-master">#</a></h3>
+<h3 id="build-flow-master"><a id="34-build--flow-master"></a>3.4 Build — flow-master<a class="anchor-link" href="#build-flow-master">#</a></h3>
 <p><strong><code>*build-phase {App}</code></strong></p>
 <ul>
 <li>Reads: checklist, Architecture, Coding Standards, UIDesign and mockups, build invocation ladder.
@@ -329,21 +329,21 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <li><strong>Defect:</strong> D-7 (DevGuide not produced on completion).
 </li>
 </ul>
-<h3 id="verify-verifier">3.5 Verify — verifier<a class="anchor-link" href="#verify-verifier">#</a></h3>
-<p><strong><code>*verify {ui | functional | all | REQ-list}</code></strong></p>
+<h3 id="verify-verifier"><a id="35-verify--verifier"></a>3.5 Verify — verifier<a class="anchor-link" href="#verify-verifier">#</a></h3>
+<p><strong><code>*verify {ui | functional | all | REQ-list} {App} [--phase N | all]</code></strong></p>
 <ul>
-<li>Reads: checklist rows in scope, DevGuide (which controls each screen must show), mockups.
+<li>Reads: checklist rows in scope, from the checklist of the phase named (<code>--phase 2</code> reads <code>{App}-P2-Checklist.md</code>; with no <code>--phase</code>, the phase in progress; <code>--phase all</code> reads each phase's checklist in turn, phase 1 first, on one start of the application), DevGuide (which controls each screen must show), mockups.
 </li>
 <li>Does: starts the application, runs Playwright browser tests and <code>dotnet test</code>, and applies seven checks to each requirement in order: build, acceptance test, data present, visual correctness against the mockup, assets loaded, speed within a declared budget, coding standards. The first failing check is recorded.
 </li>
-<li>Writes: checklist status (<code>Verified</code>, or <code>Needs re-verify</code> with a remark); <code>docs/.last-verify.json</code>, the proof that a real verify ran; one <code>gates.jsonl</code> line per requirement.
+<li>Writes: checklist status (<code>Verified</code>, or <code>Needs re-verify</code> with a remark) in that phase's checklist only; <code>docs/.last-verify.json</code>, the proof that a real verify ran, which keeps each row's phase so verifying one phase never erases another's results; one <code>gates.jsonl</code> line per requirement and one run record per phase, each naming its phase.
 </li>
 <li>Scripts: <code>tf-assets.sh</code>, <code>tf-mockup-parity.sh</code>, <code>tf-perf.sh</code>.
 </li>
 <li><strong>Defect:</strong> D-8 (task size).
 </li>
 </ul>
-<h3 id="change-analyst">3.6 Change — analyst<a class="anchor-link" href="#change-analyst">#</a></h3>
+<h3 id="change-analyst"><a id="36-change--analyst"></a>3.6 Change — analyst<a class="anchor-link" href="#change-analyst">#</a></h3>
 <p><strong><code>*amend-docs {App} {change}</code></strong></p>
 <ul>
 <li>Reads: BRD, Architecture, checklist, UIDesign.
@@ -355,24 +355,24 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <li><strong>Defect:</strong> D-9 (the mockup step was undocumented in the previous version of this file).
 </li>
 </ul>
-<h3 id="bugs-flow-master">3.7 Bugs — flow-master<a class="anchor-link" href="#bugs-flow-master">#</a></h3>
+<h3 id="bugs-flow-master"><a id="37-bugs--flow-master"></a>3.7 Bugs — flow-master<a class="anchor-link" href="#bugs-flow-master">#</a></h3>
 <p><strong><code>*triage-issues {App} {evidence} [verify]</code></strong>: analysis only. Takes screenshots and/or a written bug list, reproduces each bug, logs it against its requirement, demotes the row to <code>Needs re-verify</code>, adds rows for unspecified defects, and names the <code>*fix-issues</code> command to run next. Never edits code. Its telemetry line is marked <code>escaped</code>.</p>
 <p><strong><code>*fix-issues {App} {folder}</code></strong>: takes a folder of screenshots and an optional notes file, reproduces each bug, fixes the code (UI via the TrBlazeUI sub-agent), re-smokes, re-verifies the touched rows, updates the documents.</p>
 <p><strong><code>*log-miss {App} "description"</code></strong>: the twenty-second record. First sorts the miss with four questions, asked in order (did the app's spec say it; did the framework say it; was there a check that did not catch it; was it written and ignored), because the answer decides the fix: a checklist line, a requirement line plus a check, a fixed check, or a hook. Then writes one miss record carrying the sentence and the answer, a remark on the checklist row, and one row in the readable <code>docs/&lt;App&gt;-Misses.md</code>, which is rebuilt from the records after every miss. No reproduction, no code. D-10 closed in Session 5 (2026-09-07).</p>
-<h3 id="ship-flow-master">3.8 Ship — flow-master<a class="anchor-link" href="#ship-flow-master">#</a></h3>
+<h3 id="ship-flow-master"><a id="38-ship--flow-master"></a>3.8 Ship — flow-master<a class="anchor-link" href="#ship-flow-master">#</a></h3>
 <p><strong><code>*handoff-phase {App}</code></strong>: run once when the checklist is green, before owner testing. Finalises the UsageGuide (test users, screen-by-screen test plan), generates or refreshes the DevGuide, consolidates library feedback, re-renders HTML, sets status to Handoff.</p>
 <p><strong><code>*devguide {App} [--update]</code></strong>: the developer's low-level document. Every screen traced from page to control to service to data access, with a screenshot. Re-runnable for changed screens only. Generated automatically at brownfield day-1 and at handoff. <strong>Defect:</strong> D-7.</p>
 <p><strong><code>*productguide {App}</code></strong>: the end-user manual, screenshot-illustrated, task by task. On demand. Owner usage: not yet used.</p>
 <p><strong><code>*deploy-checklist {App} {pipeline-document}</code></strong> (added in Sitting 4b, 2026-09-06): the steps to put the application on its host, one document per hosting target, written after UAT from the owner's pipeline guidance document and the Stack answers about hosting and production secrets. Every step is a checkbox, every secret is named once, and the document says what has been executed for real. Schema: <code>TechieFlow-Document-Schemas.md</code> §3.10.</p>
-<h3 id="maintenance-flow-master">3.9 Maintenance — flow-master<a class="anchor-link" href="#maintenance-flow-master">#</a></h3>
+<h3 id="maintenance-flow-master"><a id="39-maintenance--flow-master"></a>3.9 Maintenance — flow-master<a class="anchor-link" href="#maintenance-flow-master">#</a></h3>
 <p><strong><code>*refresh-status {App}</code></strong>: rebuilds PROJECT-STATUS from evidence (checklist table, file modification times, a fresh build) after an interrupted run. Never reads git. Owner usage: after brownfield onboarding of older projects.</p>
 <p><strong><code>*metrics {App}</code></strong>: reads the five telemetry files and writes <code>docs/metrics/METRICS.md</code> and <code>.html</code>. Owner usage: recent, regular.</p>
 <p><strong><code>*generate-html</code>, <code>*render-workflow-docs</code></strong>: render markdown to styled HTML through <code>tf-render-html.sh</code>. The checklist is never rendered.</p>
-<h3 id="running-unattended-the-supervisor">3.10 Running unattended — the supervisor<a class="anchor-link" href="#running-unattended-the-supervisor">#</a></h3>
+<h3 id="running-unattended-the-supervisor"><a id="310-running-unattended--the-supervisor"></a>3.10 Running unattended — the supervisor<a class="anchor-link" href="#running-unattended-the-supervisor">#</a></h3>
 <p><code>bash .tfcore/utils/tf-goal.sh [--harness opencode] [--model &lt;id&gt;] &lt;app-folder&gt; "&lt;goal&gt;"</code> (or <code>@goal.md</code> for a goal written in a file) starts a harness session in YOLO mode with that goal and keeps it running until the agent writes the done sentinel. It waits out a usage limit (reads the reset time, sleeps until reset plus 15 minutes, resumes the same session), retries a crash with a growing pause, and re-prompts an agent that stopped early. <code>--resume</code> picks up after a reboot. The state and the full log live under <code>&lt;app&gt;/.tfcore/.session/</code> (<code>goal.log</code>, <code>goal.json</code>, <code>goal-done.json</code>); nothing is committed. Exit codes: 0 complete, 3 blocked on the owner, 4 too many cycles.</p>
 <p>Examples from the reset's own test runs (2026-09-05): <code>bash .tfcore/utils/tf-goal.sh --model sonnet /mnt/c/1MyCode/MyDiary @goal.md</code> for Claude Code, and the same with <code>--harness opencode --model opencode-go/mimo-v2.5</code> for OpenCode. The interactive alternative is to start Claude Code with <code>--permission-mode bypassPermissions</code>, type <code>/goal &lt;condition&gt;</code>, then <code>*yolo</code> and the command; that gives YOLO and the goal loop but not the limit wait. (Moved here from <code>_yolo-mode.md</code> in Sitting 4b, 2026-09-05.)</p>
 <hr>
-<h2 id="what-surrounds-every-command">4. What surrounds every command<a class="anchor-link" href="#what-surrounds-every-command">#</a></h2>
+<h2 id="what-surrounds-every-command"><a id="4-what-surrounds-every-command"></a>4. What surrounds every command<a class="anchor-link" href="#what-surrounds-every-command">#</a></h2>
 <p>Every command is wrapped by the same four mechanisms: a self-check before anything else, shared rules read before the work, hooks watching during the work, and the status gate closing the work.</p>
 <div class="diagram">
   <div class="dt">
@@ -398,14 +398,14 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
     F --&gt; G["Telemetry&lt;br/&gt;one line appended to runs.jsonl"]
     G --&gt; Z["Next command printed"]</pre>
 </div>
-<h3 id="step-0-is-the-framework-itself-working-here">4.0 Step 0 — is the framework itself working here?<a class="anchor-link" href="#step-0-is-the-framework-itself-working-here">#</a></h3>
+<h3 id="step-0-is-the-framework-itself-working-here"><a id="40-step-0--is-the-framework-itself-working-here"></a>4.0 Step 0 — is the framework itself working here?<a class="anchor-link" href="#step-0-is-the-framework-itself-working-here">#</a></h3>
 <p>Every command begins with <code>bash .tfcore/utils/tf-phase.sh start &lt;command&gt; &lt;App&gt;</code>, which marks the run and, since 2026-09-09, runs <code>tf-selfcheck.sh</code> first.</p>
 <p>The check points the framework's own scripts at <strong>this project's real files</strong> and reports which of them are broken here. It exists because nine framework defects reached TfLens in three weeks, every one met in the middle of a build: the checklist row that could never clear, the BRD carrying the anchors its own link checker demands, the metrics file holding the framework's own verdicts. None was exotic. They had simply never been run against a real project before the project ran them.</p>
 <p>It checks seven things: every framework script still parses; the checklist rows add up; the project's BRD can be read; its run records are not impossible; the framework's own verdicts are not pooled into the application's; miss amendments still attach to a parent; and the document checks run at all.</p>
 <p><strong>A FAIL is always the framework's, never the project's.</strong> Nothing in it grades the application, and it writes nothing. It never blocks: the defect is logged in the project's framework-feedback file and the command carries on, exactly as a library gap does. <code>bash .tfcore/utils/tf-selfcheck.sh --report</code> prints the entry ready to paste, because the paperwork is half the round trip.</p>
 <p>Two things it deliberately does not do. It does not report <strong>history</strong> as breakage: a stream that carries impossible records written before the emitter refused them cannot be repaired — the streams are append-only — and the reader already discards them and prints how many, so it is stated as a fact and not as a failure. And it is not a verdict of any kind: it can license nothing, least of all <code>Verified</code>.</p>
 <p>Run it by hand at any time, in any project. <code>TF_SKIP_SELFCHECK=1</code> skips it; the self-tests use that.</p>
-<h3 id="example-a-document-producing-command-day1-greenfield-techiedesk">4.1 Example: a document-producing command, <code>*day1-greenfield TechieDesk</code><a class="anchor-link" href="#example-a-document-producing-command-day1-greenfield-techiedesk">#</a></h3>
+<h3 id="example-a-document-producing-command-day1-greenfield-techiedesk"><a id="41-example-a-document-producing-command-day1-greenfield-techiedesk"></a>4.1 Example: a document-producing command, <code>*day1-greenfield TechieDesk</code><a class="anchor-link" href="#example-a-document-producing-command-day1-greenfield-techiedesk">#</a></h3>
 <ol>
 <li>The owner types the command to the analyst persona inside the TechieDesk project, with the project brief as input.
 </li>
@@ -431,7 +431,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </li>
 </ol>
 <p>In YOLO mode steps 1 to 11 run without a pause. Outside YOLO mode the task pauses for review after step 5, and the owner reports that in practice the run frequently stops there and the mockups of step 7 are not produced (defect D-1).</p>
-<h3 id="example-a-code-producing-command-build-phase-techierag">4.2 Example: a code-producing command, <code>*build-phase TechieRag</code><a class="anchor-link" href="#example-a-code-producing-command-build-phase-techierag">#</a></h3>
+<h3 id="example-a-code-producing-command-build-phase-techierag"><a id="42-example-a-code-producing-command-build-phase-techierag"></a>4.2 Example: a code-producing command, <code>*build-phase TechieRag</code><a class="anchor-link" href="#example-a-code-producing-command-build-phase-techierag">#</a></h3>
 <ol>
 <li>The owner types the command to the flow-master persona inside the TechieRag repository.
 </li>
@@ -459,7 +459,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <p>If the run dies during step 5 to 8, steps 9 to 11 never happen and PROJECT-STATUS is stale. <code>*refresh-status TechieRag</code> rebuilds it from the checklist and the files on disk.</p>
 <p>Steps 2 to 4 are reading only. In the current framework they total more than 20,000 words before step 5 begins. Section 7 describes the effect.</p>
 <hr>
-<h2 id="fixed-instruction-cost-per-command">5. Fixed instruction cost per command<a class="anchor-link" href="#fixed-instruction-cost-per-command">#</a></h2>
+<h2 id="fixed-instruction-cost-per-command"><a id="5-fixed-instruction-cost-per-command"></a>5. Fixed instruction cost per command<a class="anchor-link" href="#fixed-instruction-cost-per-command">#</a></h2>
 <p>Every command carries a fixed cost before it does any work: the instruction text the agent must read. That text is the same on every run and is independent of the project. It has four parts: the persona file, the shared rule files the task includes, the task file itself, and the templates the task reads. When a task calls another task, the called task's text is read as well.</p>
 <p>The table gives the fixed cost of each command as measured on 2026-09-04. Word counts are exact; token estimates use 1.35 tokens per word, which is typical for English technical prose. "At start" is what is read before the first useful step. "When chaining" adds the tasks the command calls. The review verdict is the framework maintainer's assessment for Session 4, subject to the owner's decision.</p>
 <table>
@@ -515,7 +515,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </li>
 </ul>
 <hr>
-<h2 id="telemetry">6. Telemetry<a class="anchor-link" href="#telemetry">#</a></h2>
+<h2 id="telemetry"><a id="6-telemetry"></a>6. Telemetry<a class="anchor-link" href="#telemetry">#</a></h2>
 <p>Five files under <code>docs/metrics/</code>. Each line is one event. Nothing is edited after it is written.</p>
 <table>
 <thead><tr><th>File</th><th>One line per</th><th>Written by</th></tr></thead>
@@ -527,7 +527,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <tr><td><code>commits.jsonl</code></td><td>one git commit by the owner</td><td>a git hook the owner installs; agents never run it</td></tr>
 </tbody>
 </table>
-<h3 id="observed-run-cost-from-the-run-stream">6.1 Observed run cost, from the run stream<a class="anchor-link" href="#observed-run-cost-from-the-run-stream">#</a></h3>
+<h3 id="observed-run-cost-from-the-run-stream"><a id="61-observed-run-cost-from-the-run-stream"></a>6.1 Observed run cost, from the run stream<a class="anchor-link" href="#observed-run-cost-from-the-run-stream">#</a></h3>
 <p>Measured from every <code>runs.jsonl</code> across the seven repositories that carry telemetry, on 2026-09-04. Median values; tokens are output tokens per run. These figures depend on the project and the work; the fixed instruction cost in section 5 does not.</p>
 <table>
 <thead><tr><th>Command</th><th>Runs recorded</th><th>Repos</th><th>Median duration (min)</th><th>Median output tokens</th></tr></thead>
@@ -548,7 +548,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </tbody>
 </table>
 <p>Fix, verify and build account for 90 of the 142 recorded runs. The run record does not carry the mode (YOLO or interactive), so cost by mode cannot yet be reported (D-12). Dollar cost is recorded only for OpenCode runs.</p>
-<h3 id="the-five-questions-the-report-answers">6.2 The five questions the report answers<a class="anchor-link" href="#the-five-questions-the-report-answers">#</a></h3>
+<h3 id="the-five-questions-the-report-answers"><a id="62-the-five-questions-the-report-answers"></a>6.2 The five questions the report answers<a class="anchor-link" href="#the-five-questions-the-report-answers">#</a></h3>
 <p>The report (<code>*metrics</code>) answers five questions.</p>
 <ol>
 <li><strong>First-pass rate.</strong> Of all requirements, the share marked Verified on their first verification. It measures how often the agent gets a requirement right without rework. Example: 100 requirements, 70 verified first time, first-pass rate 70 percent. Across projects a requirement is counted by its project and its id together, because every project has a REQ-UI-001; until 2026-09-07 the rollup counted by id alone and printed 72 percent where the figure is 48 (Session 5). The five numbers, with real figures and the sentence to say about each, are in <code>TechieFlow-Telemetry-Explained.md</code>.
@@ -564,7 +564,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </ol>
 <p>Dollar figures on a <em>record</em> exist only for OpenCode runs: Claude Code reports tokens and never a price, and no record ever stores a computed one. Converting tokens to money is the report's job, not the framework's, so <code>*metrics</code> prices every run at the published rate when it runs — a <strong>list price</strong>, never called a bill — and keeps three things apart that used to be one column: what a provider actually billed, what a monthly plan's allowance was consumed by, and what a flat fee had already paid for.</p>
 <hr>
-<h2 id="instruction-size-and-its-effect">7. Instruction size and its effect<a class="anchor-link" href="#instruction-size-and-its-effect">#</a></h2>
+<h2 id="instruction-size-and-its-effect"><a id="7-instruction-size-and-its-effect"></a>7. Instruction size and its effect<a class="anchor-link" href="#instruction-size-and-its-effect">#</a></h2>
 <p>An AI model divides its attention across everything it reads. The more text in front of it, the smaller the share each sentence receives. A rule alone in a short file is followed. The same rule as one of six hundred is followed most of the time, and the remainder is where misses originate. When an agent reports "the gate was missed" or "no such gate exists", both mean the same thing: the sentence was present and did not receive enough attention to be acted on.</p>
 <p>An analogy: a new team member is handed a sixty-page manual to read before every task. They read it, work, and by the afternoon have forgotten page fourteen. A note is added on page sixty-one: "do not forget page fourteen". The manual is now sixty-one pages.</p>
 <table>
@@ -591,7 +591,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </ul>
 <p>The mechanical parts already work: 11 hooks, 17 scripts, 16 templates, 3 scaffold scripts. The prose is what grew, and the prose is what the reset removes.</p>
 <hr>
-<h2 id="defects-and-gaps-found-in-the-session-1-review">8. Defects and gaps found in the Session 1 review<a class="anchor-link" href="#defects-and-gaps-found-in-the-session-1-review">#</a></h2>
+<h2 id="defects-and-gaps-found-in-the-session-1-review"><a id="8-defects-and-gaps-found-in-the-session-1-review"></a>8. Defects and gaps found in the Session 1 review<a class="anchor-link" href="#defects-and-gaps-found-in-the-session-1-review">#</a></h2>
 <p>These are inputs to <code>TechieFlow-Requirements.md</code> (Session 2). Each becomes a requirement line with a check, or is closed as not a defect.</p>
 <p>Each defect is also recorded in the framework repository's own miss stream, <code>docs/metrics/misses.jsonl</code>, as <code>MISS-TechieFlow-20260904-NN</code> where NN equals the defect number (D-1 is <code>-01</code>, D-19 is <code>-19</code>; D-20 and D-21 were proposed by the maintainer in Session 2 without asking the owner first, which is itself logged as <code>-22</code>; both accepted by the owner on 2026-09-04). The Session 1 work itself is recorded in <code>docs/metrics/runs.jsonl</code> as a <code>framework-reset</code> run: 2026-09-04 08:18 to 14:43 UTC, model claude-fable-5-1, 569,794 output tokens. The schema gains the <code>framework-reset</code> command value in Session 2 (D-19).</p>
 <table>

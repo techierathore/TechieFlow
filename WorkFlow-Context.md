@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-10-10 (Lekhak TF-008, TF-025, TF-026, TF-027). |
+| Last updated | 2026-10-11 (verify by phase; Mac work merged). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -26,7 +26,7 @@ Alongside the work the framework measures the work: five append-only streams und
 |---|---|
 | `docs/TechieFlow-How-It-Works.md` | What every command does, what surrounds it, what it costs, where the design falls short. |
 | `docs/TechieFlow-Document-Schemas.md` | The required shape, size and row rules of every document the framework produces. |
-| `docs/TechieFlow-Requirements.md` | The framework's own checklist: 84 lines, each with a way to check it, 50 of them proved by a script. Agent document. |
+| `docs/TechieFlow-Requirements.md` | The framework's own checklist: 85 lines, each with a way to check it, 51 of them proved by a script. Agent document. |
 | `docs/TechieFlow-Telemetry-Explained.md` | The five report numbers, with real figures and the sentence to say about each. |
 | `docs/TechieFlow-Reset-Plan-2026-09-04.md` | The seven sessions that shrank the framework, one Done line each. |
 | `README.md` | How a person installs it and drives it. |
@@ -42,7 +42,7 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 2. **Day-1, stage 1.** `*day1-greenfield <App>` or `*day1-brownfield <App>` asks the stack questions and the application's size and kind, then produces the Architecture, the BRD and the mockups, linked to each other. It runs to completion in YOLO mode and stops there, because the next thing is the owner's review.
 3. **Day-1, stage 2.** On the owner's go-ahead: the checklist through `*split-brd`, then Coding Standards, PROJECT-STATUS, CLAUDE.md, AGENTS.md and the UsageGuide. The owner never types `*split-brd` by hand.
 4. **Build.** `*build-phase <App>` clusters every open row, routes `REQ-UI-` to trblazeui and `REQ-RAG-` to techierag, builds the rest itself, smoke-tests each screen it touched, then chains the verifier. A pass ends when every row is at least Implemented, never with "run me again for the rest".
-5. **Verify.** `*verify ui|functional|all|<REQ list>` boots the application, drives it, and applies seven checks in a fixed order: build, acceptance, data, visual, assets, speed, standards. The first that fails is recorded. Only a verify run may write `Verified`.
+5. **Verify.** `*verify ui|functional|all|<REQ list> [--phase N|all]` boots the application, drives it, and applies seven checks in a fixed order: build, acceptance, data, visual, assets, speed, standards. The first that fails is recorded. Only a verify run may write `Verified`.
 6. **Bugs.** `*triage-issues` analyses and never touches code. `*fix-issues` repairs. `*triage-and-fix` runs the owner's whole sequence unattended. `*log-miss` records one sentence.
 7. **Ship.** `*handoff-phase`, then the owner's testing, then `*deploy-checklist <App> <pipeline-document>` after UAT.
 8. **Anytime.** `*amend-docs` for a change, `*refresh-status` after an interrupted run, `*devguide` and `*productguide` for the guides, `*metrics` for the report.

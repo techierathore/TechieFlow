@@ -4,13 +4,13 @@
 |---|---|
 | App | Sevak |
 | Upstream | TechieFlow |
-| Updated | 2026-10-06 |
+| Updated | 2026-10-11 |
 
 ## Summary
 
-4 entries: 0 blocking now, 0 open, 3 fixed upstream and not yet re-checked (TF-002, TF-003, TF-004, fixed 2026-10-06), 1 closed (TF-001).
+5 entries: 0 blocking now, 0 open, 1 fixed upstream and not yet re-checked (TF-005, fixed 2026-10-11), 4 closed (TF-001 to TF-004).
 
-Nothing is blocked. TF-002 to TF-004 are fixed upstream: the database guard reads the code a script runs, each Windows head has its own debugging port and is stopped alone, and a unit test no longer stands in for a skipped on-app test. TF-001 is closed: raising the size changes only the size and the phases file.
+Nothing is blocked. TF-005 is fixed upstream: `*verify` takes `--phase N` or `--phase all`, so phases 1 and 2 can be graded, and the status names the phase in the command it gives. TF-001 to TF-004 are closed.
 
 ## Entries
 
@@ -34,6 +34,8 @@ Nothing is blocked. TF-002 to TF-004 are fixed upstream: the database guard read
 
 ### TF-002 — The database guard misses a Python script that changes the app database
 
+> ✅ **Closed 2026-10-07** — re-checked here: 2026-10-07: ran python3 -c with sqlite3 connect + CREATE/DELETE against a database named techiedesk.db; guard-db.sh refused it before it ran (inline code with a database library and a write).
+
 - **Severity:** major
 - **Blocks:** no — the removed settings come back when the owner re-runs `/welcome`; the build carried on.
 - **Repro:** during `*build-phase`, a sub-agent seeded and cleaned rows with `python3` and its `sqlite3` module against the app database in the TechieDesk data folder; `guard-db.sh` did not stop it.
@@ -44,6 +46,8 @@ Nothing is blocked. TF-002 to TF-004 are fixed upstream: the database guard read
 - **Suggested fix:** refuse any command that names the app database file or data folder together with a scripting tool (python, node), and give smoke runs a throw-away data folder by default. Note the guard also refused this feedback entry's own wording, so match commands, not prose.
 
 ### TF-003 — Two booted Windows heads share one debugging port, so a smoke can drive the wrong app
+
+> ✅ **Closed 2026-10-07** — re-checked here: 2026-10-07 verify: boot-safe.sh verify5 (--port 9223, DevTools 9222, Sevak.exe pid 16364) then boot-safe.sh verify5b --port 9261 while the first was up; boot printed '1 other Windows head(s) up — this one gets DevTools port 29261 and its own WebView2 data folder'. /json on 9223 listed one page (DB5B21FE…, /settings/backup) and on 9261 one page (77508D79…, /setup), different browser ids. stop --port 9261 stopped only its pids; 9223 kept answering with its page and Sevak.exe 16364 stayed up; then stop --port 9223 left no Sevak.exe and no port.
 
 - **Severity:** major
 - **Blocks:** no — the smoke script was pinned to its own page by target id and re-run; the build carried on.
@@ -56,6 +60,8 @@ Nothing is blocked. TF-002 to TF-004 are fixed upstream: the database guard read
 
 ### TF-004 — The verdict counts a unit test as on-app acceptance for a row whose app test was skipped
 
+> ✅ **Closed 2026-10-07** — re-checked here: 2026-10-07 verify: tf-verify-tests.sh --base <cdp> --spec tests/verify/p3/sevak-p3.spec.ts WITHOUT --no-unit (unit tests ran, 1878 passed). tests.json source browser+unit: REQ-FN-055, FN-056, UI-068, RAG-056, RAG-057, RAG-058, RAG-059 (and FN-057) are NOT-TESTED with the skip reason plus 'a unit test does not measure on-app acceptance', although each has passing unit tests carrying its id (e.g. REQ-UI-068 4 passed, REQ-RAG-059 8 passed). tf-verify-verdict wrote NOT-TESTED / not Verified for each.
+
 - **Severity:** major
 - **Blocks:** no — the verifier graded from the app-only results file and kept the merged one for comparison; the run carried on.
 - **Repro:** a row's browser test calls `test.skip()` (its acceptance cannot be observed on this host) while a unit test carries the same id; merge both result files and run `tf-verify-verdict.sh --apply`.
@@ -64,6 +70,27 @@ Nothing is blocked. TF-002 to TF-004 are fixed upstream: the database guard read
 - **Encountered in:** `*build-phase Sevak` re-verify of 2026-10-05.
 - **Workaround:** grade from the app-only `tests.json`; keep `tests-with-unit.json` aside.
 - **Suggested fix:** in the merge, a skipped on-app result for a UI or FN row wins over any unit result and is reported as not measured, naming the skip reason.
+
+### TF-005 — `*verify all` grades only the appPhase checklist, so earlier phases are never graded
+
+- **Severity:** major
+- **Blocks:** no — phase 3's verify finished; the 86 built rows of phases 1 and 2 stayed ungraded.
+- **Repro:** with `appPhase: 3`, run `*verify all Sevak`, as the status advised for the phase 1 and 2 rows.
+  ```text
+  bash .tfcore/utils/tf-verify-list.sh Sevak all
+  -> # tf-verify-list — Sevak — docs/Sevak-P3-Checklist.md — phase 3 — scope all
+  ```
+- **Expected:** a way to grade phase 1 and phase 2, and a suggested command that says which phase it grades.
+- **Actual:** `verify-phase.md` reads the checklist `appPhase` names and never passes `--phase` to `tf-verify-list.sh`, so only `Sevak-P3-Checklist.md` was graded. Phases 1 and 2 hold 50 Needs re-verify and 36 built-not-verified rows.
+- **Encountered in:** `*verify all Sevak` of 2026-10-10 and 2026-10-11.
+- **Workaround:** none through the command.
+- **Suggested fix:** let `*verify` take `--phase N` and `--phase all`; make the verdict, the ledger and the telemetry follow the phase graded; name the phase in the status's next command.
+
+## Resolution status (TechieFlow team, 2026-10-11)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-005 | Fixed upstream. (1) `*verify {scope} Sevak --phase N` grades phase N's checklist; `--phase all` grades every phase in turn, phase 1 first, on one boot. `tf-verify-list.sh Sevak all --phase all` prints `PHASES 1 2 3`, and a phase with no checklist is refused, naming the phases that have one. (2) The verdict writes only into the checklist of the phase graded. The ledger `docs/.last-verify.json` keeps every row's phase, so phase 2's scope-all pass no longer wipes phase 1's verdicts. (3) Each pass writes its own run record and gate records with `app_phase`; the second pass starts where the first ended, so it is not refused as an overlap (it was before). (4) `tf-status-facts.sh` and flow-master name the phase: `--phase 3` for this phase, `--phase N` for one earlier phase, `--phase all` for several; a build of this phase still comes first. Regression case `sv_005`; four of its five checks fail on the scripts you have now. Miss `MISS-TechieFlow-20261011-01`. | Proved here on your files, read only: the new status reads "86 to verify across phases 1, 2" (phase 1: 52, phase 2: 34) and gives the command below. After the framework update, paste into Sevak's agent: `/TechieFlow:agents:verifier *verify all Sevak --phase all`. The verdict table heads each pass with its phase and checklist, phases 1 and 2's checklists get their Status cells, and `docs/metrics/runs.jsonl` gains three `verify-phase` records with `app_phase` 1, 2 and 3. |
 
 ## Resolution status (TechieFlow team, 2026-10-06)
 
