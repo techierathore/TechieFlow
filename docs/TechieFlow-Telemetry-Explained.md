@@ -4,7 +4,7 @@
 |---|---|
 | Purpose | The five numbers the framework's report prints, each in plain words: what it means, how it is worked out, one real figure from all the projects together and one from a named project, and the sentence the owner says about it on stage. |
 | Audience | The owner, for talks, blog posts and interviews. Anyone who asks "how do you know". |
-| Status | Written 2026-09-07 in Session 5 of the reset, from the streams as they stood that day. The owner rewrites any stage sentence they would not say. Figures are re-read from the report before every use; the ones here are a snapshot. |
+| Status | Written 2026-09-07 in Session 5 of the reset, from the streams as they stood that day. Refreshed 2026-10-12 for the 17 Oct livestream. Figures re-read from `tf-metrics.sh --rollup` over the public repositories only. The owner rewrites any stage sentence they would not say. |
 | Companion | `TechieFlow-How-It-Works.md` §6 (what the streams are), `.tfcore/telemetry/SCHEMA.md` (every field), `TechieFlow-Reset-Plan-2026-09-04.md` (Session 5). |
 
 ---
@@ -13,7 +13,7 @@
 
 Every project the framework runs in keeps five files under `docs/metrics/`. One line is added per event and no line is ever edited: one line per command run, one per requirement graded in a verify, one per miss and one more when it is fixed, one per chat session, one per commit. A script, `tf-metrics.sh`, reads the files and prints the five numbers below. It refuses to mix things that must not be mixed: figures reconstructed after the fact never pool with figures written at the time, an app never pools with a library, and a miss whose origin is guessed never enters a per-model figure. It prints `insufficient data` instead of a number when fewer than three records support it.
 
-The figures in this page were read on 2026-09-07 from nine repositories: TfLens, TechieBlog, TechieRag, TrBlazeUI, Lekhak, AppManager, MyDiary, Xpenser and the framework itself. The OpenCode test copies (`TfLens-oc`, `TechieBlog-oc`, `MyDiary-oc`) are left out, because each carries a copy of its original's history and would count it twice. To re-read them:
+The figures in this page were read on 2026-10-12 from seven public repositories: Chatur, TechieRag, TrBlazeUI, TechieFlow, TfLens, TechieBlog and Xpenser. Xpenser has no telemetry yet. Private projects and the OpenCode test copies are left out. To re-read them:
 
 ```
 bash .tfcore/telemetry/tf-metrics.sh --rollup <repo> <repo> …      # all together, still segmented
@@ -37,16 +37,17 @@ Three caveats that belong beside the figures they touch are marked below with �
 
 | Where | Requirements graded | Passed first time | First-pass rate |
 |---|---|---|---|
-| All apps together | 420 | 201 | 48% |
-| TfLens (the metrics dashboard, seven screens) | 178 | 36 | 20% |
+| All apps together | 529 | 220 | 42% |
+| Chatur | 164 | 30 | 18% |
+| TfLens (the metrics dashboard, seven screens) | 208 | 65 | 31% |
 | TechieBlog | 155 | 125 | 81% |
-| Lekhak | 54 | 29 | 54% |
-| MyDiary (first project on the reset framework) | 27 | 7 | 26% |
+| TechieRag (library) | 111 | 100 | 90% |
+| TrBlazeUI (library) | 59 | 10 | 17% |
 | TfLens's first period, when it was a documents-only project | 113 | 106 | 94%, reported apart |
 
-⚠ TfLens is the outlier and the reason the reset happened: 178 requirements for a seven-screen app, written before the acceptance line had a fixed shape, so the verifier and the builder read the same line differently.
+⚠ TfLens is still the outlier: two hundred and eight requirements for a seven-screen app, written before the acceptance line had a fixed shape, so the verifier and the builder read the same line differently.
 
-**On stage.** "Across my apps, about half of the requirements passed verification the first time. On TfLens it was one in five; on TechieBlog four in five. The difference was the specification, not the model: TfLens had a hundred and seventy-eight requirements for a seven-screen app, and the acceptance lines had no fixed shape."
+**On stage.** "Across my public apps, about four in ten requirements pass verification the first time. Chatur is one in five, TfLens three in ten, and TechieBlog four in five, because the gap is in the specification, not the model."
 
 ---
 
@@ -56,22 +57,22 @@ Three caveats that belong beside the figures they touch are marked below with �
 
 **How it is worked out.** Every failed grading line names the check that failed. The distribution is the count per check over all failures, per project type, live records only. A check added after the stream started (speed, assets, mockup comparison) is also reported against the records that actually ran it, so its share is not understated.
 
-| Check | All apps (293 failures) | TfLens (96) | Lekhak (28) |
-|---|---|---|---|
-| acceptance test | 127 (43%) ⚠ | 12 | 8 |
-| escaped, a person found it | 45 (15%) | 22 | 0 |
-| no check named | 44 (15%) | 44 | 0 |
-| data present (render) | 31 (11%) | 0 | 5 |
-| visual, against the mockup | 27 (9%) | 13 | 8 |
-| build | 10 (3%) | 2 | 4 |
-| mockup comparison | 5 (2%) | 3 | 0 |
-| standards | 1 | 0 | 0 |
+| Check | All apps (1,171 failures) | Chatur (834) | TfLens (208) | TechieBlog (127) |
+|---|---|---|---|---|
+| mockup comparison | 697 (60%) | 622 | 73 | 2 |
+| data present (render) | 242 (21%) | 210 | 25 | 7 |
+| acceptance test | 128 (11%) | 2 | 19 | 107 |
+| escaped, a person found it | 35 (3%) | 0 | 32 | 1 |
+| no check named | 44 (4%) | 0 | 44 | 0 |
+| visual, against the mockup | 18 (2%) | 0 | 13 | 5 |
+| build | 6 | 0 | 2 | 4 |
+| standards | 1 | 0 | 0 | 1 |
 
-The late checks, over every repository: the speed check has run on 8 records and caught nothing; the assets check on 108 and caught nothing; the mockup comparison on 217 and caught 8.
+The late checks, over every repository: the speed check has run on 4 records and caught nothing; the assets check on 1,345 and caught nothing; the mockup comparison on 1,483 and caught 697.
 
-⚠ 107 of the 127 acceptance failures come from one TechieBlog verify on 2026-09-06 that ran against an empty local database with the staff accounts behind a must-change-password screen. Those rows should have been graded "not observable, environment"; the rule now exists (FR-61) and the numbers will look different once it is applied.
+⚠ Chatur's mockup comparison numbers are high because its phase 1 mockups were not yet annotated for sample rows and state-only content; the comparison reported them as missing until the annotations went in.
 
-**On stage.** "When a requirement fails, the acceptance test is what catches it, four times in ten. The visual check and the data check together catch one in five. The speed and assets checks have never caught anything yet, and the mockup comparison caught eight failures in two hundred runs. And one failure in seven was caught by nothing: I found it."
+**On stage.** "The mockup comparison catches six in ten of these failures, and the render check catches another two in ten. The acceptance test catches one in ten, and one in ten is found by me after every check passed."
 
 ---
 
@@ -83,16 +84,17 @@ The late checks, over every repository: the speed check has run on 8 records and
 
 | Where | Escape rate (grading stream) | Misses found by a person (miss stream) |
 |---|---|---|
-| All apps together | 21% | 32%, 108 of 340 misses across the nine repositories |
-| TfLens | 33% | 49%, 42 of 86 |
+| All apps together | 10% | 42%, 369 of 883 misses across the seven public repositories |
+| Chatur | 0% | 4%, 10 of 266 |
+| TfLens | 37% | 45%, 67 of 150 |
 | TechieBlog | 1% | 0 of 89 (all found by the verify) |
-| TrBlazeUI (library) | 100%, 12 of 12 | 45%, 5 of 11 |
-| MyDiary | 100%, 20 of 20 | 48%, 20 of 42 |
-| The framework itself | no grading stream | 36%, 39 of 108 |
+| TrBlazeUI (library) | 98%, 48 of 49 | 90%, 64 of 71 |
+| TechieRag (library) | 100%, 19 of 19 | 78%, 28 of 36 |
+| The framework itself | no grading stream | 74%, 200 of 271 |
 
-MyDiary's 100% is one event: the first build's screens were all blank at runtime and the owner found it, not the verifier, which had no driver for the Windows head. TrBlazeUI's 100% is the library case: its verify has no screens of its own to check, so every failure came from a consumer.
+TrBlazeUI's and TechieRag's high escape rates are the library case: their verify has no screens of its own to check, so most failures came from a consumer.
 
-**On stage.** "One failure in five got past every automated check and was found by me. On TfLens, half of the eighty-six recorded misses were found by me, not by the framework. That number is why the verify task was rewritten."
+**On stage.** "One failure in ten got past every automated check and was found by me. On TfLens it's more than one in three, which is why the verify task keeps getting rewritten."
 
 ---
 
@@ -102,23 +104,23 @@ MyDiary's 100% is one event: the first build's screens were all blank at runtime
 
 **How it is worked out.** Every miss is one record; a fix is a second record linked to it, carrying the output tokens of the run that made the fix. The cost is a measurement only when that run fixed exactly one miss (`sole`); when one run fixed several, the window is divided equally and reported apart as apportioned. A fix with no run record has no cost and is counted as such, never as free.
 
-| | All nine repositories | TfLens | The framework itself |
+| | All public repositories | TfLens | The framework itself |
 |---|---|---|---|
-| Misses logged | 340: 244 open, 95 fixed, 1 will not fix | 86: 37 open, 49 fixed | 108: 73 open, 34 fixed |
-| Which practice failed (of those assessed) | the check was too weak 48% · the checklist had a hole 27% · an instruction was ignored 15% · the acceptance line was ambiguous 8% | 41 · 19 · 5 · 13 | 37 · 37 · 25 · 5 |
-| What kind | wrong behaviour 30% · regression 26% ⚠ · half built 20% · never specified 14% | half built 29, wrong behaviour 24, never specified 19 | wrong behaviour 53, never specified 26 |
-| Who found it | a check 133 · the owner 108 · an agent's review 81 · a library consumer 17 | owner 42, agent review 26, check 17 | agent review 51, owner 39, library 11 |
-| Fix cost, measured (one miss per run) | 108,671 output tokens per miss, 8 fixes | 171,804, 4 fixes | too few to say, 2 fixes |
-| Fix cost, apportioned (several per run) | 34,417 per miss, 115 fixes | 39,877, 66 fixes | 17,745, 18 fixes |
-| Fixes with no cost recorded | 21 | 5 | 15 |
+| Misses logged | 883: 219 open, 576 resolved, 88 will not fix | 150: 79 open, 71 resolved | 271: 56 open, 214 resolved, 1 will not fix |
+| Which practice failed (of those assessed) | the check was too weak 48% · the checklist had a hole 31% · an instruction was ignored 11% · the acceptance line was ambiguous 5% · other 5% | 48 · 23 · 8 · 14 · 8 | 79 · 41 · 30 · 5 · 1 |
+| What kind | wrong behaviour 29% · half built 29% · regression 21% · never specified 15% · other 6% | half built 55, wrong behaviour 27, never specified 27 | wrong behaviour 200, never specified 36, half built 17 |
+| Who found it | a check 379 · the owner 340 · an agent's review 118 · production 23 · a library consumer 17 · self-smoke 6 | owner 65 · a check 54 · agent review 29 · production 1 · self-smoke 1 | owner 186 · agent review 52 · production 14 · library 11 · a check 8 |
+| Fix cost, measured (one miss per run) | 140,913 output tokens per miss, 22 fixes | 142,976, 5 fixes | 217,144, 6 fixes |
+| Fix cost, apportioned (several per run) | 60,023 per miss, 234 fixes | 38,370, 86 fixes | 79,728, 68 fixes |
+| Fixes with no cost recorded | 465 | 28 | 141 |
 
-⚠ 87 of the 90 regressions are the TechieBlog empty-database verify of §2; they are one environment problem logged 87 times, and FR-61 is the answer.
+⚠ 87 of TechieBlog's 89 misses are regressions from one empty-database verify in 2026-09; they are one environment problem logged many times, and the "not observable, environment" rule now exists for cases like it.
 
-**Per model, per agent.** Only misses whose origin run is on record enter this: 139 of 340. By model: claude-opus-5 65, claude-sonnet-5 40 (all from one MyDiary build), unknown 31, gpt-5.6-sol 3. By agent: the TrBlazeUI builder 67, general-purpose builders 39, flow-master 31. This is observational. The hard work went to the expensive model on purpose, so a per-model miss rate is not a ranking.
+**Per model, per agent.** Only misses whose origin run is on record enter this: 418 of 883. By model: claude-opus-5 347, claude-opus-5-5 31, claude-sonnet-5-5 18, unknown 14, claude-fable-5-1 4, gpt-5.6-sol 3, opencode-go/glm-5.3 1. By agent: flow-master 191, general-purpose builders 75, trblazeui 92, builder 18, analyst 7, none 35. This is observational. The hard work went to the expensive model on purpose, so a per-model miss rate is not a ranking.
 
 **Whose gap (from 2026-09-07).** Every new miss now answers four questions in order: did the app's spec say it, did the framework say it, was there a check that failed to catch it, was it written and ignored. The answer decides the fix: a checklist line, a requirement line plus a check, a fixed check, or a hook. The first fifty-one misses sorted this way are Session 4's own: the reset's own defects (`docs/TechieFlow-Misses.md`).
 
-**On stage.** "Half of my recorded misses happened because the check was too weak, a quarter because the specification had a hole, and one in seven because the agent ignored an instruction it had just read. Fixing one miss on its own cost about a hundred thousand output tokens. When a fix run repaired several at once, about thirty-five thousand each."
+**On stage.** "Just under half my recorded misses happened because the check was too weak, and just under a third because the specification had a hole. Fixing one miss on its own costs about a hundred and forty thousand output tokens; when a fix run repairs several at once, about sixty thousand each."
 
 ---
 
@@ -130,20 +132,20 @@ MyDiary's 100% is one event: the first build's screens were all blank at runtime
 
 | Command | Runs | Median time | Median output tokens | Share of all recorded time | Share of all output |
 |---|---|---|---|---|---|
-| build-phase | 23 | 2 h 51 min | 457,000 (10 of 23 measured) | 44% | 22% |
-| verify-phase | 29 | 30 min | 98,000 (18 of 29) | 25% | 8% |
-| fix-issues | 43 | 35 min | 130,000 (30 of 43) | 15% | 19% |
-| amend-docs | 9 | 20 min | 91,000 (8 of 9) | 3% | 9% |
-| triage-issues | 7 | 23 min | 127,000 (5 of 7) | 1% | 2% |
-| mockups | 3 | 25 min | 99,000 | 1% | 1% |
-| log-miss | 21 | 2 min 27 s | 7,900 (14 of 21) | under 1% | under 1% |
-| framework-reset (this reset, 8 sittings) | 8 | 5 h 53 min | 764,000 (8 of 8) | 7% | 27% |
+| build-phase | 59 | 50 min | 154,590 (51 of 59 measured) | 29% | 26% |
+| verify-phase | 109 | 19 min 49 s | 18,835 (99 of 109) | 18% | 9% |
+| fix-issues | 84 | 21 min 32 s | 70,607 (67 of 84) | 8% | 15% |
+| amend-docs | 40 | 7 min 37 s | 46,162 (39 of 40) | 2% | 7% |
+| triage-issues | 8 | 14 min 48 s | 118,213 (6 of 8) | under 1% | 1% |
+| mockups | 3 | 24 min 43 s | 99,144 | 1% | under 1% |
+| log-miss | 150 | 1 min 3 s | 771 (69 of 150) | under 1% | 1% |
+| framework-reset (this reset, 85 sittings) | 85 | 20 min 37 s | 43,299 (84 of 85) | 31% | 21% |
 
-Over the nine repositories: 163 runs, 219 hours of recorded time, 25.1 million output tokens. The build phase spent 38% of its output in sub-agents where that was observed. The reset of the framework, 6.7 million output tokens, cost more output than every build phase together, 5.5 million.
+Over the seven public repositories: 624 runs, 472 hours of recorded time, 60.1 million output tokens. The build phase spent 67% of its output in sub-agents where that was observed. The reset of the framework, 12.7 million output tokens, cost less output than every build phase together, 15.5 million.
 
-Named projects: TfLens's eight build runs took a median of 2 h 16 min and 457,000 output tokens each, half of everything TfLens ever spent. TechieBlog's twenty-two fix runs took a median of 37 min and 165,000 tokens each, two thirds of its recorded output. Dollars exist only where OpenCode ran: MyDiary's day-1 on mimo-v2.5 cost $0.06, a deploy checklist $0.05, one log-miss on glm-5.3 $0.23.
+Named projects: TfLens's fourteen build runs took a median of 1 h 56 min and 378,000 output tokens each, 38% of everything TfLens ever spent. TechieBlog's twenty-two fix runs took a median of 37 min and 165,000 tokens each, two thirds of its recorded output. Dollars exist only where OpenCode ran: one log-miss on glm-5.3 cost $0.23.
 
-**On stage.** "A build phase is a three-hour, half-million-token run. A verify is half an hour and a hundred thousand tokens. Logging a miss takes two minutes. And rewriting the framework itself, eight sittings, cost more output tokens than all my build phases put together."
+**On stage.** "A build run is about fifty minutes and a hundred and fifty thousand tokens. A verify is twenty minutes and twenty thousand tokens, and logging a miss takes one minute."
 
 ---
 
@@ -174,20 +176,30 @@ The five files are append-only: nothing is ever edited and nothing is ever delet
 **The answer is another record, never an edit.** `run-void` names the bad run and says why it is wrong. Both records stay exactly where they are, and every figure then skips the one that was named — and says so:
 
 ```
-1 run record(s) VOIDED — named by a run-void record as wrong, so they are
+20 run record(s) VOIDED — named by a run-void record as wrong, so they are
 in no figure above. Both records stay on the stream; nothing was deleted:
-  TechieFlow framework-reset 2026-09-09T11:40:00Z — the start time was guessed, not measured
+  TechieRag build-phase 2026-09-25T04:25:00Z — the start time was guessed, not measured
+  TrBlazeUI verify-phase 2026-09-12T08:54:30Z — mislabelled: this window is a *fix-issues run whose step 4 chains the verifier inline
+  …
 ```
 
 Three things make this a correction rather than a cover-up. The reason travels with it, so anyone can check whether the record deserved to go. The count travels with the figures, because a smaller total offered without its exclusions is just a different wrong number. And there is no way to *replace* the bad figure with a better one — a duration nobody measured cannot be recovered by asserting one, so the run simply leaves.
 
-**On stage.** "The files can never be edited, so a wrong record can't be quietly fixed. It gets a second record saying it's wrong and why, and every report tells you how many were excluded. You can always see what was thrown out."
+**On stage.** "The files can never be edited, so a wrong record can't be quietly fixed. It gets a second record saying it's wrong and why, and every report tells you how many were excluded."
+
+---
+
+## 5c. What Verified does not mean
+
+`Verified` means every check the framework knows how to run passed on that requirement. It does not mean there was a check for everything that matters. On Chatur's 11 Oct nightly, six rows were marked `Verified` even though their acceptance tests were skipped; the screens rendered and looked right, but the behaviour was not measured. I found that by reading the checklist, not because any check failed.
+
+**On stage.** "Verified does not mean perfect. It means the checks that ran and passed — and some of those checks can still be placeholders."
 
 ---
 
 ## 6. What is not in the numbers yet
 
-- **Owner reviews.** Since 2026-09-06 a review of a phase's output is a record: how many corrections the owner gave, what producing the output cost, what the corrections cost. Two exist (MyDiary day-1). The report prints them; the figure is not yet worth a sentence.
+- **Owner reviews.** Since 2026-09-06 a review of a phase's output is a record: how many corrections the owner gave, what producing the output cost, what the corrections cost. The report prints them; the figure is not yet worth a sentence.
 - **Idea-stage commands** (brainstorm, project brief) write no run record yet, so their cost is unknown.
-- **Runs whose window could not be read** (13 of 23 builds) are outside every token figure. The per-run medians are of the measured ones, and the table says how many that is.
+- **Runs whose window could not be read** (142 of 624 in this rollup) are outside every token figure. The per-run medians are of the measured ones, and the table says how many that is.
 - **Dollars actually billed for Claude Code** will never appear; that is a decision, not a gap. Since 2026-09-10 the report does put a **list price** on its runs — the rate card applied to the tokens they measured — which is a different question and is labelled as one (§5a).
