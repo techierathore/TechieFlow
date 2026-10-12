@@ -14,6 +14,13 @@ Everything below this section from 2026-09-11 onward is also unreleased: it reac
 v1.0.4 tag (2026-09-10) and is in no published package yet. This section lists what those dated entries
 do not.
 
+- **TfLens TF-053/054 and Chatur TF-010 (2026-10-12).** `tf-mockup-parity`: an element whose own
+  `overflow` is `auto` or `scroll` is not "cut off" on that axis, and an `svg` over 48 px on either side
+  is not an icon. Measured on TfLens signed in, 14 screens: exactly the four filed findings go, none
+  added, /harness FAIL to PASS. `blazor-zoom.cs.txt` on the Mac keeps a weak reference to every attached
+  `WKWebView` and zooms them all; Chatur's copy re-copied. Cases `tf_053`, `tf_054`, `ch_010` (the real
+  file compiled against stand-in Mac types; old file 100/100/110%, new 110% in all three), each failing
+  against the old file. Misses `MISS-TechieFlow-20261012-01` to `-03`. Deployed to all 18 projects.
 - **Lekhak TF-032: the Xcode check no longer stops tf-build.sh (2026-10-11).** The 26.5 Mac Catalyst SDK
   refuses Xcode 27; `tf-verify-boot.sh` built again with `-p:ValidateXcodeVersion=false`, but `tf-build.sh`
   (and the unit rung of `tf-verify-tests.sh`, which calls it) read the refusal as a wrong rung and said

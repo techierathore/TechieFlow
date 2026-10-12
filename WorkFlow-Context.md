@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-10-11 (Lekhak TF-028/029/030). |
+| Last updated | 2026-10-12 (TfLens TF-053/054, Chatur TF-010). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -117,7 +117,7 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` (that repository, not this one) and waiting on the owner's go-ahead. | Separate repo |
 | **Every feedback entry answered so far is fixed and deployed everywhere.** Several wait for their project's re-check; `tf-feedback.sh <App> --waiting` lists them. | Each project (close) |
 | **Mockup parity pairs live rows with sample rows by position** (MISS-TechieFlow-20261003-02): row N of the app is graded against whatever kind of row the mockup drew at N, so data in another order gives row-level icon findings. Chatur's Repository rows are blocked on it. A fix would pair each app row with the best-matching sample row. | Maintainer |
-| **Mac Catalyst driver built 2026-10-07**: BOOTED means mac2 reached the first screen; screens are reached by the code's clicks. Blazor Hybrid heads owe OS zoom (standards §9b, 2026-10-11): TrSetup lacks it and the macOS 27 scene rule; TrStudio's is unbuilt (GitHub Packages 401); Sevak, Chatur unchecked. | Those projects |
+| **Mac Catalyst driver built 2026-10-07**: BOOTED means mac2 reached the first screen; screens are reached by the code's clicks. Blazor Hybrid heads owe OS zoom (standards §9b, 2026-10-11): TrSetup lacks it and the macOS 27 scene rule; TrStudio's is unbuilt (GitHub Packages 401); one private project unchecked. | Those projects |
 | **Eighteen `.gitignore` files carry repeated framework blocks** left by FR-76's defect: TechieBlog 50 copies, TfLens 30, one private project 10, fifteen others 2. Harmless but untidy; the updater no longer adds them, and removes none. | Owner decision |
 | **TrSetup has thousands of tracked build-output files.** Its ignore rules are correct and inert until the index entries go. `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the commands. Agents never run version control. | Owner action |
 | **Both library packages need republishing** so the persona fixes reach consumers (TR-002, TR-RAG-002). | Owner action |

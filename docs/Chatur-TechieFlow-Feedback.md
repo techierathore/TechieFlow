@@ -4,11 +4,11 @@
 |---|---|
 | App | Chatur |
 | Upstream | TechieFlow |
-| Updated | 2026-10-03 |
+| Updated | 2026-10-11 |
 
 ## Summary
 
-9 entries: 2 open (TF-009 blocking: a progress bar is always reported empty, 8 End-to-end run rows; TF-008 not blocking, worked around), 0 fixed upstream and not yet re-checked, 7 closed (TF-001 to TF-007).
+10 entries: nothing is blocked. None open, 2 fixed upstream and not yet re-checked (TF-008 — no screen with a value in its address was graded since; TF-010, fixed 2026-10-12), 8 closed (TF-001 to TF-007, TF-009 re-checked 2026-10-09).
 
 TF-007 was re-checked here on 2026-10-03: no list box on Start, Workbench, Prerequisites, Providers or Corrections reports "app carries an icon the mockup does not" at either width, and Start, Prerequisites, Providers and Corrections now pass mockup parity outright.
 
@@ -129,6 +129,8 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 
 ### TF-009 — A progress bar is always reported empty by the screen check
 
+> ✅ **Closed 2026-10-09** — re-checked here: 2026-10-09 06:05 verify of phase 3: tf-verify-screens.sh on End-to-end run (/auto) with seed auto-run.sh gave render OK at 1280 and 390 (no progress-bar empty finding); the bar is TrBlazeUI Progress (role=progressbar, aria-valuenow). All 10 End-to-end run rows Verified.
+
 - **Status:** open, filed 2026-10-08
 - **Severity:** major
 - **Blocks:** yes — all 8 End-to-end run rows (REQ-FN-061..066, REQ-UI-055, REQ-UI-056) are written RENDER-FAIL and cannot reach Verified while the bar is drawn correctly.
@@ -138,6 +140,18 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 - **Encountered in:** `*verify all Chatur`, phase 3, 2026-10-08 03:30
 - **Workaround:** none; adding text the mockup does not draw would be a fake.
 - **Suggested fix:** in `tf-verify-screens.mjs`, treat `[role=progressbar][aria-valuenow]`, `progress`, `meter`, and a box whose child has a measured non-zero width, as filled.
+
+### TF-010 — On a Mac, the zoom keys only reach the last window opened
+
+- **Status:** fixed upstream 2026-10-12, filed 2026-10-11
+- **Severity:** minor
+- **Blocks:** no — Chatur copied `blazor-zoom.cs.txt` unchanged as §9b says, and wired it on all three of its windows; Windows is unaffected (each WebView2 gets its own script). The work carried on.
+- **Repro:** `.tfcore/standards/blazor-zoom.cs.txt`, Mac Catalyst branch: `Attach` stores the web view in one static field (`objWebView`), and `ZoomBy`/`Reset` set `PageZoom` on that field only. Chatur has three windows, each with its own `BlazorWebView` (start, main, secondary), so each `Attach` replaces the one before.
+- **Expected:** Cmd+=, Cmd+- and Cmd+0 zoom the window that has focus (or every open window, since the level is one saved value).
+- **Actual:** By reading the code (not yet run on a Mac): they zoom whichever window was opened last; the others keep the level they opened at until they are reopened.
+- **Encountered in:** wiring §9b into Chatur, `*build-phase Chatur`, 2026-10-11
+- **Workaround:** none; the file is to be copied, not rewritten.
+- **Suggested fix:** keep a list of weak references to every attached `WKWebView` and apply the level to all of them (dropping the dead ones), or zoom the key window's web view.
 
 ## Replies from TechieFlow
 
@@ -174,3 +188,9 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 | ID | Fix | Check it here |
 |---|---|---|
 | TF-009 | Fixed upstream, as you suggested. `tf-verify-screens` now counts an anchored control as filled when it is, or holds, a `role="progressbar"` with an `aria-valuenow`, a `progress` or a `meter`, or when one of its children has a width and a height and paints something (a background colour, a background image or a border). An empty track, whose child has no size or paints nothing, is still `empty`, so a bar that draws nothing is still caught. A second fault was found while proving it: a native `progress` or `meter` crashed the screen check, because its value is a number. That is fixed too. Proved on the bar's two shapes: the mockup's track holding a fill, and TrBlazeUI's `role="progressbar"` at 50%. The old script reports `anchored control "progress-bar" (div) is empty` on both; the new one passes both. Regression case `ch_009` fails against the script you had and passes now. | After the framework update, start a run (`tests/verify/seed/auto-run.sh`), then run `*verify ui Chatur`. `/auto` has no `progress-bar ... is empty` finding at 1280 or 390, and the 8 End-to-end run rows are graded on their other checks. |
+
+### Resolution status (TechieFlow team, 2026-10-12, TF-010)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-010 | Fixed upstream, the first way you suggested. On the Mac, `blazor-zoom.cs.txt` now keeps a weak reference to every web view handed to `Attach`, and each zoom key sets the level on all of them, dropping any whose window is gone. The level is one saved value, so every open window shows it. Windows is unchanged. Proved by compiling the real file for Mac Catalyst against stand-in Mac types: three windows attached, one Cmd+=. The old file gives 100%, 100%, 110%; the new one gives 110% in all three. Regression case `ch_010` fails against the file you have and passes now. Miss `MISS-TechieFlow-20261012-03`. Not run on a real Mac yet. | Chatur's `src/Chatur/BlazorZoom.cs` is already re-copied from the new file, with its header and namespace kept (not committed; the owner commits). On the Mac, open all three windows and press Cmd+=: every window grows, not only the last one opened. |

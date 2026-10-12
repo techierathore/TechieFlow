@@ -286,7 +286,9 @@ const PROBE = (wanted = []) => {
   // mockup does not" on every row.
   const STATE = '[data-tf-state]:not([data-tf-state="sample-data"]),[data-state-testid]';
   const SAMPLE = '[data-tf-sample],[data-tf-state="sample-data"]';
-  const own = (el, sel) => [...el.querySelectorAll(sel)].filter((x) => !x.closest(STATE) || el.closest(STATE));
+  // A chart's <svg> is not an icon (TF-054): an svg larger than 48px on either side is left out.
+  const glyph = (x) => x.tagName.toLowerCase() !== 'svg' || (() => { const r = x.getBoundingClientRect(); return r.width <= 48 && r.height <= 48; })();
+  const own = (el, sel) => [...el.querySelectorAll(sel)].filter((x) => (!x.closest(STATE) || el.closest(STATE)) && (sel !== ICON || glyph(x)));
   const ownText = (el) => {
     if (!el.querySelector(STATE) || el.closest(STATE)) return el.textContent || '';
     const c = el.cloneNode(true);
@@ -300,7 +302,7 @@ const PROBE = (wanted = []) => {
   // Every icon on the page by number, so the node side can tell that an anchor and the wrappers
   // above it hold the same icon as the element it sits in: the icon clause asks "any icon inside?",
   // and one Select chevron was reported at four levels of TfLens /misses (TF-046).
-  const iconNo = new Map([...document.querySelectorAll(ICON)].map((i, n) => [i, n]));
+  const iconNo = new Map([...document.querySelectorAll(ICON)].filter(glyph).map((i, n) => [i, n]));
   const iconIds = (el) => own(el, ICON).map((i) => iconNo.get(i));
   const depthOf = (el) => { let n = 0; for (let p = el.parentElement; p; p = p.parentElement) n++; return n; };
 
@@ -439,10 +441,12 @@ const PROBE = (wanted = []) => {
       }
       overX = Math.max(0, Math.round(right - (box.left + el.clientWidth)));
     }
-    let x = overX > 2;
-    if (x && getComputedStyle(el).overflowX === 'visible') x = cutAbove(el, right);
+    const cs = getComputedStyle(el);
+    const scrolls = (v) => v === 'auto' || v === 'scroll';   // a scroller keeps its own content in reach (TF-053)
+    let x = overX > 2 && !scrolls(cs.overflowX);
+    if (x && cs.overflowX === 'visible') x = cutAbove(el, right);
     const overY = el.scrollHeight - el.clientHeight;
-    return { x, y: overY > 2, sr_excluded: hiddenKids.length };
+    return { x, y: overY > 2 && !scrolls(cs.overflowY), sr_excluded: hiddenKids.length };
   };
 
   const sigOf = (el) => {

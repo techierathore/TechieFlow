@@ -2305,6 +2305,55 @@ print(' '.join('%s=%s' % (x['req_id'], x['verdict_after']) for x in map(json.loa
     || { bad tf_052d "a row verified by the earlier scope got the wrong verdict"; note "$v"; }
 }
 
+# --- TF-053/054: a scroller is not cut off; a chart's svg is not an icon ---------------------
+# TfLens /export: a <pre> with overflow:auto holding 47 lines read "content is cut off"; /harness:
+# an ApexCharts <svg> read "app carries an icon the mockup does not". A real overflow:hidden box
+# and a small glyph svg must still be reported.
+_tf053_findings() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then echo skip; return; fi
+  local d="$SCRATCH/tf053"
+  [[ -f "$d/findings" ]] && { cat "$d/findings"; return; }
+  mkdir -p "$d/docs/mockups"
+  local css='<style>body{margin:0;font:14px/20px system-ui} .b{width:300px;height:60px;margin:8px} pre{margin:0}</style>'
+  local lines; lines="$(seq 1 40 | sed 's/.*/line & of a long compare output that is wider than the box/')"
+  printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div class="b" data-testid="out"><pre>ok</pre></div><div class="b" data-testid="cut"><pre>ok</pre></div><div class="b" data-testid="chart"><div style="height:40px;background:#36c"></div></div><div class="b" data-testid="badge"><span>3</span></div></body></html>\n' "$css" > "$d/docs/mockups/s.html"
+  cat > "$d/s.html" <<HTML
+<!doctype html><html><head><meta charset="utf-8">$css</head><body>
+<div class="b" data-testid="out"><pre style="overflow:auto;height:60px">$lines</pre></div>
+<div class="b" data-testid="cut" style="overflow:hidden"><pre>$lines</pre></div>
+<div class="b" data-testid="chart"><svg width="300" height="60"><rect width="120" height="40" fill="#36c"/></svg></div>
+<div class="b" data-testid="badge"><span>3</span><svg width="16" height="16"><circle cx="8" cy="8" r="6"/></svg></div>
+</body></html>
+HTML
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  ( cd "$d" && tf_timeout 180 node parity.mjs --base "http://127.0.0.1:$port" --screen s=/s.html \
+      --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$srv" 2>/dev/null
+  python3 -c "import json,sys
+try: s=json.load(open(sys.argv[1]))['screens'][0]
+except Exception: print('no-output'); sys.exit()
+print(' '.join(f['class']+':'+f['key'].split()[0] for f in s.get('findings',[])))" "$d/parity.json" | tee "$d/findings"
+}
+tf_053() {
+  local f; f="$(_tf053_findings)"
+  [[ "$f" == skip ]] && { printf 'skip tf_053 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; }
+  if [[ "$f" != no-output ]] && ! grep -q 'clip:out' <<<"$f" && grep -q 'clip:cut' <<<"$f"; then
+    ok tf_053 "a box that scrolls its own content is not cut off; an overflow:hidden box still is"
+  else bad tf_053 "scroller vs hidden box"; note "findings: ${f:-none}"; fi
+}
+tf_054() {
+  local f; f="$(_tf053_findings)"
+  [[ "$f" == skip ]] && { printf 'skip tf_054 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; }
+  if [[ "$f" != no-output ]] && ! grep -q 'icon:chart' <<<"$f" && grep -q 'icon:badge' <<<"$f"; then
+    ok tf_054 "a chart's svg is not an icon; a 16px glyph svg still is"
+  else bad tf_054 "chart svg vs glyph svg"; note "findings: ${f:-none}"; fi
+}
+
 # --- TF-036: two wrapped sentences that share a line ----------------------------------------
 # An inline element's bounding box is the union of its line fragments, so two sentences sharing a
 # line "overlapped" across a tile's width on TfLens /effort (2026-09-11) with 0 px² in common.
@@ -4608,6 +4657,23 @@ PY
     || { bad ch_008b "a missing comparison was skipped, or a screen without a mockup failed"; note "$(grep -E 'REQ-UI-0(60|70) ' "$cl" | cut -c1-200 | tr '\n' ' ')"; }
 }
 
+# --- Chatur TF-010: on a Mac the zoom keys reached only the last window opened -------------------
+# blazor-zoom.cs.txt kept one WKWebView in a static field, so each window's Attach replaced the one
+# before. The real file is compiled with MACCATALYST against stand-ins (tests/regression/ch010/):
+# three web views attached, one Cmd+=, all three must be at 110%.
+ch_010() {
+  local dn; dn="$(command -v dotnet || command -v dotnet.exe || { [[ -x "/mnt/c/Program Files/dotnet/dotnet.exe" ]] && echo "/mnt/c/Program Files/dotnet/dotnet.exe"; })"
+  [[ -z "$dn" ]] && { printf 'skip ch_010 — dotnet is not installed here\n'; return; }
+  local d="$SCRATCH/ch010"; mkdir -p "$d"
+  cp "$ROOT/tests/regression/ch010/"* "$d/"; cp "$UTILS/../standards/blazor-zoom.cs.txt" "$d/BlazorZoom.cs"
+  local v; v="$("$dn" --version 2>/dev/null | cut -d. -f1 | tr -dc 0-9)"
+  [[ -z "$v" || "$v" -lt 8 ]] && { printf 'skip ch_010 — no .NET 8 or later SDK here\n'; return; }
+  local out; out="$(cd "$d" && tf_timeout 300 "$dn" run -v q -p:TargetFramework="net$v.0" 2>&1 | tail -1 | tr -d '\r')"
+  [[ "$out" == "1.1 1.1 1.1" ]] \
+    && ok ch_010 "Cmd+= zooms every attached window's web view, not only the last one opened" \
+    || bad ch_010 "zoom after three windows and one Cmd+=: got '$out' (want '1.1 1.1 1.1')"
+}
+
 # --- Chatur TF-009: a progress bar was always reported empty -------------------------------------------
 # The mockup's progress-bar is a track holding a fill; the app's is a role="progressbar" with
 # aria-valuenow at 50%. Neither has text, so the screen check said `anchored control "progress-bar"
@@ -5634,7 +5700,7 @@ print(r.get('tokens_scope'), r.get('tokens_out'), r.get('subagent_runs'), r.get(
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 sv_001 sv_002 sv_003 sv_004 sv_005 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 sv_001 sv_002 sv_003 sv_004 sv_005 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done
