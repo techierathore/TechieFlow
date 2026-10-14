@@ -137,7 +137,7 @@ Commit the changes as usual and push to `main`. Every push runs the **Validate**
 
 The Validate workflow does more than the release does. It runs as two jobs, one on Linux and one on a stock Mac (Apple's bash 3.2 at `/bin/bash` and the BSD tools, with Homebrew taken off the path). Each job runs `npm run validate`, `npm run test:install` and then every `tests/*/run.sh` twice, once with the time zone set to UTC and once to Asia/Kolkata, so a script that mixes local and UTC time fails. The Mac job also runs the portability check on its own. All of it must be green.
 
-You can run them yourself before pushing:
+Run these two before a release, not after every fix. Neither depends on what a fix changed: one checks the shell scripts against a stock Mac, the other compares the two install routes.
 
 ```bash
 npm run validate
@@ -146,6 +146,8 @@ npm run validate
 ```bash
 npm run test:install
 ```
+
+After each fix, the routine is shorter. Run the regression suite once, in your machine's own time zone (`bash tests/regression/run.sh`), plus the suite of the area the fix touched. Run the regression suite a second time with `TZ=UTC` only when the fix touched a script that reads the local clock. Those scripts are listed at the top of `tests/regression/run.sh`. The two-time-zone run stays in the Validate workflow.
 
 ---
 

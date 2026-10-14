@@ -4,13 +4,13 @@
 |---|---|
 | App | Sevak |
 | Upstream | TechieFlow |
-| Updated | 2026-10-11 |
+| Updated | 2026-10-14 |
 
 ## Summary
 
-5 entries: 0 blocking now, 0 open, 1 fixed upstream and not yet re-checked (TF-005, fixed 2026-10-11), 4 closed (TF-001 to TF-004).
+6 entries: 0 blocking now, 0 open, 2 fixed upstream and not yet re-checked (TF-005, fixed 2026-10-11; TF-006, fixed 2026-10-14), 4 closed (TF-001 to TF-004).
 
-Nothing is blocked. TF-005 is fixed upstream: `*verify` takes `--phase N` or `--phase all`, so phases 1 and 2 can be graded, and the status names the phase in the command it gives. TF-001 to TF-004 are closed.
+Nothing is blocked. TF-005 is fixed upstream: `*verify` takes `--phase N` or `--phase all`, so phases 1 and 2 can be graded, and the status names the phase in the command it gives. TF-006 is fixed upstream: a theme switch counts as a click doing something, a popover switcher is opened through the control it names, and the dark theme of an app coloured in `oklch()` is seen and graded. TF-001 to TF-004 are closed.
 
 ## Entries
 
@@ -85,6 +85,25 @@ Nothing is blocked. TF-005 is fixed upstream: `*verify` takes `--phase N` or `--
 - **Encountered in:** `*verify all Sevak` of 2026-10-10 and 2026-10-11.
 - **Workaround:** none through the command.
 - **Suggested fix:** let `*verify` take `--phase N` and `--phase all`; make the verdict, the ledger and the telemetry follow the phase graded; name the phase in the status's next command.
+
+### TF-006 — The menu check reports the theme menu on Login as "does nothing when clicked" although it switches the theme
+
+> Filed by Sevak as TF-005 on 2026-10-14; renumbered TF-006 by the TechieFlow team because TF-005 is the `--phase` entry above.
+
+- **Severity:** minor
+- **Blocks:** no — it fails one row's render check (Sevak REQ-FN-036) on a working control; every other check ran.
+- **Repro:** Sevak Windows head over CDP, AppManager mode, 2026-10-14. `tf-verify-screens.sh --list … --cdp <url>` on `/login` reports `"Change theme › Light" does nothing when clicked` (also Dark and Match system), and says "the app has no dark theme" on every screen. Driving the same menu by hand over CDP: "Dark" sets `<html class="dark" data-theme="dark">` and repaints the page dark.
+- **Expected:** a menu item that changes the document's theme class and repaints the page counts as doing something; "no dark theme" is not reported for an app whose own toggle switches to dark.
+- **Actual:** the check in `tf-menus.mjs` reports the three items as doing nothing on `/login`, and the screen fails render.
+- **Encountered in:** the Sevak phase-1 fix run, 2026-10-14. The same check also reports the workspace switcher on `/welcome` as "opens nothing when clicked" (Sevak REQ-RAG-054, REQ-RAG-055), while by hand it opens its panel (`aria-expanded="true"`) and closes again.
+- **Workaround:** none in the app; the rows stay below Verified with this finding named.
+- **Suggested fix:** in `tf-menus.mjs`, compare the document's class and `data-theme` attributes and the painted background before and after the click, after the menu has closed, and treat a change in any of them as an effect.
+
+## Resolution status (TechieFlow team, 2026-10-14)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-006 | Fixed upstream in `tf-menus.mjs` and `tf-theme.mjs`. Three faults, all the checker's. (1) A menu click was judged by the address, the text, dialogs and zoom only. It now also compares the theme: the light/dark classes and `data-*theme` attributes on `<html>` and `<body>`, and the colour they paint. "Dark" now reads "changed the theme". (2) A choice that is already the current state (Light, in a light window) changes nothing when clicked. When another item of the same menu has moved the state, the walk clicks that item first and then looks at the choice again. Only a choice that still changes nothing is a finding. Afterwards the walk puts the theme back as it found it, because the attached window is your app. (3) The workspace switcher is a popover (`role="group"`), not a menu, so the walk never found it open. It now opens the box the trigger's `aria-controls` names. Also fixed: `tf-theme.mjs` read colours with a pattern for `rgb()` only. Sevak's colours are `oklch()`, so every surface read as white in both themes, which is why every screen said "the app has no dark theme". The text-contrast check was skipping every `oklch()` colour for the same reason. Colours are now converted by the browser itself, as `tf-mockup-parity.mjs` already did (TF-027). Regression case `sv_006`; all three of its checks fail on the scripts you have now. Miss `MISS-TechieFlow-20261014-02`. | Proved on your app, Windows head, 2026-10-14, old scripts then new on the same running app. Phase-1 list: old gave "the app has no dark theme" on all 5 screens and the three "Change theme" findings on Login. New: no menu findings, and every screen is graded in light and dark, with visual OK in both, so no new contrast finding. `/welcome`: old FAIL with "switch workspace opens nothing" plus the three theme findings. New: OK, light and dark; the switcher opened, and its workspace, "New workspace…" and "Workspace settings…" items were each clicked and did something. After the framework update, paste into Sevak's agent: `/TechieFlow:agents:verifier *verify all Sevak --phase 1`. Login (REQ-FN-036) and Welcome (REQ-RAG-054, REQ-RAG-055) no longer carry a menu finding, and the screen lines read "light + dark themes". |
 
 ## Resolution status (TechieFlow team, 2026-10-11)
 

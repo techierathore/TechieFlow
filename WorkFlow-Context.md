@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-10-14 (Chatur TF-011, TF-012). |
+| Last updated | 2026-10-14 (Chatur TF-011, TF-012; oklch theme fix). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -113,12 +113,12 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | Three requirements name a **script that has not been written**: FR-58 (refuse `done complete` while rows are unfinished), FR-60 (refuse a banned head name in a brief), FR-61 (grade a row not observable when the environment lacks the data). The idea-stage commands still emit no run record (FR-34, FR-60). | Maintainer |
 | **Model routing is deployed everywhere and enabled in three**: 19 repositories carry `tf-model-pick.sh` and a `routing.yaml` with a `fallbacks:` chain and a `billing:` block (added by the updater, never overwriting a line); three of them have `enabled: true` and generated bindings, the other sixteen keep their own `enabled: false`. Turning one on is `bash .tfcore/utils/tf-routing.sh on` in that project — Routing-Guide §2b. | Owner decision, per project |
 | **Open misses** are listed with their outcome in `docs/TechieFlow-Misses.md` — 52 of 167 open (2026-09-12). The one this maintainer owes a fix for is 12 of 2026-09-07, that a hidden framework folder is invisible to search and nothing enforces the rule. | Maintainer |
-| **TrStudio is not on this machine.** It is a named fixture and could not be refreshed here. | Owner action |
+| **TrStudio is not on this machine**, so it was not refreshed. | Owner action |
 | **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` (that repository, not this one) and waiting on the owner's go-ahead. | Separate repo |
 | **Every feedback entry answered so far is fixed and deployed everywhere.** Several wait for their project's re-check; `tf-feedback.sh <App> --waiting` lists them. | Each project (close) |
 | **TrBlazeUI TR-004**: disabled menu items lack `aria-disabled`; the menu bar ignores Escape. `tf-menus.mjs` works around both. | TrBlazeUI |
 | **Mockup parity pairs live rows with sample rows by position** (MISS-TechieFlow-20261003-02): row N of the app is graded against whatever kind of row the mockup drew at N, so data in another order gives row-level icon findings. Chatur's Repository rows are blocked on it. A fix would pair each app row with the best-matching sample row. | Maintainer |
-| **Mac Catalyst driver built 2026-10-07**: BOOTED means mac2 reached the first screen; screens are reached by the code's clicks. Blazor Hybrid heads owe OS zoom (standards §9b, 2026-10-11): TrSetup lacks it and the macOS 27 scene rule; TrStudio's is unbuilt (GitHub Packages 401); one private project unchecked. | Those projects |
+| **Blazor Hybrid heads owe OS zoom** (standards §9b): TrSetup lacks it and the macOS 27 scene rule; TrStudio's is unbuilt (GitHub Packages 401); one private project unchecked. | Those projects |
 | **Eighteen `.gitignore` files repeat framework blocks** (FR-76's defect; TechieBlog 50 copies, TfLens 30). Harmless; the updater no longer adds them and removes none. | Owner decision |
 | **TrSetup tracks thousands of build-output files**; its ignore rules work once the index entries go. `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the commands. | Owner action |
 | **Both library packages need republishing** so the persona fixes reach consumers (TR-002, TR-RAG-002). | Owner action |
@@ -127,7 +127,7 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | **The scripts are not technology-neutral, though the personas and tasks are** (checked by `tests/mirror/run.sh`). `tf-build.sh` is .NET's and the browser layer is Playwright's, with no stack question behind either, so another stack gets the documents and telemetry and none of the build or verify scripts (MISS-TechieFlow-20260912-06). | Owner decision |
 | Two owner-owned HTML documents still name the pre-2026 layout; the updater reports them and never edits them. | Owner action |
 
-The last five predate the reset and were not re-checked.
+The last five predate the reset, unchecked.
 
 ---
 
@@ -137,9 +137,9 @@ When you change the framework, change all of these together.
 
 1. **Mirror parity.** Any edit to `.tfcore/agents/` or `.tfcore/tasks/` is copied byte-for-byte to `.claude/commands/TechieFlow/`. Prove it with `bash tests/mirror/run.sh`. Never create `.opencode/command/TechieFlow/`.
 2. **A new task needs four wirings**: the file under `.tfcore/tasks/`, the mirror, the command registered on its owning persona (mirrored too), and an entry in `opencode.jsonc`.
-2b. **Anything that changes what a project receives goes into both delivery routes**: the shell scripts and `scripts/install.mjs`. A hook registration, a new folder under `.tfcore/`, a change to how an existing project is refreshed. `npm run test:install` compares the two routes file by file and is the check; run it on a normal filesystem, because a Windows mount reports every file executable and yields one false difference.
+2b. **Anything that changes what a project receives goes into both delivery routes**: the shell scripts and `scripts/install.mjs`. A hook registration, a new folder under `.tfcore/`, a change to how an existing project is refreshed. `npm run test:install` compares the two routes, before a release, on a normal filesystem (a Windows mount yields one false difference).
 3. **A new rule is a script or a hook, not a paragraph.** A rule ignored twice never gets a third paragraph. Task files hold steps only; explanation and history belong in the documents of §1 and in the changelog.
-4. **Prove every script by running it.** A script the maintainer has not run on a real project is not done. Both harnesses.
+4. **Prove every script by running it.** A script the maintainer has not run on a real project is not done. Both harnesses. After each fix, run `tests/regression/run.sh` once in the machine's own time zone, again with `TZ=UTC` only when a script listed at its top (one that reads the local clock) changed; portability and the install test wait for a release.
 5. **Log every gap as a miss** through `tf-log-miss.sh`, with its sort, before proposing the fix.
 5b. **Answer every fix in the project's feedback file.** A problem a project filed is answered by a row in a `## Resolution status (TechieFlow team, <date>)` table in `docs/<App>-TechieFlow-Feedback.md` here, which the owner copies across. `tests/regression/run.sh replies_complete` fails while a problem the suite holds a case for still reads open there. `bash .tfcore/utils/tf-feedback.sh <App>` (run in the project) is the one reading of those files: open, fixed upstream and not yet re-checked, closed.
 6. **Record the work.** A maintenance session ends with one `framework-reset` run record in this repository's own metrics, a dated entry in `docs/CHANGELOG.md`, and this file's open items and date refreshed.

@@ -16,6 +16,20 @@
 #   TF_REGRESSION_UTILS=<project>/.tfcore/utils bash tests/regression/run.sh tf_052
 #                                           # one, against the copy a project has deployed
 #
+# After each fix, on the machine it was made on (Windows/WSL, the Mac, any developer's machine):
+# run this suite once, in that machine's own time zone. Run it a second time with TZ=UTC only when
+# the change touches one of the scripts below, which read the local clock (today's date, a local
+# reset time, a local wait window):
+#   .tfcore/utils/tf-goal.sh            .tfcore/utils/tf-portable.sh (tf_date_from without -u)
+#   .tfcore/utils/tf_feedback.py        .tfcore/utils/tf-day1-files.py
+#   .tfcore/utils/tf-verify-verdict.py  .tfcore/utils/tf-status-facts.py
+#   .tfcore/utils/tf-render-html.py     .tfcore/utils/tf-checklist-edit.py
+#   .tfcore/utils/tf-brd-status.py      .tfcore/hooks/guard-verify.sh
+# A new script that reads the local clock is added to this list. CI (validate.yml) still runs every
+# tests/*/run.sh in UTC and in Asia/Kolkata. The portability check (tests/portability) and the
+# install-route comparison (npm run test:install) do not depend on a fix: they run before a release
+# (docs/TechieFlow-Release-Guide.md), not after every fix.
+#
 # Exit 0 all held, 1 a case failed. Python 3 standard library only. Never runs git.
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -4117,6 +4131,46 @@ print(len(v), [r.get('app_phase') for r in v], v[0]['started']=='$t1', v[1]['sta
     || { bad sv_005e "the next command did not name the right phase"; note "$s1 / $s2 / $s3 / ${s4:0:120} / $s5"; }
 }
 
+# --- Sevak TF-006: a working theme menu and a working popover called dead; oklch read as white -----------
+# The menu walk compared the address, the text, dialogs and zoom, so "Dark" (which sets data-theme and
+# the class dark and repaints) "did nothing", and so did "Light", already the state. The workspace
+# switcher's trigger names a popover (role="group") by aria-controls, which the walk never looked at, so
+# it "opened nothing". And tf-theme.mjs read colours with an rgb() pattern: an app themed in oklch()
+# painted white in both themes, so "the app has no dark theme", and faint oklch text was never measured.
+sv_006() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip sv_006 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/sv006"; mkdir -p "$d"
+  bash "$ROOT/tests/regression/sv006/make.sh" "$d"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-menus.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  ( cd "$d" && tf_timeout 300 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen app=/app/ --widths 1280 --render-wait 500 --wait 300 --json-out "$d/s-app.json" --shots-dir "$d/shots" > "$d/s-app.log" 2>&1
+    tf_timeout 300 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen faint=/faint/ --widths 1280 --themes light --render-wait 500 --wait 300 --json-out "$d/s-faint.json" --shots-dir "$d/shots" > "$d/s-faint.log" 2>&1 )
+  kill "$srv" 2>/dev/null
+  local out; out="$(python3 -c "
+import json
+s = json.load(open('$d/s-app.json')); r = s['screens'][0]
+f = [x['detail'] for w in r['widths'] for x in w.get('findings', []) if x.get('class') == 'menu']
+eff = {c['menu'] + ' > ' + c['label']: c['effect'] for c in s['menus']['clicks']}
+print('themes', '+'.join(r.get('themes', [])), '| dark', r.get('dark', ''), '| menu findings', len(f), '|', '; '.join(f))
+print('effects', json.dumps(eff, sort_keys=True))
+fa = json.load(open('$d/s-faint.json'))['screens'][0]
+print('faint', ' '.join(x['detail'][:60] for w in fa['widths'] for x in w.get('findings', []) if 'contrast' in x.get('detail', '') or x.get('check') == 'visual'))" 2>&1)"
+  grep -q '^themes light+dark | dark graded | menu findings 0 |' <<<"$out" \
+    && ok sv_006a "an app themed in oklch() is seen to have a dark theme; its theme menu and popover switcher are not called dead" \
+    || { bad sv_006a "theme menu, popover or dark theme misread:"; note "$out"; }
+  grep -q '"Theme > Dark": "changed the theme"' <<<"$out" && grep -q '"Theme > Light": "changed the theme (once' <<<"$out" \
+    && grep -q '"Alpha > Beta": "changed the page"' <<<"$out" \
+    && ok sv_006b "a theme change is an effect; the choice already made is looked at again once a sibling moved the state; a popover is opened by its aria-controls" \
+    || { bad sv_006b "click effects:"; note "$(grep '^effects' <<<"$out")"; }
+  grep -q '^faint .*Hard to read' <<<"$out" \
+    && ok sv_006c "faint oklch() text on an oklch() background is measured and fails the contrast rule" \
+    || { bad sv_006c "faint oklch text was not measured:"; note "$(grep '^faint' <<<"$out")"; }
+}
+
 # --- TrBlazeUI TF-001: triage close logged last week's bugs again under today's run -------------
 # triage.json kept every action ever taken, so each close wrote them all again: 13 phantom escaped
 # checks and 5 misses on 2026-09-19, one more on 2026-09-22. And a wrong miss could not be withdrawn.
@@ -5895,9 +5949,36 @@ print(r.get('tokens_scope'), r.get('tokens_out'), r.get('subagent_runs'), r.get(
     || bad oc_v2 "OpenCode 2 tokens: got '$got' (want 'tree 350 1 {'p/m1': 350}')"
 }
 
+# --- the per-fix routine: every script that reads the local clock is named at the top of this file ----
+# A fix to one of them is the only kind that needs this suite a second time with TZ=UTC, so the list
+# must be whole: a script that reads today's date or a local time and is not in it fails here.
+clock_readers() {
+  local got; got="$(python3 - "$ROOT" "$ROOT/tests/regression/run.sh" <<'PY'
+import os, re, sys
+root, me = sys.argv[1], sys.argv[2]
+head = open(me, encoding="utf-8").read().split("\nset -u", 1)[0]
+listed = set(re.findall(r"\.tfcore/[\w./-]+", head))
+local = re.compile(r"datetime\.date\.today\(\)|datetime\.datetime\.now\(\)(?!\.timestamp)|datetime\.now\(\)(?!\.timestamp)|time\.localtime|\.astimezone\(\)"
+                   r"|\btf_date_from +(?!-u)|(?<![\w-])date +['\"]?\+%[^s]")
+found = set()
+for d in (".tfcore/utils", ".tfcore/hooks", ".tfcore/telemetry"):
+    for n in sorted(os.listdir(os.path.join(root, d))):
+        p = os.path.join(root, d, n)
+        if not os.path.isfile(p) or not n.endswith((".sh", ".py", ".mjs")): continue
+        for line in open(p, encoding="utf-8", errors="replace"):
+            if line.lstrip().startswith("#") or "date -u" in line: continue
+            if local.search(line): found.add(f"{d}/{n}"); break
+print(" ".join(sorted(found - listed)) or "none")
+PY
+)"
+  [[ "$got" == "none" ]] \
+    && ok clock_readers "every script that reads the local clock is listed at the top of tests/regression/run.sh" \
+    || bad clock_readers "read the local clock but are not listed at the top of tests/regression/run.sh: $got"
+}
+
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 sv_001 sv_002 sv_003 sv_004 sv_005 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

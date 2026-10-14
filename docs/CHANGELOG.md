@@ -15,6 +15,26 @@ package yet, and go out as v1.2.0 (it adds a command and a coding standard, so a
 heading read "since v1.0.4" until 2026-10-13, after v1.1.0 had shipped. This section lists what the
 dated entries do not.
 
+- **The per-fix test routine is shorter (owner, 2026-10-14).** On the machine a fix is made on, the
+  regression suite runs once, in that machine's own time zone, plus the suite of the area touched. It
+  runs a second time with `TZ=UTC` only when the fix touched a script that reads the local clock. Those
+  ten scripts are listed at the top of `tests/regression/run.sh`, and the new case `clock_readers`
+  fails when a script reads the local clock but is missing from the list (proved: removing
+  `guard-verify.sh` from the list fails it). The portability check and `npm run test:install` move to
+  before a release (Release Guide §3); CI's two-time-zone run is unchanged. Also in
+  `WorkFlow-Context.md` §7.
+- **Sevak TF-006: a working theme menu and workspace switcher called dead; oklch() read as white
+  (2026-10-14).** Filed by Sevak as TF-005 and renumbered, because TF-005 is the `--phase` entry, which
+  Sevak's rewrite of its file had dropped; restored. `tf-menus.mjs`: a click's effect now includes the
+  theme (light/dark classes and `data-*theme` on `<html>`/`<body>`, and their painted background); a
+  choice already in force is clicked again once a sibling moved the state, and only one still inert is a
+  finding; the walk puts the theme back as it found it; a popover trigger's `aria-controls` names the
+  box to read (TrBlazeUI's Popover is `role="group"`). `tf-theme.mjs`: colours converted by a one-pixel
+  canvas, as parity's TF-027 already did; the `rgb()` pattern read every `oklch()` surface as white,
+  so every TrBlazeUI app was "no dark theme" and its text contrast was never measured. Case `sv_006`
+  (all three checks fail on the old scripts). Proved on Sevak's Windows head, old then new: phase-1
+  list 5 screens "no dark theme" → light + dark, visual OK in both (no new contrast finding); `/welcome`
+  FAIL with 4 menu findings → OK. Miss `MISS-TechieFlow-20261014-02`.
 - **`tfyolo`: Claude Code started in bypass mode with YOLO on (owner, 2026-10-14).** Typed in a
   terminal inside a project, it turns YOLO on, starts Claude Code with
   `--permission-mode bypassPermissions` at the project root in that terminal, and turns YOLO off

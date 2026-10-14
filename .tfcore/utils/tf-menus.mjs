@@ -13,14 +13,17 @@
 //     is the state the app is in, no file open, and is only noted in the JSON);
 //   - placeholder text ("Nothing to do yet", "Coming soon", "Not built yet", "TODO", and any
 //     --placeholder-text a project adds) the mockup does not itself draw;
-//   - an enabled item that does nothing when clicked: no address, window, dialog, zoom or text changed.
+//   - an enabled item that does nothing when clicked: no address, window, dialog, zoom, text or theme
+//     changed. A choice that is already the state (Light, in a light app) is clicked again after a
+//     sibling has moved the state, and the theme the walk changed is put back (Sevak TF-006).
 // An item the mockup marks data-tf-sample is sample data and is not owed by its label; a pick-list (a
 // select's options) is checked but not clicked; a trigger disabled in this state is passed over. A menu inside
 // a box marked as another state (data-tf-state="mockup-only" …) is not owed at all. An item whose
 // label ends the session or the work (Exit, Quit, Sign out, Log out, Close …, Delete, Remove, and any
 // --no-click pattern) is checked but never clicked. A mockup that marks no menu still has the app's own menus opened: every
 // [aria-haspopup="menu"|"true"] and every trigger in a [role=menubar], graded on placeholder text and on
-// items that do nothing.
+// items that do nothing. A popup that is not a menu (a popover, role="group") is the box the trigger's
+// aria-controls names.
 // A menu item the mockup links to another mockup (<a href="prerequisites.html">) is the way into that
 // screen. reachability() says which screens had such a way in and were reached by none of those clicks.
 
@@ -76,12 +79,14 @@ export async function mockupMenus(page, attr = 'data-testid') {
 
 // --------------------------------------------------------------- the app's side (in the page)
 const MENU_SEL = '[role="menu"], [role="listbox"], [role="menubar"] [data-state="open"], [data-tf-menu-open]';
-const APP_ITEMS = ({ popupId, attr }) => {
+const APP_ITEMS = ({ popupId, attr, controls }) => {
   const ITEM = '[role^="menuitem"], [role="option"], button, a[href]';
   const vis = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
   // the popup by its name when the app carries it; any open menu only when it does not (the walk closes
   // every menu before it opens one, so an open one is the one just opened)
   let box = popupId ? document.querySelector(`[${attr}="${CSS.escape(popupId)}"]`) : null;
+  // a popover opened by an aria-haspopup trigger is no menu: it is the box the trigger's aria-controls names
+  if ((!box || !vis(box)) && controls) { const c = document.getElementById(controls); if (c && vis(c)) { box = c; c.setAttribute('data-tf-walk-popup', ''); } }
   if (!box) box = [...document.querySelectorAll('[role="menu"], [role="listbox"]')].filter(vis).pop() || null;
   if (!box || !vis(box)) return null;
   document.querySelectorAll('[data-tf-walk]').forEach((el) => el.removeAttribute('data-tf-walk'));   // an earlier menu's marks
@@ -103,7 +108,8 @@ const APP_ITEMS = ({ popupId, attr }) => {
   return { found_by: box.getAttribute(attr) === popupId ? 'testid' : 'role', text: text(box), items, choice };
 };
 
-// What a click can change, menus left out: the address, the text a reader sees, open dialogs, the zoom.
+// What a click can change, menus left out: the address, the text a reader sees, open dialogs, the zoom,
+// the theme (light/dark classes and data-*theme attributes on <html> and <body>, and what they paint).
 const SIGNATURE = (menuSel) => {
   const inMenu = (n) => { const e = n.nodeType === 1 ? n : n.parentElement; return !!(e && e.closest(menuSel + ', [data-tf-walk-popup]')); };
   const parts = [];
@@ -121,9 +127,18 @@ const SIGNATURE = (menuSel) => {
     .filter((d) => { const r = d.getBoundingClientRect(); return r.width > 0 && r.height > 0; }).length;
   const ids = [...document.querySelectorAll('[data-testid]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && !inMenu(e); })
     .map((e) => e.getAttribute('data-testid')).slice(0, 400);
-  return { url: location.href, text: h, len: s.length, dialogs, zoom: `${window.devicePixelRatio}|${getComputedStyle(document.documentElement).zoom || ''}|${document.body ? document.body.style.zoom : ''}`, ids };
+  const MODE = /^(?:(?:theme|mode|scheme|color)[-_])?(?:dark|light)(?:[-_](?:theme|mode|scheme))?$/i;
+  const look = [document.documentElement, document.body].filter(Boolean).map((el) => {
+    const cs = getComputedStyle(el);
+    return [[...el.classList].filter((c) => MODE.test(c)).sort().join(' '),
+      [...el.attributes].filter((a) => /^data-.*(theme|mode|scheme)/i.test(a.name)).map((a) => `${a.name}=${a.value}`).sort().join(' '),
+      cs.backgroundColor, cs.colorScheme].join('|');
+  }).join('||');
+  return { url: location.href, text: h, len: s.length, dialogs, zoom: `${window.devicePixelRatio}|${getComputedStyle(document.documentElement).zoom || ''}|${document.body ? document.body.style.zoom : ''}`, look, ids };
 };
-const changed = (a, b) => a.url !== b.url || a.text !== b.text || a.dialogs !== b.dialogs || a.zoom !== b.zoom;
+const changed = (a, b) => a.url !== b.url || a.text !== b.text || a.dialogs !== b.dialogs || a.zoom !== b.zoom || a.look !== b.look;
+const effectOf = (before, after) => !before || !after ? 'unknown' : before.url !== after.url ? 'navigated' : before.dialogs !== after.dialogs ? 'opened a dialog'
+  : before.zoom !== after.zoom ? 'zoomed' : before.look !== after.look ? 'changed the theme' : before.text !== after.text ? 'changed the page' : 'nothing';
 
 // A point on plain text, outside every menu, list, dialog and control, to click a menu shut.
 const NEUTRAL = () => {
@@ -176,7 +191,7 @@ export async function walkMenus(page, mockMenus, o = {}) {
   // Escape does not close every menu bar (TrBlazeUI's stays open, and so does it on a click in an empty
   // corner), so: Escape, then a click on plain text outside any menu or control, then the trigger
   // again, and last the screen reopened, until no menu or list is open
-  const anyOpen = () => page.evaluate(() => [...document.querySelectorAll('[role="menu"], [role="listbox"]')]
+  const anyOpen = () => page.evaluate(() => [...document.querySelectorAll('[role="menu"], [role="listbox"], [data-tf-walk-popup]')]
     .some((e) => { const r = e.getBoundingClientRect(); const c = getComputedStyle(e); return r.width > 0 && r.height > 0 && c.visibility !== 'hidden'; })).catch(() => false);
   const shut = async (m) => {
     for (let k = 0; k < 3 && await anyOpen(); k++) {
@@ -204,8 +219,9 @@ export async function walkMenus(page, mockMenus, o = {}) {
     for (const t of [...tries, tries[0], tries[0]]) {
       await t.click({ timeout: 3000 }).catch(() => {});
       await page.waitForTimeout(250);
+      m.controls = (await t.getAttribute('aria-controls').catch(() => null)) || (await trig.getAttribute('aria-controls').catch(() => null)) || m.controls || '';
       for (let k = 0; k < 8; k++) {
-        const items = await page.evaluate(APP_ITEMS, { popupId: m.popup, attr }).catch(() => null);
+        const items = await page.evaluate(APP_ITEMS, { popupId: m.popup, attr, controls: m.controls }).catch(() => null);
         if (items && items.items.length) return items;
         await page.waitForTimeout(150);
       }
@@ -216,8 +232,25 @@ export async function walkMenus(page, mockMenus, o = {}) {
   // (Blazor re-rendering on the trigger's pointerdown) has dropped the marks the first reading put on it
   const current = async (m, label) => {
     await page.waitForTimeout(200);
-    const now = await page.evaluate(APP_ITEMS, { popupId: m.popup, attr }).catch(() => null);
+    const now = await page.evaluate(APP_ITEMS, { popupId: m.popup, attr, controls: m.controls }).catch(() => null);
     return now && now.items.find((x) => x.label === label);
+  };
+  // one item clicked from a freshly opened menu, for the second look and the putting back below
+  const press = async (m, label) => {
+    const again = await open(m);
+    const fresh = again.items && await current(m, label);
+    if (!fresh || fresh.disabled) { await shut(m); return 'menu did not reopen'; }
+    const before = await page.evaluate(SIGNATURE, MENU_SEL).catch(() => null);
+    await page.locator(`[data-tf-walk="${fresh.i}"]`).first().click({ timeout: 3000 }).catch(() => {});
+    let after = null;
+    for (let t = 0; t < settle; t += 150) {
+      await page.waitForTimeout(150);
+      after = await page.evaluate(SIGNATURE, MENU_SEL).catch(() => null);
+      if (before && after && changed(before, after)) break;
+    }
+    await page.keyboard.press('Escape').catch(() => {});
+    await shut(m);
+    return effectOf(before, after);
   };
 
   for (const m of list) {
@@ -251,11 +284,13 @@ export async function walkMenus(page, mockMenus, o = {}) {
       findings.push({ class: 'menu', popup: m.popup, detail: `every item of the menu "${name}" is disabled; the mockup draws ${m.items.filter((x) => !x.disabled).length} of them enabled` });
     // a pick-list (a select's options) chooses a value; its items are the data, not commands to click
     if (got.choice) { rec.result = 'pick-list: items checked, not clicked'; await shut(m); continue; }
+    const startLook = ((await page.evaluate(SIGNATURE, MENU_SEL).catch(() => null)) || {}).look;
+    const mine = [];
     // click every enabled item, one at a time, from a freshly opened menu
     for (const item of got.items) {
       const want = m.items.find((x) => sameLabel(item.label, x.label));
       const c = { popup: m.popup, menu: name, label: item.label, href: want ? want.href : '', disabled: item.disabled };
-      clicks.push(c);
+      clicks.push(c); mine.push({ c, item });
       if (item.disabled) { c.effect = 'disabled'; continue; }
       if (noClick.some((n) => norm(item.label) === n || norm(item.label).startsWith(n + ' '))) { c.effect = 'not clicked (ends the session or deletes)'; continue; }
       const again = await open(m);
@@ -286,11 +321,8 @@ export async function walkMenus(page, mockMenus, o = {}) {
       if (!landed && after) landed = { url: after.url, ids: after.ids, window: false };
       c.landed = landed ? { url: landed.url, window: landed.window, ids: landed.ids } : null;
       c.ids_before = before ? before.ids : [];
-      c.effect = c.error ? 'could not be clicked' : newPages.length ? 'opened a window' : events.length ? events.join(', ')
-        : !before || !after ? 'unknown' : before.url !== after.url ? 'navigated' : before.dialogs !== after.dialogs ? 'opened a dialog'
-        : before.zoom !== after.zoom ? 'zoomed' : before.text !== after.text ? 'changed the page' : 'nothing';
+      c.effect = c.error ? 'could not be clicked' : newPages.length ? 'opened a window' : events.length ? events.join(', ') : effectOf(before, after);
       if (c.error) findings.push({ class: 'menu', popup: m.popup, detail: `"${name} › ${item.label}" could not be clicked (${c.error.slice(0, 80)})` });
-      if (c.effect === 'nothing' && !item.checked) findings.push({ class: 'menu', popup: m.popup, detail: `"${name} › ${item.label}" does nothing when clicked` });
       // put the app back: a new window closed (a web tab only; a desktop head's window is the owner's),
       // a dialog dismissed, a toggled item toggled back, the screen reopened when the address moved
       if (!o.keepWindows) for (const np of newPages) await np.close().catch(() => {});
@@ -304,6 +336,26 @@ export async function walkMenus(page, mockMenus, o = {}) {
       }
       const now = await page.evaluate(SIGNATURE, MENU_SEL).catch(() => null);
       if (o.back && (!now || !before || now.url !== before.url || now.dialogs > before.dialogs)) await o.back();
+    }
+    // a choice that was already the state (Light in a light app) shows nothing: when a sibling moved the
+    // theme or the page in place, that sibling is clicked first and the choice looked at again
+    const donor = mine.find((x) => !x.item.checkbox && /^changed the (theme|page)$/.test(x.c.effect || ''));
+    for (const { c, item } of mine) {
+      if (c.effect !== 'nothing' || item.checked) continue;
+      if (donor && donor.item.label !== item.label && !/^menu did not reopen/.test(await press(m, donor.item.label))) {
+        const second = await press(m, item.label);
+        if (second !== 'nothing' && !/^menu did not reopen|^unknown/.test(second)) { c.effect = `${second} (once "${donor.item.label}" had moved the state)`; continue; }
+      }
+      findings.push({ class: 'menu', popup: m.popup, detail: `"${name} › ${item.label}" does nothing when clicked` });
+    }
+    // the theme put back as the walk found it: an attached desktop head is the viewer's app
+    if (startLook) {
+      const themed = mine.filter((x) => /^changed the theme/.test(x.c.effect || '')).map((x) => x.item);
+      const order = [...themed.filter((x) => x.checked), ...themed.filter((x) => !x.checked)];
+      for (const it of order) {
+        if (((await page.evaluate(SIGNATURE, MENU_SEL).catch(() => null)) || {}).look === startLook) break;
+        await press(m, it.label);
+      }
     }
     await shut(m);
   }

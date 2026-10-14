@@ -81,7 +81,11 @@ export async function useTheme(page, want, settle = 350) {
 
 // The luminance painted at five points of the window (and behind <body>), 0 = black, 1 = white.
 const SURFACE = () => {
-  const parse = (c) => { const m = String(c).match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; };
+  // the browser converts the colour, never a regex: a page themed in oklch() reads back as "oklch(…)",
+  // which an rgb() pattern skipped, so every surface counted as white and no dark theme was seen (Sevak TF-005)
+  const cv = document.createElement('canvas'); cv.width = cv.height = 1;
+  const cx = cv.getContext('2d', { willReadFrequently: true });
+  const parse = (c) => { if (!c || c === 'transparent' || !cx) return null; cx.clearRect(0, 0, 1, 1); cx.fillStyle = 'rgba(0,0,0,0)'; cx.fillStyle = String(c); cx.fillRect(0, 0, 1, 1); const d = cx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; };
   const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
   const behind = (el) => {
     const layers = [];
@@ -108,7 +112,9 @@ export const looksDark = (s) => !!s && s.filter((x) => x !== null && x < 0.2).le
 //     relative luminance (a white card or panel left in a dark shell).
 // Returns { low: [...], light: [...], low_n, light_n }, each list cut to `cap`.
 const AUDIT = ({ dark, min, cap }) => {
-  const parse = (c) => { const m = String(c).match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; };
+  const cv = document.createElement('canvas'); cv.width = cv.height = 1;   // oklch() and every other syntax, as SURFACE
+  const cx = cv.getContext('2d', { willReadFrequently: true });
+  const parse = (c) => { if (!c || c === 'transparent' || !cx) return null; cx.clearRect(0, 0, 1, 1); cx.fillStyle = 'rgba(0,0,0,0)'; cx.fillStyle = String(c); cx.fillRect(0, 0, 1, 1); const d = cx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; };
   const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
   const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
   const blend = (t, u) => { const a = t[3]; return [t[0] * a + u[0] * (1 - a), t[1] * a + u[1] * (1 - a), t[2] * a + u[2] * (1 - a), 1]; };
