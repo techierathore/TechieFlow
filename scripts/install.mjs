@@ -392,6 +392,15 @@ const canonicalSettings = String.raw`{
             "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/guard-verify.sh\""
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.tfcore/hooks/yolo-allow.sh\""
+          }
+        ]
       }
     ],
     "SessionStart": [

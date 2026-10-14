@@ -96,6 +96,15 @@ const TechieFlowPlugin = async ({ directory, client }) => {
     }
   }
 
+  // A flag that expired or went away without `tf-yolo.sh off` leaves the never-ask permissions
+  // behind (the rewritten OpenCode config): put it back
+  // when the project opens and YOLO is off (tf-yolo.sh sync; owner, 2026-10-14).
+  try {
+    if (!yoloOn() && fs.existsSync(path.join(root, ".tfcore", ".session", "yolo-perms.json"))) {
+      spawnSync("bash", [path.join(root, ".tfcore", "utils", "tf-yolo.sh"), "sync"], { cwd: root, env: { ...process.env, TF_PROJECT_DIR: root }, timeout: 15000 })
+    }
+  } catch {}
+
   // Returns the guard's stderr when the guard BLOCKS (exit 2), else null.
   function guardBlocks(script, payload) {
     try {
@@ -334,17 +343,16 @@ const TechieFlowPlugin = async ({ directory, client }) => {
       }
     },
 
-    // YOLO / goal mode (.tfcore/tasks/_yolo-mode.md): when the flag is on, the
-    // `rm * / rmdir * / sudo *` asks from the permission map are auto-approved so
-    // an unattended run never stalls on a delete. Git WRITES never reach this
-    // hook — they are `deny` in the map and exit-2 in block-git.sh. Fail-open:
-    // if the harness never calls permission.ask, nothing changes.
+    // YOLO / goal mode (.tfcore/tasks/_yolo-mode.md): when the flag is on, every
+    // ask is approved — a delete, an edit, a web fetch, a folder outside the project
+    // — so nothing asks (owner, 2026-10-14; it approved shell asks only until then).
+    // Git WRITES never reach this hook — they are `deny` in the map and exit-2 in
+    // block-git.sh. Fail-open: if the harness never calls permission.ask (OpenCode 2),
+    // the config tf-yolo.sh rewrites (every ask made allow) does the same job.
     "permission.ask": async (input, output) => {
       try {
         if (!active || !output) return
         if (!yoloOn()) return
-        const type = String((input && input.type) || "")
-        if (type && type !== "bash") return
         output.status = "allow"
       } catch {}
     },

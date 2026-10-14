@@ -485,7 +485,7 @@ HTML
     > "$d/docs/mockups/late.html"
   # the shipped script, run where playwright resolves; the bytes are the shipped ones
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -522,7 +522,7 @@ tf_022() {
  {"title":"REQ-UI-050 a control that really is missing","tests":[{"status":"unexpected","results":[{"status":"failed","error":{"message":"expect(locator).toBeVisible() failed"}}]}]}
 ]}]}
 JS
-  TF_PWJSON="$d/pw.json" TF_UNITLOG="" TF_UNITLINE="" TF_OUT="$d/tests.json" python3 "$d/map.py" >/dev/null 2>&1
+  TF_HERE="$UTILS" TF_PWJSON="$d/pw.json" TF_UNITLOG="" TF_UNITLINE="" TF_OUT="$d/tests.json" python3 "$d/map.py" >/dev/null 2>&1
   local v; v="$(python3 - "$d/tests.json" <<'PY'
 import json, sys
 try:
@@ -679,6 +679,103 @@ sys.exit(0 if any(r.get('app')=='Blk' and r.get('cmd')=='verify-phase' for r in 
     bad tf_overlap_h "after a void, the corrected record was still refused"
   fi
   unset -f emit n
+}
+
+# --- YOLO never asks (owner, 2026-10-14) ----------------------------------------------------------
+# "If it's still asking for permission then what's the purpose of YOLO mode?" `tf-yolo.sh on` now
+# rewrites the OpenCode config read last (every ask made allow, every deny kept, every agent too) and
+# `off` puts its exact text back; an expired flag is put back by the hook. The Claude Code hook
+# approves every call while the flag is live and says nothing otherwise.
+yolo_perms() {
+  local d="$SCRATCH/yoloperms"; mkdir -p "$d/.tfcore/utils" "$d/.tfcore/hooks" "$d/.opencode"
+  cp "$UTILS/tf-yolo.sh" "$d/.tfcore/utils/"; [[ -f "$UTILS/tf-yolo-perms.py" ]] && cp "$UTILS/tf-yolo-perms.py" "$d/.tfcore/utils/"
+  [[ -f "$HOOKS/yolo-allow.sh" ]] && cp "$HOOKS/yolo-allow.sh" "$d/.tfcore/hooks/"
+  cat > "$d/.opencode/opencode.jsonc" <<'JS'
+{
+  // the framework's own OpenCode config, as a project carries it
+  "$schema": "https://opencode.ai/config.json",
+  "permission": { "bash": { "*": "allow", "git commit*": "deny", "rm *": "ask", "sudo *": "ask", }, },
+  "agent": { "flow-master": { "mode": "primary", "permission": { "edit": "allow", "bash": { "*": "allow", "git push*": "deny", "rmdir *": "ask" } } } }
+}
+JS
+  cp "$d/.opencode/opencode.jsonc" "$d/before.jsonc"
+  local hin='{"tool_name":"Bash","tool_input":{"command":"ls"}}' v=""
+  ( cd "$d" && TF_PROJECT_DIR="$d" CLAUDE_PROJECT_DIR="$d" bash .tfcore/utils/tf-yolo.sh on >/dev/null 2>&1 )
+  v="$(python3 - "$d/.opencode/opencode.jsonc" <<'PY'
+import json, re, sys
+t = open(sys.argv[1]).read()
+t = "\n".join(l for l in t.splitlines() if not l.lstrip().startswith("//"))
+try:
+    c = json.loads(re.sub(r",(\s*[}\]])", r"\1", t))
+except ValueError:
+    print("unreadable"); raise SystemExit
+b, a = c["permission"]["bash"], c["agent"]["flow-master"]["permission"]
+print(t.count('"ask"'), list(b)[0], b.get("git commit*"), b.get("rm *"), a["bash"].get("git push*"), a["bash"].get("rmdir *"),
+      c["permission"].get("external_directory"), c["agent"]["flow-master"].get("mode"))
+PY
+)"
+  local h_on; h_on="$(cd "$d" && printf '%s' "$hin" | CLAUDE_PROJECT_DIR="$d" bash .tfcore/hooks/yolo-allow.sh 2>/dev/null)"
+  ( cd "$d" && TF_PROJECT_DIR="$d" CLAUDE_PROJECT_DIR="$d" bash .tfcore/utils/tf-yolo.sh off >/dev/null 2>&1 )
+  local back=no; cmp -s "$d/.opencode/opencode.jsonc" "$d/before.jsonc" && back=yes
+  local h_off; h_off="$(cd "$d" && printf '%s' "$hin" | CLAUDE_PROJECT_DIR="$d" bash .tfcore/hooks/yolo-allow.sh 2>/dev/null)"
+  # a flag left to expire: the next tool call puts OpenCode back
+  ( cd "$d" && TF_PROJECT_DIR="$d" CLAUDE_PROJECT_DIR="$d" bash .tfcore/utils/tf-yolo.sh on >/dev/null 2>&1 )
+  touch -t 202001010000 "$d/.tfcore/.session/yolo.json" 2>/dev/null
+  ( cd "$d" && printf '%s' "$hin" | CLAUDE_PROJECT_DIR="$d" bash .tfcore/hooks/yolo-allow.sh >/dev/null 2>&1 )
+  local expired=no; cmp -s "$d/.opencode/opencode.jsonc" "$d/before.jsonc" && expired=yes
+  [[ "$v" == "0 * deny allow deny allow allow primary" ]] \
+    && ok yolo_perms_a "YOLO on: OpenCode's config has no ask left, every deny in its place, the agent's too" \
+    || bad yolo_perms_a "YOLO on: OpenCode config read '$v' (want '0 * deny allow deny allow allow primary')"
+  [[ "$back" == yes && "$expired" == yes ]] \
+    && ok yolo_perms_b "off, and an expired flag, put the OpenCode config back byte for byte" \
+    || bad yolo_perms_b "OpenCode config after off: restored=$back; after expiry: restored=$expired"
+  grep -q '"permissionDecision":"allow"' <<<"$h_on" && [[ -z "$h_off" ]] \
+    && ok yolo_perms_c "the Claude Code hook approves every call while YOLO is on and says nothing when it is off" \
+    || bad yolo_perms_c "hook on: '${h_on:0:80}' off: '${h_off:0:80}'"
+}
+
+# --- tfyolo: Claude Code started in bypass mode with YOLO on (owner, 2026-10-14) ----------------------
+# Claude Code drops its own prompts only for a session started in bypass mode, so `tfyolo` (a shell
+# function tf-yolo-alias.sh puts in the profile) runs tf-yolo-start.sh: YOLO on, claude started with
+# --permission-mode bypassPermissions from the project root with the owner's arguments, YOLO off when
+# it ends, however it ends. It refuses outside a TechieFlow project. A stand-in claude records what it got.
+tfyolo() {
+  [[ -f "$UTILS/tf-yolo-start.sh" && -f "$UTILS/tf-yolo-alias.sh" ]] || { bad tfyolo "tf-yolo-start.sh or tf-yolo-alias.sh is missing"; return; }
+  local d="$SCRATCH/tfyolo"; local p="$d/proj"; mkdir -p "$p/.tfcore/utils" "$p/.tfcore/hooks" "$p/.claude" "$p/.opencode" "$p/src/deep" "$d/bin" "$d/home"
+  cp "$UTILS/tf-yolo.sh" "$UTILS/tf-yolo-perms.py" "$UTILS/tf-yolo-start.sh" "$p/.tfcore/utils/"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$p/.tfcore/hooks/block-git.sh"
+  printf '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"bash .tfcore/hooks/block-git.sh"}]}]}}\n' > "$p/.claude/settings.json"
+  printf '{\n  "permission": { "bash": { "*": "allow", "rm *": "ask" } }\n}\n' > "$p/.opencode/opencode.jsonc"
+  cp "$p/.opencode/opencode.jsonc" "$d/oc.before"
+  cat > "$d/bin/claude" <<EOF
+#!/usr/bin/env bash
+{ echo "args=\$*"; echo "cwd=\$PWD"; [[ -f "\$PWD/.tfcore/.session/yolo.json" ]] && echo yolo=on || echo yolo=off
+  grep -q '"ask"' "\$PWD/.opencode/opencode.jsonc" && echo opencode=asks || echo opencode=never-asks; } > "$d/seen"
+exit 7
+EOF
+  chmod +x "$d/bin/claude"
+  printf 'export KEEP=1\n' > "$d/home/.bashrc"
+  TF_HOME="$d/home" SHELL=/bin/bash bash "$UTILS/tf-yolo-alias.sh" install >/dev/null
+  TF_HOME="$d/home" SHELL=/bin/bash bash "$UTILS/tf-yolo-alias.sh" install >/dev/null
+  local blocks; blocks="$(grep -c '>>> TechieFlow tfyolo >>>' "$d/home/.bashrc")"
+  local rc; ( cd "$p/src/deep" && PATH="$d/bin:$PATH" bash -c "source '$d/home/.bashrc'; tfyolo -c" >/dev/null 2>&1 ); rc=$?
+  local seen; seen="$(tr '\n' ' ' < "$d/seen" 2>/dev/null)"
+  local after=bad; [[ ! -f "$p/.tfcore/.session/yolo.json" ]] && cmp -s "$p/.opencode/opencode.jsonc" "$d/oc.before" && after=restored
+  # outside any project: a fresh folder under the system's temp, not inside this repository
+  local aw; aw="$(mktemp -d 2>/dev/null || echo /tmp)"
+  local away; ( cd "$aw" && PATH="$d/bin:$PATH" bash -c "source '$d/home/.bashrc'; tfyolo" >/dev/null 2>&1 ); away=$?
+  [[ "$aw" != /tmp ]] && rmdir "$aw" 2>/dev/null
+  TF_HOME="$d/home" bash "$UTILS/tf-yolo-alias.sh" remove >/dev/null
+  local left; left="$(grep -c 'tfyolo' "$d/home/.bashrc")"
+  [[ "$seen" == "args=--permission-mode bypassPermissions -c cwd=$p yolo=on opencode=never-asks " && $rc -eq 7 ]] \
+    && ok tfyolo_a "tfyolo -c from a subfolder starts claude in bypass mode at the project root, -c passed on, YOLO on and OpenCode never asking" \
+    || bad tfyolo_a "tfyolo -c: rc=$rc saw '$seen'"
+  [[ "$after" == restored && $away -eq 2 ]] \
+    && ok tfyolo_b "when the session ends YOLO goes off and OpenCode asks again; outside a project it refuses" \
+    || bad tfyolo_b "after the session: $after; outside a project exit $away (want 2)"
+  [[ "$blocks" == 1 && "$left" == 0 ]] && grep -q '^export KEEP=1$' "$d/home/.bashrc" \
+    && ok tfyolo_c "install twice leaves one tfyolo in the profile; remove takes it out and keeps the rest" \
+    || bad tfyolo_c "profile: $blocks block(s) after two installs, $left line(s) after remove"
 }
 
 # --- the ledger the status document stands on --------------------------------------------
@@ -1205,7 +1302,7 @@ HTML
 <h1 data-testid="page-title">Misses</h1><div data-testid="miss-table">rows of misses</div></body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1251,7 +1348,7 @@ HTML
 <div data-testid="kpi-rework" class="tile">Rework 12</div></body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1485,7 +1582,7 @@ HTML
 <input data-testid="login-pass" name="p" type="password"><button data-testid="login-submit" type="submit">Sign in</button></form></body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1657,7 +1754,7 @@ HTML
 </body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1798,7 +1895,7 @@ HTML
 </body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1938,7 +2035,7 @@ HTML
 </body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -1998,7 +2095,7 @@ tf_045() {
     printf '<div class="tile" data-testid="tile-warn" style="background:#b45309">3 open</div></body></html>\n'
   } > "$d/misses.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2054,7 +2151,7 @@ tf_046() {
     printf '</body></html>\n'
   } > "$d/misses.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2130,7 +2227,7 @@ tf_047() {
     printf '</body></html>\n'
   } > "$d/misses.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2327,7 +2424,7 @@ _tf053_findings() {
 </body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -2374,7 +2471,7 @@ tf_036() {
 </body></html>
 HTML
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2630,7 +2727,7 @@ class H(http.server.BaseHTTPRequestHandler):
 http.server.ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 PY
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$d/screens.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 "$d/server.py" "$port" "$d/app.html" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2846,7 +2943,7 @@ am_011() {
   local d="$SCRATCH/am011"; mkdir -p "$d/docs/mockups"
   printf '<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font:14px/20px system-ui} .badge{display:inline-block;border-radius:8px;background:#2563eb;color:#fff;padding:2px 8px;height:20px}</style></head><body><div data-testid="dash-header"><h1>Dashboard</h1><span class="badge">3 open</span></div><table data-testid="dash-table"><tr><th>Name</th><th>Count</th></tr><tr><td>Alpha</td><td>12</td></tr></table></body></html>\n' > "$d/docs/mockups/dashboard.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-assets-browser.mjs" "$UTILS/tf-assets.sh" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-assets-browser.mjs" "$UTILS/tf-assets.sh" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   _inpage_server "$d" "$port"
   local out
@@ -2872,7 +2969,7 @@ am_012() {
   fi
   local d="$SCRATCH/am012"; mkdir -p "$d/tests/.artifacts/verify"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-verify-screens.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   _inpage_server "$d" "$port"
   local out
@@ -2938,7 +3035,7 @@ am_014() {
   printf '<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0}</style></head><body><main style="height:600px;overflow-y:auto">%s</main><div style="height:900px"></div></body></html>\n' "$page" > "$d/escaped.html"
   cp "$d/docs/mockups/report.html" "$d/docs/mockups/escaped.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -2972,7 +3069,7 @@ am_015() {
   printf '%s%s</style></head><body><div data-testid="note"><span class="w">Not adopted on any device</span></div></body></html>\n' "$head" \
     '.w{display:inline-block;width:40px;padding:4px;line-height:1;font-size:10px}' > "$d/wrapped.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & echo $! > "$d/srv.pid"
   sleep 1
@@ -3408,7 +3505,7 @@ am_028() {
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><h1 data-testid="groups-title">Groups</h1><div class="table-responsive" data-testid="groups-table"><table>%s</table></div>%s</body></html>\n' "$css" "$rows" "$tail" > "$d/groups.html"
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><h1 data-testid="groups-title">Groups</h1><div class="table-responsive" data-testid="groups-table"><p>14 groups</p><table>%s</table></div>%s</body></html>\n' "$css" "$rows" "$tail" > "$d/groups2.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-mockup-parity.mjs" "$d/parity.mjs"; cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -3472,7 +3569,7 @@ ch_001() {
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="this-chatur"><div class="row"><svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg>Version 1.4</div><div class="row">Up to date<div data-tf-state="newer-build"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="8"/></svg> Download 1.5</div></div></div></body></html>\n' "$css" > "$d/docs/mockups/pre.html"
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="this-chatur"><div class="row"><svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg>Version 1.4</div><div class="row">Up to date</div></div></body></html>\n' "$css" > "$d/site/pre/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -3542,7 +3639,7 @@ MD
   - *Acceptance:* When the owner opens Bad, then the check-ins show.
 MD
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -3700,7 +3797,7 @@ ch_005() {
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><nav data-testid="recent-list"><h3>Recent</h3></nav></body></html>\n' "$css" > "$d/site/empty/index.html"
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><nav data-testid="recent-list"><h3>Recent</h3><a>Chatur</a><a>Sevak</a></nav></body></html>\n' "$css" > "$d/site/bare/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -3738,7 +3835,7 @@ ch_006() {
   # the same, with an icon of the box's own that the mockup does not draw
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="history-table"><p>%s Filter</p><table><thead><tr><th>Check-in</th><th>Message</th></tr></thead><tbody>%s</tbody></table></div></body></html>\n' "$css" "$ic" "$arows" > "$d/site/extra/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -3772,7 +3869,7 @@ ch_007() {
   printf '%s<table data-testid="tools-table"><tbody data-tf-state="sample-data"><tr><td>%s</td><td>git</td></tr><tr><td>%s</td><td>dotnet</td></tr></tbody></table></body></html>\n' "$h" "$ic" "$ic" > "$d/docs/mockups/tools.html"
   printf '%s<div data-testid="tools-table"><table><tbody><tr><td>%s</td><td>node</td></tr></tbody></table></div></body></html>\n' "$h" "$ic" > "$d/site/tools/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -4216,7 +4313,7 @@ lk_002() {
   printf '<!doctype html><html><head><meta charset="utf-8"><style>body{font:14px system-ui}</style></head><body><h1 data-testid="page-title">Home</h1><p>Signed-in home of the development head.</p></body></html>\n' > "$d/site/index.html"
   cp "$d/site/index.html" "$d/docs/mockups/home.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 - "$d" "$port" >/dev/null 2>&1 <<'PY' &
 import functools, http.server, ssl, sys
@@ -4281,7 +4378,7 @@ lk_005() {
  {"name":"Post","route":"/posts/{PostId:int}","mockup":"","rows":["REQ-UI-003"]}]}
 JS
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$d/"
+  cp "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -4330,7 +4427,7 @@ class H(http.server.BaseHTTPRequestHandler):
 http.server.ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 PY
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-assets-browser.mjs" "$UTILS/tf-assets.sh" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-assets-browser.mjs" "$UTILS/tf-assets.sh" "$d/"
   local port cport exe
   port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   cport="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
@@ -4417,7 +4514,7 @@ lk_010() {
   printf '<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><style>%s</style></head><body><div id="root"></div><script>function draw(){document.getElementById("root").innerHTML=location.pathname==="/dashboard"?%s:"<p>Home</p>";}window.addEventListener("popstate",draw);draw();</script></body></html>\n' \
     "$css" "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$body")" > "$d/site/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port cport exe
   port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   cport="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
@@ -4580,7 +4677,7 @@ lk_022() {
   printf "$page" "Editor" > "$d/site/story/editor/index.html"
   printf '{"screens":[{"name":"Prompt Manager","route":"/admin/prompt-manager/","mockup":"docs/mockups/admin/prompt-manager.html"},{"name":"Story editor","route":"/story/editor/","mockup":"docs/mockups/story/editor.html"}]}\n' > "$d/tests/.artifacts/verify/list.json"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -4674,6 +4771,106 @@ ch_010() {
     || bad ch_010 "zoom after three windows and one Cmd+=: got '$out' (want '1.1 1.1 1.1')"
 }
 
+# --- Chatur TF-011: placeholder menus and screens no click reached passed both gates ----------------------
+# Both gates loaded each route and compared the closed page with its mockup, so File, Edit and View holding
+# only "Nothing to do yet" passed, and Settings, Prerequisites and Repository passed though no click in the
+# app opened them. Both now open every menu the mockup draws open, click every item, and fail on a missing
+# or disabled item, placeholder text, an item that does nothing, and a screen no menu click reaches. The
+# built app passes both. Also: tf-triage new counted the next id in one checklist and gave REQ-UI-055 twice.
+ch_011() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip ch_011 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/ch011"; mkdir -p "$d"
+  bash "$ROOT/tests/regression/ch011/make.sh" "$d"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  [[ -f "$UTILS/tf-menus.mjs" ]] && cp "$UTILS/tf-menus.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  local v
+  for v in bad good; do
+    ( cd "$d" && tf_timeout 300 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen main=/$v/main/ --screen prerequisites=/$v/prerequisites/ --screen settings=/$v/settings/ --widths 1280 --themes light --render-wait 500 --wait 300 --json-out "$d/s-$v.json" --shots-dir "$d/shots" > "$d/s-$v.log" 2>&1
+      tf_timeout 300 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen main=/$v/main/ --screen prerequisites=/$v/prerequisites/ --screen settings=/$v/settings/ --widths 1280 --themes light --json-out "$d/p-$v.json" > /dev/null 2> "$d/p-$v.log" )
+  done
+  ( cd "$d" && tf_timeout 300 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups-plain --screen plain=/plain/ --widths 1280 --themes light --render-wait 500 --wait 300 --json-out "$d/s-plain.json" --shots-dir "$d/shots" > "$d/s-plain.log" 2>&1 )
+  kill "$srv" 2>/dev/null
+  local pl; pl="$(python3 -c "
+import json
+s = json.load(open('$d/s-plain.json'))['screens'][0]
+print(s['render'], '|'.join(f['detail'] for w in s['widths'] for f in w['findings']))" 2>&1)"
+  grep -q '^EMPTY .*the menu "Reports" shows placeholder text "Coming soon"' <<<"$pl" \
+    && ok ch_011c "a mockup that marks no menu: the app's own menus are still opened, and a placeholder item fails" \
+    || bad ch_011c "the app's own menu was not walked: $pl"
+  local out; out="$(python3 -c "
+import json
+def load(p):
+    try: return json.load(open(p))
+    except Exception: return {'screens': []}
+for v in ('bad', 'good'):
+    s = {x['name']: x for x in load('$d/s-%s.json' % v)['screens']}
+    p = {x['screen']: x for x in load('$d/p-%s.json' % v)['screens']}
+    for n in ('main', 'prerequisites', 'settings'):
+        sd = ' | '.join(f['detail'] for w in s.get(n, {}).get('widths', []) for f in w.get('findings', []))
+        pd = ' | '.join(f['detail'] for f in p.get(n, {}).get('findings', []))
+        print(v, n, s.get(n, {}).get('render'), p.get(n, {}).get('verdict'), '#', sd, '#', pd)" 2>&1)"
+  local both='Nothing to do yet.*New project.*does nothing'
+  grep -q "^bad main EMPTY FAIL # .*$both.* # .*$both" <<<"$out" \
+    && grep -q '^bad prerequisites UNREACHABLE FAIL # no menu click reaches /bad/prerequisites/.*Coming soon.* # no menu click reaches' <<<"$out" \
+    && grep -qE '^good main OK PASS # +# *$' <<<"$out" && grep -qE '^good prerequisites OK PASS # +# *$' <<<"$out" && grep -qE '^good settings OK PASS # +# *$' <<<"$out" \
+    && ok ch_011a "both gates open every menu and click every item: a placeholder menu, a missing item, a dead item and a screen no click reaches fail; the built app passes" \
+    || { bad ch_011a "menus, one line per screen:"; note "$out"; }
+  # the next free id is counted across every checklist of the app
+  local t="$SCRATCH/ch011t"; mkdir -p "$t/docs" "$t/.tfcore"
+  printf 'appPhase: 2\n' > "$t/.tfcore/core-config.yaml"
+  local head='| ID | Requirement | Status | %% | Remarks | Detail |\n|---|---|---|---|---|---|\n'
+  printf "# A\n\n$head| REQ-UI-054 | One | Verified | 100%% | | [d](#d-req-ui-054) |\n| REQ-UI-055 | Two | Verified | 100%% | | [d](#d-req-ui-055) |\n" > "$t/docs/App-Checklist.md"
+  printf "# A P2\n\n$head| REQ-UI-050 | Three | Not Started | 0%% | | [d](#d-req-ui-050) |\n" > "$t/docs/App-P2-Checklist.md"
+  local id; id="$(cd "$t" && TF_SKIP_SELFCHECK=1 bash "$UTILS/tf-triage.sh" App new "A menu item opens nothing" "When the owner clicks View on Workbench, then the menu opens" --prefix FN 2>&1 | grep -oE 'REQ-FN-[0-9]+' | head -1)"
+  id="$(cd "$t" && TF_SKIP_SELFCHECK=1 bash "$UTILS/tf-triage.sh" App new "Menu shows a placeholder" "When the owner opens File on Workbench, then every item is real" --prefix UI 2>&1 | grep -oE 'REQ-UI-[0-9]+' | head -1)"
+  [[ "$id" == "REQ-UI-056" ]] \
+    && ok ch_011b "tf-triage new gives the next id free in every checklist of the app (REQ-UI-056, not phase 2's own REQ-UI-051)" \
+    || bad ch_011b "tf-triage new gave '$id' with REQ-UI-055 in phase 1 and REQ-UI-050 in phase 2 (want REQ-UI-056)"
+}
+
+# --- Chatur TF-012: a row counted as tested because its id sat in another test's sample data ------------
+# The xUnit theory `REQ-UI-048 requirement ids are found in test names` takes sample names as InlineData,
+# and its reported cases read `…(aName: "REQ-FN-053 …")`, so REQ-FN-053 and REQ-FN-055 were Verified on
+# it with no test of their own. A test now claims only the ids its name starts with (after one short
+# capital tag such as FIX), before any argument list, plus an argument named for the row (`row: "…"`).
+# Every describe title of a browser test is its own name. A row only named inside another row's passing
+# test is listed, not tested.
+ch_012() {
+  local d="$SCRATCH/ch012"; mkdir -p "$d"
+  awk "/<<'PY'/{f=1;next} /^PY\$/{f=0} f" "$UTILS/tf-verify-tests.sh" > "$d/map.py"
+  cat > "$d/pw.json" <<'JS'
+{"suites":[{"title":"rows.spec.ts","specs":[
+ {"title":"FIX REQ-FN-021 per-app settings persist","tests":[{"status":"expected","results":[{"status":"passed"}]}]},
+ {"title":"REQ-UI-001 a combined rate across two projects each carrying a REQ-UI-002 counts two","tests":[{"status":"expected","results":[{"status":"passed"}]}]}
+ ],"suites":[{"title":"GDPR deletion request workflow persists across reload","specs":[
+ {"title":"REQ-FN-032 assign survives a reload","tests":[{"status":"expected","results":[{"status":"passed"}]}]}]}]}]}
+JS
+  cat > "$d/unit.log" <<'LOG'
+  passed REQ-UI-048 requirement ids are found in test names(aName: "REQ-FN-053 It waits for the owner", aExpected: "REQ-FN-053") [12 ms]
+  passed REQ-UI-048 requirement ids are found in test names(aName: "REQ-FN-053/055 stop", aExpected: "REQ-FN-053,REQ-FN-055") [3 ms]
+  passed ShippedReferenceNamesPhaseThreeMember(row: "REQ-RAG-125", member: "DownloadProgress") [1 ms]
+LOG
+  TF_HERE="$UTILS" TF_PWJSON="$d/pw.json" TF_UNITLOG="$d/unit.log" TF_UNITLINE="" TF_OUT="$d/tests.json" python3 "$d/map.py" > "$d/out.txt" 2>&1
+  local v; v="$(python3 - "$d/tests.json" <<'PY'
+import json, sys
+try:
+    j = json.load(open(sys.argv[1]))
+except Exception:
+    print("unreadable"); raise SystemExit
+print(" ".join(sorted(j["reqs"])), "#", " ".join(sorted(j.get("named_only_by_other_rows_tests", {}))))
+PY
+)"
+  [[ "$v" == "REQ-FN-021 REQ-FN-032 REQ-RAG-125 REQ-UI-001 REQ-UI-048 # REQ-FN-053 REQ-FN-055 REQ-UI-002" ]] \
+    && grep -q "NO TEST REQ-FN-053 — only named inside another row's passing test" "$d/out.txt" \
+    && ok ch_012 "a test claims the ids its name starts with (and a row argument), not ids in its sample data; REQ-FN-053/055 are listed as untested" \
+    || { bad ch_012 "rows read from the names: '$v'"; note "want: REQ-FN-021 REQ-FN-032 REQ-RAG-125 REQ-UI-001 REQ-UI-048 # REQ-FN-053 REQ-FN-055 REQ-UI-002"; }
+}
+
 # --- Chatur TF-009: a progress bar was always reported empty -------------------------------------------
 # The mockup's progress-bar is a track holding a fill; the app's is a role="progressbar" with
 # aria-valuenow at 50%. Neither has text, so the screen check said `anchored control "progress-bar"
@@ -4697,7 +4894,7 @@ ch_009() {
   printf "$page" "$css" '<progress data-testid="progress-bar" max="100" value="50"></progress>' > "$d/site/native/index.html"
   printf "$page" "$css" '<div class="track" data-testid="progress-bar"><div></div></div>' > "$d/site/blank/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-verify-screens.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -4731,7 +4928,7 @@ lk_024() {
   printf '<!doctype html><html><head><meta charset="utf-8"><style>%s .card{background:#f8f8f8}</style></head><body><div class="card" data-testid="plain-card"><h2>Plain</h2><p class="muted">Readable</p></div></body></html>\n' "$base" > "$d/site/plain/index.html"
   cp "$d/site/plain/index.html" "$d/docs/mockups/plain.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -4779,7 +4976,7 @@ lk_025() {
   printf '<!doctype html><html data-site-theme="minimal" data-theme="dark" class="dark"><head><meta charset="utf-8"><style>%s html.dark body{background:#111;color:#eee}</style></head><body><div id="root"></div><script>function draw(){document.getElementById("root").innerHTML=location.pathname==="/crawler"?%s:"<p>Home</p>";}window.addEventListener("popstate",draw);draw();</script></body></html>\n' \
     "$css" "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$body")" > "$d/site/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port cport exe
   port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   cport="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
@@ -4925,7 +5122,7 @@ lk_025e() {
   sed 's|</body>|<script>new MutationObserver(() => { if (document.documentElement.dataset.theme === "dark") Element.prototype.getBoundingClientRect = () => { throw new Error("gone"); }; }).observe(document.documentElement, { attributes: true });</script></body>|' \
     "$d/docs/mockups/leaves.html" > "$d/site/leaves/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -5248,7 +5445,7 @@ lk_013() {
   printf '<!doctype html><html data-theme="dark" class="dark bg-light"><head><meta charset="utf-8"><style>%s</style></head><body><div id="root"></div><script>function draw(){document.getElementById("root").innerHTML=location.pathname==="/dashboard"?%s:"<p>Home</p>";}window.addEventListener("popstate",draw);draw();</script></body></html>\n' \
     "$css" "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$body")" > "$d/site/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port cport exe
   port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   cport="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
@@ -5285,7 +5482,7 @@ lk_011() {
   # the app's first view: the database answers, so there is no alert
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="conn-card">%s</div></body></html>\n' "$css" "$row" | tee "$d/site/conn/index.html" > "$d/site/conn2/index.html"
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -5700,7 +5897,7 @@ print(r.get('tokens_scope'), r.get('tokens_out'), r.get('subagent_runs'), r.get(
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 sv_001 sv_002 sv_003 sv_004 sv_005 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap tf_ledger guard_reads tf_selfcheck; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 sv_001 sv_002 sv_003 sv_004 sv_005 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

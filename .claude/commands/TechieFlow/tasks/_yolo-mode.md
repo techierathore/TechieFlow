@@ -14,7 +14,7 @@ YOLO means all permissions and all access are granted: run one command to comple
 
 ## What changes
 
-- Deletes and `sudo` run without a prompt. Read-only git is allowed. Git writes stay refused in every mode; the owner commits.
+- Nothing asks. Deletes and `sudo` run without a prompt; `tf-yolo.sh on` also makes OpenCode stop asking (from its next session) and the `yolo-allow.sh` hook approves every Claude Code call. Claude Code's own safety checks still ask unless the session was started with `tfyolo` (`tfyolo -c` keeps the conversation); say that in one line when one asks. Read-only git is allowed. Git writes stay refused in every mode; the owner commits.
 - No question, confirmation or pause: take the documented default and record it in the checklist Remarks. The one question that survives is a new test user (`_smoke-test-policy.md`): use a documented account; if none exists, create one named `{App}-yolo-tester`, record it in the UsageGuide, and continue.
 - Never end a turn with a question, a plan or "shall I". End only when the command is complete or everything left is owner-only.
 - A failed build, a dead port, a stopped service: fix it and continue. A `429` from a sub-agent or an API: wait 60 seconds, retry once, then route around it.

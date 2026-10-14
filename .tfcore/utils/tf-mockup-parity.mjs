@@ -45,6 +45,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { signIn, reach } from './tf-login.mjs';
 import { parseThemes, useTheme, surface, differs, looksDark } from './tf-theme.mjs';
+import { mockupMenus, walkMenus, placeholdersOnPage, reachability } from './tf-menus.mjs';
 
 // ---------------------------------------------------------------- arguments
 const argv = process.argv.slice(2);
@@ -179,6 +180,13 @@ const APPLY_THEME = (t) => {
   return { before, changed };
 };
 const MAX_FINDINGS_PER_SCREEN = parseInt(arg('--max-findings', '40'), 10);
+// Chatur TF-011: a closed menu bar matches its mockup, so menus drawn open (data-tf-state="popup-open") are
+// opened and every item clicked (tf-menus.mjs). --placeholder-text and --no-click are repeatable;
+// --no-menus leaves the menus closed.
+const many = (name) => argv.flatMap((a, i) => (a === name && i + 1 < argv.length ? [argv[i + 1]] : []));
+const PLACEHOLDER_EXTRA = many('--placeholder-text');
+const NO_CLICK_EXTRA = many('--no-click');
+const WALK_MENUS = !flag('--no-menus');
 
 if ((!BASE && !CDP) || SCREENS.length === 0) {
   console.error('usage: tf-mockup-parity.sh --base URL|--cdp URL --screen name=/route [--screen ...]');
@@ -1136,11 +1144,79 @@ for (const s of SCREENS) {
   });
 }
 
+// ---------------------------------------------------------------- menus (Chatur TF-011)
+// Each menu the mockups draw open is opened in the app and every item clicked, once, on the first screen
+// that draws it, at the first width. Its findings go on every screen whose mockup draws it; a screen a
+// menu item links to and no click reached gets an `unreachable` finding.
+let menuWalk = { walked: WALK_MENUS, menus: [], clicks: [] };
+if (WALK_MENUS && results.length) {
+  const width = WIDTHS[0];
+  const { app: page, mock: mockPage } = tabs[width];
+  const byScreen = {}, mockText = {}, mockIds = {};
+  for (const r of results) {
+    if (r.verdict === 'NO-MOCKUP' || r.verdict === 'ERROR') continue;
+    try {
+      await mockPage.goto(pathToFileURL(findMockup(r.screen)).href, { waitUntil: 'load' });
+      byScreen[r.screen] = await mockupMenus(mockPage, 'data-testid');
+      mockText[r.screen] = await mockPage.evaluate(() => document.body.innerText || '');
+      // the controls that say a click landed on this screen: anchors outside any other state or open menu
+      mockIds[r.screen] = await mockPage.evaluate(() => [...document.querySelectorAll('[data-testid]')]
+        .filter((e) => !e.closest('[data-tf-state],[data-state-testid],[data-tf-sample]')).map((e) => e.getAttribute('data-testid')));
+    } catch (e) { byScreen[r.screen] = []; }
+  }
+  const key = (m) => `${m.trigger}|${m.popup}`;
+  const done = new Map();
+  const anyMock = Object.values(byScreen).some((l) => l.length);
+  const allClicks = [];
+  for (const r of results) {
+    if (!(r.screen in byScreen)) continue;
+    const todo = byScreen[r.screen].filter((m) => !done.has(key(m)));
+    if (anyMock && !todo.length) continue;
+    if (!anyMock && done.size) break;
+    const back = async () => { if (CDP) await reachCdp(page, r.route); else await reach(page, LOGIN_OPTS, r.route); };
+    try {
+      if (CDP) await page.setViewportSize({ width, height: width < 700 ? 844 : 800 }).catch(() => {});
+      await back();
+      const pages = async () => CDP ? cdpBrowser.contexts().flatMap((c) => c.pages()) : ctx.pages().filter((p) => p !== mockPage && !Object.values(tabs).some((t) => t.mock === p));
+      const w = await walkMenus(page, todo, { attr: 'data-testid', settle: LOGIN_OPTS.settle, back, pages, keepWindows: !!CDP,
+        mockText: mockText[r.screen], placeholders: PLACEHOLDER_EXTRA, noClick: NO_CLICK_EXTRA });
+      menuWalk.menus.push(...w.menus.map((m) => ({ ...m, screen: r.screen })));
+      menuWalk.clicks.push(...w.clicks.map(({ ids_before, ...c }) => ({ ...c, landed: c.landed ? { url: c.landed.url, window: c.landed.window } : null, screen: r.screen })));
+      allClicks.push(...w.clicks);
+      if (!w.from_mockup) { done.set('app|', w.findings); r._menu = w.findings; }
+      for (const m of todo) done.set(key(m), w.findings.filter((f) => f.popup === m.popup));
+    } catch (e) { menuWalk.error = String(e.message || e).split('\n')[0]; }
+  }
+  // what each screen owes: its menus' findings, placeholder text on the page, and a way in that works
+  const ways = reachability(results.filter((r) => r.screen in byScreen).map((r) => ({ name: r.screen, route: r.route, mockup: findMockup(r.screen), anchors: mockIds[r.screen] || [] })), allClicks);
+  menuWalk.reach = ways;
+  for (const r of results) {
+    if (!(r.screen in byScreen)) continue;
+    const add = (byScreen[r.screen] || []).flatMap((m) => done.get(key(m)) || []).concat(r._menu || [])
+      .map((f) => ({ screen: r.screen, width, class: f.class, key: f.popup ? `menu ${f.popup}` : 'menu', detail: f.detail }));
+    try {
+      if (CDP) await reachCdp(page, r.route); else await reach(page, LOGIN_OPTS, r.route);
+      for (const p of await placeholdersOnPage(page, mockText[r.screen], PLACEHOLDER_EXTRA)) add.push({ screen: r.screen, width, class: 'placeholder', key: 'document', detail: `the screen shows placeholder text "${p}"` });
+    } catch (e) { /* the screen was compared above; a second opening that fails adds nothing */ }
+    const rv = ways[r.screen];
+    if (rv && !rv.reached) add.unshift({ screen: r.screen, width, class: 'unreachable', key: 'document', detail: `no menu click reaches ${r.route}: ${rv.tried.join('; ')}` });
+    if (rv && rv.reached) r.reached_by = rv.by;
+    delete r._menu;
+    if (!add.length) continue;
+    r.findings = [...add, ...r.findings].slice(0, MAX_FINDINGS_PER_SCREEN);
+    r.findings_n = r.findings.length;
+    if (r.verdict === 'PASS' || r.verdict === 'UNGRADEABLE') r.verdict = 'FAIL';
+    hardFail = true;
+  }
+}
+for (const r of results) delete r._menu;
+
 await browser.close();
 if (cdpBrowser) await cdpBrowser.close().catch(() => {});   // disconnects; the app keeps running
 
 const summary = {
   status: 'measured',
+  menus: menuWalk,
   base: BASE || CDP, mode: CDP ? 'cdp' : 'base',
   widths: WIDTHS,
   screens_n: results.length,

@@ -72,8 +72,26 @@ def set_cells(path, rid, status=None, pct=None, remark=None, append_remark=None)
     return prior
 
 
-def next_id(text, prefix):
-    ids = [int(m.group(1)) for m in re.finditer(rf"REQ-{prefix}-(\d{{3}})", text)]
+def siblings(path):
+    """every checklist of the same application: docs/<App>-Checklist.md and docs/<App>-P<N>-Checklist.md"""
+    d, f = os.path.split(path)
+    m = re.match(r"^(.+?)(?:-P\d+)?-Checklist\.md$", f)
+    if not m:
+        return []
+    app = re.escape(m.group(1))
+    try:
+        names = os.listdir(d or ".")
+    except OSError:
+        return []
+    return [os.path.join(d, n) for n in sorted(names) if n != f and re.match(rf"^{app}(?:-P\d+)?-Checklist\.md$", n)]
+
+
+def next_id(text, prefix, others=()):
+    """one past the highest id of that prefix in this checklist AND every other checklist of the app:
+    counting this one alone gave REQ-UI-055 twice, once in phase 1 and once in phase 3 (Chatur TF-011)"""
+    ids = []
+    for t in (text, *(read(o) for o in others)):
+        ids += [int(m.group(1)) for m in re.finditer(rf"REQ-{prefix}-(\d{{3,}})", t)]
     return f"REQ-{prefix}-{(max(ids) + 1 if ids else 1):03d}"
 
 
@@ -81,7 +99,7 @@ def add_row(path, prefix, title, acceptance, section=None, remark=None, status="
     """append a row to the Requirements Status table and a detail entry under `section`
     (a new section at the end when it does not exist); returns the new id"""
     text = read(path)
-    rid = next_id(text, prefix)
+    rid = next_id(text, prefix, siblings(path))
     nl = "\r\n" if "\r\n" in text else "\n"
     lines = text.split(nl)
     # the table: after the last REQ row

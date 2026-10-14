@@ -5,13 +5,22 @@
 > per library so it can be handed to (or picked up by) the owning team directly.
 
 ## Summary
-- All three findings are resolved in TrBlazeUI source.
+- TR-001 to TR-003 are resolved in TrBlazeUI source. TR-004 (a disabled menu item has no `aria-disabled`, 2026-10-13) is open.
 - Ships in: **TrBlazeUI.Components 2.0.3** — **PUBLISHED** on the GitHub Packages feed (`nuget.pkg.github.com/techierathore`), verified 2026-08-25 by querying the source from the user-level `NuGet.Config` and inspecting the downloaded nupkg (`buildTransitive/TrBlazeUI.Components.targets` with the Codex ownership-marker block, `skills/codex-trblazeui.toml`, BMAD-free `skills/claude-code-trblazeui.md`). nuget.org still carries only 2.0.0.
 - TechieFlow side done 2026-08-25: `tf-codex-bind.py` now honours the package's ownership marker (never overwrites a package-owned agent; plants `.trblazeui/.codex-agent-package-owned` next to its wrapper so the package may replace it). Without this, every existing TechieFlow app would have blocked 2.0.3's Codex deployment forever — see `docs/TechieFlow-Library-Persona-Propagation.md` § Ownership-marker contract.
 - Remaining per-app action: `update-framework.sh <repo>` → `dotnet build` (2.0.3) → confirm `.codex/agents/trblazeui.toml` is the package copy.
 - Last consolidated: 2026-08-25
 
 ## Issues
+
+### TR-004 — A disabled menu item says so only with its styling
+- **Severity:** minor
+- **Status:** open, filed 2026-10-13
+- **Blocks:** no — TechieFlow's menu walk (Chatur TF-011) now also reads an item that takes no pointer events as disabled.
+- **Repro:** Chatur's `MenuBar.razor`, `<MenubarItem Disabled="@(!CanEdit)" …>Undo</MenubarItem>` with no file open. It renders `<div role="menuitem" class="… pointer-events-none opacity-50">Undo</div>`: no `aria-disabled`, no `data-disabled`.
+- **Expected:** a disabled `MenubarItem` (and `DropdownMenuItem`) carries `aria-disabled="true"` and `data-disabled`, as the WAI-ARIA menu pattern asks. A screen reader then announces it as unavailable, and a test can find it with `getByRole('menuitem', { disabled: true })`.
+- **Actual:** a screen reader announces Undo as available; a click on it times out in Playwright (no pointer events) instead of being reported as disabled.
+- **Also seen:** an open `Menubar` menu does not close on Escape, or on a click on an empty part of the page; a click on page text does close it.
 
 ### TR-003 — NuGet package does not deploy a native Codex persona
 - **Severity:** major

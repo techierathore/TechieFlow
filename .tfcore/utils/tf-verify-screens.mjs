@@ -29,6 +29,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseThemes, useTheme, surface, differs, audit } from './tf-theme.mjs';
+import { mockupMenus, walkMenus, placeholdersOnPage, reachability } from './tf-menus.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (n, d = null) => { const i = argv.indexOf(n); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d; };
@@ -63,6 +64,11 @@ const ERROR_SELECTORS = [...args('--error-selector'), '#blazor-error-ui', '[data
 // null = auto: light, and dark when the app has a dark theme (Lekhak TF-024)
 const THEMES = parseThemes(arg('--themes', 'auto'));
 const MIN_CONTRAST = parseFloat(arg('--min-contrast', '3'));
+// Chatur TF-011: the menus are opened and every item clicked (tf-menus.mjs). --placeholder-text adds to
+// the deny list, --no-click to the labels never clicked; --no-menus leaves the menus closed (said in the JSON).
+const PLACEHOLDER_EXTRA = args('--placeholder-text');
+const NO_CLICK_EXTRA = args('--no-click');
+const WALK_MENUS = !argv.includes('--no-menus');
 
 if (!BASE && !CDP) { console.error('tf-verify-screens: --base URL or --cdp URL is required'); process.exit(3); }
 
@@ -121,6 +127,14 @@ const anchorsOf = (mockup) => {
   const out = new Set(); let m;
   while ((m = re.exec(html))) out.add(m[1]);
   return [...out];
+};
+
+// the words a mockup draws, so placeholder text the design itself shows is not held against the app
+const mockTexts = {};
+const mockTextOf = (mockup) => {
+  if (!mockup || !existsSync(mockup)) return '';
+  return mockTexts[mockup] ??= readFileSync(mockup, 'utf8').replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<(style|script)\b[\s\S]*?<\/\1\s*>/gi, '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
 };
 
 // The anchors a mockup HIDES at one width and shows at another: a sidebar that becomes a slide-out
@@ -534,6 +548,11 @@ for (const width of WIDTHS) {
         const info = await inspect(page, r.anchors || [], ATTR, ERROR_SELECTORS);
         info.contrast = await audit(page, theme === 'dark', MIN_CONTRAST);
         const g = grade(info, theme === 'light' ? consoleErrors : [], width, excused, stateOnly);
+        // a screen still showing placeholder text its mockup does not draw is not built (Chatur TF-011)
+        if (theme === (THEMES || ['light'])[0]) {
+          for (const p of await placeholdersOnPage(page, mockTextOf(s.mockup), PLACEHOLDER_EXTRA)) g.findings.push({ check: 'render', class: 'placeholder', detail: `the screen shows placeholder text "${p}"` });
+          if (g.render === 'OK' && g.findings.some((f) => f.class === 'placeholder')) g.render = 'EMPTY';
+        }
         if (r.seed && !r.seed.ok) {
           g.findings.unshift({ check: 'render', class: 'other', detail: `seed ${r.seed.path} failed (exit ${r.seed.exit ?? '?'}): ${r.seed.output}` });
           if (g.render === 'OK') g.render = 'EMPTY';
@@ -552,16 +571,80 @@ for (const width of WIDTHS) {
   }
   await close();
 }
+
+// ---------------------------------------------------------------- menus (Chatur TF-011)
+// Every menu the mockups draw open is opened in the app and every item clicked, once per menu, on the
+// first screen that draws it, at the first width. What a menu lacks or does wrong is a render finding
+// on every screen whose mockup draws that menu. A screen a menu item links to, which no click reached,
+// is UNREACHABLE.
+let menuWalk = { walked: WALK_MENUS, menus: [], clicks: [] };
+if (WALK_MENUS && mockBrowser) {
+  const byScreen = {};
+  { const ctx = await mockBrowser.newContext(); const mp = await ctx.newPage();
+    for (const s of screens) {
+      if (!s.mockup || !existsSync(s.mockup)) continue;
+      try { await mp.goto('file://' + resolve(s.mockup), { waitUntil: 'load', timeout: 15000 }); byScreen[s.name] = await mockupMenus(mp, ATTR); } catch (e) { byScreen[s.name] = []; }
+    }
+    await ctx.close().catch(() => {}); }
+  const key = (m) => `${m.trigger}|${m.popup}`;
+  const done = new Map();          // menu key -> its findings
+  const width = WIDTHS[0];
+  const anyMockMenus = Object.values(byScreen).some((l) => l.length);
+  for (const s of screens) {
+    const r = results.find((x) => x.name === s.name);
+    if (!r || r.render === 'UNREACHABLE' || r.widths.every((w) => w.render === 'UNREACHABLE')) continue;
+    const todo = (byScreen[s.name] || []).filter((m) => !done.has(key(m)));
+    if (anyMockMenus && !todo.length) continue;
+    if (!anyMockMenus && done.size) break;      // the app's own menus: walked once, on the first screen
+    const { page, close } = await contextFor(width);
+    try {
+      if (!CDP) await login(page);
+      const back = async () => { await navigate(page, s.route); await waitForRender(page, (r.anchors || []).slice(0, 20), ATTR); };
+      await back();
+      const pages = async () => CDP ? browser.contexts().flatMap((c) => c.pages()) : page.context().pages();
+      const w = await walkMenus(page, todo, { attr: ATTR, settle: SETTLE, back, pages, keepWindows: !!CDP, mockText: mockTextOf(s.mockup), placeholders: PLACEHOLDER_EXTRA, noClick: NO_CLICK_EXTRA });
+      menuWalk.menus.push(...w.menus.map((m) => ({ ...m, screen: s.name })));
+      menuWalk.clicks.push(...w.clicks.map(({ ids_before, ...c }) => ({ ...c, landed: c.landed ? { url: c.landed.url, window: c.landed.window } : null, screen: s.name })));
+      menuWalk._clicks = (menuWalk._clicks || []).concat(w.clicks);
+      if (!w.from_mockup) done.set('app|', w.findings);
+      for (const m of todo) done.set(key(m), w.findings.filter((f) => f.popup === m.popup));
+      if (!w.from_mockup) { r.menu_findings = w.findings; }
+    } catch (e) { menuWalk.error = String(e.message || e).split('\n')[0]; }
+    finally { await close(); }
+  }
+  for (const r of results) {
+    const mine = (byScreen[r.name] || []).flatMap((m) => done.get(key(m)) || []).concat(r.menu_findings || []);
+    delete r.menu_findings;
+    if (!mine.length || !r.widths.length) continue;
+    const w0 = r.widths.find((w) => w.render !== 'UNREACHABLE') || r.widths[0];
+    w0.findings = [...(w0.findings || []), ...mine.map((f) => ({ check: 'render', class: f.class, detail: f.detail }))];
+    if (w0.render === 'OK') w0.render = 'EMPTY';
+  }
+  const reach = reachability(screens.map((s) => { const r = results.find((x) => x.name === s.name) || {}; return { ...s, anchors: r.anchors, state_only: r.state_only }; }), menuWalk._clicks || []);
+  delete menuWalk._clicks;
+  menuWalk.reach = reach;
+  for (const [name, v] of Object.entries(reach)) {
+    const r = results.find((x) => x.name === name);
+    if (!r || v.reached) { if (r) r.reached_by = v.by; continue; }
+    r.unreachable_by_menu = `no menu click reaches ${r.route}: ${v.tried.join('; ')}`;
+  }
+}
+
 for (const r of results) {
   const rs = r.widths.map((w) => w.render);
   r.render = rs.includes('UNREACHABLE') ? 'UNREACHABLE' : rs.includes('ERROR') ? 'ERROR' : rs.includes('EMPTY') ? 'EMPTY' : 'OK';
+  if (r.unreachable_by_menu) {
+    // the verdict reads the first finding of an UNREACHABLE screen as its reason
+    r.render = 'UNREACHABLE';
+    r.widths[0].findings = [{ check: 'render', class: 'unreachable', detail: r.unreachable_by_menu }, ...(r.widths[0].findings || [])];
+  }
   r.visual = r.widths.some((w) => w.visual === 'FAIL') ? 'FAIL' : r.render === 'UNREACHABLE' ? 'n/a' : 'OK';
   r.anchors_n = (r.anchors || []).length;
   const notes = r.widths.flatMap((w) => (w.findings || []).map((f) => `${f.detail}`)).slice(0, 4);
   r.themes = [...new Set(r.widths.map((w) => w.theme).filter(Boolean))];
   console.log(`${r.render === 'OK' && r.visual === 'OK' ? 'OK  ' : 'FAIL'} ${r.name} (${r.route}) — render ${r.render}, visual ${r.visual}, ${r.anchors_n} anchors${r.mockup && !existsSync(r.mockup) ? ' (no mockup file)' : ''}, ${r.themes.join(' + ') || 'no'} theme${r.themes.length === 1 ? '' : 's'}${r.dark === 'not offered' ? ' (the app has no dark theme)' : ''}${notes.length ? ' — ' + notes.join('; ') : ''}`);
 }
-const out = writeOut({}, results, loginResult);
+const out = writeOut({ menus: menuWalk }, results, loginResult);
 if (loginResult && loginResult.attempted && !loginResult.ok) console.log(`LOGIN failed at ${BASE}${LOGIN_PATH}: ${loginResult.error || 'still on the sign-in page'}`);
 console.log(`screens ${out.summary.screens}${skipped.length ? ` (+${skipped.length} not driven: route needs a value)` : ''}: render ${out.summary.render_ok} OK / ${out.summary.render_fail} failed / ${out.summary.unreachable} unreachable; visual ${out.summary.visual_ok} OK / ${out.summary.visual_fail} failed; screenshots ${SHOTS}; JSON ${OUT}`);
 if (CDP && mockBrowser) await mockBrowser.close().catch(() => {});

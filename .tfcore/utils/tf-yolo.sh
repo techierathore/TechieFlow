@@ -8,6 +8,26 @@
 #   bash .tfcore/utils/tf-yolo.sh done [complete|blocked] ["<summary>"]   goal finished → write the sentinel
 #                                                                         the tf-goal.sh supervisor stops on
 #   bash .tfcore/utils/tf-yolo.sh clear-done                              remove the sentinel (supervisor does this)
+#   bash .tfcore/utils/tf-yolo.sh sync                                    put the harness permissions back when
+#                                                                         the flag has gone or expired (hooks call it)
+#
+# YOLO NEVER ASKS (owner, 2026-10-14: "if it's still asking for permission, what's the purpose of
+# YOLO mode?"). While the flag is live both harnesses stop asking, and `off`, `done` and an expired
+# flag put them back:
+#   - Claude Code: the hook .tfcore/hooks/yolo-allow.sh approves every tool call, in the session
+#     already running. Claude Code still asks where a hook's allow is not enough — an ask rule or one
+#     of its own safety checks ("requires the full permission pipeline") — and it refuses bypass mode
+#     from project or local settings ("only policy/user/flag settings may grant bypass mode"; both
+#     seen in its debug log, 2.1.299, 2026-10-14). Those prompts go only in a session started with
+#     `claude --permission-mode bypassPermissions`, which tf-goal.sh always uses.
+#   - OpenCode: the config file it reads last (.opencode/opencode.jsonc in a project) is rewritten
+#     with each "ask" turned to "allow" and every deny kept, and edits, web fetches, folders outside
+#     the project and repeated calls allowed; `off` puts its exact text back. OpenCode reads it when
+#     a session starts; the plugin's permission.ask approves everything while the flag is live
+#     (OpenCode 1.x).
+# Version-control WRITES stay refused in both: the deny rules are kept, and block-git.sh refuses
+# them before any permission check. What each file held before is kept under .tfcore/.session/ and
+# restored exactly.
 #
 # YOLO is ON when ANY of these holds (checked in this order by block-git.sh too):
 #   1. env TF_YOLO=1                      (tf-goal.sh exports it for the whole run)
@@ -54,6 +74,8 @@ flag_live() {  # exit 0 = flag present AND not expired
   [[ -n "$(find "$FLAG" -mmin "+$(( TTL_HOURS * 60 ))" 2>/dev/null)" ]] && return 1
   return 0
 }
+PERM_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tf-yolo-perms.py"
+perms() { python3 "$PERM_PY" "$1" "$ROOT" 2>/dev/null || true; }   # on | off; never fails the caller
 json_escape() { printf '%s' "$1" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null || printf '"%s"' "${1//\"/\\\"}"; }
 
 cmd="${1:-status}"; shift || true
@@ -74,11 +96,16 @@ case "$cmd" in
         "$(now_utc)" "$(json_escape "$SOURCE")" "$(json_escape "$GOAL")" "$(json_escape "${TF_HARNESS:-claude-code}")"
     } > "$FLAG" 2>/dev/null || true
     rm -f "$DONE" 2>/dev/null || true
-    echo "YOLO: ON (source=$SOURCE) — no confirmations; deletes + read-only git allowed; git WRITES still blocked; run to completion."
+    perms on
+    echo "YOLO: ON (source=$SOURCE) — no confirmations; OpenCode never asks (from its next session); Claude Code approves every call it can (its own safety checks still ask unless the session was started with: claude --permission-mode bypassPermissions); deletes + read-only git allowed; git WRITES still blocked; run to completion."
     ;;
   off)
     rm -f "$FLAG" 2>/dev/null || true
-    echo "YOLO: OFF — back to ask-on-delete, no-git, confirm-at-phase-boundaries."
+    perms off
+    echo "YOLO: OFF — back to ask-on-delete, no-git, confirm-at-phase-boundaries; OpenCode's asks restored."
+    ;;
+  sync)
+    if [[ "${TF_YOLO:-0}" == "1" ]] || flag_live; then :; else perms off; fi
     ;;
   is-on)
     if [[ "${TF_YOLO:-0}" == "1" ]] || flag_live; then exit 0; else exit 1; fi
@@ -166,13 +193,14 @@ PY2
     # unprompted and read-only git open and nothing on screen saying so. The
     # supervisor reads $DONE, never $FLAG, so clearing it here stops nothing.
     rm -f "$FLAG" 2>/dev/null || true
+    perms off
     echo "GOAL-DONE ($OUTCOME) recorded at $DONE — the supervisor (tf-goal.sh) will stop. YOLO flag cleared."
     ;;
   clear-done)
     rm -f "$DONE" 2>/dev/null || true
     ;;
   *)
-    echo "usage: tf-yolo.sh on|off|status|is-on|done [complete|blocked] [summary]|clear-done" >&2
+    echo "usage: tf-yolo.sh on|off|status|is-on|done [complete|blocked] [summary]|clear-done|sync" >&2
     ;;
 esac
 exit 0

@@ -7,8 +7,10 @@
 #   bash .tfcore/utils/tf-verify-tests.sh --merge <tests-a.json> <tests-b.json>… [--json-out tests/.artifacts/verify/tests.json]
 #
 # Browser tests: `npx playwright test` over tests/verify/ (the JSON reporter). Unit tests:
-# `tf-build.sh test` with normal console verbosity. A test belongs to a row when its name contains
-# the row's id (REQ-UI-004 …). A row is PASS when a test carrying its id passed and none failed,
+# `tf-build.sh test` with normal console verbosity. A test belongs to a row when its name STARTS with
+# the row's id (REQ-UI-004 …; tf-req-ids.py): an id later in the name, or in a theory case's arguments,
+# is what the test is about, not what it proves, and a row only named that way is listed under
+# named_only_by_other_rows_tests (Chatur TF-012). A row is PASS when a test carrying its id passed and none failed,
 # FAIL when one failed (the reason and the screenshot, when the reporter kept one, are recorded),
 # NOT-TESTED when every test carrying its id was SKIPPED, and absent when no test carries its id.
 # A skipped clause is a third outcome, never a failure: `test.skip(!SEEDED, …)` says the state does
@@ -54,8 +56,11 @@ mkdir -p "$(dirname "$OUT")" tests/.artifacts/verify
 
 # ---- --merge: the parts into one tests.json, no test run ------------------------------------------
 if [[ ${#MERGE[@]} -gt 0 ]]; then
-  TF_OUT="$OUT" python3 - "${MERGE[@]}" <<'PY'
+  TF_HERE="$HERE" TF_OUT="$OUT" python3 - "${MERGE[@]}" <<'PY'
 import json, os, re, sys
+import importlib.util
+_spec = importlib.util.spec_from_file_location("tf_req_ids", os.path.join(os.environ.get("TF_HERE", ".tfcore/utils"), "tf-req-ids.py"))
+rq = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(rq)
 # Lekhak TF-007. The parts are read oldest first (by the time each ran, else in the order given), and
 # a later run of the SAME test stands for it: a test that failed because its service was not started,
 # run again once it was, clears the row. A later skip never replaces a run that happened. A part
@@ -68,7 +73,7 @@ for i, p in enumerate(sys.argv[1:]):
         print(f"merge: {p} unreadable ({str(e)[:80]}); skipped")
 loaded.sort(key=lambda x: (x[0].get("ran_at") or "", x[1]) if all(y[0].get("ran_at") for y in loaded) else (x[1],))
 reqs, browser, unit, parts = {}, {"ran": False, "passed": 0, "failed": 0, "skipped": 0, "tests": 0}, {"ran": False, "line": ""}, []
-outs, sources, superseded = {}, {}, 0
+outs, sources, superseded, elsewhere = {}, {}, 0, {}
 for d, _i, p in loaded:
     parts.append(p)
     for rid, r in d.get("reqs", {}).items():
@@ -79,6 +84,14 @@ for d, _i, p in loaded:
             oc.update({t: {"outcome": "skip", "reason": r.get("reason", ""), "screenshot": ""} for t in r.get("skipped", [])})
         o = outs.setdefault(rid, {})
         for name, rec in oc.items():
+            # a part read before Chatur TF-012 counted a test for every id its name carried: a test that
+            # does not claim this row is dropped here, and the row noted if that test passed
+            # (a browser test's name was stored with its describe titles joined on, so there each title is read)
+            segs = re.split(r"\s+(?=REQ-)", name) if rec.get("source", r.get("source")) == "browser" else [name]
+            if not any(rid in rq.ids_of(seg) for seg in segs):
+                if rec.get("outcome") == "pass":
+                    elsewhere.setdefault(rid, []).append(name[:160])
+                continue
             # a part written before outcomes carried their source: the row's, when it had only one
             if "source" not in rec:
                 rec = dict(rec, source=r.get("source") if r.get("source") in ("browser", "unit") else "")
@@ -98,7 +111,12 @@ for d, _i, p in loaded:
     u = d.get("unit", {})
     if u.get("ran") and not unit["ran"]:
         unit = u
+for d, _i, p in loaded:
+    for rid, names in (d.get("named_only_by_other_rows_tests") or {}).items():
+        elsewhere.setdefault(rid, []).extend(names)
 for rid, o in outs.items():
+    if not o:
+        continue
     fails = [(n, x) for n, x in o.items() if x["outcome"] == "fail"]
     npass = sum(1 for x in o.values() if x["outcome"] == "pass")
     skips = [(n, x) for n, x in o.items() if x["outcome"] == "skip"]
@@ -113,7 +131,9 @@ for rid, o in outs.items():
     reqs[rid] = {"result": result, "source": sources.get(rid, ""), "tests": [n for n, x in o.items() if x["outcome"] != "skip"],
                  "skipped": [n for n, _ in skips], "passed": npass, "failed": len(fails), "reason": reason,
                  "screenshot": fails[0][1].get("screenshot", "") if fails else "", "outcomes": o}
-json.dump({"reqs": reqs, "browser": browser, "unit": unit, "merged_from": parts, "superseded": superseded},
+mentioned = {rid: sorted(set(v))[:3] for rid, v in elsewhere.items() if rid not in reqs}
+json.dump({"reqs": reqs, "browser": browser, "unit": unit, "merged_from": parts, "superseded": superseded,
+           "named_only_by_other_rows_tests": mentioned},
           open(os.environ["TF_OUT"], "w"), indent=1)
 p = sum(1 for r in reqs.values() if r["result"] == "PASS"); f = sum(1 for r in reqs.values() if r["result"] == "FAIL")
 ns = sum(1 for r in reqs.values() if r["result"] == "NOT-TESTED")
@@ -123,6 +143,8 @@ print(f"merged {len(parts)} part(s): rows with a test: {len(reqs)} — {p} PASS,
 for rid, r in sorted(reqs.items()):
     if r["result"] == "FAIL":
         print(f"  FAIL {rid} — {r['reason']}" + (f" — {r['screenshot']}" if r["screenshot"] else ""))
+for rid, names in sorted(mentioned.items()):
+    print(f"  NO TEST {rid} — only named inside another row's passing test, which does not test it: {names[0]}")
 print(f"JSON: {os.environ['TF_OUT']}")
 PY
   exit 0
@@ -255,10 +277,23 @@ PY
   fi
 fi
 
-TF_PWJSON="$PWJSON" TF_UNITLOG="$UNITLOG" TF_UNITLINE="$UNITLINE" TF_TRX="${TRX:-}" TF_OUT="$OUT" python3 - <<'PY'
+TF_HERE="$HERE" TF_PWJSON="$PWJSON" TF_UNITLOG="$UNITLOG" TF_UNITLINE="$UNITLINE" TF_TRX="${TRX:-}" TF_OUT="$OUT" python3 - <<'PY'
 import json, os, re
 import xml.etree.ElementTree as ET
-ID = re.compile(r"(REQ-(?:UI|FN|NFR|RAG)-\d{3})", re.I)
+import importlib.util
+_spec = importlib.util.spec_from_file_location("tf_req_ids", os.path.join(os.environ.get("TF_HERE", ".tfcore/utils"), "tf-req-ids.py"))
+rq = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(rq)
+ID, ids_of = rq.ID, rq.ids_of   # Chatur TF-012: a test claims the ids its name starts with (tf-req-ids.py)
+elsewhere = {}   # row -> names of passing tests that mention it without claiming it
+def claims(names, outcome):
+    """the ids a test claims: the leading run of each name given (a browser test's describe titles and
+    its own title are separate names); the other ids it mentions are noted against those rows"""
+    own = {i for n in names for i in ids_of(n)}
+    for n in names:
+        for rid in {x.upper() for x in ID.findall(n)} - own:
+            if outcome == "pass":
+                elsewhere.setdefault(rid, []).append(" ".join(names).strip()[:160])
+    return own
 reqs = {}
 browser = {"ran": False, "passed": 0, "failed": 0, "skipped": 0, "tests": 0}
 unit = {"ran": False, "line": os.environ.get("TF_UNITLINE", "")}
@@ -331,7 +366,7 @@ if pw and os.path.isfile(pw):
                             shot = a["path"].replace("\\", "/")
                             shot = shot[shot.find("tests/"):] if "tests/" in shot else shot
                             break
-                    for rid in set(ID.findall(title)):
+                    for rid in claims(path + [sp.get("title", "")], outcome):
                         add(rid, outcome, title.strip(), "browser", err, shot)
             for s in suite.get("suites", []):
                 walk(s, path + [s.get("title", "")] if s.get("title") and not s["title"].endswith(".ts") and not s["title"].endswith(".js") and not s["title"].endswith(".mjs") else path)
@@ -359,7 +394,7 @@ for trx in [p for p in os.environ.get("TF_TRX", "").splitlines() if p.strip()]:
             continue
         seen.add((name, outcome))
         msg = next(((m.text or "").strip() for m in el.iter() if m.tag.endswith("Message") and (m.text or "").strip()), "")
-        for rid in set(ID.findall(name)):
+        for rid in claims([name], outcome):
             add(rid, outcome, name, "unit",
                 ("unit test failed: " + (msg.splitlines()[0] if msg else name))[:200] if outcome == "fail"
                 else ("unit test skipped: " + name[:120]) if outcome == "skip" else "")
@@ -380,7 +415,7 @@ if ul and os.path.isfile(ul):
             continue
         seen.add((name, outcome))
         # a pass has no reason: every non-failure was once written "unit test skipped" (Lekhak TF-018)
-        for rid in set(ID.findall(name)):
+        for rid in claims([name], outcome):
             add(rid, outcome, name, "unit",
                 "unit test failed: " + name[:120] if outcome == "fail"
                 else "unit test skipped: " + name[:120] if outcome == "skip" else "")
@@ -394,13 +429,17 @@ for rid, r in reqs.items():
         why = next((x["reason"] for x in app if x["reason"]), "the test was skipped")
         r["result"] = "NOT-TESTED"
         r["reason"] = ("on-app test skipped (" + why + "); a unit test does not measure on-app acceptance")[:200]
+# a row no test claims, whose id a passing test about another row carries, is flagged: it was once
+# counted as tested on that name, and it is not
+mentioned = {rid: sorted(set(v))[:3] for rid, v in elsewhere.items() if rid not in reqs}
 unit["passed"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r["result"] == "PASS")
 unit["failed"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r["result"] == "FAIL")
 unit["not_tested"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r["result"] == "NOT-TESTED")
 
 import datetime
 ran_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-json.dump({"reqs": reqs, "browser": browser, "unit": unit, "ran_at": ran_at}, open(os.environ["TF_OUT"], "w"), indent=1)
+json.dump({"reqs": reqs, "browser": browser, "unit": unit, "ran_at": ran_at, "named_only_by_other_rows_tests": mentioned},
+          open(os.environ["TF_OUT"], "w"), indent=1)
 p = sum(1 for r in reqs.values() if r["result"] == "PASS")
 f = sum(1 for r in reqs.values() if r["result"] == "FAIL")
 ns = sum(1 for r in reqs.values() if r["result"] == "NOT-TESTED")
@@ -411,6 +450,8 @@ for rid, r in sorted(reqs.items()):
         print(f"  FAIL {rid} — {r['reason']}" + (f" — {r['screenshot']}" if r["screenshot"] else ""))
     elif r["result"] == "NOT-TESTED":
         print(f"  NOT-TESTED {rid} — {len(r['skipped'])} test(s) skipped, none ran — {r['reason']}")
+for rid, names in sorted(mentioned.items()):
+    print(f"  NO TEST {rid} — only named inside another row's passing test, which does not test it: {names[0]}")
 print(f"JSON: {os.environ['TF_OUT']}")
 PY
 [[ $ran_any -eq 1 ]] && exit 0 || exit 2

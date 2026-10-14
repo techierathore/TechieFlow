@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 271 logged: 56 open, 214 fixed, 1 will not fix |
+| Count | 275 logged: 56 open, 218 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-10-12 |
+| Updated | 2026-10-14 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -70,10 +70,14 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (214)
+## Fixed (218)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261014-01 | 2026-10-14 by owner | 2026-10-14 by log-miss | the framework never said it | YOLO mode still raised permission prompts: tf-yolo.sh changed only TechieFlow's own hooks, never the harness permissions; Claude Code asked on its safety checks and OpenCode 2 on every delete |
+| MISS-TechieFlow-20261013-03 | 2026-10-13 by owner | 2026-10-13 by log-miss | the check was too weak | Chatur TF-012: tf-verify-tests took a row id from anywhere in a test's name, so an xUnit theory whose sample data held REQ-FN-053 and REQ-FN-055 Verified both rows with no test of their own |
+| MISS-TechieFlow-20261013-02 | 2026-10-13 by owner | 2026-10-13 by log-miss | the framework never said it | Chatur TF-011: tf-triage new counted the next free id in one checklist only, so phase 3 was given REQ-UI-055, which phase 1 already held |
+| MISS-TechieFlow-20261013-01 | 2026-10-13 by owner | 2026-10-13 by log-miss | the check was too weak | Chatur TF-011: tf-verify-screens and tf-mockup-parity loaded each route and compared the closed page, so menus holding only 'Nothing to do yet' and screens no menu click opened passed verify; 51 rows reopened |
 | MISS-TechieFlow-20261012-03 | 2026-10-12 by owner | 2026-10-12 by log-miss | the framework never said it | Chatur TF-010: blazor-zoom.cs.txt kept one WKWebView in a static field, so on a Mac with several BlazorWebView windows the zoom keys reached only the last one opened |
 | MISS-TechieFlow-20261012-02 | 2026-10-12 by owner | 2026-10-12 by log-miss | the check was too weak | TfLens TF-054: tf-mockup-parity counted every svg as an icon, so an SVG chart read as an icon the mockup does not carry |
 | MISS-TechieFlow-20261012-01 | 2026-10-12 by owner | 2026-10-12 by log-miss | the check was too weak | TfLens TF-053: tf-mockup-parity's clip clause reported a box that scrolls its own content (overflow auto or scroll) as cut off, so a long code block on /export kept two rows below Verified |

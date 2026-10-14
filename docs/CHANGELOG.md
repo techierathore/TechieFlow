@@ -8,12 +8,67 @@
 
 ---
 
-## Unreleased (since v1.0.4)
+## Unreleased (since v1.1.0) — ships as v1.2.0
 
-Everything below this section from 2026-09-11 onward is also unreleased: it reached `main` after the
-v1.0.4 tag (2026-09-10) and is in no published package yet. This section lists what those dated entries
-do not.
+v1.1.0 was tagged and published on 2026-10-01; entries below dated after that are in no published
+package yet, and go out as v1.2.0 (it adds a command and a coding standard, so a minor version). This
+heading read "since v1.0.4" until 2026-10-13, after v1.1.0 had shipped. This section lists what the
+dated entries do not.
 
+- **`tfyolo`: Claude Code started in bypass mode with YOLO on (owner, 2026-10-14).** Typed in a
+  terminal inside a project, it turns YOLO on, starts Claude Code with
+  `--permission-mode bypassPermissions` at the project root in that terminal, and turns YOLO off
+  when the session ends, Ctrl+C included. `tfyolo -c` continues the last conversation, and any
+  other arguments are passed on to `claude`. It opens or closes no window. It refuses outside a
+  TechieFlow project, or in one whose settings do not register `block-git.sh`. The work is done by
+  `tf-yolo-start.sh`; `tf-yolo-alias.sh install|remove|status` puts the `tfyolo` shell function once
+  in `~/.bashrc` / `~/.zshrc`, between marker lines. Installed on this WSL machine. Proved:
+  - a stand-in `claude` in the scratch project and in Chatur saw the right arguments, the project
+    root, YOLO on and OpenCode not asking, and everything was put back afterwards;
+  - a real `claude -p` launch answered;
+  - Ctrl+C restores everything, and a second install leaves one copy in the profile.
+  Case `tfyolo`. Not run on the Mac yet: its `~/.zshrc` needs the one install there.
+- **YOLO stops the harness asking, as far as each harness allows (owner, 2026-10-14).** "If it's
+  still asking for permission then what's the purpose of YOLO mode?" `tf-yolo.sh on` used to change
+  only TechieFlow's own hooks. Three changes:
+  - OpenCode: on `on`, the config file it reads last (`.opencode/opencode.jsonc` in a project; its
+    read order was checked on 2.0.27) is rewritten with every `ask` made `allow`, every `deny` kept in
+    place, and every agent handled; `off`, `done` or an expired flag put the exact text back
+    (`tf-yolo-perms.py`). Proved there: `rm -r` ran without asking and a git write was still refused.
+  - OpenCode 1.x: the plugin's `permission.ask` now approves every kind of request, not only shell
+    commands.
+  - Claude Code: a new PreToolUse hook, `yolo-allow.sh` (every tool), approves each call while the
+    flag is live, including in the session already open. It is registered by both scaffolds, the
+    updater and the npm installer.
+  Proved with Claude Code's own debug log (2.1.299), two limits no project file can lift: a hook's
+  allow does not override a settings `ask` rule or a built-in safety check ("requires the full
+  permission pipeline"), and `defaultMode: bypassPermissions` in project or local settings is
+  ignored ("only policy/user/flag settings may grant bypass mode"). So the owner's request to set
+  bypass mode in the project's settings was built, measured as ignored, and removed. The remaining
+  prompts go only in a session started with `claude --permission-mode bypassPermissions`, which
+  `tf-goal.sh` already uses. Case `yolo_perms` (fails against the scripts deployed before).
+  `_yolo-mode.md` and `TechieFlow-Permissions-And-YOLO.md` say so. Miss `MISS-TechieFlow-20261014-01`.
+- **Chatur TF-011 and TF-012: menus are opened, and a test proves only the rows its name starts with
+  (2026-10-14).** TF-011: both browser gates loaded each route and compared the closed page, so File, Edit
+  and View holding only "Nothing to do yet" passed, and screens no click opened passed. New
+  `tf-menus.mjs`, called by `tf-verify-screens` and `tf-mockup-parity`: every menu a mockup draws open
+  (`data-tf-state="popup-open"`; with none marked, the app's own `aria-haspopup` menus) is opened and
+  every item clicked, and a screen fails on a missing item, placeholder text, an item that does nothing,
+  a menu wholly disabled where the mockup is not, and, as UNREACHABLE, a screen a menu item links to that
+  no click reached. Placeholder text on the page itself fails the screen too. Exit, Sign out, Close …
+  and Delete are never clicked; pick-lists are checked, not clicked; a menu that will not close is shut
+  by reopening the screen (TrBlazeUI's stays open on Escape, filed as TR-004 with its missing
+  `aria-disabled`). `tf-triage new` and `tf-log-miss --new` take the next id across every checklist of
+  the app. TF-012: `tf-verify-tests` reads ids from the leading run of a name (after one short capital
+  tag, before any argument list, plus an argument named `row`/`req`), each describe title on its own,
+  in runs and merges alike (`tf-req-ids.py`), and lists a row named only inside another row's passing
+  test. Measured on Chatur's web head, 16 screens: screen check 14 → 6 passing, mockup comparison
+  11 → 5. Every new failure is a gap against the mockup, a recent-project item that does nothing (an
+  app defect), or a mark the mockup or the app owes. Replaying every recorded test name in all
+  projects drops only Chatur REQ-FN-051/053/055, TfLens REQ-UI-001 and Sevak REQ-UI-050, none of
+  which had a test of its own; real Playwright reports from AppManager and Chatur read unchanged. Cases
+  `ch_011a`–`c` and `ch_012`, each failing against Chatur's scripts. `mockups.md` step 6 says how a
+  menu is drawn. Misses `MISS-TechieFlow-20261013-01` to `-03`. Ships in v1.2.0.
 - **TfLens TF-053/054 and Chatur TF-010 (2026-10-12).** `tf-mockup-parity`: an element whose own
   `overflow` is `auto` or `scroll` is not "cut off" on that axis, and an `svg` over 48 px on either side
   is not an icon. Measured on TfLens signed in, 14 screens: exactly the four filed findings go, none
