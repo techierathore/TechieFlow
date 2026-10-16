@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 277 logged: 56 open, 220 fixed, 1 will not fix |
+| Count | 278 logged: 56 open, 221 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
 | Updated | 2026-10-16 |
 
@@ -70,10 +70,11 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (220)
+## Fixed (221)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261016-02 | 2026-10-16 by owner | 2026-10-16 by log-miss | said and ignored | TF-033 fix broke CI: the lk_033 case's JavaScript wrote ${css}< which the portability scan reads as bash 4.1 {fd}<, and the briefing's date line went to 3,002 words and named a private project; the maintainer ran only the regression suite, not npm run validate and every tests/*/run.sh, after the las |
 | MISS-TechieFlow-20261016-01 | 2026-10-16 by owner | 2026-10-16 by log-miss | the check was too weak | Lekhak TF-033: tf-theme.mjs FORCE added the dark class only when the page declared no theme attribute, so an app whose light mode is data-theme=light with no class (Lekhak) was drawn half dark in the dark pass: its dark variables over TrBlazeUI's light tokens, an Info Alert at 1.06 : 1, a false visu |
 | MISS-TechieFlow-20261014-02 | 2026-10-14 by owner | 2026-10-14 by log-miss | the check was too weak | Sevak TF-006: the menu walk called a working theme menu dead (it compared only address, text, dialogs and zoom, never the theme) and a working popover switcher closed (it looked only for role=menu, never the trigger's aria-controls), and tf-theme.mjs read oklch() colours as white, so every TrBlazeUI |
 | MISS-TechieFlow-20261014-01 | 2026-10-14 by owner | 2026-10-14 by log-miss | the framework never said it | YOLO mode still raised permission prompts: tf-yolo.sh changed only TechieFlow's own hooks, never the harness permissions; Claude Code asked on its safety checks and OpenCode 2 on every delete |

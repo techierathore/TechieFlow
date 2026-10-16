@@ -5969,7 +5969,8 @@ body{margin:0;padding:24px;font:16px system-ui;background:var(--bg);color:var(--
 .alert{padding:12px;background:rgb(229,246,255);color:var(--fg)} .dark .alert{background:rgb(11,58,82)}`;
 const b = await chromium.launch();
 const p = await b.newPage();
-await p.setContent(`<!doctype html><html data-theme="light" data-site-theme="fluent-modern" class=""><head><style>${css}</style></head><body><div class="alert">Your AI provider is not set up yet.</div></body></html>`);
+await p.setContent('<!doctype html><html data-theme="light" data-site-theme="fluent-modern" class=""><head><style>' + css
+  + '</style></head><body><div class="alert">Your AI provider is not set up yet.</div></body></html>');
 const html = () => p.evaluate(() => { const e = document.documentElement; return [e.getAttribute('data-theme'), e.getAttribute('data-site-theme'), JSON.stringify(e.className)].join(' '); });
 const back = await useTheme(p, 'dark', 50);
 const dark = await html(); const a = await audit(p, true);

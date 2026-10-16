@@ -25,7 +25,10 @@ dated entries do not.
   text) and passes now, and against Lekhak's deployed copy. Miss `MISS-TechieFlow-20261016-01`,
   `weak-check`, closed in the same run. The reply is in Lekhak's file and copied here. **Deployed:**
   `update-framework.sh` ran in all 18 projects on this machine, every one exit 0, and all 18 copies of
-  `tf-theme.mjs` match this repository. The whole regression suite holds, 320 checks.
+  `tf-theme.mjs` match this repository. The whole regression suite holds, 320 checks. The commit failed
+  CI: `lk_033`'s JavaScript `${css}<` read to the portability scan as bash 4.1's `{fd}<`, and the
+  briefing's date line took it to 3,002 words and named a private project. Both fixed; miss
+  `MISS-TechieFlow-20261016-02`, `ignored` (only the regression suite was run after the last edits).
 - **The per-fix test routine is shorter (owner, 2026-10-14).** On the machine a fix is made on, the
   regression suite runs once, in that machine's own time zone, plus the suite of the area touched. It
   runs a second time with `TZ=UTC` only when the fix touched a script that reads the local clock. Those
