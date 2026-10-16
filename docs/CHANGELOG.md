@@ -15,6 +15,17 @@ package yet, and go out as v1.2.0 (it adds a command and a coding standard, so a
 heading read "since v1.0.4" until 2026-10-13, after v1.1.0 had shipped. This section lists what the
 dated entries do not.
 
+- **Lekhak TF-033: the dark pass drew a page half dark (2026-10-16).** `tf-theme.mjs` `FORCE` added the
+  `dark` class only when the page declared no theme attribute. Lekhak's light mode is
+  `<html data-theme="light" class="">` and its own switch sets `data-theme` and `dark` together, so the
+  dark pass gave `data-theme="dark"` with no class: Lekhak's dark text over TrBlazeUI's light tokens, an
+  Info Alert at 1.06 : 1, a false visual FAIL. The dark pass now adds `dark` to `<html>` whenever no
+  light/dark class is on the page, and records it so the restore removes it. Both the screen check and
+  the mockup check use it. Case `lk_033` fails against the shipped script (no class, one low-contrast
+  text) and passes now, and against Lekhak's deployed copy. Miss `MISS-TechieFlow-20261016-01`,
+  `weak-check`, closed in the same run. The reply is in Lekhak's file and copied here. **Deployed:**
+  `update-framework.sh` ran in all 18 projects on this machine, every one exit 0, and all 18 copies of
+  `tf-theme.mjs` match this repository. The whole regression suite holds, 320 checks.
 - **The per-fix test routine is shorter (owner, 2026-10-14).** On the machine a fix is made on, the
   regression suite runs once, in that machine's own time zone, plus the suite of the area touched. It
   runs a second time with `TZ=UTC` only when the fix touched a script that reads the local clock. Those

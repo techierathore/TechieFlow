@@ -8,12 +8,12 @@
 
 ## Summary
 
-32 entries: 0 blocking now, 0 open, 6 fixed upstream and not yet re-checked here (TF-008, TF-022, TF-023, TF-025, TF-030, TF-032), 26 closed after a re-check here (TF-001, TF-002, TF-003, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018, TF-019, TF-020, TF-021, TF-024, TF-026, TF-027, TF-028, TF-029, TF-031).
+33 entries: 0 blocking now, 0 open, 5 fixed upstream and not yet re-checked here (TF-008, TF-022, TF-023, TF-025, TF-033), 28 closed after a re-check here (TF-001, TF-002, TF-003, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018, TF-019, TF-020, TF-021, TF-024, TF-026, TF-027, TF-028, TF-029, TF-030, TF-031, TF-032).
 
-Nothing is blocked.
+Nothing is blocked. TF-033 (2026-10-16) is fixed upstream: the dark-mode check now adds the `dark` class when the page declares `data-theme` without it. Re-check it here.
 
-- 0 blockers, 11 majors, 21 minors, 0 nice-to-haves.
-- Last consolidated: 2026-10-11.
+- 0 blockers, 11 majors, 22 minors, 0 nice-to-haves.
+- Last consolidated: 2026-10-16.
 
 ## Entries
 
@@ -530,6 +530,8 @@ Nothing is blocked.
 
 ### TF-030 — BlogAdmin's Mac head cannot zoom: Cmd+= does nothing, and the text is too small on a high-resolution screen
 
+> ✅ **Closed 2026-10-11** — re-checked here: Framework updated from /mnt/c/3AIGenCode/TechieFlow/update-framework.sh (dry run first, then real run). BlogAdmin/BlazorZoom.cs is the §9b blazor-zoom.cs.txt copy, identical except the namespace; MainPage calls BlazorZoom.Attach and the Mac AppDelegate has BuildMenu plus the tfZoomIn/tfZoomOut/tfZoomReset exports. bash .tfcore/utils/tf-maccatalyst-check.sh: OK, zoom wired, no WARN. Windows head booted with tf-verify-boot.sh --head windows; bash .tfcore/utils/tf-verify-zoom.sh --cdp --leave 3: Ctrl+= x3 130%, Ctrl+- 120%, Ctrl+0 100%, Ctrl+wheel 110%, all OK; after stop and start, --expect-restored 1.3: opened at 130%, all OK. The Mac head key press was not re-run here (Windows host); its wiring is what the check reads.
+
 - **Severity:** major
 - **Blocks:** no. UAT carried on at the size the app opens at; the Windows head already zooms with Ctrl+plus/minus/0 and Ctrl+wheel.
 - **Repro:**
@@ -572,6 +574,8 @@ Nothing is blocked.
 
 ### TF-032 — tf-build.sh and the verify test run stop on the Mac Catalyst Xcode version check, which the boot script already turns off
 
+> ✅ **Closed 2026-10-11** — re-checked here: After update-framework.sh, with no extra flags: tf-build.sh build source/BlogAdmin/BlogAdmin.csproj -- -f net10.0-maccatalyst printed 'note  the Mac Catalyst SDK requires Xcode 26.6. The current version of Xcode is 27.0; built again with -p:ValidateXcodeVersion=false (xcode-check=off)' then 'PASS build on macos via dotnet (rung 1)'; tf-build.sh test printed the same note then 'PASS test on macos via dotnet (rung 1)'. No NOT-RUN.
+
 - **Severity:** minor
 - **Blocks:** no. The build with the check off passes, and the boot script uses it.
 - **Repro:**
@@ -590,9 +594,35 @@ Nothing is blocked.
 - **Workaround:** build with `-p:ValidateXcodeVersion=false`, as the boot does.
 - **Suggested fix:** pass the same switch in `tf-build.sh` and the test rung whenever the boot would, and report it as a note.
 
+### TF-033 — The dark-mode check draws a page whose html says `data-theme="light"` without the `dark` class, a state the app never shows
+
+- **Severity:** minor
+- **Blocks:** no. Put in dark mode its own way first, the page passes.
+- **Repro:**
+  ```
+  # BlogAdmin in light mode: <html data-theme="light" data-site-theme="fluent-modern" class="">
+  bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --cdp http://172.18.144.1:9223 --login-path /login --user Tharki@tksories.com --password admin_password
+  ```
+- **Expected:** the dark pass draws what the app draws: `data-theme="dark"` and `class="dark"` together.
+- **Actual:** seen 2026-10-16, as below.
+
+| Problem | What it affects | Does it block or break anything |
+|---|---|---|
+| `tf-theme.mjs` `FORCE` flips `data-theme` but adds the `dark` class only when no theme attribute was declared. Lekhak's light mode has no class, so the dark pass mixes Lekhak's dark variables with TrBlazeUI's light tokens: AI Setup's Info Alert read rgb(250,250,250) on rgb(229,246,255), 1.06 : 1. With both set, it is dark with light text. | The visual check of every screen with a TrBlazeUI token-coloured control, whenever the app starts in light mode. | Breaks the visual verdict (a false FAIL); does not block. |
+
+- **Encountered in:** `*build-phase Lekhak` → chained verify, 2026-10-16.
+- **Workaround:** put the app in dark mode with its own `setThemeAttributes(theme, 'dark')` before the screen check, so the class exists and is flipped both ways.
+- **Suggested fix:** in `FORCE`, when `want === 'dark'` add the `dark` class whether or not an attribute was declared (and remove it for `light`), and record it in `before` for `RESTORE`.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### Resolution status (TechieFlow team, 2026-10-16)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-033 | Fixed upstream in `tf-theme.mjs`, as you suggested. For the dark pass, `FORCE` now adds the `dark` class to `<html>` whenever the page has no light/dark class, even when it already declares `data-theme`. Before, it added the class only when no theme attribute existed, so your light mode (`data-theme="light"`, no class) became `data-theme="dark"` with no class: Lekhak's dark text over TrBlazeUI's light tokens. The class is recorded, so the restore takes it off again and the app is left as it was. A page that already has a light/dark class is flipped as before. Both checks that use dark mode get the fix: the screen check (`tf-verify-screens`) and the mockup check (`tf-mockup-parity`). Regression case `lk_033` draws your exact `<html>` with an Info Alert like AI Setup's: against the script you have, the dark pass has no `dark` class and one text at low contrast; now it has `class="dark"`, no low-contrast text, and the restore leaves `data-theme="light"` and `class=""`. Miss `MISS-TechieFlow-20261016-01`. | Proved on a page with your `<html>`, not on BlogAdmin itself (it was not running here). After the framework update, with BlogAdmin in light mode and no workaround, run your repro command. Expect no `1.06 : 1` finding on AI Setup's Info Alert in dark mode, and BlogAdmin still in light mode afterwards (`<html data-theme="light" … class="">`). Then re-grade the screens that failed in dark mode with a normal `*verify`. |
 
 ### Resolution status (TechieFlow team, 2026-10-11, third reply)
 

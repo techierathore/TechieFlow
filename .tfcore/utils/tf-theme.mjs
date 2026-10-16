@@ -8,7 +8,8 @@
 //   - the browser's colour scheme (prefers-color-scheme), emulated;
 //   - the light/dark value of every data-*theme/mode/scheme attribute on <html> and <body>, and the
 //     light/dark mode classes there (dark, theme-dark …). A page that declares none is given
-//     data-theme, data-bs-theme and, for dark, the class `dark` (Tailwind's switch).
+//     data-theme and data-bs-theme; a page with no such class is given, for dark, the class `dark`
+//     (Tailwind's switch, and the one an app setting data-theme and the class together also reads).
 // Each call returns a function that puts the page back the way it was: an attached desktop head is
 // the viewer's app. A page whose painted surface does not change between the two has no dark theme;
 // `surface` and `differs` tell. `audit` is the contrast rule the visual check applies.
@@ -27,7 +28,7 @@ const FORCE = (want) => {
   const MODE = /^(?:(?:theme|mode|scheme|color)[-_])?(?:dark|light)(?:[-_](?:theme|mode|scheme))?$/i;
   const other = want === 'dark' ? /light/ig : /dark/ig;
   const before = [];
-  let declared = false;
+  let declared = false, classed = false;
   for (const [where, el] of [['html', document.documentElement], ['body', document.body]]) {
     if (!el) continue;
     for (const a of [...el.attributes]) {
@@ -38,7 +39,7 @@ const FORCE = (want) => {
     }
     const toks = [...el.classList].filter((c) => MODE.test(c));
     if (toks.length) {
-      declared = true;
+      declared = classed = true;
       before.push({ where, cls: toks });
       for (const c of toks) { el.classList.remove(c); el.classList.add(c.replace(other, want)); }
     }
@@ -50,8 +51,11 @@ const FORCE = (want) => {
       before.push({ where: 'html', attr: name, value: null });
       h.setAttribute(name, want);
     }
-    if (want === 'dark' && !h.classList.contains('dark')) { before.push({ where: 'html', added: 'dark' }); h.classList.add('dark'); }
   }
+  // a page with no light/dark class gets `dark` for the dark pass even when it declared data-theme:
+  // an app whose switch sets both (Lekhak) was otherwise drawn half dark, a state it never shows (Lekhak TF-033)
+  const h = document.documentElement;
+  if (want === 'dark' && !classed && !h.classList.contains('dark')) { before.push({ where: 'html', added: 'dark' }); h.classList.add('dark'); }
   return before;
 };
 

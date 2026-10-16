@@ -5949,6 +5949,43 @@ print(r.get('tokens_scope'), r.get('tokens_out'), r.get('subagent_runs'), r.get(
     || bad oc_v2 "OpenCode 2 tokens: got '$got' (want 'tree 350 1 {'p/m1': 350}')"
 }
 
+# --- Lekhak TF-033: the dark pass drew a state the app never shows ------------------------------------
+# Lekhak's light mode is <html data-theme="light" data-site-theme="fluent-modern" class="">; its own
+# switch sets data-theme and the `dark` class together. FORCE flipped data-theme but added `dark` only
+# when no theme attribute was declared, so Lekhak's dark variables met TrBlazeUI's light tokens: an
+# Info Alert read rgb(250,250,250) on rgb(229,246,255), 1.06 : 1, a false FAIL. The dark pass now adds
+# `dark` whenever no light/dark class is on the page, and the restore takes it off again.
+lk_033() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip lk_033 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/lk033"; mkdir -p "$d"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-theme.mjs" "$d/"
+  cat > "$d/t.mjs" <<'JS'
+import { chromium } from 'playwright';
+import { useTheme, audit } from './tf-theme.mjs';
+const css = `:root{--fg:#111;--bg:#fff} [data-theme="dark"]{--fg:rgb(250,250,250);--bg:#111}
+body{margin:0;padding:24px;font:16px system-ui;background:var(--bg);color:var(--fg)}
+.alert{padding:12px;background:rgb(229,246,255);color:var(--fg)} .dark .alert{background:rgb(11,58,82)}`;
+const b = await chromium.launch();
+const p = await b.newPage();
+await p.setContent(`<!doctype html><html data-theme="light" data-site-theme="fluent-modern" class=""><head><style>${css}</style></head><body><div class="alert">Your AI provider is not set up yet.</div></body></html>`);
+const html = () => p.evaluate(() => { const e = document.documentElement; return [e.getAttribute('data-theme'), e.getAttribute('data-site-theme'), JSON.stringify(e.className)].join(' '); });
+const back = await useTheme(p, 'dark', 50);
+const dark = await html(); const a = await audit(p, true);
+await back();
+console.log(`${dark}|${a ? a.low_n : 'x'}|${await html()}`);
+await b.close();
+JS
+  local out; out="$(cd "$d" && tf_timeout 120 node t.mjs 2>&1 | tail -1)"
+  [[ "${out%%|*}" == 'dark fluent-modern "dark"' && "$(cut -d'|' -f2 <<<"$out")" == "0" ]] \
+    && ok lk_033a "a page that declares data-theme but no class gets the dark class too, so the dark pass draws what the app draws" \
+    || { bad lk_033a "the dark pass mixed the app's dark attribute with light class tokens: $out (want 'dark fluent-modern \"dark\"|0|…')"; }
+  [[ "${out##*|}" == 'light fluent-modern ""' ]] \
+    && ok lk_033b "the restore takes the dark class off again, leaving the page as it was" \
+    || { bad lk_033b "the page was not put back: ${out##*|} (want 'light fluent-modern \"\"')"; }
+}
+
 # --- the per-fix routine: every script that reads the local clock is named at the top of this file ----
 # A fix to one of them is the only kind that needs this suite a second time with TZ=UTC, so the list
 # must be whole: a script that reads today's date or a local time and is not in it fails here.
@@ -5978,7 +6015,7 @@ PY
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

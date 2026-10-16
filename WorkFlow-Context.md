@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-10-14 (Chatur TF-011, TF-012; oklch theme fix). |
+| Last updated | 2026-10-16 (Lekhak TF-033: dark pass adds the `dark` class beside `data-theme`). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---

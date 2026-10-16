@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 276 logged: 56 open, 219 fixed, 1 will not fix |
+| Count | 277 logged: 56 open, 220 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-10-14 |
+| Updated | 2026-10-16 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -70,10 +70,11 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (219)
+## Fixed (220)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261016-01 | 2026-10-16 by owner | 2026-10-16 by log-miss | the check was too weak | Lekhak TF-033: tf-theme.mjs FORCE added the dark class only when the page declared no theme attribute, so an app whose light mode is data-theme=light with no class (Lekhak) was drawn half dark in the dark pass: its dark variables over TrBlazeUI's light tokens, an Info Alert at 1.06 : 1, a false visu |
 | MISS-TechieFlow-20261014-02 | 2026-10-14 by owner | 2026-10-14 by log-miss | the check was too weak | Sevak TF-006: the menu walk called a working theme menu dead (it compared only address, text, dialogs and zoom, never the theme) and a working popover switcher closed (it looked only for role=menu, never the trigger's aria-controls), and tf-theme.mjs read oklch() colours as white, so every TrBlazeUI |
 | MISS-TechieFlow-20261014-01 | 2026-10-14 by owner | 2026-10-14 by log-miss | the framework never said it | YOLO mode still raised permission prompts: tf-yolo.sh changed only TechieFlow's own hooks, never the harness permissions; Claude Code asked on its safety checks and OpenCode 2 on every delete |
 | MISS-TechieFlow-20261013-03 | 2026-10-13 by owner | 2026-10-13 by log-miss | the check was too weak | Chatur TF-012: tf-verify-tests took a row id from anywhere in a test's name, so an xUnit theory whose sample data held REQ-FN-053 and REQ-FN-055 Verified both rows with no test of their own |
