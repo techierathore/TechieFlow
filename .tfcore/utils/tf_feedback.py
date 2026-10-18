@@ -195,12 +195,17 @@ def upstream_of(path, app=None):
 
 
 def state_map(root):
-    """Every entry id across the project's feedback files -> (state, "<file>, <date>")."""
+    """Every entry id across the project's feedback files -> [(state, "<file>, <date>", names)], one
+    item per file holding it. Every consumer numbers its own entries from 1, so a library with nine
+    consumer files can hold nine TR-002s (TrBlazeUI TF-006); `names` are the two project names in the
+    file's name (Lekhak and TrBlazeUI in Lekhak-TrBlazeUI-Feedback.md), which a line names to say whose."""
     out = {}
     for f in files(root):
         rel = os.path.relpath(f, root).replace(os.sep, "/")
+        names = tuple(os.path.basename(f)[: -len("-Feedback.md")].split("-"))
         for e in entries(f):
-            out[e["id"]] = (e["state"], f"{rel}" + (f", Resolution status {e['since']}" if e["since"] else ""))
+            out.setdefault(e["id"], []).append(
+                (e["state"], f"{rel}" + (f", Resolution status {e['since']}" if e["since"] else ""), names))
     return out
 
 

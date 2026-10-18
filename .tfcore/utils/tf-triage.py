@@ -13,8 +13,10 @@ row in whichever docs/<App>-Checklist.md or docs/<App>-P<N>-Checklist.md holds i
 
 demote  the row goes to Needs re-verify (% capped at 75) with a dated Remark holding the symptom in the
         reporter's words, the evidence path and the kind.
-new     a defect no row covers: the next free id in the prefix, a Not Started row, a detail entry with the
-        acceptance line and the marker BRD-pending (*amend-docs gives it its BRD item).
+new     a defect no row covers: the next free id in the prefix, across every checklist of the app and the
+        telemetry streams, a Not Started row, a detail entry with the acceptance line and the marker
+        BRD-pending (*amend-docs gives it its BRD item). Without --prefix: FN, or the one prefix a
+        checklist with no FN row uses; with several such prefixes it asks for --prefix.
 note    a dated remark on the nearest row, no status change (could not reproduce).
 close   what triage owes the telemetry, from the actions above (tests/.artifacts/verify/triage.json):
         one gate record per demoted or new row with gate "escaped" (no check caught it), one miss per row
@@ -31,6 +33,7 @@ import datetime
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -176,7 +179,19 @@ def main(argv):
             die("new needs \"<title>\" \"<acceptance>\"")
         title, acc = argv[3], argv[4]
         cl = checklist(app, argv, ce)
-        prefix = opt(argv, "--prefix", "FN").upper(); section = opt(argv, "--section"); ev = opt(argv, "--evidence")
+        prefix = opt(argv, "--prefix")
+        if prefix is None:
+            # FN unless this checklist has no FN row: then the one prefix it uses is the default, and
+            # several are asked for (TechieRag TF-005: phase 3 is all RAG, and FN was a slip)
+            used = sorted(set(re.findall(r"(?m)^\|\s*REQ-([A-Z]+)-\d{3,}", ce.read(cl))))
+            if not used or "FN" in used:
+                prefix = "FN"
+            elif len(used) == 1:
+                prefix = used[0]
+                print(f"note: every row of {cl} is REQ-{prefix}-…, so the new row is one too; pass --prefix to choose another")
+            else:
+                die(f"{cl} has no REQ-FN rows; name the prefix: --prefix {'|'.join(used)}")
+        prefix = prefix.upper(); section = opt(argv, "--section"); ev = opt(argv, "--evidence")
         src = opt(argv, "--source", "owner"); mockup = opt(argv, "--mockup")
         if prefix == "UI" and not mockup and cfg_project_type() not in ("library", "docs"):   # TrBlazeUI TF-003
             print("note: a UI row needs a mockup link; pass --mockup docs/mockups/<screen>.html or the checker will flag it")

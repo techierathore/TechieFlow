@@ -5,7 +5,8 @@
 
 On a Large project the pair is the phase being worked: --phase N, else appPhase in
 .tfcore/core-config.yaml (phase 1 is docs/<App>-BRD.md and -Checklist.md, phase n is
-docs/<App>-Pn-BRD.md and docs/<App>-Pn-Checklist.md).
+docs/<App>-Pn-BRD.md and docs/<App>-Pn-Checklist.md). A name that carries the phase, as the file
+stem does (<App>-P3), is read as <App> --phase 3.
 
 Reads docs/<App>-Checklist.md: every REQ row of the Requirements Status table, and
 the "## Page: …" section its detail entry sits under, which names the screen.
@@ -127,10 +128,18 @@ def main(argv):
     render = "--no-render" not in argv
     root = os.getcwd()
     phase = None
+    # A name that already carries the phase, as the file stem reads ("Lekhak-P3"), is the app and that
+    # phase: adding appPhase again looked for docs/Lekhak-P3-P3-Checklist.md (Lekhak TF-034,
+    # TechieRag TF-007).
+    m = re.match(r"^(.+)-P(\d+)$", app)
+    if m:
+        app, phase = m.group(1), int(m.group(2))
     if "--phase" in argv:
         i = argv.index("--phase")
         if i + 1 >= len(argv) or not argv[i + 1].isdigit() or int(argv[i + 1]) < 1:
             die("--phase needs a number from 1 upwards")
+        if phase is not None and phase != int(argv[i + 1]):
+            die(f"{argv[1]} names phase {phase} but --phase says {argv[i + 1]}")
         phase = int(argv[i + 1])
     if phase is None:
         cfg = os.path.join(root, ".tfcore", "core-config.yaml")

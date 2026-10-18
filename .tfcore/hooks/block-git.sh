@@ -21,7 +21,9 @@
 #     the only place that decides. Outside YOLO it returns permissionDecision=ask
 #     for them (same prompt the owner always had). In YOLO it stays silent and the
 #     bare "Bash" allow rule lets them run — an unattended goal run never stalls on
-#     a delete. Catastrophic `rm -rf /|~` stay in settings.json `deny` (every mode).
+#     a delete. A delete of the whole disk or home folder (rm -rf / , /* , ~ , ~/*)
+#     is refused here in every mode; settings.json deny keeps only the exact
+#     `rm -rf /` and `rm -rf ~` (a deny `*` matched every absolute path).
 #
 # YOLO is ON when any of: env TF_YOLO=1 · .tfcore/.session/yolo.json exists
 # (tf-yolo.sh on) · the hook payload's permission_mode is bypassPermissions/auto.
@@ -198,6 +200,20 @@ def classify_gh(args):
 found = {"read": 0, "write": 0}
 found_rm = [False]
 found_sudo = [False]
+found_wipe = [False]
+
+# A delete whose target is the whole disk or the home folder is refused in every mode. These
+# lived in settings.json deny as "rm -rf /*" and "rm -rf ~/*", but a deny rule's * matches any
+# text, so they also refused every delete of an absolute path (rm -rf /mnt/c/...), even in
+# bypass mode (Lekhak scratch folder, 2026-10-18).
+HOME_DIR = os.path.expanduser("~").rstrip("/")
+WIPE = {"/", "/*", "/.", "/..", "~", "~/", "~/*", "~/.", "$HOME", "$HOME/", "$HOME/*",
+        "${HOME}", "${HOME}/", "${HOME}/*"}
+def is_wipe(t):
+    t = t.strip()
+    if t in WIPE or re.fullmatch(r"/+\*?", t):
+        return True
+    return bool(HOME_DIR) and t.rstrip("/*") == HOME_DIR
 
 def scan(cmdline, depth=0):
     if depth > 4:
@@ -263,6 +279,8 @@ def scan(cmdline, depth=0):
             found[classify_gh(args)] += 1
         elif head in ("rm", "rmdir", "unlink", "shred"):
             found_rm[0] = True
+            if any(is_wipe(a) for a in args if not a.startswith("-") or a == "-"):
+                found_wipe[0] = True
         elif head in ("find",) and ("-delete" in args or "-exec" in args and any(basename(x) == "rm" for x in args)):
             found_rm[0] = True
 
@@ -276,7 +294,9 @@ except Exception:
         print("ALLOW")
     sys.exit(0)
 
-if found["write"]:
+if found_wipe[0]:
+    print("BLOCK_WIPE")
+elif found["write"]:
     print("BLOCK_WRITE")
 elif found["read"] and (strict_git or not yolo):
     print("BLOCK_READ")
@@ -290,6 +310,9 @@ VERDICT="$(TF_HOOK_INPUT="$INPUT" TF_YOLO_ON="$YOLO" python3 -c "$GIT_GUARD_PY" 
 case "$VERDICT" in
   BLOCK_WRITE) block_git_msg; exit 2 ;;
   BLOCK_READ)  block_read_msg; exit 2 ;;
+  BLOCK_WIPE)
+    echo "BLOCKED by TechieFlow policy: this deletes the whole disk or the home folder. Never run it, in any mode. Delete the folder you mean by its own path." >&2
+    exit 2 ;;
   ASK_RM)
     # Claude Code: surface the owner's usual delete/sudo prompt (hook "ask"
     # beats the bare "Bash" allow). OpenCode: its own `rm *: ask` map prompts.

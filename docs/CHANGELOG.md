@@ -15,6 +15,37 @@ package yet, and go out as v1.2.0 (it adds a command and a coding standard, so a
 heading read "since v1.0.4" until 2026-10-13, after v1.1.0 had shipped. This section lists what the
 dated entries do not.
 
+- **Feedback sweep of 2026-10-18: six open entries fixed, one standard added.** Each has a regression case that
+  fails against the shipped scripts and passes now. **Lekhak TF-035** (major): `tf-verify-screens.mjs` called an
+  unticked TrBlazeUI checkbox (`<button role="checkbox" aria-checked="false">`, no text, no child) empty, so AI
+  Story Studio's rows were a false RENDER-FAIL; a checkbox, switch or radio that paints its own box is now drawn,
+  and `tf-mockup-parity.mjs` no longer compares those controls by border style (a native checkbox computes
+  `none`). Proved on BlogAdmin's Windows head: render EMPTY → OK, 31 → 22 parity findings, none on the checkbox;
+  across the other projects' last evidence nothing else changes. Case `lk_035`. **Lekhak TF-034 and TechieRag
+  TF-007**: the Stop hook printed `tf-brd-status.sh <App>-P<n>`, which then looked for `<App>-P<n>-P<m>-Checklist.md`;
+  the hook now prints `<App> --phase <n>` and the script also reads a suffixed name. Case `lk_034`. **TrBlazeUI
+  TF-006**: `tf_feedback.state_map` kept one state per id across all feedback files, so a library's ten TR-002s
+  collapsed into the last one read; `tf-owner-text.py` now resolves an id in the file whose project its line or
+  message names, and asks "whose?" when several disagree. Case `tb_006`. **TechieRag TF-005**: `tf-triage.sh new`
+  also counts ids in the telemetry streams, and without `--prefix` a checklist with no FN row takes its one prefix
+  or asks. Case `tr_005`. **TechieRag TF-006**: `tf-verify-boot.sh` takes a windows head only with a BlazorWebView,
+  refuses a plain MAUI app at once (`kind=no-webview`) instead of waiting 300 s, and stops the Windows-side relay on
+  a failed start. Case `tr_006`. **Stack answer Q4a (owner)**: an app that signs in through AppManager registers its
+  own three test users (owner walkthrough, second user, unattended runs) through AppManager's register call, keeps
+  the passwords in git-ignored secrets and lists them in its UsageGuide; an agent never asks for, stores or uses the
+  owner's personal AppManager account. In both copies of the .NET answer set, `_smoke-test-policy.md`, the UsageGuide
+  template, and a new `tf-doc-check` rule `appmanager-test-users`. Measured: adds 3 findings to TfLens's guide (two
+  written passwords, no unattended-run user) and 3 to Xpenser's; Chatur and Sevak pass. Case `std_q4a`. **Found on
+  the way**: `tests/regression/run.sh` did not clear `CLAUDE_PROJECT_DIR`, and `tf-emit.sh` prefers it to the folder
+  it runs in, so a run started inside a Claude Code session wrote 18 fixture records into this repository's
+  `docs/metrics/` and failed 17 checks. The suite now unsets it, as the verify and bugs suites already did. The
+  18 records were removed by restoring the four files to the last commit (owner's decision).
+- **A delete by absolute path was denied in every mode (owner, 2026-10-18).** The deployed `settings.json` denied
+  `Bash(rm -rf /*)` and `Bash(rm -rf ~/*)` to stop a wipe of the disk or home folder, but a deny rule's `*` matches
+  any text, so `rm -rf /mnt/c/...` was refused even in bypass mode and a scratch folder was handed to the owner.
+  `block-git.sh` now refuses a delete of `/`, `/*`, `~`, `~/*` or the home folder in every mode, YOLO included;
+  the deny list keeps only the exact `rm -rf /` and `rm -rf ~`. In `update-framework.sh`, both scaffolds, the npm
+  installer and the permissions guide. Case `rm_wipe`.
 - **Lekhak TF-033: the dark pass drew a page half dark (2026-10-16).** `tf-theme.mjs` `FORCE` added the
   `dark` class only when the page declared no theme attribute. Lekhak's light mode is
   `<html data-theme="light" class="">` and its own switch sets `data-theme` and `dark` together, so the

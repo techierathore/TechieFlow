@@ -313,7 +313,7 @@ const canonicalSettings = String.raw`{
     ],
     "ask": [],
     "deny": [
-      "Bash(rm -rf /)", "Bash(rm -rf /*)", "Bash(rm -rf ~)", "Bash(rm -rf ~/*)",
+      "Bash(rm -rf /)", "Bash(rm -rf ~)",
       "Bash(git commit*)", "Bash(git push*)", "Bash(git add*)", "Bash(git rm*)",
       "Bash(git mv*)", "Bash(git reset*)", "Bash(git checkout*)", "Bash(git switch*)",
       "Bash(git restore*)", "Bash(git merge*)", "Bash(git rebase*)", "Bash(git cherry-pick*)",

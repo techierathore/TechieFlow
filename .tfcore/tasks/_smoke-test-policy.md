@@ -12,22 +12,24 @@ A screen passes only if all three hold, at a desktop width and a mobile width:
 
 A failure on any of the three is a defect: write it into the row's Remarks (prefix `⚠ visual:` for 2 and 3) and do not report the row done. A smoke earns a row at most `Implemented`; only an executed verify run writes `Verified`.
 
-The evidence of a smoke is the file `bash .tfcore/utils/tf-verify-screens.sh --screen <name>=<route> … --base <url>` writes (`tests/.artifacts/verify/screens.json`, with a screenshot per screen and width); a row is written `Implemented` only after that run, and its Remark names the file. The application is booted with `bash .tfcore/utils/tf-verify-boot.sh start`, which also drives an embedded-browser desktop head Windows head; a head the script cannot boot leaves the row below `Implemented` with the reason.
+The evidence of a smoke is the file `bash .tfcore/utils/tf-verify-screens.sh --screen <name>=<route> … --base <url>` writes (`tests/.artifacts/verify/screens.json`, with a screenshot per screen and width); a row is written `Implemented` only after that run, and its Remark names the file. The application is booted with `bash .tfcore/utils/tf-verify-boot.sh start`, which also drives a Windows head; a head the script cannot boot leaves the row below `Implemented` with the reason.
 
 ## Run it yourself
 
-The build ladder (`.tfcore/templates/v4custom/build-invocation-ladder.md`) says how to build, run and reach the running UI on every supported host, including native and mobile heads. Follow it. A dependent service that is down is something you start, from its own configuration, in dependency order. Ask the owner to run something only after the ladder's last rung has failed, and then still run the smoke yourself once they answer.
+The build ladder (`.tfcore/templates/v4custom/build-invocation-ladder.md`) says how to build, run and reach the running UI on every supported host, including native and mobile heads. Follow it. Start a dependent service that is down, from its own configuration, in dependency order. Ask the owner to run something only after the ladder's last rung has failed, and then still run the smoke yourself once they answer.
 
 ## Test users
 
-Resolve credentials in this order and stop at the first that works:
+Take credentials from the first that works:
 
 1. The Test users table in `docs/<App>-UsageGuide.md`.
-2. An existing account in the database, read with the connection string from the configuration.
+2. An existing account in the database, read with the configured connection string.
 3. Ask the owner, showing what you would create.
-4. Only after a yes, create it and add it to the Test users table.
+4. Only after a yes, create it and add it to the table.
 
 Never invent a throwaway account.
+
+An AppManager app skips steps 2 to 4 (stack answer Q4a): register through its register call, passwords in git-ignored secrets, never the owner's account.
 
 ## Say what ran
 

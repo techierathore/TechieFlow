@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 278 logged: 56 open, 221 fixed, 1 will not fix |
+| Count | 285 logged: 56 open, 228 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-10-16 |
+| Updated | 2026-10-18 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -70,10 +70,17 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (221)
+## Fixed (228)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261018-07 | 2026-10-18 by owner | 2026-10-18 by log-miss | the framework never said it | settings.json denied rm -rf /* and rm -rf ~/* to stop a disk wipe, but a deny rule's * matches any text, so every delete by absolute path was refused even in bypass mode and a scratch folder was handed to the owner |
+| MISS-TechieFlow-20261018-06 | 2026-10-18 by owner | 2026-10-18 by log-miss | said and ignored | tests/regression/run.sh did not clear CLAUDE_PROJECT_DIR, so a run inside a Claude Code session wrote 18 fixture records into the framework's own docs/metrics and rewrote its misses page; the verify and bugs suites already cleared it |
+| MISS-TechieFlow-20261018-05 | 2026-10-18 by owner | 2026-10-18 by log-miss | the framework never said it | TechieRag TF-006: tf-verify-boot.sh took a plain MAUI sample with no BlazorWebView as the windows head and waited 300 s for a DevTools port it can never open, three times |
+| MISS-TechieFlow-20261018-04 | 2026-10-18 by owner | 2026-10-18 by log-miss | the framework never said it | TechieRag TF-005: tf-triage.sh new gave a row an id another phase or a telemetry record already had, and without --prefix took FN on a checklist that used another prefix |
+| MISS-TechieFlow-20261018-03 | 2026-10-18 by owner | 2026-10-18 by log-miss | the check was too weak | TrBlazeUI TF-006: tf_feedback kept one state per entry id across all feedback files, so the closing-message guard checked an id like TR-002 against the wrong consumer's file |
+| MISS-TechieFlow-20261018-02 | 2026-10-18 by owner | 2026-10-18 by log-miss | the check was too weak | Lekhak TF-034 and TechieRag TF-007: the Stop hook printed tf-brd-status.sh <App>-P<n>, which then looked for a checklist named <App>-P<n>-P<m>, so the printed command refreshed nothing |
+| MISS-TechieFlow-20261018-01 | 2026-10-18 by owner | 2026-10-18 by log-miss | the check was too weak | Lekhak TF-035: tf-verify-screens.mjs called an unticked TrBlazeUI checkbox (a button with role=checkbox, no text, no child) empty, so 20 of the AI Story Studio rows were a false RENDER-FAIL; tf-mockup-parity.mjs also flagged its border |
 | MISS-TechieFlow-20261016-02 | 2026-10-16 by owner | 2026-10-16 by log-miss | said and ignored | TF-033 fix broke CI: the lk_033 case's JavaScript wrote ${css}< which the portability scan reads as bash 4.1 {fd}<, and the briefing's date line went to 3,002 words and named a private project; the maintainer ran only the regression suite, not npm run validate and every tests/*/run.sh, after the las |
 | MISS-TechieFlow-20261016-01 | 2026-10-16 by owner | 2026-10-16 by log-miss | the check was too weak | Lekhak TF-033: tf-theme.mjs FORCE added the dark class only when the page declared no theme attribute, so an app whose light mode is data-theme=light with no class (Lekhak) was drawn half dark in the dark pass: its dark variables over TrBlazeUI's light tokens, an Info Alert at 1.06 : 1, a false visu |
 | MISS-TechieFlow-20261014-02 | 2026-10-14 by owner | 2026-10-14 by log-miss | the check was too weak | Sevak TF-006: the menu walk called a working theme menu dead (it compared only address, text, dialogs and zoom, never the theme) and a working popover switcher closed (it looked only for role=menu, never the trigger's aria-controls), and tf-theme.mjs read oklch() colours as white, so every TrBlazeUI |

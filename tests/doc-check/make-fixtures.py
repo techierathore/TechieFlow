@@ -331,9 +331,13 @@ UG = """# MyDiary — Usage Guide
 
 ## Test users
 
+Registered on AppManager through its register call by `node tests/verify/register-test-users.mjs`.
+
 | # | User | Password source | Role | Exists |
 |---|---|---|---|---|
-| 1 | writer@app.test | user secrets | Writer | no |
+| 1 | writer-owner@app.test | user secrets key `App:TestUsers:Owner` | Writer, owner walkthrough | no |
+| 2 | writer-second@app.test | user secrets key `App:TestUsers:Second` | Writer, second user | no |
+| 3 | writer-yolo-tester@app.test | user secrets key `App:TestUsers:Yolo` | Writer, unattended runs | no |
 
 ## Execution guide
 

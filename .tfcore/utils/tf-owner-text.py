@@ -59,11 +59,29 @@ def load_words(root):
 
 
 def upstream_state(root):
-    """Every entry id in the project's feedback files -> (state, where), from the one reader
-    every script uses (tf_feedback.py), so this check and PROJECT-STATUS can never disagree."""
+    """Every entry id in the project's feedback files -> [(state, where, names)], one per file, from
+    the one reader every script uses (tf_feedback.py), so this check and PROJECT-STATUS can never disagree."""
     sys.path.insert(0, HERE)
     import tf_feedback
     return tf_feedback.state_map(root)
+
+
+def resolve(rid, cands, unit, text):
+    """The feedback file an id in this unit means (TrBlazeUI TF-006). One file holding it: that one.
+    Several: the files whose project the unit names ("Lekhak TR-002"), else the files the whole text
+    names. -> (state, where), or (None, the files) when it stays several that disagree."""
+    if len(cands) == 1:
+        return cands[0][:2]
+    for txt in (unit, text):
+        # a name every candidate file shares (the library's own) says nothing about which one
+        shared = set.intersection(*(set(c[2]) for c in cands))
+        hit = [c for c in cands if any(n not in shared and re.search(rf"(?<![\w-]){re.escape(n)}(?![\w-])", txt) for n in c[2])]
+        if hit:
+            cands = hit
+            break
+    if len({c[0] for c in cands}) == 1:
+        return cands[0][:2]
+    return None, ", ".join(c[1].split(",")[0] for c in cands)
 
 
 def split_text(text):
@@ -142,9 +160,13 @@ def check(text, label, root, final=False, words=None, ups=None):
     for n, txt, header in us:
         for rid in dict.fromkeys(ANY_ID.findall(txt)):
             if rid in ups:
-                mentions.setdefault(rid, []).append((n, txt, header))
-    for rid, ms in sorted(mentions.items(), key=lambda kv: kv[1][0][0]):
-        st, where = ups[rid]
+                st, where = resolve(rid, ups[rid], txt, text)
+                if st is None:
+                    fail(n, f'{rid} is an entry in several feedback files ({where}); name whose it is with the id, '
+                            f'as in "{ups[rid][0][2][0]} {rid}"')
+                    continue
+                mentions.setdefault((rid, st, where), []).append((n, txt, header))
+    for (rid, st, where), ms in sorted(mentions.items(), key=lambda kv: kv[1][0][0]):
         if st in ("fixed", "closed"):
             # read the sentence that names it, or its table row: "TF-901 is filed. X is fixed." is wrong
             said = lambda txt, h: [txt] if h is not None else [s for s in re.split(r"(?<=[.!?])\s+", txt) if rid in s]

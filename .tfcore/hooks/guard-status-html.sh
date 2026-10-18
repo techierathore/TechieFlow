@@ -149,7 +149,11 @@ if written_this_session:
             app = os.path.basename(cl)[: -len("-Checklist.md")]
             brd = os.path.join(root, "docs", f"{app}-BRD.md")
             if os.path.isfile(brd) and os.path.getmtime(cl) > os.path.getmtime(brd):
-                problems.append(f"docs/{app}-BRD.md is older than docs/{app}-Checklist.md. Run: bash .tfcore/utils/tf-brd-status.sh {app}")
+                # the stem of a phase file is "<App>-P<n>": the command takes the app and --phase n
+                # (Lekhak TF-034, TechieRag TF-007)
+                m = re.match(r"^(.+)-P(\d+)$", app)
+                cmd = f"{m.group(1)} --phase {m.group(2)}" if m else app
+                problems.append(f"docs/{app}-BRD.md is older than docs/{app}-Checklist.md. Run: bash .tfcore/utils/tf-brd-status.sh {cmd}")
     except Exception:
         pass
 

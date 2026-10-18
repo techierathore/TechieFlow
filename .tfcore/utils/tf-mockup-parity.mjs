@@ -275,7 +275,12 @@ const PROBE = (wanted = []) => {
   // reads every other border property but not this one keeps missing that whole
   // vocabulary. Quantised to the three values that carry meaning rather than the
   // full CSS keyword set, so the clause stays as noise-free as the colour buckets.
+  // A checkbox, switch or radio is not compared by its border (Lekhak TF-035): a native
+  // <input type="checkbox"> computes border-style none because the browser draws its box, while a
+  // library's role="checkbox" draws the same box as a CSS border. Same control, so not applicable.
+  const TOGGLE = 'input[type="checkbox"],input[type="radio"],[role="checkbox"],[role="switch"],[role="radio"]';
   const strokeOf = (el) => {
+    if (el.matches(TOGGLE)) return null;
     const cs = getComputedStyle(el);
     const q = (s) => (s === 'none' || s === 'hidden' ? 'none'
       : s === 'dashed' || s === 'dotted' ? 'dashed' : 'solid');
@@ -465,7 +470,7 @@ const PROBE = (wanted = []) => {
       // the badge and the visible border one element away, for the clauses to accept (TF-047)
       near: {
         badge: near.some((n) => chromeOn(n)?.badge === true),
-        stroke: near.map(strokeOf).find((s) => s.visible) || null,
+        stroke: near.map(strokeOf).find((s) => s && s.visible) || null,
       },
       tag: el.tagName.toLowerCase(),
       text: ownText(el).trim().replace(/\s+/g, ' ').slice(0, 60),

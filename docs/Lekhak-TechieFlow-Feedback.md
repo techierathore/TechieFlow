@@ -4,16 +4,16 @@
 |---|---|
 | App | Lekhak |
 | Upstream | TechieFlow |
-| Updated | 2026-10-11 |
+| Updated | 2026-10-18 |
 
 ## Summary
 
-33 entries: 0 blocking now, 0 open, 5 fixed upstream and not yet re-checked here (TF-008, TF-022, TF-023, TF-025, TF-033), 28 closed after a re-check here (TF-001, TF-002, TF-003, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018, TF-019, TF-020, TF-021, TF-024, TF-026, TF-027, TF-028, TF-029, TF-030, TF-031, TF-032).
+35 entries: 0 blocking now, 0 open, 7 fixed upstream and not yet re-checked here (TF-008, TF-022, TF-023, TF-025, TF-033, TF-034, TF-035), 28 closed after a re-check here (TF-001, TF-002, TF-003, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018, TF-019, TF-020, TF-021, TF-024, TF-026, TF-027, TF-028, TF-029, TF-030, TF-031, TF-032).
 
-Nothing is blocked. TF-033 (2026-10-16) is fixed upstream: the dark-mode check now adds the `dark` class when the page declares `data-theme` without it. Re-check it here.
+Nothing is blocked. TF-035 (2026-10-18) is fixed upstream: an unticked library checkbox counts as drawn, so AI Story Studio's rows are no longer a false RENDER-FAIL. TF-034 (2026-10-18) is fixed upstream: the status hook names `tf-brd-status.sh Lekhak --phase 3`. TF-033 (2026-10-16) is fixed upstream. All three ship in TechieFlow v1.2.0. Re-check them here.
 
-- 0 blockers, 11 majors, 22 minors, 0 nice-to-haves.
-- Last consolidated: 2026-10-16.
+- 0 blockers, 12 majors, 23 minors, 0 nice-to-haves.
+- Last consolidated: 2026-10-18.
 
 ## Entries
 
@@ -618,6 +618,15 @@ Nothing is blocked. TF-033 (2026-10-16) is fixed upstream: the dark-mode check n
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
 
+### Resolution status (TechieFlow team, 2026-10-18)
+
+Both fixes ship in **TechieFlow v1.2.0**. They are already in this project's `.tfcore/` through the framework update.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-035 | Fixed upstream in both places your entry names. (1) `tf-verify-screens` now counts a checkbox, switch or radio as drawn when it paints its own box: an element with `role="checkbox"`, `role="switch"`, `role="radio"` or `aria-checked`, or one holding such an element. TrBlazeUI's unticked `<button role="checkbox" aria-checked="false">` is drawn, as a native `<input type="checkbox">` already was. An empty box that paints nothing is still `empty`. (2) `tf-mockup-parity` no longer compares a checkbox, switch or radio by border style. The browser draws a native checkbox's box, so it computes `border-style: none`. The library draws the same box as a CSS border. They are the same control. Regression case `lk_035` fails both of its checks against the scripts you had and passes now. | **Proved on your app**, BlogAdmin's Windows head, signed in as Tharki@tksories.com, AI Story Studio only. Screen check: the old script gave render EMPTY with `anchored control "show-verify-stories-toggle" (button) is empty` at both widths, light and dark. The new one gives render OK, 17 anchors, both themes. Mockup check: 31 findings with the old script, 4 of them `show-verify-stories-toggle border style differs — mockup none, app solid`. The new one gives 22, none on the checkbox. The 22 left are colour differences between the mockup and the app (`nav-ai-setup`, `admin-view-site`, `mode-write`, `start-generation`: mockup accent, app neutral); they are not TF-035. Across the other projects' last evidence, nothing else changes. After the framework update, paste into Lekhak's agent: `/TechieFlow:agents:verifier *verify all Lekhak`. The AI Story Studio rows no longer read RENDER-FAIL for the checkbox. |
+| TF-034 | Fixed upstream, both ways you suggested. (1) `guard-status-html.sh` splits a phase file's name. For `docs/Lekhak-P3-BRD.md` it now prints `Run: bash .tfcore/utils/tf-brd-status.sh Lekhak --phase 3`. (2) `tf-brd-status.sh` reads an already-suffixed name as the app and that phase, so `tf-brd-status.sh Lekhak-P3` refreshes phase 3's BRD and no longer looks for `docs/Lekhak-P3-P3-Checklist.md`. A name with a phase and a different `--phase` is refused. The same fault was filed by TechieRag as its TF-007. Regression case `lk_034` fails both checks against the scripts you had and passes now. | Proved on a copy of your `docs/`: `tf-brd-status.sh Lekhak-P2` with your script printed `docs/Lekhak-P2-P3-Checklist.md does not exist yet; nothing to do`. The new one printed `docs/Lekhak-P2-BRD.md Development status updated: 7 screens, 23 of 23 requirements verified`. After the framework update, the next time the hook stops a turn over a phase BRD, its command has `--phase` and works as printed. |
+
 ### Resolution status (TechieFlow team, 2026-10-16)
 
 | ID | Fix | Check it here |
@@ -747,3 +756,46 @@ TF-003 stays open, but it is closer. Since 2026-10-07 the framework drives a Mac
 | TF-007 | Fixed upstream. Every test result now records each test's own outcome and when it ran. `--merge` reads the parts oldest first, and a later run of the same test replaces the earlier one. A later skip never replaces a run that happened, and a failure nothing re-ran stays. `docs/.last-verify.json` is now updated row by row: a targeted verify replaces only its own rows and keeps the rest, each with the date and run it was graded in. A full (`all`) verify still starts it afresh. A `Verified` is still unlocked only by a row graded today. | Re-run the failed test after starting its service, then `--merge tests-3of4.json tests-rerun.json`. The row reads PASS, and the merge line says "1 test(s) ran again in a later part, and the later run stands". After a targeted `*verify`, the ledger still holds all 395 rows. |
 
 TF-003 stays open. A Mac Catalyst driver has to be built and proved on a Mac, and this pass ran on the Windows machine. The steps in your workaround (open the app by `appium:appPath`, set `AXEnhancedUserInterface`, type with `macos: keys`, take element screenshots) are the plan for it. On picking the head: `tf-verify-boot.sh` takes the head it is given, so when the owner asks for the Mac head, the agent has to pass `--head maccatalyst`. The script then says plainly that no driver ships yet, and the rows read "not verified".
+
+### TF-034 — The status-gate hook names the BRD-status command with the phase in the app name, and that command then finds nothing
+
+- **Severity:** minor
+- **Blocks:** no — `bash .tfcore/utils/tf-brd-status.sh Lekhak` (app name only, with `appPhase: 3`) refreshed `docs/Lekhak-P3-BRD.md` and the turn closed.
+- **Repro:**
+  ```
+  # appPhase: 3; docs/Lekhak-P3-Checklist.md edited after docs/Lekhak-P3-BRD.md
+  # Stop hook guard-status-html.sh prints: Run: bash .tfcore/utils/tf-brd-status.sh Lekhak-P3
+  bash .tfcore/utils/tf-brd-status.sh Lekhak-P3
+  ```
+- **Expected:** the command the hook prints refreshes the phase 3 BRD.
+- **Actual:** seen 2026-10-17, as below.
+
+| Problem | What it affects | Does it block or break anything |
+|---|---|---|
+| The hook prints `tf-brd-status.sh Lekhak-P3`; the script adds the phase again and looks for `docs/Lekhak-P3-P3-Checklist.md`, which does not exist ("nothing to do") | Any agent that follows the hook's advice on a phase 2+ project: the BRD stays older than its checklist and the hook keeps blocking | No — running the script with the app name alone works |
+
+- **Encountered in:** `*amend-docs Lekhak` (phase 3), 2026-10-17.
+- **Workaround:** `bash .tfcore/utils/tf-brd-status.sh Lekhak`.
+- **Suggested fix:** have `guard-status-html.sh` print the app name without the phase suffix, or have `tf-brd-status.sh` accept an already-suffixed name.
+
+### TF-035 — The screen check calls an unticked checkbox "empty", so every row on its screen fails render
+
+- **Severity:** major
+- **Blocks:** no. The run carries on; the rows on that screen stay at a false RENDER-FAIL until it is fixed.
+- **Repro:**
+  ```
+  # AI Story Studio carries <Checkbox data-testid="show-verify-stories-toggle"/> (TrBlazeUI: <button role="checkbox" aria-checked="false">, no text, no child while unticked)
+  bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --cdp http://172.18.144.1:9223
+  ```
+- **Expected:** an unticked checkbox counts as drawn, as a native `<input type="checkbox">` does.
+- **Actual:** seen 2026-10-17, as below.
+
+| Problem | What it affects | Does it block or break anything |
+|---|---|---|
+| `tf-verify-screens.mjs` counts an anchor as filled only when it has text, is a native input tag, or has a child that paints. A `role="checkbox"` button paints its own border and has no child until ticked, so it reads "empty". | Every screen with an anchored TrBlazeUI Checkbox or Switch that starts unticked. In Lekhak phase 3 that is 16 rows on AI Story Studio. | Breaks the render verdict (a false RENDER-FAIL); does not block the run. |
+
+- **Encountered in:** `*build-phase Lekhak` → chained verify, 2026-10-17.
+- **Workaround:** none taken. Moving the anchor off the control to suit the tool would be a workaround in product code.
+- **Suggested fix:** treat `[role="checkbox"], [role="switch"], [role="radio"]` (and any element carrying `aria-checked`) as filled, or count the element's own border/background as paint, not only its children's.
+- **Same root, mockup check:** `tf-mockup-parity.sh` reports "border style differs — mockup none, app solid" on the same anchor, because the mockup's native `<input type="checkbox">` computes `border-style: none` while the library's checkbox draws its box as a border. A native checkbox and a `role="checkbox"` control should be compared as the same kind of control, not by border style.
+

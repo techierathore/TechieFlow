@@ -17,6 +17,7 @@
 | Q2 | Secrets in development | Project user secrets (`dotnet user-secrets`), visible to the developer, never committed. `appsettings.Development.json` is committed and therefore never holds a real secret. A `secrets.example.json` in the project lists every key the application reads. | No |
 | Q3 | Database | PostgreSQL, running in Docker, for development and production. Docker is always running on the development machine because WSL, where the harness runs, depends on it. If PostgreSQL is unreachable the container is stopped: the agent starts it and continues. Only if no PostgreSQL container exists at all does the agent stop and ask the owner for connection details. It never substitutes another engine and never creates its own database container. | No, unless no container exists |
 | Q4 | Authentication | Two choices only: **AppManager**, the author's shared platform for identity, roles, licences and subscriptions, which counts as part of the application and not as an external integration; or a different mechanism named by the owner. | **Yes**: "AppManager, or something else?" |
+| Q4a | Test users of an AppManager app | An app that signs in through AppManager registers its own test users on AppManager, through AppManager's register call (`POST /AuthSvc/register`, or `device-register` for a device-bound app), under the app's own application id: one for the owner's walkthrough (`{app}-owner@…`), a second user (`{app}-second@…`), and one for unattended runs (`{app}-yolo-tester@…`). A script in the project does it (for example `tests/verify/register-test-users.mjs`): it generates each password and writes it only to the project's git-ignored secrets (user secrets, or a git-ignored `.env.local`). The UsageGuide's Test users table lists the three, names where each password is kept, and never holds a password. An agent never asks for, stores or uses the owner's personal AppManager account. `tf-doc-check.sh` holds the UsageGuide to this. | No |
 | Q5 | Logging | Serilog, always, with file logging wired at startup before anything else can fail. | No |
 | Q6 | Tests | xUnit, always. A test project exists from day-1. | No |
 | Q7 | Layout and naming | `src/` and `tests/` at the root. The primary executable project is named exactly `<App>`; `<App>.App` is banned. Secondary heads take a descriptive suffix (`<App>.Api`, `<App>.Desktop`). | No |
@@ -32,6 +33,7 @@ Required packages: `TrBlazeUI.Components` — for a project with a Blazor or MAU
 ## Notes
 
 - Q4 is asked on purpose even with this answer set, because the choice differs per product.
+- Q4a follows from an AppManager answer to Q4 and is never asked (owner, 2026-10-18).
 - Q3's "start the container, never create one" replaces the behaviour that produced TfLens's own database container: an agent that cannot reach the expected database restarts it or asks, and never builds an alternative.
 - Q11.5 replaces the `database` folder of loose migration scripts that TfLens accumulated.
 - Q11.3 is a standing framework convention restated as a stack rule so that it is recorded per project and its violations can be counted.

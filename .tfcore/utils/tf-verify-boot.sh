@@ -13,7 +13,8 @@
 #            side that built it, reading its settings from the project folder as `dotnet run` does.
 #            Builders side by side never serve each other's half-written build (TF-043). A standalone
 #            WebAssembly project is still started with `dotnet run`. Prints BOOTED mode=base url=….
-#   windows  a MAUI Blazor Hybrid head (UseMaui + a net*-windows target): started Windows-side with
+#   windows  a MAUI Blazor Hybrid head (UseMaui + a net*-windows target + a BlazorWebView; a plain MAUI
+#            app is refused at once, NONE kind=no-webview, TechieRag TF-006): started Windows-side with
 #            WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222, the DevTools port
 #            relayed to every interface by tf-cdp-relay.ps1, and reached from WSL over CDP. Prints
 #            BOOTED mode=cdp url=http://<host>:9223. Proven on MyDiary, 2026-09-06.
@@ -85,6 +86,13 @@ find_projects() { # prints csproj paths under src/, source/, the root and one le
 }
 is_web()  { grep -qE 'Microsoft\.NET\.Sdk\.Web|Microsoft\.NET\.Sdk\.BlazorWebAssembly' "$1"; }
 is_maui_win() { grep -qiE '<UseMaui>[[:space:]]*true|Microsoft\.NET\.Sdk\.Maui' "$1" && grep -qE 'net[0-9.]+-windows' "$1"; }
+# A Windows head is driven over its web view's DevTools port, so only a Blazor Hybrid app has one. A
+# plain MAUI app (TechieRag's samples/TechieRag.Probe) was picked as the windows head and waited the
+# full 300 s for a port it can never open (TechieRag TF-006).
+is_hybrid() {
+  grep -qE 'Microsoft\.AspNetCore\.Components\.WebView\.Maui' "$1" && return 0
+  grep -rqlE 'AddMauiBlazorWebView|BlazorWebView' --include='*.cs' --include='*.xaml' --exclude-dir=bin --exclude-dir=obj "$(dirname "$1")" 2>/dev/null
+}
 is_maui_mac() { grep -qiE '<UseMaui>[[:space:]]*true|Microsoft\.NET\.Sdk\.Maui' "$1" && grep -qE 'net[0-9.]+-maccatalyst' "$1"; }
 
 poll_http() { # url seconds pid-to-watch(optional) -> 0 when it answers
@@ -285,7 +293,11 @@ fi
 # ---- pick the project and the head ------------------------------------------------------
 tf_read_lines ALL < <(find_projects)
 WEB=(); WIN=(); MAC=()
-for p in ${ALL[@]+"${ALL[@]}"}; do is_web "$p" && WEB+=("$p"); is_maui_win "$p" && WIN+=("$p"); is_maui_mac "$p" && MAC+=("$p"); done
+WIN_NATIVE=()
+for p in ${ALL[@]+"${ALL[@]}"}; do
+  is_web "$p" && WEB+=("$p"); is_maui_mac "$p" && MAC+=("$p")
+  if is_maui_win "$p"; then if is_hybrid "$p"; then WIN+=("$p"); else WIN_NATIVE+=("$p"); fi; fi
+done
 # a Mac Catalyst head is picked unasked only on a Mac, the one host that runs it
 [[ "$PLATFORM" == "macos" ]] || MAC=()
 # Several web projects: the one that serves screens. The first in sorted order booted AppManager's
@@ -325,9 +337,14 @@ if [[ -n "$PROJECT" ]]; then
 elif [[ -z "$HEAD" ]]; then
   if [[ ${#WEB[@]} -gt 0 ]]; then HEAD=web; pick_web
   elif [[ ${#MAC[@]} -gt 0 ]]; then HEAD=maccatalyst; PROJECT="${MAC[0]}"
-  elif [[ ${#WIN[@]} -gt 0 ]]; then HEAD=windows; PROJECT="${WIN[0]}"; fi
+  elif [[ ${#WIN[@]} -gt 0 ]]; then HEAD=windows; PROJECT="${WIN[0]}"
+  elif [[ ${#WIN_NATIVE[@]} -gt 0 ]]; then HEAD=windows; PROJECT="${WIN_NATIVE[0]}"; fi
 else
-  case "$HEAD" in web) pick_web ;; windows) PROJECT="${WIN[0]:-}" ;; maccatalyst) PROJECT="${MAC[0]:-}" ;; esac
+  case "$HEAD" in web) pick_web ;; windows) PROJECT="${WIN[0]:-${WIN_NATIVE[0]:-}}" ;; maccatalyst) PROJECT="${MAC[0]:-}" ;; esac
+fi
+if [[ "$HEAD" == windows && -n "$PROJECT" ]] && ! is_hybrid "$PROJECT"; then
+  [[ $DRYRUN -eq 1 ]] || write_state windows none "" "" "" "$PROJECT" "a MAUI app with no BlazorWebView: no web view, not drivable over CDP" no-webview "$PLATFORM"
+  echo "NONE head=windows kind=no-webview reason=$PROJECT is a MAUI app with no BlazorWebView (no AddMauiBlazorWebView, no <BlazorWebView>): it has no web view, so it is not drivable over CDP; its rows are graded by their tests"; exit 2
 fi
 if [[ $DRYRUN -eq 1 ]]; then echo "PICK head=${HEAD:-none} project=${PROJECT:-none}"; exit 0; fi
 case "$HEAD" in
@@ -714,6 +731,9 @@ MINE="$(comm -13 <(printf '%s\n' "$BEFORE_IDS") <(win_ids) | tr '\n' ' ')"
 if [[ -z "$URL" ]]; then
   pkill -P "$APP_PID" 2>/dev/null; kill "$APP_PID" "$RELAY_PID" 2>/dev/null
   for w in $MINE; do taskkill.exe /F /T /PID "$w" >/dev/null 2>&1; done
+  # the relay runs Windows-side and outlives its WSL parent: a second try then failed "Only one usage
+  # of each socket address" (TechieRag TF-006)
+  powershell.exe -NoProfile -Command "Get-NetTCPConnection -LocalPort $RELAY_PORT -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" >/dev/null 2>&1
   write_state windows none "" "" "cmd.exe /c dotnet run -f $TFM" "$PROJECT" "the DevTools port $RELAY_PORT never answered within 300 s" host "$PLATFORM"
   echo "NONE head=windows kind=host reason=the app's DevTools port never answered on ${HOSTS[*]}:$RELAY_PORT within 300 s (log $LOG, relay $DIR/relay.log)"; exit 2
 fi

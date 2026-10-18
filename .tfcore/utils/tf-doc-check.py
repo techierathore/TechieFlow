@@ -30,6 +30,7 @@ Schema grammar (one `key: value` per line inside the comment):
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import re
@@ -410,6 +411,17 @@ def resolve_size(header, brd_header, cfg, cli_size, rep, rel, need):
 def resolve_kind(header, brd_header, cfg) -> str:
     raw = (header.get("kind") or brd_header.get("kind") or cfg.get("appKind") or "app").strip().lower()
     return "library" if raw.startswith("lib") else "app"
+
+
+def signs_in_through_appmanager(root, app):
+    """the Architecture's authentication row (Q4, Auth…, Identity) names AppManager"""
+    for f in glob.glob(os.path.join(root or ".", "docs", f"{app}-Architecture.md")):
+        for _h, rows in tables_in(open(f, encoding="utf-8", errors="replace").read()):
+            for r in rows:
+                head = " ".join(r[:2]).lower()
+                if re.search(r"\bq4\b|auth|identity|sign-in", head) and re.search(r"(?i)app ?manager", " ".join(r[1:3])):
+                    return True
+    return False
 
 
 def section_text(present, name):
@@ -798,6 +810,35 @@ def check_doc_rule(rule, c, rep):
         txt = section_text(present, "Test users")
         if txt is not None and not has_table_with(txt, "user", "role"):
             rep.fail(rel, 'the "Test users" section needs a table with User and Role columns')
+
+    elif rule == "appmanager-test-users":
+        # An app that signs in through AppManager has its own three test users there, registered through
+        # AppManager's register call, each password kept in the git-ignored secrets and never written in
+        # the guide; never the owner's personal account (stack answer Q4a, owner 2026-10-18).
+        txt = section_text(present, "Test users")
+        app = c.get("app")
+        if txt is None or c["kind"] != "app" or not app or app.lower() == "appmanager" or not signs_in_through_appmanager(c["root"], app):
+            return
+        users = []
+        for hdr, rows in tables_in(txt):
+            low = [h.lower() for h in hdr]
+            if not any("user" in h for h in low):
+                continue
+            pw = next((i for i, h in enumerate(low) if "password" in h), None)
+            users += [(r, r[pw] if pw is not None and pw < len(r) else "") for r in rows if "@" in " ".join(r)]
+        whole = lambda r: " ".join(r).lower()
+        want = (("owner", r"owner|account holder"), ("second user", r"second"), ("unattended-run user", r"unattended|yolo"))
+        missing = [n for n, pat in want if not any(re.search(pat, whole(r)) for r, _p in users)]
+        if missing:
+            rep.fail(rel, f'{app} signs in through AppManager: the Test users table lists no {", no ".join(missing)} '
+                          f'(stack answer Q4a: owner walkthrough, second user, unattended runs, registered through AppManager\'s register call)')
+        for r, cell in users:
+            if not re.search(r"(?i)secret|\.env|credential|keychain", cell):
+                who = re.search(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)*", " ".join(r)).group(0)
+                rep.fail(rel, f'test user {who}: the Password cell names no git-ignored secret; keep the password in the project\'s '
+                              f'secrets and name the key here, never the password (stack answer Q4a)')
+        if users and not re.search(r"(?i)regist", txt):
+            rep.fail(rel, "the Test users section does not say the users were registered through AppManager's register call (stack answer Q4a)")
 
     elif rule == "next-command-blocks":
         seg = re.search(r"(?ms)^## Next command to run\s*\n(.*?)(?=^## |\Z)", nocomment)

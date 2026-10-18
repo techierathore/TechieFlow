@@ -11,7 +11,7 @@
 
 ## 12. Permissions (yolo-except-git-writes)
 
-The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **all Bash** (bare `"Bash"`) — so create/update/**move** run with zero prompts. **Deletes and `sudo`** (`rm`, `rmdir`, `find -delete`, `sudo`) **ask — via the hook, not via a settings `ask` rule** (see the YOLO box below for why). **Denies** catastrophic `rm -rf` root/home paths **and every git/gh WRITE subcommand** (`git commit|push|add|reset|checkout|switch|restore|merge|rebase|stash|clean|pull|fetch|…`, `gh pr|issue|repo|release create|merge|close|…`) — git is manual in TechieFlow; agents never write it, so it is a hard deny, in **every** permission mode including bypass. Permission precedence is `deny → ask → hook → allow`. *(Cross-project tip: to let a session work in another app's folder without per-path prompts, add that root to `permissions.additionalDirectories` in this project's settings.json — keep those machine-specific paths out of any shared template.)*
+The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **all Bash** (bare `"Bash"`) — so create/update/**move** run with zero prompts. **Deletes and `sudo`** (`rm`, `rmdir`, `find -delete`, `sudo`) **ask — via the hook, not via a settings `ask` rule** (see the YOLO box below for why). **Refuses** a delete of the whole disk or home folder (`rm -rf /`, `/*`, `~`, `~/*`), through the hook in every mode; settings `deny` holds only the exact `rm -rf /` and `rm -rf ~`, because a deny rule's `*` matches any text and `rm -rf /*` refused every absolute path. **It also denies every git/gh WRITE subcommand** (`git commit|push|add|reset|checkout|switch|restore|merge|rebase|stash|clean|pull|fetch|…`, `gh pr|issue|repo|release create|merge|close|…`) — git is manual in TechieFlow; agents never write it, so it is a hard deny, in **every** permission mode including bypass. Permission precedence is `deny → ask → hook → allow`. *(Cross-project tip: to let a session work in another app's folder without per-path prompts, add that root to `permissions.additionalDirectories` in this project's settings.json — keep those machine-specific paths out of any shared template.)*
 
 **The git ban is TWO layers, because prefix rules alone leak.** `Bash(git commit*)` is a literal prefix match — it never sees `cd src && git commit` or `echo done; git add -A`, which the bare `"Bash"` allow would wave straight through. That is exactly how agents kept "accidentally" running git during status updates. So the config also wires a **PreToolUse hook** — `.tfcore/hooks/block-git.sh` — that parses every Bash call (compound forms, `bash -c "…"`, `eval`, `$(…)`, wrappers like `sudo`/`env`/`xargs`) and classifies each `git`/`gh` node as **read** (`status`/`log`/`diff`/`show`/`blame`/`grep`/`branch`/`tag -l`/`stash list`/`remote -v`/`config --get`, `gh pr list|view`…) or **write** (everything else). Writes are blocked always; reads are blocked outside YOLO and allowed in YOLO. The block message carries the local-evidence recipe (checklist tables + working-tree files + fresh build) so the agent continues correctly instead of flailing. You still run git yourself: in a separate terminal, or by typing `!git …` in the session (user-typed bang commands bypass agent tool permissions).
 
@@ -21,7 +21,7 @@ The pre-built config **auto-allows** Read/Glob/Grep/Edit/Write/MultiEdit and **a
 
 | | Normal | YOLO |
 |---|---|---|
-| `rm` / `rmdir` / `sudo` | hook asks | **allowed, no prompt** (catastrophic `rm -rf /`/`~` still denied) |
+| `rm` / `rmdir` / `sudo` | hook asks | **allowed, no prompt** (a delete of the whole disk or home folder is still refused) |
 | git/gh **reads** (`status`/`log`/`diff`/`blame`, `gh pr view`) | blocked | **allowed** |
 | git/gh **writes** (`commit`/`push`/`add`/`reset`/`checkout`/`stash`/`tag`, `gh pr create|merge`) | blocked | **blocked — always** |
 | Elicitation, phase-boundary pauses, "confirm the BRD-N list", "ask once" questions | pause | **decide the default, record it, continue** |
@@ -62,7 +62,7 @@ So for the prompts that remain, the session must be started with `claude --permi
     ],
     "ask": [],
     "deny": [
-      "Bash(rm -rf /)", "Bash(rm -rf /*)", "Bash(rm -rf ~)", "Bash(rm -rf ~/*)",
+      "Bash(rm -rf /)", "Bash(rm -rf ~)",
       "Bash(git commit*)", "Bash(git push*)", "Bash(git add*)", "Bash(git reset*)",
       "Bash(git checkout*)", "Bash(git switch*)", "Bash(git restore*)", "Bash(git merge*)",
       "… every other git WRITE subcommand (rebase, cherry-pick, revert, clean, pull, fetch, init, clone, …) …",

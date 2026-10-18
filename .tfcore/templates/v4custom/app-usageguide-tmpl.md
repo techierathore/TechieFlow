@@ -13,13 +13,16 @@ entries: How to test, screen by screen |
 per-entry: 90 120
 budget: S 2500 3500 | M 4000 6000 | L 4000 6000
 rule: test-users-table
+rule: appmanager-test-users
 rule: execution-code
 rule: entry-steps
 rule: entry-expected
 -->
 <!-- Authoring notes (agent only; never visible text).
      The owner's test plan. Every agent (smoke, verify) and the owner's UAT use the SAME test users and
-     the SAME walkthrough; nobody invents accounts. One `###` per screen in navigation order, at most
+     the SAME walkthrough; nobody invents accounts. An app that signs in through AppManager lists its own three users
+     (owner walkthrough, second user, unattended runs), registered through AppManager's register call, each password named by
+     where the git-ignored secrets keep it, never written here; never the owner's personal AppManager account. One `###` per screen in navigation order, at most
      120 words: who to sign in as, numbered steps, the expected result, the REQ ids covered.
      The Execution guide is copy-pasteable commands, one per line, no narrative. Hosting and production
      deployment are not here; they are in the Deployment Checklist after UAT.

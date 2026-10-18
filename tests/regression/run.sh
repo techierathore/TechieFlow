@@ -32,6 +32,11 @@
 #
 # Exit 0 all held, 1 a case failed. Python 3 standard library only. Never runs git.
 set -u
+# A case's records go to its own fixture, never this repository's docs/metrics/. tf-emit.sh takes
+# CLAUDE_PROJECT_DIR before the folder it runs in, so a suite started from a Claude Code session wrote
+# 18 fixture records into TechieFlow's own streams on 2026-10-18 and failed 17 checks. A case that needs
+# either variable sets it on its own command line, as the verify and bugs suites already do.
+unset CLAUDE_PROJECT_DIR TF_METRICS_ROOT
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 UTILS="${TF_REGRESSION_UTILS:-$ROOT/.tfcore/utils}"
 # tf_timeout, tf_sed_inplace, tf_date_from: the GNU-only commands, so a stock Mac runs this suite
@@ -693,6 +698,29 @@ sys.exit(0 if any(r.get('app')=='Blk' and r.get('cmd')=='verify-phase' for r in 
     bad tf_overlap_h "after a void, the corrected record was still refused"
   fi
   unset -f emit n
+}
+
+# --- a delete of an absolute path was denied even in bypass mode (owner, 2026-10-18) ---------------
+# settings.json denied "Bash(rm -rf /*)" and "Bash(rm -rf ~/*)" to stop a wipe of the disk or home
+# folder, but a deny rule's * matches any text, so every `rm -rf /mnt/c/...` was refused too and a
+# scratch folder was handed to the owner to delete. The wipe check is now the hook's, in every mode;
+# the deny list keeps only the exact `rm -rf /` and `rm -rf ~`.
+rm_wipe() {
+  local d="$SCRATCH/rmwipe"; mkdir -p "$d"
+  hook() { printf '{"tool_name":"Bash","tool_input":{"command":%s}}' "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1")" \
+             | CLAUDE_PROJECT_DIR="$d" TF_YOLO=1 bash "$HOOKS/block-git.sh" >/dev/null 2>&1; echo $?; }
+  local w="" c
+  for c in 'rm -rf /' 'rm -rf /*' 'rm -rf ~' 'rm -rf ~/*' 'cd /tmp && rm -rf "$HOME"' "rm -fr $HOME/"; do w+="$(hook "$c")"; done
+  [[ "$w" == 222222 ]] && ok rm_wipe_a "a delete of the whole disk or home folder is refused, even in YOLO" \
+                       || bad rm_wipe_a "exit codes for the six wipes: $w (want 222222)"
+  w="$(hook 'rm -rf /mnt/c/Fx/tests/.artifacts/scratch')$(hook "rm -rf $HOME/scratch")"
+  [[ "$w" == 00 ]] && ok rm_wipe_b "a delete of a folder by its absolute path is not refused" \
+                   || bad rm_wipe_b "exit codes for two folder deletes: $w (want 00)"
+  local s; s="$(sed -n '/CANONICAL_SETTINGS=/,/^}'"'"'/p' "$ROOT/update-framework.sh")"
+  grep -q '"Bash(rm -rf /)"' <<<"$s" && ! grep -qF 'rm -rf /*' <<<"$s" && ! grep -qF 'rm -rf ~/*' <<<"$s" \
+    && ok rm_wipe_c "the deployed deny list keeps the exact wipes and no rm rule ending in *" \
+    || bad rm_wipe_c "update-framework.sh still denies an rm path ending in *"
+  unset -f hook
 }
 
 # --- YOLO never asks (owner, 2026-10-14) ----------------------------------------------------------
@@ -4292,6 +4320,56 @@ tb_004() {
     || { bad tb_004 "the run was not filed under triage-and-fix (runs: $cmds)"; note "$(head -2 <<<"$out")"; }
 }
 
+# --- TrBlazeUI TF-006: the closing-message guard mixed up entries that share a number ------------------
+# Every consumer numbers its own entries from TR-001, so TrBlazeUI holds a TR-002 in Lekhak's file and
+# another in TrStudio's. The guard read the bare id against all files and the last one won: Lekhak's
+# open TR-002, explained in its table and handed over in the prompt, was refused as "written about as an
+# open problem, but docs/TrStudio-TrBlazeUI-Feedback.md … records it as closed". An id is now read in the
+# file whose project its line names, else the one the message names; still several that disagree, the
+# message is asked to say whose. A closed entry named with its own consumer is still held to "closed".
+tb_006() {
+  local d="$SCRATCH/tb006" c; mkdir -p "$d/docs"
+  for c in Lekhak TrStudio; do
+    printf '# TrBlazeUI feedback — found while building %s\n\n## Entries\n\n### TR-002 — Card header actions stack under the title\n\n- **Severity:** minor\n' "$c" > "$d/docs/$c-TrBlazeUI-Feedback.md"
+  done
+  python3 - "$d/docs/TrStudio-TrBlazeUI-Feedback.md" <<'PY'
+import sys; p = sys.argv[1]; s = open(p).read()
+open(p, "w").write(s.replace("stack under the title\n", "stack under the title\n\n> ✅ **Closed 2026-07-12** — re-checked here: the header row holds the action.\n", 1))
+PY
+  local good='Lekhak TR-002 is the one left.
+
+| Problem | What it affects | Does it block or break anything |
+|---|---|---|
+| Lekhak TR-002 — card header actions stack under the title | Every card with an action | No |
+
+```
+Fix Lekhak TR-002 from docs/Lekhak-TrBlazeUI-Feedback.md.
+```'
+  local bare='TR-002 is still a problem.
+
+```
+*triage-and-fix TrBlazeUI
+```'
+  local closed='TrStudio TR-002 is still a problem.
+
+```
+*triage-and-fix TrBlazeUI
+```'
+  local o1 o2 o3 r1 r2 r3
+  o1="$(python3 "$UTILS/tf-owner-text.py" --root "$d" --final --stdin <<<"$good" 2>&1)"; r1=$?
+  o2="$(python3 "$UTILS/tf-owner-text.py" --root "$d" --final --stdin <<<"$bare" 2>&1)"; r2=$?
+  o3="$(python3 "$UTILS/tf-owner-text.py" --root "$d" --final --stdin <<<"$closed" 2>&1)"; r3=$?
+  [[ $r1 -eq 0 ]] && ! grep -q 'TR-002' <<<"$(grep FAIL <<<"$o1")" \
+    && ok tb_006a "Lekhak's open TR-002 is read in Lekhak's file, not in TrStudio's where a TR-002 is closed" \
+    || { bad tb_006a "Lekhak TR-002 was read against another consumer's file (exit $r1)"; note "$(grep FAIL <<<"$o1" | head -2)"; }
+  [[ $r2 -eq 1 ]] && grep -q 'TR-002 is an entry in several feedback files' <<<"$o2" \
+    && ok tb_006b "a bare TR-002 that two files hold in different states is asked whose it is" \
+    || { bad tb_006b "a bare id two files hold was read as one of them (exit $r2)"; note "$(grep FAIL <<<"$o2" | head -2)"; }
+  [[ $r3 -eq 1 ]] && grep -q 'TR-002 is written about as an open problem, but docs/TrStudio-TrBlazeUI-Feedback.md' <<<"$o3" \
+    && ok tb_006c "TrStudio's closed TR-002 written as open is still refused" \
+    || { bad tb_006c "a closed entry named with its consumer got through as open (exit $r3)"; note "$(grep FAIL <<<"$o3" | head -2)"; }
+}
+
 # --- TrBlazeUI TF-005: a library's fix ended before the documents it ships were updated -----------
 # The gate offered *handoff-phase after the run, so the owner released a package whose guides did not
 # describe the fix, or rebuilt it. A library's fix now runs the handoff steps itself; once they ran, the
@@ -5987,6 +6065,169 @@ JS
     || { bad lk_033b "the page was not put back: ${out##*|} (want 'light fluent-modern \"\"')"; }
 }
 
+# --- Lekhak TF-034, TechieRag TF-007: the Stop hook named the BRD-status command with the phase in the app --
+# With appPhase 3 and an earlier or current phase checklist newer than its BRD, guard-status-html.sh
+# printed `tf-brd-status.sh Lekhak-P3`, the file stem. The script added the phase again and looked for
+# docs/Lekhak-P3-P3-Checklist.md: "nothing to do", the BRD stayed older and the hook kept blocking. The
+# hook now prints `<App> --phase <n>`, and the script also reads an already-suffixed name as that phase.
+lk_034() {
+  local d="$SCRATCH/lk034" n; mkdir -p "$d/docs" "$d/.tfcore/.session" "$d/.tfcore/utils"
+  printf 'appPhase: 3\n' > "$d/.tfcore/core-config.yaml"
+  cp "$UTILS/tf-brd-status.py" "$UTILS/tf-brd-status.sh" "$d/.tfcore/utils/"
+  for n in 2 3; do
+    printf '# Fx — BRD phase %s\n\n## 7. Development status\n\nold\n' "$n" > "$d/docs/Fx-P$n-BRD.md"
+    cat > "$d/docs/Fx-P$n-Checklist.md" <<MD
+# Fx — Phase $n Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Detail |
+|---|---|---|---|---|---|
+| REQ-FN-${n}01 | Export | Verified | 100% | | [view](#d-req-fn-${n}01) |
+
+## Page: Export (\`/export\`)
+
+<a id="d-req-fn-${n}01"></a>
+- **REQ-FN-${n}01** — Export.
+  - *Acceptance:* When a user clicks Export on Export, then a file downloads.
+MD
+  done
+  touch -t "$(tf_date_from '-30 min' +%Y%m%d%H%M.%S)" "$d/docs/Fx-P2-BRD.md" "$d/docs/Fx-P3-BRD.md"
+  printf '{}' > "$d/.tfcore/.session/claude-code.json"
+  touch -t "$(tf_date_from '-10 min' +%Y%m%d%H%M.%S)" "$d/.tfcore/.session/claude-code.json"
+  printf '# Fx — Project status\n' > "$d/PROJECT-STATUS.md"; cp "$d/PROJECT-STATUS.md" "$d/PROJECT-STATUS.html"
+  local out; out="$(printf '{}' | CLAUDE_PROJECT_DIR="$d" CLAUDECODE=1 bash "$HOOKS/guard-status-html.sh" 2>&1)"
+  grep -qF 'Run: bash .tfcore/utils/tf-brd-status.sh Fx --phase 2' <<<"$out" && grep -qF 'Run: bash .tfcore/utils/tf-brd-status.sh Fx --phase 3' <<<"$out" \
+    && ! grep -qE 'tf-brd-status\.sh Fx-P[0-9]' <<<"$out" \
+    && ok lk_034a "the hook names the app and --phase for a phase BRD older than its checklist" \
+    || { bad lk_034a "the hook's BRD command: $(grep -o 'tf-brd-status.sh [^.]*' <<<"$out" | tr '\n' ' ')"; }
+  out="$(cd "$d" && bash .tfcore/utils/tf-brd-status.sh Fx --phase 2 --no-render 2>&1; bash .tfcore/utils/tf-brd-status.sh Fx-P3 --no-render 2>&1)"
+  grep -q '^tf-brd-status: docs/Fx-P2-BRD.md Development status' <<<"$out" && grep -q '^tf-brd-status: docs/Fx-P3-BRD.md Development status' <<<"$out" \
+    && grep -q '^| Export | 1 | 1 | 0 | Done |$' "$d/docs/Fx-P3-BRD.md" \
+    && ok lk_034b "the printed command refreshes phase 2's BRD, and an already-suffixed Fx-P3 refreshes phase 3's" \
+    || { bad lk_034b "the BRD was not refreshed: $(tr '\n' ' ' <<<"$out" | cut -c1-240)"; }
+}
+
+# --- Lekhak TF-035: an unticked library checkbox was "empty", so its screen's rows were RENDER-FAIL -----
+# TrBlazeUI draws <Checkbox> as <button role="checkbox" aria-checked="false"> with no text and no child
+# until ticked. The screen check counted an anchor filled only for text, a native field, or a painting
+# child, so AI Story Studio's show-verify-stories-toggle read empty and 20 phase-3 rows failed render.
+# The mockup check also said "border style differs — mockup none, app solid", because the mockup's
+# native checkbox is drawn by the browser, not by a CSS border. A painted checkbox/switch/radio now
+# counts as drawn, the two kinds are not compared by border, and an unpainted empty box is still empty.
+lk_035() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip lk_035 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/lk035" s
+  mkdir -p "$d/docs/mockups"
+  local css='<style>body{margin:0;font:14px/20px system-ui;padding:16px} .cb{width:16px;height:16px;border:1px solid #888;border-radius:3px;background:#fff;padding:0}</style>'
+  local mock='<label><input type="checkbox" data-testid="show-verify-stories-toggle"> Show verify stories</label>'
+  local page='<!doctype html><html><head><meta charset="utf-8">%s</head><body><h1>AI Story Studio</h1>%s</body></html>\n'
+  for s in checkbox switch blank; do
+    mkdir -p "$d/site/$s"
+    printf "$page" "$css" "$mock" > "$d/docs/mockups/$s.html"
+  done
+  printf "$page" "$css" '<label><button type="button" class="cb" role="checkbox" aria-checked="false" data-testid="show-verify-stories-toggle"></button> Show verify stories</label>' > "$d/site/checkbox/index.html"
+  printf "$page" "$css" '<label><button type="button" class="cb" role="switch" aria-checked="false" data-testid="show-verify-stories-toggle"></button> Show verify stories</label>' > "$d/site/switch/index.html"
+  printf "$page" "$css" '<label><div data-testid="show-verify-stories-toggle" style="width:16px;height:16px"></div> Show verify stories</label>' > "$d/site/blank/index.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  ( cd "$d" && tf_timeout 120 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen checkbox=/checkbox/ --screen switch=/switch/ --screen blank=/blank/ --widths 1280 --themes light --render-wait 500 --json-out "$d/screens.json" --shots-dir "$d/shots" > "$d/run.log" 2>&1 )
+  ( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen checkbox=/checkbox/ --screen switch=/switch/ --widths 1280 --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$srv" 2>/dev/null
+  local out par
+  out="$(python3 -c "
+import json
+for s in json.load(open('$d/screens.json'))['screens']: print(s['name'], s['render'], '|'.join(f['detail'][:60] for w in s['widths'] for f in w.get('findings', [])))" 2>&1)"
+  par="$(python3 -c "
+import json
+for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], '|'.join(f['detail'][:60] for f in s.get('findings', []) if 'border' in f['detail']))" 2>&1)"
+  grep -q '^checkbox OK $' <<<"$out" && grep -q '^switch OK $' <<<"$out" \
+    && grep -q '^blank EMPTY anchored control "show-verify-stories-toggle" (div) is empty' <<<"$out" \
+    && ok lk_035a "an unticked role=checkbox or role=switch that paints its own box is drawn; an unpainted empty box is still empty" \
+    || { bad lk_035a "unticked checkbox: $(tr '\n' ' ' <<<"$out" | cut -c1-260)"; }
+  grep -q '^checkbox $' <<<"$par" && grep -q '^switch $' <<<"$par" \
+    && ok lk_035b "the mockup check does not compare a native checkbox and a library checkbox by border style" \
+    || { bad lk_035b "border finding on a checkbox: $(tr '\n' ' ' <<<"$par" | cut -c1-260)"; }
+}
+
+# --- TechieRag TF-005: a new triage row took an id another phase's checklist already used --------------
+# Phase 3's checklist is all REQ-RAG; phase 1 holds REQ-FN-001. `tf-triage.sh new` without --prefix took
+# FN and counted the current checklist only, so it gave REQ-FN-001 again, and the miss and its gate
+# record carry that id for good. The count now spans every checklist (Chatur TF-011) and the telemetry
+# streams, and a checklist with no FN row defaults to the one prefix it uses, or asks for one.
+tr_005() {
+  local t="$SCRATCH/tr005"; mkdir -p "$t/docs/metrics" "$t/.tfcore"
+  printf 'appPhase: 3\n' > "$t/.tfcore/core-config.yaml"
+  local head='| ID | Requirement | Status | %% | Remarks | Detail |\n|---|---|---|---|---|---|\n'
+  printf "# A\n\n$head| REQ-FN-001 | One | Verified | 100%% | | [d](#d-req-fn-001) |\n" > "$t/docs/App-Checklist.md"
+  printf "# A P3\n\n$head| REQ-RAG-126 | Router | Verified | 100%% | | [d](#d-req-rag-126) |\n| REQ-RAG-127 | Pick | Not Started | 0%% | | [d](#d-req-rag-127) |\n" > "$t/docs/App-P3-Checklist.md"
+  # the renamed row's miss still names REQ-RAG-128; a record cannot be amended
+  printf '{"kind":"miss","miss_id":"MISS-App-20261009-01","req_id":"REQ-RAG-128"}\n' > "$t/docs/metrics/misses.jsonl"
+  local out; out="$(cd "$t" && TF_SKIP_SELFCHECK=1 bash "$UTILS/tf-triage.sh" App new "Router picks the wrong model" "When a caller asks for a cheap model on Routing, then the small one is chosen" --section "Model routing" 2>&1)"
+  grep -q '^REQ-RAG-129: new Not Started row' <<<"$out" \
+    && ok tr_005a "with no --prefix, an all-RAG checklist gets REQ-RAG-129: past its rows and the id a miss record still carries" \
+    || { bad tr_005a "tf-triage new gave: $(tr '\n' ' ' <<<"$out" | cut -c1-200) (want REQ-RAG-129)"; }
+  printf "| REQ-NFR-004 | Speed | Not Started | 0%% | | [d](#d-req-nfr-004) |\n" >> "$t/docs/App-P3-Checklist.md"
+  out="$(cd "$t" && TF_SKIP_SELFCHECK=1 bash "$UTILS/tf-triage.sh" App new "Second" "When a caller asks on Routing, then it answers" 2>&1)"; local rc=$?
+  [[ $rc -eq 2 ]] && grep -q 'has no REQ-FN rows; name the prefix: --prefix NFR|RAG' <<<"$out" \
+    && ok tr_005b "a checklist with several prefixes and no FN asks for --prefix instead of guessing FN" \
+    || { bad tr_005b "exit $rc: $(tr '\n' ' ' <<<"$out" | cut -c1-200)"; }
+}
+
+# --- TechieRag TF-006: a plain MAUI sample was booted as the Windows head and waited 300 s -------------
+# samples/TechieRag.Probe has UseMaui and a net*-windows target but no BlazorWebView, so it has no web
+# view and no DevTools port; the boot waited the full 300 s for one, three times. A windows head now
+# needs a BlazorWebView: a Blazor Hybrid project is preferred, and a plain MAUI app is refused at once.
+tr_006() {
+  local d="$SCRATCH/tr006"; mkdir -p "$d/samples/Probe" "$d/src/Hybrid"
+  local proj='<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFrameworks>net10.0-windows10.0.19041.0</TargetFrameworks><UseMaui>true</UseMaui></PropertyGroup></Project>'
+  printf '%s\n' "$proj" > "$d/samples/Probe/Probe.csproj"
+  printf 'public static class MauiProgram { public static void Create(object b) { } }\n' > "$d/samples/Probe/MauiProgram.cs"
+  printf '%s\n' "$proj" > "$d/src/Hybrid/Hybrid.csproj"
+  printf 'public static class MauiProgram { public static void Create(dynamic b) { b.Services.AddMauiBlazorWebView(); } }\n' > "$d/src/Hybrid/MauiProgram.cs"
+  local out; out="$(cd "$d" && bash "$UTILS/tf-verify-boot.sh" start --dry-run 2>&1 | tail -1)"
+  [[ "$out" == "PICK head=windows project=src/Hybrid/Hybrid.csproj" ]] \
+    && ok tr_006a "the Blazor Hybrid project is the windows head, not the plain MAUI sample sorted first" \
+    || bad tr_006a "picked: $out"
+  rm -rf "$d/src"
+  local t0=$SECONDS rc; out="$(cd "$d" && bash "$UTILS/tf-verify-boot.sh" start --dry-run 2>&1 | tail -1)"; rc=$?
+  [[ "$out" == "NONE head=windows kind=no-webview reason=samples/Probe/Probe.csproj is a MAUI app with no BlazorWebView"* && $((SECONDS - t0)) -lt 30 ]] \
+    && ok tr_006b "a plain MAUI app is refused at once as having no web view, not waited on for 300 s" \
+    || bad tr_006b "plain MAUI only: $out"
+}
+
+# --- stack answer Q4a: an AppManager app's test users are its own, registered, with no password written ---
+# Owner rule, 2026-10-18: every app that signs in through AppManager registers its own test users (owner
+# walkthrough, second user, unattended runs) through AppManager's register call, keeps their passwords in
+# the project's git-ignored secrets and lists them in its UsageGuide; an agent never asks for, stores or
+# uses the owner's personal AppManager account. TfLens's guide wrote two passwords out and had no
+# unattended-run user, and nothing said so. The document check now holds an AppManager app's guide to it;
+# an app that does not sign in through AppManager is not asked.
+std_q4a() {
+  local d="$SCRATCH/q4a"; mkdir -p "$d/docs"
+  printf '# Fx — Architecture\n\n## Stack decisions\n\n| Q | Topic | Answer | Source |\n|---|---|---|---|\n| Q4 | Authentication | AppManager, application id 7 | answer set |\n' > "$d/docs/Fx-Architecture.md"
+  local head='# Fx — Usage Guide\n\n| | |\n|---|---|\n| App | Fx |\n| Kind | app |\n| Size | Small |\n| Date | 2026-10-18 |\n\n## Test users\n\n'
+  printf "$head"'| # | User | Password source | Role | Exists |\n|---|---|---|---|---|\n| 1 | fx-demo@fx.test | `FxDemo!23` | User | yes |\n| 2 | fx-second@fx.test | `FxSecond!23` | User, second user | yes |\n' > "$d/docs/Fx-UsageGuide.md"
+  local out; out="$(python3 "$UTILS/tf-doc-check.py" --root "$d" "$d/docs/Fx-UsageGuide.md" 2>&1 | grep 'Q4a')"
+  grep -q 'lists no owner, no unattended-run user' <<<"$out" && grep -q 'test user fx-demo@fx.test: the Password cell names no git-ignored secret' <<<"$out" \
+    && grep -q 'does not say the users were registered' <<<"$out" \
+    && ok std_q4a_a "an AppManager app's guide with written passwords, no owner or unattended user and no register call is refused" \
+    || { bad std_q4a_a "the guide got through: $(tr '\n' ' ' <<<"$out" | cut -c1-240)"; }
+  printf "$head"'Registered on AppManager through its register call by `node tests/verify/register-test-users.mjs`.\n\n| # | User | Password source | Role | Exists |\n|---|---|---|---|---|\n| 1 | fx-owner@fx.test | user secrets key `Fx:TestUsers:Owner` | Owner walkthrough | yes |\n| 2 | fx-second@fx.test | user secrets key `Fx:TestUsers:Second` | Second user | yes |\n| 3 | fx-yolo-tester@fx.test | `FX_YOLO_PASSWORD` in the git-ignored `tests/verify/.env.local` | Unattended runs | yes |\n' > "$d/docs/Fx-UsageGuide.md"
+  out="$(python3 "$UTILS/tf-doc-check.py" --root "$d" "$d/docs/Fx-UsageGuide.md" 2>&1 | grep 'Q4a')"
+  [[ -z "$out" ]] && ok std_q4a_b "the three registered users with their passwords in the secrets pass" \
+                  || bad std_q4a_b "a guide that follows Q4a was refused: $(head -1 <<<"$out")"
+  printf '# Fx — Architecture\n\n## Stack decisions\n\n| Q | Topic | Answer | Source |\n|---|---|---|---|\n| Q4 | Authentication | Cookie authentication with a local user table | owner |\n' > "$d/docs/Fx-Architecture.md"
+  printf "$head"'| # | User | Password source | Role | Exists |\n|---|---|---|---|---|\n| 1 | admin@fx.test | seed script 003 | Admin | yes |\n' > "$d/docs/Fx-UsageGuide.md"
+  out="$(python3 "$UTILS/tf-doc-check.py" --root "$d" "$d/docs/Fx-UsageGuide.md" 2>&1 | grep 'Q4a')"
+  [[ -z "$out" ]] && ok std_q4a_c "an app that does not sign in through AppManager is not held to Q4a" \
+                  || bad std_q4a_c "a local-auth app was held to Q4a: $(head -1 <<<"$out")"
+}
+
 # --- the per-fix routine: every script that reads the local clock is named at the top of this file ----
 # A fix to one of them is the only kind that needs this suite a second time with TZ=UTC, so the list
 # must be whole: a script that reads today's date or a local time and is not in it fails here.
@@ -6016,7 +6257,7 @@ PY
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 tb_001 tb_002 tb_003 tb_004 tb_005 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 tr_001 tr_002 tr_003 tr_004 owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 std_q4a owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

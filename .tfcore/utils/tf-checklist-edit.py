@@ -86,6 +86,13 @@ def siblings(path):
     return [os.path.join(d, n) for n in sorted(names) if n != f and re.match(rf"^{app}(?:-P\d+)?-Checklist\.md$", n)]
 
 
+def streams(path):
+    """the telemetry streams beside the checklists: an id a miss or gate record carries is taken even
+    after its row was renamed, since a record cannot be amended (TechieRag TF-005)"""
+    d = os.path.join(os.path.dirname(path) or ".", "metrics")
+    return [os.path.join(d, n) for n in ("gates.jsonl", "misses.jsonl", "runs.jsonl") if os.path.isfile(os.path.join(d, n))]
+
+
 def next_id(text, prefix, others=()):
     """one past the highest id of that prefix in this checklist AND every other checklist of the app:
     counting this one alone gave REQ-UI-055 twice, once in phase 1 and once in phase 3 (Chatur TF-011)"""
@@ -99,7 +106,7 @@ def add_row(path, prefix, title, acceptance, section=None, remark=None, status="
     """append a row to the Requirements Status table and a detail entry under `section`
     (a new section at the end when it does not exist); returns the new id"""
     text = read(path)
-    rid = next_id(text, prefix, siblings(path))
+    rid = next_id(text, prefix, siblings(path) + streams(path))
     nl = "\r\n" if "\r\n" in text else "\n"
     lines = text.split(nl)
     # the table: after the last REQ row

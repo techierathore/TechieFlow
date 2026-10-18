@@ -366,8 +366,14 @@ async function inspect(page, anchors, attr, errorSelectors) {
         return !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(cs.backgroundColor) || cs.backgroundImage !== 'none'
           || ['Top', 'Right', 'Bottom', 'Left'].some((s) => parseFloat(cs[`border${s}Width`]) > 0 && cs[`border${s}Style`] !== 'none');
       };
+      // A checkbox, switch or radio drawn by a library (TrBlazeUI: <button role="checkbox"
+      // aria-checked="false">, no text, no child while unticked) paints its own box, the way a native
+      // <input type="checkbox"> does (Lekhak TF-035). Counted filled when it paints; an unpainted one
+      // with no size is still empty.
+      const toggle = '[role="checkbox"],[role="switch"],[role="radio"],[aria-checked]';
       const filled = text.length > 0 || ['input', 'select', 'textarea', 'img', 'svg', 'canvas', 'video', 'iframe', 'progress', 'meter'].includes(tag)
         || el.matches(bar) || el.querySelector(`img,svg,canvas,input,select,textarea,button,a,${bar}`) !== null
+        || (el.matches(toggle) && paints(el)) || [...el.querySelectorAll(toggle)].some(paints)
         || [...el.children].some(paints);
       const c = clipRect(el);
       out.anchors.push({ id, present: true, visible: vis(el), filled, tag, w: Math.round(r.width), h: Math.round(r.height), x: Math.round(r.left), y: Math.round(r.top),
