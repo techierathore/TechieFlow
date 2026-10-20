@@ -11,8 +11,11 @@
 ## Issues
 
 ### TR-RAG-003 — NuGet package does not deploy a native Codex persona
+
+> ✅ **Closed 2026-10-18** — fixed in TechieRag 1.1.7. The package now ships `src/TechieRag/build/content/techierag-codex-agent.toml` and deploys it to `.codex/agents/techierag.toml` on consumer build.
+
 - **Severity:** major
-- **Status:** ⬜ OPEN — framework compatibility wrapper exists; library source/package change required
+- **Status:** ✅ RESOLVED in TechieRag 1.1.7
 - **Repro:** install `TechieRag` into a clean Codex consumer and run `dotnet build` without first scaffolding TechieFlow. The package deploys Claude and OpenCode persona files plus `.techierag/TechieRag-AI-Reference.md`, but no Codex custom-agent definition. Codex therefore cannot discover a native `techierag` specialist from the package alone.
 - **Expected:** the TechieRag source of truth includes a Codex persona and the NuGet target deploys it to `.codex/agents/techierag.toml`. The agent uses plain `developer_instructions`, reads `.techierag/TechieRag-AI-Reference.md`, follows the consumer's applicable `AGENTS.md`, and contains no Claude activation/help ritual or OpenCode slash-command syntax.
 - **Actual:** TechieFlow currently generates a compatibility wrapper at `.codex/agents/techierag.toml`; it prefers an existing Claude persona and falls back to the AI reference. Scaffolded TechieFlow apps therefore work, but standalone Codex consumers do not receive a native specialist from the NuGet package.
