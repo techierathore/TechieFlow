@@ -43,8 +43,8 @@ if not isinstance(cmd, str) or not cmd.strip():
 WRITE_VERBS = r"\b(insert|update|delete|create|alter|drop|truncate|grant|revoke|replace|merge|upsert)\b"
 CLIENTS = r"\b(psql|pgcli|sqlite3|mysql|mariadb|sqlcmd|mongosh|mongo)\b"
 MIGRATORS = (r"\bdotnet\s+ef\s+database\s+(update|drop)\b"
-             r"|\bdotnet\s+run\b[^|;&]*--project\s+\S*(db|migration|migrations)\b"
-             r"|\bdbup\b|\bflyway\s+(migrate|clean|undo)\b|\bliquibase\s+(update|rollback|drop-all)\b"
+             r"|\bdotnet\s+run\b[^|;&]*--project\s+\S*(db|dbup|migration|migrations)\b"
+             r"|\bflyway\s+(migrate|clean|undo)\b|\bliquibase\s+(update|rollback|drop-all)\b"
              r"|\balembic\s+(upgrade|downgrade)\b|\bprisma\s+(migrate|db\s+push)\b|\bknex\s+migrate\b"
              r"|\brails\s+db:(migrate|reset|drop|schema:load)\b|\bsequelize\s+db:migrate\b|\bgoose\s+(up|down|reset)\b")
 DROP_DB = r"\b(dropdb|drop\s+database|mongo(sh)?\b[^|;&]*dropDatabase)\b"
@@ -75,6 +75,10 @@ def phase():
 SEG = (r"(?:^|[;&|(`\n]|\$\()\s*(?:sudo\s+(?:-\S+\s+)*)?(?:env\s+(?:\S+=\S*\s+)*)?"
        r"(?:[\w./\\-]*\bexec\s+(?:-\S+\s+)*\S+\s+)?")
 CLIENT_AT = SEG + r"(?:\S*/)?" + CLIENTS
+# DbUp is a library: it runs as the command word of a segment (`dbup upgrade`, `./App.DbUp.exe`,
+# `dotnet App.DbUp.dll`) or through `dotnet run --project …DbUp`. A bare word "dbup" anywhere blocked a
+# miss sentence naming DbUp and every grep for it (Chatur TF-014).
+MIGRATORS += r"|" + SEG + r"(?:dotnet\s+)?(?:\S*[/\\.])?dbup(?:-cli)?\b"
 INTERP = r"(?:python3?|py|node|deno|bun|ruby|perl|pwsh|powershell(?:\.exe)?|tsx|ts-node)"
 INTERP_AT = SEG + r"(?:\S*/)?" + INTERP + r"\b"
 DB_LIBS = (r"\bsqlite3\b|better-sqlite3|\bsql\.js\b|node:sqlite|\bpsycopg|\bpymysql\b|mysql\.connector|\bmysql2\b"
@@ -171,7 +175,14 @@ if direct_write or re.search(DROP_DB, low):
           "is fine. Owner rule 2026-09-05.", file=sys.stderr)
     sys.exit(2)
 
-if re.search(MIGRATORS, low):
+# a quoted argument is a mention (a miss sentence, a search pattern), unless it is the code a shell runs
+# (`bash -c "…"`) or the project `dotnet run --project` builds (Chatur TF-014)
+def _mention(m):
+    keep = re.search(r"(?:\s-c|\s/c|\s-command|--project|-p)\s*=?\s*$", low[:m.start()])
+    return m.group(0) if keep else '""'
+
+
+if re.search(MIGRATORS, re.sub(r"\"(?:[^\"\\]|\\.)*\"|'[^']*'", _mention, low)):
     ph = phase()
     # triage-and-fix step 3 is fix-issues steps 2 to 5 under its own marker (AppManager TF-027)
     if ph in ("build-phase", "fix-issues", "triage-and-fix"):

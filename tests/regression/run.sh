@@ -6228,6 +6228,190 @@ std_q4a() {
                   || bad std_q4a_c "a local-auth app was held to Q4a: $(head -1 <<<"$out")"
 }
 
+# --- Sevak TF-007 and TF-010: a mockup read mid-fade, and a sample badge graded on what its sample says ---
+# _sv_parity <dir> <name>=<route> : serve <dir>/site, compare it with <dir>/docs/mockups, print
+# "<verdict> <themes> <findings>" for the first screen
+_sv_parity() {
+  local d="$1" pw; pw="$(_pw_dir)"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  ( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen "$2" --widths 1280 --themes light,dark --json-out "$d/parity.json" >/dev/null 2>&1
+    python3 -c "
+import json; s=json.load(open('$d/parity.json'))['screens'][0]
+print(s['verdict'], ','.join(s.get('themes', [])), '|'.join(f['key'] + (' in ' + f['theme'] if f.get('theme') else '') + ': ' + f['detail'][:60] for f in s.get('findings', [])))" 2>&1 )
+  kill "$srv" 2>/dev/null
+}
+
+sv_007() {
+  if [[ -z "$(_pw_dir)" ]]; then printf 'skip sv_007 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/sv007"; mkdir -p "$d/site/wizard" "$d/docs/mockups"
+  # Sevak's setup wizard: the selected provider row fades over .12s (here 3s, so the old read lands in it)
+  local css='body{margin:0;font:14px/20px system-ui} .radio-row{display:block;padding:8px;border:1px solid #c7d2fe} .radio-row.selected{background:rgb(238,242,255)} [data-theme="dark"] body{background:#111;color:#eee} [data-theme="dark"] .radio-row.selected{background:rgb(35,42,77)}'
+  # and the nav text, a grey with a blue tint in the mockup's dark theme (#a6adc5) and a near-white in the app's
+  css="$css"' .navitem{display:block;color:#3d4451} [data-theme="dark"] .navitem{color:#a6adc5}'
+  local body='<nav data-testid="nav"><a data-testid="nav-today" class="navitem">Today</a></nav><div data-testid="wizard"><h1>Choose a provider</h1><div data-testid="wizard-provider-builtin" class="radio-row selected">Built-in model</div></div>'
+  printf '<!doctype html><html data-theme="light"><head><meta charset="utf-8"><style>%s .radio-row,.navitem{transition:all 3s}</style></head><body>%s</body></html>\n' "$css" "$body" > "$d/docs/mockups/setup-wizard.html"
+  printf '<!doctype html><html data-theme="light"><head><meta charset="utf-8"><style>%s [data-theme="dark"] .navitem{color:rgb(229,232,244)}</style></head><body>%s</body></html>\n' "$css" "$body" > "$d/site/wizard/index.html"
+  local out; out="$(_sv_parity "$d" setup-wizard=/wizard/)"
+  [[ "$out" == "PASS light,dark " ]] \
+    && ok sv_007 "the mockup's colours are read after its theme fade has ended, and a tinted grey there is still a grey" \
+    || { bad sv_007 "the mockup was read in the middle of its fade"; note "$(cut -c1-220 <<<"$out")"; }
+}
+
+sv_010() {
+  if [[ -z "$(_pw_dir)" ]]; then printf 'skip sv_010 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/sv010"; mkdir -p "$d/site/welcome" "$d/docs/mockups"
+  local css='body{margin:0;font:14px/20px system-ui} .badge{display:inline-block;border-radius:9px;padding:2px 8px;height:20px;color:#fff} .ok{background:#16a34a} .no{background:#dc2626} .info{background:#2563eb} .grey{background:#6b7280} [data-theme="dark"] body{background:#111;color:#eee}'
+  # the welcome screen: "can it run" follows this PC (sample), the licence badge does not
+  printf '<!doctype html><html data-theme="light"><head><meta charset="utf-8"><style>%s</style></head><body><div data-testid="setup"><h1>Your model</h1><p>Can it run here? <span data-testid="setup-model-can-run" data-tf-sample class="badge ok">Yes, it can run</span></p><p>Licence <span data-testid="setup-licence" class="badge info">Active</span></p></div></body></html>\n' "$css" > "$d/docs/mockups/welcome.html"
+  printf '<!doctype html><html data-theme="light"><head><meta charset="utf-8"><style>%s</style></head><body><div data-testid="setup"><h1>Your model</h1><p>Can it run here? <span data-testid="setup-model-can-run" class="badge no">No</span></p><p>Licence <span data-testid="setup-licence" class="badge grey">Active</span></p></div></body></html>\n' "$css" > "$d/site/welcome/index.html"
+  local out; out="$(_sv_parity "$d" welcome=/welcome/)"
+  grep -q '^FAIL ' <<<"$out" && ! grep -q 'setup-model-can-run' <<<"$out" && grep -q 'setup-licence.*semantic colour differs' <<<"$out" \
+    && ok sv_010 "a sample box the app draws is not graded on its colour, text or badge; a box that is not sample still is" \
+    || { bad sv_010 "the sample badge was graded on what its sample says, or the other badge was not graded"; note "$(cut -c1-260 <<<"$out")"; }
+}
+
+# --- Lekhak TF-036: the document tests were built on the WSL side over an obj/ the Windows build owns -----
+# Stand-in dotnet (WSL: MSB3491 on the Windows-written obj/) and cmd.exe (passes) on PATH; nothing is built.
+lk_036() {
+  local d="$SCRATCH/lk036"; mkdir -p "$d/bin" "$d/home" "$d/docs" "$d/src/App" "$d/tests/Fx.Tests/obj"
+  printf '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><UseMaui>true</UseMaui></PropertyGroup></Project>\n' > "$d/src/App/App.csproj"
+  printf '<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Microsoft.NET.Test.Sdk" /></ItemGroup></Project>\n' > "$d/tests/Fx.Tests/Fx.Tests.csproj"
+  printf 'Project("{X}") = "App", "src\\App\\App.csproj", "{1}"\nEndProject\nProject("{X}") = "Fx.Tests", "tests\\Fx.Tests\\Fx.Tests.csproj", "{2}"\nEndProject\n' > "$d/Fx.sln"
+  printf 'class DocTests { string p = "docs/Fx-P3-Checklist.md"; }\n' > "$d/tests/Fx.Tests/DocTests.cs"
+  printf '# Fx\n' > "$d/docs/Fx-P3-Checklist.md"
+  printf '#!/usr/bin/env bash\necho "error MSB3491: Could not write lines to file \\"obj/Debug/Fx.Tests.AssemblyInfoInputs.cache\\". Access to the path '"'"'tests/Fx.Tests/obj/Debug/Fx.Tests.AssemblyInfoInputs.cache'"'"' is denied."; exit 1\n' > "$d/bin/dotnet"
+  printf '#!/usr/bin/env bash\necho "Passed!  - Failed: 0, Passed: 12, Skipped: 0"; exit 0\n' > "$d/bin/cmd.exe"
+  chmod +x "$d/bin/"*
+  run_d() { ( cd "$d" && HOME="$d/home" PATH="$d/bin:/usr/bin:/bin" TF_BUILD_PLATFORM=wsl TF_BUILD_LOCK_WAIT=0 \
+              bash "$UTILS/tf-doc-tests.sh" docs/Fx-P3-Checklist.md ) 2>&1; }
+  local out1 out2 out3
+  # Lekhak's state: a failed WSL attempt had already written "wsl" into the test project's obj/
+  echo wsl > "$d/tests/Fx.Tests/obj/.tf-build-side"; out1="$(run_d)"
+  # outside a MAUI solution: the obj/ record decides; "windows" starts there, "wsl" stays on WSL
+  rm -f "$d/Fx.sln"; echo windows > "$d/tests/Fx.Tests/obj/.tf-build-side"; out2="$(run_d)"
+  echo wsl > "$d/tests/Fx.Tests/obj/.tf-build-side"; out3="$(run_d)"
+  grep -q '^PASS ' <<<"$out1" && grep -q '^PASS ' <<<"$out2" && ! grep -q '^PASS ' <<<"$out3" \
+    && ok lk_036 "the document tests start on the side their MAUI solution builds on, or the side that last built the obj/" \
+    || { bad lk_036 "the document tests ran on the WSL side over an obj/ the Windows build owns"; note "$(head -c 200 <<<"$out1") | $(head -c 120 <<<"$out2") | $(head -c 120 <<<"$out3")"; }
+}
+
+# --- Chatur TF-014: the database guard blocked every command that named DbUp -------------------------
+ch_014() {
+  local d="$SCRATCH/ch014"; mkdir -p "$d/.tfcore/.session"
+  printf '{"cmd": "log-miss", "app": "Chatur"}\n' > "$d/.tfcore/.session/phase.json"
+  _g14() { python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","cwd":sys.argv[2],"tool_input":{"command":sys.argv[1]}}))' "$1" "$d" \
+           | CLAUDE_PROJECT_DIR="$d" bash "$HOOKS/guard-db.sh" >/dev/null 2>&1; echo $?; }
+  local want got bad_n=0 c i=0
+  # expected exit, then the command (2 refused, 0 allowed), with the marker at log-miss
+  while IFS=$'\t' read -r want c; do
+    [[ -z "$c" ]] && continue
+    i=$((i+1)); got="$(_g14 "$c")"
+    [[ "$got" == "$want" ]] || { bad_n=$((bad_n+1)); note "case $i: exit $got, want $want: $(head -c 110 <<<"$c")"; }
+  done <<'CASES'
+0	bash .tfcore/utils/tf-log-miss.sh Chatur --what "the DbUp console logger throws on a closed stream" --sort weak-check --req REQ-NFR-004
+0	grep -n -i "dbup" docs/Chatur-Checklist.md
+0	grep -rn -i dbup src/ | head -20
+0	rg 'DbUp' src/ChaturDb && echo done
+0	bash .tfcore/utils/tf-log-miss.sh Chatur --what "it ran dotnet ef database update before the smoke"
+2	dotnet run --project src/ChaturDb
+2	dotnet run --project src/Chatur.DbUp -- --apply
+2	dotnet run --project "src/Chatur.DbUp"
+2	dotnet src/Chatur.DbUp/bin/Release/net10.0/Chatur.DbUp.dll
+2	cd tools && dbup upgrade dbup.yml
+2	bash -c "dotnet run --project src/Chatur.DbUp"
+2	dotnet ef database update
+CASES
+  [[ $bad_n -eq 0 && $i -eq 12 ]] \
+    && ok ch_014 "a migration run is refused outside build and fix; DbUp named in a sentence or a search pattern passes" \
+    || bad ch_014 "the database guard got $bad_n of $i commands wrong"
+}
+
+# --- Chatur TF-013, TF-015 and Sevak TF-009: three verdicts the evidence did not support ----------------
+vd_fixture() {   # <dir> <boot mode> : a checklist and evidence the three cases share
+  local d="$1" v="$1/tests/.artifacts/verify"
+  mkdir -p "$d/docs" "$v"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+| ID | Title | Status | % | Remarks | Details |
+|---|---|---|---|---|---|
+| REQ-UI-101 | Feedback | Not Started | 0% | | |
+| REQ-UI-102 | Settings | Implemented | 75% | | |
+| REQ-UI-103 | Home | Implemented | 75% | | |
+| REQ-NFR-010 | Outage | Implemented | 75% | | |
+MD
+  python3 - "$v" "$2" <<'PY'
+import json, sys
+v, mode = sys.argv[1], sys.argv[2]
+rows = [("REQ-UI-101", "UI", "Feedback", "/feedback", "Not Started"), ("REQ-UI-102", "UI", "Settings", "/settings", "Implemented"),
+        ("REQ-UI-103", "UI", "Home", "/", "Implemented"), ("REQ-NFR-010", "NFR", "", "", "Implemented")]
+json.dump({"app": "Fx", "scope": "all", "checklist": "docs/Fx-Checklist.md",
+           "rows": [{"id": i, "class": c, "title": t or "Outage", "status_raw": st, "pct": 0 if st == "Not Started" else 75, "remarks": "",
+                     "screen": t, "route": r, "mockup": f"docs/mockups/{t.lower()}.html" if t in ("Feedback", "Settings") else "", "perf_budget": ""} for i, c, t, r, st in rows],
+           "screens": [{"name": t, "route": r, "mockup": "", "rows": [i]} for i, c, t, r, st in rows if t]}, open(f"{v}/list.json", "w"))
+mac = mode == "appium"
+gone = lambda w, route: {"width": w, "render": "UNREACHABLE", "visual": "n/a", "screenshot": "",
+                         "findings": [{"check": "render", "class": "other",
+                                       "detail": "no window reached it: the app stays on Sign in" if mac else f"{route} answered HTTP 404"}]}
+ok = lambda w: {"width": w, "render": "OK", "visual": "OK", "findings": [], "screenshot": ""}
+scr = [{"name": "Feedback", "route": "/feedback", "render": "UNREACHABLE", "visual": "n/a", "widths": [gone(1280, "/feedback"), gone(390, "/feedback")]},
+       {"name": "Settings", "route": "/settings", "render": "UNREACHABLE", "visual": "n/a", "widths": [gone(1280, "/settings"), gone(390, "/settings")]},
+       {"name": "Home", "route": "/", "render": "OK", "visual": "OK", "widths": [ok(1280), ok(390)]}]
+for s in scr:
+    if mac:
+        s["anchors_not_measured"] = True
+json.dump({"screens": scr, "skipped": []}, open(f"{v}/screens.json", "w"))
+json.dump({"reqs": {"REQ-UI-103": {"result": "PASS", "tests": ["REQ-UI-103 home opens"], "skipped": [], "passed": 1},
+                    "REQ-NFR-010": {"result": "NOT-TESTED", "tests": ["REQ-NFR-010 retries", "REQ-NFR-010 caches"],
+                                    "skipped": ["REQ-NFR-010 outage on the app"], "passed": 2, "failed": 0,
+                                    "reason": "on-app test skipped (not measurable on this host); a unit test does not measure on-app acceptance"}}},
+          open(f"{v}/tests.json", "w"))
+if not mac:   # the mockup comparison cannot open a route that answers 404 either (Chatur's phase 4)
+    json.dump({"screens": [{"screen": "feedback", "route": "/feedback", "verdict": "ERROR", "widths": [{"width": 1280, "error": "app returned HTTP 404"}]},
+                           {"screen": "settings", "route": "/settings", "verdict": "ERROR", "widths": [{"width": 1280, "error": "app returned HTTP 404"}]}]},
+              open(f"{v}/parity.json", "w"))
+json.dump({"head": "maccatalyst" if mac else "web", "mode": mode, "url": "http://localhost:4723" if mac else "http://localhost:1",
+           "rung": "dotnet", "reason": "", "reason_kind": ""}, open(f"{v}/boot.json", "w"))
+PY
+}
+
+ch_013() {
+  local d="$SCRATCH/ch013"; vd_fixture "$d" base
+  (cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --apply >/dev/null 2>&1)
+  local cl="$d/docs/Fx-Checklist.md" emit
+  emit="$(python3 -c 'import json,sys; r={x["id"]:x for x in json.load(open(sys.argv[1]))["rows"]}; print(r["REQ-UI-101"]["emit_gate"], r["REQ-UI-102"]["emit_gate"])' "$d/tests/.artifacts/verify/verdicts.json" 2>&1)"
+  grep -q '^| REQ-UI-101 | Feedback | Not Started | 0% | .*not built — /feedback answered HTTP 404' "$cl" \
+    && grep -q '^| REQ-UI-102 | Settings | Needs re-verify .*render — /settings answered HTTP 404' "$cl" \
+    && [[ "$emit" == "False True" ]] \
+    && ok ch_013 "a Not Started row whose route answers 404 stays Not Started with the reason and no miss; a built row's 404 still fails" \
+    || { bad ch_013 "an unbuilt row's 404 was graded as a defect (emit_gate: $emit)"; note "$(grep -E 'REQ-UI-10[12] ' "$cl" | cut -c1-200 | tr '\n' ' ')"; }
+}
+
+ch_015() {
+  local d="$SCRATCH/ch015"; vd_fixture "$d" appium
+  local out rc; out="$(cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --apply 2>&1)"; rc=$?
+  local cl="$d/docs/Fx-Checklist.md"
+  [[ $rc == 0 ]] && ! grep -q UnboundLocalError <<<"$out" \
+    && grep -q '^| REQ-UI-102 | Settings | Needs re-verify .*render — no window reached it' "$cl" \
+    && grep -q '^| REQ-UI-103 | Home | Verified' "$cl" \
+    && ok ch_015 "an unreachable first screen on a Mac head is RENDER-FAIL and every other row is still graded" \
+    || { bad ch_015 "the verdict did not grade a Mac run whose first screen was unreachable (exit $rc)"; note "$(grep -m1 -E 'Error' <<<"$out")"; }
+}
+
+sv_009() {
+  local d="$SCRATCH/sv009"; vd_fixture "$d" base
+  (cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --apply >/dev/null 2>&1)
+  local row; row="$(grep '^| REQ-NFR-010 ' "$d/docs/Fx-Checklist.md")"
+  grep -q '| Implemented | 75% | .*2 unit test(s) named REQ-NFR-010 passed but do not count while its on-app test was skipped: not measurable on this host' <<<"$row" \
+    && ! grep -q 'no unit test carrying its id' <<<"$row" \
+    && ok sv_009 "a row whose unit tests passed and on-app test was skipped says so, not that no unit test exists" \
+    || { bad sv_009 "the Remark of a row with passing unit tests says something else"; note "$(cut -c1-220 <<<"$row")"; }
+}
+
 # --- the per-fix routine: every script that reads the local clock is named at the top of this file ----
 # A fix to one of them is the only kind that needs this suite a second time with TZ=UTC, so the list
 # must be whole: a script that reads today's date or a local time and is not in it fails here.
@@ -6257,7 +6441,7 @@ PY
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 std_q4a owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 ch_013 ch_014 ch_015 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 sv_007 sv_009 sv_010 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 lk_036 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 std_q4a owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

@@ -4,16 +4,16 @@
 |---|---|
 | App | Lekhak |
 | Upstream | TechieFlow |
-| Updated | 2026-10-18 |
+| Updated | 2026-10-21 |
 
 ## Summary
 
-35 entries: 0 blocking now, 0 open, 7 fixed upstream and not yet re-checked here (TF-008, TF-022, TF-023, TF-025, TF-033, TF-034, TF-035), 28 closed after a re-check here (TF-001, TF-002, TF-003, TF-004, TF-005, TF-006, TF-007, TF-009, TF-010, TF-011, TF-012, TF-013, TF-014, TF-015, TF-016, TF-017, TF-018, TF-019, TF-020, TF-021, TF-024, TF-026, TF-027, TF-028, TF-029, TF-030, TF-031, TF-032).
+36 entries: 0 blocking now, 0 open, 1 fixed upstream and not yet re-checked (TF-036, fixed 2026-10-21, ships in TechieFlow v1.2.1), 35 closed after a re-check here. TF-008, TF-022, TF-023, TF-025, TF-033, TF-034 and TF-035 were re-checked and closed on 2026-10-18.
 
-Nothing is blocked. TF-035 (2026-10-18) is fixed upstream: an unticked library checkbox counts as drawn, so AI Story Studio's rows are no longer a false RENDER-FAIL. TF-034 (2026-10-18) is fixed upstream: the status hook names `tf-brd-status.sh Lekhak --phase 3`. TF-033 (2026-10-16) is fixed upstream. All three ship in TechieFlow v1.2.0. Re-check them here.
+Nothing is blocked. TF-036 is fixed upstream (2026-10-21): the document-test step now runs the tests on the Windows side, as the solution build does. Run on this repo, it found one real failure: `docs/Lekhak-UsageGuide.md` no longer holds the sentence `GuidesSayTestConnectionSendsShortChat` guards. See the 2026-10-21 reply.
 
-- 0 blockers, 12 majors, 23 minors, 0 nice-to-haves.
-- Last consolidated: 2026-10-18.
+- 0 blockers, 12 majors, 24 minors, 0 nice-to-haves.
+- Last consolidated: 2026-10-20.
 
 ## Entries
 
@@ -130,6 +130,8 @@ Nothing is blocked. TF-035 (2026-10-18) is fixed upstream: an unticked library c
 - **Suggested fix:** Let a merge prefer the newest run of the same test, and update the ledger row by row.
 
 ### TF-008 — The document checker fails working mockup links that point into a subfolder
+
+> ✅ **Closed 2026-10-18** — re-checked here: 2026-10-18: bash .tfcore/utils/tf-doc-check.sh --app Lekhak printed 0 FAIL and no docs/mockups link failure (no 'does not open from docs/mockups/' line); the admin/ and web/ mockup links pass.
 
 - **Severity:** minor
 - **Blocks:** no — the links open correctly; the FAILs are left in place and the documents were not changed to satisfy the checker.
@@ -358,6 +360,8 @@ Nothing is blocked. TF-035 (2026-10-18) is fixed upstream: an unticked library c
 
 ### TF-022 — The mockup check looks for `docs/mockups/<screen>.html` only, so a mockup in a subfolder is reported as missing
 
+> ✅ **Closed 2026-10-18** — re-checked here: 2026-10-18 on BlogAdmin's Windows head: tf-mockup-parity.sh --cdp http://172.18.144.1:9223 --screen prompt-manager=/admin/prompt-manager --list tests/.artifacts/verify/list.json graded Prompt Manager against its mockup in docs/mockups/admin/ (130 boxes graded, 0 findings, PASS); no NO-MOCKUP and no --mockups flag needed.
+
 - **Severity:** minor
 - **Blocks:** no — passing `--mockups docs/mockups/admin` grades the screen.
 - **Repro:**
@@ -372,6 +376,8 @@ Nothing is blocked. TF-035 (2026-10-18) is fixed upstream: an unticked library c
 - **Suggested fix:** accept `--list list.json` and read each screen's mockup path from it.
 
 ### TF-023 — The document baseline covers only two files, so `*amend-docs` sees ~130 old findings as new
+
+> ✅ **Closed 2026-10-18** — re-checked here: 2026-10-18: tf-phase.sh start fix-issues Lekhak printed 'baseline written for 16 file(s) (137 old finding(s))'; tf-doc-check.sh --app Lekhak then printed 0 FAIL and 84 OLD before any document changed.
 
 - **Severity:** minor
 - **Blocks:** no — the amendment's own text was checked line by line; the old findings are about the pre-template shape of the 2026-08 documents.
@@ -403,6 +409,8 @@ Nothing is blocked. TF-035 (2026-10-18) is fixed upstream: an unticked library c
 - **Suggested fix:** `tf-verify-screens.sh --themes light,dark` (default: both when the app declares a theme switch in its UIDesign), a contrast rule in the visual check (3.0 : 1 minimum, disabled controls exempt), and the mockup parity check run per theme.
 
 ### TF-025 — The mockup check compares the app in the user's site theme against the mockup in its own, so a themed colour reads as a mismatch
+
+> ✅ **Closed 2026-10-18** — re-checked here: 2026-10-18 on BlogAdmin's Windows head with the stored minimal theme and no workaround: tf-mockup-parity.sh --screen story-crawler=/admin/story-crawler --list tests/.artifacts/verify/list.json printed PASS, 0 findings in light and dark (no crawler-auto-save dark finding); afterwards <html> read data-site-theme=minimal, data-theme=light.
 
 - **Severity:** minor
 - **Blocks:** no — for the 2026-10-09 verify the desktop app's stored site theme was switched to the mockup's (`fluent-modern`) for the comparison and restored to `minimal` after; the comparison then passed.
@@ -596,6 +604,8 @@ Nothing is blocked. TF-035 (2026-10-18) is fixed upstream: an unticked library c
 
 ### TF-033 — The dark-mode check draws a page whose html says `data-theme="light"` without the `dark` class, a state the app never shows
 
+> ✅ **Closed 2026-10-18** — re-checked here: 2026-10-18 the entry's repro (tf-verify-screens.sh --list tests/.artifacts/verify/list.json --cdp http://172.18.144.1:9223, BlogAdmin in light mode, no workaround): AI Story Studio, AI Setup and Prompt Manager render OK and visual OK in light and dark, no low-contrast finding on AI Setup; afterwards <html> read data-theme=light, class=''.
+
 - **Severity:** minor
 - **Blocks:** no. Put in dark mode its own way first, the page passes.
 - **Repro:**
@@ -614,9 +624,38 @@ Nothing is blocked. TF-035 (2026-10-18) is fixed upstream: an unticked library c
 - **Workaround:** put the app in dark mode with its own `setThemeAttributes(theme, 'dark')` before the screen check, so the class exists and is flipped both ways.
 - **Suggested fix:** in `FORCE`, when `want === 'dark'` add the `dark` class whether or not an attribute was declared (and remove it for `light`), and record it in `before` for `RESTORE`.
 
+### TF-036 — The document-test step builds the test project on the WSL side, so it stops on output the Windows build owns
+
+- **Status:** fixed upstream 2026-10-21, ships in TechieFlow v1.2.1; not yet re-checked here.
+- **Severity:** minor
+- **Blocks:** no. The full unit suite runs through `tf-build.sh test` (Windows side) and passes; only the status gate's document-test line reads NOT-RUN.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-build.sh build          # solution with a MAUI head: built Windows-side (cmd.exe rung)
+  bash .tfcore/utils/tf-doc-tests.sh docs/Lekhak-P3-Checklist.md
+  ```
+- **Expected:** the document tests run on the same side that built the solution, as `tf-build.sh test` with no target does.
+- **Actual:** seen 2026-10-18, as below.
+
+| Problem | What it affects | Does it block or break anything |
+|---|---|---|
+| `tf-doc-tests.sh` runs `tf-build.sh test` with the test project as target. A project without a MAUI head picks `~/.dotnet/dotnet` first, which cannot write `tests/Lekhak.Tests/obj/` the Windows build created (MSB3491), and reports NOT-RUN after three tries. `tf-build.sh test` on the solution, two minutes earlier, passed 1,137 of 1,137. | The status gate's document-test step on any WSL repository whose solution builds Windows-side. | Breaks the document-test line (NOT-RUN); does not block the run. |
+
+- **Encountered in:** `*fix-issues Lekhak`, status gate step 4, 2026-10-18.
+- **Workaround:** none taken; the gate line is reported as printed, with the full unit run named beside it.
+- **Suggested fix:** have `tf-doc-tests.sh` keep the side the last build used for that `obj/` (the same record `tf-build.sh` keeps for its scopedcss clear-out), or run the tests through the solution target.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### Resolution status (TechieFlow team, 2026-10-21)
+
+The fix ships in **TechieFlow v1.2.1**, the next release after v1.2.0. It is already in this project's `.tfcore/` through the framework update.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-036 | Fixed upstream in `tf-build.sh`, so `tf-doc-tests.sh` and every other caller get it. On WSL, a project with no MAUI head of its own that a solution here lists, where that solution has a MAUI head, now starts on the Windows rungs (cmd.exe, winrun, powershell.exe) before the WSL ones, as the solution build does. A `note` line says so before the verdict. Outside such a solution, a project whose `obj/` (or a referenced project's) was last built on the Windows side starts there. The solution comes first because the side record cannot be trusted alone. A failed WSL attempt writes "wsl" before it fails, and that is what your `tests/Lekhak.Tests/obj/` held today. Regression case `lk_036` fails on the script you had, with your NOT-RUN, and passes now. Miss `MISS-TechieFlow-20261021-07`. | **Proved on your repo**, 2026-10-21, `tf-doc-tests.sh docs/Lekhak-UsageGuide.md`; your P3 checklist no longer has a test that reads it. Old script: `NOT-RUN … still after 3 tries on ~/.dotnet/dotnet: error MSB3491`. New script: the tests ran on the Windows side through `cmd.exe /c dotnet test tests/Lekhak.Tests/Lekhak.Tests.csproj`, 1,163 tests. **One of them fails, and that is your document, not the framework:** `REQ-NFR-045 REQ-UI-141 GuidesSayTestConnectionSendsShortChat` (`ProviderFieldGuideTests.cs` line 77) no longer finds "with a wrong model name it fails and show…" in `docs/Lekhak-UsageGuide.md`, which has uncommitted edits. 1,162 pass. This is the catch the step exists for (TF-016). Nothing in your repo was changed. After the framework update, run the same command; expect PASS or FAIL, never NOT-RUN. `tf-build.sh test tests/Lekhak.Tests/Lekhak.Tests.csproj` on its own prints the note line. |
 
 ### Resolution status (TechieFlow team, 2026-10-18)
 
@@ -759,6 +798,8 @@ TF-003 stays open. A Mac Catalyst driver has to be built and proved on a Mac, an
 
 ### TF-034 — The status-gate hook names the BRD-status command with the phase in the app name, and that command then finds nothing
 
+> ✅ **Closed 2026-10-18** — re-checked here: 2026-10-18: guard-status-html.sh now builds 'tf-brd-status.sh <App> --phase <n>' for a docs/<App>-P<n>-Checklist.md; bash .tfcore/utils/tf-brd-status.sh Lekhak-P2 printed 'docs/Lekhak-P2-BRD.md Development status updated: 7 screens, 23 of 23 requirements verified' (not the P2-P3 file).
+
 - **Severity:** minor
 - **Blocks:** no — `bash .tfcore/utils/tf-brd-status.sh Lekhak` (app name only, with `appPhase: 3`) refreshed `docs/Lekhak-P3-BRD.md` and the turn closed.
 - **Repro:**
@@ -779,6 +820,8 @@ TF-003 stays open. A Mac Catalyst driver has to be built and proved on a Mac, an
 - **Suggested fix:** have `guard-status-html.sh` print the app name without the phase suffix, or have `tf-brd-status.sh` accept an already-suffixed name.
 
 ### TF-035 — The screen check calls an unticked checkbox "empty", so every row on its screen fails render
+
+> ✅ **Closed 2026-10-18** — re-checked here: 2026-10-18 same run: AI Story Studio render OK with 17 anchors in light and dark; the unticked show-verify-stories-toggle checkbox is no longer read as empty.
 
 - **Severity:** major
 - **Blocks:** no. The run carries on; the rows on that screen stay at a false RENDER-FAIL until it is fixed.

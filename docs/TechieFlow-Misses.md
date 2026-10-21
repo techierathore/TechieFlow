@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 285 logged: 56 open, 228 fixed, 1 will not fix |
+| Count | 292 logged: 56 open, 235 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-10-18 |
+| Updated | 2026-10-21 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -70,10 +70,17 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (228)
+## Fixed (235)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261021-07 | 2026-10-21 by owner | 2026-10-21 by log-miss | the check was too weak | Lekhak TF-036: tf-doc-tests built a test project of a MAUI solution on the WSL side over the obj/ the Windows build owns, so the status gate's document-test line read NOT-RUN |
+| MISS-TechieFlow-20261021-06 | 2026-10-21 by owner | 2026-10-21 by log-miss | the check was too weak | Chatur TF-015: tf-verify-verdict.py raised UnboundLocalError on bad when a Mac head's first graded screen was UNREACHABLE, so phases 2 to 4 of an all-phase Mac verify got no verdict |
+| MISS-TechieFlow-20261021-05 | 2026-10-21 by owner | 2026-10-21 by log-miss | the check was too weak | Chatur TF-014: guard-db.sh refused any command holding the word dbup, a log-miss sentence or a grep pattern, as a migration run |
+| MISS-TechieFlow-20261021-04 | 2026-10-21 by owner | 2026-10-21 by log-miss | the check was too weak | Chatur TF-013: tf-verify-verdict turned the 19 Not Started rows of an unbuilt phase into Needs re-verify because their routes answered 404, and recorded 19 misses against work nobody had started |
+| MISS-TechieFlow-20261021-03 | 2026-10-21 by owner | 2026-10-21 by log-miss | the check was too weak | Sevak TF-010: tf-mockup-parity graded a data-tf-sample box the app draws on its colour, so a badge showing this PC's real answer failed against the mockup's sample answer |
+| MISS-TechieFlow-20261021-02 | 2026-10-21 by owner | 2026-10-21 by log-miss | the check was too weak | Sevak TF-009: tf-verify-verdict wrote "no unit test carrying its id" for an NFR row whose two unit tests passed while its on-app test was skipped |
+| MISS-TechieFlow-20261021-01 | 2026-10-21 by owner | 2026-10-21 by log-miss | the check was too weak | Sevak TF-007: tf-mockup-parity read the mockup's colours straight after putting it in dark mode, during its CSS fade, so dark mode was graded against the light colour; reading the settled colours then showed a tinted grey (#a6adc5) called accent |
 | MISS-TechieFlow-20261018-07 | 2026-10-18 by owner | 2026-10-18 by log-miss | the framework never said it | settings.json denied rm -rf /* and rm -rf ~/* to stop a disk wipe, but a deny rule's * matches any text, so every delete by absolute path was refused even in bypass mode and a scratch folder was handed to the owner |
 | MISS-TechieFlow-20261018-06 | 2026-10-18 by owner | 2026-10-18 by log-miss | said and ignored | tests/regression/run.sh did not clear CLAUDE_PROJECT_DIR, so a run inside a Claude Code session wrote 18 fixture records into the framework's own docs/metrics and rewrote its misses page; the verify and bugs suites already cleared it |
 | MISS-TechieFlow-20261018-05 | 2026-10-18 by owner | 2026-10-18 by log-miss | the framework never said it | TechieRag TF-006: tf-verify-boot.sh took a plain MAUI sample with no BlazorWebView as the windows head and waited 300 s for a DevTools port it can never open, three times |

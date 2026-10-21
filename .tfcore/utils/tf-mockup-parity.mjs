@@ -246,7 +246,9 @@ const PROBE = (wanted = []) => {
     if (!c) return null;
     const { r, g, b } = c;
     const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-    if (mx - mn < 28) return 'neutral';
+    // a grey with a tint is still a grey: Sevak's dark nav text #a6adc5 (spread 31, saturation 21%) read as
+    // accent beside the app's near-white, once TF-007 had the mockup read settled and not mid-fade
+    if (mx - mn < 28 || (mx - mn) / (255 - Math.abs(mx + mn - 255)) < 0.25) return 'neutral';
     // By hue, never by one channel. "Red is highest, so green above 120 is a warning" put a deep
     // amber (180, 83, 9) in `negative` beside a light amber in `warning` — one warning tone on two
     // sides of the line, reported as a colour difference on TfLens /misses (TF-045).
@@ -662,7 +664,13 @@ const CLAUSES = {
     : m.token.fits && !a.token.fits
       ? `value cell is narrower than its longest unbreakable token ("${a.token.token}") — it breaks mid-token`
       : false),
+  // Sevak TF-010: a sample box the app draws is graded on being there with a size, nothing it says
+  size: (m, a) => (!m.in_sample ? null
+    : m.w > 0 && m.h > 0 && (!(a.w > 0) || !(a.h > 0)) ? `the mockup draws this sample box ${m.w}×${m.h}; the app draws it ${a.w ?? 0}×${a.h ?? 0}` : false),
 };
+// Sevak TF-010: inside a box the mockup marks data-tf-sample, what the sample says is the app's real data
+// ("Yes, it can run" against this PC's truthful "No"), so its colour, its text and its badge are not graded
+const SAMPLE_SKIP = new Set(['color', 'badge', 'wrap', 'token']);
 
 // Which clauses require having reached INSIDE a container rather than merely
 // touching its outer box. TF-011's `harness` screen graded three column CONTAINERS
@@ -800,8 +808,10 @@ function diff(mock, app, screen, width, skip = null) {
     return false;
   };
 
+  const sampleKeys = Object.keys(mock.index).filter((k) => mock.index[k].sample);
   for (const key of Object.keys(mock.index)) {
-    const m = mock.index[key];
+    const inSample = sampleKeys.some((k) => key === k || key.startsWith(k + ' > '));
+    const m = inSample ? { ...mock.index[key], in_sample: true } : mock.index[key];
     let a = app.index[key];
     let appKey = key;
 
@@ -829,6 +839,7 @@ function diff(mock, app, screen, width, skip = null) {
     // wrapper div and become the always-present finding TF-012 warns about — the
     // fastest way to train a reader to skim the whole report.
     if (!a) {
+      if (inSample && m.badge === true) continue;   // a sample badge reading otherwise in the app is its data (TF-010)
       const parentKey = key.includes(' > ') ? key.slice(0, key.lastIndexOf(' > ')) : null;
       const parentPaired = parentKey ? !!app.index[parentKey] : false;
       // an icon is missing only when the paired parent carries fewer icons than the mockup's
@@ -870,6 +881,7 @@ function diff(mock, app, screen, width, skip = null) {
     compared++;
     for (const [name, fn] of Object.entries(CLAUSES)) {
       if (skip && skip.has(name)) continue;     // a clause the mockup says nothing about in this theme (TF-024)
+      if (inSample && SAMPLE_SKIP.has(name)) continue;
       const r = fn(m, a);
       if (r === null) continue;
       clauseCoverage[name]++;

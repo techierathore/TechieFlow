@@ -8,12 +8,49 @@
 
 ---
 
-## Unreleased (since v1.1.0) — ships as v1.2.0
+## Unreleased (since v1.2.0) — ships as v1.2.1
 
-v1.1.0 was tagged and published on 2026-10-01; entries below dated after that are in no published
-package yet, and go out as v1.2.0 (it adds a command and a coding standard, so a minor version). This
-heading read "since v1.0.4" until 2026-10-13, after v1.1.0 had shipped. This section lists what the
-dated entries do not.
+v1.2.0 was tagged on 2026-10-18. What follows is in no published package yet and goes out as v1.2.1:
+bug fixes only, so a patch version.
+
+- **Feedback sweep of 2026-10-21: seven open entries fixed.** Each has a regression case that fails
+  against the v1.2.0 scripts and passes now. **Sevak TF-007**: after a theme is put on a page,
+  `tf-theme.mjs` now runs every fade and finite animation to its end before anything is read. The
+  mockup was read with no wait, so a `transition: all .12s` row gave its light colour in dark mode.
+  Reading the settled colours exposed a second fault in `tf-mockup-parity.mjs`: a grey with a slight
+  tint (Sevak's dark nav text `#a6adc5`) was called "accent". A colour under 25% saturation is now
+  neutral. Measured on the mockups of 14 projects: only Sevak, TrBlazeUI and MyDiary-Kimi have
+  tinted greys that change class; the other 11 are unchanged. Case `sv_007`. **Sevak TF-010**: a box
+  the mockup marks `data-tf-sample` that the app draws is graded on being there with a size, never
+  on its colour, text or badge. This also covers sample rows the app fills (Chatur's check-in rows).
+  Case `sv_010`. Proved on Sevak's Windows head, old then new: Welcome FAIL → PASS; Backup's two
+  badge findings and Tasks' badge finding are gone. Backup and Tasks still fail on one real
+  difference each: the active nav item is indigo in the mockup's dark theme and grey in the app's.
+  **Sevak TF-009**: a row whose unit tests passed while its on-app test was skipped said "no unit
+  test carrying its id"; it now says how many unit tests passed and why they do not count. Case
+  `sv_009`. **Chatur TF-013**: a Not Started row whose only failing checks are its route answering
+  404 (render, and the mockup check that could not open it) keeps Not Started, says "not built" and
+  emits no miss. Replayed on Chatur's phase-4 evidence: 19 rows Needs re-verify with 19 misses →
+  19 Not Started with none. Case `ch_013`. **Chatur TF-015**: `tf-verify-verdict.py` crashed with
+  `UnboundLocalError` on `bad` when a Mac head's screen was UNREACHABLE; `bad` is set first, and the
+  row is RENDER-FAIL as on any head. Case `ch_015`. **Chatur TF-014**: `guard-db.sh` refused any
+  command holding the word "dbup". DbUp now counts only when it runs: as a command word (`dbup
+  upgrade`, `./App.DbUp.exe`, `dotnet App.DbUp.dll`) or through `dotnet run --project …DbUp`, and a
+  quoted argument is a mention unless a shell runs it (`bash -c "…"`). Case `ch_014`, 12 commands.
+  **Lekhak TF-036**: on WSL, `tf-build.sh` now builds a project listed in a solution that has a
+  MAUI head on the Windows side first, as the solution builds; outside such a solution, a project
+  whose `obj/` was last built Windows-side starts there. Proved on Lekhak: the old step gave
+  NOT-RUN (MSB3491, three tries on `~/.dotnet/dotnet`); the new one ran the tests Windows-side.
+  Case `lk_036`. Misses `MISS-TechieFlow-20261021-01` to `-07`, one per entry, `weak-check`, closed in the
+  same run. The whole regression suite holds, 344 checks, in local time and in UTC; the verify
+  self-test holds, 67 checks.
+
+## v1.1.1 and v1.2.0 (since v1.1.0)
+
+v1.1.0 was tagged and published on 2026-10-01; v1.1.1 was tagged on 2026-10-16 and v1.2.0 on
+2026-10-18 (it adds a command and a coding standard, so a minor version). This heading read "since
+v1.0.4" until 2026-10-13, after v1.1.0 had shipped, and "Unreleased" until 2026-10-21. This section
+lists what the dated entries do not.
 
 - **Feedback sweep of 2026-10-18: six open entries fixed, one standard added.** Each has a regression case that
   fails against the shipped scripts and passes now. **Lekhak TF-035** (major): `tf-verify-screens.mjs` called an

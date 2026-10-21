@@ -201,6 +201,31 @@ cross_side() { # side: clear what another side built with its own paths in it, t
   done
   [[ $cleared -eq 1 ]] && echo "note  the scoped stylesheets and static asset lists were built on the other side of this machine; cleared so the $1 build writes them itself"
 }
+# Lekhak TF-036: on WSL a target with no MAUI head starts on the WSL rungs. A test project inside a solution
+# that has a MAUI head is built Windows-side with that solution, and ~/.dotnet/dotnet then could not write
+# the obj/ Windows owns (MSB3491): tf-doc-tests.sh said NOT-RUN where `tf-build.sh test` on the solution
+# had just passed. Such a target starts on the side its solution builds on, the Windows side. Outside such
+# a solution, a target whose obj/ (or a referenced project's) was last built Windows-side starts there.
+# The record alone is not enough: a failed WSL attempt writes it before it fails.
+if [[ "$PLATFORM" == "wsl" && $maui -eq 0 && "$TARGET" == *.csproj ]]; then
+  won=""; tname="$(basename "$TARGET")"
+  for sln in *.slnx *.sln; do
+    [[ -f "$sln" ]] && grep -q "$tname" "$sln" || continue
+    while IFS= read -r p; do
+      [[ -f "$p" ]] && grep -qiE '<UseMaui>[[:space:]]*true|Microsoft\.NET\.Sdk\.Maui|net[0-9.]+-(android|ios|maccatalyst|windows10)' "$p" \
+        && { won="$sln has a MAUI head, so it builds on the Windows side"; break 2; }
+    done < <(grep -oE '"[^"]+\.csproj"|Path="[^"]+\.csproj"' "$sln" | sed 's/^Path=//' | tr -d '"' | tr '\\' '/')
+  done
+  if [[ -z "$won" ]]; then
+    for d in ${pdirs[@]+"${pdirs[@]}"}; do
+      [[ "$(cat "$d/obj/.tf-build-side" 2>/dev/null)" == windows ]] && { won="$d/obj was last built on the Windows side"; break; }
+    done
+  fi
+  if [[ -n "$won" ]]; then
+    rungs=("cmd.exe" "winrun" "powershell.exe" "dotnet" "$HOME/.dotnet/dotnet")
+    echo "note  $won; this $MODE starts there too (rungs: cmd.exe, winrun, powershell.exe, then the WSL ones)"
+  fi
+fi
 WRONG_RUNG='NETSDK1178|Microsoft\.(iOS|Android|MacCatalyst|tvOS)\.Sdk|Workload ID|not recognized|WindowsAppSDK|command not found|No such file or directory|is not recognized as an internal or external command|The term .* is not recognized|workload.*not installed|Inadequate permissions'
 
 # A Mac Catalyst build after Platforms/MacCatalyst/Info.plist (or an .entitlements file) changed: the

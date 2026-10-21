@@ -72,11 +72,23 @@ const RESTORE = (before) => {
   }
 };
 
+const SETTLE_ANIMATIONS = () => {
+  let n = 0;
+  for (const a of document.getAnimations()) {   // getAnimations() flushes style, so a fade the change just started is in it
+    try { if (Number.isFinite(a.effect?.getComputedTiming().endTime)) { a.finish(); n++; } } catch (e) { /* not finishable */ }
+  }
+  return n;
+};
+
 // Draws the page in `want` and returns the function that puts it back.
 export async function useTheme(page, want, settle = 350) {
   await page.emulateMedia({ colorScheme: want }).catch(() => {});
   const before = await page.evaluate(FORCE, want).catch(() => null);
   if (settle) await page.waitForTimeout(settle);
+  // Sevak TF-007: a theme change starts the page's CSS fades (`transition: all .12s`), and the mockup,
+  // read with no settle, gave its light colour in dark mode. Every fade and finite animation is run to
+  // its end, so what is read is the colour the page settles on; a spinner (infinite) is left running.
+  await page.evaluate(SETTLE_ANIMATIONS).catch(() => {});
   return async () => {
     if (before) await page.evaluate(RESTORE, before).catch(() => {});
     await page.emulateMedia({ colorScheme: null }).catch(() => {});

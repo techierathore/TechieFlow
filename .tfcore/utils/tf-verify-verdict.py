@@ -24,7 +24,8 @@ For each row, the seven checks in order, and the first that fails is the verdict
 Verdicts: PASS · FAIL (acceptance) · BUILD-FAIL · RENDER-FAIL · ASSET-FAIL · VISUAL-FAIL · MOCKUP-FAIL ·
 PERF-FAIL · NOT-TESTED (no test carried the id, or every test carrying it was skipped; the screen
 checks passed or did not run) ·
-NOT-OBSERVABLE (an NFR row with no budget and no unit test) · NOT-DRIVEN (its screen was never driven:
+NOT-OBSERVABLE (an NFR row with no budget and no unit test) · NOT-BUILT (a Not Started row whose only
+failing check is its route answering 404: it keeps Not Started and emits no miss, Chatur TF-013) · NOT-DRIVEN (its screen was never driven:
 the head could not be booted, or has no driver) · DEFECT-OPEN (every check passed, but the old Remarks
 carry a defect no verify can see, tf_defect.py: the row goes to Needs re-verify, and so to a fix, with
 the defect kept; AppManager TF-021). A row is Verified only on PASS. NOT-* rows keep their
@@ -174,8 +175,16 @@ def main(argv):
         # it. It is neither a pass nor a defect, so it grades exactly like a row with no test at
         # all — never Verified, no gate record (TF-022). `t` is kept for the note.
         skipped_only = bool(t) and t.get("result") == "NOT-TESTED"
+        # Sevak TF-009: a row whose unit tests passed while its on-app test was skipped (Sevak TF-004)
+        # was written "no unit test carrying its id"; the tests ran, they just do not count
+        unit_only = ""
+        if skipped_only and t.get("passed"):
+            why = re.sub(r"^on-app test skipped [(](.*)[)]; a unit test.*$", r"\1", t.get("reason") or "")
+            unit_only = f"{t['passed']} unit test(s) named {rid} passed but do not count while its on-app test was skipped" \
+                + (f": {why}" if why else "")
         if skipped_only:
-            notes.append(f"acceptance not measured ({len(t.get('skipped') or [])} test(s) skipped, none ran)")
+            if not unit_only:
+                notes.append(f"acceptance not measured ({len(t.get('skipped') or [])} test(s) skipped, none ran)")
             t = None
         # the OS zoom keys (coding-standards-dotnet.md §9b): a row whose acceptance carries "zoom-check: keys"
         # or "zoom-check: kept" is graded by tf-verify-zoom.sh --json-out zoom/<REQ>.json, which stands as its
@@ -201,6 +210,7 @@ def main(argv):
         if t:
             checks.append(("acceptance", True, t["result"] != "PASS", "FAIL", "assert-fail", quoted(t.get("reason")) or "test failed", t.get("screenshot") or ""))
         # 3 render
+        bad = []   # Chatur TF-015: an UNREACHABLE first screen left it unset for the Mac note below
         if scr:
             if scr.get("render") == "UNREACHABLE":
                 f = next((x for w in scr["widths"] for x in w.get("findings", [])), {})
@@ -280,12 +290,25 @@ def main(argv):
                     notes.append(f"perf not measured: {g['reason']}")
 
         ran = [c[0] for c in checks if c[1]]
-        first = next((c for c in checks if c[1] and c[2]), None)
+        failed = [c for c in checks if c[1] and c[2]]
+        first = failed[0] if failed else None
         verdict, cls, detail, evidence = (first[3], first[4], first[5], first[6]) if first else (None, None, "", "")
+        # Chatur TF-013: a Not Started row whose only failing check is its route answering 404 (the mockup
+        # comparison could not open it either, for the same reason) was never built; it is not a defect to
+        # re-verify, so it keeps Not Started and emits no miss
+        if verdict == "RENDER-FAIL" and all(re.search(r"HTTP 404\b", c[5] or "") for c in failed) \
+                and scr and scr.get("render") == "UNREACHABLE" \
+                and (r.get("status") or prior).strip("`* ").lower().startswith("not started") \
+                and all(re.search(r"answered HTTP 404\b", f.get("detail", "")) for w in scr["widths"] for f in w.get("findings", [])[:1]):
+            verdict, cls, evidence = "NOT-BUILT", None, ""
+            detail = f"{detail}: the screen is not built yet, nothing to re-verify"
 
         # the honest non-verdicts
         if verdict is None:
-            if r["class"] == "NFR" and not r.get("perf_budget") and not t:
+            if unit_only:
+                verdict = "NOT-TESTED"
+                detail = unit_only + (f"; screen {r['screen']} renders and looks right{nonames}" if driven else "")
+            elif r["class"] == "NFR" and not r.get("perf_budget") and not t:
                 verdict = "NOT-OBSERVABLE"
                 detail = "NFR row with no perf-budget and no unit test carrying its id"
             elif not t and r.get("screen") and not driven:
@@ -338,6 +361,7 @@ def main(argv):
         marks = {"FAIL": "⚠ acceptance", "BUILD-FAIL": "⚠ build", "RENDER-FAIL": "⚠ render", "ASSET-FAIL": "⚠ assets",
                  "VISUAL-FAIL": "⚠ visual", "MOCKUP-FAIL": "⚠ mockup-parity", "PERF-FAIL": "⚠ perf",
                  "NOT-TESTED": "not verified", "NOT-OBSERVABLE": "not observable", "NOT-DRIVEN": "not verified", "PASS": "PASS",
+                 "NOT-BUILT": "not built",
                  "DEFECT-OPEN": "checks pass, defect open"}
         remark = f"{today} verify: {marks[verdict]} — {detail}"
         if evidence:

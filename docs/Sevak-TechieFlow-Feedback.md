@@ -4,13 +4,15 @@
 |---|---|
 | App | Sevak |
 | Upstream | TechieFlow |
-| Updated | 2026-10-14 |
+| Updated | 2026-10-21 |
 
 ## Summary
 
-6 entries: 0 blocking now, 0 open, 2 fixed upstream and not yet re-checked (TF-005, fixed 2026-10-11; TF-006, fixed 2026-10-14), 4 closed (TF-001 to TF-004).
+10 entries: 0 blocking now, 1 open (TF-008), 4 fixed upstream and not yet re-checked (TF-005, fixed 2026-10-11; TF-007, TF-009 and TF-010, fixed 2026-10-21, ship in TechieFlow v1.2.1), 5 closed (TF-001 to TF-004, and TF-006 on 2026-10-21).
 
-Nothing is blocked. TF-005 is fixed upstream: `*verify` takes `--phase N` or `--phase all`, so phases 1 and 2 can be graded, and the status names the phase in the command it gives. TF-006 is fixed upstream: a theme switch counts as a click doing something, a popover switcher is opened through the control it names, and the dark theme of an app coloured in `oklch()` is seen and graded. TF-001 to TF-004 are closed.
+TF-007, TF-009 and TF-010 are fixed upstream (2026-10-21). On this app, Welcome now passes its mockup check. Tasks and Backup still fail on one real difference each: the active nav item is indigo in the mockup's dark theme and grey in the app's. The setup wizard still fails on three "Change theme" menu items that could not be clicked. See the 2026-10-21 reply.
+
+TF-008 is the self-check's "52 of 55 BRD items"; it holds nothing up. TF-005 is fixed upstream: `*verify` takes `--phase N` or `--phase all`, so phases 1 and 2 can be graded, and the status names the phase in the command it gives. TF-006 is fixed upstream: a theme switch counts as a click doing something, a popover switcher is opened through the control it names, and the dark theme of an app coloured in `oklch()` is seen and graded. TF-001 to TF-004 are closed.
 
 ## Entries
 
@@ -88,6 +90,8 @@ Nothing is blocked. TF-005 is fixed upstream: `*verify` takes `--phase N` or `--
 
 ### TF-006 — The menu check reports the theme menu on Login as "does nothing when clicked" although it switches the theme
 
+> ✅ **Closed 2026-10-21** — re-checked here: 2026-10-21 tf-verify-screens.sh --screen welcome=/welcome --cdp on the Windows head: render OK, visual OK, light + dark themes, no menu finding (the workspace switcher no longer reads as opening nothing).
+
 > Filed by Sevak as TF-005 on 2026-10-14; renumbered TF-006 by the TechieFlow team because TF-005 is the `--phase` entry above.
 
 - **Severity:** minor
@@ -98,6 +102,69 @@ Nothing is blocked. TF-005 is fixed upstream: `*verify` takes `--phase N` or `--
 - **Encountered in:** the Sevak phase-1 fix run, 2026-10-14. The same check also reports the workspace switcher on `/welcome` as "opens nothing when clicked" (Sevak REQ-RAG-054, REQ-RAG-055), while by hand it opens its panel (`aria-expanded="true"`) and closes again.
 - **Workaround:** none in the app; the rows stay below Verified with this finding named.
 - **Suggested fix:** in `tf-menus.mjs`, compare the document's class and `data-theme` attributes and the painted background before and after the click, after the menu has closed, and treat a change in any of them as an effect.
+
+### TF-007 — The mockup check reads a mockup's colours in the middle of its CSS fade, so dark mode is graded against the light colour
+
+- **Status:** fixed upstream 2026-10-21, ships in TechieFlow v1.2.1; not yet re-checked here.
+- **Severity:** minor
+- **Blocks:** yes — for three rows only (Sevak REQ-UI-022, REQ-FN-009, REQ-FN-050): their screen's mockup check fails on this alone, so they cannot reach Verified. Every other check passes, and the run carried on.
+- **Repro:** Sevak Windows head over CDP, 2026-10-20. `tf-mockup-parity.sh --cdp <url> --screen setup-wizard=/setup?step=2 --list tests/.artifacts/verify/list.json` reports `semantic colour differs — mockup neutral, app accent` on `wizard-provider-builtin`, in dark mode only (1280 and 390). The mockup row is `.radio-row.selected`, and `.radio-row` has `transition: all .12s`. Read in headless Chromium:
+  ```text
+  light                      rgb(238, 242, 255)   -> neutral
+  dark, read at once         rgb(238, 242, 255)   -> neutral (still the light colour)
+  dark, read after 400 ms    rgb(35, 42, 77)      -> accent (the settled dark colour)
+  ```
+  The app's row settles to the same `#232a4d` in dark mode.
+- **Expected:** the mockup is read after its theme change has finished painting, so the settled dark colour is compared.
+- **Actual:** the mockup is read straight after `data-theme="dark"` is set, while the fade is still running, so the light colour is compared with the app's dark one.
+- **Encountered in:** Sevak `*fix-issues` for the 2026-10-20 amendment (the setup wizard's model step).
+- **Workaround:** none in the app; the app is right. The three rows stay `Implemented` with this finding named.
+- **Suggested fix:** in `tf-mockup-parity.mjs`, after putting a theme on the mockup, turn transitions off (`*{transition:none!important}`) or wait for `getAnimations()` to finish before reading styles. The app side may need the same.
+
+### TF-008 — The self-check says `tf-split-brd` reads 52 of 55 BRD items on Sevak
+
+- **Severity:** minor
+- **Blocks:** no — no command of this run reads the split; the other two BRDs read fully (75 of 75, 23 of 23).
+- **Repro:** `bash .tfcore/utils/tf-phase.sh start fix-issues Sevak`, 2026-10-20, prints `FAIL  tf-split-brd  Sevak: reads 52 of 55 BRD items`; `bash .tfcore/utils/tf-selfcheck.sh --report` prints the same line.
+- **Expected:** every BRD item is read, or the line names the three it skipped.
+- **Actual:** three items are not read, and the line does not say which file or which items. The three BRDs hold 87, 63 and 23 `**BRD-n**` bullets as written (struck-out ones included), so the count of 55 is the checker's own.
+- **Encountered in:** the start of Sevak `*fix-issues`, 2026-10-20.
+- **Workaround:** none needed for this run.
+- **Suggested fix:** have the self-check print the file and the ids it could not read.
+
+### TF-009 — The verdict says "no unit test carrying its id" for a row whose unit tests ran and passed
+
+- **Status:** fixed upstream 2026-10-21, ships in TechieFlow v1.2.1; not yet re-checked here.
+- **Severity:** minor
+- **Blocks:** no — the row stays `Implemented` by the TF-004 rule either way; only the reason written into the checklist is wrong.
+- **Repro:** Sevak REQ-NFR-010, 2026-10-20. Two unit tests named `REQ-NFR-010 …` passed and its on-app test was skipped as not measurable. `tests.json` holds `"result": "NOT-TESTED", "passed": 2`. `tf-verify-verdict.sh --apply` writes `not observable — NFR row with no perf-budget and no unit test carrying its id`.
+- **Expected:** the Remark says the unit tests passed but do not count while the on-app test was skipped (TF-004).
+- **Actual:** the Remark says no unit test exists.
+- **Encountered in:** Sevak `*fix-issues` for the 2026-10-20 amendment.
+- **Workaround:** the row's Remark was extended by hand with the two tests' names.
+- **Suggested fix:** in the verdict, test `NOT-TESTED` with `passed > 0` before the NOT-OBSERVABLE branch and write the TF-004 reason.
+
+### TF-010 — `data-tf-sample` does not exempt a badge whose colour follows the app's real data
+
+- **Status:** fixed upstream 2026-10-21, ships in TechieFlow v1.2.1; not yet re-checked here.
+- **Blocks:** yes — for four Sevak phase 3 rows only (REQ-UI-066, REQ-RAG-054, REQ-RAG-055, REQ-UI-074): every other check passes, and the run carried on.
+- **Severity:** minor
+- **Repro:** Sevak `*verify all Sevak --phase 3`, 2026-10-21. The owner marked `tasks-state-badge` (tasks.html), `setup-model-can-run` (welcome.html), `backup-gdrive-badge` and `backup-onedrive-badge` (backup.html) `data-tf-sample`. `tf-mockup-parity.sh` still reports, for example, `semantic colour differs — mockup positive, app negative` on `setup-model-can-run`: the mockup draws "Yes, it can run" and this PC truthfully shows "No".
+- **Expected:** a box the mockup marks as sample data is not graded on what its sample says (its colour, text or state), only on whether the app draws the control there.
+- **Actual:** `diff()` in `tf-mockup-parity.mjs` exempts a `data-tf-sample` box only when the app draws nothing at its place; when it draws the box, colour is compared like any other.
+- **Encountered in:** the Sevak phase 3 verify after `*amend-docs` marked those boxes, 2026-10-21.
+- **Workaround:** none taken. Marking the boxes `data-tf-state="variant-…"` instead would leave them out of the comparison, but that says "another state of the screen", which is not what they are.
+- **Suggested fix:** for a `data-tf-sample` box the app does draw, compare presence and size, and skip the colour, text and badge clauses.
+
+## Resolution status (TechieFlow team, 2026-10-21)
+
+All three fixes ship in **TechieFlow v1.2.1**, the next release after v1.2.0. They are already in this project's `.tfcore/` through the framework update.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-007 | Fixed upstream in `tf-theme.mjs`, as you suggested, plus one rule in `tf-mockup-parity.mjs` that the fix brought to light. (1) After a theme is put on a page, every fade and every animation that ends is run to its end before anything is read (`getAnimations()`, then `finish()`). A spinner, which never ends, keeps running. The mockup used to be read with no wait at all, so `.radio-row.selected` gave its light colour in dark mode. (2) With the mockup read in its settled dark colours, every nav item on Tasks, Welcome and Backup read "mockup accent, app neutral" at 1280. Your mockup's dark nav text is `#a6adc5`, a grey with a slight blue tint, and the app's is a near-white grey, `oklch(0.935 0.015 274)`. The colour check called the mockup's grey "accent". A colour under 25% saturation now counts as neutral. Measured on the mockups of 14 projects: tinted greys change class only in Sevak, TrBlazeUI and MyDiary-Kimi. Regression case `sv_007`: each of its two parts fails on the scripts you had. Miss `MISS-TechieFlow-20261021-01`. | **Proved on your app**, Windows head, 2026-10-21, old scripts then new on the same running app. `--screen setup-wizard=/setup?step=2`: old gives `wizard-provider-builtin: semantic colour differs — mockup neutral, app accent`; new gives no colour finding. **Still failing, and not TF-007:** both runs report `menu "Change theme › Light" could not be clicked (locator.click: Timeout 3000ms exceeded.)`, and the same for Dark and Match system, on this screen at 1280. So REQ-UI-022, REQ-FN-009 and REQ-FN-050 lose the colour finding but stay below Verified on this one. We have not found out whether the walk or the wizard is at fault. If the menu works by hand on the wizard, please file it as a new entry. After the framework update, paste into Sevak's agent: `/TechieFlow:agents:verifier *verify all Sevak --phase 1`. The wizard rows no longer carry the dark-mode colour finding on `wizard-provider-builtin`. |
+| TF-009 | Fixed upstream in `tf-verify-verdict.py`, as you suggested. A row whose unit tests passed while its on-app test was skipped is now checked before the "not observable" branch. Its Remark reads, for example, `2 unit test(s) named REQ-NFR-010 passed but do not count while its on-app test was skipped: <the skip's reason>`. The row's status is unchanged: it stays `Implemented` by the TF-004 rule. Regression case `sv_009` fails on the script you had. Miss `MISS-TechieFlow-20261021-02`. | Proved on a fixture built from your entry's numbers (`NOT-TESTED`, `passed: 2`). The tests file from your 2026-10-20 run is no longer in `tests/.artifacts/verify/`, so it was not replayed. On your next verify, REQ-NFR-010's Remark names the two passing unit tests instead of saying none exists, as long as its on-app test is still skipped. You can drop the hand-written extension. |
+| TF-010 | Fixed upstream in `tf-mockup-parity.mjs`, as you suggested. A box the mockup marks `data-tf-sample` that the app does draw is graded only on being there with a size. Its colour, text and badge are not compared, and that holds for everything inside the box too. A sample box the app draws with no size is a finding. When the app draws nothing there, it is still "not measured", as before. Regression case `sv_010` fails on the script you had. It also proves that a badge without the mark is still graded. Miss `MISS-TechieFlow-20261021-03`. | **Proved on your app**, Windows head, 2026-10-21, `--screen tasks=/tasks --screen welcome=/welcome --screen backup=/settings/backup`, light and dark, old scripts then new. **Welcome: FAIL → PASS.** `setup-model-can-run` is gone. **Backup:** both badge findings are gone, but it still FAILs on one finding: `nav-backup` in dark mode, "mockup accent, app neutral". **Tasks:** `tasks-state-badge` did not appear in either run today. It still FAILs on `nav-tasks` in dark mode, the same as Backup, and on `tasks-card > div[1]: mockup carries an icon here; the app does not`, which the old script also reports. The nav finding is a real difference: the mockup draws the active nav item indigo in dark mode (`rgba(99,102,241,.22)`), and the app draws it grey. Either the app or the mockup changes; that choice is yours. So REQ-RAG-054 and REQ-RAG-055 (Welcome) can reach Verified. REQ-UI-066 (Tasks) and REQ-UI-074 (Backup) stay below Verified until the active nav colour is settled, and Tasks' icon finding too. After the framework update, paste into Sevak's agent: `/TechieFlow:agents:verifier *verify all Sevak --phase 3`. |
 
 ## Resolution status (TechieFlow team, 2026-10-14)
 
