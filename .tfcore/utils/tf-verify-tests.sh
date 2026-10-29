@@ -277,7 +277,7 @@ PY
   fi
 fi
 
-TF_HERE="$HERE" TF_PWJSON="$PWJSON" TF_UNITLOG="$UNITLOG" TF_UNITLINE="$UNITLINE" TF_TRX="${TRX:-}" TF_OUT="$OUT" python3 - <<'PY'
+TF_HERE="$HERE" TF_LIST="$LIST" TF_PWJSON="$PWJSON" TF_UNITLOG="$UNITLOG" TF_UNITLINE="$UNITLINE" TF_TRX="${TRX:-}" TF_OUT="$OUT" python3 - <<'PY'
 import json, os, re
 import xml.etree.ElementTree as ET
 import importlib.util
@@ -432,13 +432,52 @@ for rid, r in reqs.items():
 # a row no test claims, whose id a passing test about another row carries, is flagged: it was once
 # counted as tested on that name, and it is not
 mentioned = {rid: sorted(set(v))[:3] for rid, v in elsewhere.items() if rid not in reqs}
+# TechieRag TF-008: triage gave a new row an id the tests already carried, and the row passed on those
+# older tests. A row logged by triage ("logged from UAT 2026-10-29") whose tests carried its id before that
+# day is warned about: the tests may be about something else. The day an id first appeared is read from
+# the history (the first commit that added it under tests/ or src/), else from the files' own dates.
+import datetime
+import subprocess
+def first_seen(rid):
+    try:
+        out = subprocess.run(["git", "log", "--reverse", "--format=%cs", "-S", rid, "--", "tests", "test", "src", "source"],
+                             capture_output=True, text=True, timeout=60).stdout.split()
+        if out:
+            return out[0]
+    except Exception:
+        pass
+    days = []
+    for top in ("tests", "test", "src", "source"):
+        for d, dirs, files in os.walk(top):
+            dirs[:] = [x for x in dirs if x not in ("bin", "obj", "node_modules", ".artifacts", "TestResults", ".git")]
+            for f in files:
+                p = os.path.join(d, f)
+                try:
+                    if rid in open(p, encoding="utf-8", errors="replace").read():
+                        days.append(datetime.date.fromtimestamp(os.path.getmtime(p)).isoformat())
+                except OSError:
+                    pass
+    return min(days) if days else None
+predates = {}
+try:
+    listed = {r["id"]: r for r in json.load(open(os.environ.get("TF_LIST", ""), encoding="utf-8")).get("rows", [])}
+except Exception:
+    listed = {}
+for rid, r in reqs.items():
+    m = re.search(r"logged from \w+ (\d{4}-\d\d-\d\d)", (listed.get(rid) or {}).get("remarks") or "")
+    if m and r["tests"]:
+        seen = first_seen(rid)
+        if seen and seen < m.group(1):
+            predates[rid] = {"logged": m.group(1), "tests_from": seen}
+            r["predates"] = predates[rid]
 unit["passed"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r["result"] == "PASS")
 unit["failed"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r["result"] == "FAIL")
 unit["not_tested"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r["result"] == "NOT-TESTED")
 
 import datetime
 ran_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-json.dump({"reqs": reqs, "browser": browser, "unit": unit, "ran_at": ran_at, "named_only_by_other_rows_tests": mentioned},
+json.dump({"reqs": reqs, "browser": browser, "unit": unit, "ran_at": ran_at, "named_only_by_other_rows_tests": mentioned,
+           "tests_older_than_row": predates},
           open(os.environ["TF_OUT"], "w"), indent=1)
 p = sum(1 for r in reqs.values() if r["result"] == "PASS")
 f = sum(1 for r in reqs.values() if r["result"] == "FAIL")
@@ -452,6 +491,8 @@ for rid, r in sorted(reqs.items()):
         print(f"  NOT-TESTED {rid} — {len(r['skipped'])} test(s) skipped, none ran — {r['reason']}")
 for rid, names in sorted(mentioned.items()):
     print(f"  NO TEST {rid} — only named inside another row's passing test, which does not test it: {names[0]}")
+for rid, w in sorted(predates.items()):
+    print(f"  WARN {rid} — logged {w['logged']}, but tests carried its id from {w['tests_from']}: they may test something else; rename them or the row")
 print(f"JSON: {os.environ['TF_OUT']}")
 PY
 [[ $ran_any -eq 1 ]] && exit 0 || exit 2

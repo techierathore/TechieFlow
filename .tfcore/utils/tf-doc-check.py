@@ -1563,8 +1563,11 @@ def main(argv=None):
                 # edit to an over-limit document, a cut included, changed the text and read as new
                 # (Lekhak TF-023). The same finding with a count no larger than the old one is old;
                 # a document that grew past its maximum still FAILs.
+                # The size word is not part of the finding either: re-sizing a project (Small to Large) changed
+                # "the Small maximum is 1,200" to "the Large maximum is 1,200", and an unchanged document's
+                # old finding blocked the step (TechieBlog TF-001).
                 def _shape(m):
-                    return re.sub(r"\d[\d,]*", "#", m)
+                    return re.sub(r"\b(Small|Medium|Large)\b", "SIZE", re.sub(r"\d[\d,]*", "#", m))
                 def _first(m):
                     n = re.search(r"\d[\d,]*", m)
                     return int(n.group(0).replace(",", "")) if n else None

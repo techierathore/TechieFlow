@@ -4,11 +4,11 @@
 |---|---|
 | App | Chatur |
 | Upstream | TechieFlow |
-| Updated | 2026-10-21 |
+| Updated | 2026-10-29 (TF-015 to TF-017 and TF-020 fixed upstream, ship in TechieFlow v1.2.2; TF-013 and TF-014 re-checked upstream) |
 
 ## Summary
 
-15 entries: 0 open, 5 fixed upstream and not yet re-checked (TF-008, TF-010; TF-013, TF-014 and TF-015, fixed 2026-10-21, ship in TechieFlow v1.2.1), 10 closed (TF-001 to TF-007, TF-009, TF-011, TF-012). Nothing is blocking: TF-015, which kept the Mac Catalyst verifier from grading phases 2–4, is fixed upstream and waits for a re-check on the Mac.
+20 entries: 2 open (TF-018, TF-019), 8 fixed upstream and not yet re-checked (TF-008, TF-010, TF-013 to TF-015 in v1.2.1; TF-015 reworked, TF-016, TF-017 and TF-020 in v1.2.2, fixed 2026-10-29), 10 closed (TF-001 to TF-007, TF-009, TF-011, TF-012). 0 blocking now: TF-020 and TF-017, the two that blocked, are fixed upstream.
 
 TF-007 was re-checked here on 2026-10-03: no list box on Start, Workbench, Prerequisites, Providers or Corrections reports "app carries an icon the mockup does not" at either width, and Start, Prerequisites, Providers and Corrections now pass mockup parity outright.
 
@@ -189,7 +189,7 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 
 ### TF-013 — An all-phase verify turns the Not Started rows of an unbuilt phase into Needs re-verify
 
-- **Status:** fixed upstream 2026-10-21, ships in TechieFlow v1.2.1; not yet re-checked here.
+- **Status:** fixed upstream 2026-10-21, ships in TechieFlow v1.2.1; not yet re-checked here (re-checked upstream 2026-10-29: already in this project's `.tfcore/`, which is v1.2.1).
 - **Severity:** minor
 - **Blocks:** no — the rows are listed under Known blockers in PROJECT-STATUS as not built, and the work carried on.
 - **Repro:** `bash .tfcore/utils/tf-verify-list.sh Chatur all --phase 4` on a phase whose five routes do not exist yet, then `tf-verify-screens.sh` (every route answers 404) and `tf-verify-verdict.sh Chatur --apply`.
@@ -198,10 +198,11 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 - **Encountered in:** `*verify all Chatur --phase all`, 2026-10-19
 - **Workaround:** none in the checklist; the status page says the phase is unbuilt.
 - **Suggested fix:** in `tf-verify-verdict`, keep Not Started when the row's prior status was Not Started and the only failing check is a route that answered 404 or was never built; write the reason in the Remark and emit no miss.
+- **Reply (TechieFlow team, 2026-10-29):** Checked again, as asked: the fix is in v1.2.1, and this project's `.tfcore/` is v1.2.1 (`tf-verify-verdict.py` matches the v1.2.1 file). Case `ch_013` still holds. Nothing new ships for it. The 19 rows of `docs/Chatur-P4-Checklist.md` still read Needs re-verify from the 2026-10-19 run; one verify puts them back. **Check it here:** `/TechieFlow:agents:verifier *verify all Chatur --phase 4`. The 19 rows go back to Not Started with the 404 reason, and no miss is written.
 
 ### TF-014 — The database guard blocks any command that contains the word "dbup", even when nothing runs a migration
 
-- **Status:** fixed upstream 2026-10-21, ships in TechieFlow v1.2.1; not yet re-checked here (filed 2026-10-20).
+- **Status:** fixed upstream 2026-10-21, ships in TechieFlow v1.2.1; not yet re-checked here (re-checked upstream 2026-10-29: already in this project's `.tfcore/`, which is v1.2.1).
 - **Severity:** minor
 - **Blocks:** no — the sentence was passed to `tf-log-miss.sh` from a file (`--what "$(cat <file>)"`), and the search was done under a `fix-issues` marker; the work carried on.
 - **Repro:** with the marker at `log-miss`, run `bash .tfcore/utils/tf-log-miss.sh Chatur --what "the DbUp console logger throws …" --sort weak-check --req REQ-NFR-004`, or a read-only search such as `grep -n -i "dbup" docs/Chatur-Checklist.md`.
@@ -210,10 +211,11 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 - **Encountered in:** `*log-miss Chatur` for MISS-Chatur-20261020-01, 2026-10-20
 - **Workaround:** pass the sentence from a file; search for the code without the word.
 - **Suggested fix:** match `dbup` only as the command word of a segment (the `SEG` prefix `CLIENT_AT` already uses), and drop quoted arguments and `grep`/`rg` patterns before the `MIGRATORS` search.
+- **Reply (TechieFlow team, 2026-10-29):** Checked again on this project's own hook (v1.2.1), with the marker at `amend-docs`: `grep -n -i "dbup" docs/Chatur-Checklist.md` and your `tf-log-miss.sh … --what "the DbUp console logger throws"` both pass (exit 0); `dotnet run --project src/ChaturDb` is still refused (exit 2). Case `ch_014` holds. Nothing new ships for it. **Check it here:** run your two repro commands outside a build or fix: neither is blocked.
 
 ### TF-015 — `tf-verify-verdict.py` crashes when the first graded screen is unreachable on a Blazor Hybrid Mac head
 
-- **Status:** fixed upstream 2026-10-21, ships in TechieFlow v1.2.1; not yet re-checked here (filed 2026-10-21).
+- **Status:** fixed upstream 2026-10-29, ships in TechieFlow v1.2.2; not yet re-checked here.
 - **Severity:** major
 - **Blocks:** yes — phases 2, 3 and 4 of an all-phase Mac Catalyst verify cannot produce a verdict when the first screen in the checklist is unreachable (the app is stuck on Sign in)
 - **Repro:** boot the Mac Catalyst head (`--head maccatalyst`) with a Blazor Hybrid app that opens on Sign in. Run `bash .tfcore/utils/tf-verify-list.sh Chatur all --phase 2`, then `bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --appium http://localhost:4723` (screens report UNREACHABLE), then `bash .tfcore/utils/tf-verify-verdict.sh Chatur --apply --started <ts>`.
@@ -222,6 +224,70 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 - **Encountered in:** `*verify-phase Chatur --scope all --head maccatalyst`, 2026-10-21
 - **Workaround:** none without editing `.tfcore/`; the phase-2..4 checklists remain ungraded.
 - **Suggested fix:** initialize `bad = []` before the `if scr.get("render") == "UNREACHABLE"` branch, or move the `anchors_not_measured` note inside the `else` branch.
+- **Reply (TechieFlow team, 2026-10-29):** Reworked as you asked. The 2026-10-21 fix still holds: `bad` is set before the branch, so nothing crashes. What changed: on a Mac web-view head an unreachable screen's rows were RENDER-FAIL; they are now written as not driven (status kept, the Remark says not measured and why), the checklist is still written, and every other row is graded. A web head's unreachable screen still fails. Regression case `ch_015`, changed to the new rule; it fails on v1.2.1. Same change as TF-016. **Check it here:** on the Mac, `*verify all Chatur --phase all --head maccatalyst`: phases 2 to 4 get a verdict table, and no row behind Sign in is RENDER-FAIL.
+
+### TF-016 — The Mac Catalyst head cannot sign in, so only the Sign in screen is measurable
+
+- **Status:** fixed upstream 2026-10-29, ships in TechieFlow v1.2.2; not yet re-checked here.
+- **Severity:** major
+- **Blocks:** no — the web head graded the rows (2026-10-24). The Mac window stays not measured.
+- **Repro:** `tf-verify-boot.sh start --head maccatalyst`, then `tf-verify-screens.sh --list tests/.artifacts/verify/list.json --appium http://localhost:4723 --login-path /sign-in --user <owner> --password <pw>`. Dump the element tree with `tf-appium.mjs` (`s.source()`).
+- **Expected:** the head signs in, or reports every screen behind the sign-in as not measured, and no row is failed for it.
+- **Actual:** Appium mac2 shows the BlazorWebView's content as one empty element (an empty scroll view), so no field or button inside it can be found. The maccatalyst head has no sign-in step, and `--login-path`, `--user` and `--password` are ignored (`login: null` in `tf-verify-native.mjs`). Only Sign in is measurable: 1 screen OK, 11 `UNREACHABLE`. Typing by screen position would be global input, which hard rule 4 forbids, so it was not tried.
+- **Encountered in:** `*verify all Chatur --phase 1 --head maccatalyst`, 2026-10-24
+- **Workaround:** the 73 rows that were not Verified were graded on the web head. The 25 Verified rows were left as they were. The verdict was not applied from the Mac run, because unreachable screens would have failed them.
+- **Suggested fix:** when a head cannot sign in, write every screen behind the sign-in as not measured, never as a failed render, and say so in the Remark. Add a sign-in step for a web view head if it can be driven by the app's own window.
+- **Reply (TechieFlow team, 2026-10-29):** Fixed with one change, shared with Sevak TF-014. **Sign-in step:** with `--user` and `--password`, the Mac head now looks for the user and password fields inside the app's own window, types into them the way a Blazor Hybrid form takes text (`s.type`, Lekhak TF-026), and clicks "Sign in" or "Log in". Nothing is typed by screen position. **Where it cannot:** a web view that shows Appium one empty element, or controls with no label, has no field to find. The head then prints `LOGIN not driven — the Mac head cannot sign in: Appium sees the web view as one empty element …`, writes that to `screens.json` (`login`), and marks every screen it could not reach `NOT-MEASURED`, never `UNREACHABLE`. The verdict grades those rows as not driven: the status is kept, the Remark says `not measured — … (grade it on the web or Windows head)`, and no gate record or miss is written. A web view the head can see into (Lekhak's) is unchanged: a screen no link reaches is still UNREACHABLE. Proved on a stand-in Appium that serves saved element trees (`tests/maccatalyst/fake-appium.mjs`), with your shape and with a sign-in form the head can see. **Not run on a real Mac yet.** Regression cases `ch_015`, `ch_016`, `sv_014`. Miss `MISS-TechieFlow-20261029-02`. On this app the web view is opaque, so the Mac head will report the sign-in as not driven and the 11 screens behind it as not measured. Signing in on the Mac needs the web view's content to be visible to Appium. **Check it here:** on the Mac, `/TechieFlow:agents:verifier *verify all Chatur --phase 1 --head maccatalyst`. Sign in is graded; the screens behind it print `NOT … not measured`, and no row fails on them.
+
+### TF-017 — The verdict writes Verified on a row whose every test was skipped
+
+- **Status:** fixed upstream 2026-10-29, ships in TechieFlow v1.2.2; not yet re-checked here.
+- **Severity:** critical
+- **Blocks:** yes — REQ-FN-106 (Settings and the other pages open from the main window) reads `Verified` at 100% in `docs/Chatur-P3-Checklist.md`, while its own Remark says "not verified — every test named REQ-FN-106 was skipped; acceptance not measured".
+- **Repro:** `bash .tfcore/utils/tf-verify-verdict.sh Chatur --apply --started <ts>` on phase 3, where the only tests naming REQ-FN-106 are skipped (10 skipped, none ran). The verdict table prints `REQ-FN-106 | NOT-TESTED | - | Verified`.
+- **Expected:** a row is `Verified` only when every check that ran passed. A row with no test that ran is not Verified, and its Status stays at its previous value or goes to Needs re-verify.
+- **Actual:** the verdict's own table shows `NOT-TESTED` as the verdict, and the Status cell is written `Verified` with a Remark that says not verified.
+- **Encountered in:** `*build-phase Chatur` chained verify, phase 3, 2026-10-25
+- **Workaround:** none; the Status cell was left as the verdict script wrote it. The checklist is not hand-edited because the verdict script owns those cells.
+- **Suggested fix:** in `tf-verify-verdict.py`, write the Status from the verdict, and treat NOT-TESTED as a failed check for the row's Status, not as a pass.
+- **Reply (TechieFlow team, 2026-10-29):** Fixed in `tf-verify-verdict.py`. A row this run could not measure (every test skipped, no test ran, or its screen was not driven) is never written Verified on that run's word. It keeps Verified only when an earlier PASS is on record: its Remark says `verify: PASS`, or the ledger's last verdict for it is PASS. The Remark then names it, for example `not measured — every test named REQ-FN-106 was skipped; Verified on 2026-10-19 stands, not re-measured`, and the next run finds the date there. With no earlier PASS on record the row goes to Needs re-verify at 75%. The Remark word for these rows is now "not measured", never "not verified" beside a Verified status. Regression case `ch_017`. Miss `MISS-TechieFlow-20261029-05`. **For REQ-FN-106 here:** its Remark reads `2026-10-28 verify: not verified — no test named REQ-FN-106 ran` and the ledger's last verdict is NOT-TESTED, so its 2026-10-19 PASS is no longer on record. The next verify of phase 3 writes it Needs re-verify, until a test named for it runs and passes. **Check it here:** `/TechieFlow:agents:verifier *verify functional Chatur --phase 3`. REQ-FN-106 reads Needs re-verify with the reason, not Verified.
+
+### TF-018 — Verify on WSL cannot boot the head, so verdicts are written without a boot record
+
+- **Status:** open, filed 2026-10-25
+- **Severity:** major
+- **Blocks:** yes — every verdict written from this machine on 2026-10-25 came from a head the tooling did not boot. The verdict header prints `booted: not booted`, and rows whose checks need the boot record fail with `ENOENT '/proc/undefined/cmdline'` (REQ-FN-055, REQ-FN-061).
+- **Repro:** `bash .tfcore/utils/tf-verify-boot.sh start` on WSL with the published harness on `http://localhost:5280`. It prints `NONE head=web kind=host reason=the published copy … did not answer on http://localhost:5280/ within 120 s although its log says it is listening`. The log shows `Application started`.
+- **Expected:** the boot step reaches the published copy on WSL, or it runs the WSL copy when the Windows-side copy is unreachable, and writes a boot record the verdict can use.
+- **Actual:** the boot script chooses its runner from the build rung (`via cmd.exe`), and no environment switch forces the WSL runner. The Windows-side copy never answers from WSL. A head started by hand has no pid record, so the process checks read `/proc/undefined`.
+- **Encountered in:** `*build-phase Chatur` chained verify, phase 3, 2026-10-25
+- **Workaround:** the published harness was started by hand under WSL dotnet (`~/.dotnet/dotnet Chatur.WebHarness.dll --urls http://localhost:5280`) and stopped by hand afterwards. Its verdicts are recorded as "not booted".
+- **Suggested fix:** an environment variable (for example `TF_BOOT_RUNNER=wsl`) that forces the WSL runner, and a fallback to it when the cmd.exe copy does not answer within the wait. Also record the pid of a hand-started head so the process checks can read it.
+
+### TF-019 — The screen check's default sign-in path is /login, but this app signs in at /sign-in
+
+- **Status:** open, filed 2026-10-25
+- **Severity:** minor
+- **Blocks:** no — passing `--login-path /sign-in` by hand works, and the screens were then driven.
+- **Repro:** `bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --base http://localhost:5280 --login-path /login --user chatur-owner@techierathore.com`, against an app whose sign-in page is `/sign-in`. The run ends `LOGIN failed … no user or email field found on the sign-in page`.
+- **Expected:** the sign-in path is read from the app's own configuration, or the tool tries `/sign-in` when `/login` has no sign-in form.
+- **Actual:** the tool signs in at the path it was given and stops after the first failure.
+- **Encountered in:** `*build-phase Chatur` chained verify, phase 3, 2026-10-25
+- **Workaround:** pass `--login-path /sign-in`.
+- **Suggested fix:** probe `/login` then `/sign-in` when the first has no sign-in form, or take the path from `core-config.yaml`.
+
+### TF-020 — Picking the branch you are already on is reported as "does nothing when clicked"
+
+- **Status:** fixed upstream 2026-10-29, ships in TechieFlow v1.2.2; not yet re-checked here.
+- **Severity:** minor
+- **Blocks:** yes — the render check fails all 19 rows on End-to-end run, Run queue and Run report on this one finding, once the sample menu items are marked.
+- **Repro:** open a project whose repository has one branch (`main`). Run `bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --base <url> --login-path /sign-in --user chatur-owner@techierathore.com --password <pw>`. The branch menu holds `main` (ticked, the current branch) and "Open the repository…".
+- **Expected:** a choice that is already the state, with no sibling choice to move the state first, is noted and not reported. The menu-walk rule for Light in a light app already says this.
+- **Actual:** `"main2 to push › main" does nothing when clicked`, a render finding on every screen that shows the toolbar.
+- **Encountered in:** `*build-phase Chatur` chained verify, phase 3, 2026-10-28
+- **Workaround:** none in the app. Switching to the current branch has nothing to do.
+- **Suggested fix:** in `tf-menus.mjs`, treat a ticked item (a check mark, `aria-checked="true"` or `data-state="checked"`) with no unticked sibling choice as "already the state", not as an item that does nothing.
+- **Reply (TechieFlow team, 2026-10-29):** Fixed as you suggested. The cause: the walk already skipped a ticked item, but it knew a tick only by a named icon (`svg[class*="check"]`, `data-icon`). TrBlazeUI's `LucideIcon` draws `<svg class="lucide-icon">` with the check path alone, so your ticked `main` was never seen as ticked. `tf-menus.mjs` now also knows a tick by its shape (one stroke of three points, the middle one lowest), as well as `aria-checked="true"` and `data-state="checked"`, and records the click as "already the state (ticked)". An unticked item that does nothing still fails. Regression case `ch_020`. Miss `MISS-TechieFlow-20261029-01`. **Re-run on this project's phase 3** (the web head as on 28 Oct: the WSL copy of the published harness on :5280, signed in as chatur-owner, the three screens that hold the 19 rows): v1.2.1 gives render EMPTY on End-to-end run, Run queue and Run report with `"main2 to push › main" does nothing when clicked`; the fix gives render OK on all three. **Not ours, for you:** a second run on the same data fails visual on all three screens: `text "build failed" in span[data-testid=output-status] is 2.8 : 1 against its background (rgb(252,252,252) on rgb(246,109,103); 3 : 1 is the minimum)`. That is the app's badge colour. Also, the Windows-side copy (what `tf-verify-boot.sh start` chose today) shows "No branches found" in the branch menu, so this fault does not show there. **Check it here:** paste into Chatur's agent `/TechieFlow:agents:verifier *verify ui Chatur --phase 3`. No screen reports `› main" does nothing`.
 
 ## Replies from TechieFlow
 
@@ -283,3 +349,16 @@ All three fixes ship in **TechieFlow v1.2.1**, the next release after v1.2.0. Th
 | TF-013 | Fixed upstream in `tf-verify-verdict.py`, as you suggested. A row that was Not Started keeps Not Started when every check that fails on it is its route answering 404. That is the render check, and the mockup check, which could not open the route for the same reason. Its Remark reads `not built — /feedback answered HTTP 404: the screen is not built yet, nothing to re-verify`, and it emits no gate record and no miss. A row that was built and answers 404 still goes to Needs re-verify, and so does a Not Started row with any other failure. Regression case `ch_013` fails on the script you had. Miss `MISS-TechieFlow-20261021-04`. | **Replayed on your phase-4 evidence** (`list-p4.json`, `screens-p4.json`, `parity-p4.json`, `assets-p4.json`), in a copy, so nothing here was written. Old script: 19 rows RENDER-FAIL, Needs re-verify, 19 misses. New script: 19 rows Not Started, no miss. **One thing for you:** the 19 rows of `docs/Chatur-P4-Checklist.md` still read Needs re-verify from the 2026-10-19 run. After the framework update, paste into Chatur's agent: `/TechieFlow:agents:verifier *verify all Chatur --phase 4`. The verdict puts them back to Not Started, each with the 404 reason. |
 | TF-014 | Fixed upstream in `guard-db.sh`, as you suggested. "dbup" counts only when it runs: as the command word of a segment (`dbup upgrade`, `./Chatur.DbUp.exe`, `dotnet Chatur.DbUp.dll`) or through `dotnet run --project …Db` / `…DbUp`. A quoted argument is a mention (a `--what` sentence, a `grep` pattern), unless a shell runs it (`bash -c "dotnet run --project src/ChaturDb"`) or it is the `--project` path. Regression case `ch_014` holds 12 command shapes; the guard you had gets 5 of them wrong. Miss `MISS-TechieFlow-20261021-05`. | Proved on your two repro commands, with the marker at `log-miss`: your guard refuses both, the new one allows both. `dotnet run --project src/ChaturDb` is still refused outside `*build-phase`, `*fix-issues` and `*triage-and-fix`. After the framework update, `*log-miss` takes a sentence naming DbUp, and `grep -n -i "dbup" docs/Chatur-Checklist.md` runs. You no longer need the file workaround. |
 | TF-015 | Fixed upstream in `tf-verify-verdict.py`, as you suggested: `bad` is set before the render branch. A row on an UNREACHABLE screen is RENDER-FAIL on a Mac head as on any other, with the screen check's reason, and every other row is graded. Regression case `ch_015` builds your shape: a Mac (appium) boot, `anchors_not_measured`, the first screen UNREACHABLE. It fails on the script you had with exit 1 and `UnboundLocalError`, and passes now. Miss `MISS-TechieFlow-20261021-06`. | Proved on that fixture only: the Mac run's evidence is on the Mac, not on this machine. On the Mac, after the framework update, paste into Chatur's agent: `/TechieFlow:agents:verifier *verify all Chatur --phase all --head maccatalyst`. Phases 2 to 4 get a verdict table. Rows whose screen stays behind Sign in read RENDER-FAIL with the screen check's reason. |
+
+### Resolution status (TechieFlow team, 2026-10-29)
+
+Ships in **TechieFlow v1.2.2**, the next release after v1.2.1. Already in this project's `.tfcore/` through the framework update.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-020 | Fixed upstream. The reply is under the entry. | paste into Chatur's agent `/TechieFlow:agents:verifier *verify ui Chatur --phase 3`. No screen reports `› main" does nothing`. |
+| TF-017 | Fixed upstream. The reply is under the entry. | `/TechieFlow:agents:verifier *verify functional Chatur --phase 3`. REQ-FN-106 reads Needs re-verify with the reason, not Verified. |
+| TF-016 | Fixed upstream. The reply is under the entry. | on the Mac, `/TechieFlow:agents:verifier *verify all Chatur --phase 1 --head maccatalyst`. Sign in is graded; the screens behind it print `NOT … not measured`, and no row fails on them. |
+| TF-015 | Fixed upstream. The reply is under the entry. | on the Mac, `*verify all Chatur --phase all --head maccatalyst`: phases 2 to 4 get a verdict table, and no row behind Sign in is RENDER-FAIL. |
+| TF-013 | Fixed upstream. The reply is under the entry. | `/TechieFlow:agents:verifier *verify all Chatur --phase 4`. The 19 rows go back to Not Started with the 404 reason, and no miss is written. |
+| TF-014 | Fixed upstream. The reply is under the entry. | run your two repro commands outside a build or fix: neither is blocked. |

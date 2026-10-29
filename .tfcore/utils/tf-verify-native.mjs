@@ -26,6 +26,14 @@
 // and the screenshot is that window alone, taken by macOS by its window number.
 // --from-source a.xml,b.xml grades saved page sources instead of a running app (one screen per
 // file, no screenshot): how the self-tests check the grading where there is no Mac.
+// An opaque web view (Chatur TF-016, Sevak TF-014): mac2 can show a BlazorWebView's content as one
+// empty element, or as controls with no label, so nothing inside it can be found or clicked and the
+// head cannot sign in. Typing by screen position would be global input, which is not allowed. A screen
+// nothing reached there is NOT-MEASURED, never UNREACHABLE: the verdict grades its rows as not driven.
+// Sign in: with --user and --password, the first screen's user and password fields are found inside the
+// app's window and typed into (s.type, the way a Blazor Hybrid form takes text, Lekhak TF-026), then its
+// "Sign in" or "Log in" button is clicked. screens.json `login` says whether that worked and why not.
+// When it did not, every screen nothing reached is NOT-MEASURED with that reason.
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, normalize, resolve } from 'node:path';
@@ -170,16 +178,29 @@ function grade(nodes, anchors) {
   return { render, visual, findings, anchors_present: out.anchors.filter((a) => a.present).length, window: win ? { w: win.w, h: win.h } : null };
 }
 
+// no labelled control inside the window's content: a web view mac2 cannot see into
+function opaque(nodes) {
+  const win = windowOf(nodes);
+  return !!win && !descendants(nodes, win.i).some((n) => !inChrome(nodes, n) && WEB_CONTROLS.has(n.type) && shows(n));
+}
+const LOGIN_ASKED = ['--user', '--password', '--login-path'].some((f) => argv.includes(f));
+const USER = arg('--user', ''), PASSWORD = arg('--password', '');
+const OPAQUE_WHY = 'Appium sees the web view as one empty element, so no field, link or button inside it can be found';
+let login = LOGIN_ASKED ? { driven: false, reason: 'not tried' } : null;
+let blockedWhy = '';   // set once the head is known unable to go past the first screen
+
 const skipped = [];
 function writeOut(results, extra = {}, width = 0) {
   const summary = {
-    mode: 'appium', base: APPIUM, bundle_id: BUNDLE, widths: width ? [width] : [], login: null, screens: results, skipped,
+    mode: 'appium', base: APPIUM, bundle_id: BUNDLE, widths: width ? [width] : [],
+    login, screens: results, skipped,
     anchors_not_measured: NO_NAMES,
     summary: {
       screens: results.length, skipped: skipped.length,
       render_ok: results.filter((r) => r.render === 'OK').length,
       render_fail: results.filter((r) => r.render === 'EMPTY' || r.render === 'ERROR').length,
       unreachable: results.filter((r) => r.render === 'UNREACHABLE').length,
+      not_measured: results.filter((r) => r.render === 'NOT-MEASURED').length,
       visual_ok: results.filter((r) => r.visual === 'OK').length,
       visual_fail: results.filter((r) => r.visual === 'FAIL').length,
     },
@@ -212,6 +233,26 @@ async function control(win, text) {
     if (el) return el;
   }
   return null;
+}
+// the sign-in step: fields found in the app's own window, never typed by screen position
+async function signIn() {
+  const nodes = parseSource(await s.source());
+  if (NO_NAMES && opaque(nodes)) return { driven: false, reason: `the Mac head cannot sign in: ${OPAQUE_WHY}` };
+  if (!USER || !PASSWORD) return { driven: false, reason: 'the Mac head signs in only with both --user and --password' };
+  const win = await s.find('-ios predicate string', 'elementType == 4').catch(() => null);
+  const user = await s.find('-ios predicate string', 'elementType == 49', win).catch(() => null);   // TextField
+  const pw = await s.find('-ios predicate string', 'elementType == 50', win).catch(() => null);     // SecureTextField
+  if (!user || !pw) return { driven: false, reason: `the first screen has no ${user ? 'password' : 'user'} field the Mac head can see` };
+  await s.type(user, USER); await s.type(pw, PASSWORD);
+  const btn = await control(win, 'Sign in') || await control(win, 'Log in');
+  if (!btn) return { driven: false, reason: 'no "Sign in" or "Log in" button on the first screen' };
+  await s.click(btn);
+  const t0 = Date.now();
+  while (Date.now() - t0 < Math.max(RENDER_WAIT, 10000)) {
+    await sleep(500);
+    if (!parseSource(await s.source()).some((n) => n.type === 'SecureTextField')) return { driven: true, reason: `signed in as ${USER} in the app's window` };
+  }
+  return { driven: false, reason: `still on the sign-in screen ${Math.round((Date.now() - t0) / 1000)} s after "Sign in" was clicked` };
 }
 async function reach(sc, first) {
   const name = sc.name;
@@ -256,10 +297,23 @@ for (const [i, sc] of screens.entries()) {
   try {
     // the first look: opening the session starts the app again, and a web view took about eight
     // seconds to draw its first page, menu included (2026-10-07). Wait for it before looking for the menu.
-    if (s && !firstDrawn) { const t1 = Date.now(); while (Date.now() - t1 < Math.max(RENDER_WAIT, 20000) && !hasContent(parseSource(await s.source()))) await sleep(300); firstDrawn = true; }
+    if (s && !firstDrawn) {
+      const t1 = Date.now(); while (Date.now() - t1 < Math.max(RENDER_WAIT, 20000) && !hasContent(parseSource(await s.source()))) await sleep(300); firstDrawn = true;
+      if (LOGIN_ASKED) {
+        login = await signIn().catch((e) => ({ driven: false, reason: `the sign-in step failed: Appium: ${e.message}` }));
+        console.log(login.driven ? `LOGIN ${login.reason}` : `LOGIN not driven — ${login.reason}; every screen behind Sign in is not measured (grade it on the web or Windows head)`);
+        if (!login.driven) blockedWhy = login.reason;
+      }
+    }
     nav = FROM_SOURCE.length ? { how: `saved source ${FROM_SOURCE[i]}` } : await reach(sc, results.length === 1);
   } catch (e) { nav = { how: '', why: `Appium: ${e.message}` }; }
-  if (!nav.how) {
+  if (!nav.how && !blockedWhy && NO_NAMES && s) {
+    try { if (opaque(parseSource(await s.source()))) blockedWhy = `the Mac head cannot go past the first screen: ${OPAQUE_WHY}`; } catch { /* left as unreachable */ }
+  }
+  if (!nav.how && blockedWhy) {
+    const detail = `${sc.name} not measured: ${blockedWhy.startsWith('the Mac head') ? blockedWhy : `on the Mac head ${blockedWhy}`}, so no screen past the first is reached`;
+    r.widths.push({ width, url: '', status: 0, screenshot: '', render: 'NOT-MEASURED', visual: 'n/a', findings: [{ check: 'render', class: 'not-measured', detail }] });
+  } else if (!nav.how) {
     const detail = nav.why ? `${sc.name} was not reached: ${nav.why}`
       : `no control reaches ${sc.name}: no link to ${sc.route} was found in the code${NO_NAMES ? '' : `; give its tab, flyout item, link or button AutomationId="nav-${slug(sc.name)}"`}, or the label "${sc.name}"`;
     r.widths.push({ width, url: '', status: 0, screenshot: '', render: 'UNREACHABLE', visual: 'n/a', findings: [{ check: 'render', class: 'other', detail }] });
@@ -298,10 +352,10 @@ for (const [i, sc] of screens.entries()) {
   const notes = [...new Set(r.widths.flatMap((e) => (e.findings || []).map((f) => f.detail + (e.requested_width ? ` @${e.width}` : ''))))].slice(0, 4);
   const sizes = r.widths.filter((e) => e.requested_width).map((e) => `${e.width}${e.width_note ? ` (asked ${e.requested_width})` : ''}`);
   const names = NO_NAMES ? 'names not measured (web view)' : `${r.anchors_n} anchors${r.mockup && !existsSync(r.mockup) ? ' (no mockup file)' : ''}`;
-  console.log(`${r.render === 'OK' && r.visual === 'OK' ? 'OK  ' : 'FAIL'} ${r.name} (${r.route}) — render ${r.render}, visual ${r.visual}, ${names}${sizes.length ? `, @${sizes.join('/')}` : ''}${r.widths[0].reached ? ` — ${r.widths[0].reached}` : ''}${notes.length ? ' — ' + notes.join('; ') : ''}`);
+  console.log(`${r.render === 'OK' && r.visual === 'OK' ? 'OK  ' : r.render === 'NOT-MEASURED' ? 'NOT ' : 'FAIL'} ${r.name} (${r.route}) — render ${r.render}, visual ${r.visual}, ${names}${sizes.length ? `, @${sizes.join('/')}` : ''}${r.widths[0].reached ? ` — ${r.widths[0].reached}` : ''}${notes.length ? ' — ' + notes.join('; ') : ''}`);
 }
 if (PID && before) resizeWindow(PID, before.w, before.h);
 if (s) await s.close();
 const out = writeOut(results, {}, width);
-console.log(`screens ${out.summary.screens}${skipped.length ? ` (+${skipped.length} skipped)` : ''}: render ${out.summary.render_ok} OK / ${out.summary.render_fail} failed / ${out.summary.unreachable} unreachable; visual ${out.summary.visual_ok} OK / ${out.summary.visual_fail} failed${NO_NAMES ? '; control names not measured (web view)' : ''}; screenshots ${SHOTS}; JSON ${OUT}`);
-process.exit(out.summary.screens && out.summary.unreachable === out.summary.screens ? 2 : (out.summary.render_fail + out.summary.visual_fail + out.summary.unreachable) ? 5 : 0);
+console.log(`screens ${out.summary.screens}${skipped.length ? ` (+${skipped.length} skipped)` : ''}: render ${out.summary.render_ok} OK / ${out.summary.render_fail} failed / ${out.summary.unreachable} unreachable / ${out.summary.not_measured} not measured; visual ${out.summary.visual_ok} OK / ${out.summary.visual_fail} failed${NO_NAMES ? '; control names not measured (web view)' : ''}; screenshots ${SHOTS}; JSON ${OUT}`);
+process.exit(out.summary.screens && out.summary.unreachable + out.summary.not_measured === out.summary.screens ? 2 : (out.summary.render_fail + out.summary.visual_fail + out.summary.unreachable) ? 5 : 0);

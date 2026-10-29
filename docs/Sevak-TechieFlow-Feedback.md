@@ -4,15 +4,20 @@
 |---|---|
 | App | Sevak |
 | Upstream | TechieFlow |
-| Updated | 2026-10-21 |
+| Updated | 2026-10-29 (TF-014 fixed upstream, ships in TechieFlow v1.2.2) |
 
 ## Summary
 
-10 entries: 0 blocking now, 1 open (TF-008), 4 fixed upstream and not yet re-checked (TF-005, fixed 2026-10-11; TF-007, TF-009 and TF-010, fixed 2026-10-21, ship in TechieFlow v1.2.1), 5 closed (TF-001 to TF-004, and TF-006 on 2026-10-21).
+14 entries: 1 blocking now (TF-013), 4 open (TF-008, TF-011, TF-012, TF-013), 3 fixed upstream and not yet re-checked (TF-005, TF-009; TF-014, fixed 2026-10-29, ships in TechieFlow v1.2.2), 7 closed (TF-001 to TF-004, TF-006, TF-007, TF-010).
 
-TF-007, TF-009 and TF-010 are fixed upstream (2026-10-21). On this app, Welcome now passes its mockup check. Tasks and Backup still fail on one real difference each: the active nav item is indigo in the mockup's dark theme and grey in the app's. The setup wizard still fails on three "Change theme" menu items that could not be clicked. See the 2026-10-21 reply.
+New on 2026-10-22: TF-011, a minimized Windows app window draws no frames, so every click in a check times out; it is the likely cause of the wizard's "Change theme" items that "could not be clicked". TF-012, the DevGuide work list looks only in `src/` and `source/`, so it finds none of Sevak's screens under `apps/`.
 
-TF-008 is the self-check's "52 of 55 BRD items"; it holds nothing up. TF-005 is fixed upstream: `*verify` takes `--phase N` or `--phase all`, so phases 1 and 2 can be graded, and the status names the phase in the command it gives. TF-006 is fixed upstream: a theme switch counts as a click doing something, a popover switcher is opened through the control it names, and the dark theme of an app coloured in `oklch()` is seen and graded. TF-001 to TF-004 are closed.
+New on 2026-10-25: TF-014, on the Mac Blazor Hybrid head no screen past the first can be reached, and the verdict grades that as a render failure. TF-013's workaround, `tests/verify/boot-safe-mac.sh`, ran and booted safely.
+
+TF-008 is the self-check's "52 of 55 BRD items"; it holds nothing up (seen again 2026-10-25).
+
+- Severity across all entries, open and closed: 5 major, 7 minor (one entry has no severity line). Entries keep their id order.
+- Last consolidated: 2026-10-22 (phase 3 handoff)
 
 ## Entries
 
@@ -105,6 +110,8 @@ TF-008 is the self-check's "52 of 55 BRD items"; it holds nothing up. TF-005 is 
 
 ### TF-007 — The mockup check reads a mockup's colours in the middle of its CSS fade, so dark mode is graded against the light colour
 
+> ✅ **Closed 2026-10-22** — re-checked here: 2026-10-22 tf-mockup-parity.sh --cdp on the Windows head, --screen setup-wizard=/setup?step=2, light and dark at 1280 and 390: 0 findings; wizard-provider-builtin no longer reads mockup neutral, app accent. REQ-UI-022, REQ-FN-009, REQ-FN-050 Verified.
+
 - **Status:** fixed upstream 2026-10-21, ships in TechieFlow v1.2.1; not yet re-checked here.
 - **Severity:** minor
 - **Blocks:** yes — for three rows only (Sevak REQ-UI-022, REQ-FN-009, REQ-FN-050): their screen's mockup check fails on this alone, so they cannot reach Verified. Every other check passes, and the run carried on.
@@ -146,6 +153,8 @@ TF-008 is the self-check's "52 of 55 BRD items"; it holds nothing up. TF-005 is 
 
 ### TF-010 — `data-tf-sample` does not exempt a badge whose colour follows the app's real data
 
+> ✅ **Closed 2026-10-22** — re-checked here: 2026-10-22 *fix-issues verify, Windows head: tasks, welcome and backup each 0 mockup findings in light and dark; the data-tf-sample badges are no longer graded on colour. REQ-RAG-054, REQ-RAG-055, REQ-UI-066, REQ-UI-074 Verified (the remaining nav finding was the app's, fixed in MainLayout.razor.css).
+
 - **Status:** fixed upstream 2026-10-21, ships in TechieFlow v1.2.1; not yet re-checked here.
 - **Blocks:** yes — for four Sevak phase 3 rows only (REQ-UI-066, REQ-RAG-054, REQ-RAG-055, REQ-UI-074): every other check passes, and the run carried on.
 - **Severity:** minor
@@ -155,6 +164,60 @@ TF-008 is the self-check's "52 of 55 BRD items"; it holds nothing up. TF-005 is 
 - **Encountered in:** the Sevak phase 3 verify after `*amend-docs` marked those boxes, 2026-10-21.
 - **Workaround:** none taken. Marking the boxes `data-tf-state="variant-…"` instead would leave them out of the comparison, but that says "another state of the screen", which is not what they are.
 - **Suggested fix:** for a `data-tf-sample` box the app does draw, compare presence and size, and skip the colour, text and badge clauses.
+
+### TF-011 — A minimized Windows app window draws no frames, so every click in a check or test times out
+
+- **Blocks:** no — restoring the window and running again passes; on 2026-10-22 it cost one failed test (REQ-RAG-059) and a wrong lead on three wizard rows.
+- **Severity:** minor
+- **Repro:** Sevak Windows head over CDP, 2026-10-22, during `*verify all Sevak --phase 3`. With the app's window minimized (and the Windows lock screen showing), in the page: `requestAnimationFrame` fired 0 times in 3000 ms while `document.visibilityState` was `visible` and `document.hasFocus()` was `true`. Every `locator.click` then fails with `Timeout … exceeded … waiting for element to be visible, enabled and stable` (here `#primary-source` on `/llm-settings`, REQ-RAG-059). `ShowWindow(hwnd, SW_RESTORE)` on the app's own window: 5 frames in 142 ms, and the same test passed. The wizard's `"Change theme › Light" could not be clicked (locator.click: Timeout 3000ms exceeded.)` in the 2026-10-21 reply has the same signature; the menu works on a window that draws (2026-10-22, steps 1 and 2, light and dark).
+- **Expected:** the boot or each check notices a window that draws no frames, restores it (its own window only) or stops with "the app window is minimized, nothing can be clicked", instead of reporting each control as not clickable.
+- **Actual:** each click is reported as a defect of the screen, in the app's rows.
+- **Encountered in:** Sevak `*verify all Sevak --phase 3`, 2026-10-22.
+- **Workaround:** before each test chunk, restore the app's own window (`ShowWindow` on its handle; no keyboard or mouse input) and check that frames are drawn.
+- **Suggested fix:** in `tf-verify-boot.sh` (and before each screen in `tf-verify-screens.sh` / `tf-mockup-parity.sh`), count `requestAnimationFrame` callbacks for one second; on 0, restore the head's window by its recorded process id, count again, and if still 0, write a "not measured: window not drawing" result instead of click findings.
+
+### TF-012 — The DevGuide work list finds no screens in an app whose code lives under `apps/`
+
+- **Blocks:** no — the phase 3 DevGuide was written by reading the code directly; only the automatic list and its `--update` change detection are lost.
+- **Severity:** minor
+- **Repro:** Sevak, 2026-10-22, `*handoff-phase Sevak`. `bash .tfcore/utils/tf-devguide-list.sh Sevak --phase 3` (and with no `--phase`) prints `NOTHING: no routed page found in the code (no @page, [Route], or path: declaration outside samples and tests). Build first.` The app has 9 phase 3 pages, e.g. `apps/Sevak/Components/Pages/Life/Today.razor` carries `@page "/today"`.
+- **Expected:** every `@page` in the app's projects is listed, wherever the solution keeps them.
+- **Actual:** `tf-devguide-list.py` searches only `CODE_ROOTS = ("src", "source")` and lists `apps` in `SAMPLE_DIRS`, so a solution laid out as `apps/<App>/…` (Sevak's `Sevak.slnx`: `apps/Sevak`, `apps/Sevak.Core`, `apps/SevakDb`) has no code at all to the script.
+- **Encountered in:** Sevak `*handoff-phase`, 2026-10-22.
+- **Workaround:** the guide's entries were read at file and line by hand.
+- **Suggested fix:** take the code roots from the solution file's project paths (`*.slnx` / `*.sln`), or from a `codeRoots:` key in `core-config.yaml`, and treat `apps/` as samples only on a library.
+
+### TF-013 — A Mac Catalyst boot cannot pass the verification settings to the app, so it would open the owner's real data
+
+- **Blocks:** yes for the Mac head — a boot would run on `~/Library/Application Support/TechieDesk` and, outside verification mode, install the `com.techiedesk.scheduler` launchd agent. Not blocking for the Windows head.
+- **Severity:** major
+- **Repro:** Sevak, 2026-10-25, `*verify all Sevak --phase all --head maccatalyst`. Read, not run: `tf-verify-boot.sh` starts the app with `open -n`, and `tf-appium.mjs` `openSession()` opens the mac2 session with `appium:appPath` and `appium:skipAppKill` only. Neither carries an environment variable, so `SEVAK_VERIFICATION_MODE` and `AppDb__DataDirectory` cannot reach the app.
+- **Expected:** a Mac head can start on a throw-away data folder, as the Windows head can.
+- **Actual:** the boot controls no environment for the app.
+- **Encountered in:** Sevak `*verify`, 2026-10-25.
+- **Workaround:** `tests/verify/boot-safe-mac.sh`. It writes `appsettings.Production.json` into the built bundle with `AppDb:DataDirectory` and `Sevak:VerificationMode`, and refuses to go on unless the app's log names the fresh folder. First run 2026-10-25 (`boot-safe-mac.sh verify-all`): the build passed, the app's log named `tests/.artifacts/smoke-data/20261025T101257Z-verify-all/data`, and the real database and launchd agent were unchanged. AppManager and IMAP settings still cannot reach the app this way.
+- **Suggested fix:** let `tf-verify-boot.sh start --head maccatalyst` take `--env NAME=VALUE` (repeatable). Pass each pair to `open` as `--env NAME=VALUE`, and to `openSession()` as `appium:environment` (a mac2 session relaunches the app, so both need it). Also let a project name a pre-launch hook script in `core-config.yaml` that the boot runs after the build and before the first launch.
+
+### TF-014 — On a Mac Blazor Hybrid head no screen past the first can be reached, and the verdict grades that as a render failure
+
+- **Status:** fixed upstream 2026-10-29, ships in TechieFlow v1.2.2; not yet re-checked here.
+- **Blocks:** no — the run went on; the rows were written "not driven" instead. Every UI row on the Mac head stays unproven until this is fixed.
+- **Severity:** major
+- **Repro:** Sevak, 2026-10-25, `*verify all Sevak --phase all --head maccatalyst`. The app booted on the First-run wizard. `tf-verify-screens.sh --appium` printed `render UNREACHABLE` for all 17 fixed-route screens, `/setup` included, though it was on screen. In the mac2 page source the web view's buttons carry no `label`, `title` or `value`, so "Set up later" cannot be found. The dry-run verdict then gave 17 Verified phase 1 rows `RENDER-FAIL` (REQ-UI-022, REQ-FN-036 …).
+- **Expected:** a screen the tool could not reach is "not measured" (verify-phase.md: "a check that could not run is absent from the record"), and the screen already in the window is graded as reached.
+- **Actual:** `tf-verify-verdict.py` (render check, `scr.get("render") == "UNREACHABLE"`) adds a failing render check, so a tool limit becomes a product defect.
+- **Encountered in:** Sevak `*verify`, 2026-10-25.
+- **Workaround:** the screens results were moved to `tests/.artifacts/verify/mac-unreachable/screens-p{1,2,3}.json` before each `--apply`, so the rows were graded on build and acceptance only.
+- **Suggested fix:** grade UNREACHABLE as not measured when the boot is `mode=appium webview=yes`, and compare the first screen with the window before calling it unreachable. To drive the pages themselves, attach through the WKWebView's inspector (`isInspectable`, Safari remote automation) or have the app expose an in-process test bridge in verification mode.
+- **Reply (TechieFlow team, 2026-10-29):** Fixed with one change, shared with Sevak TF-014. **Sign-in step:** with `--user` and `--password`, the Mac head now looks for the user and password fields inside the app's own window, types into them the way a Blazor Hybrid form takes text (`s.type`, Lekhak TF-026), and clicks "Sign in" or "Log in". Nothing is typed by screen position. **Where it cannot:** a web view that shows Appium one empty element, or controls with no label, has no field to find. The head then prints `LOGIN not driven — the Mac head cannot sign in: Appium sees the web view as one empty element …`, writes that to `screens.json` (`login`), and marks every screen it could not reach `NOT-MEASURED`, never `UNREACHABLE`. The verdict grades those rows as not driven: the status is kept, the Remark says `not measured — … (grade it on the web or Windows head)`, and no gate record or miss is written. A web view the head can see into (Lekhak's) is unchanged: a screen no link reaches is still UNREACHABLE. Proved on a stand-in Appium that serves saved element trees (`tests/maccatalyst/fake-appium.mjs`), with your shape and with a sign-in form the head can see. **Not run on a real Mac yet.** Regression cases `ch_015`, `ch_016`, `sv_014`. Miss `MISS-TechieFlow-20261029-02`. Two parts of your suggestion were not done. Grading the screen already in the window as reached: on an opaque web view the head cannot tell which screen is showing, and grading whatever is on view passed a wrong screen before (Lekhak TF-027), so only a screen whose route is `/` is graded that way. Attaching through the WKWebView inspector or an in-app test bridge needs a change in the app and a new driver; it is not in this fix. **Check it here:** on the Mac, `/TechieFlow:agents:verifier *verify all Sevak --phase all --head maccatalyst`. The screens it cannot reach print `NOT … not measured`, none `UNREACHABLE`, and no phase 1 row goes to RENDER-FAIL for them.
+
+## Resolution status (TechieFlow team, 2026-10-29)
+
+Ships in **TechieFlow v1.2.2**, the next release after v1.2.1. Already in this project's `.tfcore/` through the framework update.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-014 | Fixed upstream. The reply is under the entry. | on the Mac, `/TechieFlow:agents:verifier *verify all Sevak --phase all --head maccatalyst`. The screens it cannot reach print `NOT … not measured`, none `UNREACHABLE`, and no phase 1 row goes to RENDER-FAIL for them. |
 
 ## Resolution status (TechieFlow team, 2026-10-21)
 

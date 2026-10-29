@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 292 logged: 56 open, 235 fixed, 1 will not fix |
+| Count | 299 logged: 56 open, 242 fixed, 1 will not fix |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-10-21 |
+| Updated | 2026-10-29 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -70,10 +70,17 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (235)
+## Fixed (242)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261029-07 | 2026-10-29 by owner | 2026-10-29 by log-miss | said and ignored | edited TechieBlog's own TrBlazeUI feedback file (Summary and a TR-031 closed mark) to make the doc check pass; that file belongs to TechieBlog and TrBlazeUI, not TechieFlow; reverted |
+| MISS-TechieFlow-20261029-06 | 2026-10-29 by owner | 2026-10-29 by log-miss | the check was too weak | tf-log-miss with --started skipped the running command's marker, so a miss logged with --fixed --started inside *fix-issues wrote a log-miss run record over the fix run's whole window |
+| MISS-TechieFlow-20261029-05 | 2026-10-29 by owner | 2026-10-29 by log-miss | the check was too weak | Chatur TF-017: tf-verify-verdict kept a row's earlier Verified when every test named for it was skipped, so REQ-FN-106 read Verified at 100% with a Remark saying not verified |
+| MISS-TechieFlow-20261029-04 | 2026-10-29 by owner | 2026-10-29 by log-miss | the check was too weak | TechieRag TF-008: tf-triage new took the next id from the checklists and telemetry only, so it reused REQ-RAG-135 and -136 that test names already carried, and verify passed the new rows on those old tests |
+| MISS-TechieFlow-20261029-03 | 2026-10-29 by owner | 2026-10-29 by log-miss | the check was too weak | TechieBlog TF-001: tf-doc-check's baseline compared size findings with the size word in them, so re-sizing a project from Small to Large made an unchanged over-length finding new and blocked the step |
+| MISS-TechieFlow-20261029-02 | 2026-10-29 by owner | 2026-10-29 by log-miss | the check was too weak | Chatur TF-016, Sevak TF-014 and Chatur TF-015: the Mac Catalyst head ignored the sign-in options and called every screen past the first UNREACHABLE on an opaque web view, and the verdict failed those rows as render failures |
+| MISS-TechieFlow-20261029-01 | 2026-10-29 by owner | 2026-10-29 by log-miss | the check was too weak | Chatur TF-020: the menu walk knew a ticked item only by a named check icon, so TrBlazeUI's unnamed lucide tick on the current branch read as an item that does nothing and failed 19 rows of Chatur's phase 3 |
 | MISS-TechieFlow-20261021-07 | 2026-10-21 by owner | 2026-10-21 by log-miss | the check was too weak | Lekhak TF-036: tf-doc-tests built a test project of a MAUI solution on the WSL side over the obj/ the Windows build owns, so the status gate's document-test line read NOT-RUN |
 | MISS-TechieFlow-20261021-06 | 2026-10-21 by owner | 2026-10-21 by log-miss | the check was too weak | Chatur TF-015: tf-verify-verdict.py raised UnboundLocalError on bad when a Mac head's first graded screen was UNREACHABLE, so phases 2 to 4 of an all-phase Mac verify got no verdict |
 | MISS-TechieFlow-20261021-05 | 2026-10-21 by owner | 2026-10-21 by log-miss | the check was too weak | Chatur TF-014: guard-db.sh refused any command holding the word dbup, a log-miss sentence or a grep pattern, as a migration run |

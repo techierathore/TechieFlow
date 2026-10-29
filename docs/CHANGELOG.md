@@ -8,10 +8,47 @@
 
 ---
 
-## Unreleased (since v1.2.0) — ships as v1.2.1
+## Unreleased (since v1.2.1) — ships as v1.2.2
 
-v1.2.0 was tagged on 2026-10-18. What follows is in no published package yet and goes out as v1.2.1:
+v1.2.1 was tagged on 2026-10-22. What follows is in no published package yet and goes out as v1.2.2:
 bug fixes only, so a patch version.
+
+- **Feedback sweep of 2026-10-29: nine entries, all from verify runs.** Each new case fails against
+  the v1.2.1 scripts and passes now. **Chatur TF-020**: the menu walk knew a ticked item only by a
+  named check icon. TrBlazeUI's `LucideIcon` draws `<svg class="lucide-icon">` with the path alone,
+  so the branch already checked out ("main") read as "does nothing when clicked". `tf-menus.mjs` now
+  also knows a tick by its shape (one stroke of three points, the middle one lowest) and records it as
+  "already the state (ticked)"; an unticked item that does nothing still fails. Proved on Chatur's
+  web head (the WSL copy, as on 28 Oct), phase 3: v1.2.1 gives render EMPTY on End-to-end run, Run
+  queue and Run report on that finding (19 rows); the fix gives render OK on all three. Case
+  `ch_020`. **Chatur TF-017**: a row whose tests were all skipped kept the Verified it read before,
+  with a Remark saying "not verified" (REQ-FN-106). `tf-verify-verdict.py` now writes Verified on a
+  row it could not measure only when an earlier PASS is on record (in its Remark or the ledger), and
+  says "Verified on <date> stands, not re-measured"; without one the row goes to Needs re-verify. The
+  Remark mark for NOT-TESTED and NOT-DRIVEN rows is now "not measured". Case `ch_017`. **Chatur
+  TF-016, Sevak TF-014 and Chatur TF-015, one change**: on a Mac web-view head Appium sees the web
+  view as one empty element. `tf-verify-native.mjs` now has a sign-in step (the user and password
+  fields found in the app's own window, typed with `s.type`, then "Sign in" or "Log in"); where the
+  web view is opaque it says the sign-in was not driven and why, and every screen it could not reach
+  is NOT-MEASURED, never UNREACHABLE. The verdict grades those rows as not driven ("not measured …
+  grade it on the web or Windows head"), no gate record; on 21 Oct they became RENDER-FAIL. A web
+  view the head can see into (Lekhak's) is unchanged: an unlinked screen is still UNREACHABLE. Proved
+  on a stand-in Appium (`tests/maccatalyst/fake-appium.mjs`), not on a Mac. Cases `ch_015`, `ch_016`,
+  `sv_014`. **TechieBlog TF-001**: `tf-doc-check`'s baseline compared a size finding with its size
+  word, so re-sizing a project (Small to Large) made an unchanged over-length finding new. `_shape()`
+  now drops the size word. On a copy of TechieBlog's documents, baselined as Small and checked as
+  Large: v1.2.1 gives 1 FAIL (Coding Standards, 2,786 words), the fix 0. Case `bl_001`. **TechieRag
+  TF-008**: `tf-triage new` also skips ids that the project's `src/`, `source/`, `tests/` and `test/`
+  carry, and `tf-verify-tests` warns (WARN line, `tests_older_than_row` in tests.json, a ⚠ note in
+  the Remark) when a row logged by triage has tests that carried its id before the day it was logged.
+  The day comes from the history, else from the files' dates. Case `tr_008`. **Chatur TF-013, TF-014
+  and TF-015** were already in v1.2.1 (`ch_013`, `ch_014` hold); Chatur's `.tfcore/` is v1.2.1. **Found
+  in this run**: `tf-log-miss --fixed --started` inside a running `*fix-issues` skipped the marker and
+  wrote a log-miss run record over the fix run's window (voided). The marker is now read whether or not
+  `--started` is given. Case `tf_029`. Misses `MISS-TechieFlow-20261029-01` to `-06`, `weak-check`,
+  closed in the same run. The regression suite
+  holds in local time (`dev_001` failed once under load and passed three times alone; it touches none
+  of these scripts).
 
 - **Feedback sweep of 2026-10-21: seven open entries fixed.** Each has a regression case that fails
   against the v1.2.0 scripts and passes now. **Sevak TF-007**: after a theme is put on a page,

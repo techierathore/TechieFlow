@@ -1251,6 +1251,7 @@ cased = {("TF-%03d" % int(c[3:])) for c in cased}
 own = {"AppManager": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^am_0?(\d{2,3})\(\)", suite)},
        "Chatur": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^ch_0?(\d{2,3})\(\)", suite)},
        "TrBlazeUI": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^tb_0?(\d{2,3})\(\)", suite)},
+       "TechieBlog": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^bl_0?(\d{2,3})\(\)", suite)},
        "Lekhak": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^lk_0?(\d{2,3})\(\)", suite)},
        "Sevak": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^sv_0?(\d{2,3})\(\)", suite)},
        "TechieRag": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^tr_0?(\d{2,3})\(\)", suite)}}
@@ -1468,8 +1469,12 @@ tf_029() {
            --sort spec --class unspecified-gap --artifact brd --severity minor --fixed ) 2>&1; }
   lm "the BRD never said the export names its columns" >/dev/null
   lm "the BRD never said the filter survives a reload" >/dev/null
+  # 2026-10-29: with --started (a fix run naming its own start) the marker was not read, and a log-miss
+  # run record was written over the enclosing command's window
+  ( cd "$d" && CLAUDE_PROJECT_DIR= TF_METRICS_ROOT="$d" bash .tfcore/utils/tf-log-miss.sh Fx --what "the export drops the last row" \
+      --sort weak-check --class wrong-behaviour --artifact src --severity minor --fixed --started "$t0" ) >/dev/null 2>&1
   local runs; runs="$(grep -c '"kind":"run"' "$d/docs/metrics/runs.jsonl")"
-  [[ "$runs" == "0" ]] && ok tf_029a "a miss logged inside *amend-docs writes no run record of its own" \
+  [[ "$runs" == "0" ]] && ok tf_029a "a miss logged inside *amend-docs writes no run record of its own, --started or not" \
                        || { bad tf_029a "$runs log-miss run record(s) written over the amendment's window"; note "$(grep '"kind":"run"' "$d/docs/metrics/runs.jsonl" | head -1 | cut -c1-160)"; }
   local out; out="$(echo "{\"kind\":\"run\",\"app\":\"Fx\",\"cmd\":\"amend-docs\",\"started\":\"$t0\"}" \
                    | ( cd "$d" && CLAUDE_PROJECT_DIR= TF_METRICS_ROOT="$d" bash .tfcore/utils/tf-emit.sh runs ) 2>&1)"
@@ -1479,8 +1484,8 @@ tf_029() {
     bad tf_029b "the amendment's run record was refused"; note "$(grep REFUSED <<<"$out" | head -1 | cut -c1-160)"
   fi
   local misses; misses="$(grep -c "\"found_run_id\":\"$t0\"" "$d/docs/metrics/misses.jsonl")"
-  [[ "$misses" == "2" ]] && ok tf_029c "both misses are recorded, each naming the amendment's start" \
-                         || bad tf_029c "$misses of 2 misses carry the amendment's start"
+  [[ "$misses" == "3" ]] && ok tf_029c "every miss is recorded, each naming the amendment's start" \
+                         || bad tf_029c "$misses of 3 misses carry the amendment's start"
   # a *log-miss marker three days old: the session died; the run starts now, not three days ago
   local d2; d2="$(_metrics_fx logmissstale)"
   mkdir -p "$d2/.tfcore/.session"; cp -r "$UTILS" "$d2/.tfcore/"
@@ -4965,6 +4970,33 @@ for v in ('bad', 'good'):
     || bad ch_011b "tf-triage new gave '$id' with REQ-UI-055 in phase 1 and REQ-UI-050 in phase 2 (want REQ-UI-056)"
 }
 
+# --- Chatur TF-020: picking the branch you are already on was "does nothing when clicked" ---------------
+# The walk skips a ticked item, but it knew a tick only by a name (svg[class*="check"], data-icon). TrBlazeUI's
+# LucideIcon renders <svg class="lucide-icon"> with the check path alone, so Chatur's "main" was not seen as
+# ticked and failed the render check of every screen with the toolbar (19 rows of phase 3). A tick is now
+# also known by its shape. An unticked item that does nothing is still reported.
+ch_020() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip ch_020 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/ch020"; mkdir -p "$d"
+  bash "$ROOT/tests/regression/ch020/make.sh" "$d"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-menus.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  ( cd "$d" && tf_timeout 300 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen main=/main/ \
+      --widths 1280 --themes light --render-wait 500 --wait 300 --json-out "$d/s.json" --shots-dir "$d/shots" > "$d/s.log" 2>&1 )
+  kill "$srv" 2>/dev/null
+  local out; out="$(python3 -c "
+import json
+s = json.load(open('$d/s.json'))['screens'][0]
+print(' | '.join(f['detail'] for w in s['widths'] for f in w['findings']))" 2>&1)"
+  ! grep -q '› main\" does nothing' <<<"$out" && grep -q 'View › Refresh" does nothing when clicked' <<<"$out" \
+    && ok ch_020 "a ticked item drawn by an unnamed tick icon is the state already, never an item that does nothing; an unticked dead item still fails" \
+    || { bad ch_020 "the menu walk misread the ticked branch or missed the dead item"; note "$(cut -c1-300 <<<"$out")"; }
+}
+
 # --- Chatur TF-012: a row counted as tested because its id sat in another test's sample data ------------
 # The xUnit theory `REQ-UI-048 requirement ids are found in test names` takes sample names as InlineData,
 # and its reported cases read `…(aName: "REQ-FN-053 …")`, so REQ-FN-053 and REQ-FN-055 were Verified on
@@ -5297,6 +5329,32 @@ p='$d/docs/Fx-BRD.md'; s=open(p).read(); open(p,'w').write(s.replace('filler wor
   grep -q 'words; the Small maximum' <<<"$f2" \
     && ok lk_023c "a document grown past its maximum still FAILs" \
     || { bad lk_023c "growth past the maximum was hidden by the baseline"; }
+}
+
+# --- TechieBlog TF-001: re-sizing a project made an old size finding new ---------------------------------
+# The baseline matched a size finding on its words with the numbers taken out, and the size word was one
+# of them: "the Small maximum is 1,200" became "the Large maximum is 1,200" after tf-day1-files --size L,
+# so TechieBlog's unchanged Coding Standards blocked *amend-docs. The size word no longer counts; a
+# document that grew still FAILs.
+bl_001() {
+  local d="$SCRATCH/bl001"; mkdir -p "$d/docs" "$d/.tfcore/.session"
+  cp -r "$UTILS" "$d/.tfcore/utils"; cp -r "$ROOT/.tfcore/templates" "$d/.tfcore/"
+  printf 'appSize: S\nappKind: app\nappPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  printf '# Fx — Checklist\n' > "$d/docs/Fx-Checklist.md"
+  python3 -c "print('# Fx — Coding Standards\n\n' + 'filler word '*1393)" > "$d/docs/Fx-Coding-Standards.md"
+  ( cd "$d" && TF_SKIP_SELFCHECK=1 bash .tfcore/utils/tf-phase.sh start amend-docs Fx ) >/dev/null 2>&1
+  local base f1 f2
+  base="$(grep -c 'Small maximum' "$d/.tfcore/.session/doc-check-baseline.json")"
+  printf 'appSize: L\nappKind: app\nappPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  f1="$(cd "$d" && bash .tfcore/utils/tf-doc-check.sh --app Fx 2>&1)"
+  python3 -c "open('$d/docs/Fx-Coding-Standards.md','a').write('more words here '*400)"
+  f2="$(cd "$d" && bash .tfcore/utils/tf-doc-check.sh --app Fx 2>&1 | grep '^FAIL')"
+  [[ "$base" -ge 1 ]] && grep -q '^OLD .*words; the Large maximum' <<<"$f1" && ! grep -q '^FAIL .*maximum' <<<"$f1" \
+    && ok bl_001a "an unchanged over-length document stays old after the project is re-sized from Small to Large" \
+    || { bad bl_001a "the re-size made an old size finding new (baseline Small findings: $base)"; note "$(grep -E '^(FAIL|OLD)' <<<"$f1" | tr '\n' ' ' | cut -c1-240)"; }
+  grep -q 'words; the Large maximum' <<<"$f2" \
+    && ok bl_001b "a document that grew past its maximum after the re-size still FAILs" \
+    || bad bl_001b "growth past the maximum was hidden by the baseline after a re-size"
 }
 
 # --- Lekhak TF-028: amend-docs wrote a removed row in a form the check refused -------------------------
@@ -6178,6 +6236,41 @@ tr_005() {
     || { bad tr_005b "exit $rc: $(tr '\n' ' ' <<<"$out" | cut -c1-200)"; }
 }
 
+# --- TechieRag TF-008: a new triage row took an id the tests already carried ------------------------------
+# REQ-RAG-135 and -136 were in xUnit DisplayNames with no checklist row, so tf-triage new gave them to two new
+# rows, and verify passed those rows on the old, unrelated tests. new now also reads src/ and tests/, and the
+# test mapping warns when a row logged by triage has tests that carried its id before the day it was logged.
+tr_008() {
+  local d="$SCRATCH/tr008"; mkdir -p "$d/docs" "$d/.tfcore" "$d/tests/App.Tests/Llm" "$d/tests/App.Tests/bin"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  printf '# A\n\n| ID | Requirement | Status | %% | Remarks | Detail |\n|---|---|---|---|---|---|\n| REQ-RAG-134 | One | Verified | 100%% | | [d](#d-req-rag-134) |\n' > "$d/docs/App-Checklist.md"
+  printf '[Fact(DisplayName = "REQ-RAG-135 VeniceNonStreamedReplyReportsReasoningTokens")]\n[Fact(DisplayName = "REQ-RAG-136 RequestTimeoutCancelsSlowProvider")]\n' > "$d/tests/App.Tests/Llm/VeniceTests.cs"
+  printf 'REQ-RAG-900 in a build output is not code\n' > "$d/tests/App.Tests/bin/out.cs"
+  local id; id="$(cd "$d" && TF_SKIP_SELFCHECK=1 bash "$UTILS/tf-triage.sh" App new "Streaming stops" "When the provider stalls, then the stream ends" --prefix RAG 2>&1 | grep -oE 'REQ-RAG-[0-9]+' | head -1)"
+  [[ "$id" == "REQ-RAG-137" ]] \
+    && ok tr_008a "tf-triage new skips an id a test's name already carries (REQ-RAG-137, not -135); a build folder is not read" \
+    || bad tr_008a "tf-triage new gave '$id' while tests carry REQ-RAG-135 and -136 (want REQ-RAG-137)"
+  # the mapping: REQ-RAG-135 logged on 2026-10-29, its only test in a file dated 2026-10-20 (no history here)
+  local m="$SCRATCH/tr008m"; mkdir -p "$m/tests"
+  printf '[Fact(DisplayName = "REQ-RAG-135 VeniceNonStreamedReplyReportsReasoningTokens")]\n' > "$m/tests/VeniceTests.cs"
+  touch -d 2026-10-20T12:00:00 "$m/tests/VeniceTests.cs"
+  printf '[Fact(DisplayName = "REQ-RAG-137 StreamEndsWhenProviderStalls")]\n' > "$m/tests/StreamTests.cs"
+  touch -d 2026-10-29T12:00:00 "$m/tests/StreamTests.cs"
+  awk "/TF_PWJSON=.*<<'PY'/{f=1;next} /^PY\$/{f=0} f" "$UTILS/tf-verify-tests.sh" > "$m/map.py"
+  printf '%s\n' '{"rows":[{"id":"REQ-RAG-135","remarks":"logged from UAT 2026-10-29"},{"id":"REQ-RAG-137","remarks":"logged from UAT 2026-10-29"}]}' > "$m/list.json"
+  cat > "$m/pw.json" <<'JS'
+{"suites":[{"title":"t.spec.ts","specs":[
+ {"title":"REQ-RAG-135 VeniceNonStreamedReplyReportsReasoningTokens","tests":[{"status":"expected","results":[{"status":"passed"}]}]},
+ {"title":"REQ-RAG-137 StreamEndsWhenProviderStalls","tests":[{"status":"expected","results":[{"status":"passed"}]}]}]}]}
+JS
+  ( cd "$m" && TF_HERE="$UTILS" TF_LIST="$m/list.json" TF_PWJSON="$m/pw.json" TF_UNITLOG="$m/none.log" TF_UNITLINE="" TF_OUT="$m/tests.json" \
+      GIT_CEILING_DIRECTORIES="$SCRATCH" python3 "$m/map.py" > "$m/out.txt" 2>&1 )
+  local w; w="$(python3 -c 'import json,sys; print(sorted(json.load(open(sys.argv[1])).get("tests_older_than_row", {})))' "$m/tests.json" 2>&1)"
+  [[ "$w" == "['REQ-RAG-135']" ]] && grep -q "WARN REQ-RAG-135 — logged 2026-10-29, but tests carried its id from 2026-10-20" "$m/out.txt" \
+    && ok tr_008b "a row whose tests carried its id before triage logged it is warned about; a row with its own new test is not" \
+    || { bad tr_008b "the test mapping did not warn on tests older than the row: $w"; note "$(tr '\n' ' ' < "$m/out.txt" | cut -c1-200)"; }
+}
+
 # --- TechieRag TF-006: a plain MAUI sample was booted as the Windows head and waited 300 s -------------
 # samples/TechieRag.Probe has UseMaui and a net*-windows target but no BlazorWebView, so it has no web
 # view and no DevTools port; the boot waited the full 300 s for one, three times. A windows head now
@@ -6391,15 +6484,125 @@ ch_013() {
     || { bad ch_013 "an unbuilt row's 404 was graded as a defect (emit_gate: $emit)"; note "$(grep -E 'REQ-UI-10[12] ' "$cl" | cut -c1-200 | tr '\n' ' ')"; }
 }
 
+# Chatur TF-015 (reworked 2026-10-29 with TF-016): on a Mac web-view head a screen nothing reached was
+# RENDER-FAIL, so a tool limit (Appium cannot see into the web view, nor sign in) failed built rows. It is
+# now not measured: the row keeps its status and says why, and every other row is still graded.
 ch_015() {
   local d="$SCRATCH/ch015"; vd_fixture "$d" appium
   local out rc; out="$(cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --apply 2>&1)"; rc=$?
   local cl="$d/docs/Fx-Checklist.md"
   [[ $rc == 0 ]] && ! grep -q UnboundLocalError <<<"$out" \
-    && grep -q '^| REQ-UI-102 | Settings | Needs re-verify .*render — no window reached it' "$cl" \
+    && grep -q '^| REQ-UI-102 | Settings | Implemented | 75% | .*verify: not measured — .*grade it on the web or Windows head' "$cl" \
+    && ! grep -q '^| REQ-UI-102 .*⚠ render' "$cl" \
     && grep -q '^| REQ-UI-103 | Home | Verified' "$cl" \
-    && ok ch_015 "an unreachable first screen on a Mac head is RENDER-FAIL and every other row is still graded" \
-    || { bad ch_015 "the verdict did not grade a Mac run whose first screen was unreachable (exit $rc)"; note "$(grep -m1 -E 'Error' <<<"$out")"; }
+    && ok ch_015 "an unreachable screen on a Mac web-view head is not measured, never a render failure, and every other row is still graded" \
+    || { bad ch_015 "the verdict failed or crashed on a Mac run whose first screen was unreachable (exit $rc)"; note "$(grep -m1 -E 'Error' <<<"$out")$(grep '^| REQ-UI-102' "$cl" | cut -c1-200)"; }
+}
+
+# Chatur TF-016 and Sevak TF-014, one change: the Mac head over a web view Appium cannot see into. The
+# head ignored --user/--password, called every screen past the first UNREACHABLE, and the verdict failed
+# them. Run against tests/maccatalyst/fake-appium.mjs (saved element trees), so no Mac is needed.
+_mac_run() {   # <dir> <fixture: opaque|signin> : screens.json from the Mac head over the stand-in Appium
+  local d="$1" v="$1/tests/.artifacts/verify" port=$((47300 + RANDOM % 500)) pid
+  mkdir -p "$v"; cp -r "$ROOT/tests/maccatalyst/sources/$2" "$d/src"; rm -f "$d/src/typed.txt"
+  printf '%s\n' '{"screens":[{"name":"Sign in","route":"/","rows":["REQ-UI-101"]},{"name":"Settings","route":"/settings","nav":["Settings"],"rows":["REQ-UI-102"]}]}' > "$d/screens-list.json"
+  printf '%s\n' '{"head":"maccatalyst","mode":"appium","webview":true,"bundle_id":"fx","url":"http://localhost:4723","rung":"dotnet","reason":"","reason_kind":""}' > "$v/boot.json"
+  node "$ROOT/tests/maccatalyst/fake-appium.mjs" "$port" "$d/src" & pid=$!; sleep 0.5
+  ( cd "$d" && node "$UTILS/tf-verify-native.mjs" --appium "http://127.0.0.1:$port" --list screens-list.json --boot "$v/boot.json" \
+      --json-out "$v/screens.json" --shots-dir "$d/shots" --user owner@fx --password pw --render-wait 300 --wait 50 2>&1 )
+  kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+}
+ch_016() {
+  if ! command -v node >/dev/null 2>&1; then printf 'skip ch_016 — node is not installed here\n'; return; fi
+  local d="$SCRATCH/ch016" out s
+  out="$(_mac_run "$d" opaque)"
+  s="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); r={x["name"]:x["render"] for x in d["screens"]}; print(r.get("Sign in"), r.get("Settings"), (d.get("login") or {}).get("driven"))' "$d/tests/.artifacts/verify/screens.json" 2>&1)"
+  [[ "$s" == "OK NOT-MEASURED False" ]] && grep -q '^LOGIN not driven — the Mac head cannot sign in: Appium sees the web view as one empty element' <<<"$out" \
+    && ok ch_016a "an opaque web view on the Mac head: the sign-in is reported as not driven, and the screen behind it is not measured, not unreachable" \
+    || { bad ch_016a "the Mac head ignored the sign-in or failed the screen behind it: $s"; note "$(tr '\n' ' ' <<<"$out" | cut -c1-240)"; }
+  local e="$SCRATCH/ch016b"
+  out="$(_mac_run "$e" signin)"
+  s="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); r={x["name"]:x["render"] for x in d["screens"]}; print(r.get("Settings"), (d.get("login") or {}).get("driven"))' "$e/tests/.artifacts/verify/screens.json" 2>&1)"
+  [[ "$s" == "OK True" ]] && grep -q 'TextField=owner@fx' "$e/src/typed.txt" 2>/dev/null && grep -q '^SecureTextField=pw' "$e/src/typed.txt" 2>/dev/null \
+    && ok ch_016b "a web view the Mac head can see into: it signs in through the app's own fields and reaches the screen behind Sign in" \
+    || { bad ch_016b "the Mac head did not sign in through the app's window: $s"; note "$(tr '\n' ' ' <<<"$out" | cut -c1-240)"; }
+  # the verdict over the opaque run: a built row behind Sign in keeps its status, says not measured, no gate record
+  mkdir -p "$d/docs"
+  printf '%s\n' '# Fx — Checklist' '' '| ID | Title | Status | % | Remarks | Details |' '|---|---|---|---|---|---|' \
+    '| REQ-UI-101 | Sign in | Implemented | 75% | | |' '| REQ-UI-102 | Settings | Implemented | 75% | | |' > "$d/docs/Fx-Checklist.md"
+  python3 - "$d/tests/.artifacts/verify" <<'PY'
+import json, sys
+v = sys.argv[1]
+json.dump({"app": "Fx", "scope": "all", "checklist": "docs/Fx-Checklist.md",
+           "rows": [{"id": i, "class": "UI", "title": t, "status_raw": "Implemented", "pct": 75, "remarks": "", "screen": t, "route": r,
+                     "mockup": "", "perf_budget": ""} for i, t, r in (("REQ-UI-101", "Sign in", "/"), ("REQ-UI-102", "Settings", "/settings"))],
+           "screens": [{"name": "Sign in", "route": "/", "rows": ["REQ-UI-101"]}, {"name": "Settings", "route": "/settings", "rows": ["REQ-UI-102"]}]},
+          open(f"{v}/list.json", "w"))
+json.dump({"reqs": {"REQ-UI-101": {"result": "PASS", "tests": ["REQ-UI-101 sign in"], "skipped": [], "passed": 1},
+                    "REQ-UI-102": {"result": "PASS", "tests": ["REQ-UI-102 settings"], "skipped": [], "passed": 1}}}, open(f"{v}/tests.json", "w"))
+PY
+  (cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --apply >/dev/null 2>&1)
+  local cl="$d/docs/Fx-Checklist.md" emit
+  emit="$(python3 -c 'import json,sys; r={x["id"]:x for x in json.load(open(sys.argv[1]))["rows"]}; print(r["REQ-UI-102"]["verdict"], r["REQ-UI-102"]["emit_gate"])' "$d/tests/.artifacts/verify/verdicts.json" 2>&1)"
+  grep -q '^| REQ-UI-102 | Settings | Implemented | 75% | .*not measured — test passed but Settings not measured: the Mac head cannot sign in' "$cl" \
+    && grep -q '^| REQ-UI-101 | Sign in | Verified' "$cl" && [[ "$emit" == "NOT-DRIVEN False" ]] \
+    && ok ch_016c "the verdict grades a screen the Mac head could not reach as not measured, with the reason, and no gate record" \
+    || { bad ch_016c "the verdict graded the Mac head's unmeasured screen wrong ($emit)"; note "$(grep '^| REQ-UI-10' "$cl" | cut -c1-220 | tr '\n' ' ')"; }
+}
+sv_014() {   # the same fault on Sevak's Mac Blazor Hybrid head: the first-run screen's buttons carry no label
+  if ! command -v node >/dev/null 2>&1; then printf 'skip sv_014 — node is not installed here\n'; return; fi
+  local d="$SCRATCH/sv014" out s; out="$(_mac_run "$d" opaque)"; rc=$?
+  s="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["summary"]["unreachable"], d["summary"]["not_measured"])' "$d/tests/.artifacts/verify/screens.json" 2>&1)"
+  [[ "$s" == "0 1" ]] \
+    && ok sv_014 "a web view whose buttons carry no label: screens past the first are not measured, none unreachable" \
+    || { bad sv_014 "unreachable / not measured: $s"; note "$(tr '\n' ' ' <<<"$out" | cut -c1-200)"; }
+}
+
+# Chatur TF-017: REQ-FN-106 read Verified at 100% with the Remark "not verified — every test named
+# REQ-FN-106 was skipped". A row this run could not measure keeps Verified only on an earlier PASS on
+# record, named in the Remark (so the next run still finds it); without one it goes to Needs re-verify.
+ch_017() {
+  local d="$SCRATCH/ch017" v="$SCRATCH/ch017/tests/.artifacts/verify"; mkdir -p "$d/docs" "$v"
+  printf '%s\n' '# Fx — Checklist' '' '| ID | Title | Status | % | Remarks | Details |' '|---|---|---|---|---|---|' \
+    '| REQ-FN-106 | Settings opens | Verified | 100% | 2026-10-19 verify: PASS — test `REQ-FN-106 opens` | |' \
+    '| REQ-FN-107 | Board opens | Verified | 100% | 2026-10-21 verify: not verified — every test named REQ-FN-107 was skipped | |' \
+    '| REQ-FN-108 | Run opens | Implemented | 75% | | |' > "$d/docs/Fx-Checklist.md"
+  python3 - "$v" <<'PY'
+import json, sys
+v = sys.argv[1]
+rows = [("REQ-FN-106", "Verified", 100, "2026-10-19 verify: PASS — test `REQ-FN-106 opens`"),
+        ("REQ-FN-107", "Verified", 100, "2026-10-21 verify: not verified — every test named REQ-FN-107 was skipped"),
+        ("REQ-FN-108", "Implemented", 75, "")]
+json.dump({"app": "Fx", "scope": "all", "checklist": "docs/Fx-Checklist.md",
+           "rows": [{"id": i, "class": "FN", "title": i, "status_raw": st, "pct": p, "remarks": rm, "screen": "", "route": "", "mockup": "", "perf_budget": ""}
+                    for i, st, p, rm in rows], "screens": []}, open(f"{v}/list.json", "w"))
+sk = lambda i: {"result": "NOT-TESTED", "tests": [], "skipped": [f"{i} on the app"] * 10, "passed": 0, "failed": 0}
+json.dump({"reqs": {i: sk(i) for i, *_ in rows}}, open(f"{v}/tests.json", "w"))
+json.dump({"head": "web", "mode": "playwright", "url": "http://localhost:1", "rung": "dotnet", "reason": "", "reason_kind": ""}, open(f"{v}/boot.json", "w"))
+PY
+  local out; out="$(cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --apply 2>&1)"
+  local cl="$d/docs/Fx-Checklist.md"
+  grep -q '^| REQ-FN-106 | Settings opens | Verified | 100% | .*verify: not measured — every test named REQ-FN-106 was skipped; Verified on 2026-10-19 stands' "$cl" \
+    && grep -q '^| REQ-FN-107 | Board opens | Needs re-verify | 75% | .*not measured — .*no earlier PASS on record' "$cl" \
+    && grep -q '^| REQ-FN-108 | Run opens | Implemented | 75% | .*not measured' "$cl" \
+    && ! grep -q 'not verified' "$cl" \
+    && ok ch_017 "a row whose tests were all skipped is never written Verified on that run: an earlier PASS stands and is named, else it is re-verified" \
+    || { bad ch_017 "a skipped-only row was written Verified without a pass behind it"; note "$(grep '^| REQ-FN' "$cl" | cut -c1-200 | tr '\n' ' ')"; }
+  # the next run finds the earlier PASS in the Remark this run wrote
+  python3 - "$v" "$cl" <<'PY'
+import json, re, sys
+v, cl = sys.argv[1], sys.argv[2]
+l = json.load(open(f"{v}/list.json"))
+rem = {m.group(1): m.group(2) for m in re.finditer(r"^\| (REQ-FN-\d+) \|[^|]*\|[^|]*\|[^|]*\|([^|]*)\|", open(cl).read(), re.M)}
+for r in l["rows"]:
+    r["remarks"] = rem[r["id"]].strip()
+json.dump(l, open(f"{v}/list.json", "w"))
+PY
+  rm -f "$d/docs/.last-verify.json"
+  (cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --apply >/dev/null 2>&1)
+  grep -q '^| REQ-FN-106 | Settings opens | Verified | 100% | .*Verified on 2026-10-19 stands' "$cl" \
+    && ok ch_017b "a second unmeasured run still finds the earlier PASS, from the Remark the first one wrote" \
+    || { bad ch_017b "the earlier PASS was lost after one unmeasured run"; note "$(grep '^| REQ-FN-106' "$cl" | cut -c1-200)"; }
 }
 
 sv_009() {
@@ -6441,7 +6644,7 @@ PY
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 ch_013 ch_014 ch_015 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 sv_007 sv_009 sv_010 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 lk_036 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 std_q4a owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 ch_013 ch_014 ch_015 ch_016 ch_017 ch_020 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 sv_007 sv_009 sv_010 sv_014 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 bl_001 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 lk_036 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 tr_008 std_q4a owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

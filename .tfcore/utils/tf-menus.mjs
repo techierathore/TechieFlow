@@ -91,13 +91,41 @@ const APP_ITEMS = ({ popupId, attr, controls }) => {
   if (!box || !vis(box)) return null;
   document.querySelectorAll('[data-tf-walk]').forEach((el) => el.removeAttribute('data-tf-walk'));   // an earlier menu's marks
   const text = (el) => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+  // a check mark drawn as an icon: named for it, or, when the icon carries no name (TrBlazeUI's
+  // LucideIcon renders <svg class="lucide-icon"> with the path alone; Chatur TF-020), one stroke of three
+  // points whose middle one is the lowest, with an end either side of it: the shape of a tick
+  const tick = (svg) => {
+    if (svg.matches('[class*="check"], [data-icon*="check"], [data-lucide*="check"]')) return true;
+    const use = svg.querySelector('use');
+    if (use && /check|tick/i.test(use.getAttribute('href') || use.getAttribute('xlink:href') || '')) return true;
+    const marks = [...svg.querySelectorAll('path, polyline, polygon, line, circle, rect, ellipse')];
+    if (marks.length !== 1 || !/^(path|polyline)$/.test(marks[0].tagName.toLowerCase())) return false;
+    const pts = [];
+    if (marks[0].tagName.toLowerCase() === 'polyline') {
+      const n = (marks[0].getAttribute('points') || '').match(/-?\d*\.?\d+/g) || [];
+      for (let k = 0; k + 1 < n.length; k += 2) pts.push([+n[k], +n[k + 1]]);
+    } else {
+      const tok = (marks[0].getAttribute('d') || '').match(/[a-zA-Z]|-?\d*\.?\d+/g) || [];
+      let cmd = '', x = 0, y = 0;
+      for (let k = 0; k < tok.length;) {
+        if (/[a-zA-Z]/.test(tok[k])) { cmd = tok[k++]; if (!/^[MmLl]$/.test(cmd)) return false; continue; }
+        const dx = +tok[k], dy = +tok[k + 1]; k += 2;
+        if (cmd === 'm' || cmd === 'l') { x += dx; y += dy; } else { x = dx; y = dy; }
+        pts.push([x, y]);
+        if (cmd === 'M') cmd = 'L'; else if (cmd === 'm') cmd = 'l';
+      }
+    }
+    if (pts.length !== 3) return false;
+    const [a, b, c] = pts;
+    return b[1] > a[1] && b[1] > c[1] && (a[0] - b[0]) * (c[0] - b[0]) < 0;
+  };
   const items = [...box.querySelectorAll(ITEM)].filter(vis)
     .filter((el) => { const up = el.parentElement && el.parentElement.closest(ITEM); return !up || !box.contains(up) || up === box; })
     .map((el, i) => {
       el.setAttribute('data-tf-walk', String(i));
       // the value already chosen does nothing when chosen again, so it is never "an item that does nothing"
       const checked = el.getAttribute('aria-checked') === 'true' || el.getAttribute('aria-selected') === 'true' || el.getAttribute('data-state') === 'checked'
-        || !!el.querySelector('svg[class*="check"], [data-icon="check"], [data-lucide="check"]') || /✓|✔/.test(el.textContent || '');
+        || [...el.querySelectorAll('svg')].some(tick) || !!el.querySelector('[data-icon="check"], [data-lucide="check"]') || /✓|✔/.test(el.textContent || '');
       // disabled by attribute, or by taking no pointer events at all (TrBlazeUI's menu items set only
       // pointer-events:none and half opacity, with no aria-disabled)
       return { i, label: text(el), disabled: el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true' || el.hasAttribute('data-disabled')
@@ -341,7 +369,9 @@ export async function walkMenus(page, mockMenus, o = {}) {
     // theme or the page in place, that sibling is clicked first and the choice looked at again
     const donor = mine.find((x) => !x.item.checkbox && /^changed the (theme|page)$/.test(x.c.effect || ''));
     for (const { c, item } of mine) {
-      if (c.effect !== 'nothing' || item.checked) continue;
+      if (c.effect !== 'nothing') continue;
+      // ticked: it is the state already (the branch checked out), and choosing it again has nothing to do
+      if (item.checked) { c.effect = 'already the state (ticked)'; continue; }
       if (donor && donor.item.label !== item.label && !/^menu did not reopen/.test(await press(m, donor.item.label))) {
         const second = await press(m, item.label);
         if (second !== 'nothing' && !/^menu did not reopen|^unknown/.test(second)) { c.effect = `${second} (once "${donor.item.label}" had moved the state)`; continue; }

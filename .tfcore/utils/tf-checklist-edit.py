@@ -93,11 +93,32 @@ def streams(path):
     return [os.path.join(d, n) for n in ("gates.jsonl", "misses.jsonl", "runs.jsonl") if os.path.isfile(os.path.join(d, n))]
 
 
+CODE_SKIP = {"bin", "obj", "node_modules", ".artifacts", "TestResults", ".git", "wwwroot", "dist", "build"}
+CODE_EXT = (".cs", ".razor", ".cshtml", ".fs", ".vb", ".ts", ".tsx", ".js", ".mjs", ".jsx", ".py", ".java", ".kt", ".go",
+            ".rs", ".swift", ".rb", ".php", ".feature", ".sh", ".ps1", ".xaml")
+
+
+def code(path):
+    """the source and test files of the project the checklist belongs to: an id a test's name or the code
+    already carries is taken, though no checklist row holds it (TechieRag TF-008: REQ-RAG-135 and -136 were
+    in xUnit DisplayNames, triage gave them to two new rows, and verify passed those rows on the old tests)"""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(path)))
+    out = []
+    for top in ("src", "source", "tests", "test"):
+        for d, dirs, files in os.walk(os.path.join(root, top)):
+            dirs[:] = [x for x in dirs if x not in CODE_SKIP]
+            out += [os.path.join(d, f) for f in files if f.lower().endswith(CODE_EXT)]
+    return out
+
+
 def next_id(text, prefix, others=()):
     """one past the highest id of that prefix in this checklist AND every other checklist of the app:
     counting this one alone gave REQ-UI-055 twice, once in phase 1 and once in phase 3 (Chatur TF-011)"""
     ids = []
-    for t in (text, *(read(o) for o in others)):
+    def text_of(o):   # a source file in another encoding is still read for its ids
+        with open(o, encoding="utf-8", errors="replace") as f:
+            return f.read()
+    for t in (text, *(text_of(o) for o in others)):
         ids += [int(m.group(1)) for m in re.finditer(rf"REQ-{prefix}-(\d{{3,}})", t)]
     return f"REQ-{prefix}-{(max(ids) + 1 if ids else 1):03d}"
 
@@ -106,7 +127,7 @@ def add_row(path, prefix, title, acceptance, section=None, remark=None, status="
     """append a row to the Requirements Status table and a detail entry under `section`
     (a new section at the end when it does not exist); returns the new id"""
     text = read(path)
-    rid = next_id(text, prefix, siblings(path) + streams(path))
+    rid = next_id(text, prefix, siblings(path) + streams(path) + code(path))
     nl = "\r\n" if "\r\n" in text else "\n"
     lines = text.split(nl)
     # the table: after the last REQ row

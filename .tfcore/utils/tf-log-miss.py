@@ -98,25 +98,26 @@ def main(argv):
     # the enclosing command's window made the enclosing record overlap and be refused (TF-029).
     # A marker older than 24 h belongs to a session that died, and is ignored as every reader does.
     running = "log-miss"
-    if not started:
-        # The marker's own cmd and started, never its "outer" block: a command started after another
-        # one keeps that one as "outer", written first, and a first-match read took it for this one
-        # (TF-052 follow-up: log-miss after *triage-issues wrote no run record).
-        mk = subprocess.run(["bash", os.path.join(HERE, "tf-phase.sh"), "show"], capture_output=True, text=True).stdout
-        try:
-            marker = json.loads(mk) if mk.strip().startswith("{") else {}
-        except ValueError:
-            marker = {}
-        m_started, m_cmd = marker.get("started") or "", marker.get("cmd") or ""
-        try:
-            age = (datetime.datetime.now(datetime.timezone.utc)
-                   - datetime.datetime.strptime(m_started, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc))
-            fresh = age < datetime.timedelta(hours=24)
-        except ValueError:
-            fresh = False
-        started = m_started if fresh else now
-        if fresh and m_cmd and m_cmd not in ("log-miss", "goal"):
-            running = m_cmd
+    # Read even when --started is given (2026-10-29: `--fixed --started <fix-issues start>` inside a running
+    # *fix-issues wrote a log-miss run record over that run's whole window, which had to be voided).
+    # The marker's own cmd and started, never its "outer" block: a command started after another
+    # one keeps that one as "outer", written first, and a first-match read took it for this one
+    # (TF-052 follow-up: log-miss after *triage-issues wrote no run record).
+    mk = subprocess.run(["bash", os.path.join(HERE, "tf-phase.sh"), "show"], capture_output=True, text=True).stdout
+    try:
+        marker = json.loads(mk) if mk.strip().startswith("{") else {}
+    except ValueError:
+        marker = {}
+    m_started, m_cmd = marker.get("started") or "", marker.get("cmd") or ""
+    try:
+        age = (datetime.datetime.now(datetime.timezone.utc)
+               - datetime.datetime.strptime(m_started, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc))
+        fresh = age < datetime.timedelta(hours=24)
+    except ValueError:
+        fresh = False
+    started = started or (m_started if fresh else now)
+    if fresh and m_cmd and m_cmd not in ("log-miss", "goal"):
+        running = m_cmd
 
     spec = importlib.util.spec_from_file_location("tf_checklist_edit", os.path.join(HERE, "tf-checklist-edit.py"))
     ce = importlib.util.module_from_spec(spec)
