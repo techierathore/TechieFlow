@@ -6253,9 +6253,9 @@ tr_008() {
   # the mapping: REQ-RAG-135 logged on 2026-10-29, its only test in a file dated 2026-10-20 (no history here)
   local m="$SCRATCH/tr008m"; mkdir -p "$m/tests"
   printf '[Fact(DisplayName = "REQ-RAG-135 VeniceNonStreamedReplyReportsReasoningTokens")]\n' > "$m/tests/VeniceTests.cs"
-  touch -d 2026-10-20T12:00:00 "$m/tests/VeniceTests.cs"
+  touch -t 202610201200.00 "$m/tests/VeniceTests.cs"
   printf '[Fact(DisplayName = "REQ-RAG-137 StreamEndsWhenProviderStalls")]\n' > "$m/tests/StreamTests.cs"
-  touch -d 2026-10-29T12:00:00 "$m/tests/StreamTests.cs"
+  touch -t 202610291200.00 "$m/tests/StreamTests.cs"
   awk "/TF_PWJSON=.*<<'PY'/{f=1;next} /^PY\$/{f=0} f" "$UTILS/tf-verify-tests.sh" > "$m/map.py"
   printf '%s\n' '{"rows":[{"id":"REQ-RAG-135","remarks":"logged from UAT 2026-10-29"},{"id":"REQ-RAG-137","remarks":"logged from UAT 2026-10-29"}]}' > "$m/list.json"
   cat > "$m/pw.json" <<'JS'

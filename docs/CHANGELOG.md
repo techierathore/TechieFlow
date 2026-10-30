@@ -46,9 +46,13 @@ bug fixes only, so a patch version.
   in this run**: `tf-log-miss --fixed --started` inside a running `*fix-issues` skipped the marker and
   wrote a log-miss run record over the fix run's window (voided). The marker is now read whether or not
   `--started` is given. Case `tf_029`. Misses `MISS-TechieFlow-20261029-01` to `-06`, `weak-check`,
-  closed in the same run. The regression suite
-  holds in local time (`dev_001` failed once under load and passed three times alone; it touches none
-  of these scripts).
+  closed in the same run. **CI fix, 2026-10-30**: the Validate run on commit 08d6432 failed
+  on both runners. The new `tr_008` case dated its test files with `touch -d`, which a stock Mac does
+  not have, so the portability check failed, and with it `npm run validate`, `tests/portability/run.sh`
+  and the suite steps in both time zones. It now uses `touch -t`, which works on both. Every
+  `tests/*/run.sh` passes in UTC and in Asia/Kolkata. `dev_001` fails about half the time on the
+  owner's WSL machine because its clock steps back by about 0.7 s (twice in 40 s, measured) while
+  the case relies on one-second windows. On a steady clock it passes.
 
 - **Feedback sweep of 2026-10-21: seven open entries fixed.** Each has a regression case that fails
   against the v1.2.0 scripts and passes now. **Sevak TF-007**: after a theme is put on a page,
