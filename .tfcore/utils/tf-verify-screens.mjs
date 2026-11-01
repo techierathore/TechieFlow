@@ -22,7 +22,10 @@
 //
 // Modes: --base URL (a served app, a new browser) or --cdp URL (attach to an already-running
 // embedded-browser desktop head over its DevTools port; screens are reached by pushState, the way
-// the router does).
+// the router does). On --cdp a screen is measured once the app has moved to it: the address matches
+// and one of its own anchors is attached (Lekhak TF-037); a window that draws no animation frames is
+// restored once by the boot's process id, and is NOT-MEASURED when it still draws none (Sevak TF-011).
+// --login-path is tried first, then /login, /sign-in, /signin, /account/login (Chatur TF-019).
 
 import { chromium } from 'playwright';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -228,6 +231,7 @@ function writeOut(extra, results = [], login = null) {
       render_ok: results.filter((r) => r.render === 'OK').length,
       render_fail: results.filter((r) => r.render === 'EMPTY' || r.render === 'ERROR').length,
       unreachable: results.filter((r) => r.render === 'UNREACHABLE').length,
+      not_measured: results.filter((r) => r.render === 'NOT-MEASURED').length,
       visual_ok: results.filter((r) => r.visual === 'OK').length,
       visual_fail: results.filter((r) => r.visual === 'FAIL').length,
     },
@@ -241,7 +245,7 @@ function writeOut(extra, results = [], login = null) {
 // The sign-in recipe (TF-033, TF-044) and the way a screen behind an in-page sign-in is reached
 // (AppManager TF-006) live in tf-login.mjs since AppManager TF-011, shared with tf-mockup-parity
 // and tf-assets so every check reaches a screen the same way.
-import { signIn, signedOut as signedOutShared, navigateInApp as navigateInAppShared } from './tf-login.mjs';
+import { signIn, signedOut as signedOutShared, navigateInApp as navigateInAppShared, anchorsPresent, waitArrived, ensureDrawing } from './tf-login.mjs';
 const LOGIN_OPTS = { base: BASE, loginPath: LOGIN_PATH, user: USER, password: PASS, attr: ATTR, settle: SETTLE, renderWait: RENDER_WAIT };
 const login = (page) => signIn(page, LOGIN_OPTS);
 
@@ -260,12 +264,14 @@ async function contextFor(width) {
   return { page, close: () => ctx.close() };
 }
 
-async function navigate(page, route) {
+async function navigate(page, route, anchors = []) {
   if (CDP) {
     try {
+      // Lekhak TF-037: wait until the app has moved to the screen, not a fixed settle (tf-login.mjs)
+      const before = await anchorsPresent(page, anchors, ATTR);
       await page.evaluate((r) => { history.pushState({}, '', r); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); }, route);
-      await page.waitForTimeout(SETTLE);
-      return { status: 200, url: page.url() };
+      const a = await waitArrived(page, route, anchors, before, LOGIN_OPTS);
+      return { status: 200, url: page.url(), arrived: a.arrived, arrive_ms: a.ms };
     } catch (e) { return { status: 0, error: e.message.split('\n')[0] }; }
   }
   try {
@@ -507,9 +513,24 @@ for (const width of WIDTHS) {
     const excused = (r.hidden_by_width || {})[width] || [];
     const stateOnly = r.state_only || [];
     consoleErrors.length = 0;
-    let nav = await navigate(page, s.route);
+    let nav = await navigate(page, s.route, (r.anchors || []).filter((id) => !excused.includes(id) && !stateOnly.includes(id)));
     const shot = `${SHOTS}/${slug(s.name)}-${width}.png`;
     const entry = { width, url: nav.url || '', status: nav.status, screenshot: shot, console_errors: [] };
+    if (CDP && nav.arrived === false) entry.arrived = false;
+    // Sevak TF-011: a minimized desktop window draws no frames, and every click and wait on it times out.
+    // Counted before measuring; restored once by the boot's process id; still not drawing: not measured.
+    if (CDP && nav.status === 200) {
+      const dr = await ensureDrawing(page, CDP);
+      if (!dr.drawing) {
+        entry.render = 'NOT-MEASURED'; entry.visual = 'n/a';
+        entry.findings = [{ check: 'render', class: 'not-measured', not_drawing: true,
+          detail: `not measured: the app window is not drawing (minimized, or the screen is locked?) — 0 animation frames in 1 s${dr.restored ? `; restore: ${dr.restored}` : ''}` }];
+        try { await page.screenshot({ path: shot }); } catch (e) { entry.screenshot = ''; }
+        r.widths.push(entry);
+        continue;
+      }
+      if (dr.restored) entry.window_restored = dr.restored;
+    }
     // --- AppManager TF-006: a sign-in the page keeps for itself, not in a cookie. The document for a
     // signed-in screen answers 401 because the server cannot see the sign-in; the page then draws the
     // screen once its live connection reads the session in the tab, or never, when the sign-in lives
@@ -525,7 +546,8 @@ for (const width of WIDTHS) {
       }
       if (how) { entry.reached = how; nav = { status: 200, url: page.url() }; entry.url = nav.url; }
     }
-    const redirectedToLogin = LOGIN_PATH && nav.url && new URL(nav.url).pathname.startsWith(LOGIN_PATH) && !s.route.startsWith(LOGIN_PATH);
+    const lp = LOGIN_OPTS.loginPath;   // the sign-in address that worked (Chatur TF-019)
+    const redirectedToLogin = lp && nav.url && new URL(nav.url).pathname.startsWith(lp) && !s.route.startsWith(lp);
     if (nav.status === 0 || nav.status >= 400 || redirectedToLogin) {
       entry.render = 'UNREACHABLE'; entry.visual = 'n/a';
       entry.findings = [{ check: 'render', class: 'other', detail: nav.status === 0 ? `could not open ${s.route}: ${nav.error || 'no response'}` : redirectedToLogin ? `${s.route} redirected to the sign-in page (not signed in)` : `${s.route} answered HTTP ${nav.status}` }];
@@ -638,21 +660,22 @@ if (WALK_MENUS && mockBrowser) {
 
 for (const r of results) {
   const rs = r.widths.map((w) => w.render);
-  r.render = rs.includes('UNREACHABLE') ? 'UNREACHABLE' : rs.includes('ERROR') ? 'ERROR' : rs.includes('EMPTY') ? 'EMPTY' : 'OK';
+  r.render = rs.includes('UNREACHABLE') ? 'UNREACHABLE' : rs.includes('ERROR') ? 'ERROR' : rs.includes('EMPTY') ? 'EMPTY' : rs.includes('NOT-MEASURED') ? 'NOT-MEASURED' : 'OK';
   if (r.unreachable_by_menu) {
     // the verdict reads the first finding of an UNREACHABLE screen as its reason
     r.render = 'UNREACHABLE';
     r.widths[0].findings = [{ check: 'render', class: 'unreachable', detail: r.unreachable_by_menu }, ...(r.widths[0].findings || [])];
   }
-  r.visual = r.widths.some((w) => w.visual === 'FAIL') ? 'FAIL' : r.render === 'UNREACHABLE' ? 'n/a' : 'OK';
+  r.visual = r.widths.some((w) => w.visual === 'FAIL') ? 'FAIL' : ['UNREACHABLE', 'NOT-MEASURED'].includes(r.render) ? 'n/a' : 'OK';
   r.anchors_n = (r.anchors || []).length;
   const notes = r.widths.flatMap((w) => (w.findings || []).map((f) => `${f.detail}`)).slice(0, 4);
   r.themes = [...new Set(r.widths.map((w) => w.theme).filter(Boolean))];
-  console.log(`${r.render === 'OK' && r.visual === 'OK' ? 'OK  ' : 'FAIL'} ${r.name} (${r.route}) — render ${r.render}, visual ${r.visual}, ${r.anchors_n} anchors${r.mockup && !existsSync(r.mockup) ? ' (no mockup file)' : ''}, ${r.themes.join(' + ') || 'no'} theme${r.themes.length === 1 ? '' : 's'}${r.dark === 'not offered' ? ' (the app has no dark theme)' : ''}${notes.length ? ' — ' + notes.join('; ') : ''}`);
+  console.log(`${r.render === 'OK' && r.visual === 'OK' ? 'OK  ' : r.render === 'NOT-MEASURED' ? 'NOT ' : 'FAIL'} ${r.name} (${r.route}) — render ${r.render}, visual ${r.visual}, ${r.anchors_n} anchors${r.mockup && !existsSync(r.mockup) ? ' (no mockup file)' : ''}, ${r.themes.join(' + ') || 'no'} theme${r.themes.length === 1 ? '' : 's'}${r.dark === 'not offered' ? ' (the app has no dark theme)' : ''}${notes.length ? ' — ' + notes.join('; ') : ''}`);
 }
 const out = writeOut({ menus: menuWalk }, results, loginResult);
-if (loginResult && loginResult.attempted && !loginResult.ok) console.log(`LOGIN failed at ${BASE}${LOGIN_PATH}: ${loginResult.error || 'still on the sign-in page'}`);
-console.log(`screens ${out.summary.screens}${skipped.length ? ` (+${skipped.length} not driven: route needs a value)` : ''}: render ${out.summary.render_ok} OK / ${out.summary.render_fail} failed / ${out.summary.unreachable} unreachable; visual ${out.summary.visual_ok} OK / ${out.summary.visual_fail} failed; screenshots ${SHOTS}; JSON ${OUT}`);
+if (loginResult && loginResult.attempted && !loginResult.ok) console.log(`LOGIN failed at ${BASE}${LOGIN_OPTS.loginPath}: ${loginResult.error || 'still on the sign-in page'}`);
+if (loginResult && loginResult.ok && loginResult.login_path) console.log(`LOGIN signed in at ${loginResult.login_path}: ${loginResult.login_path_asked} has no sign-in form (pass --login-path ${loginResult.login_path})`);
+console.log(`screens ${out.summary.screens}${skipped.length ? ` (+${skipped.length} not driven: route needs a value)` : ''}: render ${out.summary.render_ok} OK / ${out.summary.render_fail} failed / ${out.summary.unreachable} unreachable${out.summary.not_measured ? ` / ${out.summary.not_measured} not measured` : ''}; visual ${out.summary.visual_ok} OK / ${out.summary.visual_fail} failed; screenshots ${SHOTS}; JSON ${OUT}`);
 if (CDP && mockBrowser) await mockBrowser.close().catch(() => {});
 if (!CDP) await browser.close(); else await browser.close().catch(() => {});
 process.exit(firstUnreachable && out.summary.unreachable === out.summary.screens ? 2 : (out.summary.render_fail + out.summary.visual_fail + out.summary.unreachable) ? 5 : 0);

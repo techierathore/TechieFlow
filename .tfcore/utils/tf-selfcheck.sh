@@ -169,13 +169,17 @@ for app, phase, _cl in apps:
         spec = importlib.util.spec_from_file_location("_sb", os.path.join(UTILS, "tf-split-brd.py"))
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
-        read = len({(i["id"] if isinstance(i, dict) else i[0]) for i in mod.ledger(text)})
+        read_ids = {(i["id"] if isinstance(i, dict) else i[0]) for i in mod.ledger(text)}
+        read = len(read_ids)
     except Exception as e:
         broken("tf-split-brd", "%s: could not read the BRD at all (%s)" % (app, type(e).__name__),
                "*amend-docs --add-missing cannot append checklist rows")
         continue
     if written and read < written:
-        broken("tf-split-brd", "%s: reads %d of %d BRD items" % (app, read, written),
+        # the file and the ids, so the line can be acted on (Sevak TF-008: "52 of 55" named neither)
+        unread = sorted(written_ids - read_ids, key=lambda x: int(x.split("-")[1]))
+        broken("tf-split-brd", "%s: reads %d of %d BRD items in %s; not read: %s"
+               % (app, read, written, os.path.relpath(brd, REPO), ", ".join(unread[:10]) + (" …" if len(unread) > 10 else "")),
                "new requirements must be added to the checklist by hand until this is fixed")
     elif written:
         ok("tf-split-brd", "%s: reads all %d BRD items" % (app, written))

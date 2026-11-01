@@ -839,6 +839,14 @@ def check_doc_rule(rule, c, rep):
                               f'secrets and name the key here, never the password (stack answer Q4a)')
         if users and not re.search(r"(?i)regist", txt):
             rep.fail(rel, "the Test users section does not say the users were registered through AppManager's register call (stack answer Q4a)")
+        # FW-001: Chatur's and Sevak's verify tests registered a new account on the production AppManager on
+        # every run, and the owner deleted them by hand. The section says so in one sentence; the check is
+        # tf-test-users-check.py, run by the verdict and the build.
+        if users and not (re.search(r"(?i)never (?:creates?|registers?)[^.]*\baccounts?\b", txt) and re.search(r"(?i)\bby hand\b", txt)):
+            rep.fail(rel, 'the Test users section must say: "A verify test never creates, deletes or changes an account on a shared '
+                          'AppManager; the register-creates-an-account path is verified by hand once per release and recorded in the '
+                          'checklist with the date, and the automated row checks only the form\'s validation and the email-already-in-use '
+                          'path using test user 1." (FW-001)')
 
     elif rule == "next-command-blocks":
         seg = re.search(r"(?ms)^## Next command to run\s*\n(.*?)(?=^## |\Z)", nocomment)
@@ -1569,14 +1577,18 @@ def main(argv=None):
                 def _shape(m):
                     return re.sub(r"\b(Small|Medium|Large)\b", "SIZE", re.sub(r"\d[\d,]*", "#", m))
                 def _first(m):
-                    n = re.search(r"\d[\d,]*", m)
-                    return int(n.group(0).replace(",", "")) if n else None
+                    # the count: after "is" in a section or entry finding, whose name may hold a number
+                    n = re.search(r"\bis (\d[\d,]*) (?:words|lines|rows|requirements|KB|screens)\b", m) or re.search(r"(\d[\d,]*)", m)
+                    return int(n.group(1).replace(",", "")) if n else None
+                # TfLens TF-055: a section or entry over its limit ('section "Design system" is 888 words;
+                # at most 300') was old only at the identical count, so a cut read as new
+                SIZED = r"^(?:\d[\d,]* (?:words|lines|rows|requirements|KB|screens)|(?:section|entry) \".*\" is \d[\d,]* (?:words|lines|rows))"
                 for l in rep.lines:
                     if l.startswith("FAIL "):
                         head, msg = l.split(": ", 1)
                         r = head[len("FAIL "):]
                         was = base.get(r, [])
-                        same = msg in set(was) or (re.match(r"^\d[\d,]* (words|lines|rows|requirements|KB|screens)", msg) and any(
+                        same = msg in set(was) or (re.match(SIZED, msg) and any(
                             _shape(o) == _shape(msg) and _first(o) is not None and _first(msg) <= _first(o) for o in was))
                         if same:
                             relined.append("OLD  " + l[5:])

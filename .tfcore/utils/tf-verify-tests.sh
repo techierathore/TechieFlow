@@ -40,12 +40,17 @@ while [[ $# -gt 0 ]]; do
     --spec) SPECS+=("${2:-}"); shift 2 ;;
     --list) LIST="${2:-}"; shift 2 ;;
     --all-specs) ALLSPECS=1; shift ;;
-    --merge) shift; while [[ $# -gt 0 && "$1" != --* ]]; do MERGE+=("$1"); shift; done ;;
+    --merge) shift; MERGING=1; while [[ $# -gt 0 && "$1" != --* ]]; do MERGE+=("$1"); shift; done ;;
     --json-out) OUT="${2:-}"; shift 2 ;;
     -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "tf-verify-tests: unknown argument $1" >&2; exit 2 ;;
   esac
 done
+# Chatur TF-018: `--merge` with no part files fell through to a full test run, minutes long, over the
+# suite the caller meant only to combine. It is refused.
+if [[ "${MERGING:-0}" == 1 && ${#MERGE[@]} -eq 0 ]]; then
+  echo "tf-verify-tests: --merge needs the part files to combine (--merge tests-1of2.json tests-2of2.json); nothing was run" >&2; exit 2
+fi
 PART=""
 if [[ -n "$SHARD" ]]; then
   [[ "$SHARD" =~ ^([1-9][0-9]*)/([1-9][0-9]*)$ ]] || { echo "tf-verify-tests: --shard takes N/M, such as 2/4" >&2; exit 2; }

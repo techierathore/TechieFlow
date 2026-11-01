@@ -4,16 +4,16 @@
 |---|---|
 | App | Lekhak |
 | Upstream | TechieFlow |
-| Updated | 2026-10-21 |
+| Updated | 2026-11-01 |
 
 ## Summary
 
-36 entries: 0 blocking now, 0 open, 1 fixed upstream and not yet re-checked (TF-036, fixed 2026-10-21, ships in TechieFlow v1.2.1), 35 closed after a re-check here. TF-008, TF-022, TF-023, TF-025, TF-033, TF-034 and TF-035 were re-checked and closed on 2026-10-18.
+37 entries: 0 blocking now, 1 open (TF-037, filed 2026-11-01), 1 fixed upstream and not yet re-checked (TF-036, fixed 2026-10-21, ships in TechieFlow v1.2.1), 35 closed after a re-check here.
 
-Nothing is blocked. TF-036 is fixed upstream (2026-10-21): the document-test step now runs the tests on the Windows side, as the solution build does. Run on this repo, it found one real failure: `docs/Lekhak-UsageGuide.md` no longer holds the sentence `GuidesSayTestConnectionSendsShortChat` guards. See the 2026-10-21 reply.
+Nothing is blocked. TF-037: on the desktop head, the screen and mockup checks sometimes measure the page before the app has moved to it, so a correct screen fails once and passes on a second run.
 
-- 0 blockers, 12 majors, 24 minors, 0 nice-to-haves.
-- Last consolidated: 2026-10-20.
+- 0 blockers, 13 majors, 24 minors, 0 nice-to-haves.
+- Last consolidated: 2026-11-01.
 
 ## Entries
 
@@ -626,6 +626,8 @@ Nothing is blocked. TF-036 is fixed upstream (2026-10-21): the document-test ste
 
 ### TF-036 — The document-test step builds the test project on the WSL side, so it stops on output the Windows build owns
 
+> ✅ **Closed 2026-10-23** — re-checked here: 2026-10-23: tf-doc-tests.sh on the amended phase-3 docs ran the unit tests Windows-side (cmd.exe rung 1) and returned a real result (1 of 1,163 failed, the Usage Guide sentence) instead of NOT-RUN; after the sentence was restored the full suite passed 1,195 of 1,195
+
 - **Status:** fixed upstream 2026-10-21, ships in TechieFlow v1.2.1; not yet re-checked here.
 - **Severity:** minor
 - **Blocks:** no. The full unit suite runs through `tf-build.sh test` (Windows side) and passes; only the status gate's document-test line reads NOT-RUN.
@@ -645,9 +647,37 @@ Nothing is blocked. TF-036 is fixed upstream (2026-10-21): the document-test ste
 - **Workaround:** none taken; the gate line is reported as printed, with the full unit run named beside it.
 - **Suggested fix:** have `tf-doc-tests.sh` keep the side the last build used for that `obj/` (the same record `tf-build.sh` keeps for its scopedcss clear-out), or run the tests through the solution target.
 
+### TF-037 — On a desktop head, the screen and mockup checks can measure the page before the app has moved to it
+
+- **Severity:** major
+- **Blocks:** no. The run carries on; a second run of the same check graded correctly both times.
+- **Repro:**
+  ```
+  # BlogAdmin booted with tf-verify-boot.sh start --project source/BlogAdmin/BlogAdmin.csproj (mode=cdp), left on AI Story Studio by the browser tests
+  bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --cdp http://localhost:9223   # list holds AI Setup (/admin/ai-setup)
+  ```
+- **Expected:** the check waits until the app is showing `/admin/ai-setup` before it reads anchors or takes the screenshot.
+- **Actual:** seen 2026-11-01, as below.
+
+| Problem | What it affects | Does it block or break anything |
+|---|---|---|
+| `ai-setup-1280.png` shows AI Story Studio, and four AI Setup anchors (`embedding-card`, `embedding-folder-input`, `embedding-status`, `use-folder-button`) were reported "not on the page"; the app itself was on `/admin/ai-setup` a moment later. On 2026-10-31 `tf-mockup-parity.sh` did the same on AI Story Studio: `admin-topbar` was "cut off", with the top bar still reading the previous page "Story Manager". | Any row whose screen is checked right after another page was open in the desktop head. | Breaks the render and mockup verdicts (a false RENDER-FAIL or MOCKUP-FAIL); does not block the run. |
+
+- **Encountered in:** `*verify ui Lekhak --phase 2` (2026-10-31, parity) and `*verify REQ-FN-146 Lekhak --phase 1` (2026-11-01, screens).
+- **Workaround:** ran the check a second time and graded from that run; the first runs are kept as `tests/.artifacts/verify/parity-run1.json` and `screens-run1.json`.
+- **Suggested fix:** after routing in the embedded browser, wait until `location.pathname` equals the route and at least one of the screen's own anchors is attached (or the breadcrumb names the screen), then settle, before measuring.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### Resolution status (TechieFlow team, 2026-11-01)
+
+Ships in **TechieFlow v1.2.4**, the next release after v1.2.3; already in this project's `.tfcore/` through the framework update of 2026-11-01. Each fix has a regression case in `tests/regression/run.sh` that fails against the v1.2.3 script and passes now.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-037 | Fixed upstream in `tf-verify-screens.mjs` and `tf-mockup-parity.mjs`, through `tf-login.mjs`. On a desktop head both checks note the anchors on the page before the move. After it they wait (at most 5 s) until one of the screen's own anchors that was not there before is attached, then until the page stops changing, and only then measure. Case `lk_037`: v1.2.3 gives render EMPTY, and a mockup PASS that compared 1 of 2 controls on the page it left; now render OK and PASS on 3 of 3. | After the framework update: `*verify REQ-FN-146 Lekhak --phase 1` on BlogAdmin's desktop head: AI Setup grades right on the first run, with no second run. |
 
 ### Resolution status (TechieFlow team, 2026-10-21)
 

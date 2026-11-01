@@ -6615,6 +6615,576 @@ sv_009() {
     || { bad sv_009 "the Remark of a row with passing unit tests says something else"; note "$(cut -c1-220 <<<"$row")"; }
 }
 
+# --- FW-001: verify tests created accounts on the shared production AppManager on every run -----------
+# Chatur tests/verify/signin-register.spec.ts:96 registered chatur-verify-<Date.now()>@techierathore.com
+# for REQ-FN-004, and Sevak tests/verify/p1/a-setup-shell-auth.spec.ts:377 registered
+# sevak-verify-<Date.now()>@example.com for REQ-UI-006; the owner deleted the accounts by hand. The rule
+# was a sentence in the prompts. tf-test-users-check.py makes it a check: the verdict fails the row on
+# gate test-users, and tf-build.sh fails a builder's changed test.
+_tu_fx() {   # <dir> : an app that signs in through AppManager, with three test users
+  local d="$1"; mkdir -p "$d/docs" "$d/tests/verify" "$d/.tfcore"
+  printf 'appSize: S\nappKind: app\nappPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  printf '# Fx — Checklist\n' > "$d/docs/Fx-Checklist.md"
+  cat > "$d/docs/Fx-Architecture.md" <<'MD'
+# Fx — Architecture
+
+| Area | Choice |
+|---|---|
+| Q4 Authentication | AppManager at https://appmgr.example (shared) |
+MD
+  cat > "$d/docs/Fx-UsageGuide.md" <<'MD'
+# Fx — Usage Guide
+
+## Test users
+
+| # | User | Password source | Role | Exists |
+|---|---|---|---|---|
+| 1 | fx-owner@fx.app | user secrets key `Fx:TestUsers:Owner` | Owner | yes |
+| 2 | fx-second@fx.app | user secrets key `Fx:TestUsers:Second` | Second user | yes |
+
+## Execution guide
+MD
+}
+
+fw_001() {
+  local d="$SCRATCH/tf056" g="$SCRATCH/tf056good" out rc
+  _tu_fx "$d"; _tu_fx "$g"
+  cat > "$d/tests/verify/register.spec.ts" <<'TS'
+import { test, expect } from '@playwright/test';
+
+test('REQ-FN-004 register with a valid password creates the account', async ({ page }) => {
+  const vEmail = `fx-verify-${Date.now()}@fx.app`;
+  await page.goto('/register');
+  await page.getByTestId('input-email').fill(vEmail);
+  await page.getByTestId('register-submit').click();
+  await expect(page).toHaveURL(/\/projects/);
+});
+TS
+  cat > "$g/tests/verify/register.spec.ts" <<'TS'
+import { test, expect } from '@playwright/test';
+
+test('REQ-UI-004 email already in use shows the server message', async ({ page }) => {
+  const vEmail = 'fx-owner@fx.app';
+  await page.goto('/register');
+  await page.getByTestId('input-email').fill(vEmail);
+  await page.getByTestId('register-submit').click();
+  await expect(page.getByTestId('email-error')).toBeVisible();
+});
+
+test('REQ-UI-003 the form refuses an empty submit', async ({ page }) => {
+  await page.goto('/register');
+  await page.getByTestId('register-submit').click();
+  await expect(page.getByText('Email is required')).toBeVisible();
+});
+
+test('REQ-UI-009 forgot password shows the same message for any email', async ({ page }) => {
+  await page.goto('/forgot-password');
+  await page.locator('input[type=email]').fill(`nobody-${Date.now()}@example.invalid`);
+  await page.getByRole('button', { name: 'Send reset link' }).click();
+  await expect(page.getByText('If that address exists')).toBeVisible();
+});
+TS
+  out="$(cd "$d" && python3 "$UTILS/tf-test-users-check.py" 2>&1)"; rc=$?
+  [[ $rc -eq 1 ]] && grep -q '^FAIL  tests/verify/register.spec.ts:4 email: .*fx-verify-${Date.now()}@fx.app.*\[REQ-FN-004\]' <<<"$out" \
+    && grep -q '^FAIL  tests/verify/register.spec.ts:7 register: submits the register form' <<<"$out" \
+    && ok fw_001a "a test that registers a timestamped address fails, naming the file and both lines" \
+    || { bad fw_001a "the timestamped register test was not failed (exit $rc)"; note "$(head -3 <<<"$out" | cut -c1-200)"; }
+  out="$(cd "$g" && python3 "$UTILS/tf-test-users-check.py" 2>&1)"; rc=$?
+  [[ $rc -eq 0 ]] && grep -q '^PASS  test-users — 1 test file(s)' <<<"$out" \
+    && ok fw_001b "test user 1 (email in use), an empty submit and a .invalid address on Forgot password pass" \
+    || { bad fw_001b "a test that uses the Test users table was failed (exit $rc)"; note "$(head -3 <<<"$out" | cut -c1-200)"; }
+  # the verify gate: the row fails on test-users even though its test passed
+  vd_fixture "$d" base
+  python3 - "$d/tests/.artifacts/verify" <<'PY'
+import json, sys
+v = sys.argv[1]
+l = json.load(open(f"{v}/list.json"))
+l["rows"].append({"id": "REQ-FN-004", "class": "FN", "title": "Register", "status_raw": "Implemented", "pct": 75, "remarks": "",
+                  "screen": "", "route": "", "mockup": "", "perf_budget": ""})
+json.dump(l, open(f"{v}/list.json", "w"))
+t = json.load(open(f"{v}/tests.json"))
+t["reqs"]["REQ-FN-004"] = {"result": "PASS", "tests": ["REQ-FN-004 register with a valid password creates the account"], "skipped": [], "passed": 1}
+json.dump(t, open(f"{v}/tests.json", "w"))
+PY
+  printf '| REQ-FN-004 | Register | Implemented | 75%% | | |\n' >> "$d/docs/Fx-Checklist.md"
+  (cd "$d" && python3 "$UTILS/tf-verify-verdict.py" Fx --apply >/dev/null 2>&1)
+  python3 - "$d/tests/.artifacts/verify/verdicts.json" <<'PY' && ok fw_001c "the verdict fails REQ-FN-004 on gate test-users although its test passed; REQ-UI-103 is still PASS" || bad fw_001c "the verdict did not fail the registering row on test-users"
+import json, sys
+rows = {r["id"]: r for r in json.load(open(sys.argv[1]))["rows"]}
+r, h = rows.get("REQ-FN-004", {}), rows.get("REQ-UI-103", {})
+sys.exit(0 if r.get("verdict") == "TEST-USERS-FAIL" and r.get("gate") == "test-users" and r.get("emit_gate")
+         and r.get("status") == "Needs re-verify" and h.get("verdict") == "PASS" and "test-users" in h.get("gates_run", []) else 1)
+PY
+  # the build gate: a builder's changed test fails tf-build.sh before anything is built, with a gate record.
+  # TF_TEST_USERS_ALL=1: every test file counts as changed (the fixture sits in this repository's ignored
+  # tests/.artifacts, where the version-control listing sees nothing; the suite never runs it itself)
+  : > "$d/Fx.csproj"; mkdir -p "$d/docs/metrics"
+  out="$(cd "$d" && TF_TEST_USERS_ALL=1 TF_METRICS_ROOT="$d" TF_BUILD_PLATFORM=linux bash "$UTILS/tf-build.sh" build Fx.csproj 2>&1)"; rc=$?
+  [[ $rc -eq 1 ]] && grep -q '^FAIL  test-users:' <<<"$out" && grep -q '"gate": *"test-users"' "$d/docs/metrics/gates.jsonl" 2>/dev/null \
+    && ok fw_001d "tf-build.sh fails a registering test before building and writes a gate record on test-users" \
+    || { bad fw_001d "tf-build.sh did not fail the registering test (exit $rc)"; note "$(head -3 <<<"$out" | cut -c1-200)"; }
+  # the usage guide's Test users section says it, in one sentence
+  local f1 f2
+  f1="$(cd "$g" && python3 "$UTILS/tf-doc-check.py" docs/Fx-UsageGuide.md 2>&1 | grep 'FW-001')"
+  python3 - "$g/docs/Fx-UsageGuide.md" <<'PY'
+import sys
+p = sys.argv[1]; s = open(p).read()
+s = s.replace("| 2 | fx-second@fx.app | user secrets key `Fx:TestUsers:Second` | Second user | yes |\n",
+              "| 2 | fx-second@fx.app | user secrets key `Fx:TestUsers:Second` | Second user | yes |\n\nA verify test never creates, "
+              "deletes or changes an account on a shared AppManager; the \"register creates an account\" path is verified by hand once "
+              "per release and recorded in the checklist with the date.\n")
+open(p, "w").write(s)
+PY
+  f2="$(cd "$g" && python3 "$UTILS/tf-doc-check.py" docs/Fx-UsageGuide.md 2>&1 | grep 'FW-001')"
+  [[ -n "$f1" && -z "$f2" ]] \
+    && ok fw_001e "tf-doc-check fails a Test users section that does not say verify tests never create accounts, and passes it once it does" \
+    || { bad fw_001e "the Test users rule did not fail then pass"; note "before: ${f1:0:120} after: ${f2:0:120}"; }
+}
+
+# --- TfLens TF-055: a section over its limit was old only at the identical word count ------------------
+tf_055() {
+  local d="$SCRATCH/tf055"; mkdir -p "$d/docs" "$d/.tfcore/.session"
+  cp -r "$UTILS" "$d/.tfcore/utils"; cp -r "$ROOT/.tfcore/templates" "$d/.tfcore/"
+  printf 'appSize: S\nappKind: app\nappPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  printf '# Fx — Checklist\n' > "$d/docs/Fx-Checklist.md"
+  python3 -c "print('# Fx — Brief\n\n| | |\n|---|---|\n| App | Fx |\n| Date | 2026-11-01 |\n\n## What it is\n\n' + 'word '*200 + '\n\n## Who it is for\n\nPeople.\n\n## Must do\n\n- One thing.\n\n## Out of scope\n\nNothing.\n')" > "$d/docs/Fx-Brief.md"
+  ( cd "$d" && TF_SKIP_SELFCHECK=1 bash .tfcore/utils/tf-phase.sh start amend-docs Fx ) >/dev/null 2>&1
+  python3 - "$d/docs/Fx-Brief.md" <<'PY'
+import sys
+p = sys.argv[1]; s = open(p).read()
+open(p, "w").write(s.replace("word " * 200, "word " * 190))
+PY
+  local f; f="$(cd "$d" && bash .tfcore/utils/tf-doc-check.sh --app Fx 2>&1)"
+  python3 -c "open('$d/docs/Fx-Brief.md','a').write('')"
+  grep -q '^OLD .*section "What it is" is 190 words; at most 150' <<<"$f" && ! grep -q '^FAIL .*section "What it is"' <<<"$f" \
+    && ok tf_055a "a section over its limit that was cut (200 to 190 words) is old, not new" \
+    || { bad tf_055a "cutting an over-limit section made its finding new"; note "$(grep 'What it is' <<<"$f" | cut -c1-200)"; }
+  python3 - "$d/docs/Fx-Brief.md" <<'PY'
+import sys
+p = sys.argv[1]; s = open(p).read()
+open(p, "w").write(s.replace("word " * 190, "word " * 230))
+PY
+  f="$(cd "$d" && bash .tfcore/utils/tf-doc-check.sh --app Fx 2>&1)"
+  grep -q '^FAIL .*section "What it is" is 230 words; at most 150' <<<"$f" \
+    && ok tf_055b "a section that grew past its baseline count still FAILs" \
+    || bad tf_055b "a section that grew was hidden by the baseline"
+}
+
+# --- Chatur TF-021: tf-triage new handed out REQ-UI-1000 after REQ-UI-078 ------------------------------
+# A test's sample checklist held REQ-UI-999; the TechieRag TF-008 scan counted code ids into the highest
+# id, so the next one was 1000, and tf-req-ids read REQ-UI-1001 as REQ-UI-100.
+ch_021() {
+  local d="$SCRATCH/ch021"; mkdir -p "$d/docs" "$d/tests/verify" "$d/.tfcore"
+  printf 'appSize: S\nappKind: app\nappPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  cat > "$d/docs/Fx-Checklist.md" <<'MD'
+# Fx — Checklist
+
+## Requirements Status
+
+| ID | Title | Status | % | Remarks | Details |
+|---|---|---|---|---|---|
+| REQ-UI-078 | Workbench | Verified | 100% | | |
+| REQ-UI-079 | Board | Not Started | 0% | | |
+
+## Workbench
+
+- **REQ-UI-078** — Workbench
+  - Acceptance: When a user opens Workbench, then it shows.
+MD
+  printf "test('REQ-UI-079 board', async () => {});\nconst SAMPLE = '| REQ-UI-999 | Sample requirement | Implemented |';\n" > "$d/tests/verify/board.spec.ts"
+  local out; out="$(cd "$d" && TF_METRICS_ROOT="$d" bash "$UTILS/tf-triage.sh" Fx new "Probe" "When a user opens Workbench, then the probe shows." --prefix UI --section Workbench 2>&1)"
+  grep -q '^REQ-UI-080: new' <<<"$out" \
+    && ok ch_021a "the next UI id after REQ-UI-079 is REQ-UI-080, though a test's sample data carries REQ-UI-999" \
+    || { bad ch_021a "triage handed out another id"; note "$(tail -1 <<<"$out")"; }
+  local ids; ids="$(cd "$UTILS" && python3 -c "import importlib.util as u; s=u.spec_from_file_location('r','tf-req-ids.py'); m=u.module_from_spec(s); s.loader.exec_module(m); print(m.ids_of('REQ-UI-1001 board opens'), m.ids_of('REQ-UI-101 home'))")"
+  [[ "$ids" == "['REQ-UI-1001'] ['REQ-UI-101']" ]] \
+    && ok ch_021b "a four-digit id is read whole (REQ-UI-1001), never cut to REQ-UI-100" \
+    || bad ch_021b "tf-req-ids read: $ids"
+}
+
+# --- Sevak TF-008: the self-check said "reads 52 of 55 BRD items" and named neither file nor ids -----------
+# Sevak's phase-2 BRD renumbers three items as "**BRD-171** (was BRD-49) — …". The ledger regex wanted the
+# dash right after the id, so the three were never read: not in a split, not in --add-missing, and the
+# self-check's line gave no file and no id to act on.
+sv_008() {
+  local d="$SCRATCH/sv008"; mkdir -p "$d/docs" "$d/.tfcore"
+  printf 'appPhase: 2\n' > "$d/.tfcore/core-config.yaml"
+  printf '# Fx — P2 Checklist\n\n| ID | Title | Status | %% | Remarks | Detail |\n|---|---|---|---|---|---|\n| REQ-FN-001 | One | Not Started | 0%% | — | — |\n' > "$d/docs/Fx-P2-Checklist.md"
+  cat > "$d/docs/Fx-P2-BRD.md" <<'MD'
+# Fx — Phase 2 BRD
+
+## Requirements
+
+- **BRD-170** — System shall list tasks. *Screen:* Tasks
+  - *Acceptance:* When a user opens Tasks, then the tasks show.
+- **BRD-171** (was BRD-49) — System shall validate the licence at login *(deferred)*
+  - *Acceptance:* When a user signs in, then the licence is checked.
+MD
+  local ids; ids="$(cd "$d" && python3 -c "
+import importlib.util,sys
+s=importlib.util.spec_from_file_location('sb','$UTILS/tf-split-brd.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+print(' '.join(i['id'] for i in m.ledger(open('docs/Fx-P2-BRD.md').read())))")"
+  [[ "$ids" == *BRD-171* ]] \
+    && ok sv_008a "an item renumbered as '**BRD-171** (was BRD-49) —' is read by the ledger" \
+    || { bad sv_008a "the renumbered item is not read"; note "ledger: $ids"; }
+  # the line names the file and the ids when an item is still not read (here one the reader cannot know)
+  printf -- '- **BRD-172** has no dash at all\n' >> "$d/docs/Fx-P2-BRD.md"
+  local out; out="$(bash "$UTILS/tf-selfcheck.sh" "$d" 2>&1)"
+  grep -q 'tf-split-brd.*reads 2 of 3 BRD items in docs/Fx-P2-BRD.md; not read: BRD-172' <<<"$out" \
+    && ok sv_008b "the self-check's split-brd line names the BRD file and the ids it could not read" \
+    || { bad sv_008b "the split-brd line names no file or ids"; note "$(grep 'tf-split-brd' <<<"$out" | head -1 | cut -c1-200)"; }
+}
+
+# --- Sevak TF-012: the DevGuide work list found no screens in an app whose code lives under apps/ ---------
+# Sevak.slnx lists apps/Sevak, apps/Sevak.Core and apps/SevakDb. The lister searched only src/ and
+# source/ and skipped apps/ as a sample folder, so it said NOTHING for an app with 9 phase-3 pages. The
+# solution's project folders are code, and apps/ is a sample folder only on a library.
+sv_012() {
+  local d="$SCRATCH/sv012"; mkdir -p "$d/.tfcore" "$d/docs" "$d/apps/Fx/Pages"
+  printf 'appKind: app\nappPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  printf '<Solution>\n  <Project Path="apps/Fx/Fx.csproj" />\n</Solution>\n' > "$d/Fx.slnx"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Razor" />\n' > "$d/apps/Fx/Fx.csproj"
+  printf '@page "/today"\n<h1>Today</h1>\n' > "$d/apps/Fx/Pages/Today.razor"
+  printf '### Screen: Today (`/today`)\n' > "$d/docs/Fx-UIDesign.md"
+  local out; out="$(cd "$d" && python3 "$UTILS/tf-devguide-list.py" Fx 2>&1)"
+  grep -q 'Today (/today) — apps/Fx/Pages/Today.razor' <<<"$out" \
+    && ok sv_012a "an app's page under apps/<App>/ (listed in its .slnx) is on the DevGuide work list" \
+    || { bad sv_012a "the page under apps/ was not found"; note "$(head -4 <<<"$out" | tail -2 | cut -c1-160)"; }
+  # a library keeps apps/ as samples: its sample app's page is not a component to document
+  local l="$SCRATCH/sv012lib"; mkdir -p "$l/.tfcore" "$l/src/Lib" "$l/apps/Demo/Pages"
+  printf 'appPhase: 1\nmetrics:\n  project_type: library\n' > "$l/.tfcore/core-config.yaml"
+  printf '<Solution>\n  <Project Path="src/Lib/Lib.csproj" />\n  <Project Path="apps/Demo/Demo.csproj" />\n</Solution>\n' > "$l/Lib.slnx"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Razor" />\n' > "$l/src/Lib/Lib.csproj"; cp "$l/src/Lib/Lib.csproj" "$l/apps/Demo/Demo.csproj"
+  printf '<button>@ChildContent</button>\n' > "$l/src/Lib/Button.razor"
+  printf '@page "/demo"\n<Button>x</Button>\n' > "$l/apps/Demo/Pages/DemoPage.razor"
+  out="$(cd "$l" && python3 "$UTILS/tf-devguide-list.py" Lib 2>&1)"
+  grep -q '^- Lib / Button — src/Lib/Button.razor — shown in apps/Demo/Pages/DemoPage.razor' <<<"$out" \
+    && ! grep -q '^- Lib / DemoPage' <<<"$out" \
+    && ok sv_012b "on a library apps/ stays a sample folder: its demo page is the Button's sample, not a component of its own" \
+    || { bad sv_012b "a library's sample app under apps/ was listed as code"; note "$(grep -n 'DemoPage' <<<"$out" | head -2)"; }
+}
+
+# --- AppManager TF-030, TechieBlog TF-002, Chatur TF-018: a WSL web head ran where WSL could not reach it --
+# A web project in a solution with a MAUI head was published Windows-side (Lekhak TF-036) and its copy run
+# there on `localhost`, which NAT-mode WSL cannot reach: NONE kind=host on a working app. A web project with
+# no MAUI target of its own now publishes and runs on WSL; with no dotnet on WSL the Windows copy is bound
+# to 0.0.0.0 and reached at localhost or the gateway; TF_BOOT_RUNNER=wsl|windows names the side. Stand-in
+# dotnet, cmd.exe, wslpath and powershell.exe: the Windows copy answers only when bound to every
+# interface (bound to localhost it prints "Now listening" and is unreachable, as on a NAT machine).
+_wsl_web_fx() {   # <name> <with-wsl-dotnet 1|0> -> fixture dir
+  local d="$SCRATCH/$1"; mkdir -p "$d/bin" "$d/home" "$d/p/Properties" "$d/m"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Web"></Project>\n' > "$d/p/Fx.csproj"
+  printf '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFrameworks>net10.0-android;net10.0-windows10.0.19041.0</TargetFrameworks><UseMaui>true</UseMaui></PropertyGroup></Project>\n' > "$d/m/M.csproj"
+  printf '<Solution>\n  <Project Path="p/Fx.csproj" />\n  <Project Path="m/M.csproj" />\n</Solution>\n' > "$d/Fx.slnx"
+  cat > "$d/bin/fx-serve" <<'SH'
+#!/usr/bin/env bash
+# fx-serve <side> <args…>: what dotnet does on that side, logged to __D__/calls
+log="__D__/calls"; side="$1"; shift; a="$*"
+case "$a" in
+  *publish*) out="$(sed -E 's/.* -o ([^ ]+).*/\1/' <<<"$a")"; echo "$side publish" >> "$log"
+             mkdir -p "$out"; echo dll > "$out/Fx.dll"; echo "Fx -> $out"; exit 0 ;;
+  *--urls*) u="$(sed -E 's/.*--urls ([^ ]+).*/\1/' <<<"$a")"; port="${u##*:}"; echo "$side run $u" >> "$log"
+            echo "Now listening on: $u"
+            if [[ "$side" == wsl || "$u" == *0.0.0.0* ]]; then exec python3 -m http.server "$port" --bind 127.0.0.1; fi
+            exit 0 ;;
+esac
+SH
+  tf_sed_inplace "s#__D__#$d#" "$d/bin/fx-serve"
+  [[ "$2" == 1 ]] && printf '#!/usr/bin/env bash\nexec "%s/bin/fx-serve" wsl "$@"\n' "$d" > "$d/bin/dotnet"
+  printf '#!/usr/bin/env bash\n[[ "$1" == /c ]] && shift\nexec "%s/bin/fx-serve" windows "$@"\n' "$d" > "$d/bin/cmd.exe"
+  printf '#!/usr/bin/env bash\n[[ "$1" == -w || "$1" == -u ]] && shift\necho "$1"\n' > "$d/bin/wslpath"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$d/bin/powershell.exe"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$d/bin/ip"
+  chmod +x "$d/bin/"*
+  printf '%s' "$d"
+}
+_wsl_boot() {   # <dir> <port> [VAR=value…] -> the start's output; stops it again
+  local d="$1" p="$2"; shift 2
+  tf_timeout 200 cat < <(cd "$d" && env "$@" TF_BOOT_PLATFORM=wsl TF_BUILD_PLATFORM=wsl TF_BOOT_WAIT=10 HOME="$d/home" PATH="$d/bin:/usr/bin:/bin" \
+    bash "$UTILS/tf-verify-boot.sh" start --project p/Fx.csproj --port "$p" 2>&1)
+  ( cd "$d" && HOME="$d/home" PATH="$d/bin:/usr/bin:/bin" bash "$UTILS/tf-verify-boot.sh" stop --port "$p" ) >/dev/null 2>&1
+}
+_free_port() { python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()'; }
+
+am_030() {
+  local d out
+  d="$(_wsl_web_fx am030 1)"; out="$(_wsl_boot "$d" "$(_free_port)" TF_NOOP=1)"
+  grep -q '^BOOTED head=web .*side=wsl' <<<"$out" && grep -q '^wsl publish$' "$d/calls" && ! grep -q '^windows' "$d/calls" \
+    && ok am_030a "on WSL a web project with no MAUI target, in a solution with a MAUI head, is published and run on WSL" \
+    || { bad am_030a "the web project was run where WSL cannot reach it"; note "$(grep -E '^(BOOTED|NONE)' <<<"$out" | cut -c1-200)"; note "calls: $(tr '\n' ';' < "$d/calls" 2>/dev/null)"; }
+  d="$(_wsl_web_fx am030b 0)"; out="$(_wsl_boot "$d" "$(_free_port)" TF_NOOP=1)"
+  grep -q '^BOOTED head=web .*rung=cmd.exe .*side=windows' <<<"$out" && grep -q '^windows run http://0.0.0.0:' "$d/calls" \
+    && ok am_030b "with no dotnet on WSL the Windows copy is bound to every interface and reached from WSL" \
+    || { bad am_030b "the Windows-side copy was bound to localhost only"; note "$(grep -E '^(BOOTED|NONE)' <<<"$out" | cut -c1-200)"; note "calls: $(tr '\n' ';' < "$d/calls" 2>/dev/null)"; }
+}
+
+bl_002() {
+  local d out
+  d="$(_wsl_web_fx bl002 1)"; out="$(_wsl_boot "$d" "$(_free_port)" TF_BOOT_RUNNER=windows)"
+  grep -q '^BOOTED head=web .*rung=cmd.exe' <<<"$out" && grep -q '^windows run http://0.0.0.0:' "$d/calls" && ! grep -q '^wsl' "$d/calls" \
+    && ok bl_002 "TF_BOOT_RUNNER=windows runs the copy Windows-side, bound to 0.0.0.0, and WSL reaches it" \
+    || { bad bl_002 "the Windows-side copy could not be reached from WSL"; note "$(grep -E '^(BOOTED|NONE)' <<<"$out" | cut -c1-200)"; note "calls: $(tr '\n' ';' < "$d/calls" 2>/dev/null)"; }
+}
+
+ch_018() {
+  # a: a head started by hand gets a boot record, with its pid, that the verdict and `stop` use
+  local d="$SCRATCH/ch018"; mkdir -p "$d/www"; echo hi > "$d/www/index.html"
+  local p; p="$(_free_port)"
+  python3 -m http.server "$p" --bind 127.0.0.1 --directory "$d/www" >/dev/null 2>&1 &
+  local pid=$! i=0
+  while [[ $i -lt 20 ]] && ! curl -s -o /dev/null "http://localhost:$p/" 2>/dev/null; do sleep 0.3; i=$((i+1)); done
+  local out; out="$(cd "$d" && bash "$UTILS/tf-verify-boot.sh" adopt --port "$p" --pid "$pid" 2>&1)"
+  local rec; rec="$(python3 -c 'import json,sys; s=json.load(open(sys.argv[1])); print(s.get("mode"), s.get("pids"), s.get("url"))' "$d/tests/.artifacts/verify/boot.json" 2>/dev/null)"
+  ( cd "$d" && bash "$UTILS/tf-verify-boot.sh" stop --port "$p" ) >/dev/null 2>&1; sleep 1
+  local gone=1; kill -0 "$pid" 2>/dev/null && { gone=0; kill "$pid" 2>/dev/null; }
+  grep -q '^BOOTED head=web mode=base .*rung=adopted' <<<"$out" && [[ "$rec" == "base [$pid] http://localhost:$p" && $gone -eq 1 ]] \
+    && ok ch_018a "a head started by hand is adopted: a boot record with its pid, and stop stops it" \
+    || { bad ch_018a "a hand-started head still has no boot record"; note "$(tail -1 <<<"$out" | cut -c1-160) | record: $rec | stopped: $gone"; }
+  # b: --merge with no part files refuses instead of running the whole suite
+  local e="$SCRATCH/ch018b"; mkdir -p "$e"
+  out="$(cd "$e" && tf_timeout 60 bash "$UTILS/tf-verify-tests.sh" --merge 2>&1)"; local rc=$?
+  [[ $rc -eq 2 ]] && grep -q -- '--merge needs the part files' <<<"$out" \
+    && ok ch_018b "tf-verify-tests --merge with no part files refuses and runs nothing" \
+    || { bad ch_018b "--merge with no files did not refuse (exit $rc)"; note "$(head -2 <<<"$out" | cut -c1-160)"; }
+  # c: TF_BOOT_RUNNER=wsl keeps the WSL side even when only the Windows side has been used before
+  d="$(_wsl_web_fx ch018c 1)"; mkdir -p "$d/p/obj"; echo windows > "$d/p/obj/.tf-build-side"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Web"></Project>\n' > "$d/p/Fx.csproj"; rm -f "$d/Fx.slnx"
+  out="$(_wsl_boot "$d" "$(_free_port)" TF_BOOT_RUNNER=wsl)"
+  grep -q '^BOOTED head=web .*side=wsl' <<<"$out" && ! grep -q '^windows' "$d/calls" \
+    && ok ch_018c "TF_BOOT_RUNNER=wsl runs the copy on WSL, where the tests can hand it WSL paths" \
+    || { bad ch_018c "TF_BOOT_RUNNER=wsl was not honoured"; note "$(grep -E '^(BOOTED|NONE)' <<<"$out" | cut -c1-200)"; note "calls: $(tr '\n' ';' < "$d/calls" 2>/dev/null)"; }
+}
+
+# --- Sevak TF-013: a Mac Catalyst boot could not hand the app its verification settings ------------------
+# `open -n` and the mac2 session carried no environment, so SEVAK_VERIFICATION_MODE and a throw-away
+# AppDb__DataDirectory never reached the app and a boot would open the owner's real data. `start --env
+# NAME=VALUE` (repeatable, any head) is kept in the boot record as "env", passed to `open --env`, and
+# openSession() sends it as appium:environment, since a mac2 session relaunches the app. The session part
+# runs on any machine against a stand-in Appium that records what it was sent; the boot's own Mac steps
+# run only on a Mac.
+sv_013() {
+  local d="$SCRATCH/sv013"; mkdir -p "$d/src/A" "$d/tests/.artifacts/verify"
+  printf '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFrameworks>net10.0-maccatalyst</TargetFrameworks><UseMaui>true</UseMaui></PropertyGroup></Project>\n' > "$d/src/A/A.csproj"
+  local out rc
+  out="$(cd "$d" && bash "$UTILS/tf-verify-boot.sh" start --head maccatalyst --project src/A/A.csproj --env SEVAK_VERIFICATION_MODE=1 --env "AppDb__DataDirectory=$d/data" --dry-run 2>&1)"; rc=$?
+  [[ $rc -eq 0 ]] && grep -q '^PICK head=maccatalyst' <<<"$out" \
+    && ok sv_013a "start --head maccatalyst takes --env NAME=VALUE, repeatable" \
+    || { bad sv_013a "--env was refused (exit $rc)"; note "$(tail -1 <<<"$out" | cut -c1-160)"; }
+  printf '%s\n' '{"head":"maccatalyst","mode":"appium","env":{"SEVAK_VERIFICATION_MODE":"1","AppDb__DataDirectory":"/tmp/fx-data"}}' > "$d/tests/.artifacts/verify/boot.json"
+  local port=$((47900 + RANDOM % 80))
+  cat > "$d/fake.mjs" <<'JS'
+import { createServer } from 'node:http';
+import { writeFileSync } from 'node:fs';
+const [port, out] = process.argv.slice(2);
+createServer((req, res) => { let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => {
+  if (req.method === 'POST' && req.url === '/session') writeFileSync(out, b);
+  res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ value: { sessionId: 'fx', capabilities: {} } }));
+}); }).listen(Number(port), '127.0.0.1');
+JS
+  node "$d/fake.mjs" "$port" "$d/caps.json" & local pid=$!; sleep 0.7
+  ( cd "$d" && node --input-type=module -e "
+import { openSession } from '$UTILS/tf-appium.mjs';
+const s = await openSession('http://127.0.0.1:$port', { bundleId: 'fx', appPath: '/Applications/Fx.app' }); await s.close();" ) >/dev/null 2>&1
+  kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+  local got; got="$(python3 -c 'import json,sys; c=json.load(open(sys.argv[1]))["capabilities"]["alwaysMatch"]; print(json.dumps(c.get("appium:environment"), sort_keys=True))' "$d/caps.json" 2>/dev/null)"
+  [[ "$got" == '{"AppDb__DataDirectory": "/tmp/fx-data", "SEVAK_VERIFICATION_MODE": "1"}' ]] \
+    && ok sv_013b "the mac2 session carries the boot's --env pairs as appium:environment" \
+    || { bad sv_013b "the mac2 session was opened without the app's environment"; note "sent: ${got:-nothing}"; }
+  out="$(cd "$d" && bash "$UTILS/tf-verify-boot.sh" start --head maccatalyst --env 'not a pair' --dry-run 2>&1)"; rc=$?
+  [[ $rc -eq 3 ]] && grep -q -- '--env takes NAME=VALUE' <<<"$out" \
+    && ok sv_013c "an --env that is not NAME=VALUE is refused" \
+    || { bad sv_013c "a malformed --env was accepted (exit $rc)"; note "$(tail -1 <<<"$out" | cut -c1-160)"; }
+}
+
+# --- shared by lk_037 and sv_011: an app with a pushState router, attached over CDP like a desktop head ---
+# <dir> <mode: slow|frozen>: writes server.py and the mockups, starts the server and a headless Chromium
+# with a DevTools port; sets CDP_PORT, CDP_SRV and CDP_BR. slow: every route change draws the new page
+# 4 s after the address changes, the top bar first still naming the previous page (Lekhak TF-037).
+# frozen: requestAnimationFrame never calls back, like a minimized Windows window (Sevak TF-011).
+_cdp_app() {
+  local d="$1" mode="$2"; mkdir -p "$d/docs/mockups"
+  local css='body{margin:0;font:14px/20px system-ui;background:#fff;color:#111} header{height:40px;background:#f3f4f6} .card{margin:16px;padding:12px;border:1px solid #ccc;width:400px}'
+  printf '<!doctype html><html><head><meta charset="utf-8"><style>%s</style></head><body><header data-testid="admin-topbar">Story Studio</header><div class="card" data-testid="studio-editor">Write a story</div></body></html>\n' "$css" > "$d/docs/mockups/studio.html"
+  printf '<!doctype html><html><head><meta charset="utf-8"><style>%s</style></head><body><header data-testid="admin-topbar">AI Setup</header><div class="card" data-testid="embedding-card">Embeddings</div><div class="card" data-testid="embedding-status">Ready</div></body></html>\n' "$css" > "$d/docs/mockups/aisetup.html"
+  cat > "$d/server.py" <<PY
+import http.server, sys
+CSS = "$css"
+MODE = "$mode"
+APP = """<!doctype html><html><head><meta charset="utf-8"><style>""" + CSS + """</style></head><body><div id="root"></div><script>
+var MODE = '""" + MODE + """';
+if (MODE === 'frozen') window.requestAnimationFrame = function () { return 0; };
+var PAGES = {'/studio': '<header data-testid="admin-topbar">Story Studio</header><div class="card" data-testid="studio-editor">Write a story</div>',
+             '/ai-setup': '<header data-testid="admin-topbar">AI Setup</header><div class="card" data-testid="embedding-card">Embeddings</div><div class="card" data-testid="embedding-status">Ready</div>'};
+function draw(at){ document.getElementById('root').innerHTML = PAGES[at || location.pathname] || '<p>Home</p>'; }
+window.addEventListener('popstate', function(){ var at = location.pathname; if (MODE === 'slow') setTimeout(function(){ draw(at); }, 4000); else draw(at); });
+draw();
+</script></body></html>"""
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_GET(self):
+        b = APP.encode("utf-8"); self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+http.server.ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+PY
+  local port exe
+  port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  CDP_PORT="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 "$d/server.py" "$port" >/dev/null 2>&1 & CDP_SRV=$!
+  ln -sfn "$(_pw_dir)/node_modules" "$d/node_modules"
+  exe="$(cd "$d" && node -e "import('playwright').then(p=>console.log(p.chromium.executablePath()))" 2>/dev/null)"
+  "$exe" --headless=new --no-sandbox --remote-debugging-port="$CDP_PORT" --user-data-dir="$d/profile" "http://127.0.0.1:$port/studio" >/dev/null 2>&1 & CDP_BR=$!
+  local i=0; while [[ $i -lt 30 ]] && ! curl -s -m 2 "http://127.0.0.1:$CDP_PORT/json/version" | grep -q webSocketDebuggerUrl; do sleep 1; i=$((i+1)); done
+  sleep 1
+}
+_cdp_copy() {   # <dir>: the shipped browser scripts, run where playwright resolves
+  ln -sfn "$(_pw_dir)/node_modules" "$1/node_modules"
+  cp "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$1/"
+}
+
+# --- Lekhak TF-037: a desktop head measured before the app had moved to the screen ----------------
+# On a desktop head a screen is opened by pushState; the address changes at once and the app draws the
+# page a moment later. The check read the page after a fixed 1.5 s: AI Setup's anchors were "not on the
+# page" over a screenshot of AI Story Studio, and the mockup check read the top bar still naming the
+# previous page. Here every route change draws 4 s late.
+lk_037() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip lk_037 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/lk037"; _cdp_app "$d" slow; _cdp_copy "$d"
+  ( cd "$d" && tf_timeout 180 node tf-verify-screens.mjs --cdp "http://127.0.0.1:$CDP_PORT" --screen studio=/studio --screen aisetup=/ai-setup \
+      --widths 1280 --themes light --json-out "$d/screens.json" >/dev/null 2>&1 )
+  ( cd "$d" && tf_timeout 180 node tf-mockup-parity.mjs --cdp "http://127.0.0.1:$CDP_PORT" --mockups docs/mockups --screen studio=/studio --screen aisetup=/ai-setup \
+      --widths 1280 --themes light --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$CDP_BR" "$CDP_SRV" 2>/dev/null; wait "$CDP_BR" "$CDP_SRV" 2>/dev/null
+  local got
+  got="$(python3 -c "
+import json
+try: s={x['name']:x for x in json.load(open('$d/screens.json'))['screens']}; print(s['aisetup']['render'], '/'.join(f['detail'] for w in s['aisetup']['widths'] for f in w.get('findings',[]))[:160])
+except Exception as e: print('no-output', e)" 2>&1)"
+  [[ "$got" == "OK "* ]] \
+    && ok lk_037a "the screen check waits for the screen's own anchors after a desktop head moves, then measures" \
+    || { bad lk_037a "the screen check measured the previous page"; note "$got"; }
+  got="$(python3 -c "
+import json
+try: s={x['screen']:x for x in json.load(open('$d/parity.json'))['screens']}; a=s['aisetup']; c=a['coverage']; print(a['verdict'], f\"compared {c['compared']} of the app's {c['app_controls']} controls\", '/'.join(str(f.get('key'))+' '+str(f.get('detail'))[:60] for f in a.get('findings',[]))[:200])
+except Exception as e: print('no-output', e)" 2>&1)"
+  # the shipped script graded the previous page: it compared 1 of 2 controls (the shared top bar) and said PASS
+  [[ "$got" == "PASS compared 3 of the app's 3 controls"* ]] \
+    && ok lk_037b "the mockup check compares the screen the app moved to, not the one it left" \
+    || { bad lk_037b "the mockup check compared the previous page"; note "$got"; }
+}
+
+# needs _cdp_app and _cdp_copy from lk_037.sh
+# --- Sevak TF-011: a minimized desktop window draws no frames -------------------------------------
+# Every click and "stable" wait times out on a window that draws nothing, and each was reported as a
+# defect of the screen. requestAnimationFrame never calls back here, as on Sevak's minimized window.
+sv_011() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip sv_011 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/sv011"; _cdp_app "$d" frozen; _cdp_copy "$d"
+  ( cd "$d" && tf_timeout 180 node tf-verify-screens.mjs --cdp "http://127.0.0.1:$CDP_PORT" --screen aisetup=/ai-setup \
+      --widths 1280 --themes light --json-out "$d/screens.json" >/dev/null 2>&1 )
+  ( cd "$d" && tf_timeout 180 node tf-mockup-parity.mjs --cdp "http://127.0.0.1:$CDP_PORT" --mockups docs/mockups --screen aisetup=/ai-setup \
+      --widths 1280 --themes light --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$CDP_BR" "$CDP_SRV" 2>/dev/null; wait "$CDP_BR" "$CDP_SRV" 2>/dev/null
+  local got
+  got="$(python3 -c "
+import json
+try: s=json.load(open('$d/screens.json'))['screens'][0]; f=s['widths'][0].get('findings') or [{}]; print(s['render'], f[0].get('detail',''))
+except Exception as e: print('no-output', e)" 2>&1)"
+  [[ "$got" == "NOT-MEASURED not measured: the app window is not drawing"* ]] \
+    && ok sv_011a "a desktop window that draws no frames is not measured, with the reason, not graded" \
+    || { bad sv_011a "a window that draws nothing was graded as if it drew"; note "$(cut -c1-200 <<<"$got")"; }
+  got="$(python3 -c "
+import json
+try: print(json.load(open('$d/parity.json'))['screens'][0]['verdict'])
+except Exception as e: print('no-output', e)" 2>&1)"
+  [[ "$got" == "NOT-MEASURED" ]] \
+    && ok sv_011b "the mockup check says not measured for a window that draws no frames" \
+    || { bad sv_011b "the mockup check graded a window that draws nothing"; note "$got"; }
+  # the verdict: a row on that screen is not driven, never Verified or RENDER-FAIL
+  mkdir -p "$d/tests/.artifacts/verify"; cp "$d/screens.json" "$d/parity.json" "$d/tests/.artifacts/verify/"
+  printf '# Fx — Checklist\n\n| ID | Title | Status | %% | Remarks | Detail |\n|---|---|---|---|---|---|\n| REQ-UI-001 | AI Setup | Implemented | 90%% | — | x |\n' > "$d/docs/Fx-Checklist.md"
+  cat > "$d/tests/.artifacts/verify/list.json" <<'J'
+{"checklist": "docs/Fx-Checklist.md", "scope": "all", "phase": 1, "screens": [{"name": "aisetup", "route": "/ai-setup", "mockup": "docs/mockups/aisetup.html"}],
+ "rows": [{"id": "REQ-UI-001", "class": "UI", "title": "AI Setup", "status": "Implemented", "status_raw": "Implemented", "pct": 90, "remarks": "", "screen": "aisetup", "route": "/ai-setup", "mockup": "docs/mockups/aisetup.html"}]}
+J
+  printf '{"head":"windows","mode":"cdp","url":"http://x","rung":"cmd.exe","reason":""}\n' > "$d/tests/.artifacts/verify/boot.json"
+  printf '{"reqs":{"REQ-UI-001":{"result":"PASS","tests":["REQ-UI-001 opens"]}}}\n' > "$d/tests/.artifacts/verify/tests.json"
+  got="$( cd "$d" && python3 "$UTILS/tf-verify-verdict.py" Fx --dir tests/.artifacts/verify 2>&1 | grep '^| REQ-UI-001' )"
+  grep -q '| REQ-UI-001 | NOT-DRIVEN | - | Implemented | .*not drawing' <<<"$got" \
+    && ok sv_011c "the verdict grades a row on that screen as not driven, keeping its status" \
+    || { bad sv_011c "the verdict graded a row on a window that drew nothing"; note "$(cut -c1-200 <<<"$got")"; }
+}
+
+# --- Chatur TF-019: told /login, the app signs in at /sign-in ------------------------------------
+# The check went to the path it was given, found no user field and stopped: "LOGIN failed … no user or
+# email field found on the sign-in page", and no screen behind sign-in was driven.
+ch_019() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip ch_019 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/ch019"; mkdir -p "$d/docs/mockups"
+  printf '<!doctype html><html><body><h1 data-testid="page-title">Projects</h1><p>Your projects.</p></body></html>\n' > "$d/docs/mockups/projects.html"
+  cat > "$d/server.py" <<'PY'
+import http.server, sys
+SIGNIN = """<!doctype html><html><body><form id="f"><input type="email" name="email"><input type="password" name="password">
+<button type="submit">Sign in</button></form><script>document.getElementById('f').addEventListener('submit', function (e) {
+ e.preventDefault(); document.cookie = 'auth=1; path=/'; location.href = '/projects'; });</script></body></html>"""
+PROJECTS = """<!doctype html><html><body><h1 data-testid="page-title">Projects</h1><p>Your projects.</p></body></html>"""
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def send(self, code, body):
+        b = body.encode(); self.send_response(code); self.send_header("Content-Type", "text/html"); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+    def do_GET(self):
+        p = self.path.split("?")[0]
+        if p == "/sign-in": self.send(200, SIGNIN)
+        elif p == "/projects":
+            if "auth=1" in (self.headers.get("Cookie") or ""): self.send(200, PROJECTS)
+            else: self.send_response(302); self.send_header("Location", "/sign-in"); self.end_headers()
+        else: self.send(404, "<!doctype html><html><body><p>Not found</p></body></html>")
+http.server.ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+PY
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 "$d/server.py" "$port" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  local out
+  out="$( cd "$d" && tf_timeout 180 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --screen projects=/projects --widths 1280 --themes light \
+          --login-path /login --user chatur-owner@techierathore.com --password x --json-out "$d/screens.json" 2>&1 )"
+  kill "$srv" 2>/dev/null; wait "$srv" 2>/dev/null
+  local got; got="$(python3 -c "
+import json
+try: j=json.load(open('$d/screens.json')); l=j.get('login') or {}; print('ok' if l.get('ok') else 'login-failed', l.get('login_path'), j['screens'][0]['render'])
+except Exception as e: print('no-output', e)" 2>&1)"
+  [[ "$got" == "ok /sign-in OK" ]] \
+    && ok ch_019a "told /login, the check finds the sign-in form at /sign-in, signs in and drives the screen" \
+    || { bad ch_019a "the check stopped at the sign-in path it was given"; note "$got"; }
+  grep -q '^LOGIN signed in at /sign-in: /login has no sign-in form' <<<"$out" \
+    && ok ch_019b "it says which sign-in address worked" \
+    || { bad ch_019b "the address that worked is not said"; note "$(grep -i login <<<"$out" | head -2)"; }
+}
+
+# --- TfLens TF-056: a mockup's translucent tint was read at full strength --------------------------------
+# /prices: the mockup's note sits on rgba(59,130,246,.08) over a white card, the app's on TrBlazeUI's opaque
+# pale blue. The 8 % tint bucketed as accent and the app's pale blue as neutral: "mockup accent, app
+# neutral" on a note plainly the same. A translucent colour is now blended over what is behind it. A
+# strong translucent tint (rgba(…,.9)) is still accent, so a real colour difference is still found.
+tf_056() {
+  if [[ -z "$(_pw_dir)" ]]; then printf 'skip tf_056 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/tf056p"; mkdir -p "$d/site/prices" "$d/docs/mockups"
+  local css='body{margin:0;font:14px/20px system-ui} .card{background:#fff;padding:12px} .note{display:block;padding:8px}'
+  local body='<div class="card" data-testid="prices"><h1>Prices</h1><p data-testid="prices-standing-note" class="note">Prices are read daily.</p><p data-testid="prices-strong" class="note strong">Strong</p></div>'
+  printf '<!doctype html><html><head><meta charset="utf-8"><style>%s .note{background:rgba(59,130,246,.08);color:#1e293b} .strong{background:rgba(220,38,38,.9);color:#fff}</style></head><body>%s</body></html>\n' "$css" "$body" > "$d/docs/mockups/prices.html"
+  printf '<!doctype html><html><head><meta charset="utf-8"><style>%s .note{background:rgb(236,244,255);color:#1e293b} .strong{background:rgb(37,99,235);color:#fff}</style></head><body>%s</body></html>\n' "$css" "$body" > "$d/site/prices/index.html"
+  local out; out="$(_sv_parity "$d" prices=/prices/)"
+  ! grep -q 'prices-standing-note' <<<"$out" \
+    && ok tf_056a "a pale translucent tint over a white card buckets as the app's opaque pale colour does" \
+    || { bad tf_056a "the 8 % tint was read at full strength"; note "$(cut -c1-220 <<<"$out")"; }
+  grep -q 'prices-strong.*semantic colour differs' <<<"$out" \
+    && ok tf_056b "a strong translucent red against an opaque blue is still a colour difference" \
+    || { bad tf_056b "the strong tint's real difference was lost"; note "$(cut -c1-220 <<<"$out")"; }
+}
+
 # --- the per-fix routine: every script that reads the local clock is named at the top of this file ----
 # A fix to one of them is the only kind that needs this suite a second time with TZ=UTC, so the list
 # must be whole: a script that reads today's date or a local time and is not in it fails here.
@@ -6644,7 +7214,7 @@ PY
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 ch_013 ch_014 ch_015 ch_016 ch_017 ch_020 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 sv_007 sv_009 sv_010 sv_014 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 bl_001 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 lk_036 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 tr_008 std_q4a owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 tf_055 tf_056 fw_001 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 am_030 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 ch_013 ch_014 ch_015 ch_016 ch_017 ch_018 ch_019 ch_020 ch_021 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 sv_007 sv_008 sv_009 sv_010 sv_011 sv_012 sv_013 sv_014 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 bl_001 bl_002 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 lk_036 lk_037 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 tr_008 std_q4a owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

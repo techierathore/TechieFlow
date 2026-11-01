@@ -8,10 +8,100 @@
 
 ---
 
-## Unreleased (since v1.2.1) — ships as v1.2.2
+## Unreleased (since v1.2.3) — ships as v1.2.4
 
-v1.2.1 was tagged on 2026-10-22. What follows is in no published package yet and goes out as v1.2.2:
-bug fixes only, so a patch version.
+v1.2.3 was tagged on 2026-10-30 at `2d9bc3d`. What follows is in no published package yet (it was
+deployed to all 18 projects with `update-framework.sh` on 2026-11-01) and goes out as v1.2.4: one new check that enforces a rule the prompts already stated, and bug fixes, so a patch version.
+
+- **FW-001 (owner, 2026-11-01): verify tests created accounts on the shared production AppManager on
+  every run.** (First numbered TF-056; TfLens filed its own TF-056 the same day, and TF numbers in
+  `tests/regression` belong to TfLens, so the framework's own defects now take FW numbers.) Two causes: Chatur `tests/verify/signin-register.spec.ts:96` registered
+  `chatur-verify-<Date.now()>@techierathore.com` for REQ-FN-004, and Sevak
+  `tests/verify/p1/a-setup-shell-auth.spec.ts:377` registered `sevak-verify-<Date.now()>@example.com` for
+  REQ-UI-006. The owner deleted the users by hand. The prompts said "use a test user from the usage guide,
+  never an invented one", but nothing checked it. The new `tf-test-users-check.py` scans every verify spec
+  and unit or integration test file. It fails a register call (`AuthSvc/register`, `UserSvc/register`,
+  `device-register`, a client's `Register…()`) or a register-form submit, and an address built at run time
+  (`Date.now()`, a Guid, random, a timestamp) that is not in the usage guide's Test users table. Allowed:
+  Test users addresses, so the "email already in use" path with test user 1 passes. Also allowed: a submit
+  with no address typed (the form's own validation), a `.invalid` or `@example.com` address in a test that
+  registers nothing (Forgot password), and a file whose AppManager client is replaced. It runs in two places:
+  - **The verify verdict**, as gate `test-users`, after build and before acceptance. The row goes to Needs
+    re-verify and `tf-verify-emit.sh` writes its gate record and miss.
+  - **`tf-build.sh build|test`**, over the builder's changed test files, before anything is built. It
+    prints a FAIL line and writes one gate record per row.
+  The rule is enforced only on an app that signs in through a shared AppManager (its Architecture's sign-in
+  row, or its Test users section). An app with its own accounts (TechieBlog, Lekhak, AppManager itself) gets
+  NOTE lines and a PASS. The verifier, the verify task, the builder prompt and the usage-guide template now
+  carry the sentence. tf-doc-check's `appmanager-test-users` rule fails a Test users section that does not
+  say it. The gate is in SCHEMA.md and `tf-metrics.sh` (`LATE_GATES` from 2026-11-01).
+  - **Measured on every project with a `.tfcore`:** Chatur 4 findings (REQ-FN-004, REQ-FN-005), Sevak 4
+    (REQ-UI-006, plus `tests/verify/p3/verify-env.ts` `registerThrowaway()`), AstroLyfe 5
+    (`tests/ui-smoke/AxeScan.spec.ts`, `auth-signup.spec.ts`: sign-ups at `astrolyfe.*.${Date.now()}@example.com`).
+    TfLens and Xpenser pass. TechieBlog has 13 notes, AppManager 46, Lekhak 1: all local accounts, none failed.
+  - **Replayed on a copy of Chatur's phase-1 evidence:** exactly two rows change, REQ-FN-004 and REQ-FN-005
+    (NOT-DRIVEN → TEST-USERS-FAIL). REQ-UI-004, which uses test user 1, is unchanged.
+  - **The doc rule now fails** the Test users section of Chatur, Sevak, TfLens and Xpenser until each adds
+    the sentence.
+  Case `fw_001`.
+
+- **Feedback sweep of 2026-11-01: twelve open entries fixed.** Each case fails against the v1.2.3 scripts
+  and passes now. Misses `MISS-TechieFlow-20261101-01` to `-06`, closed in the same run.
+  - **Lekhak TF-037**: on a desktop head a screen is opened by pushState, and the app draws it a moment
+    later. Both checks read the page after a fixed 1.5 s, so AI Setup's anchors were "not on the page" over
+    a screenshot of AI Story Studio. The screen check (`tf-verify-screens.mjs`) and the mockup check
+    (`tf-mockup-parity.mjs`) now note the anchors on the page before the move. After it they wait (at most
+    5 s) for one of the screen's own new anchors, then for the page to stop changing. Case `lk_037`.
+  - **Chatur TF-019**: `tf-login.mjs` tries the given sign-in path, then `/login`, `/sign-in`, `/signin`
+    and `/account/login`. It says which one worked ("LOGIN signed in at /sign-in: /login has no sign-in
+    form"). Case `ch_019`.
+  - **Sevak TF-011**: a minimized Windows window draws no frames. On a desktop head both checks now count
+    animation frames before measuring. On none, they restore the head's own window once, by the process id
+    the boot recorded. If it still draws nothing, the screen is NOT-MEASURED ("the app window is not
+    drawing"), and the verdict grades its rows as not driven. The restore itself is not proved on a real
+    Windows window. Case `sv_011`.
+  - **AppManager TF-030, TechieBlog TF-002 and Chatur TF-018, one change**: on WSL, `tf-verify-boot.sh`
+    ran a web project's copy on Windows, where NAT-mode WSL cannot reach it and a Windows process cannot
+    read the WSL paths the tests type. Now:
+    - A web project with no MAUI target of its own is published and run on WSL. When WSL cannot build it,
+      the Windows copy is bound to `0.0.0.0` and reached at `localhost` or the WSL gateway.
+    - `TF_BOOT_RUNNER=wsl|windows` names the side (through the new `TF_BUILD_SIDE` in `tf-build.sh`).
+    - `tf-verify-boot.sh adopt --port N [--pid P]` gives a head started by hand a boot record.
+    - `tf-verify-tests.sh --merge` with no part files refuses.
+
+    Cases `am_030`, `bl_002`, `ch_018`.
+  - **Sevak TF-013**: `tf-verify-boot.sh start --env NAME=VALUE` (repeatable) is kept in the boot record. It
+    reaches the Mac app through `open --env` and the mac2 session's `appium:environment`, and the Windows
+    head through `set`. Not proved on a Mac. Case `sv_013`.
+  - **Sevak TF-008**: three items written `**BRD-171** (was BRD-49) — …` were skipped by `tf-split-brd`. They
+    are read now, and the self-check line names the BRD file and any id it could not read. On Sevak: 52 of
+    55 → all 55. Case `sv_008`.
+  - **Sevak TF-012**: `tf-devguide-list` now also reads the project folders a root `*.slnx` / `*.sln` lists.
+    `apps/` is a samples folder only on a library. On Sevak, phase 3: NOTHING → 9 screens. The other 16
+    projects list exactly what they did. Case `sv_012`.
+  - **Chatur TF-021**: a test's sample checklist held `REQ-UI-999`. The TechieRag TF-008 scan counted it into
+    the highest id, so triage handed out `REQ-UI-1000`, and `tf-req-ids.py` cut `REQ-UI-1001` to `REQ-UI-100`.
+    Ids in code and tests now only rule an id out; they never raise the count. Ids of four digits are read
+    whole. On a copy of Chatur: `REQ-UI-1000` → `REQ-UI-083`. Case `ch_021`.
+  - **TfLens TF-055**: in the doc-check baseline, a section or entry over its size limit was old only at
+    the identical word count. It is now old at any count no larger than the baseline's, as a whole-document
+    finding already was. Case `tf_055`.
+  - **TfLens TF-056** (filed during this sweep): `tf-mockup-parity.mjs` read a translucent colour at full
+    strength. The mockup's `rgba(59,130,246,.08)` note bucketed as `accent` against the app's opaque pale blue
+    (`neutral`). A colour under 99 % opacity is now blended over what is painted behind it before it is
+    bucketed. A strong translucent colour still keeps its hue.
+    - **Measured on the mockups of 12 projects:** anchored colours change bucket in Chatur (146 of 4,366),
+      AppManager (42 of 334), TfLens (30 of 920) and TrBlazeUI (14 of 1,970); the other 8 are unchanged.
+    - **On TfLens's last evidence:** its 4 colour findings were all this one, and they go.
+    - **Not measured:** the app side of Chatur, AppManager and TrBlazeUI, which were not running. A pale
+      translucent chip in a mockup against a solid chip in the app is now a difference where it was not.
+
+    Case `tf_056`.
+
+## v1.2.3 (since v1.2.1)
+
+Tagged on 2026-10-30 at `2d9bc3d`. This section was written as "Unreleased, ships as v1.2.2"; v1.2.2 was
+never tagged, and these changes shipped as v1.2.3.
 
 - **Feedback sweep of 2026-10-29: nine entries, all from verify runs.** Each new case fails against
   the v1.2.1 scripts and passes now. **Chatur TF-020**: the menu walk knew a ticked item only by a

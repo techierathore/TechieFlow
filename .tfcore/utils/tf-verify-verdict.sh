@@ -4,7 +4,7 @@
 #   bash .tfcore/utils/tf-verify-verdict.sh <App> [--apply] [--dir tests/.artifacts/verify] [--started <ISO>]
 #
 # Reads list.json, boot.json, tests.json, screens.json, assets.json, parity.json and perf/<REQ>.json
-# from the evidence folder, applies the seven checks in order, records the first that fails, writes
+# from the evidence folder, applies the checks in order (build, test-users, acceptance, render, assets, visual, mockup, speed), records the first that fails, writes
 # docs/.last-verify.json (the ledger the verify hook reads, with every row's verdict) and verdicts.json,
 # and with --apply rewrites the Status, % and Remarks cells of the graded rows in the checklist.
 # A row is Verified only when everything that ran passed; a row whose screen was never driven keeps

@@ -4,6 +4,10 @@
 #   bash .tfcore/utils/tf-verify-boot.sh start [--head web|windows|static] [--project <csproj>] [--dry-run]
 #                                              [--port N] [--config Release] [--static <dir>] [--probe-path /healthz]
 #                                              [--environment Development]   (web: ASPNETCORE_ENVIRONMENT)
+#                                              [--env NAME=VALUE]…  (any head; kept in the record as "env")
+#   bash .tfcore/utils/tf-verify-boot.sh adopt --port N [--pid P] [--url U]   (a head started by hand)
+#   TF_BOOT_RUNNER=wsl|windows   on WSL, the side a web head runs on (default: WSL for a web project
+#                                with no MAUI target of its own, then Windows bound to 0.0.0.0)
 #   bash .tfcore/utils/tf-verify-boot.sh stop [--port N]
 #   bash .tfcore/utils/tf-verify-boot.sh status [--port N]
 #
@@ -56,6 +60,7 @@ U="$(uname -s 2>/dev/null || echo windows)"
 if [[ "$U" == Darwin* ]]; then PLATFORM="macos"
 elif [[ "$U" == Linux* ]]; then grep -qiE "microsoft|wsl" /proc/version 2>/dev/null && PLATFORM="wsl"
 else PLATFORM="windows"; fi
+PLATFORM="${TF_BOOT_PLATFORM:-$PLATFORM}"   # the self-tests only
 
 winarg() { # a Windows path as a cmd.exe argument: bare when it has no space (a quote passed
   # through the WSL bridge reaches dotnet as part of the path: "does not exist: \"C:\...\""; miss 23)
@@ -103,6 +108,18 @@ poll_http() { # url seconds pid-to-watch(optional) -> 0 when it answers
     # right. A Web API with nothing at / answers 404, and was polled for 120 s, called "not brought up"
     # and stopped while its log said "Application started" (AppManager TF-004).
     [[ "$code" =~ ^[1-5][0-9][0-9]$ ]] && return 0
+    if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then return 1; fi
+    sleep 2; i=$((i+2))
+  done
+  return 1
+}
+poll_hosts() { # port path seconds pid host... -> prints the first host that answers, nothing when none did
+  local port="$1" path="$2" secs="$3" pid="$4" i=0 h code; shift 4
+  while [[ $i -lt $secs ]]; do
+    for h in "$@"; do
+      code="$(curl -s -o /dev/null -m 3 -w '%{http_code}' "http://$h:$port$path" 2>/dev/null || true)"
+      [[ "$code" =~ ^[1-5][0-9][0-9]$ ]] && { echo "$h"; return 0; }
+    done
     if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then return 1; fi
     sleep 2; i=$((i+2))
   done
@@ -253,13 +270,48 @@ for f in twins:
 print(f"STOPPED head={s.get('head')} mode={s.get('mode')} pids={s.get('pids')}")
 PY
     exit 0 ;;
+  adopt)
+    # Chatur TF-018: a head started by hand (when the boot could not reach its own) left no boot record:
+    # the verdict wrote "not booted" over checks that had run, and a test reading pids[0] opened
+    # /proc/undefined. `adopt` records it: the process listening on the port, the URL, a boot record
+    # like start's, so the verdict, the tests and `stop` treat it as booted.
+    APORT=""; APID=""; AURL=""; APROJ=""; ALOG=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --port) APORT="${2:-}"; shift 2 ;;
+        --pid) APID="${2:-}"; shift 2 ;;
+        --url) AURL="${2:-}"; shift 2 ;;
+        --project) APROJ="${2:-}"; shift 2 ;;
+        --log) ALOG="${2:-}"; shift 2 ;;
+        *) echo "tf-verify-boot: unknown argument $1" >&2; exit 3 ;;
+      esac
+    done
+    [[ "$APORT" =~ ^[0-9]+$ ]] || { echo "tf-verify-boot: adopt needs --port N (the port the hand-started head listens on)" >&2; exit 3; }
+    AURL="${AURL:-http://localhost:$APORT}"; AURL="${AURL%/}"
+    if [[ -z "$APID" ]]; then
+      command -v lsof >/dev/null 2>&1 && APID="$(lsof -t -iTCP:"$APORT" -sTCP:LISTEN 2>/dev/null | head -1)"
+      [[ -z "$APID" ]] && command -v ss >/dev/null 2>&1 && APID="$(ss -ltnpH "sport = :$APORT" 2>/dev/null | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2)"
+    fi
+    if [[ ! "$APID" =~ ^[0-9]+$ ]] || ! kill -0 "$APID" 2>/dev/null; then
+      echo "NONE kind=host reason=no process of this machine found listening on port $APORT${APID:+ (pid $APID is not running)}; pass --pid <the head's pid>"; exit 2
+    fi
+    poll_http "$AURL/" 6 "$APID" || { echo "NONE kind=host reason=pid $APID is running but $AURL/ does not answer"; exit 2; }
+    KEYED="$DIR/boot-$APORT.json"; LOG="${ALOG:-$DIR/app-$APORT.log}"
+    write_state web base "$AURL" "$APID" "started by hand (adopted)" "$APROJ" "" "" "$PLATFORM"
+    set_state adopted true
+    echo "BOOTED head=web mode=base url=$AURL rung=adopted pid=$APID log=$LOG stop=\"bash .tfcore/utils/tf-verify-boot.sh stop --port $APORT\""; exit 0 ;;
   start) ;;
-  *) sed -n '2,39p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 3 ;;
+  *) sed -n '2,43p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 3 ;;
 esac
 
-HEAD=""; PROJECT=""; PORT=""; CONFIG=""; STATIC=""; PROBE="/"; DRYRUN=0; ENVNAME=""
+HEAD=""; PROJECT=""; PORT=""; CONFIG=""; STATIC=""; PROBE="/"; DRYRUN=0; ENVNAME=""; APPENV=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    # Sevak TF-013: a variable the app reads (a throw-away data folder, a verification switch), on every
+    # head: the web copy's environment, the Windows head's `set`, and on a Mac `open --env` and the mac2
+    # session's appium:environment. Kept in the boot record as "env", so every later session reuses it.
+    --env) [[ "${2:-}" =~ ^[A-Za-z_][A-Za-z0-9_]*=.*$ ]] || { echo "tf-verify-boot: --env takes NAME=VALUE, got '${2:-}'" >&2; exit 3; }
+           APPENV+=("$2"); shift 2 ;;
     --environment) ENVNAME="${2:-}"; shift 2 ;;   # the web head's ASPNETCORE_ENVIRONMENT (Lekhak TF-001)
     --probe-path) PROBE="${2:-/}"; [[ "$PROBE" == /* ]] || PROBE="/$PROBE"; shift 2 ;;
     --dry-run) DRYRUN=1; shift ;;   # print which project and head would boot, and stop (TF-010)
@@ -271,6 +323,14 @@ while [[ $# -gt 0 ]]; do
     *) echo "tf-verify-boot: unknown argument $1" >&2; exit 3 ;;
   esac
 done
+
+RUNNER="${TF_BOOT_RUNNER:-}"   # wsl | windows: the side of a WSL machine a web head runs on (Chatur TF-018)
+case "$RUNNER" in ""|wsl|windows) ;; *) echo "tf-verify-boot: TF_BOOT_RUNNER is wsl or windows, not '$RUNNER'" >&2; exit 3 ;; esac
+WAIT="${TF_BOOT_WAIT:-120}"    # seconds a web copy has to answer (the self-tests shorten it)
+save_env() { # the --env pairs into the boot record, so a later session or relaunch passes the same
+  [[ ${#APPENV[@]} -gt 0 ]] || return 0
+  set_state env "$(python3 -c 'import json,sys; print(json.dumps(dict(a.split("=",1) for a in sys.argv[1:])))' "${APPENV[@]}")"
+}
 
 # ---- static ---------------------------------------------------------------------------
 if [[ "$HEAD" == "static" ]]; then
@@ -471,7 +531,8 @@ sys.exit(0 if v < (4, 1, 1) else 1)' "$M2"; then
   # Opened the way Finder opens it: macOS kills a sandboxed app started from its binary directly
   # ("Killed: 9", Lekhak BlogAdmin, 2026-10-07). Its output goes to the log through open's own options.
   # -ApplePersistenceIgnoreState: never offer to reopen the windows of an earlier run (Lekhak TF-026)
-  OPENERR="$(open -n -o "$ROOT_LOG" --stderr "$ROOT_LOG" "$APP" --args -ApplePersistenceIgnoreState YES 2>&1)"; printf '%s\n' "$OPENERR" >> "$LOG"
+  OENV=(); for kv in ${APPENV[@]+"${APPENV[@]}"}; do OENV+=(--env "$kv"); done   # Sevak TF-013
+  OPENERR="$(open -n ${OENV[@]+"${OENV[@]}"} -o "$ROOT_LOG" --stderr "$ROOT_LOG" "$APP" --args -ApplePersistenceIgnoreState YES 2>&1)"; printf '%s\n' "$OPENERR" >> "$LOG"
   APP_PID=""; i=0
   while [[ $i -lt 10 && -z "$APP_PID" ]]; do sleep 1; i=$((i+1)); APP_PID="$(pgrep -f "$APP/Contents/MacOS/$EXE" | head -1)"; done
   i=0; while [[ -n "$APP_PID" && $i -lt 8 ]] && kill -0 "$APP_PID" 2>/dev/null; do sleep 1; i=$((i+1)); done
@@ -491,6 +552,7 @@ sys.exit(0 if v < (4, 1, 1) else 1)' "$M2"; then
   write_state maccatalyst appium "$AURL" "$APP_PID $APPIUM_PID" "tf-build.sh build -f $TFM" "$PROJECT" "" "" "$PLATFORM"
   set_state bundle_id "$(json_escape "$BUNDLE")"
   set_state app_path "$(json_escape "$APP")"
+  save_env   # before the first session: tf-appium.mjs openSession() passes it as appium:environment
   # Lekhak TF-026: a running process and an answering Appium are not a boot. A mac2 session has to open
   # and find the app's own window on view, not a system dialog, before this says BOOTED.
   SHOT="$PWD/$DIR/boot-$APORT-window.png"
@@ -543,23 +605,6 @@ if [[ "$HEAD" == "web" ]]; then
   # are read from the project folder, as `dotnet run` reads them.
   if ! grep -q 'Microsoft\.NET\.Sdk\.BlazorWebAssembly' "$PROJECT"; then
     ROOTDIR="$PWD"; RUN="$DIR/run-$PORT"
-    rm -rf "$RUN"
-    echo "### publish $PROJECT into $RUN" >> "$LOG"
-    # Debug unless --config says otherwise: `dotnet publish` alone builds Release, which is not the app
-    # `dotnet run` ran, and a Release publish over a Debug-built tree stamped the pages with one scope
-    # and the stylesheet with another (TfLens cluster E, in TF-043)
-    pub="$(bash "$HERE/tf-build.sh" publish "$PROJECT" -- -o "$RUN" -c "${CONFIG:-Debug}" 2>&1)"; prc=$?
-    printf '%s\n' "$pub" >> "$LOG"
-    verdict="$(grep -E '^(PASS|FAIL|NOT-RUN)' <<<"$pub" | tail -1)"
-    if [[ $prc -eq 1 ]]; then
-      first="$(grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$pub" | head -1 | sed 's/^[[:space:]]*//' | cut -c1-160)"
-      write_state web none "" "" "tf-build.sh publish" "$PROJECT" "build error: ${first:-$verdict}" build-error "$PLATFORM"
-      echo "NONE head=web kind=build-error reason=the code does not build: ${first:-$verdict} (log $LOG)"; exit 2
-    elif [[ $prc -ne 0 || ! -f "$RUN/$ASM.dll" ]]; then
-      reason="${verdict:-the publish wrote no $ASM.dll into $RUN}"
-      write_state web none "" "" "tf-build.sh publish" "$PROJECT" "$reason" host "$PLATFORM"
-      echo "NONE head=web kind=host reason=$reason (log $LOG)"; exit 2
-    fi
     # what `dotnet run` sets from the launch profile; the environment above all, which picks the
     # settings file and whether the secrets are read
     tf_read_lines LSENV < <(TF_BOOT_ENV="$ENVNAME" python3 - "$PDIR/Properties/launchSettings.json" <<'PY'
@@ -578,52 +623,94 @@ for k, v in env.items():
     print(f"{k}={v}")
 PY
 )
-    WIN=""
-    case "$verdict" in
-      *"via cmd.exe"*|*"via winrun"*|*"via powershell.exe"*)
-        WIN=1; WPD="$(winarg "$(wslpath -w "$PDIR")")"; WDLL="$(winarg "$(wslpath -w "$RUN/$ASM.dll")")"
-        WWEB=""; [[ -d "$RUN/wwwroot" ]] && WWEB="--webroot $(winarg "$(wslpath -w "$RUN/wwwroot")")"
-        sets=""; for kv in ${LSENV[@]+"${LSENV[@]}"}; do sets+="set $kv&& "; done
-        nohup cmd.exe /c "cd /d $WPD && ${sets}dotnet $WDLL --urls $URL --contentRoot $WPD $WWEB" >> "$LOG" 2>&1 < /dev/null &
-        PID=$!; label="cmd.exe /c dotnet" ;;
-      *)
-        runner="dotnet"; [[ "$verdict" == *"via ~/.dotnet/dotnet"* ]] && runner="$HOME/.dotnet/dotnet"
-        # Lekhak TF-001. A copy run on the WSL side reads user-secrets from ~/.microsoft/usersecrets,
-        # while `dotnet user-secrets set` on Windows wrote them to %APPDATA%\Microsoft\UserSecrets:
-        # "Required configuration value(s) not set" on an app that starts under `dotnet run`. The
-        # secrets reader looks under $APPDATA first on any system, so when only the Windows store
-        # holds this project's secrets, the app is pointed at it.
-        SID="$(grep -oE '<UserSecretsId>[^<]+' "$PROJECT" 2>/dev/null | head -1 | sed 's/<UserSecretsId>//')"
-        if [[ -n "$SID" && ! -f "$HOME/.microsoft/usersecrets/$SID/secrets.json" ]] && [[ "$PLATFORM" == wsl || -n "${TF_WIN_APPDATA:-}" ]]; then
-          WAD="${TF_WIN_APPDATA:-}"
-          if [[ -z "$WAD" ]] && command -v cmd.exe >/dev/null 2>&1; then
-            WAD="$(cmd.exe /c 'echo %APPDATA%' 2>/dev/null | tr -d '\r')"; [[ -n "$WAD" ]] && WAD="$(wslpath -u "$WAD" 2>/dev/null)"
-          fi
-          if [[ -n "$WAD" && -f "$WAD/Microsoft/UserSecrets/$SID/secrets.json" ]]; then
-            LSENV+=("APPDATA=$WAD")
-            echo "tf-verify-boot: user-secrets $SID are in the Windows store only; the app reads them from $WAD/Microsoft/UserSecrets"
-          fi
-        fi
-        WEBR=(); [[ -d "$RUN/wwwroot" ]] && WEBR=(--webroot "$ROOTDIR/$RUN/wwwroot")
-        # the redirections belong to the whole background group and the group becomes the app: a group
-        # left waiting on its app kept this script's output open, so a caller reading it waited for ever
-        ( cd "$PDIR" || exit 1; exec env ${LSENV[@]+"${LSENV[@]}"} nohup "$runner" "$ROOTDIR/$RUN/$ASM.dll" --urls "$URL" --contentRoot "$PWD" ${WEBR[@]+"${WEBR[@]}"} ) \
-            >> "$ROOTDIR/$LOG" 2>&1 < /dev/null &
-        PID=$!; label="$([[ "$runner" == dotnet ]] && echo dotnet || echo '~/.dotnet/dotnet')" ;;
-    esac
-    if poll_http "$URL$PROBE" 120 "$PID"; then
-      write_state web base "$URL" "$PID" "$label (published copy)" "$PROJECT" "" "" "$PLATFORM"
-      set_state run_dir "$(json_escape "$RUN")"
-      [[ -n "$WIN" ]] && set_state win_port "$PORT"
-      echo "BOOTED head=web mode=base url=$URL rung=$label project=$PROJECT copy=$RUN pid=$PID log=$LOG stop=\"bash .tfcore/utils/tf-verify-boot.sh stop --port $PORT\""; exit 0
+    LSENV+=(${APPENV[@]+"${APPENV[@]}"})   # --env NAME=VALUE: the caller's own, after the profile's
+    # AppManager TF-030, TechieBlog TF-002, Chatur TF-018: the side of a WSL machine the copy runs on.
+    # It followed the publish's rung, and a web project in a solution with a MAUI head is built
+    # Windows-side (Lekhak TF-036), so the copy ran there: in NAT networking WSL cannot reach a Windows
+    # `localhost`, and a Windows process cannot read the WSL paths the tests type. A web project with no
+    # MAUI target of its own now publishes and runs on the WSL side; when WSL cannot build it (no dotnet
+    # there), the Windows side is tried, bound to every interface and reached at localhost or the WSL
+    # gateway. TF_BOOT_RUNNER=wsl|windows names the side and is never second-guessed.
+    SIDES=("")
+    if [[ "$PLATFORM" == wsl ]]; then
+      if [[ -n "$RUNNER" ]]; then SIDES=("$RUNNER")
+      elif grep -qiE '<UseMaui>[[:space:]]*true|Microsoft\.NET\.Sdk\.Maui|net[0-9.]+-(android|ios|maccatalyst|windows10)' "$PROJECT"; then SIDES=("windows" "wsl")
+      else SIDES=("wsl" "windows"); fi
     fi
-    pkill -P "$PID" 2>/dev/null; kill "$PID" 2>/dev/null
-    [[ -n "$WIN" ]] && powershell.exe -NoProfile -Command "Get-NetTCPConnection -LocalPort $PORT -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" >/dev/null 2>&1
-    last="$(grep -vE '^[[:space:]]*$' "$LOG" | tail -3 | tr '\n' ' ' | cut -c1-240)"
-    # say what the log says: "no rung brought it up" sent a reader to the build when the app had started
-    said=""; grep -q 'Now listening on' "$LOG" && said=" although its log says it is listening"
-    write_state web none "" "" "$label (published copy)" "$PROJECT" "the published copy did not answer on $URL$PROBE within 120 s$said" host "$PLATFORM"
-    echo "NONE head=web kind=host reason=the published copy of $PROJECT did not answer on $URL$PROBE within 120 s$said; last lines: $last (log $LOG)"; exit 2
+    GW="$(ip route 2>/dev/null | awk '/default/{print $3; exit}')"
+    tried=(); said=""; last=""
+    for SIDE in "${SIDES[@]}"; do
+      rm -rf "$RUN"
+      echo "### publish $PROJECT into $RUN${SIDE:+ (side $SIDE)}" >> "$LOG"
+      # Debug unless --config says otherwise: `dotnet publish` alone builds Release, which is not the app
+      # `dotnet run` ran, and a Release publish over a Debug-built tree stamped the pages with one scope
+      # and the stylesheet with another (TfLens cluster E, in TF-043)
+      pub="$(TF_BUILD_SIDE="$SIDE" bash "$HERE/tf-build.sh" publish "$PROJECT" -- -o "$RUN" -c "${CONFIG:-Debug}" 2>&1)"; prc=$?
+      printf '%s\n' "$pub" >> "$LOG"
+      verdict="$(grep -E '^(PASS|FAIL|NOT-RUN)' <<<"$pub" | tail -1)"
+      if [[ $prc -eq 1 ]]; then
+        first="$(grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$pub" | head -1 | sed 's/^[[:space:]]*//' | cut -c1-160)"
+        write_state web none "" "" "tf-build.sh publish" "$PROJECT" "build error: ${first:-$verdict}" build-error "$PLATFORM"
+        echo "NONE head=web kind=build-error reason=the code does not build: ${first:-$verdict} (log $LOG)"; exit 2
+      elif [[ $prc -ne 0 || ! -f "$RUN/$ASM.dll" ]]; then
+        last="${verdict:-the publish wrote no $ASM.dll into $RUN}"; tried+=("publish${SIDE:+ on $SIDE}: $last"); continue
+      fi
+      WIN=""; HOSTS=("localhost")
+      case "$verdict" in
+        *"via cmd.exe"*|*"via winrun"*|*"via powershell.exe"*)
+          # bound to every interface: WSL reaches it at localhost (mirrored networking) or at the gateway
+          # (NAT), the way the Windows head's DevTools port is reached (TechieBlog TF-002)
+          WIN=1; [[ -n "$GW" ]] && HOSTS+=("$GW")
+          WPD="$(winarg "$(wslpath -w "$PDIR")")"; WDLL="$(winarg "$(wslpath -w "$RUN/$ASM.dll")")"
+          WWEB=""; [[ -d "$RUN/wwwroot" ]] && WWEB="--webroot $(winarg "$(wslpath -w "$RUN/wwwroot")")"
+          sets=""; for kv in ${LSENV[@]+"${LSENV[@]}"}; do sets+="set $kv&& "; done
+          nohup cmd.exe /c "cd /d $WPD && ${sets}dotnet $WDLL --urls http://0.0.0.0:$PORT --contentRoot $WPD $WWEB" >> "$LOG" 2>&1 < /dev/null &
+          PID=$!; label="cmd.exe /c dotnet" ;;
+        *)
+          runner="dotnet"; [[ "$verdict" == *"via ~/.dotnet/dotnet"* ]] && runner="$HOME/.dotnet/dotnet"
+          # Lekhak TF-001. A copy run on the WSL side reads user-secrets from ~/.microsoft/usersecrets,
+          # while `dotnet user-secrets set` on Windows wrote them to %APPDATA%\Microsoft\UserSecrets:
+          # "Required configuration value(s) not set" on an app that starts under `dotnet run`. The
+          # secrets reader looks under $APPDATA first on any system, so when only the Windows store
+          # holds this project's secrets, the app is pointed at it.
+          SID="$(grep -oE '<UserSecretsId>[^<]+' "$PROJECT" 2>/dev/null | head -1 | sed 's/<UserSecretsId>//')"
+          if [[ -n "$SID" && ! -f "$HOME/.microsoft/usersecrets/$SID/secrets.json" ]] && [[ "$PLATFORM" == wsl || -n "${TF_WIN_APPDATA:-}" ]] \
+             && ! printf '%s\n' ${LSENV[@]+"${LSENV[@]}"} | grep -q '^APPDATA='; then
+            WAD="${TF_WIN_APPDATA:-}"
+            if [[ -z "$WAD" ]] && command -v cmd.exe >/dev/null 2>&1; then
+              WAD="$(cmd.exe /c 'echo %APPDATA%' 2>/dev/null | tr -d '\r')"; [[ -n "$WAD" ]] && WAD="$(wslpath -u "$WAD" 2>/dev/null)"
+            fi
+            if [[ -n "$WAD" && -f "$WAD/Microsoft/UserSecrets/$SID/secrets.json" ]]; then
+              LSENV+=("APPDATA=$WAD")
+              echo "tf-verify-boot: user-secrets $SID are in the Windows store only; the app reads them from $WAD/Microsoft/UserSecrets"
+            fi
+          fi
+          WEBR=(); [[ -d "$RUN/wwwroot" ]] && WEBR=(--webroot "$ROOTDIR/$RUN/wwwroot")
+          # the redirections belong to the whole background group and the group becomes the app: a group
+          # left waiting on its app kept this script's output open, so a caller reading it waited for ever
+          ( cd "$PDIR" || exit 1; exec env ${LSENV[@]+"${LSENV[@]}"} nohup "$runner" "$ROOTDIR/$RUN/$ASM.dll" --urls "$URL" --contentRoot "$PWD" ${WEBR[@]+"${WEBR[@]}"} ) \
+              >> "$ROOTDIR/$LOG" 2>&1 < /dev/null &
+          PID=$!; label="$([[ "$runner" == dotnet ]] && echo dotnet || echo '~/.dotnet/dotnet')" ;;
+      esac
+      AT="$(poll_hosts "$PORT" "$PROBE" "$WAIT" "$PID" "${HOSTS[@]}")"
+      if [[ -n "$AT" ]]; then
+        URL="http://$AT:$PORT"
+        write_state web base "$URL" "$PID" "$label (published copy)" "$PROJECT" "" "" "$PLATFORM"
+        set_state run_dir "$(json_escape "$RUN")"
+        [[ -n "$WIN" ]] && set_state win_port "$PORT"
+        [[ -n "$SIDE" ]] && set_state side "$(json_escape "$SIDE")"
+        save_env
+        echo "BOOTED head=web mode=base url=$URL rung=$label project=$PROJECT copy=$RUN${SIDE:+ side=$SIDE} pid=$PID log=$LOG stop=\"bash .tfcore/utils/tf-verify-boot.sh stop --port $PORT\""; exit 0
+      fi
+      pkill -P "$PID" 2>/dev/null; kill "$PID" 2>/dev/null
+      [[ -n "$WIN" ]] && powershell.exe -NoProfile -Command "Get-NetTCPConnection -LocalPort $PORT -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" >/dev/null 2>&1
+      last="$(grep -vE '^[[:space:]]*$' "$LOG" | tail -3 | tr '\n' ' ' | cut -c1-240)"
+      # say what the log says: "no rung brought it up" sent a reader to the build when the app had started
+      said=""; grep -q 'Now listening on' "$LOG" && said=" although its log says it is listening"
+      tried+=("$label${SIDE:+ ($SIDE side)} on ${HOSTS[*]}: no answer within $WAIT s$said")
+    done
+    write_state web none "" "" "tf-build.sh publish" "$PROJECT" "the published copy did not answer on $URL$PROBE within $WAIT s$said; tried: $(IFS=';'; echo "${tried[*]}")" host "$PLATFORM"
+    echo "NONE head=web kind=host reason=the published copy of $PROJECT did not answer on $URL$PROBE within $WAIT s$said; tried: $(IFS=';'; echo "${tried[*]}"); last lines: $last (log $LOG)"; exit 2
   fi
   # a standalone WebAssembly project has no server of its own to publish: `dotnet run` serves it
   rungs=()
@@ -641,7 +728,7 @@ PY
         nohup cmd.exe /c "dotnet run --project $WP ${CFGARGS[*]:-} --urls $URL" >> "$LOG" 2>&1 < /dev/null &
         PID=$!; label="cmd.exe /c dotnet" ;;
       *)
-        ASPNETCORE_ENVIRONMENT="${ENVNAME:-${ASPNETCORE_ENVIRONMENT:-Development}}" nohup "$r" run --project "$PROJECT" ${CFGARGS[@]+"${CFGARGS[@]}"} --urls "$URL" >> "$LOG" 2>&1 < /dev/null &
+        ASPNETCORE_ENVIRONMENT="${ENVNAME:-${ASPNETCORE_ENVIRONMENT:-Development}}" nohup env ${APPENV[@]+"${APPENV[@]}"} "$r" run --project "$PROJECT" ${CFGARGS[@]+"${CFGARGS[@]}"} --urls "$URL" >> "$LOG" 2>&1 < /dev/null &
         PID=$!; label="$r" ;;
     esac
     tried+=("$label")
@@ -649,6 +736,7 @@ PY
       WP_PORT=""; [[ "$r" == "cmd.exe" ]] && WP_PORT="$PORT"
       write_state web base "$URL" "$PID" "$label" "$PROJECT" "" "" "$PLATFORM"
       [[ -n "$WP_PORT" ]] && set_state win_port "$WP_PORT"
+      save_env
       echo "BOOTED head=web mode=base url=$URL rung=$label project=$PROJECT pid=$PID log=$LOG stop=\"bash .tfcore/utils/tf-verify-boot.sh stop --port $PORT\""; exit 0
     fi
     pkill -P "$PID" 2>/dev/null; kill "$PID" 2>/dev/null
@@ -704,7 +792,8 @@ echo "### windows head: $PROJECT -f $TFM (DevTools $CDP_PORT, relay $RELAY_PORT)
 # stop kills them alone, never every copy of the program (taskkill /IM stopped another agent's app)
 win_ids() { powershell.exe -NoProfile -Command "Get-Process -Name '$ASM' -ErrorAction SilentlyContinue | ForEach-Object { \$_.Id }" 2>/dev/null | tr -d '\r' | grep -E '^[0-9]+$' | sort; }
 BEFORE_IDS="$(win_ids)"
-nohup cmd.exe /c "${UDF_SET}set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=$CDP_PORT&& dotnet run --project $WP -f $TFM ${CFGARGS[*]:-}" >> "$LOG" 2>&1 < /dev/null &
+APPSET=""; for kv in ${APPENV[@]+"${APPENV[@]}"}; do APPSET+="set $kv&& "; done   # --env (Sevak TF-013, Chatur TF-018)
+nohup cmd.exe /c "${UDF_SET}${APPSET}set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=$CDP_PORT&& dotnet run --project $WP -f $TFM ${CFGARGS[*]:-}" >> "$LOG" 2>&1 < /dev/null &
 APP_PID=$!
 nohup powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$RELAY" -ListenPort "$RELAY_PORT" -TargetPort "$CDP_PORT" >> "$DIR/relay.log" 2>&1 < /dev/null &
 RELAY_PID=$!
@@ -741,5 +830,6 @@ write_state windows cdp "$URL" "$APP_PID $RELAY_PID" "cmd.exe /c dotnet run -f $
 set_state win_image "\"$ASM.exe\""
 set_state win_pids "[$(tr ' ' '\n' <<<"$MINE" | grep -E '^[0-9]+$' | paste -sd, -)]"
 set_state cdp_port "$CDP_PORT"
+save_env
 echo "BOOTED head=windows mode=cdp url=$URL project=$PROJECT tfm=$TFM pids=$APP_PID,$RELAY_PID image=$ASM.exe log=$LOG"
 exit 0

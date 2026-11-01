@@ -4,14 +4,14 @@
 |---|---|
 | App | AppManager |
 | Upstream | TechieFlow |
-| Updated | 2026-10-04 |
+| Updated | 2026-10-21 |
 
 ## Summary
 
-- 0 blockers, 7 majors, 22 minors, 0 nice-to-haves
-- Last consolidated: 2026-10-04
+- 0 blockers, 8 majors, 22 minors, 0 nice-to-haves
+- Last consolidated: 2026-10-21
 
-29 entries: 0 blocking now, 0 open, 1 fixed upstream and waiting to be re-checked here (TF-029, fixed 2026-10-04), 28 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-014 on 2026-09-14, TF-015 and TF-016 on 2026-09-16, TF-017 to TF-022 on 2026-09-17, TF-023 and TF-024 on 2026-09-18, TF-025 to TF-027 on 2026-09-19, TF-028 on 2026-10-04.
+30 entries: 0 blocking now, 1 open and not blocking (TF-030, 2026-10-21: the boot script runs a web project Windows-side, where WSL cannot reach it), 29 closed here after a re-check: TF-001 to TF-006 on 2026-09-13, TF-007 to TF-014 on 2026-09-14, TF-015 and TF-016 on 2026-09-16, TF-017 to TF-022 on 2026-09-17, TF-023 and TF-024 on 2026-09-18, TF-025 to TF-027 on 2026-09-19, TF-028 and TF-029 on 2026-10-04.
 
 Nothing is blocked. TF-029 is fixed upstream: a rendered heading also carries GitHub's id, so links to numbered headings land. TF-028 is closed: a table wrapper that only scrolls sideways is no longer taken for the app's scroll container. TF-025 to TF-027 are closed: a quoted `&` no longer reads as a background run, the app's log files no longer count as code, and `*triage-and-fix` may run a migration. TF-024 is closed: the API reference is no longer graded as the usage guide. TF-023 is closed: a DevGuide's word limit grows with each screen past 20, so the guide is one file again. TF-022 is closed: the builder prompt names the usage guide that exists. TF-020 is closed: a fix prompt carries each row's defect. TF-021 is closed: a verify keeps a defect it cannot see and sends the row to a fix.
 ## Entries
@@ -407,6 +407,8 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 
 ### TF-029 — the HTML renderer drops the numbers from heading ids, so links to numbered headings go nowhere
 
+> ✅ **Closed 2026-10-04** — re-checked here: Re-checked 2026-10-04: re-rendered docs/AppManager-api-usage-guide.md with tf-render-html.sh and counted in-page links against element ids in the HTML: 238 links, 0 dead; the heading for 3.7 Group Service carries id 37-group-service-groupsvc, so the table-of-contents link lands.
+
 - **Severity:** minor
 - **Blocks:** no — the Markdown files' links work; only the rendered HTML copies have dead in-page links.
 - **Repro:** `bash .tfcore/utils/tf-render-html.sh docs/AppManager-api-usage-guide.md`, then follow the table-of-contents link `#37-group-service-groupsvc` (heading `### 3.7 Group Service (GroupSvc)`).
@@ -416,9 +418,33 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 - **Workaround:** none in the HTML; readers use the Markdown file or the sidebar.
 - **Suggested fix:** build heading ids the way GitHub does (keep digits, drop the dots), or give each heading both ids.
 
+### TF-030 — `tf-verify-boot.sh` runs a web project Windows-side on WSL, where WSL cannot reach it
+
+- **Severity:** major
+- **Blocks:** no — Playwright started the API and the admin site on WSL instead (`AM_START_WEB=1` in `playwright.config.ts`), the REQ-FN-061 test ran against them and passed, and the run carried on.
+- **Repro:** On WSL, with a solution that has a MAUI head:
+  ```text
+  bash .tfcore/utils/tf-verify-boot.sh start
+  -> NONE head=web kind=host reason=the published copy of src/AppManagerWeb/AppManagerWeb.csproj did not answer on http://localhost:5041/ within 120 s although its log says it is listening
+  ```
+  The same with `--project src/AppManagerApi/AppManagerApi.csproj --probe-path /healthz` on :5100. Both logs say `Now listening on: http://localhost:<port>` from `C:\…`, so the copy runs on Windows, and WSL's `curl http://localhost:<port>` gets no answer (NAT networking).
+- **Expected:** A web project that builds on WSL (no MAUI target of its own) is published and run on WSL, or the Windows copy listens where WSL can reach it, and the script prints BOOTED.
+- **Actual:** NONE `kind=host`, so the verdict records "not booted" even though the app works.
+- **Encountered in:** `*triage-and-fix AppManager` (AM-003 / REQ-FN-061), 2026-10-21.
+- **Workaround:** Build the web and API projects on WSL (`~/.dotnet/dotnet build`; the Windows build leaves Windows paths in the static web assets manifest, and the WSL run then stops with "The path must be absolute") and let Playwright's `webServer` start both.
+- **Suggested fix:** In the web head, choose the side from the project being booted, not from the solution: a project with no MAUI target publishes and runs on the WSL rungs.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### Resolution status (TechieFlow team, 2026-11-01)
+
+Ships in **TechieFlow v1.2.4**, the next release after v1.2.3; already in this project's `.tfcore/` through the framework update of 2026-11-01. Each fix has a regression case in `tests/regression/run.sh` that fails against the v1.2.3 script and passes now.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-030 | Fixed upstream in `tf-verify-boot.sh`. The side is chosen from the project being booted, not from the solution: a web project with no MAUI target of its own is published and run on WSL. Case `am_030`. | After the framework update: `bash .tfcore/utils/tf-verify-boot.sh start --project src/AppManagerWeb/AppManagerWeb.csproj`: expect `BOOTED … side=wsl` with no `AM_START_WEB=1`. |
 
 ### TF-029 — fixed 2026-10-04
 

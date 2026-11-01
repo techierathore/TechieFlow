@@ -8,8 +8,11 @@ acceptance tests), screens.json (render and visual), assets.json (tf-assets.sh -
 parity.json (tf-mockup-parity.sh --json-out) and perf/<REQ>.json (tf-perf.sh --json-out per budget
 row). A file that is absent means that check did not run.
 
-For each row, the seven checks in order, and the first that fails is the verdict:
+For each row, the checks in order, and the first that fails is the verdict:
   build       the app booted (or was built) — boot.json
+  test-users  no test of the row creates, deletes or changes an account on a shared AppManager —
+              tf-test-users-check.py, run here over the app's test files (FW-001); a row whose test
+              registers an account, or builds an address at run time, fails it whatever its test said
   acceptance  a test carrying the row's id passed — tests.json
   render      every anchored control on its screen shows something — screens.json
   assets      every stylesheet and script its screen declares arrived — assets.json
@@ -21,7 +24,7 @@ For each row, the seven checks in order, and the first that fails is the verdict
   speed       within the row's perf-budget, only when it declares one — perf/<REQ>.json
   (standards has no script yet and is never listed as run)
 
-Verdicts: PASS · FAIL (acceptance) · BUILD-FAIL · RENDER-FAIL · ASSET-FAIL · VISUAL-FAIL · MOCKUP-FAIL ·
+Verdicts: PASS · FAIL (acceptance) · BUILD-FAIL · TEST-USERS-FAIL · RENDER-FAIL · ASSET-FAIL · VISUAL-FAIL · MOCKUP-FAIL ·
 PERF-FAIL · NOT-TESTED (no test carried the id, or every test carrying it was skipped; the screen
 checks passed or did not run) ·
 NOT-OBSERVABLE (an NFR row with no budget and no unit test) · NOT-BUILT (a Not Started row whose only
@@ -51,9 +54,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import tf_defect  # noqa: E402
 import tf_stack_check  # noqa: E402
-FAILING = {"BUILD-FAIL": "build", "FAIL": "acceptance", "RENDER-FAIL": "render", "ASSET-FAIL": "assets",
+FAILING = {"BUILD-FAIL": "build", "TEST-USERS-FAIL": "test-users", "FAIL": "acceptance", "RENDER-FAIL": "render", "ASSET-FAIL": "assets",
            "VISUAL-FAIL": "visual", "MOCKUP-FAIL": "mockup-parity", "PERF-FAIL": "perf"}
-STATUS = {"PASS": "Verified", "FAIL": "FAIL", "BUILD-FAIL": "FAIL", "RENDER-FAIL": "Needs re-verify", "ASSET-FAIL": "Needs re-verify",
+STATUS = {"PASS": "Verified", "FAIL": "FAIL", "BUILD-FAIL": "FAIL", "TEST-USERS-FAIL": "Needs re-verify", "RENDER-FAIL": "Needs re-verify", "ASSET-FAIL": "Needs re-verify",
           "VISUAL-FAIL": "Needs re-verify", "MOCKUP-FAIL": "Needs re-verify", "PERF-FAIL": "Needs re-verify"}
 
 
@@ -125,13 +128,31 @@ def words(s, n=60):
     return s if len(w) <= n else " ".join(w[:n]) + "…"   # the ellipsis rides on the last word: the checker counts words, and a bare "…" was a 61st (miss 29)
 
 
+def test_users(app, d):
+    """tf-test-users-check.py over the app's test files (FW-001): {REQ: [finding]} and the run's JSON.
+    A finding no row owns (a helper no test calls) is printed, never dropped."""
+    import subprocess
+    out = os.path.join(d, "test-users.json")
+    try:
+        subprocess.run([sys.executable, os.path.join(HERE, "tf-test-users-check.py"), "--app", app, "--json-out", out, "--quiet"],
+                       capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.SubprocessError):
+        return {}, None
+    j = load(out) or {}
+    by = {}
+    for k, f in enumerate(j.get("findings") or []):
+        for rid in f.get("reqs") or []:
+            by.setdefault(rid, []).append(f)
+    return by, j
+
+
 def mac_why(r, scr):
     """why a Mac web-view head did not measure a screen, in the Remark (Chatur TF-016, Sevak TF-014)"""
     f = next((x for w in scr.get("widths", []) for x in w.get("findings", [])), {})
     why = f.get("detail", "") if f.get("class") == "not-measured" else ""
     return (why or f"screen {r['screen']} not measured on the Mac head: Appium sees the web view as one empty "
             "element and cannot sign in, so a screen behind Sign in is never reached") \
-        + " (grade it on the web or Windows head)"
+        + ("" if f.get("not_drawing") else " (grade it on the web or Windows head)")
 
 
 def main(argv):
@@ -159,6 +180,8 @@ def main(argv):
     # the mockup each listed screen is graded against; a row's own *Mockup:* line when its screen has none
     mock_of = {s.get("name"): s.get("mockup") or "" for s in lst.get("screens", []) or []}
     grade = perf_grader()
+    tu_by, tu = test_users(app, d)
+    tu_on = bool(tu) and tu.get("enforced", False)
 
     # the last ledger: an earlier PASS lets a row this run could not measure keep its Verified (TF-017)
     prev = load(os.path.join("docs", ".last-verify.json")) if os.path.isfile(os.path.join("docs", ".last-verify.json")) else None
@@ -242,6 +265,16 @@ def main(argv):
 
         # 1 build
         checks.append(("build", booted or build_failed, build_failed, "BUILD-FAIL", "build-error", boot.get("reason", "build failed"), ""))
+        # 1b test-users: a test that creates an account on the shared AppManager is wrong whatever it
+        # proved (Chatur REQ-FN-004, Sevak REQ-UI-006, 1 Nov 2026: the owner deleted the accounts by hand)
+        if rid in tu_by:
+            f = tu_by[rid][0]
+            checks.append(("test-users", True, True, "TEST-USERS-FAIL", "test-users",
+                           f"{f['file']}:{f['line']} {f['detail']}" + (f" (+{len(tu_by[rid]) - 1} more)" if len(tu_by[rid]) > 1 else "")
+                           + "; a verify test never creates an account: register is checked by hand once per release",
+                           os.path.join(d, "test-users.json")))
+        elif tu_on and t:
+            checks.append(("test-users", True, False, "TEST-USERS-FAIL", None, "", ""))
         # 2 acceptance
         if t:
             checks.append(("acceptance", True, t["result"] != "PASS", "FAIL", "assert-fail", quoted(t.get("reason")) or "test failed", t.get("screenshot") or ""))
@@ -275,6 +308,7 @@ def main(argv):
             checks.append(("visual", True, bool(bad), "VISUAL-FAIL", f["class"] if f else None,
                            f"{f['detail']} on {r['screen']}" if f else "", w.get("screenshot", "") if w else ""))
         # 6 mockup parity
+        parity_unmeasured = ""
         mockup = mock_of.get(r.get("screen")) or r.get("mockup") or ""
         ps = parity_for(r, mockup, comparisons) if r.get("screen") else None
         if not ps and driven and mockup and boot.get("mode") == "appium":
@@ -305,6 +339,8 @@ def main(argv):
                                os.path.join(d, "parity.json")))
             elif v == "UNGRADEABLE":
                 notes.append("mockup-parity UNGRADEABLE (add data-testid anchors to the mockup)")
+            elif v == "NOT-MEASURED":   # Sevak TF-011: the desktop window drew no frames; not compared, not a pass
+                parity_unmeasured = next((w.get("error") for w in ps.get("widths", []) if w.get("error")), "") or "not measured"
             nm = (ps.get("coverage") or {}).get("not_measured") or []
             if nm:   # sample rows the app had no data for (Chatur TF-002)
                 notes.append(f"mockup-parity: {len(nm)} sample box(es) not measured, the app drew no data there "
@@ -371,6 +407,9 @@ def main(argv):
                           else f"screen {r['screen']} was not driven: its route {sk['route']} needs --route-value "
                                + ", ".join(f"{n}=<id>" for n in sk.get("needs", [])) if sk
                           else f"screen {r['screen']} was not driven in this run"))
+            elif parity_unmeasured and not unit_only:
+                verdict = "NOT-DRIVEN"
+                detail = f"mockup comparison of {r['screen']} {parity_unmeasured}"
             else:
                 verdict = "PASS"
                 parts = [f"test {quoted(t['tests'][0], 60)}" if t and t.get("tests") else "test passed"]
@@ -405,10 +444,10 @@ def main(argv):
                 detail = f"{detail}; no earlier PASS on record, so it is not Verified"
         if verdict == "PASS":
             pct = 100
-        elif verdict in ("DEFECT-OPEN", "RENDER-FAIL", "ASSET-FAIL", "VISUAL-FAIL", "MOCKUP-FAIL", "PERF-FAIL"):
+        elif verdict in ("DEFECT-OPEN", "TEST-USERS-FAIL", "RENDER-FAIL", "ASSET-FAIL", "VISUAL-FAIL", "MOCKUP-FAIL", "PERF-FAIL"):
             pct = min(pct if pct is not None else 75, 75)
         gate = FAILING.get(verdict)
-        marks = {"FAIL": "⚠ acceptance", "BUILD-FAIL": "⚠ build", "RENDER-FAIL": "⚠ render", "ASSET-FAIL": "⚠ assets",
+        marks = {"FAIL": "⚠ acceptance", "BUILD-FAIL": "⚠ build", "TEST-USERS-FAIL": "⚠ test-users", "RENDER-FAIL": "⚠ render", "ASSET-FAIL": "⚠ assets",
                  "VISUAL-FAIL": "⚠ visual", "MOCKUP-FAIL": "⚠ mockup-parity", "PERF-FAIL": "⚠ perf",
                  "NOT-TESTED": "not measured", "NOT-OBSERVABLE": "not observable", "NOT-DRIVEN": "not measured", "PASS": "PASS",
                  "NOT-BUILT": "not built",
@@ -429,7 +468,7 @@ def main(argv):
         table.append((rid, verdict, gate or "-", status, detail[:70]))
 
     checks = []
-    for c in ("build", "acceptance", "render", "assets", "visual", "mockup-parity", "perf"):
+    for c in ("build", "test-users", "acceptance", "render", "assets", "visual", "mockup-parity", "perf"):
         if any(c in x["gates_run"] for x in rows_out):
             checks.append(c)
     # Lekhak TF-007: a targeted verify rewrote the ledger with its own rows only (395 became 1), so every
@@ -497,6 +536,10 @@ def main(argv):
     print("|---|---|---|---|---|")
     for t in table:
         print("| " + " | ".join(str(x).replace("|", "/") for x in t) + " |")
+    if tu and tu.get("verdict") == "FAIL":
+        loose = [f for f in tu.get("findings") or [] if not f.get("reqs")]
+        print(f"test-users: FAIL — {len(tu.get('findings') or [])} finding(s) ({os.path.join(d, 'test-users.json')})"
+              + (f"; {len(loose)} in no row's test, fix them too: " + ", ".join(f"{f['file']}:{f['line']}" for f in loose[:4]) if loose else ""))
     print()
     print(f"Ledger: docs/.last-verify.json ({len(ledger_rows)} rows graded now, {len(all_rows)} in all). Verdicts: {os.path.join(d, 'verdicts.json')}."
           + (f" Checklist: {applied} row(s) rewritten in {lst.get('checklist')}." if apply else " Checklist untouched (no --apply)."))

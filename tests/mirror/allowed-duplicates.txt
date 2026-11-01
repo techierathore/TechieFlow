@@ -8,6 +8,7 @@
 90335b9659bc  .tfcore/agents/flow-master.md,.tfcore/agents/verifier.md  - everything the owner reads is plain, simple english, a question for 
 f11866779761  .tfcore/agents/flow-master.md,.tfcore/agents/verifier.md  - on activation, say who you are and print the command table below onc
 f474cb804cb7  .tfcore/agents/flow-master.md,.tfcore/agents/verifier.md  yes|no" first, and never stopping the run when the answer is no:
+213fd49f1802  .tfcore/agents/verifier.md,.tfcore/tasks/verify-phase.md  the "register creates an account" path of any app is verified by hand 
 03b76928f584  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  bash .tfcore/utils/tf-day1-files.sh {app} --size {s|m|l} --kind {app|l
 15cf9a2aeac2  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  any untracking commands it prints go into your summary for the owner t
 34dcdb7ea088  .tfcore/tasks/day1-brownfield.md,.tfcore/tasks/day1-greenfield.md  one row per phase, each within medium, every screen in exactly one pha
@@ -22,6 +23,7 @@ b9c9d9416993  .tfcore/tasks/handoff-phase.md,.tfcore/tasks/productguide.md  reqs
 e4ede6312612  .tfcore/tasks/handoff-phase.md,.tfcore/tasks/productguide.md  telemetry has no veto: if the emit fails, the phase still succeeded;
 39271a11699f  .tfcore/tasks/metrics-report.md,docs/TechieFlow-Telemetry-Runbook.md  first-pass rate — what fraction of reqs reach verified on attempt 1?
 e32a5d8d950c  .tfcore/tasks/metrics-report.md,docs/TechieFlow-Telemetry-Runbook.md  a pooled gate distribution understates the visual gate, because librar
+27b45ac24325  .tfcore/tasks/verify-phase.md,.tfcore/templates/v4custom/app-usageguide-tmpl.md  a verify test never creates, deletes or changes an account on a shared
 7eda1f1e0889  .tfcore/templates/v4custom/app-brd-tmpl.md,.tfcore/templates/v4custom/app-phase-brd-tmpl.md  | {screen} | {n} | {n} | {n} | planned, in progress, partial, done |
 c9e2b1ba9688  .tfcore/templates/v4custom/app-brd-tmpl.md,.tfcore/templates/v4custom/app-phase-brd-tmpl.md  | {screen name} | /route | {role} | mockupmockups/{screen-slug}.html |
 ea1915563b6d  .tfcore/templates/v4custom/app-brd-tmpl.md,.tfcore/templates/v4custom/app-phase-brd-tmpl.md  - acceptance: when {actor} {does what} on {screen}, then {a result a b

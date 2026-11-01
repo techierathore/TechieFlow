@@ -339,6 +339,8 @@ Registered on AppManager through its register call by `node tests/verify/registe
 | 2 | writer-second@app.test | user secrets key `App:TestUsers:Second` | Writer, second user | no |
 | 3 | writer-yolo-tester@app.test | user secrets key `App:TestUsers:Yolo` | Writer, unattended runs | no |
 
+A verify test never creates, deletes or changes an account on a shared AppManager; the "register creates an account" path is verified by hand once per release and recorded in the checklist with the date, and the automated row checks only the form's validation and the "email already in use" path using test user 1.
+
 ## Execution guide
 
 Prerequisites: .NET 9 SDK, PostgreSQL in Docker.

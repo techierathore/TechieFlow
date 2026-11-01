@@ -111,23 +111,28 @@ def code(path):
     return out
 
 
-def next_id(text, prefix, others=()):
+def next_id(text, prefix, others=(), taken=()):
     """one past the highest id of that prefix in this checklist AND every other checklist of the app:
-    counting this one alone gave REQ-UI-055 twice, once in phase 1 and once in phase 3 (Chatur TF-011)"""
-    ids = []
+    counting this one alone gave REQ-UI-055 twice, once in phase 1 and once in phase 3 (Chatur TF-011).
+    `taken` (the code and tests) only rules ids out, it never raises the count: a test's sample checklist
+    held REQ-UI-999, so Chatur's next UI row after REQ-UI-078 became REQ-UI-1000 (Chatur TF-021)."""
     def text_of(o):   # a source file in another encoding is still read for its ids
         with open(o, encoding="utf-8", errors="replace") as f:
             return f.read()
-    for t in (text, *(text_of(o) for o in others)):
-        ids += [int(m.group(1)) for m in re.finditer(rf"REQ-{prefix}-(\d{{3,}})", t)]
-    return f"REQ-{prefix}-{(max(ids) + 1 if ids else 1):03d}"
+    pat = re.compile(rf"REQ-{prefix}-(\d{{3,}})(?!\d)")
+    ids = [int(m.group(1)) for t in (text, *(text_of(o) for o in others)) for m in pat.finditer(t)]
+    used = set(ids) | {int(m.group(1)) for o in taken for m in pat.finditer(text_of(o))}
+    n = max(ids) + 1 if ids else 1
+    while n in used:
+        n += 1
+    return f"REQ-{prefix}-{n:03d}"
 
 
 def add_row(path, prefix, title, acceptance, section=None, remark=None, status="Not Started", mockup=None, brd="BRD-pending"):
     """append a row to the Requirements Status table and a detail entry under `section`
     (a new section at the end when it does not exist); returns the new id"""
     text = read(path)
-    rid = next_id(text, prefix, siblings(path) + streams(path) + code(path))
+    rid = next_id(text, prefix, siblings(path) + streams(path), taken=code(path))
     nl = "\r\n" if "\r\n" in text else "\n"
     lines = text.split(nl)
     # the table: after the last REQ row

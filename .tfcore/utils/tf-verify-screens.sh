@@ -3,6 +3,7 @@
 #
 #   bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --base http://localhost:5099 \
 #        [--login-path /login --user ravi --password '…'] [--cookie 'k=v'] [--storage-state file]
+#        (a --login-path with no sign-in form: /login, /sign-in, /signin and /account/login are tried; Chatur TF-019)
 #   bash .tfcore/utils/tf-verify-screens.sh --screen home=/ --screen posts=/posts --base URL   # a smoke: changed screens only
 #   bash .tfcore/utils/tf-verify-screens.sh --list … --cdp http://172.18.144.1:9223               # an embedded-browser desktop head
 #   … --error-selector '.my-crash-banner'   # the banner THIS stack shows when its client side falls over

@@ -10,7 +10,7 @@ Read first: `docs/{App}-Coding-Standards.md` (and the standard files it names un
 
 Two standing rules:
 1. Git is manual. Never run `git` or `gh` for any purpose. Record your row ids in the checklist Remarks (`[REQ-…]`), not in commits.
-2. Smoke it yourself before you return: `bash .tfcore/utils/tf-build.sh` must PASS, then boot the app and open every screen you touched with headless Playwright (or the native driver the ladder names); the data must show and nothing may overlap; use a test user from `{UsageGuide}`, never an invented one. A green compiler is not a smoke.
+2. Smoke it yourself before you return: `bash .tfcore/utils/tf-build.sh` must PASS, then boot the app and open every screen you touched with headless Playwright (or the native driver the ladder names); the data must show and nothing may overlap; use a test user from `{UsageGuide}`, never an invented one. A green compiler is not a smoke. A test never creates, deletes or changes an account on a shared AppManager; the "register creates an account" path of any app is verified by hand once per release and recorded in the checklist with the date, and the automated row checks only the form's validation and the "email already in use" path using test user 1 (`tf-build.sh` fails a changed test that does: gate `test-users`).
 
 Unit tests for every FN, RAG and NFR row go under `tests/unit/`. Run-generated files go under `tests/.artifacts/`, never at the repository root.
 

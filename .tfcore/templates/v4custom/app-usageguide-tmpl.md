@@ -22,7 +22,8 @@ rule: entry-expected
      The owner's test plan. Every agent (smoke, verify) and the owner's UAT use the SAME test users and
      the SAME walkthrough; nobody invents accounts. An app that signs in through AppManager lists its own three users
      (owner walkthrough, second user, unattended runs), registered through AppManager's register call, each password named by
-     where the git-ignored secrets keep it, never written here; never the owner's personal AppManager account. One `###` per screen in navigation order, at most
+     where the git-ignored secrets keep it, never written here; never the owner's personal AppManager account. On such an app the section carries the sentence under the table
+     word for word (tf-doc-check: appmanager-test-users; tf-test-users-check.py enforces it in the tests). One `###` per screen in navigation order, at most
      120 words: who to sign in as, numbered steps, the expected result, the REQ ids covered.
      The Execution guide is copy-pasteable commands, one per line, no narrative. Hosting and production
      deployment are not here; they are in the Deployment Checklist after UAT.
@@ -43,6 +44,8 @@ rule: entry-expected
 | # | User | Password source | Role | Exists |
 |---|---|---|---|---|
 | 1 | {admin@app.test} | {user secrets key, seed script} | {Admin} | {yes, no} |
+
+A verify test never creates, deletes or changes an account on a shared AppManager; the "register creates an account" path is verified by hand once per release and recorded in the checklist with the date, and the automated row checks only the form's validation and the "email already in use" path using test user 1.
 
 ## Execution guide
 

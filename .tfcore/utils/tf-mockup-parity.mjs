@@ -43,7 +43,7 @@ import { chromium } from 'playwright';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { signIn, reach } from './tf-login.mjs';
+import { signIn, reach, anchorsPresent, waitArrived, ensureDrawing } from './tf-login.mjs';
 import { parseThemes, useTheme, surface, differs, looksDark } from './tf-theme.mjs';
 import { mockupMenus, walkMenus, placeholdersOnPage, reachability } from './tf-menus.mjs';
 
@@ -237,8 +237,27 @@ const PROBE = (wanted = []) => {
     pctx.fillStyle = v;                    // an unparseable value leaves it transparent
     pctx.fillRect(0, 0, 1, 1);
     const [r, g, b, a] = pctx.getImageData(0, 0, 1, 1).data;
-    return a / 255 < 0.05 ? null : { r, g, b };
+    return a / 255 < 0.05 ? null : { r, g, b, a: a / 255 };
   };
+  // TfLens TF-056: a translucent colour is seen over what is painted behind it. The mockup's
+  // rgba(59,130,246,.08) badge is a pale blue on a white card, but read at full strength it bucketed
+  // as `accent` against the app's opaque pale blue (`neutral`). A colour under 99% opacity is blended
+  // over the nearest backgrounds behind it, layer by layer, down to an opaque one (white if none).
+  const behind = (el) => {
+    const layers = [];
+    for (let p = el && el.parentElement; p; p = p.parentElement) {
+      const c = RGB(getComputedStyle(p).backgroundColor);
+      if (!c) continue;
+      layers.push(c);
+      if (c.a >= 0.99) break;
+    }
+    let base = { r: 255, g: 255, b: 255 };
+    for (const c of layers.reverse()) base = over(c, base);
+    return base;
+  };
+  const over = (c, base) => ({ r: Math.round(c.r * c.a + base.r * (1 - c.a)), g: Math.round(c.g * c.a + base.g * (1 - c.a)),
+                               b: Math.round(c.b * c.a + base.b * (1 - c.a)), a: 1 });
+  const seen = (c, el) => (c && c.a < 0.99 ? over(c, behind(el)) : c);
 
   // Semantic BUCKET, never the literal colour: two designs may legitimately differ
   // in shade, and grading the exact value would produce a finding on every screen.
@@ -268,7 +287,12 @@ const PROBE = (wanted = []) => {
 
   const semanticColor = (el) => {
     const cs = getComputedStyle(el);
-    return bucket(RGB(cs.backgroundColor)) || (drawnBorder(cs) ? bucket(RGB(cs.borderTopColor)) : null) || bucket(RGB(cs.color));
+    const bg = RGB(cs.backgroundColor);
+    const fg = RGB(cs.color);
+    // text is seen over the element's own background, itself seen over what is behind it
+    const under = bg ? seen(bg, el) : behind(el);
+    return bucket(seen(bg, el)) || (drawnBorder(cs) ? bucket(seen(RGB(cs.borderTopColor), el)) : null)
+      || bucket(fg && fg.a < 0.99 ? over(fg, under) : fg);
   };
 
   // --- TF-009: the seventh class. A mockup says "provisional / estimated /
@@ -931,11 +955,17 @@ if (CDP) {
   }
 }
 // the attached app's router, not a document load: a desktop head has no server to answer a goto
-async function reachCdp(page, route) {
+// Lekhak TF-037: and it waits until the app has drawn the screen — the address matches and one of the
+// mockup's anchors that was not on the previous page is attached — before anything is read (tf-login.mjs)
+async function reachCdp(page, route, anchors = []) {
   try {
+    const before = await anchorsPresent(page, anchors);
     await page.evaluate((r) => { history.pushState({}, '', r); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); }, route);
-    await page.waitForTimeout(LOGIN_OPTS.settle);
-    return { status: 200, url: page.url() };
+    const a = await waitArrived(page, route, anchors, before, LOGIN_OPTS);
+    // Sevak TF-011: a minimized desktop window draws nothing, and nothing read from it can be trusted
+    const dr = await ensureDrawing(page, CDP);
+    if (!dr.drawing) return { status: 0, not_drawing: true, error: `not measured: the app window is not drawing (minimized, or the screen is locked?) — 0 animation frames in 1 s${dr.restored ? `; restore: ${dr.restored}` : ''}` };
+    return { status: 200, url: page.url(), arrived: a.arrived };
   } catch (e) { return { status: 0, error: e.message.split('\n')[0] }; }
 }
 if (COOKIE && !CDP) {
@@ -992,9 +1022,9 @@ for (const s of SCREENS) {
       // reach() judges by what the page draws, signs in again from inside the page when it must, and
       // returns 200 only when the screen was really drawn signed in.
       if (CDP) await page.setViewportSize({ width, height: width < 700 ? 844 : 800 }).catch(() => {});
-      const nav = CDP ? await reachCdp(page, s.route) : await reach(page, LOGIN_OPTS, s.route);
+      const nav = CDP ? await reachCdp(page, s.route, mock.testids || []) : await reach(page, LOGIN_OPTS, s.route);
       if (nav.status === 0 || nav.status >= 400 || nav.signedOut) {
-        perWidth.push({ width, error: nav.status === 0 ? `could not open ${s.route}: ${nav.error || 'no response'}`
+        perWidth.push({ width, ...(nav.not_drawing ? { not_drawing: true } : {}), error: nav.not_drawing ? nav.error : nav.status === 0 ? `could not open ${s.route}: ${nav.error || 'no response'}`
           : nav.signedOut ? `app returned HTTP ${nav.document_status ?? nav.status} and stayed signed out (sign-in ${LOGIN_PATH && USER ? 'did not hold' : 'not given: --login-path/--user/--password or --cookie'})`
           : `app returned HTTP ${nav.status}` });
         continue;
@@ -1112,7 +1142,9 @@ for (const s of SCREENS) {
   // dark pass gave PASS on light alone, with nothing saying dark was missing (MISS-TechieFlow-20261009-04).
   const failedPasses = perWidth.filter((w) => w.error);
   let verdict;
-  if (ok.length === 0) verdict = 'ERROR';
+  // Sevak TF-011: a desktop window that drew no frames at every width was not compared, and is not a defect
+  if (perWidth.length && perWidth.every((w) => w.not_drawing)) verdict = 'NOT-MEASURED';
+  else if (ok.length === 0) verdict = 'ERROR';
   else if (findings.length) verdict = 'FAIL';
   else if (failedPasses.length) verdict = 'ERROR';
   else if (ungradeable) verdict = 'UNGRADEABLE';
@@ -1171,7 +1203,7 @@ if (WALK_MENUS && results.length) {
   const { app: page, mock: mockPage } = tabs[width];
   const byScreen = {}, mockText = {}, mockIds = {};
   for (const r of results) {
-    if (r.verdict === 'NO-MOCKUP' || r.verdict === 'ERROR') continue;
+    if (r.verdict === 'NO-MOCKUP' || r.verdict === 'ERROR' || r.verdict === 'NOT-MEASURED') continue;
     try {
       await mockPage.goto(pathToFileURL(findMockup(r.screen)).href, { waitUntil: 'load' });
       byScreen[r.screen] = await mockupMenus(mockPage, 'data-testid');
@@ -1245,6 +1277,7 @@ const summary = {
   screens_with_no_coverage: results.filter((r) => r.coverage && r.coverage.ungradeable).length,
   no_mockup: results.filter((r) => r.verdict === 'NO-MOCKUP').length,
   error: results.filter((r) => r.verdict === 'ERROR').length,
+  not_measured: results.filter((r) => r.verdict === 'NOT-MEASURED').length,
   findings_n: results.reduce((a, r) => a + (r.findings_n || 0), 0),
   screens: results,
 };

@@ -234,7 +234,7 @@ Failure:
 | `attempt` | int | See §3.1. Derive it; never guess it. |
 | `verdict` | string | Mirrors the checklist vocabulary **exactly**: `Verified` \| `Needs re-verify` \| `FAIL` \| `Blocked` \| `Implemented` \| `Done (pre-existing)`. |
 | `gate` | string \| null | **The FIRST gate that failed**, or `null` on a pass. See §3.2. |
-| `gates_run` | string[] | Which gates actually executed this pass — subset of `["build","acceptance","render","assets","visual","mockup-parity","perf","standards"]`, in execution order. A gate absent here did **not** run and cannot be credited or blamed. For `perf`, `assets` and `mockup-parity` this carries real weight: see §3.5. |
+| `gates_run` | string[] | Which gates actually executed this pass — subset of `["build","test-users","acceptance","render","assets","visual","mockup-parity","perf","standards"]`, in execution order. A gate absent here did **not** run and cannot be credited or blamed. For `perf`, `assets` and `mockup-parity` this carries real weight: see §3.5. |
 | `failure_class` | string \| null | Controlled vocabulary only, §3.3. `null` on a pass. |
 | `prior_verdict` | string \| null | The Status cell value **before** this run wrote over it. `null` if the row is new. |
 | `app_phase` | int | The phase whose checklist holds `req_id` and was written by this pass (added 2026-10-11, Sevak TF-005); see §2. Absent on older records. |
@@ -265,6 +265,7 @@ Get this right; everything else on the record is secondary.
 | Value | The assertion that failed |
 |---|---|
 | `build` | The code did not compile / the app did not boot. Nothing downstream ran. |
+| `test-users` | The REQ's own test creates, deletes or changes an account on a shared AppManager (a register call or submit, an address built at run time), `tf-test-users-check.py`; the verdict and `tf-build.sh` run it. **Added 2026-11-01 (FW-001); see §3.5.** |
 | `acceptance` | The REQ's acceptance test ran and failed (Playwright spec, `dotnet test`). |
 | `render` | verify-phase §4a data-render gate — a control is `RENDER-EMPTY` / `RENDER-ERROR` (blank table, count-vs-rows mismatch, empty chart). |
 | `assets` | verify-phase §4a2 asset-integrity gate — a stylesheet or script the page **declares** did not arrive (404, non-200, empty body). **Added 2026-08-31; see §3.5.** |
@@ -275,7 +276,7 @@ Get this right; everything else on the record is secondary.
 | `escaped` | **Not a gate.** A defect that reached UAT/production and was logged by `*triage-issues` — i.e. *every* gate missed it. This value is what makes escape rate computable. Written only by `triage-issues.md`. |
 | `null` | Nothing failed. |
 
-**"First" means first in execution order** (`build` → `acceptance` → `render` → `assets` → `visual` → `mockup-parity` → `perf` → `standards`). If a REQ fails render *and* visual, `gate` is `render`. Recording the later one inflates the visual gate's apparent catch rate.
+**"First" means first in execution order** (`build` → `test-users` → `acceptance` → `render` → `assets` → `visual` → `mockup-parity` → `perf` → `standards`). If a REQ fails render *and* visual, `gate` is `render`. Recording the later one inflates the visual gate's apparent catch rate.
 
 `assets` sits **before** `visual` because an asset that never arrived explains the visual result rather than being explained by it: a page with no stylesheet is unstyled *because of* the 404, and recording `visual` there would attribute the catch to the gate that merely saw the consequence. `mockup-parity` sits **after** `visual` for the mirror reason — a screen that overlaps or clips is broken on its own terms, before any question of whether it matches a design.
 
@@ -288,6 +289,8 @@ Get this right; everything else on the record is secondary.
 `low-contrast` and `light-surface` (added 2026-10-07, Lekhak TF-024) are visual findings: text below the contrast floor against the colour painted behind it, in either theme, and a large light panel in dark mode. The ratio and the colours stay in the run JSON and the Remark.
 
 `missing-asset` (added 2026-08-31) names an asset the page **declared** and never received — a 404, a non-200, or a 200 with an empty body on a `<link rel=stylesheet>` or `<script src>`. It says only that; **never** the URL, which is a file path inside the app and is exactly what constraint 7 keeps out of these streams. The path belongs in the checklist Remark a human reads.
+
+`test-users` (added 2026-11-01, FW-001) names a test that creates, deletes or changes an account on a shared AppManager: a register call or submit, or an address built at run time that is not in the usage guide's Test users table. It is the failure class of gate `test-users` only.
 
 `mockup-drift` (added 2026-08-31) names a structural disagreement between a built screen and its approved mockup. Which of the eight classes drifted is **not** recorded here — that is a property of one screen on one day, the same reasoning that keeps a latency figure out of a record. The class and the element live in the §4b2 run JSON under `tests/.artifacts/` and in the Remark.
 
@@ -322,6 +325,7 @@ This is why `gates_run` must be populated truthfully rather than padded with eve
 | `perf` | 2026-08-10 | records with `perf` in `gates_run` |
 | `assets` | 2026-08-31 | records with `assets` in `gates_run` |
 | `mockup-parity` | 2026-08-31 | records with `mockup-parity` in `gates_run` |
+| `test-users` | 2026-11-01 | records with `test-users` in `gates_run` |
 
 `mockup-parity` carries a **second** honesty requirement that `perf` does not, and it is the sharper of the two. The gate compares elements the app and the mockup both anchor, so on a screen whose mockup anchors little, it can grade almost nothing — and a `PASS` from a gate that graded nothing is indistinguishable from a `PASS` from a gate that graded everything. **The failure mode is inverted: the less of a screen the gate can see, the cleaner its verdict looks.** That produced a real false statement upstream — eight UI rows written `Verified` off "10 PASS / 2 FAIL / 0 findings" while a screen was visibly wrong (TF-011).
 

@@ -50,6 +50,14 @@ now:      "2,786 words; the Large maximum is 1,200 (target 800). ..."
 
 ## Replies from TechieFlow
 
+### Resolution status (TechieFlow team, 2026-11-01)
+
+Ships in **TechieFlow v1.2.4**, the next release after v1.2.3; already in this project's `.tfcore/` through the framework update of 2026-11-01. Each fix has a regression case in `tests/regression/run.sh` that fails against the v1.2.3 script and passes now.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-002 | Fixed upstream in `tf-verify-boot.sh` (the same change as AppManager TF-030 and Chatur TF-018). A web project with no MAUI target of its own runs on WSL. When WSL cannot build it, the Windows copy is bound to `0.0.0.0` and tried at `localhost` and at the WSL gateway, with no relays. Case `bl_002`. Not proved on a NAT machine: Windows Firewall may still block the gateway route, and `TF_BOOT_RUNNER=wsl` is then the way round. | After the framework update: `bash .tfcore/utils/tf-verify-boot.sh start` with no relays: expect `BOOTED`. |
+
 ### Resolution status (TechieFlow team, 2026-10-29)
 
 Ships in **TechieFlow v1.2.2**, the next release after v1.2.1. Already in this project's `.tfcore/` through the framework update.

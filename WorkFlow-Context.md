@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-10-16 (dark-pass `dark` class fix). |
+| Last updated | 2026-11-01 (gate `test-users`, FW-001; v1.2.3 is the last tag). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -71,6 +71,8 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 - **Plain English to the owner; a decision goes in a file, not the conversation; an upstream defect is always filed, `Blocks: yes|no` first, and `no` never stops the run.** `.tfcore/tasks/_owner-language.md`. Since 2026-09-11 the closing message of a command, and any free-form document it hands over, is checked by the Stop hook through `tf-owner-text.sh` (FR-74): no word from `.tfcore/standards/owner-words.txt`, every open upstream problem with what it affects and its prompt, none fixed upstream called open, every command still to run as a line to paste, the next prompt in a code block. Add a word to that list when the owner has to ask what one means.
 - **An agent document is never rendered to HTML.** The checklist, the miss list and feedback files are refused by name; anything else whose only reader is an agent stays markdown.
 - **A rule is a script, and it is written once.** `tests/mirror/run.sh` refuses the same sentence in two rule files (32 deliberate ones baselined) and holds the word caps. When a cap is reached, delete prose a check has replaced; never raise the cap.
+- **No test creates an account on a shared AppManager**: gate `test-users`, in the verdict and `tf-build.sh`.
+- **TF-NNN is TfLens's numbering; the framework's own defects are FW-NNN.**
 - **Public documents name only public repositories**: TechieRag, TechieDesk, TrBlazeUI, TfLens, TechieBlog, TrStudio, TrSetup, Xpenser.
 
 ---
@@ -112,8 +114,8 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | **Distribution**: the framework is an npm package with a validation workflow, merged from `main` on 2026-09-07. Publishing it is the remaining step (FR-48 to FR-52). | Owner action |
 | Three requirements name a **script that has not been written**: FR-58 (refuse `done complete` while rows are unfinished), FR-60 (refuse a banned head name in a brief), FR-61 (grade a row not observable when the environment lacks the data). The idea-stage commands still emit no run record (FR-34, FR-60). | Maintainer |
 | **Model routing is deployed everywhere and enabled in three**: 19 repositories carry `tf-model-pick.sh` and a `routing.yaml` with a `fallbacks:` chain and a `billing:` block (added by the updater, never overwriting a line); three of them have `enabled: true` and generated bindings, the other sixteen keep their own `enabled: false`. Turning one on is `bash .tfcore/utils/tf-routing.sh on` in that project — Routing-Guide §2b. | Owner decision, per project |
-| **Open misses** are listed with their outcome in `docs/TechieFlow-Misses.md` — 52 of 167 open (2026-09-12). The one this maintainer owes a fix for is 12 of 2026-09-07, that a hidden framework folder is invisible to search and nothing enforces the rule. | Maintainer |
-| **TrStudio is not on this machine**, so it was not refreshed. | Owner action |
+| **Open misses**: `docs/TechieFlow-Misses.md`. | Maintainer |
+| **Not proved on real machines** (v1.2.4): window restore, Mac `--env`, NAT fallback; the translucent-colour fix (TfLens TF-056) is unmeasured on running apps. `tests/goal` fails only inside Claude Code. | Maintainer |
 | **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` (that repository, not this one) and waiting on the owner's go-ahead. | Separate repo |
 | **Every feedback entry answered so far is fixed and deployed everywhere.** Several wait for their project's re-check; `tf-feedback.sh <App> --waiting` lists them. | Each project (close) |
 | **TrBlazeUI TR-004**: disabled menu items lack `aria-disabled`; the menu bar ignores Escape. `tf-menus.mjs` works around both. | TrBlazeUI |
@@ -127,7 +129,6 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | **The scripts are not technology-neutral, though the personas and tasks are** (checked by `tests/mirror/run.sh`). `tf-build.sh` is .NET's and the browser layer is Playwright's, with no stack question behind either, so another stack gets the documents and telemetry and none of the build or verify scripts (MISS-TechieFlow-20260912-06). | Owner decision |
 | Two owner-owned HTML documents still name the pre-2026 layout; the updater reports them and never edits them. | Owner action |
 
-The last five predate the reset, unchecked.
 
 ---
 

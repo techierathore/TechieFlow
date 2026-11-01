@@ -118,7 +118,7 @@ for row in v["rows"]:
     if not row["gate"]:
         continue
     cls = ("regression" if (row["prior_verdict"] or "").lower().startswith("verified")
-           else "standards-violation" if row["gate"] == "standards"
+           else "standards-violation" if row["gate"] in ("standards", "test-users")
            else "partial-implementation")
     opened = q("--open-miss", rid)
     if opened and opened.split()[-1] == cls:
@@ -128,7 +128,7 @@ for row in v["rows"]:
         print(f"  misses: no id for {rid}; skipped")
         continue
     m = {"kind": "miss", "miss_id": mid, "req_id": rid, "req_class": row["class"], "miss_class": cls,
-         "artifact": "src", "severity": "major", "origin_phase": "build-phase", "origin_agent": "flow-master",
+         "artifact": "tests" if row["gate"] == "test-users" else "src", "severity": "major", "origin_phase": "build-phase", "origin_agent": "flow-master",
          "found_by": "gate", "found_phase": "verify-phase", "found_gate": row["gate"], "found_run_id": run_id,
          "failure_class": row["failure_class"] or "other"}
     if rid in origin:

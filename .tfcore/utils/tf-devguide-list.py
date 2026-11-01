@@ -20,6 +20,14 @@ import sys
 
 SKIP = ("/bin/", "/obj/", "/node_modules/", "/.artifacts/", "/OldDocs/", "/.git/", "/dist/", "/wwwroot/lib/")
 SAMPLE_DIRS = ("samples", "sample", "demos", "demo", "apps", "examples", "tests")
+# apps/ holds a library's sample apps, but an app's own code may live there: Sevak.slnx lists
+# apps/Sevak, apps/Sevak.Core and apps/SevakDb, and the lister found no page at all (Sevak TF-012).
+# main() drops "apps" from the sample folders unless the project is a library.
+LIBRARY = [True]
+
+
+def sample_dirs():
+    return SAMPLE_DIRS if LIBRARY[0] else tuple(s for s in SAMPLE_DIRS if s != "apps")
 ROUTE_PATTERNS = [   # (file pattern, route pattern, page or endpoint)
     (r"\.(razor|cshtml)$", re.compile(r'(?m)^\s*@page\s+"([^"]+)"'), "page"),
     (r"\.cs$", re.compile(r'\[(?:Http(?:Get|Post|Put|Delete)|Route)\(\s*"([^"]+)"'), "endpoint"),
@@ -63,7 +71,7 @@ def walk(root, exts, skip_samples=False):
         dd = d.replace("\\", "/") + "/"
         if any(s in dd for s in SKIP):
             continue
-        if skip_samples and any(f"/{s}/" in dd or dd.endswith(f"/{s}/") for s in SAMPLE_DIRS):
+        if skip_samples and any(f"/{s}/" in dd or dd.endswith(f"/{s}/") for s in sample_dirs()):
             continue
         for f in files:
             if f.lower().endswith(exts):
@@ -73,11 +81,34 @@ def walk(root, exts, skip_samples=False):
                 yield p[2:] if p.startswith("./") else p
 
 
+def solution_roots():
+    """The folders of the projects the solution files at the root list (*.slnx, *.sln), outside
+    src/ and source/ and outside the sample folders: an app's code under apps/<App>/ (Sevak TF-012)."""
+    out = []
+    for f in sorted(os.listdir(".")):
+        if not f.lower().endswith((".slnx", ".sln")) or not os.path.isfile(f):
+            continue
+        txt = read(f)
+        paths = re.findall(r'Path="([^"]+\.(?:cs|fs|vb)proj)"', txt) + re.findall(r'"([^"]+\.(?:cs|fs|vb)proj)"', txt)
+        for p in paths:
+            d = os.path.dirname(p.replace("\\", "/")).strip("/")
+            top = d.split("/")[0] if d else ""
+            if not d or top in CODE_ROOTS or top in sample_dirs() or d in out or not os.path.isdir(d):
+                continue
+            out.append(d)
+    return out
+
+
 def code_files(exts, skip_samples=True):
-    """Every file with these extensions under the project's code folders (src/, source/)."""
-    for r in CODE_ROOTS:
+    """Every file with these extensions under the project's code folders (src/, source/, and the folders
+    of the projects its solution lists)."""
+    seen = set()
+    for r in list(CODE_ROOTS) + solution_roots():
         if os.path.isdir(r):
-            yield from walk(r, exts, skip_samples=skip_samples)
+            for f in walk(r, exts, skip_samples=skip_samples):
+                if f not in seen:
+                    seen.add(f)
+                    yield f
 
 
 def roles_from_usageguide(app):
@@ -126,7 +157,7 @@ def norm_route(r):
 def sample_files(exts):
     """Files under the sample folders only (samples/, demos/, apps/, examples/), never the whole tree."""
     out = []
-    for d in SAMPLE_DIRS:
+    for d in sample_dirs():
         if d == "tests":
             continue
         if os.path.isdir(d):
@@ -159,6 +190,7 @@ def main(argv):
     if "--kind" in argv and argv.index("--kind") + 1 < len(argv):
         kind = argv[argv.index("--kind") + 1].lower()   # override for a project whose config lacks it
     sub = "app"
+    LIBRARY[0] = kind.startswith("lib")
     if kind.startswith("lib"):
         razors = list(code_files((".razor",)))
         sub = "ui-library" if razors else "service-library"

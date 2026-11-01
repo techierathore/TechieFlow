@@ -38,7 +38,7 @@ from datetime import datetime
 
 STREAMS = ("runs", "gates", "sessions", "commits", "misses")
 VERDICTS = ("Verified", "Needs re-verify", "FAIL", "Blocked", "Implemented", "Done (pre-existing)")
-GATE_ORDER = ("build", "acceptance", "render", "assets", "visual", "mockup-parity",
+GATE_ORDER = ("build", "test-users", "acceptance", "render", "assets", "visual", "mockup-parity",
               "perf", "standards", "escaped")
 
 # Gates that entered the enum after gates.jsonl started collecting. Their share of a raw
@@ -46,7 +46,7 @@ GATE_ORDER = ("build", "acceptance", "render", "assets", "visual", "mockup-parit
 # chance to record them, and (for `perf`) most records after it still do not run the gate.
 # The honest denominator is "records that actually ran it", i.e. gates_run membership.
 # SCHEMA.md §3.5. Keep this table in sync when a gate is added.
-LATE_GATES = {"perf": "2026-08-10", "assets": "2026-08-31", "mockup-parity": "2026-08-31"}
+LATE_GATES = {"perf": "2026-08-10", "assets": "2026-08-31", "mockup-parity": "2026-08-31", "test-users": "2026-11-01"}
 
 # The same hazard as LATE_GATES, one stream over: an OPTIONAL FIELD added after a
 # stream started collecting. A record written before the date had no such field to

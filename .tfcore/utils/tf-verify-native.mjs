@@ -37,7 +37,7 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, normalize, resolve } from 'node:path';
-import { openSession, parseSource, descendants, appPid, resizeWindow, windowShot, macWindow } from './tf-appium.mjs';
+import { openSession, bootEnv, parseSource, descendants, appPid, resizeWindow, windowShot, macWindow } from './tf-appium.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (n, d = null) => { const i = argv.indexOf(n); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d; };
@@ -213,7 +213,7 @@ function writeOut(results, extra = {}, width = 0) {
 
 let s = null;
 if (!FROM_SOURCE.length) {
-  try { s = await openSession(APPIUM, { bundleId: BUNDLE, appPath: APP_PATH }); }
+  try { s = await openSession(APPIUM, { bundleId: BUNDLE, appPath: APP_PATH, environment: bootEnv(BOOT) }); }   // Sevak TF-013
   catch (e) {
     console.log(`UNREACHABLE appium ${APPIUM} (${APP_PATH || BUNDLE}): ${e.message}`);
     console.log('  a mac2 session that cannot start is usually a permission: System Settings > Privacy & Security > Accessibility (the terminal, and WebDriverAgentRunner-Runner)');

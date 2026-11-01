@@ -17,6 +17,8 @@
 #   PASS  built on wsl via cmd.exe /c dotnet (rung 4) — 0 warnings
 #   FAIL  real compile errors on wsl via ~/.dotnet/dotnet (rung 2): 3 CS errors, first: …
 #   NOT-RUN no rung could run dotnet on wsl; tried: dotnet, ~/.dotnet/dotnet, cmd.exe, winrun, powershell.exe
+# Before a build or test, the changed test files go through tf-test-users-check.py (FW-001): a test
+# that creates an account on a shared AppManager is a FAIL line, exit 1, like a compile error.
 # Exit 0 PASS · 1 FAIL (the code is wrong: fix it) · 2 NOT-RUN (the host is wrong: never a
 # project blocker; say which rungs were tried).
 #
@@ -107,6 +109,20 @@ if [[ "$MODE" == "probe" ]]; then
   exit 0
 fi
 [[ -z "$TARGET" && "$MODE" != "run" ]] && { echo "NOT-RUN no .sln, .slnx or .csproj here; name the target"; exit 2; }
+
+# ---- test-users: a changed test never creates an account on a shared AppManager (FW-001) ----------
+# The builder's changed and new test files (git, read-only) are scanned before anything is built: a test
+# that registers an account or builds an address at run time fails the build line, and each row it
+# belongs to gets a gate record on gate test-users. TF_TEST_USERS=0 skips it (the self-tests only).
+if [[ ( "$MODE" == "build" || "$MODE" == "test" ) && $PRINT -eq 0 && "${TF_TEST_USERS:-1}" != "0" && "${TF_TEST_TOGETHER:-0}" != "1" ]]; then
+  tu_out="$(python3 "$(dirname "${BASH_SOURCE[0]}")/tf-test-users-check.py" --changed --emit build-phase 2>&1)"; tu_rc=$?
+  if [[ $tu_rc -eq 1 ]]; then
+    grep -E '^FAIL  [^ ]+:[0-9]+ ' <<<"$tu_out" | head -10
+    echo "FAIL  test-users: $(grep -E '^FAIL  test-users' <<<"$tu_out" | sed 's/^FAIL  test-users — //')"
+    grep -E '^telemetry:' <<<"$tu_out"
+    exit 1
+  fi
+fi
 
 # ---- test on a solution: one test project at a time (TechieRag TF-004) ----------------------------
 # `dotnet test <solution>` runs every test project at once. On a 7.8 GB WSL machine TechieRag's local-
@@ -225,6 +241,16 @@ if [[ "$PLATFORM" == "wsl" && $maui -eq 0 && "$TARGET" == *.csproj ]]; then
     rungs=("cmd.exe" "winrun" "powershell.exe" "dotnet" "$HOME/.dotnet/dotnet")
     echo "note  $won; this $MODE starts there too (rungs: cmd.exe, winrun, powershell.exe, then the WSL ones)"
   fi
+fi
+# TF_BUILD_SIDE=wsl|windows: the caller names the side of a WSL machine, overriding the choices above.
+# tf-verify-boot.sh passes it for a web head: a web project with no MAUI target of its own, in a solution
+# that has one, was published Windows-side (the Lekhak TF-036 rule above) and run there, where WSL could
+# not reach it (AppManager TF-030, TechieBlog TF-002, Chatur TF-018).
+if [[ "$PLATFORM" == "wsl" ]]; then
+  case "${TF_BUILD_SIDE:-}" in
+    wsl)     rungs=("dotnet" "$HOME/.dotnet/dotnet"); echo "note  TF_BUILD_SIDE=wsl: this $MODE runs on the WSL rungs only (dotnet, ~/.dotnet/dotnet)" ;;
+    windows) rungs=("cmd.exe" "winrun" "powershell.exe"); echo "note  TF_BUILD_SIDE=windows: this $MODE runs on the Windows rungs only (cmd.exe, winrun, powershell.exe)" ;;
+  esac
 fi
 WRONG_RUNG='NETSDK1178|Microsoft\.(iOS|Android|MacCatalyst|tvOS)\.Sdk|Workload ID|not recognized|WindowsAppSDK|command not found|No such file or directory|is not recognized as an internal or external command|The term .* is not recognized|workload.*not installed|Inadequate permissions'
 

@@ -106,10 +106,11 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout">
   <nav class="side">
     <h1>TechieFlow — Changelog</h1>
-    <div class="sub">Last rendered: 2026-10-30</div>
+    <div class="sub">Last rendered: 2026-11-01</div>
     <div class="group">Contents</div>
     <ol>
-        <li><a href="#unreleased-since-v1-2-1-ships-as-v1-2-2">Unreleased (since v1.2.1) — ships as v1.2.2</a></li>
+        <li><a href="#unreleased-since-v1-2-3-ships-as-v1-2-4">Unreleased (since v1.2.3) — ships as v1.2.4</a></li>
+        <li><a href="#v1-2-3-since-v1-2-1">v1.2.3 (since v1.2.1)</a></li>
         <li><a href="#v1-1-1-and-v1-2-0-since-v1-1-0">v1.1.1 and v1.2.0 (since v1.1.0)</a></li>
         <li><a href="#chatur-tf-005-the-tf-001-fix-failed-every-list-the-app-fills-with-real-rows">2026-10-02 — Chatur TF-005: the TF-001 fix failed every list the app fills with real rows</a></li>
         <li><a href="#sevak-tf-001-raising-the-size-rewrote-agents-md-and-claude-md">2026-10-02 — Sevak TF-001: raising the size rewrote AGENTS.md and CLAUDE.md</a></li>
@@ -233,12 +234,13 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
   </nav>
   <main>
     <h1>TechieFlow — Changelog</h1>
-    <div class="subtitle">Rendered 2026-10-30 &middot; source <code>CHANGELOG.md</code></div>
+    <div class="subtitle">Rendered 2026-11-01 &middot; source <code>CHANGELOG.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
       <ol>
-        <li><a href="#unreleased-since-v1-2-1-ships-as-v1-2-2">Unreleased (since v1.2.1) — ships as v1.2.2</a></li>
+        <li><a href="#unreleased-since-v1-2-3-ships-as-v1-2-4">Unreleased (since v1.2.3) — ships as v1.2.4</a></li>
+        <li><a href="#v1-2-3-since-v1-2-1">v1.2.3 (since v1.2.1)</a></li>
         <li><a href="#v1-1-1-and-v1-2-0-since-v1-1-0">v1.1.1 and v1.2.0 (since v1.1.0)</a></li>
         <li><a href="#chatur-tf-005-the-tf-001-fix-failed-every-list-the-app-fills-with-real-rows">2026-10-02 — Chatur TF-005: the TF-001 fix failed every list the app fills with real rows</a></li>
         <li><a href="#sevak-tf-001-raising-the-size-rewrote-agents-md-and-claude-md">2026-10-02 — Sevak TF-001: raising the size rewrote AGENTS.md and CLAUDE.md</a></li>
@@ -369,9 +371,84 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </tbody>
 </table>
 <hr>
-<h2 id="unreleased-since-v1-2-1-ships-as-v1-2-2"><a id="unreleased-since-v121--ships-as-v122"></a>Unreleased (since v1.2.1) — ships as v1.2.2<a class="anchor-link" href="#unreleased-since-v1-2-1-ships-as-v1-2-2">#</a></h2>
-<p>v1.2.1 was tagged on 2026-10-22. What follows is in no published package yet and goes out as v1.2.2:
-bug fixes only, so a patch version.</p>
+<h2 id="unreleased-since-v1-2-3-ships-as-v1-2-4"><a id="unreleased-since-v123--ships-as-v124"></a>Unreleased (since v1.2.3) — ships as v1.2.4<a class="anchor-link" href="#unreleased-since-v1-2-3-ships-as-v1-2-4">#</a></h2>
+<p>v1.2.3 was tagged on 2026-10-30 at <code>2d9bc3d</code>. What follows is in no published package yet (it was
+deployed to all 18 projects with <code>update-framework.sh</code> on 2026-11-01) and goes out as v1.2.4: one new check that enforces a rule the prompts already stated, and bug fixes, so a patch version.</p>
+<ul>
+<li><strong>FW-001 (owner, 2026-11-01): verify tests created accounts on the shared production AppManager on every run.</strong> (First numbered TF-056; TfLens filed its own TF-056 the same day, and TF numbers in <code>tests/regression</code> belong to TfLens, so the framework's own defects now take FW numbers.) Two causes: Chatur <code>tests/verify/signin-register.spec.ts:96</code> registered <code>chatur-verify-&lt;Date.now()&gt;@techierathore.com</code> for REQ-FN-004, and Sevak <code>tests/verify/p1/a-setup-shell-auth.spec.ts:377</code> registered <code>sevak-verify-&lt;Date.now()&gt;@example.com</code> for REQ-UI-006. The owner deleted the users by hand. The prompts said "use a test user from the usage guide, never an invented one", but nothing checked it. The new <code>tf-test-users-check.py</code> scans every verify spec and unit or integration test file. It fails a register call (<code>AuthSvc/register</code>, <code>UserSvc/register</code>, <code>device-register</code>, a client's <code>Register…()</code>) or a register-form submit, and an address built at run time (<code>Date.now()</code>, a Guid, random, a timestamp) that is not in the usage guide's Test users table. Allowed: Test users addresses, so the "email already in use" path with test user 1 passes. Also allowed: a submit with no address typed (the form's own validation), a <code>.invalid</code> or <code>@example.com</code> address in a test that registers nothing (Forgot password), and a file whose AppManager client is replaced. It runs in two places:
+<ul>
+<li><strong>The verify verdict</strong>, as gate <code>test-users</code>, after build and before acceptance. The row goes to Needs re-verify and <code>tf-verify-emit.sh</code> writes its gate record and miss.
+</li>
+<li><strong><code>tf-build.sh build|test</code></strong>, over the builder's changed test files, before anything is built. It prints a FAIL line and writes one gate record per row.
+</li>
+</ul>
+</li>
+</ul>
+<p>The rule is enforced only on an app that signs in through a shared AppManager (its Architecture's sign-in
+  row, or its Test users section). An app with its own accounts (TechieBlog, Lekhak, AppManager itself) gets
+  NOTE lines and a PASS. The verifier, the verify task, the builder prompt and the usage-guide template now
+  carry the sentence. tf-doc-check's <code>appmanager-test-users</code> rule fails a Test users section that does not
+  say it. The gate is in SCHEMA.md and <code>tf-metrics.sh</code> (<code>LATE_GATES</code> from 2026-11-01).</p>
+<ul>
+<li><strong>Measured on every project with a <code>.tfcore</code>:</strong> Chatur 4 findings (REQ-FN-004, REQ-FN-005), Sevak 4 (REQ-UI-006, plus <code>tests/verify/p3/verify-env.ts</code> <code>registerThrowaway()</code>), AstroLyfe 5 (<code>tests/ui-smoke/AxeScan.spec.ts</code>, <code>auth-signup.spec.ts</code>: sign-ups at <code>astrolyfe.*.${Date.now()}@example.com</code>). TfLens and Xpenser pass. TechieBlog has 13 notes, AppManager 46, Lekhak 1: all local accounts, none failed.
+</li>
+<li><strong>Replayed on a copy of Chatur's phase-1 evidence:</strong> exactly two rows change, REQ-FN-004 and REQ-FN-005 (NOT-DRIVEN → TEST-USERS-FAIL). REQ-UI-004, which uses test user 1, is unchanged.
+</li>
+<li><strong>The doc rule now fails</strong> the Test users section of Chatur, Sevak, TfLens and Xpenser until each adds the sentence.
+</li>
+</ul>
+<p>Case <code>fw_001</code>.</p>
+<ul>
+<li><strong>Feedback sweep of 2026-11-01: twelve open entries fixed.</strong> Each case fails against the v1.2.3 scripts and passes now. Misses <code>MISS-TechieFlow-20261101-01</code> to <code>-06</code>, closed in the same run.
+<ul>
+<li><strong>Lekhak TF-037</strong>: on a desktop head a screen is opened by pushState, and the app draws it a moment later. Both checks read the page after a fixed 1.5 s, so AI Setup's anchors were "not on the page" over a screenshot of AI Story Studio. The screen check (<code>tf-verify-screens.mjs</code>) and the mockup check (<code>tf-mockup-parity.mjs</code>) now note the anchors on the page before the move. After it they wait (at most 5 s) for one of the screen's own new anchors, then for the page to stop changing. Case <code>lk_037</code>.
+</li>
+<li><strong>Chatur TF-019</strong>: <code>tf-login.mjs</code> tries the given sign-in path, then <code>/login</code>, <code>/sign-in</code>, <code>/signin</code> and <code>/account/login</code>. It says which one worked ("LOGIN signed in at /sign-in: /login has no sign-in form"). Case <code>ch_019</code>.
+</li>
+<li><strong>Sevak TF-011</strong>: a minimized Windows window draws no frames. On a desktop head both checks now count animation frames before measuring. On none, they restore the head's own window once, by the process id the boot recorded. If it still draws nothing, the screen is NOT-MEASURED ("the app window is not drawing"), and the verdict grades its rows as not driven. The restore itself is not proved on a real Windows window. Case <code>sv_011</code>.
+</li>
+<li><strong>AppManager TF-030, TechieBlog TF-002 and Chatur TF-018, one change</strong>: on WSL, <code>tf-verify-boot.sh</code> ran a web project's copy on Windows, where NAT-mode WSL cannot reach it and a Windows process cannot read the WSL paths the tests type. Now:
+<ul>
+<li>A web project with no MAUI target of its own is published and run on WSL. When WSL cannot build it, the Windows copy is bound to <code>0.0.0.0</code> and reached at <code>localhost</code> or the WSL gateway.
+</li>
+<li><code>TF_BOOT_RUNNER=wsl|windows</code> names the side (through the new <code>TF_BUILD_SIDE</code> in <code>tf-build.sh</code>).
+</li>
+<li><code>tf-verify-boot.sh adopt --port N [--pid P]</code> gives a head started by hand a boot record.
+</li>
+<li><code>tf-verify-tests.sh --merge</code> with no part files refuses.
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>Cases <code>am_030</code>, <code>bl_002</code>, <code>ch_018</code>.</p>
+<ul>
+<li><strong>Sevak TF-013</strong>: <code>tf-verify-boot.sh start --env NAME=VALUE</code> (repeatable) is kept in the boot record. It reaches the Mac app through <code>open --env</code> and the mac2 session's <code>appium:environment</code>, and the Windows head through <code>set</code>. Not proved on a Mac. Case <code>sv_013</code>.
+</li>
+<li><strong>Sevak TF-008</strong>: three items written <code>**BRD-171** (was BRD-49) — …</code> were skipped by <code>tf-split-brd</code>. They are read now, and the self-check line names the BRD file and any id it could not read. On Sevak: 52 of 55 → all 55. Case <code>sv_008</code>.
+</li>
+<li><strong>Sevak TF-012</strong>: <code>tf-devguide-list</code> now also reads the project folders a root <code>*.slnx</code> / <code>*.sln</code> lists. <code>apps/</code> is a samples folder only on a library. On Sevak, phase 3: NOTHING → 9 screens. The other 16 projects list exactly what they did. Case <code>sv_012</code>.
+</li>
+<li><strong>Chatur TF-021</strong>: a test's sample checklist held <code>REQ-UI-999</code>. The TechieRag TF-008 scan counted it into the highest id, so triage handed out <code>REQ-UI-1000</code>, and <code>tf-req-ids.py</code> cut <code>REQ-UI-1001</code> to <code>REQ-UI-100</code>. Ids in code and tests now only rule an id out; they never raise the count. Ids of four digits are read whole. On a copy of Chatur: <code>REQ-UI-1000</code> → <code>REQ-UI-083</code>. Case <code>ch_021</code>.
+</li>
+<li><strong>TfLens TF-055</strong>: in the doc-check baseline, a section or entry over its size limit was old only at the identical word count. It is now old at any count no larger than the baseline's, as a whole-document finding already was. Case <code>tf_055</code>.
+</li>
+<li><strong>TfLens TF-056</strong> (filed during this sweep): <code>tf-mockup-parity.mjs</code> read a translucent colour at full strength. The mockup's <code>rgba(59,130,246,.08)</code> note bucketed as <code>accent</code> against the app's opaque pale blue (<code>neutral</code>). A colour under 99 % opacity is now blended over what is painted behind it before it is bucketed. A strong translucent colour still keeps its hue.
+<ul>
+<li><strong>Measured on the mockups of 12 projects:</strong> anchored colours change bucket in Chatur (146 of 4,366), AppManager (42 of 334), TfLens (30 of 920) and TrBlazeUI (14 of 1,970); the other 8 are unchanged.
+</li>
+<li><strong>On TfLens's last evidence:</strong> its 4 colour findings were all this one, and they go.
+</li>
+<li><strong>Not measured:</strong> the app side of Chatur, AppManager and TrBlazeUI, which were not running. A pale translucent chip in a mockup against a solid chip in the app is now a difference where it was not.
+</li>
+</ul>
+</li>
+</ul>
+<p>Case <code>tf_056</code>.</p>
+<h2 id="v1-2-3-since-v1-2-1"><a id="v123-since-v121"></a>v1.2.3 (since v1.2.1)<a class="anchor-link" href="#v1-2-3-since-v1-2-1">#</a></h2>
+<p>Tagged on 2026-10-30 at <code>2d9bc3d</code>. This section was written as "Unreleased, ships as v1.2.2"; v1.2.2 was
+never tagged, and these changes shipped as v1.2.3.</p>
 <ul>
 <li><strong>Feedback sweep of 2026-10-29: nine entries, all from verify runs.</strong> Each new case fails against the v1.2.1 scripts and passes now. <strong>Chatur TF-020</strong>: the menu walk knew a ticked item only by a named check icon. TrBlazeUI's <code>LucideIcon</code> draws <code>&lt;svg class="lucide-icon"&gt;</code> with the path alone, so the branch already checked out ("main") read as "does nothing when clicked". <code>tf-menus.mjs</code> now also knows a tick by its shape (one stroke of three points, the middle one lowest) and records it as "already the state (ticked)"; an unticked item that does nothing still fails. Proved on Chatur's web head (the WSL copy, as on 28 Oct), phase 3: v1.2.1 gives render EMPTY on End-to-end run, Run queue and Run report on that finding (19 rows); the fix gives render OK on all three. Case <code>ch_020</code>. <strong>Chatur TF-017</strong>: a row whose tests were all skipped kept the Verified it read before, with a Remark saying "not verified" (REQ-FN-106). <code>tf-verify-verdict.py</code> now writes Verified on a row it could not measure only when an earlier PASS is on record (in its Remark or the ledger), and says "Verified on &lt;date&gt; stands, not re-measured"; without one the row goes to Needs re-verify. The Remark mark for NOT-TESTED and NOT-DRIVEN rows is now "not measured". Case <code>ch_017</code>. <strong>Chatur TF-016, Sevak TF-014 and Chatur TF-015, one change</strong>: on a Mac web-view head Appium sees the web view as one empty element. <code>tf-verify-native.mjs</code> now has a sign-in step (the user and password fields found in the app's own window, typed with <code>s.type</code>, then "Sign in" or "Log in"); where the web view is opaque it says the sign-in was not driven and why, and every screen it could not reach is NOT-MEASURED, never UNREACHABLE. The verdict grades those rows as not driven ("not measured … grade it on the web or Windows head"), no gate record; on 21 Oct they became RENDER-FAIL. A web view the head can see into (Lekhak's) is unchanged: an unlinked screen is still UNREACHABLE. Proved on a stand-in Appium (<code>tests/maccatalyst/fake-appium.mjs</code>), not on a Mac. Cases <code>ch_015</code>, <code>ch_016</code>, <code>sv_014</code>. <strong>TechieBlog TF-001</strong>: <code>tf-doc-check</code>'s baseline compared a size finding with its size word, so re-sizing a project (Small to Large) made an unchanged over-length finding new. <code>_shape()</code> now drops the size word. On a copy of TechieBlog's documents, baselined as Small and checked as Large: v1.2.1 gives 1 FAIL (Coding Standards, 2,786 words), the fix 0. Case <code>bl_001</code>. <strong>TechieRag TF-008</strong>: <code>tf-triage new</code> also skips ids that the project's <code>src/</code>, <code>source/</code>, <code>tests/</code> and <code>test/</code> carry, and <code>tf-verify-tests</code> warns (WARN line, <code>tests_older_than_row</code> in tests.json, a ⚠ note in the Remark) when a row logged by triage has tests that carried its id before the day it was logged. The day comes from the history, else from the files' dates. Case <code>tr_008</code>. <strong>Chatur TF-013, TF-014 and TF-015</strong> were already in v1.2.1 (<code>ch_013</code>, <code>ch_014</code> hold); Chatur's <code>.tfcore/</code> is v1.2.1. <strong>Found in this run</strong>: <code>tf-log-miss --fixed --started</code> inside a running <code>*fix-issues</code> skipped the marker and wrote a log-miss run record over the fix run's window (voided). The marker is now read whether or not <code>--started</code> is given. Case <code>tf_029</code>. Misses <code>MISS-TechieFlow-20261029-01</code> to <code>-06</code>, <code>weak-check</code>, closed in the same run. <strong>CI fix, 2026-10-30</strong>: the Validate run on commit 08d6432 failed on both runners. The new <code>tr_008</code> case dated its test files with <code>touch -d</code>, which a stock Mac does not have, so the portability check failed, and with it <code>npm run validate</code>, <code>tests/portability/run.sh</code> and the suite steps in both time zones. It now uses <code>touch -t</code>, which works on both. Every <code>tests/*/run.sh</code> passes in UTC and in Asia/Kolkata. <code>dev_001</code> fails about half the time on the owner's WSL machine because its clock steps back by about 0.7 s (twice in 40 s, measured) while the case relies on one-second windows. On a steady clock it passes.
 </li>

@@ -17,6 +17,7 @@ Each rule lives in one place; these lines only point at it.
 - Run to completion: `.tfcore/tasks/_yolo-mode.md`. `*verify` is in YOLO by default.
 - Boot the application yourself, on this machine, and never ask the owner to start or test anything: `.tfcore/tasks/_smoke-test-policy.md` and `bash .tfcore/utils/tf-verify-boot.sh`.
 - Evidence over assertion. A row is `Verified` only when every check that ran passed, and the verdict script writes it from the evidence files; a `Verified` written by hand is refused by the hook. A check that could not run is written as not measured, never as a pass.
+- A verify test never creates, deletes or changes an account on a shared AppManager; the "register creates an account" path of any app is verified by hand once per release and recorded in the checklist with the date, and the automated row checks only the form's validation and the "email already in use" path using test user 1. The verdict enforces it (gate `test-users`, `tf-test-users-check.py`).
 - No source edits. The verifier writes tests, evidence, the ledger and the checklist cells; fixing is `*fix-issues`, the owner's call.
 - One checklist is the single source of truth. Never a dated verify report, never a second status file.
 - Read failures, not successes: open a screenshot or a log only for a check that failed.
@@ -26,7 +27,7 @@ Each rule lives in one place; these lines only point at it.
 
 | Command | What it does | Task file |
 |---|---|---|
-| `*verify {scope} {App} [--phase N\|all]` | boots the app, runs the seven checks on every row in scope of that phase's checklist (default `appPhase`; `all` is each phase in turn, phase 1 first), writes the verdicts and the telemetry | `verify-phase.md` |
+| `*verify {scope} {App} [--phase N\|all]` | boots the app, runs the checks on every row in scope of that phase's checklist (default `appPhase`; `all` is each phase in turn, phase 1 first), writes the verdicts and the telemetry | `verify-phase.md` |
 | `*report {scope} {App}` | prints the current Status and Remarks of the rows in scope from the checklist, without running anything | |
 | `*help` | prints this table | |
 | `*exit` | leaves the persona | |

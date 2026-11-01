@@ -8,7 +8,7 @@
 
 ## Summary
 
-20 entries: 2 open (TF-018, TF-019), 8 fixed upstream and not yet re-checked (TF-008, TF-010, TF-013 to TF-015 in v1.2.1; TF-015 reworked, TF-016, TF-017 and TF-020 in v1.2.2, fixed 2026-10-29), 10 closed (TF-001 to TF-007, TF-009, TF-011, TF-012). 0 blocking now: TF-020 and TF-017, the two that blocked, are fixed upstream.
+21 entries: 3 open (TF-018, TF-019, TF-021), 8 fixed upstream and not yet re-checked (TF-008, TF-010, TF-013 to TF-015 in v1.2.1; TF-015 reworked, TF-016, TF-017 and TF-020 in v1.2.2, fixed 2026-10-29), 10 closed (TF-001 to TF-007, TF-009, TF-011, TF-012). 0 blocking now: TF-020 and TF-017, the two that blocked, are fixed upstream.
 
 TF-007 was re-checked here on 2026-10-03: no list box on Start, Workbench, Prerequisites, Providers or Corrections reports "app carries an icon the mockup does not" at either width, and Start, Prerequisites, Providers and Corrections now pass mockup parity outright.
 
@@ -263,6 +263,8 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 - **Encountered in:** `*build-phase Chatur` chained verify, phase 3, 2026-10-25
 - **Workaround:** the published harness was started by hand under WSL dotnet (`~/.dotnet/dotnet Chatur.WebHarness.dll --urls http://localhost:5280`) and stopped by hand afterwards. Its verdicts are recorded as "not booted".
 - **Suggested fix:** an environment variable (for example `TF_BOOT_RUNNER=wsl`) that forces the WSL runner, and a fallback to it when the cmd.exe copy does not answer within the wait. Also record the pid of a hand-started head so the process checks can read it.
+- **Seen again 2026-10-29, another form (Blocks: no, the workaround worked):** this time the cmd.exe copy did answer from WSL, so the boot kept it. The tests run in WSL and type WSL fixture paths (`/mnt/c/…/fixtures/workbench-a`) into Project folders, and a Windows process cannot read them: the project never appears in Open recent, and every spec that opens a fixture project fails (14 phase-3 rows and the phase-1 workbench-files rows). The fix is the same switch: when the tests run in WSL, run the web harness in WSL too. Workaround used: stop the cmd.exe copy, start the same published copy with `~/.dotnet/dotnet <absolute path>/Chatur.WebHarness.dll --contentRoot … --webroot …` on a fresh `harness-data`, and write its pid into `boot-5280.json`.
+- **Also seen 2026-10-29 (Blocks: no):** `tf-verify-tests.sh --merge` with no file arguments runs the whole suite instead of refusing. And `tf-verify-boot.sh start --head windows` boots the desktop head on the owner's real database (`%LOCALAPPDATA%\Techie Rathore\com.techierathore.chatur\Data\chatur.db`): desktop-head.spec.ts sent a test message in the owner's real project chat and changed its model picker. The desktop head should get its own data folder for tests.
 
 ### TF-019 — The screen check's default sign-in path is /login, but this app signs in at /sign-in
 
@@ -278,6 +280,8 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 
 ### TF-020 — Picking the branch you are already on is reported as "does nothing when clicked"
 
+> ✅ **Closed 2026-10-29** — re-checked here: 2026-10-29 *verify all Chatur --phase 3: tf-verify-screens.sh drove End-to-end run, Run queue and Run report in light and dark; render and visual OK on all 3, no screen reported '› main does nothing'; the 19 rows are Verified.
+
 - **Status:** fixed upstream 2026-10-29, ships in TechieFlow v1.2.2; not yet re-checked here.
 - **Severity:** minor
 - **Blocks:** yes — the render check fails all 19 rows on End-to-end run, Run queue and Run report on this one finding, once the sample menu items are marked.
@@ -288,6 +292,18 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 - **Workaround:** none in the app. Switching to the current branch has nothing to do.
 - **Suggested fix:** in `tf-menus.mjs`, treat a ticked item (a check mark, `aria-checked="true"` or `data-state="checked"`) with no unticked sibling choice as "already the state", not as an item that does nothing.
 - **Reply (TechieFlow team, 2026-10-29):** Fixed as you suggested. The cause: the walk already skipped a ticked item, but it knew a tick only by a named icon (`svg[class*="check"]`, `data-icon`). TrBlazeUI's `LucideIcon` draws `<svg class="lucide-icon">` with the check path alone, so your ticked `main` was never seen as ticked. `tf-menus.mjs` now also knows a tick by its shape (one stroke of three points, the middle one lowest), as well as `aria-checked="true"` and `data-state="checked"`, and records the click as "already the state (ticked)". An unticked item that does nothing still fails. Regression case `ch_020`. Miss `MISS-TechieFlow-20261029-01`. **Re-run on this project's phase 3** (the web head as on 28 Oct: the WSL copy of the published harness on :5280, signed in as chatur-owner, the three screens that hold the 19 rows): v1.2.1 gives render EMPTY on End-to-end run, Run queue and Run report with `"main2 to push › main" does nothing when clicked`; the fix gives render OK on all three. **Not ours, for you:** a second run on the same data fails visual on all three screens: `text "build failed" in span[data-testid=output-status] is 2.8 : 1 against its background (rgb(252,252,252) on rgb(246,109,103); 3 : 1 is the minimum)`. That is the app's badge colour. Also, the Windows-side copy (what `tf-verify-boot.sh start` chose today) shows "No branches found" in the branch menu, so this fault does not show there. **Check it here:** paste into Chatur's agent `/TechieFlow:agents:verifier *verify ui Chatur --phase 3`. No screen reports `› main" does nothing`.
+
+### TF-021 — tf-triage.sh new hands out four-digit ids that the test mapping cannot read
+
+- **Status:** open, filed 2026-10-30
+- **Severity:** major
+- **Blocks:** no — the four rows were renumbered by hand to free three-digit ids (REQ-UI-079 to REQ-UI-082), and the run went on.
+- **Repro:** on Chatur, whose highest UI id is REQ-UI-078, run `bash .tfcore/utils/tf-triage.sh Chatur new "<title>" "<When … then …>" --prefix UI --section "Workbench"` four times. The rows come back as REQ-UI-1000, REQ-UI-1001, REQ-UI-1002 and REQ-UI-1003. Then run `tf-verify-tests.sh` over specs whose tests are titled `REQ-UI-1001 …`, `REQ-UI-1002 …`.
+- **Expected:** the next free id in the prefix, REQ-UI-079 onward, in the three-digit form every other script reads.
+- **Actual:** `tf-req-ids.py` matches `REQ-(UI|FN|NFR|RAG)-\d{3}`, so all seven tests of the four rows were filed in `tests.json` under one row, `REQ-UI-100`, which does not exist, and the four rows would have been graded as having no test.
+- **Encountered in:** `*triage-and-fix Chatur docs/screenshots/2026-10-29-first-use`, 2026-10-30
+- **Workaround:** the rows, their tests and the code comments were renumbered to REQ-UI-079 to REQ-UI-082 before the verify.
+- **Suggested fix:** in `tf-triage.py` `new`, take the next free number after the highest existing id; and in `tf-req-ids.py`, read `\d{3,}` with a word boundary, so a longer id is never cut to its first three digits.
 
 ## Replies from TechieFlow
 
@@ -362,3 +378,14 @@ Ships in **TechieFlow v1.2.2**, the next release after v1.2.1. Already in this p
 | TF-015 | Fixed upstream. The reply is under the entry. | on the Mac, `*verify all Chatur --phase all --head maccatalyst`: phases 2 to 4 get a verdict table, and no row behind Sign in is RENDER-FAIL. |
 | TF-013 | Fixed upstream. The reply is under the entry. | `/TechieFlow:agents:verifier *verify all Chatur --phase 4`. The 19 rows go back to Not Started with the 404 reason, and no miss is written. |
 | TF-014 | Fixed upstream. The reply is under the entry. | run your two repro commands outside a build or fix: neither is blocked. |
+
+### Resolution status (TechieFlow team, 2026-11-01)
+
+Ships in **TechieFlow v1.2.4**, the next release after v1.2.3; already in this project's `.tfcore/` through the framework update of 2026-11-01. Each fix has a regression case in `tests/regression/run.sh` that fails against the v1.2.3 script and passes now.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-018 | Fixed upstream in `tf-verify-boot.sh`, `tf-build.sh` and `tf-verify-tests.sh`. On WSL a web project with no MAUI target of its own is published and run on WSL, so the tests can hand it WSL paths. `TF_BOOT_RUNNER=wsl|windows` forces a side. `tf-verify-boot.sh adopt --port N [--pid P]` gives a head started by hand a boot record with its pid. `--merge` with no part files refuses. The `/proc/undefined` read is in your `tests/verify/support/restart.ts` (`pids[0]` of a record without pids); with a real or adopted record it does not happen. The desktop head's real database is only partly answered: `--env` reaches the Windows head, but the app must name its data-folder variable. Case `ch_018`. | After the framework update: `bash .tfcore/utils/tf-verify-boot.sh start`: expect `BOOTED … side=wsl` and the fixture projects opening. |
+| TF-019 | Fixed upstream in `tf-login.mjs`. The sign-in tries the path it was given, then `/login`, `/sign-in`, `/signin` and `/account/login`, and says which worked: "LOGIN signed in at /sign-in: /login has no sign-in form". Case `ch_019`. | After the framework update: the screen check with `--login-path /login`: expect "LOGIN signed in at /sign-in" and the screens driven. |
+| TF-021 | Fixed upstream in `tf-checklist-edit.py` and `tf-req-ids.py`. `tests/verify/process-run.spec.ts` holds `REQ-UI-999` as sample data; the TechieRag TF-008 scan counted it into the highest id, so the next was 1000. Ids in code and tests now only rule an id out and never raise the count, and a four-digit id is read whole. On a copy of your repo: `REQ-UI-1000` → `REQ-UI-083`. Case `ch_021`. | After the framework update: `bash .tfcore/utils/tf-triage.sh Chatur new …` on a copy: expect the next three-digit id. |
+

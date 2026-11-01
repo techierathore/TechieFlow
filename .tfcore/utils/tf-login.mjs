@@ -27,18 +27,34 @@ export async function pick(scope, selectors) {
 const LOGIN_ATTEMPTS = 4;
 const opts = (o) => ({ attr: 'data-testid', settle: 1500, renderWait: 5000, ...o, base: (o.base || '').replace(/\/$/, '') });
 
+// The usual sign-in addresses, tried in this order after the one the caller named when that page has no
+// user field: Chatur signs in at /sign-in and the check was told /login, so it stopped with "no user or
+// email field found" (Chatur TF-019).
+export const LOGIN_PATHS = ['/login', '/sign-in', '/signin', '/account/login', '/Account/Login'];
+
 export async function signIn(page, o) {
-  const { base, loginPath, user, password, attr, settle } = opts(o);
+  const { base, user, password, attr, settle } = opts(o);
+  let { loginPath } = opts(o);
   if (!loginPath || !user) return { attempted: false };
   const onLogin = () => page.url().startsWith(base + loginPath);
   try {
-    await page.goto(base + loginPath, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-    // a page that draws its form a moment after it arrives has no field to pick yet
-    await page.waitForSelector('input', { state: 'visible', timeout: 15000 }).catch(() => {});
     const INPUT = ':is(input, textarea)';
     const USER_FIELD = [`${INPUT}[${attr}*="email" i]`, `${INPUT}[${attr}*="user" i]`, 'input[type="email"]', 'input[autocomplete="username"]',
                         'input[name*="email" i]', 'input[name*="user" i]', 'input[id*="email" i]', 'input[id*="user" i]', 'form input[type="text"]'];
+    const tried = [];
+    for (const path of [loginPath, ...LOGIN_PATHS.filter((x) => x.toLowerCase() !== loginPath.toLowerCase())]) {
+      tried.push(path);
+      await page.goto(base + path, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+      // a page that draws its form a moment after it arrives has no field to pick yet
+      await page.waitForSelector('input', { state: 'visible', timeout: tried.length === 1 ? 15000 : 5000 }).catch(() => {});
+      // the address the form is really on: an app that sends /login on to /sign-in signs in at /sign-in
+      if (await pick(page, USER_FIELD)) { loginPath = (page.url().startsWith(base) && page.url().slice(base.length).split(/[?#]/)[0]) || path; break; }
+    }
+    // every check that reads the sign-in address afterwards (signedOut, the redirect test) reads this one
+    if (loginPath !== o.loginPath) { o.loginPathAsked = o.loginPath; o.loginPath = loginPath; }
+    const moved = o.loginPathAsked ? { login_path: loginPath, login_path_asked: o.loginPathAsked } : {};
+    if (!(await pick(page, USER_FIELD))) return { attempted: true, ok: false, error: `no user or email field found on the sign-in page (tried ${tried.join(', ')})` };
     const PASS_FIELD = ['input[type="password"]', `${INPUT}[${attr}*="pass" i]`];
     // The button, never a field: "login-email" and "login-pass" contain "login" too, and taking the
     // first test id with "login" in it clicked the email box, so sign-in never submitted (TF-033).
@@ -75,11 +91,11 @@ export async function signIn(page, o) {
       if (!onLogin()) {
         await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
         await page.waitForTimeout(settle);
-        return { attempted: true, ok: true, url: page.url(), attempts: attempt };
+        return { attempted: true, ok: true, url: page.url(), attempts: attempt, ...moved };
       }
     }
-    if (!onLogin()) return { attempted: true, ok: true, url: page.url(), attempts: 1 };
-    return { attempted: true, ok: false, url: page.url(), attempts: LOGIN_ATTEMPTS, error: `still on the sign-in page after ${LOGIN_ATTEMPTS} attempts: ${why}` };
+    if (!onLogin()) return { attempted: true, ok: true, url: page.url(), attempts: 1, ...moved };
+    return { attempted: true, ok: false, url: page.url(), attempts: LOGIN_ATTEMPTS, ...moved, error: `still on the sign-in page after ${LOGIN_ATTEMPTS} attempts: ${why}` };
   } catch (e) {
     return { attempted: true, ok: false, error: e.message.split('\n')[0] };
   }
@@ -164,4 +180,91 @@ export async function reach(page, o, route) {
     out.signedOut = true;
   }
   return out;
+}
+
+// ---- a desktop head: arriving on a screen, and a window that draws ----------------------------
+// Lekhak TF-037: on a desktop head a screen is opened by pushState, which changes the address at once,
+// while the app draws the new page a moment later. The check read the anchors and took the screenshot
+// in between: AI Setup's four anchors were "not on the page" over a picture of AI Story Studio. So the
+// anchors present BEFORE the move are noted, and after it the check waits (bounded) until the address
+// matches the route and one of the screen's own anchors that was not there before is attached, then
+// until the page stops changing for 300 ms. It never decides anything: on the timeout the page is
+// graded as it stands, and `arrived: false` says so.
+export async function anchorsPresent(page, anchors = [], attr = 'data-testid') {
+  if (!anchors || !anchors.length) return [];
+  try {
+    return await page.evaluate(({ anchors, attr }) => anchors.filter((id) => document.querySelector(`[${attr}="${CSS.escape(id)}"]`)), { anchors, attr });
+  } catch (e) { return []; }
+}
+
+export async function waitArrived(page, route, anchors = [], before = [], o = {}) {
+  const { attr, renderWait } = opts(o);
+  const want = (route || '').split(/[?#]/)[0];
+  const fresh = (anchors || []).filter((a) => !(before || []).includes(a));
+  const t0 = Date.now();
+  let arrived = true;
+  try {
+    await page.waitForFunction(({ want, fresh, attr }) => {
+      const has = fresh.some((id) => document.querySelector(`[${attr}="${CSS.escape(id)}"]`));
+      if (has) return true;
+      const norm = (x) => (x || '').replace(/\/+$/, '').toLowerCase() || '/';
+      const rx = new RegExp('^' + norm(want).split(/(\{[^}]*\})/).map((p) => p.startsWith('{') ? '[^/]+' : p.replace(/[.*+?^$()|[\]\\]/g, '\\$&')).join('') + '$');
+      return !fresh.length && rx.test(norm(location.pathname));
+    }, { want, fresh, attr }, { timeout: Math.max(renderWait, 5000), polling: 100 });
+  } catch (e) { arrived = false; }
+  // then quiet: nothing in the page changed for 300 ms (at most 3 s), so the top bar has caught up too
+  await page.evaluate(() => new Promise((res) => {
+    let t; const done = () => { mo.disconnect(); clearTimeout(cap); clearTimeout(t); res(); };
+    const mo = new MutationObserver(() => { clearTimeout(t); t = setTimeout(done, 300); });
+    const cap = setTimeout(done, 3000); t = setTimeout(done, 300);
+    mo.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true });
+  })).catch(() => {});
+  return { ms: Date.now() - t0, arrived, fresh: fresh.length };
+}
+
+// Sevak TF-011: a minimized Windows app window draws no frames, so every click waits for a control to
+// be "stable" and times out, and each was reported as a defect of the screen. requestAnimationFrame
+// callbacks are counted for `ms`; none means the window is not drawing.
+export async function framesDrawn(page, ms = 1000) {
+  try {
+    return await page.evaluate((ms) => new Promise((res) => {
+      let n = 0; const t0 = performance.now();
+      const tick = () => { n++; if (performance.now() - t0 < ms) requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+      setTimeout(() => res(n), ms);
+    }), ms);
+  } catch (e) { return -1; }
+}
+
+// Restore the head's own window, by the Windows process ids the boot recorded (boot.json win_pids):
+// ShowWindow(SW_RESTORE) on that process's main window, no keyboard or mouse input. Returns what it did.
+export async function restoreWindow(cdpUrl, dir = 'tests/.artifacts/verify') {
+  const { existsSync, readdirSync, readFileSync } = await import('node:fs');
+  const { spawnSync } = await import('node:child_process');
+  let pids = [];
+  try {
+    const files = existsSync(dir) ? readdirSync(dir).filter((f) => /^boot(-\d+)?\.json$/.test(f)) : [];
+    for (const f of files) {
+      const b = JSON.parse(readFileSync(`${dir}/${f}`, 'utf8'));
+      if (b.stopped || !Array.isArray(b.win_pids) || !b.win_pids.length) continue;
+      if (cdpUrl && b.url && b.url.replace(/\/$/, '') !== cdpUrl.replace(/\/$/, '') && f !== 'boot.json') continue;
+      pids = b.win_pids.filter((p) => /^\d+$/.test(String(p)));
+      if (pids.length) break;
+    }
+  } catch (e) { /* no boot record: nothing to restore */ }
+  if (!pids.length) return 'no Windows process id in the boot record';
+  const ps = 'Add-Type -Name W -Namespace TfW -MemberDefinition \'[DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int c);\'; '
+    + `foreach ($i in @(${pids.join(',')})) { $p = Get-Process -Id $i -ErrorAction SilentlyContinue; if ($p -and $p.MainWindowHandle -ne 0) { [void][TfW.W]::ShowWindow($p.MainWindowHandle, 9); 'restored ' + $i } }`;
+  const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { encoding: 'utf8', timeout: 20000 });
+  if (r.error) return `could not run powershell.exe: ${r.error.code || r.error.message}`;
+  return (r.stdout || '').trim() || `no window found for process ${pids.join(', ')}`;
+}
+
+// framesDrawn, then restoreWindow and count again: { drawing, frames, restored }
+export async function ensureDrawing(page, cdpUrl) {
+  let frames = await framesDrawn(page, 500);
+  if (frames !== 0) return { drawing: true, frames };
+  const restored = await restoreWindow(cdpUrl);
+  frames = await framesDrawn(page, 1000);
+  return { drawing: frames !== 0, frames, restored };
 }

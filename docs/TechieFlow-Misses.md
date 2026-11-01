@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 300 logged: 56 open, 243 fixed, 1 will not fix |
+| Count | 308 logged: 56 open, 250 fixed, 1 will not fix, 1 withdrawn |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-10-30 |
+| Updated | 2026-11-01 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -70,10 +70,17 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (243)
+## Fixed (250)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261101-08 | 2026-11-01 by owner | 2026-11-01 by log-miss | the check was too weak | TfLens TF-056: tf-mockup-parity read a mockup's translucent tint at full strength, so an 8 percent blue note bucketed as accent against the app's opaque pale blue (neutral) and REQ-UI-072 stayed Needs re-verify |
+| MISS-TechieFlow-20261101-07 | 2026-11-01 by owner | 2026-11-01 by log-miss | said and ignored | FW-001: verify tests created a new account on the shared production AppManager on every run (Chatur signin-register.spec.ts:96 for REQ-FN-004, Sevak a-setup-shell-auth.spec.ts:377 for REQ-UI-006); the rule was a sentence in the prompts and no code enforced it, so the owner deleted the users by hand |
+| MISS-TechieFlow-20261101-06 | 2026-11-01 by owner | 2026-11-01 by log-miss | the check was too weak | Chatur TF-021 and TfLens TF-055: tf-triage new counted a test's sample id REQ-UI-999 into the highest id and handed out REQ-UI-1000, which tf-req-ids cut to REQ-UI-100; and a section over its size limit was old in the doc-check baseline only at the identical word count |
+| MISS-TechieFlow-20261101-05 | 2026-11-01 by owner | 2026-11-01 by log-miss | the check was too weak | Sevak TF-008 and TF-012: tf-split-brd skipped a '**BRD-171** (was BRD-49) —' item and the self-check named no file or id; tf-devguide-list read only src/ and source/, so an app under apps/ had no screens |
+| MISS-TechieFlow-20261101-04 | 2026-11-01 by owner | 2026-11-01 by log-miss | the framework never said it | Sevak TF-013: a Mac Catalyst boot could pass no environment to the app, so a verify would open the owner's real data folder |
+| MISS-TechieFlow-20261101-03 | 2026-11-01 by owner | 2026-11-01 by log-miss | the check was too weak | AppManager TF-030, TechieBlog TF-002, Chatur TF-018: on WSL the verify boot ran a web project's copy Windows-side, where NAT-mode WSL cannot reach it and a Windows process cannot read the WSL paths the tests type; a hand-started head had no boot record; --merge with no files ran the whole suite |
+| MISS-TechieFlow-20261101-02 | 2026-11-01 by owner | 2026-11-01 by log-miss | the check was too weak | Lekhak TF-037, Chatur TF-019, Sevak TF-011: on a desktop head the screen and mockup checks measured the page before the app had moved to it, the sign-in tried only the given path (/login, not /sign-in), and a minimized window that draws no frames turned every click into a screen defect |
 | MISS-TechieFlow-20261030-01 | 2026-10-30 by owner | 2026-10-30 by log-miss | said and ignored | the 2026-10-29 fix run added touch -d to regression case tr_008 and was called done without running npm run validate; the portability check caught it in CI and failed the Validate run on 08d6432 |
 | MISS-TechieFlow-20261029-07 | 2026-10-29 by owner | 2026-10-29 by log-miss | said and ignored | edited TechieBlog's own TrBlazeUI feedback file (Summary and a TR-031 closed mark) to make the doc check pass; that file belongs to TechieBlog and TrBlazeUI, not TechieFlow; reverted |
 | MISS-TechieFlow-20261029-06 | 2026-10-29 by owner | 2026-10-29 by log-miss | the check was too weak | tf-log-miss with --started skipped the running command's marker, so a miss logged with --fixed --started inside *fix-issues wrote a log-miss run record over the fix run's whole window |
@@ -323,3 +330,9 @@
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
 | MISS-TechieFlow-20260828-03 | 2026-08-28 by agent-review | 2026-08-28 by log-miss | not sorted | no sentence recorded (other, other) |
+
+## Withdrawn — logged in error (1)
+
+| Miss | Found | Closed | Whose gap | What went wrong |
+|---|---|---|---|---|
+| MISS-TechieFlow-20261101-01 | 2026-11-01 by owner | 2026-11-01: its sentence names TF-056, which is TfLens's own entry (filed the same day); re-logged as FW-001 | said and ignored | TF-056: verify tests created a new account on the shared production AppManager on every run (Chatur signin-register.spec.ts:96 for REQ-FN-004, Sevak a-setup-shell-auth.spec.ts:377 for REQ-UI-006); the rule was a sentence in the prompts and no code enforced it, so the owner deleted the users by hand |

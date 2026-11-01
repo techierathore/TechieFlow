@@ -10,7 +10,7 @@ tests/regression/run.sh am_019, am_020, am_021.
 import re
 
 # found by a verify check: a new verify grades it again, so its verdict replaces the old mark
-VERIFY = r"acceptance|build|render|assets|visual|mockup-parity|perf"
+VERIFY = r"acceptance|build|test-users|render|assets|visual|mockup-parity|perf"
 # found by another step (guide, owner's testing, production, a miss, a review): no verify sees it
 OTHER = r"DevGuide|UAT bug|prod bug|miss \d{4}-|SECURITY"
 DEFECT = re.compile(rf"⚠\s*(?:{OTHER}|{VERIFY})\b")

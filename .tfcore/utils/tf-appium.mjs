@@ -8,7 +8,7 @@
 // `await s.type(el, 'text')`, the one way a Blazor Hybrid form on a Mac took the text.
 
 import { execFileSync } from 'node:child_process';
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 
 const W3C_EL = 'element-6066-11e4-a52e-4f735466cecf';
 
@@ -27,11 +27,20 @@ async function call(base, method, path, body) {
 // answered "could not be found" for a build outside /Applications that macOS had not registered
 // (Lekhak TF-003; seen again 2026-10-07). skipAppKill: the app is tf-verify-boot.sh's to stop, so
 // ending the session leaves it running for the next check.
-export async function openSession(url, { bundleId, appPath = '', automationName = 'Mac2', platformName = 'mac', extra = {} } = {}) {
+// Sevak TF-013: a mac2 session relaunches the app, so the variables `tf-verify-boot.sh start --env` gave
+// `open` have to reach the session too, or the relaunched app opens the owner's real data. They come
+// from the boot record's "env" (tests/.artifacts/verify/boot.json, or TF_BOOT_STATE) unless the caller
+// passes `environment`; an empty record sends none.
+export function bootEnv(path = process.env.TF_BOOT_STATE || 'tests/.artifacts/verify/boot.json') {
+  try { const e = JSON.parse(readFileSync(path, 'utf8')).env; return e && typeof e === 'object' ? e : {}; } catch { return {}; }
+}
+export async function openSession(url, { bundleId, appPath = '', automationName = 'Mac2', platformName = 'mac', environment = null, extra = {} } = {}) {
   const base = url.replace(/\/$/, '');
   const which = appPath ? { 'appium:appPath': appPath } : { 'appium:bundleId': bundleId };
+  const env = environment || bootEnv();
   const v = await call(base, 'POST', '/session', { capabilities: { alwaysMatch: {
     platformName, 'appium:automationName': automationName, ...which,
+    ...(Object.keys(env).length ? { 'appium:environment': env } : {}),
     'appium:skipAppKill': true, 'appium:newCommandTimeout': 300, ...extra } } });
   const sp = `/session/${v.sessionId}`;
   const s = {

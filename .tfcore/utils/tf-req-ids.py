@@ -10,10 +10,10 @@ requirement) claims that row: TechieRag's per-row cases.
 """
 import re
 
-ID = re.compile(r"(REQ-(?:UI|FN|NFR|RAG)-\d{3})", re.I)
+ID = re.compile(r"(REQ-(?:UI|FN|NFR|RAG)-\d{3,})(?!\d)", re.I)   # REQ-UI-1001 is never cut to REQ-UI-100 (Chatur TF-021)
 LEAD_SEP = re.compile(r"(?:[\s,;/&+|·:\[\]–—-]|\band\b)*", re.I)
 TAG = re.compile(r"\s*\[?[A-Z][A-Z0-9]{1,5}\]?:?\s+(?=REQ-)")
-ROW_ARG = re.compile(r"\b(?:row|req|reqid|req_id|requirement)\s*[:=]\s*[\"']?(REQ-(?:UI|FN|NFR|RAG)-\d{3})\b", re.I)
+ROW_ARG = re.compile(r"\b(?:row|req|reqid|req_id|requirement)\s*[:=]\s*[\"']?(REQ-(?:UI|FN|NFR|RAG)-\d{3,})\b", re.I)
 
 
 def ids_of(name):

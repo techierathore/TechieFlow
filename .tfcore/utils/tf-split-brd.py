@@ -90,7 +90,9 @@ def ledger(text):
         # tf-doc-check refuses a broken link -- so a real BRD carries `<a id="brd-N"></a>`
         # here and this regex matched NONE of TfLens's 179 items. tests/regression tf_017.
         m = re.match(r"^\s*[-*]\s*(?:<a id=[\"\']?[^\"\'>]*[\"\']?\s*>\s*</a>\s*)?"
-                     r"\*\*(BRD-\d+)\*\*\s*[—:-]+\s*(.*)$", lines[i])
+                     r"\*\*(BRD-\d+)\*\*\s*(?:\([^)]*\)\s*)?[—:-]+\s*(.*)$", lines[i])
+        # "(was BRD-49)" between the id and the dash is a renumbered item, still live: Sevak's phase-2
+        # BRD carries three, and the self-check said "reads 52 of 55" without naming them (Sevak TF-008).
         if m and m.group(1) not in nfr_ids:
             rid, rest = m.group(1), m.group(2)
             title = re.split(r"\s*(?:\.\s+\*|\s\*Screen|\s·\s\*|\s\*Mockup)", rest, 1)[0].strip().rstrip(".")
