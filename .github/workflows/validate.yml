@@ -28,6 +28,7 @@ jobs:
           npm --version
           bash --version | head -1
           python3 --version
+          echo "::notice title=Runner::$( (. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME") || echo "macOS $(sw_vers -productVersion)" ), $(bash --version | head -1 | cut -c1-40), $(python3 --version)"
           rsync --version | head -1
 
       - name: Validate the repository
@@ -47,7 +48,10 @@ jobs:
           failed=""
           for suite in tests/*/run.sh; do
             echo "::group::$suite"
-            if bash "$suite"; then echo "PASS $suite"; else echo "FAIL $suite (exit $?)"; failed="$failed $suite"; fi
+            rc=0; bash "$suite" > "$RUNNER_TEMP/suite.out" 2>&1 || rc=$?; cat "$RUNNER_TEMP/suite.out"
+            if [ "$rc" -eq 0 ]; then echo "PASS $suite"; else echo "FAIL $suite (exit $rc)"; failed="$failed $suite"
+              # the failing cases on the run page itself: a log needs a sign-in, an annotation does not
+              grep -E '^FAIL' "$RUNNER_TEMP/suite.out" | head -8 | while IFS= read -r l; do echo "::error title=$suite ($TZ)::$l"; done; fi
             echo "::endgroup::"
           done
           if [ -n "$failed" ]; then echo "failed:$failed"; exit 1; fi
@@ -61,7 +65,10 @@ jobs:
           failed=""
           for suite in tests/*/run.sh; do
             echo "::group::$suite"
-            if bash "$suite"; then echo "PASS $suite"; else echo "FAIL $suite (exit $?)"; failed="$failed $suite"; fi
+            rc=0; bash "$suite" > "$RUNNER_TEMP/suite.out" 2>&1 || rc=$?; cat "$RUNNER_TEMP/suite.out"
+            if [ "$rc" -eq 0 ]; then echo "PASS $suite"; else echo "FAIL $suite (exit $rc)"; failed="$failed $suite"
+              # the failing cases on the run page itself: a log needs a sign-in, an annotation does not
+              grep -E '^FAIL' "$RUNNER_TEMP/suite.out" | head -8 | while IFS= read -r l; do echo "::error title=$suite ($TZ)::$l"; done; fi
             echo "::endgroup::"
           done
           if [ -n "$failed" ]; then echo "failed:$failed"; exit 1; fi
@@ -103,6 +110,7 @@ jobs:
           npm --version
           python3 --version
           perl -e 'print "perl $^V\n"'
+          echo "::notice title=Runner::$( (. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME") || echo "macOS $(sw_vers -productVersion)" ), $(bash --version | head -1 | cut -c1-40), $(python3 --version)"
           rsync --version 2>&1 | head -1 || true
           for tool in timeout gtimeout setsid realpath mapfile; do
             if command -v "$tool" >/dev/null 2>&1; then echo "$tool: $(command -v "$tool")"; else echo "$tool: not on PATH"; fi
@@ -129,7 +137,10 @@ jobs:
           failed=""
           for suite in tests/*/run.sh; do
             echo "::group::$suite"
-            if /bin/bash "$suite"; then echo "PASS $suite"; else echo "FAIL $suite (exit $?)"; failed="$failed $suite"; fi
+            rc=0; /bin/bash "$suite" > "$RUNNER_TEMP/suite.out" 2>&1 || rc=$?; cat "$RUNNER_TEMP/suite.out"
+            if [ "$rc" -eq 0 ]; then echo "PASS $suite"; else echo "FAIL $suite (exit $rc)"; failed="$failed $suite"
+              # the failing cases on the run page itself: a log needs a sign-in, an annotation does not
+              grep -E '^FAIL' "$RUNNER_TEMP/suite.out" | head -8 | while IFS= read -r l; do echo "::error title=$suite ($TZ)::$l"; done; fi
             echo "::endgroup::"
           done
           if [ -n "$failed" ]; then echo "failed:$failed"; exit 1; fi
@@ -143,7 +154,10 @@ jobs:
           failed=""
           for suite in tests/*/run.sh; do
             echo "::group::$suite"
-            if /bin/bash "$suite"; then echo "PASS $suite"; else echo "FAIL $suite (exit $?)"; failed="$failed $suite"; fi
+            rc=0; /bin/bash "$suite" > "$RUNNER_TEMP/suite.out" 2>&1 || rc=$?; cat "$RUNNER_TEMP/suite.out"
+            if [ "$rc" -eq 0 ]; then echo "PASS $suite"; else echo "FAIL $suite (exit $rc)"; failed="$failed $suite"
+              # the failing cases on the run page itself: a log needs a sign-in, an annotation does not
+              grep -E '^FAIL' "$RUNNER_TEMP/suite.out" | head -8 | while IFS= read -r l; do echo "::error title=$suite ($TZ)::$l"; done; fi
             echo "::endgroup::"
           done
           if [ -n "$failed" ]; then echo "failed:$failed"; exit 1; fi

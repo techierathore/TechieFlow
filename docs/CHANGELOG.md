@@ -45,6 +45,13 @@ deployed to all 18 projects with `update-framework.sh` on 2026-11-01) and goes o
     the sentence.
   Case `fw_001`.
 
+- **CI shows its failures without a sign-in (2026-11-02).** Run 153 (`c5e1a31`) failed in both "every
+  suite" steps on the Linux job, and the log is visible only to a signed-in user. Every suite passed here on a
+  clean copy (no ignored files, Linux disk, UTC, no Claude Code variables, Windows tools off PATH, the scripts
+  forced to plain Linux, a real dotnet in place), so the cause is on the runner. `validate.yml` now writes each
+  failing case's `FAIL` line as an error annotation, and the runner's OS, bash and Python as a notice. Both show
+  on the public run page and through the API.
+
 - **Feedback sweep of 2026-11-01: twelve open entries fixed.** Each case fails against the v1.2.3 scripts
   and passes now. Misses `MISS-TechieFlow-20261101-01` to `-06`, closed in the same run.
   - **Lekhak TF-037**: on a desktop head a screen is opened by pushState, and the app draws it a moment

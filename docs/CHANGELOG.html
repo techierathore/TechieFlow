@@ -106,7 +106,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout">
   <nav class="side">
     <h1>TechieFlow — Changelog</h1>
-    <div class="sub">Last rendered: 2026-11-01</div>
+    <div class="sub">Last rendered: 2026-11-02</div>
     <div class="group">Contents</div>
     <ol>
         <li><a href="#unreleased-since-v1-2-3-ships-as-v1-2-4">Unreleased (since v1.2.3) — ships as v1.2.4</a></li>
@@ -234,7 +234,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
   </nav>
   <main>
     <h1>TechieFlow — Changelog</h1>
-    <div class="subtitle">Rendered 2026-11-01 &middot; source <code>CHANGELOG.md</code></div>
+    <div class="subtitle">Rendered 2026-11-02 &middot; source <code>CHANGELOG.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
@@ -399,6 +399,8 @@ deployed to all 18 projects with <code>update-framework.sh</code> on 2026-11-01)
 </ul>
 <p>Case <code>fw_001</code>.</p>
 <ul>
+<li><strong>CI shows its failures without a sign-in (2026-11-02).</strong> Run 153 (<code>c5e1a31</code>) failed in both "every suite" steps on the Linux job, and the log is visible only to a signed-in user. Every suite passed here on a clean copy (no ignored files, Linux disk, UTC, no Claude Code variables, Windows tools off PATH, the scripts forced to plain Linux, a real dotnet in place), so the cause is on the runner. <code>validate.yml</code> now writes each failing case's <code>FAIL</code> line as an error annotation, and the runner's OS, bash and Python as a notice. Both show on the public run page and through the API.
+</li>
 <li><strong>Feedback sweep of 2026-11-01: twelve open entries fixed.</strong> Each case fails against the v1.2.3 scripts and passes now. Misses <code>MISS-TechieFlow-20261101-01</code> to <code>-06</code>, closed in the same run.
 <ul>
 <li><strong>Lekhak TF-037</strong>: on a desktop head a screen is opened by pushState, and the app draws it a moment later. Both checks read the page after a fixed 1.5 s, so AI Setup's anchors were "not on the page" over a screenshot of AI Story Studio. The screen check (<code>tf-verify-screens.mjs</code>) and the mockup check (<code>tf-mockup-parity.mjs</code>) now note the anchors on the page before the move. After it they wait (at most 5 s) for one of the screen's own new anchors, then for the page to stop changing. Case <code>lk_037</code>.
