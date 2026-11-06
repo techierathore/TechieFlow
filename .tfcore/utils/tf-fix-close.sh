@@ -27,7 +27,13 @@
 #      demote or tf-log-miss.sh, then re-run this.
 # --cmd names the command the run record is filed under (default fix-issues): *triage-and-fix passes
 # --cmd triage-and-fix, so its run is counted as itself and no second record over the same window is
-# needed, which the overlap rule refused (TrBlazeUI TF-004). The miss-fix records keep fix_cmd fix-issues.
+# needed, which the overlap rule refused (TrBlazeUI TF-004). The miss-fix records carry fix_cmd triage-and-fix
+# then, fix-issues otherwise (Lekhak TF-039: triage-and-fix was not in the vocabulary, so --misses refused it).
+# A close called again after a later verify (the first verify said Needs re-verify, the re-verify PASS):
+#   - the windows a close of this command already recorded are skipped, so no second run record overlaps;
+#   - a row whose open miss already has a miss-fix gets a new one when a verify graded it after that record
+#     (a newer gate record) and the verdict changed, even when this close's start is after that verify (Lekhak TF-039). The same
+#     verdict again writes nothing, so a close run twice counts each fix once.
 # --reqs defaults to every row those verifies graded. The start defaults to the fix's marker, or its
 # "outer" entry when a chained verify replaced it. Telemetry never blocks: refusals are printed, exit 0.
 set -u
@@ -127,8 +133,10 @@ inner, voided = [], set()
 for r in jsonl("runs.jsonl"):
     if r.get("kind") == "run-void":
         voided.add((r.get("cmd"), r.get("started")))
-    elif r.get("kind", "run") == "run" and r.get("app") == app and r.get("cmd") not in ("fix-issues", cmd) and not r.get("backfilled") \
-            and started and (r.get("started") or "") >= started and (r.get("ended") or "") and r["ended"] <= now:
+    elif r.get("kind", "run") == "run" and r.get("app") == app and not r.get("backfilled") \
+            and started and (r.get("started") or "") >= started and (r.get("ended") or "") and r["ended"] <= now \
+            and (r.get("cmd") not in ("fix-issues", cmd) or (r.get("started") or "") > started):
+        # a later window this command already recorded (an earlier close of the same fix) is skipped like a chained run
         inner.append((r["started"], r["ended"], r.get("cmd")))
 inner = sorted(w for w in inner if (w[2], w[0]) not in voided)
 gaps, t = [], started
@@ -148,23 +156,79 @@ for i, (s, e) in enumerate(gaps):
     if s and s in existing:
         had += 1; continue
     wrote += emit("runs", run)
-if inner:
-    print(f"{cmd}: recorded around {len(inner)} chained run(s) ({', '.join(sorted({c for _s, _e, c in inner}))}) in {len(gaps)} segment(s)")
-closed, none, unverified = 0, [], []
+chained = [w for w in inner if w[2] != cmd]
+if chained:
+    print(f"{cmd}: recorded around {len(chained)} chained run(s) ({', '.join(sorted({c for _s, _e, c in chained}))}) in {len(gaps)} segment(s)")
+fix_cmd = "triage-and-fix" if cmd == "triage-and-fix" else "fix-issues"
+last_fix, misses_on, void = {}, {}, set()   # miss_id -> latest miss-fix; row -> its misses
+for m in jsonl("misses.jsonl"):
+    k = m.get("kind")
+    if k == "miss-fix" and m.get("miss_id"):
+        p = last_fix.get(m["miss_id"])
+        if p is None or (m.get("ts") or "") >= (p.get("ts") or ""):
+            last_fix[m["miss_id"]] = m
+    elif k == "miss-void":
+        void.add(m.get("miss_id"))
+    elif k == "miss" and m.get("req_id") and m.get("app") in (None, app):
+        misses_on.setdefault(m["req_id"].upper(), []).append(m)
+def open_on(rid):
+    """every open miss on the row (tf-emit.sh --open-miss gives only the newest): a row can hold two, a
+    wrong-behaviour the owner found and a partial-implementation a later gate opened (Lekhak REQ-UI-154)"""
+    return [m for m in misses_on.get(rid, []) if m.get("miss_id") not in void
+            and (last_fix.get(m.get("miss_id")) or {}).get("verdict_after") not in ("Verified", "wont-fix")]
+# the latest verdict a verify wrote for each row, with WHEN it was written (the record's ts): a verify chained
+# by a fix carries the fix's start as its run_id, so run_id cannot say whether it graded after a miss-fix
+latest_gate = {}
+for g in jsonl("gates.jsonl"):
+    if g.get("kind") == "gate" and g.get("app") in (None, app) and not g.get("backfilled") and g.get("gate") != "escaped" and g.get("req_id"):
+        k = g["req_id"].upper()
+        if (g.get("ts") or "") >= (latest_gate.get(k, {}).get("ts") or ""):
+            latest_gate[k] = g
+def write_fix(m, rid, verdict, run_id):
+    fa = q("--next-fix-attempt", m["miss_id"]) or "1"
+    rec = {"kind": "miss-fix", "miss_id": m["miss_id"], "req_id": rid, "fix_cmd": fix_cmd, "fix_attempt": int(fa) if fa.isdigit() else 1,
+           "verdict_after": verdict, "reopened": False}
+    if run_id: rec["fix_run_id"] = run_id
+    return emit("misses", rec)
+closed, followed, none, unverified = 0, 0, [], []
 for rid in reqs:
     if rid not in rows:
         unverified.append(rid); continue
-    opened = q("--open-miss", rid)
-    if not opened:
+    mine = open_on(rid)
+    if not mine:
         none.append(rid); continue
-    mid = opened.split()[0]
-    fa = q("--next-fix-attempt", mid) or "1"
-    rec = {"kind": "miss-fix", "miss_id": mid, "req_id": rid, "fix_cmd": "fix-issues", "fix_attempt": int(fa) if fa.isdigit() else 1,
-           "verdict_after": rows[rid], "reopened": False}
-    if started: rec["fix_run_id"] = started
-    if emit("misses", rec): closed += 1
+    for m in mine:
+        prev = last_fix.get(m["miss_id"])
+        if prev and prev.get("verdict_after") == rows[rid] and started and prev.get("fix_run_id") == started:
+            continue    # this close already wrote this verdict for this fix
+        closed += write_fix(m, rid, rows[rid], started)
+# Lekhak TF-039: the follow-up. A fix's first verify said Needs re-verify, its miss-fix said so, and a later
+# verify passed the row. A close started after that verify has no row in its window, so the miss stayed open
+# although the row is Verified. The rows of the last run of this command before this close (the fix it
+# follows up) get a miss-fix, filed under that run, for each open miss a verify graded after the miss's own
+# record or its latest miss-fix (a newer gate record) with a different verdict. Rows of older fixes are left
+# alone: their misses are closed by the next fix of those rows.
+fu = None
+if started:
+    for r in jsonl("runs.jsonl"):
+        if r.get("kind", "run") == "run" and r.get("app") == app and r.get("cmd") == cmd and r.get("reqs_touched") \
+                and (r.get("started") or "") < started and (r.get("cmd"), r.get("started")) not in voided \
+                and (fu is None or r["started"] > fu["started"]):
+            fu = r
+for rid in sorted({x.upper() for x in (fu or {}).get("reqs_touched") or []} - set(reqs)):
+    g = latest_gate.get(rid)
+    if not g or not g.get("verdict"):
+        continue
+    for m in open_on(rid):
+        prev = last_fix.get(m["miss_id"])
+        ref = (prev or m).get("ts") or ""
+        if (g.get("ts") or "") <= ref or (prev and prev.get("verdict_after") == g["verdict"]):
+            continue
+        if write_fix(m, rid, g["verdict"], fu["started"]):
+            closed += 1; followed += 1
 state = "already there" if had == len(gaps) else "written" if wrote + had == len(gaps) else "not written"
 print(f"{cmd}: run record {state}; {closed} miss-fix record(s) with the verifier's verdict"
+      + (f" ({followed} for a re-verify after the {cmd} of {fu['started']})" if followed else "")
       + (f"; no open miss on {', '.join(none)} (log it first, then re-run)" if none else "")
       + (f"; no verify graded {', '.join(unverified)} during this fix, so its miss stays open with no miss-fix" if unverified else ""))
 PY

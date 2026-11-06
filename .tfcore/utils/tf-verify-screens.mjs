@@ -45,8 +45,12 @@ const MOCKUPS = arg('--mockups', 'docs/mockups');
 const WIDTHS = (arg('--widths', '1280,390')).split(',').map((w) => parseInt(w.trim(), 10)).filter(Boolean);
 const OUT = arg('--json-out', 'tests/.artifacts/verify/screens.json');
 const SHOTS = arg('--shots-dir', 'tests/.artifacts/verify/screens');
-const LOGIN_PATH = arg('--login-path');
-const USER = arg('--user'); const PASS = arg('--password');
+// Sevak TF-015: a sign-in the command line does not name comes from tests/verify/testsettings(.Local).json
+// (Verify:Login:Path / User / Password, or Verify:Login:TestUser naming a Test users number).
+const TS = await import('./tf-testsettings.mjs').catch(() => null);
+const fromSettings = (k) => (TS ? TS.setting(k) : '') || null;
+const LOGIN_PATH = arg('--login-path') || fromSettings('Verify:Login:Path');
+const USER = arg('--user') || fromSettings('Verify:Login:User'); const PASS = arg('--password') || (arg('--user') ? null : fromSettings('Verify:Login:Password'));
 const COOKIE = arg('--cookie'); const STORAGE = arg('--storage-state');
 const SETTLE = parseInt(arg('--wait', '1500'), 10);
 // how long to keep waiting for the FIRST render after the page has settled. Plenty of stacks
@@ -245,7 +249,7 @@ function writeOut(extra, results = [], login = null) {
 // The sign-in recipe (TF-033, TF-044) and the way a screen behind an in-page sign-in is reached
 // (AppManager TF-006) live in tf-login.mjs since AppManager TF-011, shared with tf-mockup-parity
 // and tf-assets so every check reaches a screen the same way.
-import { signIn, signedOut as signedOutShared, navigateInApp as navigateInAppShared, anchorsPresent, waitArrived, ensureDrawing } from './tf-login.mjs';
+import { signIn, signedOut as signedOutShared, navigateInApp as navigateInAppShared, anchorsPresent, waitArrived, ensureDrawing, openFresh } from './tf-login.mjs';
 const LOGIN_OPTS = { base: BASE, loginPath: LOGIN_PATH, user: USER, password: PASS, attr: ATTR, settle: SETTLE, renderWait: RENDER_WAIT };
 const login = (page) => signIn(page, LOGIN_OPTS);
 
@@ -267,11 +271,10 @@ async function contextFor(width) {
 async function navigate(page, route, anchors = []) {
   if (CDP) {
     try {
-      // Lekhak TF-037: wait until the app has moved to the screen, not a fixed settle (tf-login.mjs)
-      const before = await anchorsPresent(page, anchors, ATTR);
-      await page.evaluate((r) => { history.pushState({}, '', r); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); }, route);
-      const a = await waitArrived(page, route, anchors, before, LOGIN_OPTS);
-      return { status: 200, url: page.url(), arrived: a.arrived, arrive_ms: a.ms };
+      // Lekhak TF-037: wait until the app has moved to the screen, not a fixed settle; Lekhak TF-038: from
+      // the screen's own first state, scrolled to the top, whatever the last test left (tf-login.mjs)
+      const a = await openFresh(page, route, anchors, LOGIN_OPTS);
+      return { status: 200, url: page.url(), arrived: a.arrived, arrive_ms: a.ms, reset: a.reset };
     } catch (e) { return { status: 0, error: e.message.split('\n')[0] }; }
   }
   try {

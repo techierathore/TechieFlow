@@ -833,7 +833,7 @@ def check_doc_rule(rule, c, rep):
             rep.fail(rel, f'{app} signs in through AppManager: the Test users table lists no {", no ".join(missing)} '
                           f'(stack answer Q4a: owner walkthrough, second user, unattended runs, registered through AppManager\'s register call)')
         for r, cell in users:
-            if not re.search(r"(?i)secret|\.env|credential|keychain", cell):
+            if not re.search(r"(?i)secret|\.env|credential|keychain|testsettings", cell):
                 who = re.search(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)*", " ".join(r)).group(0)
                 rep.fail(rel, f'test user {who}: the Password cell names no git-ignored secret; keep the password in the project\'s '
                               f'secrets and name the key here, never the password (stack answer Q4a)')

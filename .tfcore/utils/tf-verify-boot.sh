@@ -6,8 +6,14 @@
 #                                              [--environment Development]   (web: ASPNETCORE_ENVIRONMENT)
 #                                              [--env NAME=VALUE]…  (any head; kept in the record as "env")
 #   bash .tfcore/utils/tf-verify-boot.sh adopt --port N [--pid P] [--url U]   (a head started by hand)
-#   TF_BOOT_RUNNER=wsl|windows   on WSL, the side a web head runs on (default: WSL for a web project
+# Settings: tests/verify/testsettings.json laid under the git-ignored testsettings.Local.json, read by
+# tf-testsettings.py (Sevak TF-015; no environment variable is a setting):
+#   Verify:Runner wsl|windows    on WSL, the side a web head runs on (default: WSL for a web project
 #                                with no MAUI target of its own, then Windows bound to 0.0.0.0)
+#   Verify:BootWaitSeconds N     how long a web copy has to answer (120)
+#   Verify:WindowsAppData <dir>  the Windows %APPDATA% from WSL, when cmd.exe cannot say
+#   Verify:AppEnv {"NAME": "v"}  handed to the app as --env NAME=v (an --env on the command line wins)
+# TF_BOOT_RUNNER, TF_BOOT_WAIT and TF_WIN_APPDATA still work for one release, with a warning naming the key.
 #   bash .tfcore/utils/tf-verify-boot.sh stop [--port N]
 #   bash .tfcore/utils/tf-verify-boot.sh status [--port N]
 #
@@ -301,7 +307,7 @@ PY
     set_state adopted true
     echo "BOOTED head=web mode=base url=$AURL rung=adopted pid=$APID log=$LOG stop=\"bash .tfcore/utils/tf-verify-boot.sh stop --port $APORT\""; exit 0 ;;
   start) ;;
-  *) sed -n '2,43p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 3 ;;
+  *) sed -n '2,49p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 3 ;;
 esac
 
 HEAD=""; PROJECT=""; PORT=""; CONFIG=""; STATIC=""; PROBE="/"; DRYRUN=0; ENVNAME=""; APPENV=()
@@ -324,9 +330,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-RUNNER="${TF_BOOT_RUNNER:-}"   # wsl | windows: the side of a WSL machine a web head runs on (Chatur TF-018)
-case "$RUNNER" in ""|wsl|windows) ;; *) echo "tf-verify-boot: TF_BOOT_RUNNER is wsl or windows, not '$RUNNER'" >&2; exit 3 ;; esac
-WAIT="${TF_BOOT_WAIT:-120}"    # seconds a web copy has to answer (the self-tests shorten it)
+tfset() { python3 "$HERE/tf-testsettings.py" get "$@"; }   # Sevak TF-015: the settings files, the old variable for one release
+RUNNER="$(tfset Verify:Runner --env-name TF_BOOT_RUNNER)"   # wsl | windows: the side of a WSL machine a web head runs on (Chatur TF-018)
+case "$RUNNER" in ""|wsl|windows) ;; *) echo "tf-verify-boot: Verify:Runner (testsettings) is wsl or windows, not '$RUNNER'" >&2; exit 3 ;; esac
+WAIT="$(tfset Verify:BootWaitSeconds --env-name TF_BOOT_WAIT)"; [[ "$WAIT" =~ ^[0-9]+$ ]] || WAIT=120   # seconds a web copy has to answer
+WINAPPDATA="$(tfset Verify:WindowsAppData --env-name TF_WIN_APPDATA)"
+# Verify:AppEnv: the app's own variables from the settings, unless the command line names the same one
+while IFS= read -r kv; do
+  [[ "$kv" =~ ^[A-Za-z_][A-Za-z0-9_]*=.*$ ]] || continue
+  printf '%s\n' ${APPENV[@]+"${APPENV[@]}"} | grep -q "^${kv%%=*}=" || APPENV+=("$kv")
+done < <(python3 "$HERE/tf-testsettings.py" pairs Verify:AppEnv 2>/dev/null)
 save_env() { # the --env pairs into the boot record, so a later session or relaunch passes the same
   [[ ${#APPENV[@]} -gt 0 ]] || return 0
   set_state env "$(python3 -c 'import json,sys; print(json.dumps(dict(a.split("=",1) for a in sys.argv[1:])))' "${APPENV[@]}")"
@@ -630,7 +643,7 @@ PY
     # `localhost`, and a Windows process cannot read the WSL paths the tests type. A web project with no
     # MAUI target of its own now publishes and runs on the WSL side; when WSL cannot build it (no dotnet
     # there), the Windows side is tried, bound to every interface and reached at localhost or the WSL
-    # gateway. TF_BOOT_RUNNER=wsl|windows names the side and is never second-guessed.
+    # gateway. Verify:Runner wsl|windows (testsettings) names the side and is never second-guessed.
     SIDES=("")
     if [[ "$PLATFORM" == wsl ]]; then
       if [[ -n "$RUNNER" ]]; then SIDES=("$RUNNER")
@@ -674,9 +687,9 @@ PY
           # secrets reader looks under $APPDATA first on any system, so when only the Windows store
           # holds this project's secrets, the app is pointed at it.
           SID="$(grep -oE '<UserSecretsId>[^<]+' "$PROJECT" 2>/dev/null | head -1 | sed 's/<UserSecretsId>//')"
-          if [[ -n "$SID" && ! -f "$HOME/.microsoft/usersecrets/$SID/secrets.json" ]] && [[ "$PLATFORM" == wsl || -n "${TF_WIN_APPDATA:-}" ]] \
+          if [[ -n "$SID" && ! -f "$HOME/.microsoft/usersecrets/$SID/secrets.json" ]] && [[ "$PLATFORM" == wsl || -n "$WINAPPDATA" ]] \
              && ! printf '%s\n' ${LSENV[@]+"${LSENV[@]}"} | grep -q '^APPDATA='; then
-            WAD="${TF_WIN_APPDATA:-}"
+            WAD="$WINAPPDATA"
             if [[ -z "$WAD" ]] && command -v cmd.exe >/dev/null 2>&1; then
               WAD="$(cmd.exe /c 'echo %APPDATA%' 2>/dev/null | tr -d '\r')"; [[ -n "$WAD" ]] && WAD="$(wslpath -u "$WAD" 2>/dev/null)"
             fi

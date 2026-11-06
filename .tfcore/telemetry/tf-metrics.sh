@@ -433,20 +433,17 @@ def analyse_misses(misses):
         prev = latest.get(mid)
         if prev is None or (f.get("ts") or "") >= (prev.get("ts") or ""):
             latest[mid] = f
-    # TWO DIFFERENT QUESTIONS, DELIBERATELY NOT THE SAME PREDICATE.
+    # ONE PREDICATE SINCE 2026-11-05 (TechieBlog TF-003, owner's decision).
     #
     #   "is this defect still live?"      -> the COLLAPSE check in tf-emit.sh --open-miss.
-    #                                        A wont-fix defect is still live: the next verify
-    #                                        failure on that REQ is the SAME defect and must not
-    #                                        open a second record. So --open-miss keeps its
-    #                                        `verdict_after != "Verified"` predicate. Do not
-    #                                        "fix" the two to agree — they are asking different
-    #                                        things and agreeing would break one of them.
-    #
     #   "how much work is outstanding?"   -> THIS count, which the owner reads as a backlog.
-    #                                        `wont-fix` is a decision, not a backlog item, so it
-    #                                        gets its own bucket. `deferred` IS outstanding —
-    #                                        postponed work is still work — so it stays open.
+    #
+    # Until 2026-11-05 the collapse check kept a wont-fix miss live, so the next verify failure
+    # on that REQ joined it. That also swallowed a second, different defect on the same row
+    # (TechieBlog REQ-UI-016), so both now read `wont-fix` as closed, and the collapse check
+    # compares the miss class as well as the row. The cost, accepted: a wont-fix row that fails
+    # verify again opens one new miss, which then collapses the failures after it.
+    # `deferred` IS outstanding — postponed work is still work — so it stays open in both.
     def _verdict(m):
         return (latest.get(m.get("miss_id")) or {}).get("verdict_after")
 
@@ -552,6 +549,39 @@ def analyse_misses(misses):
     listed = [p for p in (list_price(REPO_OF.get(id(f), ""), f) for f in sole) if p is not None]
     escaped = [m for m in opened if m.get("found_by") in ("owner", "production")]
     design = [m for m in opened if m.get("miss_class") == "unspecified-gap"]
+
+    # Discovery cost beside fix cost, per miss (SCHEMA.md §5.5.12; TechieBlog TF-004). A miss written
+    # before 2026-11-05 carries no discovery field: it is "not recorded", outside every divisor, never a
+    # zero. "not-measured" is a record that says why it has no window of its own.
+    disc_measured = [m for m in opened if m.get("discovery_scope") not in (None, "not-measured")
+                     and m.get("discovery_tokens_out") is not None]
+    disc_not = [m for m in opened if m.get("discovery_scope") == "not-measured"]
+    fixes_of = defaultdict(list)
+    for f in fixes:
+        if f.get("miss_id") in known:
+            fixes_of[f["miss_id"]].append(f)
+    def _fix_cost(mid):
+        """the latest fix's tokens out: whole when it was the run's only fix, its share (labelled) when shared"""
+        fs = sorted(fixes_of.get(mid) or [], key=lambda r: r.get("ts") or "")
+        if not fs:
+            return {"fix": "no fix yet"}
+        f = fs[-1]; att = f.get("cost_attribution_computed") or f.get("cost_attribution") or "none"
+        if f.get("tokens_out") is None or att == "none":
+            return {"fix": "not measured"}
+        if att == "sole":
+            return {"fix": "measured", "fix_tokens_out": f["tokens_out"]}
+        n = int(att.split(":")[1]) if ":" in att else 1
+        return {"fix": "apportioned 1/%d" % n, "fix_tokens_out": round(float(f["tokens_out"]) / n, 1)}
+    per_miss = []
+    for m in sorted(disc_measured + disc_not, key=lambda r: r.get("ts") or ""):
+        row = {"miss_id": m.get("miss_id"), "req_id": m.get("req_id"), "found_phase": m.get("found_phase")}
+        if m in disc_measured:
+            row.update({"discovery": "measured", "discovery_tokens_out": m["discovery_tokens_out"],
+                        "discovery_s": m.get("discovery_s")})
+        else:
+            row.update({"discovery": "not measured", "discovery_why": m.get("discovery_why")})
+        row.update(_fix_cost(m.get("miss_id")))
+        per_miss.append(row)
 
     # Owner reviews (§5.5.9): how many corrections each phase's output needed, and what
     # producing it and correcting it cost. Token means divide by the records that carry the
@@ -660,6 +690,14 @@ def analyse_misses(misses):
         "cost_list_usd_per_miss": round(
             sum(listed) / len(listed), 4) if len(listed) >= MIN_N else None,
         "cost_list_usd_records": len(listed),
+        "discovery_tokens_per_miss": round(float(sum(m["discovery_tokens_out"] for m in disc_measured)) / len(disc_measured), 1)
+                                     if len(disc_measured) >= MIN_N else None,
+        "discovery_minutes_per_miss": round(sum((m.get("discovery_s") or 0) for m in disc_measured) / 60.0 / len(disc_measured), 1)
+                                      if len(disc_measured) >= MIN_N else None,
+        "discovery_measured_n": len(disc_measured),
+        "discovery_not_measured_n": len(disc_not),
+        "discovery_not_recorded_n": len(opened) - len(disc_measured) - len(disc_not),
+        "per_miss_cost": per_miss,
     }
 
 
@@ -1853,6 +1891,28 @@ def print_misses(m, W):
             if m[key]:
                 print("     %-16s: " % label +
                       "  ".join("%s=%d" % kv for kv in m[key].items()))
+
+    # ---- discovery beside fix, per miss (TechieBlog TF-004)
+    if not m.get("per_miss_cost"):
+        print("")
+        print("  DISCOVERY COST PER MISS — none recorded yet (%d misses were written before the field existed)"
+              % m.get("discovery_not_recorded_n", 0))
+    else:
+        print("")
+        print("  DISCOVERY AND FIX COST PER MISS — tokens out; a share is labelled, never an even split of discovery")
+        print("     discovery per miss : %s   (n=%d measured, %d not measured, %d before 2026-11-05)" % (
+            ("%s tokens out, %s min" % (m["discovery_tokens_per_miss"], m["discovery_minutes_per_miss"]))
+            if m["discovery_tokens_per_miss"] is not None else "insufficient data (fewer than %d measured)" % MIN_N,
+            m["discovery_measured_n"], m["discovery_not_measured_n"], m["discovery_not_recorded_n"]))
+        rows = m["per_miss_cost"][-20:]
+        for r in rows:
+            d = ("%s tokens, %s min" % (_k(r["discovery_tokens_out"]), round((r.get("discovery_s") or 0) / 60.0, 1))
+                 if r["discovery"] == "measured" else "not measured (%s)" % (r.get("discovery_why") or "")[:48])
+            fx = ("%s tokens%s" % (_k(r["fix_tokens_out"]), "" if r["fix"] == "measured" else " (" + r["fix"] + ")")
+                  if "fix_tokens_out" in r else r["fix"])
+            print("     %-26s %-12s found: %-40s fix: %s" % ((r.get("miss_id") or "")[-26:], r.get("req_id") or "-", d, fx))
+        if len(m["per_miss_cost"]) > len(rows):
+            print("     … %d earlier misses in the JSON (--json)" % (len(m["per_miss_cost"]) - len(rows)))
 
     # ---- cost, measured and apportioned, NEVER combined
     print("")

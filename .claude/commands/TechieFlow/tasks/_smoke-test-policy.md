@@ -29,7 +29,7 @@ Take credentials from the first that works:
 
 Never invent a throwaway account.
 
-An AppManager app skips steps 2 to 4 (stack answer Q4a): register through its register call, passwords in git-ignored secrets, never the owner's account.
+An AppManager app skips steps 2 to 4 (stack answer Q4a): the owner registers them (`tf-register-test-users.mjs`), never the owner's account. Settings: `tests/verify/testsettings.json` under the git-ignored `testsettings.Local.json` (`tf-testsettings.py`), not environment variables.
 
 ## Say what ran
 

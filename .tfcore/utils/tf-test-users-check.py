@@ -20,14 +20,21 @@ Allowed:
   - an address ending in .invalid or @example.com, built at run time or not, in a test that submits
     no register form and calls no register endpoint (it is only typed into a form that rejects it,
     such as Forgot password)
-  - a register-form submit whose only typed address is a Test users address (the "email already in
-    use" path with test user 1), or that types no address at all (the form's own validation)
+  - a register-form submit, or a register call, whose only address is a Test users address (the
+    "email already in use" path with test user 1), ONLY after a sign-in with that same address earlier
+    in the same test and a stop between the two (a skip, a return, a throw or an assertion) for when
+    that sign-in is refused. Without it, a test user AppManager no longer holds is created by the
+    submit (Sevak TF-016, 2026-11-03: AppManager user 14). Finding kind `register`, "submits Register
+    with test user …'s address with no successful sign-in as that user before it".
+  - a register-form submit that types no address at all (the form's own validation)
   - a file where the AppManager client is replaced (page.route on the auth calls, nock, msw,
     jest/vi.mock, a Mock/Substitute/Fake of the client, WebApplicationFactory/TestServer): no
     network reaches a shared AppManager
 The "register creates an account" path of any app is verified by hand once per release and recorded
 in the checklist with the date; the automated row checks only the form's validation and the "email
-already in use" path using test user 1.
+already in use" path using test user 1, after signing in as test user 1 in the same test and stopping,
+with nothing submitted, when that sign-in is refused. The one place a Test users account is ever
+registered is the owner-run register-test-users script (stack rule Q4a), never a verify test.
 
 --emit <cmd> appends one gate record per failing row (gate test-users, verdict FAIL) through
 tf-emit.sh, run_id from the running command's marker (.tfcore/.session/phase.json): the build gate's
@@ -77,6 +84,11 @@ EMAIL_FIELD = re.compile(r"(?i)email|e-mail|user(?:name)?['\"\]= ]")
 SELECTOR_ARG = re.compile(r"(?i)(?:getByPlaceholder|getByLabel|getByText|getByTitle|Placeholder|placeholder\s*[=:])\s*\(?\s*$")
 TEST_USER_REF = re.compile(r"(?i)credentials\s*\(|test_?users?|testuser|\bowner|\buser_?1\b|yolo|second")
 TYPE_CALL = re.compile(r"(?i)\.fill\s*\(|\.type\s*\(|pressSequentially\s*\(|SendKeys\s*\(|FillAsync\s*\(|TypeAsync\s*\(|\btype\s*\(")
+# Sevak TF-016: a sign-in as the same user before a Register submit, and a stop when it is refused
+SIGNIN = re.compile(r"(?i)\bsign_?in\w*\s*\(|\blog_?in(?:As|With|User|Async)?\w*\s*\(|AuthSvc/login|UserSvc/login|/(?:account/)?(?:sign-?in|login)\b|\.Login\w*\s*\(|SignInAsync\s*\(")
+STOP = re.compile(r"(?i)\b(?:test|it)\.skip\s*\(|\bskip\s*\(|\breturn\b|\bthrow\b|\bexpect\s*\(|\bAssert\.|\.Should\(|Skip\.If\w*\s*\(|\bAssume\.|pytest\.(?:skip|fail)\s*\(|\bt\.(?:Skip|Fatal)\w*\s*\(|^\s*assert\s")
+SIGNIN_SUBMIT = re.compile(r"(?i)^(?!.*(?:register|sign-?up|create-account)).*(?:sign-?in|log-?in)[\w-]*(?:-form|-submit|-button|\b)")   # the sign-in form's own submit
+TYPED_ARG = re.compile(r"(?i)(?:\.fill|\.type|pressSequentially|SendKeys|FillAsync|TypeAsync)\s*\(\s*(?:[^,()]*,\s*)?([A-Za-z_$][\w$.!?]*|['\"`][^'\"`]+['\"`])\s*[,)]")
 
 # --- the AppManager client replaced: no network ------------------------------------------------------
 MOCKS = [re.compile(p) for p in (
@@ -292,7 +304,7 @@ def scan_file(rel, users):
                 continue
             if ENDPOINT.search(ln) or CLIENT_REGISTER.search(ln):
                 out.append((i + 1, "endpoint", bool(DEVICE.search(ln))))
-            elif ctx and SUBMIT.search(ln) and SUBMIT_WHAT.search(
+            elif ctx and SUBMIT.search(ln) and not SIGNIN_SUBMIT.search(ln) and SUBMIT_WHAT.search(
                     re.sub(r"(?i)\b(?:goto|go|navigate\w*|openInteractive|waitForURL|toHaveURL)\s*\([^)]*\)", "",
                            (clean[i - 1] + " " if ln.lstrip().startswith(".") and i > a else "") + ln)):
                 out.append((i + 1, "form", False))
@@ -337,19 +349,58 @@ def scan_file(rel, users):
         typed_unknown = any(TYPE_CALL.search(clean[i]) and EMAIL_FIELD.search(clean[i]) for i in range(a, b))
         known_user = [x for x in addrs if x[1] in users]
         others = [x for x in addrs if x[1] not in users]
+        # what names the test user's address in this test: the literal, a constant holding it, or the
+        # identifier typed into the email field (OWNER_EMAIL read from settings)
+        user_tokens = {x[1] for x in known_user} | {c for c, (v, _rt, _r) in consts.items() if v in users}
+        for i in range(a, b):
+            if TYPE_CALL.search(clean[i]) and EMAIL_FIELD.search(clean[i]):
+                for t in TYPED_ARG.findall(clean[i]):
+                    t = t.strip("'\"`").rstrip("!?")
+                    if t and "@" not in t or t.lower() in users:
+                        user_tokens.add(t.lower() if "@" in t else t)
+
+        def signed_in_first(sub_line):
+            """a sign-in naming the same user before the submit, then a stop before the submit"""
+            for i in range(a, sub_line - 1):
+                ln = clean[i]
+                if not SIGNIN.search(ln) or HELPER.match(lines[i]):
+                    continue
+                low = ln.lower()
+                if user_tokens and not any((t.lower() if "@" in t else t) in (low if "@" in t else ln) for t in user_tokens):
+                    continue
+                if any(STOP.search(clean[j]) for j in range(i + 1, sub_line - 1)):
+                    return True
+            return False
+
+        def via_test_user(ln_no, via):
+            return (f"submits Register with a test user's address with no successful sign-in as that user before it{via}: "
+                    "when AppManager no longer holds the user, the submit creates it. Sign in as test user 1 first in "
+                    "the same test and stop (skip) without submitting when that sign-in is refused")
         for ln_no, how, device, hname, hl in subs:
             via = f" (through {hname}(), line {hl})" if hname else ""
             if device:
                 findings.append((ln_no, "register", f"registers a device on AppManager{via}", reqs))
             elif how == "endpoint":
                 if known_user and not others:
-                    continue                 # "email already in use" with a test user
+                    if signed_in_first(ln_no):
+                        continue             # "email already in use" with a test user proved to exist
+                    findings.append((ln_no, "register", via_test_user(ln_no, via), reqs))
+                    continue
                 findings.append((ln_no, "register", f"calls an AppManager register endpoint{via}"
                                  + (f" with {others[0][3]}" if others else ""), reqs))
             else:
                 if not others and known_user:
-                    continue                 # test user 1: the "email already in use" path
-                if not addrs and not (typed_unknown and not TEST_USER_REF.search(body)):
+                    if signed_in_first(ln_no):
+                        continue             # test user 1, proved to exist: the "email already in use" path
+                    findings.append((ln_no, "register", via_test_user(ln_no, via), reqs))
+                    continue
+                if not addrs and typed_unknown and TEST_USER_REF.search(body):
+                    # a test user typed by name (OWNER_EMAIL from the settings): the same rule
+                    if signed_in_first(ln_no):
+                        continue
+                    findings.append((ln_no, "register", via_test_user(ln_no, via), reqs))
+                    continue
+                if not addrs and not typed_unknown:
                     continue                 # no address typed: the form's own validation
                 findings.append((ln_no, "register", f"submits the register form{via}"
                                  + (f" with {others[0][3]}" if others else " with an address that is not a test user"), reqs))
@@ -432,7 +483,8 @@ def main(argv):
         print(f"FAIL  test-users — {len(findings)} finding(s) in {nfiles} file(s): "
               + ", ".join(f"{f['file']}:{f['line']}" for f in findings[:4]) + (" …" if len(findings) > 4 else "")
               + ". A test never creates, deletes or changes an account on a shared AppManager: use a Test users address "
-              "(the \"email already in use\" path with test user 1) or check only the form's validation; the "
+              "(the \"email already in use\" path with test user 1, only after signing in as test user 1 in the same test and "
+              "stopping when that sign-in is refused) or check only the form's validation; the "
               "\"register creates an account\" path is verified by hand once per release and recorded in the checklist with the date.")
     else:
         print(f"PASS  test-users — {len(scope)} test file(s), no test creates an account; {len(users)} test user(s) in {src}"

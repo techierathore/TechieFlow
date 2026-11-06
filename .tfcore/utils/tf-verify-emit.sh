@@ -102,6 +102,15 @@ for r in runs:
         if r.get("started", "") >= origin.get(rid, ("", ""))[0]:
             origin[rid] = (r.get("started", ""), r.get("cmd"), (r.get("subagents") or ["flow-master"])[0] if r.get("subagents") else "flow-master")
 
+# the defects this pass will open a miss for (same tests as below), counted first for the discovery window
+def _would_open(row):
+    if not row.get("emit_gate") or not row["gate"]:
+        return False
+    c = ("regression" if (row["prior_verdict"] or "").lower().startswith("verified")
+         else "standards-violation" if row["gate"] in ("standards", "test-users") else "partial-implementation")
+    o = q("--open-miss", row["id"], c)
+    return not (o and o.split()[-1] == c)
+n_new = sum(1 for r in v["rows"] if _would_open(r))
 gates = misses = 0
 for row in v["rows"]:
     if not row.get("emit_gate"):
@@ -120,7 +129,7 @@ for row in v["rows"]:
     cls = ("regression" if (row["prior_verdict"] or "").lower().startswith("verified")
            else "standards-violation" if row["gate"] in ("standards", "test-users")
            else "partial-implementation")
-    opened = q("--open-miss", rid)
+    opened = q("--open-miss", rid, cls)
     if opened and opened.split()[-1] == cls:
         continue
     mid = q("--next-miss-id")
@@ -133,6 +142,12 @@ for row in v["rows"]:
          "failure_class": row["failure_class"] or "other"}
     if rid in origin:
         m["origin_run_id"], m["origin_phase"], m["origin_agent"] = origin[rid]
+    # TechieBlog TF-004: one pass grades every row at once, so a defect has the pass's window as its own
+    # only when it is the pass's one new defect; otherwise it is not measured (never an even share)
+    if n_new == 1 and run_id:
+        m["discovery_started"], m["discovery_ended"] = run_id, now
+    else:
+        m["discovery_why"] = f"one verify pass found {n_new} defects at once; its window is not any one of theirs"
     if emit("misses", m):
         misses += 1
 

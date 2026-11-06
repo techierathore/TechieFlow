@@ -8,10 +8,96 @@
 
 ---
 
-## Unreleased (since v1.2.3) — ships as v1.2.4
+## Unreleased (since v1.2.4) — ships as v1.2.5
 
-v1.2.3 was tagged on 2026-10-30 at `2d9bc3d`. What follows is in no published package yet (it was
-deployed to all 18 projects with `update-framework.sh` on 2026-11-01) and goes out as v1.2.4: one new check that enforces a rule the prompts already stated, and bug fixes, so a patch version.
+v1.2.4 is the tag at `4699d14`. What follows is in no published package yet and goes out as v1.2.5: bug fixes,
+one rule made stricter at the owner's request, and two small new scripts the fixes need, so a patch version.
+
+- **TechieBlog TF-004 (owner, 2026-11-05): a defect found during a run had no discovery cost of its own.**
+  A run's tokens are one window over every row it touched. Misses are written together at a command's close,
+  so "from the step's start to the record" would give them all the same window. Each miss gets a slice of
+  its own instead: from the latest mark before it (a new `tf-triage.sh <App> look "<problem>"`, run as
+  triage starts on each issue; the previous finding; or the start) to when it was logged.
+  - `tf-emit.sh` reads that slice's tokens from the transcript or opencode.db, as for a run. Slices never
+    overlap.
+  - Findings logged within 2 minutes with no `look` between them, a verify pass that opens several misses,
+    and `*log-miss` read `discovery_scope: not-measured` with `discovery_why`. Never an even share.
+  - `tf-metrics.sh` reports discovery beside fix cost per miss (`per_miss_cost`) and the mean over measured
+    ones. Older misses are "not recorded".
+  - Fields in SCHEMA §5.5.12; triage-issues step 3 runs `look`.
+  - **Replayed on TechieBlog's 5 Nov session:** REQ-UI-016 was logged 17 s after REQ-UI-017, so both read
+    "found together". The two cost 147,938 output tokens in 18 minutes, of the run's 445,629.
+
+  Case `bl_004`.
+
+- **Feedback sweep of 2026-11-05: six entries from four apps.** Each has a case in `tests/regression/run.sh`
+  that fails against the v1.2.4 scripts and passes now (`sv_016c` and the second half of `lk_039` are the
+  checks that the allowed shape still passes).
+  - **Sevak TF-016 (owner's rule, 2026-11-05): a verify test created test user 1 on the shared AppManager.**
+    The rule let the Register test submit test user 1's address for the "email already in use" path. On 3 Nov
+    AppManager no longer held that user, so the submit created it (user 14). `tf-test-users-check.py` now
+    passes such a submit, or a register call, only when the same test signs in with that address earlier and
+    stops (a skip, return, throw or assertion) between the two; the address may be literal, a constant, or
+    typed by name. A sign-in form's own submit is not a Register submit. Verify-phase step 4, the verifier, the
+    usage-guide template and stack rule Q4a say so; Q4a adds that the owner-run register-test-users script is
+    the only place a test user is registered. `fw_001`'s allowed example now signs in first.
+    - **Measured on all 18 projects with a `.tfcore`:** one new finding, TfLens
+      `tests/verify/ui-auth-shell.spec.ts:129` (Register with test user 1, no sign-in first). Sevak's fixed test
+      passes; its 3 Nov shape fails. Every other project is unchanged.
+
+    Case `sv_016`.
+  - **Sevak TF-015: the verify harness's settings were environment variables.** Stack rules Q1 and Q11.2 allow
+    appsettings-style files only. New `tf-testsettings.py` and `tf-testsettings.mjs` read
+    `tests/verify/testsettings.json` with the git-ignored `testsettings.Local.json` laid over it key by key
+    (`Verify:Runner`, `TestUsers:1:Password`). `tf-verify-boot.sh` takes `Verify:Runner`,
+    `Verify:BootWaitSeconds`, `Verify:WindowsAppData` and `Verify:AppEnv` (handed to the app as `--env`) from
+    them; `TF_BOOT_RUNNER`, `TF_BOOT_WAIT` and `TF_WIN_APPDATA` still work for this release and print the key
+    and file to move to. The screen and mockup checks take their sign-in from `Verify:Login` when the command
+    line names none. New `tf-register-test-users.mjs` (owner-run, refuses inside a verify) registers each
+    `TestUsers:<n>` that has no password through AppManager's public-key and register calls and writes the
+    password into the Local file only. Template `.tfcore/templates/verify/testsettings.json`; the usage-guide
+    template, Q4a, the smoke-test policy and `tf-doc-check`'s Password-cell rule name the Local file; the
+    `.gitignore` block adds it. The framework never read `.env.local`: Sevak's own scripts did, and they are
+    the app's to move. Proved on a stand-in AppManager only. Case `sv_015`.
+  - **Chatur TF-022: a submenu row was "does nothing when clicked".** In `tf-menus.mjs` a row with
+    `aria-haspopup` (or a label ending in ▸) is graded by its submenu opening, and each child row is opened
+    through it and clicked in turn, one level deep. A row skipped by `--no-click` now says so, not "ends the
+    session or deletes". **On Chatur's web head**, main window: v1.2.4 gives `File › Recent projects ▸` and
+    `View › Zoom ▸` "does nothing"; now both open, the recent project opens and Zoom in, Zoom out and Actual
+    size act. Case `ch_022`.
+  - **Lekhak TF-038: a desktop head left on the screen's route by a test was measured as left.** The new
+    `openFresh()` in `tf-login.mjs`, used by both checks on `--cdp`: when the app is already on the route it is
+    moved to another route and back, so the screen is drawn from its first state, then the window and every
+    scrolled box go to the top. The fixture reproduces Lekhak's finding (`admin-topbar` "content is cut off
+    vertically") on v1.2.4. Not proved on BlogAdmin's Windows head. Case `lk_038`.
+  - **Lekhak TF-039: a fix's miss stayed open after its re-verify passed.** `tf-fix-close.sh`:
+    - a close started after the re-verify now follows up the last run of the same command. For each open miss
+      on its rows, a newer gate record with a different verdict gets a miss-fix filed under that run. The
+      record's own time is used, because a chained verify carries the fix's start. Rows of older fixes are
+      left alone.
+    - every open miss on a row is closed, not only the newest;
+    - a second close skips the windows a close of the same command already recorded, so it no longer
+      collides with its own run record;
+    - `triage-and-fix` is in the `fix_cmd` vocabulary (`tf-emit.sh`, SCHEMA §5.5).
+
+    **Replayed on a copy of Lekhak's 3 Nov records** without the hand-written record: v1.2.4 writes nothing
+    and REQ-UI-154 stays open; now both of its misses get Verified and the row is closed. Case `lk_039`.
+  - **TechieBlog TF-003 (owner's rule, 2026-11-05): a wont-fix miss counted as open.** `tf-emit.sh
+    --open-miss` and `--open-misses` now treat a latest miss-fix of `Verified` or `wont-fix` as closed, as
+    `metrics-report.md` already said. `--open-miss <REQ> <class>` finds the open miss of that class. The
+    triage, log-miss and verify emitters pass the class, so a regression and a partial-implementation on
+    one row are two misses. This reverses the 2026-08 design note in `tf-metrics.sh`, which kept wont-fix
+    live so that a repeat failure joined it. The cost: a wont-fix row that fails verify again opens one new
+    miss. SCHEMA §5.5.4 and the emit gate say so.
+    - **Measured on every project:** only TechieBlog changes; its `--open-misses` list goes from 13 to 1 (12
+      wont-fix).
+
+    Case `bl_003`.
+
+## v1.2.4 (since v1.2.3)
+
+v1.2.3 was tagged on 2026-10-30 at `2d9bc3d`. What follows was deployed to all 18 projects with
+`update-framework.sh` on 2026-11-01 and went out as v1.2.4: one new check that enforces a rule the prompts already stated, and bug fixes, so a patch version.
 
 - **FW-001 (owner, 2026-11-01): verify tests created accounts on the shared production AppManager on
   every run.** (First numbered TF-056; TfLens filed its own TF-056 the same day, and TF numbers in

@@ -6,6 +6,7 @@
     bash .tfcore/utils/tf-triage.sh <App> new "<title>" "<When … on <screen>, then …>" [--prefix UI|FN|NFR|RAG]
                                      [--section "<screen>"] [--evidence <path>] [--source owner|production] [--mockup <file>] [--sort <sort>]
     bash .tfcore/utils/tf-triage.sh <App> note <REQ> "<could not reproduce: what was tried>"
+    bash .tfcore/utils/tf-triage.sh <App> look "<the problem you start investigating now>"
     bash .tfcore/utils/tf-triage.sh <App> close [--started <ISO>] [--verify-ran] [--cmd triage-issues|fix-issues]
 
 demote, new and note take --phase N for another phase's checklist; without it demote and note find the
@@ -18,6 +19,9 @@ new     a defect no row covers: the next free id in the prefix, across every che
         BRD-pending (*amend-docs gives it its BRD item). Without --prefix: FN, or the one prefix a
         checklist with no FN row uses; with several such prefixes it asks for --prefix.
 note    a dated remark on the nearest row, no status change (could not reproduce).
+look    a time mark, nothing else: run it as you START investigating each reported problem. It is where
+        that defect's discovery window begins (TechieBlog TF-004), so each miss carries what finding it
+        cost, not a share of the run's window.
 close   what triage owes the telemetry, from the actions above (tests/.artifacts/verify/triage.json):
         one gate record per demoted or new row with gate "escaped" (no check caught it), one miss per row
         with found_by owner or production, the symptom as `what` and the sort (FR-32; --sort on demote or
@@ -215,6 +219,14 @@ def main(argv):
         print(f"{rid}: noted — {argv[4]}")
         return 0
 
+    if verb == "look":
+        if len(argv) < 4:
+            die("look needs \"<the problem you start investigating>\"")
+        log["actions"].append({"verb": "look", "symptom": argv[3], "ts": now})
+        log_save(log)
+        print(f"look: {now} — {argv[3][:80]}")
+        return 0
+
     if verb == "close":
         started = opt(argv, "--started") or subprocess.run(["bash", os.path.join(HERE, "tf-phase.sh"), "show"], capture_output=True, text=True).stdout
         if started.startswith("{"):
@@ -250,6 +262,30 @@ def main(argv):
         acts = [a for a in log.get("actions", []) if a["verb"] in ("demote", "new") and a not in stale]
         gates = misses = 0
         failed = []
+        # TechieBlog TF-004: each defect's own discovery window. It starts at the latest mark before it: a
+        # `look` (the agent began investigating this problem), the previous finding, or the command's start;
+        # it ends when the defect was logged. Findings logged within BURST seconds of each other with no
+        # `look` between them were found together and logged in a row (TechieBlog's two demotes of 5 Nov were
+        # 17 s apart): their windows cannot be told apart, so each is "not measured", never an even share.
+        BURST = 120
+        def _s(t):
+            try: return datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M:%SZ").timestamp()
+            except Exception: return None
+        live = sorted([x for x in log.get("actions", []) if x.get("ts") and (not started or x["ts"] >= started)], key=lambda x: x["ts"])
+        found = [x for x in live if x["verb"] in ("demote", "new")]
+        def window(a):
+            t = a.get("ts")
+            if not t or not started or t < started:
+                return None, None, "this triage logged no time for the finding, or ran with no start"
+            looks = [x["ts"] for x in live if x["verb"] == "look" and x["ts"] <= t]
+            prev_found = [x["ts"] for x in found if x["ts"] < t]
+            start = max([started] + looks + prev_found)
+            mates = [x for x in found if x is not a and abs((_s(x["ts"]) or 0) - (_s(t) or 0)) <= BURST
+                     and not any(min(x["ts"], t) <= lk <= max(x["ts"], t) for lk in looks + [y["ts"] for y in live if y["verb"] == "look"])]
+            if mates:
+                return None, None, (f"found together with {', '.join(sorted({m['req_id'] for m in mates}))[:80]}: logged within "
+                                    f"{BURST} s of each other with no `tf-triage.sh look` between them")
+            return start, t, None
         for a in acts:
             rid = a["req_id"]; cls_req = rid.split("-")[1]
             att = q("--next-attempt", rid) or "1"
@@ -262,7 +298,7 @@ def main(argv):
             else:
                 failed.append(a)
             mc =("unspecified-gap" if a["verb"] == "new" else "regression" if (a.get("prior") or "").lower().startswith("verified") else "wrong-behaviour")
-            opened = q("--open-miss", rid)
+            opened = q("--open-miss", rid, mc)
             if opened and opened.split()[-1] == mc:
                 print(f"  {rid}: already open as {opened.split()[0]} ({mc}); no second miss")
                 continue
@@ -272,6 +308,11 @@ def main(argv):
                  "origin_phase": "day1-greenfield" if a["verb"] == "new" else "build-phase", "origin_agent": "analyst" if a["verb"] == "new" else "flow-master",
                  "found_by": a.get("source", "owner"), "found_phase": cmd, "found_gate": None, "found_run_id": started,
                  "failure_class": fc, "what": a["symptom"][:300], "sort": a.get("sort") or ("spec" if a["verb"] == "new" else "weak-check")}
+            ds, de, dwhy = window(a)
+            if ds and de:
+                m["discovery_started"], m["discovery_ended"] = ds, de
+            else:
+                m["discovery_why"] = dwhy
             if a["verb"] != "new":
                 o = q("--origin-of", rid).split()
                 if len(o) >= 3:
@@ -288,6 +329,7 @@ def main(argv):
                             "severity": "major", "why_missed": "instruction-ignored", "origin_phase": "triage-issues", "origin_agent": "flow-master",
                             "found_by": "gate", "found_phase": "triage-issues", "found_gate": None, "found_run_id": started, "failure_class": "other",
                             "what": f"triage edited {len(changed)} file(s) under src, source or tests, which a triage never does: " + ", ".join(changed[:5]),
+                            "discovery_why": "found by a rule check at the close, not by searching",
                             "sort": "ignored"})
             print(f"WARNING: {len(changed)} file(s) changed under src/, source/ or tests/ during this triage (logged as {mid}): " + ", ".join(changed[:5]))
         if cmd == "triage-issues":

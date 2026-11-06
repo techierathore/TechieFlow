@@ -24,6 +24,10 @@
 // [aria-haspopup="menu"|"true"] and every trigger in a [role=menubar], graded on placeholder text and on
 // items that do nothing. A popup that is not a menu (a popover, role="group") is the box the trigger's
 // aria-controls names.
+// A row that opens a submenu (aria-haspopup="menu"|"true", or a label ending in ▸) is graded by the submenu
+// appearing (aria-expanded turning true, or another menu shown), and each of its child rows is then opened
+// through it and clicked and graded in turn, one level deep (Chatur TF-022: "File › Recent projects ▸" read
+// "does nothing when clicked" because a submenu opening changes nothing outside the menus).
 // A menu item the mockup links to another mockup (<a href="prerequisites.html">) is the way into that
 // screen. reachability() says which screens had such a way in and were reached by none of those clicks.
 
@@ -119,8 +123,11 @@ const APP_ITEMS = ({ popupId, attr, controls }) => {
     const [a, b, c] = pts;
     return b[1] > a[1] && b[1] > c[1] && (a[0] - b[0]) * (c[0] - b[0]) < 0;
   };
+  const MENUISH = '[role="menu"], [role="listbox"]';
   const items = [...box.querySelectorAll(ITEM)].filter(vis)
     .filter((el) => { const up = el.parentElement && el.parentElement.closest(ITEM); return !up || !box.contains(up) || up === box; })
+    // a submenu's rows drawn inside this menu belong to the submenu (Chatur TF-022)
+    .filter((el) => !box.matches(MENUISH) || el.closest(MENUISH) === box)
     .map((el, i) => {
       el.setAttribute('data-tf-walk', String(i));
       // the value already chosen does nothing when chosen again, so it is never "an item that does nothing"
@@ -128,12 +135,38 @@ const APP_ITEMS = ({ popupId, attr, controls }) => {
         || [...el.querySelectorAll('svg')].some(tick) || !!el.querySelector('[data-icon="check"], [data-lucide="check"]') || /✓|✔/.test(el.textContent || '');
       // disabled by attribute, or by taking no pointer events at all (TrBlazeUI's menu items set only
       // pointer-events:none and half opacity, with no aria-disabled)
-      return { i, label: text(el), disabled: el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true' || el.hasAttribute('data-disabled')
+      const sub = /^(menu|true)$/i.test(el.getAttribute('aria-haspopup') || '') || /[▸►▶]\s*$/.test(text(el));
+      return { i, label: text(el), sub, controls: el.getAttribute('aria-controls') || '', disabled: el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true' || el.hasAttribute('data-disabled')
         || getComputedStyle(el).pointerEvents === 'none',
         checkbox: /checkbox/.test(el.getAttribute('role') || '') || (el.hasAttribute('aria-checked') && !/radio/.test(el.getAttribute('role') || '')), checked };
     });
   const choice = box.getAttribute('role') === 'listbox' || (items.length > 0 && [...box.querySelectorAll('[data-tf-walk]')].every((e) => e.getAttribute('role') === 'option'));
   return { found_by: box.getAttribute(attr) === popupId ? 'testid' : 'role', text: text(box), items, choice };
+};
+
+// The submenu a row opened: the box its aria-controls names, else a menu shown now that is not the row's own
+// menu nor around it. Its rows are marked data-tf-walk-sub. null while it is not open.
+const SUB_ITEMS = ({ row, controls }) => {
+  const ITEM = '[role^="menuitem"], [role="option"], button, a[href]';
+  const MENUISH = '[role="menu"], [role="listbox"]';
+  const vis = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+  const text = (el) => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+  const r = document.querySelector(`[data-tf-walk="${row}"]`);
+  if (!r) return null;
+  const own = r.closest(MENUISH);
+  let box = controls ? document.getElementById(controls) : null;
+  if (!box || !vis(box)) box = [...document.querySelectorAll(MENUISH)].filter(vis).filter((m) => m !== own && !m.contains(r) && !m.contains(own)).pop() || null;
+  if (!box || !vis(box)) return null;
+  const expanded = r.getAttribute('aria-expanded') === 'true';
+  document.querySelectorAll('[data-tf-walk-sub]').forEach((el) => el.removeAttribute('data-tf-walk-sub'));
+  const items = [...box.querySelectorAll(ITEM)].filter(vis).filter((el) => el.closest(MENUISH) === box || !box.matches(MENUISH))
+    .filter((el) => { const up = el.parentElement && el.parentElement.closest(ITEM); return !up || !box.contains(up); })
+    .map((el, j) => {
+      el.setAttribute('data-tf-walk-sub', String(j));
+      return { j, label: text(el), disabled: el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true' || el.hasAttribute('data-disabled') || getComputedStyle(el).pointerEvents === 'none',
+        checked: el.getAttribute('aria-checked') === 'true' || el.getAttribute('data-state') === 'checked' || /✓|✔/.test(el.textContent || '') };
+    }).filter((x) => x.label);
+  return { expanded, items };
 };
 
 // What a click can change, menus left out: the address, the text a reader sees, open dialogs, the zoom,
@@ -189,6 +222,9 @@ export async function walkMenus(page, mockMenus, o = {}) {
   const settle = o.settle ?? 1200;
   const pr = placeholderRe(o.placeholders || []);
   const noClick = [...NO_CLICK, ...(o.noClick || [])].map((x) => norm(x));
+  // the reason a row was not clicked: the built-in list ends the session or deletes; --no-click is the caller's
+  const askedNot = (o.noClick || []).map((x) => norm(x));
+  const skipWhy = (label) => (askedNot.some((n) => norm(label) === n || norm(label).startsWith(n + ' ')) ? 'not clicked (--no-click)' : 'not clicked (ends the session or deletes)');
   const pagesNow = o.pages || (async () => page.context().pages());
   const findings = [], clicks = [], menus = [];
   // o.mockText: the mockup's own text, so a placeholder the design itself draws is not held against the app
@@ -320,11 +356,77 @@ export async function walkMenus(page, mockMenus, o = {}) {
       const c = { popup: m.popup, menu: name, label: item.label, href: want ? want.href : '', disabled: item.disabled };
       clicks.push(c); mine.push({ c, item });
       if (item.disabled) { c.effect = 'disabled'; continue; }
-      if (noClick.some((n) => norm(item.label) === n || norm(item.label).startsWith(n + ' '))) { c.effect = 'not clicked (ends the session or deletes)'; continue; }
+      if (noClick.some((n) => norm(item.label) === n || norm(item.label).startsWith(n + ' '))) { c.effect = skipWhy(item.label); continue; }
       const again = await open(m);
       const fresh = again.items && await current(m, item.label);
       if (!fresh) { c.effect = 'menu did not reopen'; continue; }
       if (fresh.disabled) { c.effect = 'disabled'; await shut(m); continue; }
+      if (fresh.sub) {
+        const subOpen = async () => {
+          for (let t = 0; t < settle; t += 150) {
+            const got2 = await page.evaluate(SUB_ITEMS, { row: String(fresh.i), controls: fresh.controls }).catch(() => null);
+            if (got2 && got2.items.length) return got2;
+            await page.waitForTimeout(150);
+          }
+          return null;
+        };
+        await page.locator(`[data-tf-walk="${fresh.i}"]`).first().click({ timeout: 3000 }).catch((e) => { c.error = e.message.split('\n')[0]; });
+        const opened = c.error ? null : await subOpen();
+        if (opened) {
+          c.effect = 'opened its submenu';
+          c.submenu = [];
+          for (const child of opened.items) {
+            const cc = { popup: m.popup, menu: `${name} › ${item.label}`, label: child.label, disabled: child.disabled };
+            c.submenu.push(cc); clicks.push(cc);
+            if (child.disabled) { cc.effect = 'disabled'; continue; }
+            if (noClick.some((n) => norm(child.label) === n || norm(child.label).startsWith(n + ' '))) { cc.effect = skipWhy(child.label); continue; }
+            if (child.checked) { cc.effect = 'already the state (ticked)'; continue; }
+            // the path again from a freshly opened menu: the menu, the submenu row, the child
+            const again2 = await open(m);
+            const row2 = again2.items && await current(m, item.label);
+            if (!row2) { cc.effect = 'menu did not reopen'; continue; }
+            await page.locator(`[data-tf-walk="${row2.i}"]`).first().click({ timeout: 3000 }).catch(() => {});
+            let sub2 = null;
+            for (let t = 0; t < settle && !sub2; t += 150) {
+              const g = await page.evaluate(SUB_ITEMS, { row: String(row2.i), controls: row2.controls }).catch(() => null);
+              if (g && g.items.length) sub2 = g; else await page.waitForTimeout(150);
+            }
+            const target = sub2 && sub2.items.find((x) => x.label === child.label);
+            if (!target) { cc.effect = 'submenu did not reopen'; await shut(m); continue; }
+            const before2 = await page.evaluate(SIGNATURE, MENU_SEL).catch(() => null);
+            const pagesBefore2 = new Set(await pagesNow());
+            await page.locator(`[data-tf-walk-sub="${target.j}"]`).first().click({ timeout: 3000 }).catch((e) => { cc.error = e.message.split('\n')[0]; });
+            let after2 = null, newPages2 = [];
+            for (let t = 0; t < settle; t += 150) {
+              await page.waitForTimeout(150);
+              newPages2 = (await pagesNow()).filter((p) => !pagesBefore2.has(p));
+              after2 = await page.evaluate(SIGNATURE, MENU_SEL).catch(() => null);
+              if (newPages2.length || (before2 && after2 && changed(before2, after2))) break;
+            }
+            cc.effect = cc.error ? 'could not be clicked' : newPages2.length ? 'opened a window' : effectOf(before2, after2);
+            cc.landed = after2 ? { url: after2.url, window: newPages2.length > 0, ids: after2.ids } : null;
+            cc.ids_before = before2 ? before2.ids : [];
+            if (cc.error) findings.push({ class: 'menu', popup: m.popup, detail: `"${name} › ${item.label} › ${child.label}" could not be clicked (${cc.error.slice(0, 80)})` });
+            else if (cc.effect === 'nothing') findings.push({ class: 'menu', popup: m.popup, detail: `"${name} › ${item.label} › ${child.label}" does nothing when clicked` });
+            if (!o.keepWindows) for (const np of newPages2) await np.close().catch(() => {});
+            await page.keyboard.press('Escape').catch(() => {});
+            await shut(m);
+            const now2 = await page.evaluate(SIGNATURE, MENU_SEL).catch(() => null);
+            if (o.back && (!now2 || !before2 || now2.url !== before2.url || now2.dialogs > before2.dialogs)) await o.back();
+          }
+          await page.keyboard.press('Escape').catch(() => {});
+          await shut(m);
+          continue;
+        }
+        // no submenu appeared: graded as any other item, from a freshly opened menu
+        await page.keyboard.press('Escape').catch(() => {});
+        if (c.error) { c.effect = 'could not be clicked'; findings.push({ class: 'menu', popup: m.popup, detail: `"${name} › ${item.label}" could not be clicked (${c.error.slice(0, 80)})` }); await shut(m); continue; }
+        await shut(m);
+        const again3 = await open(m);
+        const fresh3 = again3.items && await current(m, item.label);
+        if (!fresh3) { c.effect = 'menu did not reopen'; continue; }
+        fresh.i = fresh3.i;
+      }
       const before = await page.evaluate(SIGNATURE, MENU_SEL).catch(() => null);
       const pagesBefore = new Set(await pagesNow());
       const events = [];

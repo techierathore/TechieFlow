@@ -4,15 +4,15 @@
 |---|---|
 | App | Lekhak |
 | Upstream | TechieFlow |
-| Updated | 2026-11-01 |
+| Updated | 2026-11-05 (TF-038 and TF-039 fixed upstream, ship in TechieFlow v1.2.5) |
 
 ## Summary
 
-37 entries: 0 blocking now, 1 open (TF-037, filed 2026-11-01), 1 fixed upstream and not yet re-checked (TF-036, fixed 2026-10-21, ships in TechieFlow v1.2.1), 35 closed after a re-check here.
+39 entries: 0 blocking now, 0 open, 3 fixed upstream and not yet re-checked (TF-037, ships in TechieFlow v1.2.4; TF-038 and TF-039, ship in v1.2.5), 36 closed after a re-check here.
 
-Nothing is blocked. TF-037: on the desktop head, the screen and mockup checks sometimes measure the page before the app has moved to it, so a correct screen fails once and passes on a second run.
+Nothing is blocked. TF-038: the mockup check measured a desktop screen as the last test left it. TF-039: a fix's miss stayed open after its re-verify passed; three older misses with the same fault are named in the reply.
 
-- 0 blockers, 13 majors, 24 minors, 0 nice-to-haves.
+- 0 blockers, 13 majors, 26 minors, 0 nice-to-haves.
 - Last consolidated: 2026-11-01.
 
 ## Entries
@@ -667,9 +667,70 @@ Nothing is blocked. TF-037: on the desktop head, the screen and mockup checks so
 - **Workaround:** ran the check a second time and graded from that run; the first runs are kept as `tests/.artifacts/verify/parity-run1.json` and `screens-run1.json`.
 - **Suggested fix:** after routing in the embedded browser, wait until `location.pathname` equals the route and at least one of the screen's own anchors is attached (or the breadcrumb names the screen), then settle, before measuring.
 
+### TF-038 — On a desktop head already on the screen's route, the mockup check measures the page as a test left it (scrolled), and reports the top bar "cut off"
+
+- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.2.5; not yet re-checked here.
+- **Severity:** minor
+- **Blocks:** no. A fresh page (navigate away, scroll to top) graded PASS with 0 findings.
+- **Repro:**
+  ```
+  # BlogAdmin booted with tf-verify-boot.sh start --head windows (mode=cdp); a browser test ends on /admin/ai-story-studio scrolled to the Review queue
+  bash .tfcore/utils/tf-mockup-parity.sh --cdp http://localhost:9223 --screen ai-story-studio=/admin/ai-story-studio --json-out tests/.artifacts/verify/parity.json
+  ```
+- **Expected:** the check starts each screen from the route's own first state, scrolled to the top, whatever the last test left.
+- **Actual:** seen 2026-11-04, after TF-037's fix.
+
+| Problem | What it affects | Does it block or break anything |
+|---|---|---|
+| `admin-topbar` "content is cut off vertically" at 1280 and 390, light and dark; the screenshot shows the page scrolled to the Review queue with the test's switch still on. TF-037's wait only triggers on a move to a new page, so on the same route nothing resets. | Any desktop-head screen whose last browser test ended on that route. | A false MOCKUP-FAIL and a gate miss (`MISS-Lekhak-20261103-02`); does not block the run. |
+
+- **Encountered in:** `*triage-and-fix Lekhak` (2026-11-04), verify of REQ-UI-154.
+- **Workaround:** moved the head to `/admin` and scrolled every container to the top, then ran parity again: PASS, 0 findings.
+- **Suggested fix:** on a desktop head, route to a neutral page and back (or reload) before each screen, and scroll to the top before measuring.
+- **Reply (TechieFlow team, 2026-11-05):** Fixed the first way you suggested, in both checks. New `openFresh()` in `tf-login.mjs` is used by `tf-mockup-parity.mjs` and `tf-verify-screens.mjs` on `--cdp`. When the app is already on the screen's route, it is first moved to another route (`/`, or a route no page answers when the screen is `/`) and waits until that page is drawn. Then it moves back, waits for the screen's own anchors as TF-037 does, and scrolls the window and every scrolled box to the top. So the screen is drawn from its first state, without the test's switch, whatever the last test left. A reload was not used: it would restart a desktop head's whole Blazor session. Regression case `lk_038`: a stand-in desktop app that, like a Blazor router, draws nothing when moved to the route it is on, left 25 px down with an extra line in a 40 px top bar. v1.2.4 gives your finding, `admin-topbar: content is cut off vertically; the mockup is not clipped`; the fix gives PASS. **Not proved on BlogAdmin's Windows head**: it was not running here. **Not ours, for you:** `MISS-Lekhak-20261103-02` came from this false MOCKUP-FAIL, and it is already closed with Verified. **Check it here:** paste into Lekhak's agent: `/TechieFlow:agents:verifier *verify ui Lekhak --phase 3` on BlogAdmin's desktop head, run right after the browser tests that end on AI Story Studio. AI Story Studio shows no `admin-topbar` "cut off" finding.
+
+### TF-039 — tf-fix-close.sh does not rewrite a miss-fix after a later verify passes, and its --misses form refuses the fix command triage-and-fix
+
+- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.2.5; not yet re-checked here.
+- **Severity:** minor
+- **Blocks:** no. `--misses <id> --fix-cmd fix-issues --verdict Verified` closed the miss.
+- **Repro:**
+  ```
+  bash .tfcore/utils/tf-fix-close.sh Lekhak --started <t0> --subagents none --build pass --cmd triage-and-fix   # verify said Needs re-verify
+  # re-verify the row: PASS, Verified
+  bash .tfcore/utils/tf-fix-close.sh Lekhak --started <t0> --subagents none --build pass --cmd triage-and-fix   # prints "1 miss-fix record(s)" but writes none
+  bash .tfcore/utils/tf-fix-close.sh Lekhak --misses MISS-Lekhak-20261103-01 --fix-cmd triage-and-fix --verdict Verified   # REFUSED: not in the fix_cmd vocabulary
+  ```
+- **Expected:** the second close writes a miss-fix with the new verdict; `triage-and-fix` is accepted as `fix_cmd`, since triage-and-fix.md step 3 tells you to use it.
+- **Actual:** seen 2026-11-04.
+
+| Problem | What it affects | Does it block or break anything |
+|---|---|---|
+| The miss stayed open with `verdict_after: Needs re-verify` although the row is Verified; the script's own line said a record was written. | Any fix whose first verify was below Verified. | Leaves a fixed miss open in the metrics until closed by hand; does not block. |
+
+- **Encountered in:** `*triage-and-fix Lekhak` (2026-11-04).
+- **Workaround:** the `--misses … --fix-cmd fix-issues` form.
+- **Suggested fix:** write a new miss-fix when the ledger verdict changed since the last one; add `triage-and-fix` to the `fix_cmd` vocabulary.
+- **Reply (TechieFlow team, 2026-11-05):** Fixed, both parts. The cause of the first: your second close ran with the start of its own marker (19:48:30, after the re-verify). A close only looks at verdicts given since its start, so it saw no row. In `tf-fix-close.sh` now:
+  1. A close follows up the last run of the same command before it. For each open miss on that run's rows, a verdict given after the miss's latest miss-fix, and different from it, gets a new miss-fix filed under that run. "After" is read from the gate record's own time, because a verify that a fix chains carries the fix's start.
+  2. Every open miss on a row is closed, not only the newest one. REQ-UI-154 held two.
+  3. A second close skips the time a close of the same command already recorded, so it no longer collides with its own run record.
+  4. `triage-and-fix` is in the `fix_cmd` vocabulary (`tf-emit.sh` and SCHEMA §5.5), and a triage-and-fix close files its miss-fix records under it.
+
+  Regression case `lk_039`. **Replayed on a copy of your 3 Nov records**, cut at 19:48:30 and without your hand-written record: v1.2.4 writes nothing and REQ-UI-154 stays open; the fix writes Verified for both of its misses, under the triage-and-fix of 17:53:15. Your real records were not touched. **Found while replaying, for you:** three older misses have the same fault. `MISS-Lekhak-20261012-04` (REQ-UI-120), `MISS-Lekhak-20261027-05` (REQ-RAG-098) and `MISS-Lekhak-20261031-08` (REQ-UI-141) are still open, though each row was graded Verified later (12, 27 and 31 Oct). The new close leaves them alone, because they belong to older fixes. **Check it here:** paste into Lekhak's agent: `Close three misses whose rows were re-verified Verified: bash .tfcore/utils/tf-fix-close.sh Lekhak --misses MISS-Lekhak-20261012-04,MISS-Lekhak-20261027-05,MISS-Lekhak-20261031-08 --fix-cmd fix-issues --verdict Verified`. It prints `3 of 3 miss-fix record(s) written`. On the next fix whose first verify is below Verified, the close after the re-verify prints `… for a re-verify after the triage-and-fix of <start>` and the miss closes.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### Resolution status (TechieFlow team, 2026-11-05)
+
+Ships in **TechieFlow v1.2.5**, the next release after v1.2.4. Already in this project's `.tfcore/` through the framework update of 2026-11-06. Each fix has a regression case in `tests/regression/run.sh` that fails against the v1.2.4 scripts and passes now.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-038 | Fixed upstream. The reply is under the entry. | `*verify ui Lekhak --phase 3` on BlogAdmin's desktop head right after the browser tests: no `admin-topbar` "cut off" finding on AI Story Studio. |
+| TF-039 | Fixed upstream. The reply is under the entry. | close the three older misses with the prompt in the reply: `3 of 3 miss-fix record(s) written`. |
 
 ### Resolution status (TechieFlow team, 2026-11-01)
 
@@ -693,7 +754,7 @@ Both fixes ship in **TechieFlow v1.2.0**. They are already in this project's `.t
 
 | ID | Fix | Check it here |
 |---|---|---|
-| TF-035 | Fixed upstream in both places your entry names. (1) `tf-verify-screens` now counts a checkbox, switch or radio as drawn when it paints its own box: an element with `role="checkbox"`, `role="switch"`, `role="radio"` or `aria-checked`, or one holding such an element. TrBlazeUI's unticked `<button role="checkbox" aria-checked="false">` is drawn, as a native `<input type="checkbox">` already was. An empty box that paints nothing is still `empty`. (2) `tf-mockup-parity` no longer compares a checkbox, switch or radio by border style. The browser draws a native checkbox's box, so it computes `border-style: none`. The library draws the same box as a CSS border. They are the same control. Regression case `lk_035` fails both of its checks against the scripts you had and passes now. | **Proved on your app**, BlogAdmin's Windows head, signed in as Tharki@tksories.com, AI Story Studio only. Screen check: the old script gave render EMPTY with `anchored control "show-verify-stories-toggle" (button) is empty` at both widths, light and dark. The new one gives render OK, 17 anchors, both themes. Mockup check: 31 findings with the old script, 4 of them `show-verify-stories-toggle border style differs — mockup none, app solid`. The new one gives 22, none on the checkbox. The 22 left are colour differences between the mockup and the app (`nav-ai-setup`, `admin-view-site`, `mode-write`, `start-generation`: mockup accent, app neutral); they are not TF-035. Across the other projects' last evidence, nothing else changes. After the framework update, paste into Lekhak's agent: `/TechieFlow:agents:verifier *verify all Lekhak`. The AI Story Studio rows no longer read RENDER-FAIL for the checkbox. |
+| TF-035 | Fixed upstream in both places your entry names. (1) `tf-verify-screens` now counts a checkbox, switch or radio as drawn when it paints its own box: an element with `role="checkbox"`, `role="switch"`, `role="radio"` or `aria-checked`, or one holding such an element. TrBlazeUI's unticked `<button role="checkbox" aria-checked="false">` is drawn, as a native `<input type="checkbox">` already was. An empty box that paints nothing is still `empty`. (2) `tf-mockup-parity` no longer compares a checkbox, switch or radio by border style. The browser draws a native checkbox's box, so it computes `border-style: none`. The library draws the same box as a CSS border. They are the same control. Regression case `lk_035` fails both of its checks against the scripts you had and passes now. | **Proved on your app**, BlogAdmin's Windows head, signed in as Tharki@tksories.com, AI Story Studio only. Screen check: the old script gave render EMPTY with `anchored control "show-verify-stories-toggle" (button) is empty` at both widths, light and dark. The new one gives render OK, 17 anchors, both themes. Mockup check: 31 findings with the old script, 4 of them `show-verify-stories-toggle border style differs — mockup none, app solid`. The new one gives 22, none on the checkbox. The 22 left are colour differences between the mockup and the app (`nav-ai-setup`, `admin-view-site`, `mode-write`, `start-generation`: mockup accent, app neutral); they are not TF-035. Across the other projects' last evidence, nothing else changes. Paste into Lekhak's agent: `/TechieFlow:agents:verifier *verify all Lekhak`. The AI Story Studio rows no longer read RENDER-FAIL for the checkbox. |
 | TF-034 | Fixed upstream, both ways you suggested. (1) `guard-status-html.sh` splits a phase file's name. For `docs/Lekhak-P3-BRD.md` it now prints `Run: bash .tfcore/utils/tf-brd-status.sh Lekhak --phase 3`. (2) `tf-brd-status.sh` reads an already-suffixed name as the app and that phase, so `tf-brd-status.sh Lekhak-P3` refreshes phase 3's BRD and no longer looks for `docs/Lekhak-P3-P3-Checklist.md`. A name with a phase and a different `--phase` is refused. The same fault was filed by TechieRag as its TF-007. Regression case `lk_034` fails both checks against the scripts you had and passes now. | Proved on a copy of your `docs/`: `tf-brd-status.sh Lekhak-P2` with your script printed `docs/Lekhak-P2-P3-Checklist.md does not exist yet; nothing to do`. The new one printed `docs/Lekhak-P2-BRD.md Development status updated: 7 screens, 23 of 23 requirements verified`. After the framework update, the next time the hook stops a turn over a phase BRD, its command has `--phase` and works as printed. |
 
 ### Resolution status (TechieFlow team, 2026-10-16)
@@ -712,7 +773,7 @@ Both fixes ship in **TechieFlow v1.2.0**. They are already in this project's `.t
 
 | ID | Fix | Check it here |
 |---|---|---|
-| TF-030 | Fixed upstream, and in BlogAdmin itself, at the owner's request. **Framework:** (1) `coding-standards-dotnet.md` §9b: every Blazor Hybrid head zooms with Cmd (Mac) or Ctrl (Windows) plus `=`, `-` and `0`, from 50% to 300% in 10% steps. The level is kept in MAUI Preferences (`tf.zoom`), and the Mac menu bar shows View › Zoom In, Zoom Out, Actual Size. The code to copy is `.tfcore/standards/blazor-zoom.cs.txt`. (2) `tf-maccatalyst-check.sh` warns about a Blazor Hybrid head without it, naming the head. It is a warning, so the boot still runs. (3) New `tf-verify-zoom.sh` presses the keys on a booted head and measures the result. On the Mac it measures the window's pictures, because the accessibility tree does not follow a web view's zoom. On Windows it reads the page over CDP. (4) Templates: an acceptance line ending `zoom-check: keys` or `zoom-check: kept` is graded from that script's result. Regression case `lk_030` fails 2 of 3 against the scripts you have and passes now. Miss `MISS-TechieFlow-20261011-04`. **BlogAdmin (not committed; the owner commits):** new `source/BlogAdmin/BlazorZoom.cs`, one line in `MainPage.xaml.cs`, and four members in `Platforms/MacCatalyst/AppDelegate.cs`. Two things were not as the request assumed. First, from macOS 26 the Mac menu ignores an app delegate's `BuildMenu`, so the commands go in through `UIMainMenuSystem`. That also needs the Format menu turned off, because its Font › Bigger and Smaller already own Cmd+= and Cmd+-. BlogAdmin's Format menu is gone. Second, the WinUI WebView2 control does not expose WebView2's `ZoomFactor`, and WebView2's own zoom steps unevenly (25% to 500%). So on Windows the app turns WebView2's zoom off, and a script on each page handles Ctrl+plus, Ctrl+minus, Ctrl+0 and Ctrl+wheel, saving each level. | **Proved on this Mac (macOS 27):** Mac head built and booted. `tf-verify-zoom.sh --appium http://localhost:4723 --leave 3` printed OK for the View menu, and 130%, 120%, 100% after the keys. After `stop` and `start`, `--expect-restored 1.3` printed `opened at 130%`. BlogAdmin was left at 100%. **Not proved here:** the Windows head. A Windows build cannot run on a Mac. The Windows code compiled against the real WinUI and MAUI packages. Its page script, run in Chromium, gave 130%/120%/100%, 110% for Ctrl+wheel, stopped at 300% and 50%, and kept 130% across a page reload. To re-check: on the Mac, after the framework update, `bash .tfcore/utils/tf-maccatalyst-check.sh` prints OK for BlogAdmin. Then boot as above and run `bash .tfcore/utils/tf-verify-zoom.sh --appium http://localhost:4723`. Expect four OK lines. On Windows, build the Windows head, boot with `--head windows`, and run `bash .tfcore/utils/tf-verify-zoom.sh --cdp <the boot url>`. Expect five OK lines. Add the two zoom rows to the checklist through `*amend-docs` (the BRD is the owner's), then `*verify` grades them. |
+| TF-030 | Fixed upstream, and in BlogAdmin itself, at the owner's request. **Framework:** (1) `coding-standards-dotnet.md` §9b: every Blazor Hybrid head zooms with Cmd (Mac) or Ctrl (Windows) plus `=`, `-` and `0`, from 50% to 300% in 10% steps. The level is kept in MAUI Preferences (`tf.zoom`), and the Mac menu bar shows View › Zoom In, Zoom Out, Actual Size. The code to copy is `.tfcore/standards/blazor-zoom.cs.txt`. (2) `tf-maccatalyst-check.sh` warns about a Blazor Hybrid head without it, naming the head. It is a warning, so the boot still runs. (3) New `tf-verify-zoom.sh` presses the keys on a booted head and measures the result. On the Mac it measures the window's pictures, because the accessibility tree does not follow a web view's zoom. On Windows it reads the page over CDP. (4) Templates: an acceptance line ending `zoom-check: keys` or `zoom-check: kept` is graded from that script's result. Regression case `lk_030` fails 2 of 3 against the scripts you have and passes now. Miss `MISS-TechieFlow-20261011-04`. **BlogAdmin (not committed; the owner commits):** new `source/BlogAdmin/BlazorZoom.cs`, one line in `MainPage.xaml.cs`, and four members in `Platforms/MacCatalyst/AppDelegate.cs`. Two things were not as the request assumed. First, from macOS 26 the Mac menu ignores an app delegate's `BuildMenu`, so the commands go in through `UIMainMenuSystem`. That also needs the Format menu turned off, because its Font › Bigger and Smaller already own Cmd+= and Cmd+-. BlogAdmin's Format menu is gone. Second, the WinUI WebView2 control does not expose WebView2's `ZoomFactor`, and WebView2's own zoom steps unevenly (25% to 500%). So on Windows the app turns WebView2's zoom off, and a script on each page handles Ctrl+plus, Ctrl+minus, Ctrl+0 and Ctrl+wheel, saving each level. | **Proved on this Mac (macOS 27):** Mac head built and booted. `tf-verify-zoom.sh --appium http://localhost:4723 --leave 3` printed OK for the View menu, and 130%, 120%, 100% after the keys. After `stop` and `start`, `--expect-restored 1.3` printed `opened at 130%`. BlogAdmin was left at 100%. **Not proved here:** the Windows head. A Windows build cannot run on a Mac. The Windows code compiled against the real WinUI and MAUI packages. Its page script, run in Chromium, gave 130%/120%/100%, 110% for Ctrl+wheel, stopped at 300% and 50%, and kept 130% across a page reload. To re-check: on the Mac, `bash .tfcore/utils/tf-maccatalyst-check.sh` prints OK for BlogAdmin. Then boot as above and run `bash .tfcore/utils/tf-verify-zoom.sh --appium http://localhost:4723`. Expect four OK lines. On Windows, build the Windows head, boot with `--head windows`, and run `bash .tfcore/utils/tf-verify-zoom.sh --cdp <the boot url>`. Expect five OK lines. Add the two zoom rows to the checklist through `*amend-docs` (the BRD is the owner's), then `*verify` grades them. |
 
 Found on the way, and fixed: a Mac-head verify failed every screen that has a mockup with "mockup-parity not found", because the mockup comparison never runs on a Mac. A Mac head's rows now say "mockup not compared on a Mac head" instead; compare the mockups on the Windows head. Your next Mac `*verify` would have hit it.
 

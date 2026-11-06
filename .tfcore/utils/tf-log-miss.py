@@ -132,7 +132,7 @@ def main(argv):
 
     # 1. duplicate check
     if req:
-        opened = q("--open-miss", req)
+        opened = q("--open-miss", req, cls)
         if opened and opened.split()[-1] == cls:
             mid = opened.split()[0]
             line = f"already logged as {mid}, still open."
@@ -167,7 +167,10 @@ def main(argv):
            "artifact": artifact, "severity": severity, "why_missed": why, "origin_phase": "day1-greenfield" if cls in ("unspecified-gap", "spec-contradiction") else "build-phase",
            "origin_agent": "analyst" if cls in ("unspecified-gap", "spec-contradiction") else "flow-master",
            "found_by": found_by, "found_phase": "log-miss", "found_gate": None, "found_run_id": started, "failure_class": "other", "what": what[:300],
-           "sort": sort}
+           "sort": sort,
+           # TechieBlog TF-004: a defect told to *log-miss was found outside any run's window
+           "discovery_why": ("found by the owner or in production, not by a run" if found_by in ("owner", "production")
+                             else "logged after the fact by *log-miss; it has no window of its own")}
     attributed = "inferred, no run record found"
     if req and cls not in ("unspecified-gap", "spec-contradiction"):
         o = q("--origin-of", req).split()

@@ -1,0 +1,15 @@
+{
+  "Verify": {
+    "Runner": "",
+    "BootWaitSeconds": 120,
+    "WindowsAppData": "",
+    "AppEnv": {},
+    "Login": { "Path": "", "TestUser": "1", "User": "", "Password": "" }
+  },
+  "TestUsers": {
+    "1": { "Email": "", "FirstName": "", "LastName": "", "Password": "" },
+    "2": { "Email": "", "FirstName": "", "LastName": "", "Password": "" },
+    "3": { "Email": "", "FirstName": "", "LastName": "", "Password": "" }
+  },
+  "AppManager": { "BaseUrl": "", "ApiKey": "", "ApplicationId": "", "DeviceId": "" }
+}

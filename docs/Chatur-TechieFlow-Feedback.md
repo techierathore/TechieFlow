@@ -4,11 +4,11 @@
 |---|---|
 | App | Chatur |
 | Upstream | TechieFlow |
-| Updated | 2026-10-29 (TF-015 to TF-017 and TF-020 fixed upstream, ship in TechieFlow v1.2.2; TF-013 and TF-014 re-checked upstream) |
+| Updated | 2026-11-05 (TF-022 fixed upstream, ships in TechieFlow v1.2.5) |
 
 ## Summary
 
-21 entries: 3 open (TF-018, TF-019, TF-021), 8 fixed upstream and not yet re-checked (TF-008, TF-010, TF-013 to TF-015 in v1.2.1; TF-015 reworked, TF-016, TF-017 and TF-020 in v1.2.2, fixed 2026-10-29), 10 closed (TF-001 to TF-007, TF-009, TF-011, TF-012). 0 blocking now: TF-020 and TF-017, the two that blocked, are fixed upstream.
+22 entries: 0 open, 11 fixed upstream and not yet re-checked (TF-008, TF-010, TF-013 to TF-019, TF-021, TF-022), 11 closed (TF-001 to TF-007, TF-009, TF-011, TF-012, TF-020). 0 blocking.
 
 TF-007 was re-checked here on 2026-10-03: no list box on Start, Workbench, Prerequisites, Providers or Corrections reports "app carries an icon the mockup does not" at either width, and Start, Prerequisites, Providers and Corrections now pass mockup parity outright.
 
@@ -305,6 +305,19 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 - **Workaround:** the rows, their tests and the code comments were renumbered to REQ-UI-079 to REQ-UI-082 before the verify.
 - **Suggested fix:** in `tf-triage.py` `new`, take the next free number after the highest existing id; and in `tf-req-ids.py`, read `\d{3,}` with a word boundary, so a longer id is never cut to its first three digits.
 
+### TF-022 — The menu walk reports a submenu row (▸) as "does nothing when clicked"
+
+- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.2.5; not yet re-checked here.
+- **Severity:** minor
+- **Blocks:** no, with a workaround (updated 2026-11-05). Left alone, it fails render on every main-window screen, about 90 rows in phases 1 to 3. The 5 Nov verify passed `--no-click "Recent projects" --no-click "Zoom"` to the screen and mockup checks, so those two rows are not measured. The JSON wrongly gives the reason as "ends the session or deletes".
+- **Repro:** TrBlazeUI 2.2.2, Chatur's main window with File ▸ Recent projects ▸ and View ▸ Zoom ▸ built as `MenubarSub` (TR-020). Run `bash .tfcore/utils/tf-mockup-parity.sh --base http://localhost:5280 --screen main=/ --mockup-dir docs/mockups --login-path /sign-in --user chatur-owner@techierathore.com --password <pw> --json-out tests/.artifacts/verify/parity-main.json`.
+- **Expected:** a row with `aria-haspopup="menu"` that opens a list (`aria-expanded` goes to `true`, a `role="menu"` appears beside it) is an item that did its job, and the walk goes on into that list.
+- **Actual:** `"File › Recent projects ▸" does nothing when clicked` and `"View › Zoom ▸" does nothing when clicked`. A probe on the same app shows a mouse click on either row opens its list at once and keeps it open (`aria-expanded="true"`, the list in the page after 100 ms, 400 ms and 1 s).
+- **Encountered in:** `*fix-issues Chatur` (TR-020 re-check), 2026-11-04
+- **Workaround:** `--no-click` on the two submenu rows (see Blocks).
+- **Suggested fix:** in `tf-menus.mjs`, count `aria-expanded` turning `true` on an `aria-haspopup` item as an effect, and walk the list it opened as a nested menu.
+- **Reply (TechieFlow team, 2026-11-05):** Fixed as you suggested. The cause: the walk judges a click by what changes outside the menus (address, text, dialogs, zoom, theme), and a submenu opening changes none of those. In `tf-menus.mjs`, a row with `aria-haspopup="menu"` or `"true"`, or a label ending in ▸, is now graded by its submenu appearing: `aria-expanded` turning `true`, or another menu showing beside it. Its child rows are then opened through it, one at a time from a freshly opened menu, and clicked and graded like any item. A dead child still fails, as `"File › Recent projects ▸ › <name>" does nothing when clicked`. It goes one level deep. Also fixed: a row skipped with `--no-click` now reads `not clicked (--no-click)` in the JSON, not "ends the session or deletes". Regression case `ch_022`. **Proved on your web head** (`tf-verify-boot.sh start --head web --port 5280`, signed in as chatur-owner, main window at 1280, light). v1.2.4 gives `"File › Recent projects ▸" does nothing when clicked` and `"View › Zoom ▸" does nothing when clicked`. The fix gives neither: Recent projects opened its submenu and DefaultApp opened, and Zoom opened with Zoom in and Zoom out zooming and Actual size acting. **Not ours, for you:** render still reads EMPTY on this screen for two other findings, in both runs: `the menu "main2 to push" has no "feature/board" item` and the same for `run/BRD-96-101`. Those are sample branches the mockup draws in the branch menu without `data-tf-sample` (the TF-011 reply named this). Mark them, or the app's branches will never match. **Check it here:** paste into Chatur's agent: `/TechieFlow:agents:verifier *verify ui Chatur --phase 1`, without the two `--no-click` options. No screen reports `Recent projects ▸" does nothing` or `Zoom ▸" does nothing`.
+
 ## Replies from TechieFlow
 
 ### Resolution status (TechieFlow team, 2026-10-02)
@@ -362,9 +375,9 @@ All three fixes ship in **TechieFlow v1.2.1**, the next release after v1.2.0. Th
 
 | ID | Fix | Check it here |
 |---|---|---|
-| TF-013 | Fixed upstream in `tf-verify-verdict.py`, as you suggested. A row that was Not Started keeps Not Started when every check that fails on it is its route answering 404. That is the render check, and the mockup check, which could not open the route for the same reason. Its Remark reads `not built — /feedback answered HTTP 404: the screen is not built yet, nothing to re-verify`, and it emits no gate record and no miss. A row that was built and answers 404 still goes to Needs re-verify, and so does a Not Started row with any other failure. Regression case `ch_013` fails on the script you had. Miss `MISS-TechieFlow-20261021-04`. | **Replayed on your phase-4 evidence** (`list-p4.json`, `screens-p4.json`, `parity-p4.json`, `assets-p4.json`), in a copy, so nothing here was written. Old script: 19 rows RENDER-FAIL, Needs re-verify, 19 misses. New script: 19 rows Not Started, no miss. **One thing for you:** the 19 rows of `docs/Chatur-P4-Checklist.md` still read Needs re-verify from the 2026-10-19 run. After the framework update, paste into Chatur's agent: `/TechieFlow:agents:verifier *verify all Chatur --phase 4`. The verdict puts them back to Not Started, each with the 404 reason. |
+| TF-013 | Fixed upstream in `tf-verify-verdict.py`, as you suggested. A row that was Not Started keeps Not Started when every check that fails on it is its route answering 404. That is the render check, and the mockup check, which could not open the route for the same reason. Its Remark reads `not built — /feedback answered HTTP 404: the screen is not built yet, nothing to re-verify`, and it emits no gate record and no miss. A row that was built and answers 404 still goes to Needs re-verify, and so does a Not Started row with any other failure. Regression case `ch_013` fails on the script you had. Miss `MISS-TechieFlow-20261021-04`. | **Replayed on your phase-4 evidence** (`list-p4.json`, `screens-p4.json`, `parity-p4.json`, `assets-p4.json`), in a copy, so nothing here was written. Old script: 19 rows RENDER-FAIL, Needs re-verify, 19 misses. New script: 19 rows Not Started, no miss. **One thing for you:** the 19 rows of `docs/Chatur-P4-Checklist.md` still read Needs re-verify from the 2026-10-19 run. Paste into Chatur's agent: `/TechieFlow:agents:verifier *verify all Chatur --phase 4`. The verdict puts them back to Not Started, each with the 404 reason. |
 | TF-014 | Fixed upstream in `guard-db.sh`, as you suggested. "dbup" counts only when it runs: as the command word of a segment (`dbup upgrade`, `./Chatur.DbUp.exe`, `dotnet Chatur.DbUp.dll`) or through `dotnet run --project …Db` / `…DbUp`. A quoted argument is a mention (a `--what` sentence, a `grep` pattern), unless a shell runs it (`bash -c "dotnet run --project src/ChaturDb"`) or it is the `--project` path. Regression case `ch_014` holds 12 command shapes; the guard you had gets 5 of them wrong. Miss `MISS-TechieFlow-20261021-05`. | Proved on your two repro commands, with the marker at `log-miss`: your guard refuses both, the new one allows both. `dotnet run --project src/ChaturDb` is still refused outside `*build-phase`, `*fix-issues` and `*triage-and-fix`. After the framework update, `*log-miss` takes a sentence naming DbUp, and `grep -n -i "dbup" docs/Chatur-Checklist.md` runs. You no longer need the file workaround. |
-| TF-015 | Fixed upstream in `tf-verify-verdict.py`, as you suggested: `bad` is set before the render branch. A row on an UNREACHABLE screen is RENDER-FAIL on a Mac head as on any other, with the screen check's reason, and every other row is graded. Regression case `ch_015` builds your shape: a Mac (appium) boot, `anchors_not_measured`, the first screen UNREACHABLE. It fails on the script you had with exit 1 and `UnboundLocalError`, and passes now. Miss `MISS-TechieFlow-20261021-06`. | Proved on that fixture only: the Mac run's evidence is on the Mac, not on this machine. On the Mac, after the framework update, paste into Chatur's agent: `/TechieFlow:agents:verifier *verify all Chatur --phase all --head maccatalyst`. Phases 2 to 4 get a verdict table. Rows whose screen stays behind Sign in read RENDER-FAIL with the screen check's reason. |
+| TF-015 | Fixed upstream in `tf-verify-verdict.py`, as you suggested: `bad` is set before the render branch. A row on an UNREACHABLE screen is RENDER-FAIL on a Mac head as on any other, with the screen check's reason, and every other row is graded. Regression case `ch_015` builds your shape: a Mac (appium) boot, `anchors_not_measured`, the first screen UNREACHABLE. It fails on the script you had with exit 1 and `UnboundLocalError`, and passes now. Miss `MISS-TechieFlow-20261021-06`. | Proved on that fixture only: the Mac run's evidence is on the Mac, not on this machine. On the Mac, paste into Chatur's agent: `/TechieFlow:agents:verifier *verify all Chatur --phase all --head maccatalyst`. Phases 2 to 4 get a verdict table. Rows whose screen stays behind Sign in read RENDER-FAIL with the screen check's reason. |
 
 ### Resolution status (TechieFlow team, 2026-10-29)
 
@@ -378,6 +391,14 @@ Ships in **TechieFlow v1.2.2**, the next release after v1.2.1. Already in this p
 | TF-015 | Fixed upstream. The reply is under the entry. | on the Mac, `*verify all Chatur --phase all --head maccatalyst`: phases 2 to 4 get a verdict table, and no row behind Sign in is RENDER-FAIL. |
 | TF-013 | Fixed upstream. The reply is under the entry. | `/TechieFlow:agents:verifier *verify all Chatur --phase 4`. The 19 rows go back to Not Started with the 404 reason, and no miss is written. |
 | TF-014 | Fixed upstream. The reply is under the entry. | run your two repro commands outside a build or fix: neither is blocked. |
+
+### Resolution status (TechieFlow team, 2026-11-05)
+
+Ships in **TechieFlow v1.2.5**, the next release after v1.2.4. Already in this project's `.tfcore/` through the framework update of 2026-11-06. The regression case fails against the v1.2.4 script and passes now.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-022 | Fixed upstream. The reply is under the entry. | `/TechieFlow:agents:verifier *verify ui Chatur --phase 1` without `--no-click`. No screen reports `Recent projects ▸" does nothing` or `Zoom ▸" does nothing`. |
 
 ### Resolution status (TechieFlow team, 2026-11-01)
 

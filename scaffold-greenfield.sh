@@ -408,8 +408,9 @@ done
 #    package for library personas) and must never be committed in the app repo.
 #    Append-only + idempotent: existing anchored/slash variants are respected;
 #    user content is never rewritten.
-GI_LINES=(".tfcore/" ".claude/" ".opencode/" "/CLAUDE.md" "/opencode.jsonc" "/.tf-scaffold-note.txt")
-GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?CLAUDE\.md$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$')
+# tests/verify/testsettings.Local.json holds this machine's test passwords and keys (Sevak TF-015): never committed
+GI_LINES=(".tfcore/" ".claude/" ".opencode/" "/CLAUDE.md" "/opencode.jsonc" "/.tf-scaffold-note.txt" "tests/verify/testsettings.Local.json")
+GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?CLAUDE\.md$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$' '^/?(tests/verify/|\*\*/)?testsettings\.Local\.json$')
 GI_MISSING=()
 for i in "${!GI_LINES[@]}"; do
   # tr strips CR so CRLF .gitignore files (Windows-authored) still match the $-anchor

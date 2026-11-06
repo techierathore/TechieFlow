@@ -43,7 +43,7 @@ import { chromium } from 'playwright';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { signIn, reach, anchorsPresent, waitArrived, ensureDrawing } from './tf-login.mjs';
+import { signIn, reach, anchorsPresent, waitArrived, ensureDrawing, openFresh } from './tf-login.mjs';
 import { parseThemes, useTheme, surface, differs, looksDark } from './tf-theme.mjs';
 import { mockupMenus, walkMenus, placeholdersOnPage, reachability } from './tf-menus.mjs';
 
@@ -66,7 +66,12 @@ const COOKIE = arg('--cookie');
 // A sign-in the page keeps for itself sets no cookie, so --cookie could not reach AppManager's screens
 // at all: "app returned HTTP 401" at both widths (AppManager TF-011). The same --login-path, --user,
 // --password and --storage-state tf-verify-screens takes, through the shared recipe in tf-login.mjs.
-const LOGIN_PATH = arg('--login-path'); const USER = arg('--user'); const PASS = arg('--password');
+// Sevak TF-015: a sign-in the command line does not name comes from tests/verify/testsettings(.Local).json
+// (Verify:Login:Path / User / Password, or Verify:Login:TestUser naming a Test users number).
+const TS = await import('./tf-testsettings.mjs').catch(() => null);
+const fromSettings = (k) => (TS ? TS.setting(k) : '') || null;
+const LOGIN_PATH = arg('--login-path') || fromSettings('Verify:Login:Path');
+const USER = arg('--user') || fromSettings('Verify:Login:User'); const PASS = arg('--password') || (arg('--user') ? null : fromSettings('Verify:Login:Password'));
 const STORAGE = arg('--storage-state');
 const LOGIN_OPTS = { base: BASE, loginPath: LOGIN_PATH, user: USER, password: PASS, settle: 1500, renderWait: 5000 };
 const HEADERS = [];
@@ -959,13 +964,12 @@ if (CDP) {
 // mockup's anchors that was not on the previous page is attached — before anything is read (tf-login.mjs)
 async function reachCdp(page, route, anchors = []) {
   try {
-    const before = await anchorsPresent(page, anchors);
-    await page.evaluate((r) => { history.pushState({}, '', r); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); }, route);
-    const a = await waitArrived(page, route, anchors, before, LOGIN_OPTS);
+    // Lekhak TF-038: from the screen's own first state, scrolled to the top, whatever the last test left
+    const a = await openFresh(page, route, anchors, LOGIN_OPTS);
     // Sevak TF-011: a minimized desktop window draws nothing, and nothing read from it can be trusted
     const dr = await ensureDrawing(page, CDP);
     if (!dr.drawing) return { status: 0, not_drawing: true, error: `not measured: the app window is not drawing (minimized, or the screen is locked?) — 0 animation frames in 1 s${dr.restored ? `; restore: ${dr.restored}` : ''}` };
-    return { status: 200, url: page.url(), arrived: a.arrived };
+    return { status: 200, url: page.url(), arrived: a.arrived, reset: a.reset };
   } catch (e) { return { status: 0, error: e.message.split('\n')[0] }; }
 }
 if (COOKIE && !CDP) {

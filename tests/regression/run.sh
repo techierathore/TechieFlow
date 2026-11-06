@@ -6665,6 +6665,9 @@ import { test, expect } from '@playwright/test';
 
 test('REQ-UI-004 email already in use shows the server message', async ({ page }) => {
   const vEmail = 'fx-owner@fx.app';
+  // Sevak TF-016: test user 1 is proved to exist before Register is submitted with its address
+  await signIn(page, vEmail);
+  test.skip(!(await signedIn(page)), 'test user 1 does not sign in, so Register is not submitted (it would create the account)');
   await page.goto('/register');
   await page.getByTestId('input-email').fill(vEmail);
   await page.getByTestId('register-submit').click();
@@ -7001,6 +7004,9 @@ const s = await openSession('http://127.0.0.1:$port', { bundleId: 'fx', appPath:
 # with a DevTools port; sets CDP_PORT, CDP_SRV and CDP_BR. slow: every route change draws the new page
 # 4 s after the address changes, the top bar first still naming the previous page (Lekhak TF-037).
 # frozen: requestAnimationFrame never calls back, like a minimized Windows window (Sevak TF-011).
+# scrolled: the window opens on /studio as a browser test left it: scrolled 25 px down a long page, with
+# the top bar still holding the test's state (a 60 px "Review queue" line in a 40 px bar) until the page is
+# drawn again (Lekhak TF-038). Like a Blazor router, a move to the route already drawn draws nothing.
 _cdp_app() {
   local d="$1" mode="$2"; mkdir -p "$d/docs/mockups"
   local css='body{margin:0;font:14px/20px system-ui;background:#fff;color:#111} header{height:40px;background:#f3f4f6} .card{margin:16px;padding:12px;border:1px solid #ccc;width:400px}'
@@ -7015,9 +7021,12 @@ var MODE = '""" + MODE + """';
 if (MODE === 'frozen') window.requestAnimationFrame = function () { return 0; };
 var PAGES = {'/studio': '<header data-testid="admin-topbar">Story Studio</header><div class="card" data-testid="studio-editor">Write a story</div>',
              '/ai-setup': '<header data-testid="admin-topbar">AI Setup</header><div class="card" data-testid="embedding-card">Embeddings</div><div class="card" data-testid="embedding-status">Ready</div>'};
-function draw(at){ document.getElementById('root').innerHTML = PAGES[at || location.pathname] || '<p>Home</p>'; }
-window.addEventListener('popstate', function(){ var at = location.pathname; if (MODE === 'slow') setTimeout(function(){ draw(at); }, 4000); else draw(at); });
+var DRAWN = '';
+function draw(at){ DRAWN = at || location.pathname; document.getElementById('root').innerHTML = PAGES[DRAWN] || '<p>Home</p>'; }
+window.addEventListener('popstate', function(){ var at = location.pathname; if (MODE === 'scrolled' && at === DRAWN) return; if (MODE === 'slow') setTimeout(function(){ draw(at); }, 4000); else draw(at); });
 draw();
+if (MODE === 'scrolled') { document.body.insertAdjacentHTML('beforeend', '<div style="height:3000px"></div>');
+  document.querySelector('[data-testid=admin-topbar]').insertAdjacentHTML('beforeend', '<div style="height:60px">Review queue (12) · verifying</div>'); window.scrollTo(0, 25); }
 </script></body></html>"""
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
@@ -7185,6 +7194,318 @@ tf_056() {
     || { bad tf_056b "the strong tint's real difference was lost"; note "$(cut -c1-220 <<<"$out")"; }
 }
 
+# --- Sevak TF-015: the verify harness read its settings from environment variables and a .env.local file ----
+# Stack rules Q1 and Q11.2: settings live in appsettings-style files, with no second mechanism. The harness
+# now reads tests/verify/testsettings.json with the git-ignored testsettings.Local.json laid over it; the old
+# variables still work for one release, with a warning naming the key to move. The register-test-users
+# script writes each new password into the Local file only. Here a stand-in AppManager answers its calls.
+sv_015() {
+  local d="$SCRATCH/sv015"; mkdir -p "$d/tests/verify" "$d/docs"
+  cat > "$d/tests/verify/testsettings.json" <<'J'
+{"Verify": {"Runner": "", "BootWaitSeconds": 120, "AppEnv": {"FX_VERIFICATION_MODE": "1"}, "Login": {"TestUser": "1", "User": "", "Password": ""}},
+ "TestUsers": {"1": {"Email": "fx-owner@fx.app", "FirstName": "Fx", "LastName": "Owner", "Password": ""},
+               "2": {"Email": "fx-second@fx.app", "FirstName": "Fx", "LastName": "Second", "Password": ""}},
+ "AppManager": {"BaseUrl": "", "ApiKey": "", "ApplicationId": ""}}
+J
+  cat > "$d/tests/verify/testsettings.Local.json" <<'J'
+{"Verify": {"Runner": "nowhere", "AppEnv": {"AppDb__DataDirectory": "tests/.artifacts/data"}},
+ "TestUsers": {"2": {"Password": "already-set"}}}
+J
+  local got; got="$(cd "$d" && python3 "$UTILS/tf-testsettings.py" get Verify:BootWaitSeconds; python3 "$UTILS/tf-testsettings.py" get verify:runner; \
+                   python3 "$UTILS/tf-testsettings.py" get TestUsers:2:Password; python3 "$UTILS/tf-testsettings.py" get Verify:Login:User; \
+                   python3 "$UTILS/tf-testsettings.py" pairs Verify:AppEnv | sort | tr '\n' ' ' 2>&1)"
+  [[ "$(tr '\n' '|' <<<"$got")" == "120|nowhere|already-set|fx-owner@fx.app|AppDb__DataDirectory=tests/.artifacts/data FX_VERIFICATION_MODE=1 |" ]] \
+    && ok sv_015a "testsettings.Local.json is laid over testsettings.json key by key, keys read with ':' in any case" \
+    || { bad sv_015a "the two settings files were not layered"; note "$(tr '\n' '|' <<<"$got")"; }
+  local out rc
+  out="$(cd "$d" && TF_BOOT_PLATFORM=linux bash "$UTILS/tf-verify-boot.sh" start --dry-run 2>&1)"; rc=$?
+  [[ $rc -eq 3 ]] && grep -q "Verify:Runner (testsettings) is wsl or windows, not 'nowhere'" <<<"$out" \
+    && ok sv_015b "the boot takes its runner from the settings files, not only from an environment variable" \
+    || { bad sv_015b "the boot did not read Verify:Runner (exit $rc)"; note "$(head -2 <<<"$out" | cut -c1-200)"; }
+  python3 - "$d/tests/verify/testsettings.Local.json" <<'PY'
+import json, sys
+p = sys.argv[1]; j = json.load(open(p)); j["Verify"]["Runner"] = ""; json.dump(j, open(p, "w"))
+PY
+  out="$(cd "$d" && TF_BOOT_RUNNER=sideways TF_BOOT_PLATFORM=linux bash "$UTILS/tf-verify-boot.sh" start --dry-run 2>&1)"
+  grep -q 'TF_BOOT_RUNNER is read for one more release only; move it to tests/verify/testsettings.Local.json as "Verify:Runner"' <<<"$out" \
+    && grep -q "not 'sideways'" <<<"$out" \
+    && ok sv_015c "the old variable still works for one release and says which key in which file to move it to" \
+    || { bad sv_015c "the old variable was dropped or gave no warning"; note "$(head -3 <<<"$out" | cut -c1-200)"; }
+  # the register-test-users script against a stand-in AppManager
+  if ! command -v node >/dev/null 2>&1 || [[ ! -f "$UTILS/tf-register-test-users.mjs" ]]; then
+    bad sv_015d "no tf-register-test-users.mjs, or node is not installed"; return
+  fi
+  cat > "$d/am.mjs" <<'JS'
+import http from 'node:http'; import crypto from 'node:crypto'; import fs from 'node:fs';
+const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048, publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } });
+const log = [];
+const srv = http.createServer((req, res) => {
+  let body = ''; req.on('data', (c) => { body += c; }); req.on('end', () => {
+    res.setHeader('Content-Type', 'application/json');
+    if (req.headers['x-api-key'] !== 'k-123') { res.statusCode = 401; return res.end('{"success":false,"errorCode":"BAD_KEY"}'); }
+    if (req.url === '/AuthSvc/public-key') return res.end(JSON.stringify({ success: true, data: { publicKey } }));
+    if (req.url === '/AuthSvc/register') {
+      const b = JSON.parse(body); const pw = crypto.privateDecrypt({ key: privateKey, padding: crypto.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' }, Buffer.from(b.encryptedPassword, 'base64')).toString();
+      log.push({ email: b.email, app: b.applicationId, pwlen: pw.length }); fs.writeFileSync(process.argv[3], JSON.stringify(log));
+      return res.end(JSON.stringify({ success: true, data: { userId: 40 + log.length } }));
+    }
+    res.statusCode = 404; res.end('{}');
+  });
+});
+srv.listen(Number(process.argv[2]), '127.0.0.1');
+JS
+  local port; port="$(_free_port)"
+  node "$d/am.mjs" "$port" "$d/am-log.json" >/dev/null 2>&1 & local am=$!
+  sleep 1
+  printf '{"AppManager": {"BaseUrl": "http://127.0.0.1:%s/", "ApiKey": "k-123", "ApplicationId": "fx-app"}}\n' "$port" > "$d/appsettings.Development.json"
+  cp "$d/tests/verify/testsettings.json" "$d/committed.json"
+  out="$(cd "$d" && cp "$UTILS/tf-testsettings.mjs" "$UTILS/tf-register-test-users.mjs" . 2>/dev/null; node tf-register-test-users.mjs --appsettings appsettings.Development.json 2>&1)"; rc=$?
+  kill "$am" 2>/dev/null; wait "$am" 2>/dev/null
+  local pw1; pw1="$(cd "$d" && python3 "$UTILS/tf-testsettings.py" get TestUsers:1:Password)"
+  [[ $rc -eq 0 && ${#pw1} -ge 20 ]] && cmp -s "$d/committed.json" "$d/tests/verify/testsettings.json" \
+    && grep -q 'fx-owner@fx.app: registered (user id 41); password written to tests/verify/testsettings.Local.json as TestUsers:1:Password' <<<"$out" \
+    && grep -q 'fx-second@fx.app: already has a password in the settings, skipped' <<<"$out" && ! grep -qF -- "$pw1" <<<"$out" \
+    && grep -q '"email":"fx-owner@fx.app","app":"fx-app"' "$d/am-log.json" && ! grep -q 'fx-second' "$d/am-log.json" \
+    && ok sv_015d "the register-test-users script registers only a user with no password, writes it to the Local file only, never prints it" \
+    || { bad sv_015d "the register-test-users script (exit $rc)"; note "$(tr '\n' ' ' <<<"$out" | cut -c1-240)"; }
+}
+
+# --- Sevak TF-016: a Register submit with test user 1's address created that user on AppManager -----------------
+# The rule let a verify test submit Register with a Test users address (the "email already in use" path). When
+# AppManager no longer held test user 1, the submit created it (Sevak, 3 Nov, AppManager user 14). Such a submit
+# is now allowed only after a sign-in with the same address earlier in the same test, and a stop between the two.
+sv_016() {
+  local d="$SCRATCH/sv016"; _tu_fx "$d"
+  local head='import { test, expect } from "@playwright/test";
+const OWNER_EMAIL = setting("TestUsers:1:Email");
+'
+  { printf '%s' "$head"; cat <<'TS'
+test('REQ-UI-006 register shows email already in use', async ({ page }) => {
+  await page.goto('/register');
+  await page.locator('input[name=email]').fill(OWNER_EMAIL);
+  await page.locator('[data-testid="register-submit"]').click();
+  await expect(page.getByTestId('register-banner')).toContainText('already exists');
+  await signIn(page, OWNER_EMAIL, OWNER_PASSWORD);
+});
+TS
+  } > "$d/tests/verify/old.spec.ts"
+  { printf '%s' "$head"; cat <<'TS'
+test('REQ-UI-006 register shows email already in use', async ({ page }) => {
+  await signIn(page, OWNER_EMAIL, OWNER_PASSWORD);
+  test.skip(!(await signedIn(page)), 'test user 1 does not sign in, so Register is not submitted');
+  await signOut(page);
+  await page.goto('/register');
+  await page.locator('input[name=email]').fill(OWNER_EMAIL);
+  await page.locator('[data-testid="register-submit"]').click();
+  await expect(page.getByTestId('register-banner')).toContainText('already exists');
+});
+TS
+  } > "$d/tests/verify/new.spec.ts"
+  { printf '%s' "$head"; cat <<'TS'
+test('REQ-UI-006 register shows email already in use', async ({ page }) => {
+  await signIn(page, OWNER_EMAIL, OWNER_PASSWORD);
+  await signOut(page);
+  await page.goto('/register');
+  await page.locator('input[name=email]').fill(OWNER_EMAIL);
+  await page.locator('[data-testid="register-submit"]').click();
+});
+TS
+  } > "$d/tests/verify/nostop.spec.ts"
+  { cat <<'TS'
+import { test, expect } from '@playwright/test';
+test('REQ-UI-007 register with test user 1 literal', async ({ page }) => {
+  await page.goto('/register');
+  await page.getByTestId('input-email').fill('fx-owner@fx.app');
+  await page.getByTestId('register-submit').click();
+});
+TS
+  } > "$d/tests/verify/literal.spec.ts"
+  local o n s l
+  o="$(cd "$d" && python3 "$UTILS/tf-test-users-check.py" --files tests/verify/old.spec.ts 2>&1 | head -1)"
+  n="$(cd "$d" && python3 "$UTILS/tf-test-users-check.py" --files tests/verify/new.spec.ts 2>&1 | tail -1)"
+  s="$(cd "$d" && python3 "$UTILS/tf-test-users-check.py" --files tests/verify/nostop.spec.ts 2>&1 | head -1)"
+  l="$(cd "$d" && python3 "$UTILS/tf-test-users-check.py" --files tests/verify/literal.spec.ts 2>&1 | head -1)"
+  grep -q "^FAIL  tests/verify/old.spec.ts:6 register: submits Register with a test user's address with no successful sign-in as that user before it" <<<"$o" \
+    && grep -q '^FAIL  tests/verify/literal.spec.ts:5 register:' <<<"$l" \
+    && ok sv_016a "Register submitted with test user 1's address and no sign-in before it fails, by name or literal address" \
+    || { bad sv_016a "a Register submit with no sign-in first passed"; note "${o:0:160} | ${l:0:160}"; }
+  grep -q '^FAIL  tests/verify/nostop.spec.ts' <<<"$s" \
+    && ok sv_016b "a sign-in with no stop before the submit (the test goes on when it is refused) still fails" \
+    || { bad sv_016b "a sign-in that never stops the test was accepted"; note "${s:0:160}"; }
+  grep -q '^PASS  test-users — 1 test file(s)' <<<"$n" \
+    && ok sv_016c "signed in as test user 1 first, and skipped when that is refused: the email-already-in-use path passes" \
+    || { bad sv_016c "the guarded test was failed"; note "${n:0:200}"; }
+}
+
+# --- Chatur TF-022: a submenu row (▸) was reported as "does nothing when clicked" ----------------------------
+# A click on "File › Recent projects ▸" opens its submenu (aria-expanded true, a second role="menu"), and a
+# submenu changes nothing outside the menus, so the walk read it as dead and failed every main-window screen.
+ch_022() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip ch_022 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/ch022"; mkdir -p "$d"
+  bash "$ROOT/tests/regression/ch022/make.sh" "$d"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-menus.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
+  local port; port="$(_free_port)"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  ( cd "$d" && tf_timeout 300 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen main=/main/ \
+      --widths 1280 --themes light --render-wait 500 --wait 300 --json-out "$d/s.json" --shots-dir "$d/shots" > "$d/s.log" 2>&1 )
+  kill "$srv" 2>/dev/null; wait "$srv" 2>/dev/null
+  local out; out="$(python3 -c "
+import json
+s = json.load(open('$d/s.json'))['screens'][0]
+print(' | '.join(f['detail'] for w in s['widths'] for f in w['findings']))" 2>&1)"
+  ! grep -q 'Recent projects ▸" does nothing' <<<"$out" && grep -q '"File › Recent projects ▸ › Beta" does nothing when clicked' <<<"$out" \
+    && ok ch_022 "a submenu row is graded by its submenu opening, and each child is clicked in turn; a dead child still fails" \
+    || { bad ch_022 "the menu walk misread the submenu row or skipped its children"; note "$(tr '\n' ' ' <<<"$out" | cut -c1-300)"; }
+}
+
+# --- Lekhak TF-038: a desktop head already on the screen's route was measured as the last test left it --------
+# The browser test ended on /studio scrolled down, with its own state on the page; TF-037's wait triggers only on
+# a move to another page, so the mockup check read the scrolled page and reported the top bar "cut off".
+lk_038() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip lk_038 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/lk038"; _cdp_app "$d" scrolled; _cdp_copy "$d"
+  ( cd "$d" && tf_timeout 180 node tf-mockup-parity.mjs --cdp "http://127.0.0.1:$CDP_PORT" --mockups docs/mockups --screen studio=/studio \
+      --widths 1280 --themes light --no-menus --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$CDP_BR" "$CDP_SRV" 2>/dev/null; wait "$CDP_BR" "$CDP_SRV" 2>/dev/null
+  local got; got="$(python3 -c "
+import json
+try: a=json.load(open('$d/parity.json'))['screens'][0]; print(a['verdict'], '/'.join(str(f.get('key'))+' '+str(f.get('detail'))[:70] for f in a.get('findings',[]))[:240])
+except Exception as e: print('no-output', e)" 2>&1)"
+  [[ "$got" == "PASS"* ]] \
+    && ok lk_038 "a desktop head left scrolled on the screen's route is measured from the screen's first state, at the top" \
+    || { bad lk_038 "the mockup check measured the page as the last test left it"; note "$got"; }
+}
+
+# --- Lekhak TF-039: a fix whose first verify said Needs re-verify kept its miss open after a re-verify passed ----
+# tf-fix-close.sh wrote the miss-fix with the first verdict; a close after the re-verify, started after it, saw no
+# row in its window and wrote nothing, and its --misses form refused fix_cmd triage-and-fix (the command
+# triage-and-fix.md tells you to pass). Here: the first verify fails the row, a later one passes it.
+lk_039() {
+  local d; d="$(_metrics_fx lk039)"; mkdir -p "$d/.tfcore"; printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  local M="$d/docs/metrics"
+  cat > "$M/runs.jsonl" <<'J'
+{"kind":"run","app":"Fx","cmd":"verify-phase","mode":"verify","started":"2026-11-04T10:10:00Z","ended":"2026-11-04T10:20:00Z","v":1,"ts":"2026-11-04T10:20:00Z"}
+J
+  cat > "$M/misses.jsonl" <<'J'
+{"kind":"miss","miss_id":"MISS-Fx-20261104-01","req_id":"REQ-UI-154","req_class":"UI","miss_class":"wrong-behaviour","artifact":"src","severity":"major","found_by":"owner","app":"Fx","v":1,"ts":"2026-11-04T10:01:00Z"}
+{"kind":"miss","miss_id":"MISS-Fx-20261104-02","req_id":"REQ-UI-155","req_class":"UI","miss_class":"wrong-behaviour","artifact":"src","severity":"major","found_by":"owner","app":"Fx","v":1,"ts":"2026-11-04T10:02:00Z"}
+J
+  cat > "$M/gates.jsonl" <<'J'
+{"kind":"gate","app":"Fx","run_id":"2026-11-04T10:10:00Z","req_id":"REQ-UI-154","req_class":"UI","attempt":1,"verdict":"Needs re-verify","gate":"mockup-parity","v":1,"ts":"2026-11-04T10:20:00Z"}
+J
+  printf '{"run_id":"2026-11-04T10:10:00Z","rows":{"REQ-UI-154":"MOCKUP-FAIL"}}\n' > "$d/docs/.last-verify.json"
+  local c1 c2 c3 m1
+  c1="$(cd "$d" && bash "$UTILS/tf-fix-close.sh" Fx --started 2026-11-04T10:00:00Z --subagents none --build pass --cmd triage-and-fix 2>&1)"
+  # the re-verify passes the row. As in Lekhak, a verify the fix chained files its gate record and the ledger
+  # under the fix's start, so only the record's own time says it came later; the close the triage runs next
+  # starts after it, from its own marker
+  printf '{"kind":"gate","app":"Fx","run_id":"2026-11-04T10:00:00Z","req_id":"REQ-UI-154","req_class":"UI","attempt":2,"verdict":"Verified","gate":null,"v":1,"ts":"2099-01-01T11:40:00Z"}\n' >> "$M/gates.jsonl"
+  printf '{"run_id":"2026-11-04T10:00:00Z","rows":{"REQ-UI-154":"PASS"}}\n' > "$d/docs/.last-verify.json"
+  c2="$(cd "$d" && bash "$UTILS/tf-fix-close.sh" Fx --started 2099-01-01T11:45:00Z --subagents none --build pass --cmd triage-and-fix 2>&1)"
+  c3="$(cd "$d" && bash "$UTILS/tf-fix-close.sh" Fx --started 2099-01-01T11:45:00Z --subagents none --build pass --cmd triage-and-fix 2>&1)"
+  local open1; open1="$(cd "$d" && bash "$UTILS/tf-emit.sh" --open-miss REQ-UI-154)"
+  local n; n="$(grep -c '"kind":"miss-fix"' "$M/misses.jsonl")"
+  [[ -z "$open1" && "$n" == 2 ]] && grep -q '"verdict_after":"Verified"' "$M/misses.jsonl" && grep -q 'for a re-verify after the triage-and-fix of 2026-11-04T10:00:00Z' <<<"$c2" \
+    && ok lk_039a "a close after the re-verify writes the Verified miss-fix and the miss closes; a third close writes nothing more" \
+    || { bad lk_039a "the miss stayed open after the re-verify passed (open: '$open1', $n miss-fix records)"; note "$(tr '\n' ' ' <<<"$c1 // $c2 // $c3" | cut -c1-300)"; }
+  m1="$(cd "$d" && bash "$UTILS/tf-fix-close.sh" Fx --misses MISS-Fx-20261104-02 --fix-cmd triage-and-fix --verdict Verified 2>&1)"
+  grep -q '1 of 1 miss-fix record(s) written' <<<"$m1" && grep -q '"miss_id":"MISS-Fx-20261104-02","fix_cmd":"triage-and-fix"' "$M/misses.jsonl" \
+    && ok lk_039b "the --misses form takes fix_cmd triage-and-fix" \
+    || { bad lk_039b "triage-and-fix was refused as fix_cmd"; note "$(cut -c1-200 <<<"$m1")"; }
+}
+
+# --- TechieBlog TF-003: a miss closed as wont-fix still blocked a new miss on the same row --------------------
+# tf-emit.sh --open-miss treated only Verified as closed, so the triage of a second, different defect on
+# REQ-UI-016 printed "already open as MISS-…-12 (regression); no second miss". wont-fix now closes, as
+# metrics-report.md says; and the check takes the miss class, since a row can hold two defects of two classes.
+bl_003() {
+  local d; d="$(_metrics_fx bl003)"; mkdir -p "$d/.tfcore" "$d/tests/.artifacts/verify"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"; printf '# Fx — Checklist\n' > "$d/docs/Fx-Checklist.md"
+  cat > "$d/docs/metrics/misses.jsonl" <<'J'
+{"kind":"miss","miss_id":"MISS-Fx-20260906-12","req_id":"REQ-UI-016","req_class":"UI","miss_class":"regression","artifact":"src","severity":"major","found_by":"gate","app":"Fx","v":1,"ts":"2026-09-06T10:00:00Z"}
+{"kind":"miss-fix","miss_id":"MISS-Fx-20260906-12","req_id":"REQ-UI-016","fix_cmd":"fix-issues","fix_attempt":1,"verdict_after":"wont-fix","reopened":false,"app":"Fx","v":1,"ts":"2026-09-07T10:00:00Z"}
+{"kind":"miss","miss_id":"MISS-Fx-20261001-01","req_id":"REQ-UI-020","req_class":"UI","miss_class":"partial-implementation","artifact":"src","severity":"major","found_by":"gate","app":"Fx","v":1,"ts":"2026-10-01T10:00:00Z"}
+{"kind":"miss","miss_id":"MISS-Fx-20261002-01","req_id":"REQ-UI-020","req_class":"UI","miss_class":"regression","artifact":"src","severity":"major","found_by":"gate","app":"Fx","v":1,"ts":"2026-10-02T10:00:00Z"}
+J
+  local e="$UTILS/tf-emit.sh" a b c
+  a="$(cd "$d" && bash "$e" --open-miss REQ-UI-016)"
+  b="$(cd "$d" && bash "$e" --open-miss REQ-UI-020 partial-implementation)"
+  c="$(cd "$d" && bash "$e" --open-misses Fx)"
+  [[ -z "$a" ]] && ! grep -q '20260906-12' <<<"$c" \
+    && ok bl_003a "a miss whose latest miss-fix says wont-fix is closed, for --open-miss and --open-misses" \
+    || { bad bl_003a "a wont-fix miss still counts as open"; note "open-miss: '$a'"; }
+  [[ "$b" == "MISS-Fx-20261001-01 partial-implementation" ]] \
+    && ok bl_003b "with a class, the open miss of that class is found though a newer one of another class sits on the row" \
+    || { bad bl_003b "the class was not compared"; note "got '$b'"; }
+  cat > "$d/tests/.artifacts/verify/triage.json" <<'JS'
+{"app":"Fx","actions":[{"verb":"demote","req_id":"REQ-UI-016","symptom":"an author can edit any post","kind":null,"source":"owner","prior":"Verified","ts":"2026-11-05T08:20:00Z"}]}
+JS
+  local out; out="$(cd "$d" && bash "$UTILS/tf-triage.sh" Fx close --started 2026-11-05T08:17:18Z --cmd triage-and-fix 2>&1)"
+  ! grep -q 'already open as MISS-Fx-20260906-12' <<<"$out" && grep -q 'triage: 1 row(s) logged — 1 gate record(s) (escaped), 1 miss(es)' <<<"$out" \
+    && ok bl_003c "a new defect on a wont-fix row gets a miss of its own" \
+    || { bad bl_003c "the new defect was folded into the wont-fix miss"; note "$(grep -E 'triage:|already' <<<"$out" | tr '\n' ' ' | cut -c1-200)"; }
+}
+
+# --- TechieBlog TF-004: a defect found during a run had no discovery cost of its own ------------------------
+# A run's tokens were one window over every row it touched, so what finding REQ-UI-016 cost (an Author could edit
+# any post) could not be told from the four other rows of the same triage. A miss now carries its own window:
+# from the `look` mark (or the previous finding, or the start) to when it was logged, read from the transcript.
+# Two findings logged seconds apart with no look between them were found together: "not measured", not halves.
+bl_004() {
+  local d; d="$(_metrics_fx bl004)"; mkdir -p "$d/.tfcore/.session" "$d/tests/.artifacts/verify"
+  printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
+  printf '# Fx — Checklist\n\n| ID | Title | Status | %% | Remarks | Detail |\n|---|---|---|---|---|---|\n| REQ-UI-016 | Edit post | Verified | 100%% | — | x |\n| REQ-UI-017 | Posts list | Verified | 100%% | — | x |\n| REQ-UI-020 | Tags | Verified | 100%% | — | x |\n| REQ-UI-021 | Search | Verified | 100%% | — | x |\n' > "$d/docs/Fx-Checklist.md"
+  local tr="$d/transcript.jsonl"
+  python3 - "$tr" <<'PY'
+import json, sys
+out = []
+def msg(ts, o, i=10, model="claude-opus-5-5"):
+    out.append({"type": "assistant", "timestamp": ts + ".000Z", "message": {"model": model, "usage": {"input_tokens": i, "output_tokens": o}}})
+msg("2026-11-05T08:00:30", 50)      # before the look: the run's start-up, not REQ-UI-016's
+msg("2026-11-05T08:02:00", 400)     # investigating REQ-UI-016 (look at 08:01:00)
+msg("2026-11-05T08:05:00", 600)
+msg("2026-11-05T08:12:00", 900)     # REQ-UI-020 and REQ-UI-021, found together
+open(sys.argv[1], "w").write("\n".join(json.dumps(r) for r in out) + "\n")
+PY
+  printf '{"session_id":"x","transcript_path":"%s"}\n' "$tr" > "$d/.tfcore/.session/claude-code.json"
+  cat > "$d/tests/.artifacts/verify/triage.json" <<'JS'
+{"app":"Fx","actions":[
+ {"verb":"look","symptom":"an author can edit any post","ts":"2026-11-05T08:01:00Z"},
+ {"verb":"demote","req_id":"REQ-UI-016","symptom":"an author can edit any post by its id","kind":null,"source":"owner","prior":"Verified","ts":"2026-11-05T08:06:00Z"},
+ {"verb":"demote","req_id":"REQ-UI-020","symptom":"a tag is dropped on save","kind":null,"source":"owner","prior":"Verified","ts":"2026-11-05T08:15:00Z"},
+ {"verb":"demote","req_id":"REQ-UI-021","symptom":"search ignores the title","kind":null,"source":"owner","prior":"Verified","ts":"2026-11-05T08:15:17Z"}]}
+JS
+  ( cd "$d" && TF_HARNESS=claude-code bash "$UTILS/tf-triage.sh" Fx close --started 2026-11-05T08:00:00Z --cmd triage-and-fix ) >/dev/null 2>&1
+  local got; got="$(python3 - "$d/docs/metrics/misses.jsonl" <<'PY'
+import json, sys
+m = {r["req_id"]: r for r in map(json.loads, open(sys.argv[1])) if r.get("kind") == "miss"}
+a, b, c = m.get("REQ-UI-016", {}), m.get("REQ-UI-020", {}), m.get("REQ-UI-021", {})
+print(a.get("discovery_tokens_out"), a.get("discovery_s"), a.get("discovery_scope"), b.get("discovery_scope"), c.get("discovery_scope"),
+      "together" if "found together with REQ-UI-021" in (b.get("discovery_why") or "") else "-")
+PY
+)"
+  [[ "$got" == "1000 300 main not-measured not-measured together" ]] \
+    && ok bl_004a "a miss carries its own discovery window, from its look mark to when it was logged, read from the transcript" \
+    || { bad bl_004a "no discovery cost of its own (tokens out, seconds, scope …: $got)"; }
+  [[ "$got" == *"not-measured not-measured together" ]] \
+    && ok bl_004b "two findings logged seconds apart with no look between them read not measured, never an even share" \
+    || bad bl_004b "findings logged together were given a share ($got)"
+  # the report puts discovery beside fix: REQ-UI-016's fix, the run's only fix, cost 2,000 tokens
+  printf '{"kind":"run","app":"Fx","cmd":"fix-issues","mode":"fix","started":"2026-11-05T09:00:00Z","ended":"2026-11-05T09:30:00Z","reqs_touched":["REQ-UI-016"],"tokens_out":2000,"tokens_scope":"main","v":1,"ts":"2026-11-05T09:30:00Z"}\n' >> "$d/docs/metrics/runs.jsonl"
+  local mid; mid="$(python3 -c "import json,sys; print([r['miss_id'] for r in map(json.loads, open(sys.argv[1])) if r.get('kind')=='miss' and r.get('req_id')=='REQ-UI-016'][0])" "$d/docs/metrics/misses.jsonl" 2>/dev/null)"
+  printf '{"kind":"miss-fix","miss_id":"%s","req_id":"REQ-UI-016","fix_cmd":"fix-issues","fix_attempt":1,"verdict_after":"Verified","reopened":false,"fix_run_id":"2026-11-05T09:00:00Z","cost_attribution":"sole","tokens_out":2000,"tokens_scope":"main","app":"Fx","v":1,"ts":"2026-11-05T09:30:00Z"}\n' "$mid" >> "$d/docs/metrics/misses.jsonl"
+  local rep; rep="$(bash "$TELEM/tf-metrics.sh" --report "$d" 2>&1)"
+  grep -q "DISCOVERY AND FIX COST PER MISS" <<<"$rep" && grep -qE "${mid: -26} +REQ-UI-016 +found: 1.0k tokens, 5.0 min +fix: 2.0k tokens" <<<"$rep" \
+    && grep -qE 'REQ-UI-020 +found: not measured \(found together' <<<"$rep" \
+    && ok bl_004c "the metrics report shows each miss's discovery cost beside its fix cost" \
+    || { bad bl_004c "the report has no discovery-beside-fix line"; note "$(grep -A5 'DISCOVERY' <<<"$rep" | head -6 | cut -c1-160)"; }
+}
+
 # --- the per-fix routine: every script that reads the local clock is named at the top of this file ----
 # A fix to one of them is the only kind that needs this suite a second time with TZ=UTC, so the list
 # must be whole: a script that reads today's date or a local time and is not in it fails here.
@@ -7214,7 +7535,7 @@ PY
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 tf_055 tf_056 fw_001 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 am_030 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 ch_013 ch_014 ch_015 ch_016 ch_017 ch_018 ch_019 ch_020 ch_021 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 sv_007 sv_008 sv_009 sv_010 sv_011 sv_012 sv_013 sv_014 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 bl_001 bl_002 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 lk_036 lk_037 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 tr_008 std_q4a owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 tf_055 tf_056 fw_001 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 am_030 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 ch_013 ch_014 ch_015 ch_016 ch_017 ch_018 ch_019 ch_020 ch_021 ch_022 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 sv_007 sv_008 sv_009 sv_010 sv_011 sv_012 sv_013 sv_014 sv_015 sv_016 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 bl_001 bl_002 bl_003 bl_004 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 lk_036 lk_037 lk_038 lk_039 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 tr_008 std_q4a owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

@@ -130,6 +130,7 @@ Then stop. Do not run the status gate — this task reports on history, it does 
 - [ ] `why_missed` distribution reported against **records that carry the field** *and* could have carried it — misses predating the field's introduction (`FIELD_SINCE`, SCHEMA §5.5.6) are outside the denominator and their count is stated; escapes lacking it are flagged, with `--amend` named as the remedy
 - [ ] `miss-amend` records folded into their parents before counting; amendments applied and orphaned amends both reported
 - [ ] Open-miss count excludes `wont-fix` (a decision, not a backlog item) and reports it in its own bucket
+- [ ] Each miss's discovery cost stands beside its fix cost, or says "not measured" with the reason (SCHEMA §5.5.12); never an even share of a run's window
 - [ ] Measured (`sole`) and apportioned (`shared:n`) rework cost in separate labelled columns — never one blended number
 - [ ] Rework-cost means divide by the records that **carry** `tokens_out` (`tokens_per_miss_measured_n`), with `tokens_unrecorded_sole_n` stated — an unrecorded repair is never averaged in as a free one (SCHEMA §5.5.8)
 - [ ] Effort-per-phase section written from `phases` — per-phase wall clock, tokens, **per-model output split**, and subagent fan-out

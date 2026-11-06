@@ -222,6 +222,52 @@ export async function waitArrived(page, route, anchors = [], before = [], o = {}
   return { ms: Date.now() - t0, arrived, fresh: fresh.length };
 }
 
+// Lekhak TF-038: a desktop head the last browser test left ON the screen's route (scrolled to the Review
+// queue, its switch still on) was measured as the test left it, and the top bar read "cut off". A move to
+// the same route changes nothing, so TF-037's wait had nothing to wait for. Every screen is now opened from
+// its own first state: when the app is already on the route it is first moved to another one ('/', or a
+// route no page answers when the screen is '/') and back, so the app draws the screen afresh; then the
+// window and every scrolled box go back to the top. `reset` says when the hop was made.
+const samePath = (a, b) => {
+  const n = (x) => ((x || '').split(/[?#]/)[0].replace(/\/+$/, '') || '/').toLowerCase();
+  return n(a) === n(b) && ((a || '').split('#')[0].split('?')[1] || '') === ((b || '').split('#')[0].split('?')[1] || '');
+};
+const pushRoute = (page, r) => page.evaluate((x) => { history.pushState({}, '', x); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); }, r);
+const quiet = (page) => page.evaluate(() => new Promise((res) => {
+  let t; const done = () => { mo.disconnect(); clearTimeout(cap); clearTimeout(t); res(); };
+  const mo = new MutationObserver(() => { clearTimeout(t); t = setTimeout(done, 300); });
+  const cap = setTimeout(done, 3000); t = setTimeout(done, 300);
+  mo.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true });
+})).catch(() => {});
+export async function scrollToTop(page) {
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+    for (const el of document.querySelectorAll('*')) if (el.scrollTop > 0 || el.scrollLeft > 0) { el.scrollTop = 0; el.scrollLeft = 0; }
+  }).catch(() => {});
+  // one frame to paint, bounded: a minimized window draws none (Sevak TF-011) and would wait forever
+  await page.evaluate(() => new Promise((r) => { requestAnimationFrame(() => r()); setTimeout(r, 300); })).catch(() => {});
+}
+export async function openFresh(page, route, anchors = [], o = {}) {
+  let reset = false;
+  const here = await page.evaluate(() => location.pathname + location.search).catch(() => '');
+  if (samePath(here, route)) {
+    const away = samePath(route, '/') ? '/tf-verify-away' : '/';
+    const was = await page.evaluate(() => (document.body ? document.body.innerText : '')).catch(() => '');
+    await pushRoute(page, away);
+    // until the app has drawn the other page (an app that draws late, Lekhak TF-037, would otherwise draw
+    // it in the middle of the measurement), bounded; then quiet
+    await page.waitForFunction((w) => (document.body ? document.body.innerText : '') !== w, was,
+      { timeout: Math.max(opts(o).renderWait, 5000), polling: 100 }).catch(() => {});
+    await quiet(page);
+    reset = true;
+  }
+  const before = await anchorsPresent(page, anchors, opts(o).attr);
+  await pushRoute(page, route);
+  const a = await waitArrived(page, route, anchors, before, o);
+  await scrollToTop(page);
+  return { ...a, reset };
+}
+
 // Sevak TF-011: a minimized Windows app window draws no frames, so every click waits for a control to
 // be "stable" and times out, and each was reported as a defect of the screen. requestAnimationFrame
 // callbacks are counted for `ms`; none means the window is not drawing.

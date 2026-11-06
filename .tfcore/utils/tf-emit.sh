@@ -13,9 +13,12 @@
 #                                               # behind routing.yaml `escalation:` (advisory)
 #   tf-emit.sh --next-miss-id                   # prints MISS-<app>-<YYYYMMDD>-<NN> (SCHEMA.md §5.5.1)
 #   tf-emit.sh --next-fix-attempt MISS-App-20260828-03   # prints an integer
-#   tf-emit.sh --open-miss REQ-UI-014           # prints "<miss_id> <miss_class>" if a miss on that REQ
-#                                               # is still open, nothing otherwise (the §5.5.4 collapse
-#                                               # check — one defect is one miss, however often it fails)
+#   tf-emit.sh --open-miss REQ-UI-014 [<miss_class>]
+#                                               # prints "<miss_id> <miss_class>" if a miss on that REQ
+#                                               # (of that class, when one is named) is still open, nothing
+#                                               # otherwise (the §5.5.4 collapse check — one defect is one
+#                                               # miss, however often it fails). Closed = the latest miss-fix
+#                                               # says Verified or wont-fix (TechieBlog TF-003)
 #   tf-emit.sh --amend MISS-App-20260828-01 why_missed missing-checklist-item
 #                                               # fills a field that is still null on a miss already on
 #                                               # the stream (SCHEMA.md §5.5.7). Never overwrites.
@@ -274,8 +277,15 @@ fi
 # SCHEMA.md §5.5.4 — the collapse check. A REQ that fails three verify passes
 # must produce ONE miss, not three; otherwise the miss count measures retry
 # patience rather than quality. Open = no miss-fix, or the latest miss-fix
-# closed with a verdict_after other than "Verified". Prints "<miss_id>
-# <miss_class>" for the most recent open miss, or nothing at all.
+# closed with a verdict_after other than "Verified" or "wont-fix". Prints
+# "<miss_id> <miss_class>" for the most recent open miss, or nothing at all.
+# With a class, only an open miss of that class counts: a row can hold a
+# regression and a partial-implementation at once, two defects, and the
+# check against the most recent one alone opened a second record for the
+# older one (TechieBlog TF-003). wont-fix closes, as metrics-report.md says
+# ("a decision, not a backlog item"): a new defect on a wont-fix row gets a
+# miss of its own. The same defect failing verify again after a wont-fix
+# also gets one, once; that is the price of the owner's rule (2026-11-05).
 # --- list the open misses whose deficient artifact is a document ----------
 # `*amend-docs` is the command that edits a BRD, an Architecture or a mockup, so it is
 # the only command that can close a miss whose artifact is one of those -- and it had no
@@ -285,8 +295,8 @@ fi
 #
 #   tf-emit.sh --open-misses <App> [--artifact-class doc]
 #
-# Prints one line per open miss: "<miss_id> <artifact> <what>". Open means no miss-fix
-# carries verdict_after Verified, the same test --open-miss applies.
+# Prints one line per open miss: "<miss_id> <artifact> <what>". Open means the latest
+# miss-fix carries neither Verified nor wont-fix, the same test --open-miss applies.
 if [[ "$1" == "--open-misses" ]]; then
   OMAPP="${2:-}"; OMCLASS=""
   [[ "${3:-}" == "--artifact-class" ]] && OMCLASS="${4:-}"
@@ -328,7 +338,7 @@ for r in opened:
     if klass and klass != "doc" and art != klass:
         continue
     fix = fixes.get(r.get("miss_id"))
-    if fix is not None and fix.get("verdict_after") == "Verified":
+    if fix is not None and fix.get("verdict_after") in ("Verified", "wont-fix"):
         continue
     print("%s %s %s" % (r.get("miss_id"), art or "-", (r.get("what") or "")[:110]))
 PY2
@@ -336,11 +346,11 @@ PY2
 fi
 
 if [[ "$1" == "--open-miss" ]]; then
-  REQ="$2"
+  REQ="${2:-}"; OMC="${3:-}"
   [[ -n "$REQ" ]] || exit 0
-  python3 - "$MET_DIR/misses.jsonl" "$REQ" 2>"$TF_ERR" <<'PY' || true
+  python3 - "$MET_DIR/misses.jsonl" "$REQ" "$OMC" 2>"$TF_ERR" <<'PY' || true
 import json, sys
-path, req = sys.argv[1], sys.argv[2]
+path, req, want = sys.argv[1], sys.argv[2], sys.argv[3]
 opened, fixes, voided = [], {}, set()
 try:
     with open(path, encoding="utf-8") as fh:
@@ -367,8 +377,10 @@ except FileNotFoundError:
 for r in reversed(opened):                     # most recent first
     if r.get("miss_id") in voided:
         continue
+    if want and (r.get("miss_class") or "other") != want:
+        continue
     fix = fixes.get(r.get("miss_id"))
-    if fix is None or fix.get("verdict_after") != "Verified":
+    if fix is None or fix.get("verdict_after") not in ("Verified", "wont-fix"):
         print("%s %s" % (r.get("miss_id"), r.get("miss_class") or "other"))
         break
 PY
@@ -1302,6 +1314,51 @@ def enrich_run(rec):
         warn("run enrichment failed (%s) — record kept unenriched" % e)
     return rec
 
+# --- discovery cost of one miss (SCHEMA.md §5.5.12; TechieBlog TF-004) -----
+# A run's tokens are one window over every row it touched, so a defect found during it had no
+# cost of its own. The writer of a miss names the slice of time in which THIS defect was found
+# (discovery_started → discovery_ended: from the previous finding of the same run, or the run's
+# start, to the moment this one was logged); the tokens in that slice are read here from the
+# harness's own store, exactly as a run's window is. Slices of one run never overlap, so nothing
+# is counted twice and nothing is shared out evenly. No slice, or a store with nothing in it:
+# discovery_scope "not-measured" with discovery_why — never an even share, never a zero.
+_DISC = ("discovery_s", "discovery_tokens_in", "discovery_tokens_out", "discovery_tokens_cache_read",
+         "discovery_tokens_cache_write", "discovery_model_tokens_out", "discovery_scope")
+
+
+def _discovery(rec):
+    why = rec.pop("discovery_why", None)
+    for f in _DISC:
+        rec.pop(f, None)                 # derived here, never a caller's figure
+    a, b = rec.get("discovery_started"), rec.get("discovery_ended")
+    t0, t1 = (_iso_ms(a) if a else None), (_iso_ms(b) if b else None)
+    if t0 is None or t1 is None or t1 < t0:
+        rec.pop("discovery_started", None); rec.pop("discovery_ended", None)
+        rec["discovery_scope"] = "not-measured"
+        rec["discovery_why"] = why or "no window of its own: the writer could not say when this defect was found"
+        return
+    rec["discovery_s"] = int((t1 - t0) / 1000)
+    win = None
+    try:
+        if HARNESS == "claude-code":
+            win = _window_claude(t0, t1)
+        elif HARNESS == "opencode":
+            win = _window_opencode(t0, t1)
+    except Exception:
+        win = None
+    if not win:
+        rec["discovery_scope"] = "not-measured"
+        rec["discovery_why"] = "the harness's store has no messages in that window (%s)" % (HARNESS or "harness unknown")
+        return
+    rec["discovery_tokens_in"] = win["tot"]["in"]
+    rec["discovery_tokens_out"] = win["tot"]["out"]
+    rec["discovery_tokens_cache_read"] = win["tot"]["cr"]
+    rec["discovery_tokens_cache_write"] = win["tot"]["cw"]
+    if win["models"]:
+        rec["discovery_model_tokens_out"] = dict(sorted(win["models"].items(), key=lambda kv: -kv[1]))
+    rec["discovery_scope"] = win["scope"]
+
+
 # --- miss enrichment (misses only; SCHEMA.md §5.5) ------------------------
 # Two lookups, both against runs.jsonl, both replacing an agent judgement with a
 # fact the emitter can check:
@@ -1456,7 +1513,7 @@ _REVIEW_ENUMS = {
 }
 _FIX_ENUMS = {
     "verdict_after": ("Verified", "Needs re-verify", "FAIL", "deferred", "wont-fix"),
-    "fix_cmd": ("fix-issues", "build-phase", "triage-issues", "amend-docs", "log-miss"),
+    "fix_cmd": ("fix-issues", "triage-and-fix", "build-phase", "triage-issues", "amend-docs", "log-miss"),
 }
 
 
@@ -1506,7 +1563,9 @@ _ALLOWED = {
     ("misses", "miss"): {"miss_id", "req_id", "req_class", "miss_class", "artifact", "severity", "origin_phase",
                          "origin_agent", "origin_run_id", "origin_model", "origin_harness", "origin_confidence",
                          "why_missed", "found_by", "found_phase", "found_gate", "found_run_id", "failure_class",
-                         "what", "sort"},
+                         "what", "sort", "discovery_started", "discovery_ended", "discovery_s", "discovery_tokens_in",
+                         "discovery_tokens_out", "discovery_tokens_cache_read", "discovery_tokens_cache_write",
+                         "discovery_model_tokens_out", "discovery_scope", "discovery_why"},
     ("misses", "miss-fix"): {"miss_id", "req_id", "fix_run_id", "fix_cmd", "fix_attempt", "verdict_after",
                              "reopened", "cost_attribution", "tokens_in", "tokens_out", "tokens_cache_read",
                              "tokens_cache_write", "cost_usd", "tokens_scope", "model",
@@ -1586,6 +1645,7 @@ def enrich_miss(rec):
         kind = rec.get("kind")
         runs = _runs_by_start()
         if kind == "miss":
+            _discovery(rec)
             src = runs.get(rec.get("origin_run_id")) if rec.get("origin_run_id") else None
             if src:
                 rec["origin_confidence"] = "linked"

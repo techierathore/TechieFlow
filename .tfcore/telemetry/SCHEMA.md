@@ -481,7 +481,7 @@ The agent's job on a `miss` record is therefore small and honest: name what was 
 | `miss_id` | string | The link. A `miss-fix` matching no `miss` is reported as an **orphan** and counted, never silently dropped. |
 | `req_id` | string \| null | Copied from the miss, for readability. |
 | `fix_run_id` | string | `started` of the repair run. **This is where the cost comes from.** |
-| `fix_cmd` | string | `fix-issues` \| `build-phase` \| `triage-issues` \| `amend-docs` \| `log-miss` |
+| `fix_cmd` | string | `fix-issues` \| `triage-and-fix` \| `build-phase` \| `triage-issues` \| `amend-docs` \| `log-miss` |
 | `fix_attempt` | int | `1 +` the count of prior `miss-fix` records for this `miss_id`. `tf-emit.sh --next-fix-attempt <miss_id>`. |
 | `verdict_after` | string | `Verified` \| `Needs re-verify` \| `FAIL` \| `deferred` \| `wont-fix` |
 | `reopened` | bool | `true` when this miss had already closed `Verified` and a later escape re-opened it. |
@@ -510,11 +510,12 @@ The limitation is stated rather than hidden: **a miss fixed inline during a long
 
 A REQ that fails three verify passes must produce **one** miss, not three; otherwise the miss count measures retry patience rather than quality, and every distribution built on it is inflated.
 
-> Before emitting a `miss`, look for an **open** miss on the same `req_id` in the same `app` — one with no `miss-fix` record, or whose latest `miss-fix` carries a `verdict_after` other than `Verified`. If one exists **and** its `miss_class` equals the one you would record, **emit nothing**: it is the same miss, still open. If the `miss_class` differs, emit a new `miss` — the REQ is now failing for a genuinely different reason, and that is new information.
+> Before emitting a `miss`, look for an **open** miss on the same `req_id` in the same `app` and of the same `miss_class` — one with no `miss-fix` record, or whose latest `miss-fix` carries a `verdict_after` other than `Verified` or `wont-fix`. If one exists, **emit nothing**: it is the same miss, still open. If none of that class is open, emit a new `miss` — the REQ is now failing for a genuinely different reason, and that is new information. A `wont-fix` miss is closed: it is a decision, not a backlog item, so a new defect on that row gets its own miss (TechieBlog TF-003, 2026-11-05).
 
 ```bash
-bash .tfcore/utils/tf-emit.sh --open-miss REQ-UI-014
-# prints "<miss_id> <miss_class>" if one is open, nothing otherwise
+bash .tfcore/utils/tf-emit.sh --open-miss REQ-UI-014 partial-implementation
+# prints "<miss_id> <miss_class>" if one of that class is open, nothing otherwise;
+# with no class, the most recent open miss of any class (what tf-fix-close.sh closes)
 ```
 
 The check belongs to the emitter, never to an agent's judgement.
@@ -671,6 +672,28 @@ The stream is for scripts. The owner reads `docs/<App>-Misses.md`: one row per `
 
 §2.7's `run-void`, for this stream. Fields: `miss_id` (the miss withdrawn) and `reason`. Written only by `bash .tfcore/utils/tf-emit.sh --void-miss <miss_id> "<reason>"`, which refuses a miss not on the stream, a second void and an empty reason. Readers: the miss leaves every figure with its fixes and amends (`misses_voided_n`, `misses_voided`; an orphan is `miss_voids_orphaned_n`), `--open-miss` and `--open-misses` skip it, and `docs/<App>-Misses.md` lists it under *Withdrawn*. Proved by `tests/regression/run.sh tb_001`.
 
+### 5.5.12 Discovery cost — what finding one defect cost (added 2026-11-05, TechieBlog TF-004)
+
+A run's tokens are one window over every row it touched, so a defect found during a run had no cost of its own, and the report could not put what finding a defect cost beside what fixing it cost. A `miss` now carries its own **discovery window**, and the tokens in it are read from the harness's store by `tf-emit.sh`, exactly as a run's window is (§2.5). The slices of one run never overlap, so nothing is counted twice and nothing is shared out evenly.
+
+| Field | Type | Values / notes |
+|---|---|---|
+| `discovery_started` | ISO-8601 \| absent | Set by the writer. Where finding this defect began: the latest `tf-triage.sh <App> look` mark before it, the run's previous finding, or the command's start |
+| `discovery_ended` | ISO-8601 \| absent | Set by the writer: when the defect was logged (`demote` / `new`), or the verify pass's end |
+| `discovery_s` | int \| absent | Derived: the window's length in seconds |
+| `discovery_tokens_in` / `_out` / `_cache_read` / `_cache_write` | int \| absent | Derived from the transcript (Claude Code) or opencode.db (OpenCode), in the window. A caller's figure is dropped |
+| `discovery_model_tokens_out` | object \| absent | Derived: output tokens per model in the window |
+| `discovery_scope` | `main` \| `tree` \| `not-measured` | Derived. `not-measured` whenever the window could not be given or the store held nothing in it — never an even share, never a zero |
+| `discovery_why` | string \| absent | Why it is `not-measured` |
+
+Who sets the window:
+
+- **`tf-triage.sh close`**: from the latest mark before the finding to the moment it was logged. Findings logged within 120 s of each other with no `look` between them were found together. Their windows cannot be told apart, so each is `not-measured`, naming the others.
+- **`tf-verify-emit.sh`**: the pass's window, only when the pass opened exactly one miss. Several in one pass are `not-measured`.
+- **`tf-log-miss.sh`**: `not-measured`; the defect was found by the owner, or outside any run.
+
+A miss written before 2026-11-05 has no `discovery_scope` and is "not recorded": outside every divisor (§5.5.8). `tf-metrics.sh` reports `discovery_tokens_per_miss`, `discovery_minutes_per_miss` and their `_n`, and per miss (`per_miss_cost`) the discovery cost beside the latest fix's cost: whole when the fix was `sole`, its labelled share when `shared:N` (§5.5.3). Proved by `tests/regression/run.sh bl_004`.
+
 ## 6. Provenance — three separations, one rule applied three times
 
 **Data from different provenances never merges.**
@@ -734,7 +757,7 @@ Treat backfilled gate data as **context and volume**, never as evidence for a pu
 | Miss rate per origin model | misses grouped by `origin_model` | as above — this is the routing-decision number |
 | Miss rate per origin agent | misses grouped by `origin_agent` | as above |
 | Miss escape share | misses with `found_by ∈ {owner, production}` ÷ all misses | live-only; reported **beside** the `gates.jsonl` escape rate, never merged |
-| Open misses | `miss` with no `miss-fix`, or whose latest `miss-fix.verdict_after ≠ Verified` | poolable |
+| Open misses | `miss` with no `miss-fix`, or whose latest `miss-fix.verdict_after` is neither `Verified` nor `wont-fix` | poolable |
 | Tokens per miss fixed | Σ `tokens_out` ÷ **count of records that carry `tokens_out`** over `miss-fix` | **`cost_attribution="sole"` only**; apportioned in a labelled column; the divisor is published as `tokens_per_miss_measured_n` / `tokens_per_miss_apportioned_n` and the excluded records as `tokens_unrecorded_sole_n` / `tokens_unrecorded_shared_n` (§5.5.8) |
 | Measured cost per miss fixed | Σ `cost_usd` ÷ count | **OpenCode records only** (§4); never pooled across harness |
 | Median time-to-close a miss | `miss-fix.ts − miss.ts` | poolable |

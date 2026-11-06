@@ -31,7 +31,7 @@ The script fills in everything else (harness, model, tokens, cost, app, time sta
 ## Misses
 
 - Get the id first: `bash .tfcore/utils/tf-emit.sh --next-miss-id`.
-- One defect is one miss. Before emitting, run `bash .tfcore/utils/tf-emit.sh --open-miss REQ-UI-014`; if it prints an open miss of the same class, emit nothing.
+- One defect is one miss. Before emitting, run `bash .tfcore/utils/tf-emit.sh --open-miss REQ-UI-014 <miss_class>`; if it prints one, emit nothing.
 - On a miss found by the owner, fill `why_missed`.
 - Every miss carries `sort`, whose gap it was: `spec`, `unsaid`, `weak-check` or `ignored` (the four questions of `log-miss.md` step 1). The scripts fill it; a hand-written record names it.
 - Complete a null field later with `bash .tfcore/utils/tf-emit.sh --amend <miss_id> <field> <value>` (`why_missed` or `sort`).
