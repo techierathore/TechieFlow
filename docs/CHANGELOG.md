@@ -59,14 +59,20 @@ a new telemetry stream, so a minor version (owner, 2026-11-08).
     alone stands over the earlier skip. verify-phase.md step 5 names it.
   - Cases `tr_009` and `tr_010`; all four checks fail against the v1.2.4 scripts.
 
-- **FW-002: CI on ab48ace (run 42474539895) — the repository lock let two builds run at once on Ubuntu.**
-  The annotation added for 8bd1909 printed what `tf_043c` saw: `order: start start end end`. Between a build's
-  `mkdir` of the lock and its owner write, a waiting build read no owner and asked `find -mmin +1` whether the
-  lock was old; on the Ubuntu 26.04 runner it said yes, and the live lock was removed. `tf-lock.sh` now measures
-  the age of an owner-less lock in seconds with python (taken over only past 60 s) and writes the owner file
-  whole, renamed into place, so a waiter never reads a half-written one as none. The eight FR lines that failed
-  in tests/requirements (FR-69, 72 to 77, 85) run the regression suite and failed with it. Case `fw_002`, with a
-  `find` on PATH that calls every lock old: it fails against the old `tf-lock.sh` and passes now.
+- **FW-002: the repository lock let two builds run at once on the Ubuntu 26.04 CI runner (runs 42474539895 on
+  ab48ace and 42486414491 on 5b114e8).** `tf_043c` printed `order: start start end end` on CI and never here.
+  The first fix (5b114e8) blamed `find -mmin +1` and moved the age check to python; CI failed the same way, so
+  that was not the cause. Every decision in `tf-lock.sh` leaned on an outside tool: `mkdir` to claim the lock,
+  `cut` and `hostname` to read its owner, `find` for its age, and that runner ships different core tools from
+  Ubuntu 24.04 and macOS. With a `mkdir` that reports success on a folder that already exists, the 5b114e8
+  lock reproduces CI's output exactly. The lock is now claimed by creating its owner file with bash's own
+  no-clobber redirection, an exclusive create that fails when the file exists whatever `mkdir` says; the
+  owner is read with `read` and the host is `$HOSTNAME`, so nothing outside bash decides. Release never
+  `rm -rf`s (a waiter may already have claimed inside the folder), a takeover re-reads the dead owner before
+  removing it, and `TF_LOCK_TRACE=<file>` records every decision; `tf_043c` prints that trace if it ever
+  fails again. Case `fw_002`: with `mkdir`, `find`, `cut` and `hostname` all replaced by broken ones, two
+  builds started together run one after the other; it fails against the 5b114e8 lock. The eight FR lines that
+  failed in tests/requirements run the regression suite and failed with it.
 
 - **`tf-estimate.sh` read TechieBlog's Prod-Deploy-Checklist.md as the app (owner, 2026-11-08).** It took the
   first `*-Checklist.md` by name, and "Prod-Deploy" sorts before "TechieBlog", so every phase-1 row read "no

@@ -2028,15 +2028,16 @@ tf_043() {
   pkill -f "http.server $p1" 2>/dev/null; pkill -f "http.server $p2" 2>/dev/null
   # two builds at once in one repository: the second waits for the first
   local e; e="$(_tf043_fx tf043c)"
-  ( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" bash "$UTILS/tf-build.sh" build p/Fx.csproj >/dev/null 2>&1 ) &
+  : > "$e/trace"
+  ( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" TF_LOCK_TRACE="$e/trace" bash "$UTILS/tf-build.sh" build p/Fx.csproj >/dev/null 2>&1 ) &
   local b1=$!
-  ( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" bash "$UTILS/tf-build.sh" build p/Fx.csproj >/dev/null 2>&1 ) &
+  ( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" TF_LOCK_TRACE="$e/trace" bash "$UTILS/tf-build.sh" build p/Fx.csproj >/dev/null 2>&1 ) &
   wait "$b1" $!
   local order; order="$(cut -d' ' -f1 "$e/calls" 2>/dev/null | tr '\n' ' ')"
   if [[ "$order" == "start end start end " ]]; then
     ok tf_043c "two builds started together run one after the other"
   else
-    bad tf_043c "two builds wrote the same output at the same time"; note "order: $order"
+    bad tf_043c "two builds wrote the same output at the same time"; note "order: $order // lock trace: $(tr '\n' ';' < "$e/trace" 2>/dev/null)"
   fi
   # a lock left by a build that died is taken over, not waited on for half an hour
   : > "$e/calls"; mkdir -p "$e/tests/.artifacts/build/.lock"
@@ -7617,30 +7618,47 @@ JS
   fi
 }
 
-# --- FW-002 (2026-11-08): a lock taken a moment ago, owner not yet written, was removed as stale ------------------
-# CI run 42474539895 (Ubuntu 26.04): tf_043c printed "order: start start end end", two builds at once. Between a
-# holder's mkdir and its owner write, a waiter read no owner and asked `find -mmin +1` whether the lock was old;
-# it said yes and the live lock was removed. The age is now measured in seconds by python and the owner file is
-# renamed into place whole. A `find` that calls everything old stands on PATH here; nothing may trust it.
+# --- FW-002 (2026-11-08): two builds ran at once on the Ubuntu 26.04 CI runner --------------------------
+# Runs 42474539895 and 42486414491: tf_043c printed "order: start start end end" while every run here kept
+# them apart. Every decision in tf-lock.sh leaned on an outside tool (mkdir to claim, cut and hostname to
+# read the owner, find for age), and that runner ships different core tools. The lock is now claimed by an
+# exclusive create of its owner file in bash itself, and nothing outside bash decides. Here those tools are
+# replaced by broken ones on PATH: a mkdir that always reports success, a find that calls everything old, a
+# cut and a hostname that print nonsense. The two builds must still run one after the other.
 fw_002() {
   local e; e="$(_tf043_fx fw002)"
-  printf '#!/bin/sh\nfor a in "$@"; do case "$a" in -*|+*|[0-9]*) ;; *) echo "$a"; break ;; esac; done\n' > "$e/bin/find"; chmod +x "$e/bin/find"
-  mkdir -p "$e/tests/.artifacts/build/.lock"            # just taken, no owner yet
-  local out; out="$( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" TF_TEST_USERS=0 TF_BUILD_LOCK_MAX=6 tf_timeout 60 bash "$UTILS/tf-build.sh" build p/Fx.csproj 2>/dev/null )"
-  if ! grep -q '^start' "$e/calls" 2>/dev/null && grep -q '^NOT-RUN another build or browser check held this repository' <<<"$out" \
-     && [[ -d "$e/tests/.artifacts/build/.lock" ]]; then
-    ok fw_002a "a lock taken a moment ago with no owner yet is waited on, never removed, whatever find says"
+  local real_mkdir; real_mkdir="$(command -v mkdir)"
+  printf '#!/bin/sh\n%s -p "$@" 2>/dev/null\nexit 0\n' "$real_mkdir" > "$e/bin/mkdir"
+  printf '#!/bin/sh\nfor a in "$@"; do case "$a" in -*|+*|[0-9]*) ;; *) echo "$a"; break ;; esac; done\n' > "$e/bin/find"
+  printf '#!/bin/sh\necho garbage\n' > "$e/bin/cut"
+  printf '#!/bin/sh\necho "host-$$"\n' > "$e/bin/hostname"
+  chmod +x "$e/bin/mkdir" "$e/bin/find" "$e/bin/cut" "$e/bin/hostname"
+  : > "$e/trace"
+  ( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" TF_TEST_USERS=0 TF_LOCK_TRACE="$e/trace" bash "$UTILS/tf-build.sh" build p/Fx.csproj >/dev/null 2>&1 ) &
+  local b1=$!
+  ( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" TF_TEST_USERS=0 TF_LOCK_TRACE="$e/trace" bash "$UTILS/tf-build.sh" build p/Fx.csproj >/dev/null 2>&1 ) &
+  wait "$b1" $!
+  local order; order="$(grep -E '^(start|end) ' "$e/calls" 2>/dev/null | awk '{print $1}' | tr '\n' ' ')"
+  if [[ "$order" == "start end start end " ]]; then
+    ok fw_002a "with mkdir, find, cut and hostname all broken, two builds started together still run one after the other"
   else
-    bad fw_002a "a fresh lock with no owner was removed and a second build ran"; note "$(head -1 <<<"$out") // calls: $(tr '\n' ' ' < "$e/calls" 2>/dev/null)"
+    bad fw_002a "broken core tools let two builds run at once"; note "order: $order // trace: $(tr '\n' ';' < "$e/trace")"
   fi
-  # and one that really is old (two minutes, no owner: its holder died before writing one) is taken over
-  : > "$e/calls"
-  python3 -c "import os,sys,time; t=time.time()-120; os.utime(sys.argv[1],(t,t))" "$e/tests/.artifacts/build/.lock"
-  out="$( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" TF_TEST_USERS=0 TF_BUILD_LOCK_MAX=20 tf_timeout 60 bash "$UTILS/tf-build.sh" build p/Fx.csproj 2>/dev/null )"
-  if grep -q '^PASS' <<<"$out" && grep -q '^start' "$e/calls" && [[ ! -d "$e/tests/.artifacts/build/.lock" ]]; then
-    ok fw_002b "a lock with no owner that is over a minute old is taken over, and released after"
+  # an owner file just created and not yet written is held, never removed
+  : > "$e/calls"; rm -rf "$e/tests/.artifacts/build/.lock"; "$real_mkdir" -p "$e/tests/.artifacts/build/.lock"; : > "$e/tests/.artifacts/build/.lock/owner"
+  local out; out="$( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" TF_TEST_USERS=0 TF_BUILD_LOCK_MAX=6 tf_timeout 60 bash "$UTILS/tf-build.sh" build p/Fx.csproj 2>/dev/null )"
+  if ! grep -q '^start' "$e/calls" && grep -q '^NOT-RUN another build or browser check held this repository' <<<"$out" && [[ -f "$e/tests/.artifacts/build/.lock/owner" ]]; then
+    ok fw_002b "an owner file created a moment ago and not yet written is waited on, never removed"
   else
-    bad fw_002b "an abandoned lock with no owner was not taken over"; note "$(head -1 <<<"$out")"
+    bad fw_002b "a lock being taken was removed and a build ran"; note "$(head -1 <<<"$out")"
+  fi
+  # and one left empty for two minutes (its holder died between the create and the write) is taken over
+  python3 -c "import os,sys,time; t=time.time()-120; os.utime(sys.argv[1],(t,t))" "$e/tests/.artifacts/build/.lock/owner"
+  out="$( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" TF_TEST_USERS=0 TF_BUILD_LOCK_MAX=20 tf_timeout 60 bash "$UTILS/tf-build.sh" build p/Fx.csproj 2>/dev/null )"
+  if grep -q '^PASS' <<<"$out" && grep -q '^start' "$e/calls" && [[ ! -e "$e/tests/.artifacts/build/.lock" ]]; then
+    ok fw_002c "an owner left empty for over a minute is taken over, and the lock is gone after the build"
+  else
+    bad fw_002c "an abandoned empty owner was not taken over"; note "$(head -1 <<<"$out")"
   fi
 }
 
