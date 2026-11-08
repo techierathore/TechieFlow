@@ -7617,9 +7617,36 @@ JS
   fi
 }
 
+# --- FW-002 (2026-11-08): a lock taken a moment ago, owner not yet written, was removed as stale ------------------
+# CI run 42474539895 (Ubuntu 26.04): tf_043c printed "order: start start end end", two builds at once. Between a
+# holder's mkdir and its owner write, a waiter read no owner and asked `find -mmin +1` whether the lock was old;
+# it said yes and the live lock was removed. The age is now measured in seconds by python and the owner file is
+# renamed into place whole. A `find` that calls everything old stands on PATH here; nothing may trust it.
+fw_002() {
+  local e; e="$(_tf043_fx fw002)"
+  printf '#!/bin/sh\nfor a in "$@"; do case "$a" in -*|+*|[0-9]*) ;; *) echo "$a"; break ;; esac; done\n' > "$e/bin/find"; chmod +x "$e/bin/find"
+  mkdir -p "$e/tests/.artifacts/build/.lock"            # just taken, no owner yet
+  local out; out="$( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" TF_TEST_USERS=0 TF_BUILD_LOCK_MAX=6 tf_timeout 60 bash "$UTILS/tf-build.sh" build p/Fx.csproj 2>/dev/null )"
+  if ! grep -q '^start' "$e/calls" 2>/dev/null && grep -q '^NOT-RUN another build or browser check held this repository' <<<"$out" \
+     && [[ -d "$e/tests/.artifacts/build/.lock" ]]; then
+    ok fw_002a "a lock taken a moment ago with no owner yet is waited on, never removed, whatever find says"
+  else
+    bad fw_002a "a fresh lock with no owner was removed and a second build ran"; note "$(head -1 <<<"$out") // calls: $(tr '\n' ' ' < "$e/calls" 2>/dev/null)"
+  fi
+  # and one that really is old (two minutes, no owner: its holder died before writing one) is taken over
+  : > "$e/calls"
+  python3 -c "import os,sys,time; t=time.time()-120; os.utime(sys.argv[1],(t,t))" "$e/tests/.artifacts/build/.lock"
+  out="$( cd "$e" && HOME="$e/home" PATH="$e/bin:/usr/bin:/bin" TF_TEST_USERS=0 TF_BUILD_LOCK_MAX=20 tf_timeout 60 bash "$UTILS/tf-build.sh" build p/Fx.csproj 2>/dev/null )"
+  if grep -q '^PASS' <<<"$out" && grep -q '^start' "$e/calls" && [[ ! -d "$e/tests/.artifacts/build/.lock" ]]; then
+    ok fw_002b "a lock with no owner that is over a minute old is taken over, and released after"
+  else
+    bad fw_002b "an abandoned lock with no owner was not taken over"; note "$(head -1 <<<"$out")"
+  fi
+}
+
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 tf_055 tf_056 fw_001 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 am_030 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 ch_013 ch_014 ch_015 ch_016 ch_017 ch_018 ch_019 ch_020 ch_021 ch_022 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 sv_007 sv_008 sv_009 sv_010 sv_011 sv_012 sv_013 sv_014 sv_015 sv_016 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 bl_001 bl_002 bl_003 bl_004 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 lk_036 lk_037 lk_038 lk_039 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 tr_008 tr_009 tr_010 std_q4a owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 tf_055 tf_056 fw_001 fw_002 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 am_030 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 ch_013 ch_014 ch_015 ch_016 ch_017 ch_018 ch_019 ch_020 ch_021 ch_022 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 sv_007 sv_008 sv_009 sv_010 sv_011 sv_012 sv_013 sv_014 sv_015 sv_016 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 bl_001 bl_002 bl_003 bl_004 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 lk_036 lk_037 lk_038 lk_039 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 tr_008 tr_009 tr_010 std_q4a owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

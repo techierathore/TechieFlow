@@ -59,6 +59,15 @@ a new telemetry stream, so a minor version (owner, 2026-11-08).
     alone stands over the earlier skip. verify-phase.md step 5 names it.
   - Cases `tr_009` and `tr_010`; all four checks fail against the v1.2.4 scripts.
 
+- **FW-002: CI on ab48ace (run 42474539895) — the repository lock let two builds run at once on Ubuntu.**
+  The annotation added for 8bd1909 printed what `tf_043c` saw: `order: start start end end`. Between a build's
+  `mkdir` of the lock and its owner write, a waiting build read no owner and asked `find -mmin +1` whether the
+  lock was old; on the Ubuntu 26.04 runner it said yes, and the live lock was removed. `tf-lock.sh` now measures
+  the age of an owner-less lock in seconds with python (taken over only past 60 s) and writes the owner file
+  whole, renamed into place, so a waiter never reads a half-written one as none. The eight FR lines that failed
+  in tests/requirements (FR-69, 72 to 77, 85) run the regression suite and failed with it. Case `fw_002`, with a
+  `find` on PATH that calls every lock old: it fails against the old `tf-lock.sh` and passes now.
+
 - **`tf-estimate.sh` read TechieBlog's Prod-Deploy-Checklist.md as the app (owner, 2026-11-08).** It took the
   first `*-Checklist.md` by name, and "Prod-Deploy" sorts before "TechieBlog", so every phase-1 row read "no
   precedent" even with a family. The app is now resolved as the framework names it: `--app {App}` (the task
