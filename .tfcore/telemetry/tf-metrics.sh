@@ -17,6 +17,7 @@
 #   tf-metrics.sh --backfill-commits  [<repo>] [--dry-run]
 #   tf-metrics.sh --backfill-gates    [<repo>] [--dry-run]
 #   tf-metrics.sh --rollup <repo> [<repo> ...] [--json]
+#   tf-metrics.sh --estimates [<repo> ...] [--json]   each phase's estimate beside its actual (§2.8)
 #
 # PROVENANCE RULE (SCHEMA.md §6) — enforced here, not just documented:
 #   live and backfilled records NEVER pool, and app/library/docs NEVER pool, for
@@ -36,7 +37,7 @@ import sys
 from collections import Counter, defaultdict, OrderedDict
 from datetime import datetime
 
-STREAMS = ("runs", "gates", "sessions", "commits", "misses")
+STREAMS = ("runs", "gates", "sessions", "commits", "misses", "estimates")
 VERDICTS = ("Verified", "Needs re-verify", "FAIL", "Blocked", "Implemented", "Done (pre-existing)")
 GATE_ORDER = ("build", "test-users", "acceptance", "render", "assets", "visual", "mockup-parity",
               "perf", "standards", "escaped")
@@ -1278,6 +1279,180 @@ def median(xs):
     return xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2.0
 
 
+# ------------------------------------------------- estimates against actuals (SCHEMA.md §2.8)
+EST_CMDS = ("build-phase", "verify-phase", "fix-issues", "triage")
+# "triage" is the after-handoff step: *triage-and-fix and *triage-issues runs, pooled. Bugs a person found
+# after the checks passed are never counted inside machine QA's fix-issues (owner, 2026-11-08).
+EST_STEP_OF = {"build-phase": "build-phase", "verify-phase": "verify-phase", "fix-issues": "fix-issues",
+               "triage-and-fix": "triage", "triage-issues": "triage"}
+EST_LABEL = {"build-phase": "build-phase", "verify-phase": "verify-phase", "fix-issues": "fix-issues",
+             "triage": "after handoff"}
+
+
+def analyse_estimates(repos):
+    """The reconciliation: each phase's latest estimate beside what the runs measured.
+
+    TWO COLUMNS, NEVER ONE NUMBER. An estimate is a forecast and a run record is a measurement, and
+    the fourth provenance separation (SCHEMA.md §6) keeps them apart: the estimate's mid and range sit
+    beside the actual, and nothing here divides one by the other or writes either back.
+
+    Per repo, per phase, per estimating model, the LATEST estimate batch (one `ts`) is read. Its rows
+    give the phase's requirement set; per cmd, the rows that HAD a figure are the ones the actual is
+    measured over, so like is compared with like when some rows had no precedent. The actual is the
+    live (never backfilled, never voided) runs of that cmd whose reqs_touched meet those rows; a run
+    that also touched other rows contributes the share of its tokens and time that its rows in the
+    phase make up (rows in phase / reqs_count) and is counted as APPORTIONED — an inference, labelled
+    as one (§6, third separation, applied to runs). Fewer than MIN_N runs: insufficient data."""
+    out = {"phases": [], "repos_with_estimates": 0}
+    for repo in repos:
+        est = [e for e in read_stream(repo, "estimates") if e.get("kind") == "estimate"]
+        if not est:
+            continue
+        out["repos_with_estimates"] += 1
+        runs, _vn, _vr, _vo = apply_voids(read_stream(repo, "runs"), app_name(repo))
+        runs = [r for r in runs if r.get("kind") == "run" and not r.get("backfilled")]
+        # The latest FORECAST per phase and estimating model; a phase estimated only after the fact shows its
+        # latest retro batch, labelled. A later hindsight estimate never replaces the forecast it would flatter.
+        latest, latest_retro = {}, {}
+        for e in est:
+            key = (e.get("app") or app_name(repo), e.get("phase"), e.get("model"))
+            pick = latest_retro if e.get("basis_note") == "retro" else latest
+            if e.get("ts") and e["ts"] > pick.get(key, ""):
+                pick[key] = e["ts"]
+        for key, ts in latest_retro.items():
+            latest.setdefault(key, ts)
+        for (app, phase, model), ts in sorted(latest.items(), key=lambda kv: (str(kv[0][0]), kv[0][1] or 0, str(kv[0][2]))):
+            batch = [e for e in est if (e.get("app") or app_name(repo)) == app and e.get("phase") == phase
+                     and e.get("model") == model and e.get("ts") == ts]
+            phase_rows = sorted({e["req_id"] for e in batch if e.get("req_id")})
+            entry = {"app": app, "phase": phase, "model": model, "ts": ts, "rows_n": len(phase_rows), "cmds": {},
+                     "retro": any(e.get("basis_note") == "retro" for e in batch)}
+            # Runs that recorded no rows cannot be placed in ANY phase: their cost is real and is in no
+            # actual. Counted per cmd over the whole repo and printed, never guessed into a phase.
+            rowless = {c: sum(1 for r in runs if EST_STEP_OF.get(r.get("cmd")) == c and not (r.get("reqs_touched") or []))
+                       for c in EST_CMDS}
+            def _actual(steps, covered):
+                """The live runs of these steps that touched the covered rows, each counting the share of its
+                tokens and time its covered rows make up of its reqs_count (apportioned when below one)."""
+                act = {"runs_n": 0, "apportioned_n": 0, "rowless_runs_in_repo_n": sum(rowless[c] for c in steps),
+                       "tokens_out": 0.0, "tokens_n": 0, "tokens_unrecorded_n": 0, "tokens_main_scope_n": 0,
+                       "duration_s": 0.0, "duration_n": 0}
+                for r in runs:
+                    if EST_STEP_OF.get(r.get("cmd")) not in steps:
+                        continue
+                    reqs = [q for q in (r.get("reqs_touched") or []) if isinstance(q, str)]
+                    n = r.get("reqs_count") if isinstance(r.get("reqs_count"), int) and r.get("reqs_count") > 0 else len(reqs)
+                    hit = covered.intersection(reqs)
+                    if not hit or n <= 0:
+                        continue
+                    share = min(1.0, float(len(hit)) / n)
+                    act["runs_n"] += 1
+                    if share < 1.0:
+                        act["apportioned_n"] += 1
+                    tok = r.get("tokens_out")
+                    if isinstance(tok, (int, float)) and r.get("tokens_scope") not in (None, "none"):
+                        act["tokens_out"] += tok * share
+                        act["tokens_n"] += 1
+                        if r.get("tokens_scope") == "main":
+                            act["tokens_main_scope_n"] += 1
+                    else:
+                        act["tokens_unrecorded_n"] += 1
+                    d = _dur(r)
+                    if d:
+                        act["duration_s"] += d * share
+                        act["duration_n"] += 1
+                for f, nf in (("tokens_out", "tokens_n"), ("duration_s", "duration_n")):
+                    act[f] = int(round(act[f])) if act[nf] >= MIN_N else "insufficient data (n=%d)" % act[nf]
+                return act
+
+            row_rec = {(e.get("cmd"), e["req_id"]): e for e in batch if e.get("req_id")}
+            covered_of = {c: {q for (cc, q), e in row_rec.items() if cc == c and e.get("basis") != "none"} for c in EST_CMDS}
+            for cmd in EST_CMDS:
+                total = next((e for e in batch if e.get("cmd") == cmd and e.get("req_id") is None), None)
+                covered = covered_of[cmd]
+                act = _actual({cmd}, covered)
+                position = {}
+                for f in ("tokens_out", "duration_s"):
+                    e_f = (total or {}).get(f)
+                    a_f = act[f]
+                    if isinstance(e_f, dict) and isinstance(a_f, int):
+                        position[f] = "below" if a_f < e_f["low"] else ("above" if a_f > e_f["high"] else "within")
+                    else:
+                        position[f] = None
+                entry["cmds"][cmd] = {
+                    "estimate": {"tokens_out": (total or {}).get("tokens_out"), "duration_s": (total or {}).get("duration_s"),
+                                 "basis": (total or {}).get("basis"), "basis_runs": (total or {}).get("basis_runs"),
+                                 "rows_covered": len(covered)},
+                    "actual": act, "actual_in_range": position}
+            # The phase in three parts, each estimate beside actual: build, machine QA (verify + fix) and after
+            # handoff (triage). Verify and fix are added only when their estimates cover the same rows, and
+            # their actuals only when both are numbers: a sum over different rows is not one figure.
+            def _part(cmds):
+                """Estimate and actual over the SAME rows: those every step of the part had a figure for. The
+                estimate is the sum of those rows' figures; the actual is the part's runs on those rows."""
+                covered = set.intersection(*[covered_of[c] for c in cmds])
+                part = {"rows_covered": len(covered), "estimate": {}, "actual": _actual(set(cmds), covered)}
+                for f in ("tokens_out", "duration_s"):
+                    figs = [row_rec[(c, q)].get(f) for c in cmds for q in covered]
+                    part["estimate"][f] = ({k: sum(x[k] for x in figs) for k in ("low", "mid", "high")}
+                                           if figs and all(isinstance(x, dict) for x in figs) else None)
+                return part
+            entry["parts"] = {"build": _part(["build-phase"]), "machine_qa": _part(["verify-phase", "fix-issues"]),
+                              "after_handoff": _part(["triage"])}
+            out["phases"].append(entry)
+    return out
+
+
+def print_estimates(e, W):
+    """ESTIMATE AGAINST ACTUAL. Two columns, never one number (SCHEMA.md §6, fourth separation)."""
+    print("-" * W)
+    print("ESTIMATE AGAINST ACTUAL (SCHEMA.md §2.8) — an estimate never pools with a measurement")
+    if not e["phases"]:
+        print("  no estimates yet: run *estimate-phase {App} before *build-phase (docs/metrics/estimates.jsonl)")
+        return
+    def fig(d, fmt):
+        return "%s (%s–%s)" % (fmt(d["mid"]), fmt(d["low"]), fmt(d["high"])) if isinstance(d, dict) else "no precedent"
+    def actual(v, fmt, unit=""):
+        return fmt(v) + unit if isinstance(v, int) else str(v)
+    for p in e["phases"]:
+        print("  %s phase %s — estimated by %s at %s, %d row(s)%s" % (
+            p["app"], p["phase"], p["model"] or "unknown model", p["ts"], p["rows_n"],
+            " — estimated after the fact: hindsight, not a forecast" if p.get("retro") else ""))
+        print("    %-20s %-30s %-24s %-8s %s" % ("cmd", "estimate mid (low–high)", "actual", "range", "actual runs"))
+        for cmd in EST_CMDS:
+            c = p["cmds"][cmd]
+            a = c["actual"]
+            runs_note = "%d run(s), %d apportioned" % (a["runs_n"], a["apportioned_n"])
+            if a["tokens_unrecorded_n"]:
+                runs_note += ", %d with no tokens" % a["tokens_unrecorded_n"]
+            if a["tokens_main_scope_n"]:
+                runs_note += ", %d main-thread only" % a["tokens_main_scope_n"]
+            if a.get("rowless_runs_in_repo_n"):
+                runs_note += "; %d run(s) in the repo named no row" % a["rowless_runs_in_repo_n"]
+            cov = c["estimate"]["rows_covered"]
+            lab = EST_LABEL[cmd]
+            label = lab if cov == p["rows_n"] else "%s [%d/%d]" % (lab, cov, p["rows_n"])
+            print("    %-20s %-30s %-24s %-8s %s" % (label, fig(c["estimate"]["tokens_out"], _k) + " tok",
+                                                  actual(a["tokens_out"], _k, " tok"), c["actual_in_range"]["tokens_out"] or "—",
+                                                  runs_note))
+            print("    %-20s %-30s %-24s %-8s" % ("", fig(c["estimate"]["duration_s"], _hms),
+                                               actual(a["duration_s"], _hms), c["actual_in_range"]["duration_s"] or "—"))
+        print("    PHASE %s in three parts — estimate beside actual:" % p["phase"])
+        for key, lab in (("build", "build"), ("machine_qa", "machine QA"), ("after_handoff", "after handoff")):
+            pt = p["parts"][key]
+            cov = pt["rows_covered"]
+            tag = "" if cov == p["rows_n"] else " [%d/%d]" % (cov, p["rows_n"])
+            print("    %-20s %-30s %-24s" % (lab + tag, fig(pt["estimate"]["tokens_out"], _k) + " tok",
+                                          actual(pt["actual"]["tokens_out"], _k, " tok")))
+            print("    %-20s %-30s %-24s" % ("", fig(pt["estimate"]["duration_s"], _hms), actual(pt["actual"]["duration_s"], _hms)))
+    print("  After handoff = *triage-and-fix + *triage-issues runs, the bugs a person found after the checks passed;")
+    print("  never counted inside machine QA.")
+    print("  Actual = the live runs of that cmd that touched the rows the estimate covered; a run that also")
+    print("  touched other rows counts its share only (apportioned). [n/m] = rows that had a figure. A run that")
+    print("  named no row cannot be placed in any phase, so it is in no actual: its count is shown, never")
+    print("  shared out. Owner UAT time is not measured. Fewer than %d runs: insufficient data, never a number." % MIN_N)
+
+
 def analyse(repos):
     """Returns a dict of segmented figures. Segmentation is structural: the
     live-only metrics are computed PER (project_type) over LIVE records only,
@@ -1389,7 +1564,9 @@ def analyse(repos):
            "gates_malformed_n": len(gates_malformed),
            "gates_malformed": gates_malformed,
            "misses": analyse_misses(misses),
-           "phases": analyse_phases(runs)}
+           "phases": analyse_phases(runs),
+           # Forecasts beside measurements, never pooled with them (SCHEMA.md §2.8, §6 fourth separation).
+           "estimates": analyse_estimates(repos)}
 
     for label, bucket in (("live", live), ("backfilled", back)):
         for ptype, recs in sorted(seg(bucket).items()):
@@ -1604,6 +1781,7 @@ def print_report(a, repos):
 
     print_phases(a["phases"], W)
     print_misses(a["misses"], W)
+    print_estimates(a["estimates"], W)
     print("=" * W)
 
 
@@ -1976,6 +2154,8 @@ def main(argv):
         print("")
         print("  --report           [<repo>] [--json]   roll up one repo to stdout")
         print("  --rollup <repo>...          [--json]   cross-project view, still segmented")
+        print("  --estimates [<repo>...]     [--json]   each phase's estimate beside its actual")
+        print("                     (SCHEMA.md §2.8). Read-only; *handoff-phase prints it.")
         print("  --phases  [<repo>...]       [--json]   effort per phase: time, tokens,")
         print("                     model split, subagent fan-out (SCHEMA.md §2.6).")
         print("                     Read-only and agent-safe, exactly like --report.")
@@ -2021,6 +2201,16 @@ def main(argv):
             print(json.dumps(a, indent=2))
         else:
             print_report(a, repos)
+    elif mode == "--estimates":
+        e = analyse_estimates(repos)
+        if as_json:
+            print(json.dumps(e, indent=2))
+        else:
+            print("=" * 78)
+            print("TechieFlow estimates against actuals")
+            print("=" * 78)
+            print_estimates(e, 78)
+            print("=" * 78)
     elif mode == "--phases":
         # The §2.6 effort view on its own. Read-only, no git, agent-safe — the same
         # standing as --report, which is what the parity gate and the *metrics task

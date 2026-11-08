@@ -7,7 +7,7 @@
 
 **Schema version:** `v = 1`
 **Location:** `docs/metrics/` inside each app repo — **tracked by git, never gitignored.**
-**Streams:** `runs` · `gates` · `sessions` · `commits` · `misses` (§5.5, added 2026-08-28)
+**Streams:** `runs` · `gates` · `sessions` · `commits` · `misses` (§5.5, added 2026-08-28) · `estimates` (§2.8, added 2026-11-08: forecasts, never measurements)
 **Format:** JSONL — one JSON object per line, append-only. Never rewritten, never compacted, never sorted in place.
 
 ---
@@ -25,6 +25,8 @@ Questions 1–3 are answered by `gates.jsonl`, which remains **the primary strea
 
 **Non-goal:** cycle-time-per-feature. The unit of work in this framework is **the run**, not the ticket. There is no per-feature timing field and there will not be one.
 
+**Estimates (§2.8, added 2026-11-08) do not change that.** An estimate is a forecast written to its own stream, `estimates.jsonl`; a row's estimate is an input to the phase total, and the reconciliation headline (estimate beside actual) is per phase. Nothing measures a feature's time, and nothing ever estimates a token into a measurement.
+
 ---
 
 ## 1. Fields present on EVERY record
@@ -33,7 +35,7 @@ Questions 1–3 are answered by `gates.jsonl`, which remains **the primary strea
 |---|---|---|
 | `v` | int | Schema version. Always `1` today. Injected by `tf-emit.sh` if absent. |
 | `ts` | string | ISO-8601 UTC, second precision, `Z` suffix — e.g. `2026-08-08T04:12:33Z`. Injected by `tf-emit.sh` if absent. |
-| `kind` | string | `run` \| `gate` \| `session` \| `commit` \| `miss` \| `miss-fix` \| `miss-amend`. Must be one of the kinds the stream file declares. Every stream but `misses.jsonl` declares exactly one, so for those "matches the file" and "is declared by the file" are the same rule; `misses.jsonl` declares three (§5.5). |
+| `kind` | string | `run` \| `gate` \| `session` \| `commit` \| `miss` \| `miss-fix` \| `miss-amend` \| `estimate` (§2.8). Must be one of the kinds the stream file declares. Every stream but `misses.jsonl` declares exactly one, so for those "matches the file" and "is declared by the file" are the same rule; `misses.jsonl` declares three (§5.5). |
 | `app` | string | The `{AppName}` the record belongs to. Injected by `tf-emit.sh` if absent — inferred from the one `docs/<App>-Checklist.md`, falling back to the repo directory name. Emitters should still pass it explicitly. |
 | `project_type` | string | `app` \| `library` \| `docs` \| `framework`. Injected by `tf-emit.sh` — from the tree shape for `framework`, otherwise from `core-config.yaml`. |
 | `project_type_inferred` | bool | Present **only when `true`** — `metrics.project_type` was absent from `core-config.yaml` and `app` was assumed. Reports must label these records **unclassified**, never silently pool them. |
@@ -93,7 +95,7 @@ So `tf-emit.sh` detects it and injects it. **Never write `harness` into an emit 
 
 | Field | Type | Values / notes |
 |---|---|---|
-| `cmd` | string | `day1-brownfield` \| `day1-greenfield` \| `split-brd` \| `mockups` \| `build-phase` \| `verify-phase` \| `fix-issues` \| `triage-issues` \| `log-miss` \| `devguide` \| `productguide` \| `handoff-phase` \| `refresh-status` \| `amend-docs` \| `deploy-checklist` (added 2026-09-06) \| `metrics-report` \| `generate-html` \| `render-workflow-docs` \| `triage-and-fix` \| `develop-end-to-end` (added 2026-10-08: only its launch; each phase records itself) \| `framework-reset` (framework maintenance, D-19; all five added 2026-09-07, after FR-37's check was built and found 27 records already carrying a value the schema did not list). A value outside this list is a defect in the emitting task, not in the reader: the reader keeps it. |
+| `cmd` | string | `day1-brownfield` \| `day1-greenfield` \| `split-brd` \| `mockups` \| `build-phase` \| `verify-phase` \| `fix-issues` \| `triage-issues` \| `log-miss` \| `devguide` \| `productguide` \| `handoff-phase` \| `refresh-status` \| `amend-docs` \| `deploy-checklist` (added 2026-09-06) \| `estimate-phase` (added 2026-11-08, §2.8: the run that wrote the estimates, never the estimates themselves) \| `metrics-report` \| `generate-html` \| `render-workflow-docs` \| `triage-and-fix` \| `develop-end-to-end` (added 2026-10-08: only its launch; each phase records itself) \| `framework-reset` (framework maintenance, D-19; all five added 2026-09-07, after FR-37's check was built and found 27 records already carrying a value the schema did not list). A value outside this list is a defect in the emitting task, not in the reader: the reader keeps it. |
 | `mode` | string \| null | `build` \| `fix`. `build-phase` already distinguishes these (FIX mode) — capture it; the ratio is the rework metric. `null` for commands with no mode. |
 | `started` | string | ISO-8601 UTC. When the task began — the timestamp you noted at step 0, not "now minus a guess". |
 | `ended` | string | ISO-8601 UTC. Normally equal to `ts`. |
@@ -203,6 +205,45 @@ A `run-void` names one run record and says why it should not be counted:
 `tf-emit.sh` now **refuses** a live `run` record for an app whose `started` precedes the latest `ended` of that app's live runs. The refusal names the record it collides with and the timestamp to use instead; nothing is appended. **Voided and backfilled records are excluded from the comparison**, which is what keeps the §2.7 repair path working: void the wrong record, then the corrected one is accepted.
 
 The one real overlap is two machines appending to the same `merge=union` stream (§6). That is declared, with `bash .tfcore/utils/tf-emit.sh runs --allow-overlap`, and never assumed — the mistake this refuses is easy to make and impossible to see afterwards, so the door is a flag rather than a fallback. FR-72; `bash tests/regression/run.sh tf_overlap`.
+
+### 2.8 `docs/metrics/estimates.jsonl` — what a phase should cost, written before it is built (added 2026-11-08, v1.3.0)
+
+**A forecast, on its own stream, never a measurement.** §2.5's rule stands unchanged: tokens are never estimated into a measurement. An estimate is a different fact — what earlier runs suggest a phase will cost — and it gets a stream of its own so that no reader of `runs.jsonl` can ever take one for a run, and no figure can pool the two (§6, fourth separation). DECISIONS.md 2026-11-08 records why.
+
+**Written only by `bash .tfcore/telemetry/tf-estimate.sh <repo> --phase N [--family <repo> ...]`** (the `*estimate-phase` task), through `tf-emit.sh estimates`, one batch per run of the script, every record of a batch carrying the same `ts`.
+
+```json
+{"v":1,"ts":"2026-11-08T05:10:00Z","kind":"estimate","app":"Sevak","project_type":"app","phase":3,
+ "req_id":"REQ-UI-060","cmd":"build-phase","tokens_out":{"low":8700,"mid":20500,"high":31200},
+ "duration_s":{"low":186,"mid":334,"high":639},"basis":"family","basis_runs":31,"model":"claude-opus-5-5","harness":"claude-code"}
+```
+
+| Field | Type | Values / notes |
+|---|---|---|
+| `kind` | string | `estimate` — the stream's one kind. |
+| `phase` | int | The phase estimated: 1 is `docs/<App>-Checklist.md`, n is `docs/<App>-P<n>-Checklist.md` (the naming `*verify --phase` uses). |
+| `req_id` | string \| null | The checklist row. **`null` on the phase total.** IDs only, never requirement text (§9). |
+| `cmd` | string | `build-phase` \| `verify-phase` \| `fix-issues` \| `triage`. One record per row **per step**, and one phase total per step. Machine QA is `verify-phase` + `fix-issues`; the script adds them for its printed table and never stores the sum (§8). **`triage` is the after-handoff step** (added 2026-11-08): the runs of `triage-and-fix` and `triage-issues`, pooled — bugs a person found after the checks passed, **never counted inside `fix-issues`**. It is estimated by the same rule as the others and printed in its own column, kept out of "build + machine QA" so a phase with no triage history still has a total. |
+| `tokens_out` | object \| null | `{"low","mid","high"}`: the first quartile, median and third quartile of **output tokens per row** over the history (each run's `tokens_out` ÷ its `reqs_count`). On the phase total, the sum of the row figures that had one. `null` when there was no precedent. |
+| `duration_s` | object \| null | The same three figures for wall seconds per row (each run's duration — its timestamps win over a stored `duration_s`, as in every reader — ÷ its `reqs_count`). |
+| `basis` | string | `repo` — at least three runs in this repo; `family` — fewer, so the runs of the `--family` repos the owner named were added; `none` — still fewer than three: **no precedent**, and both figures are `null`. A phase total is `family` if any row it sums was. |
+| `basis_runs` | int | How many runs the figure was computed over (on the phase total: distinct runs across its rows). |
+| `model` | string \| null | **The model that made the estimate**, read from the session pointer exactly as `enrich_run` reads a run's window (`bash .tfcore/utils/tf-emit.sh --current-model`: the dominant model over the last six hours). `null` when the store cannot tell. It is not the model the build will use. |
+| `basis_note` | string | Present **only** as `"retro"` (added 2026-11-08): the phase was **estimated after the fact** — runs on its own rows already existed when the estimate was made, so the figure is hindsight, not a forecast. Every record of the batch carries it, `tf-estimate.sh` prints ESTIMATED AFTER THE FACT, and the reconciliation labels the phase "estimated after the fact". Where a phase has both a forecast and a retro batch, the reconciliation shows the **forecast**: a later hindsight estimate never replaces the figure it would flatter. Absent on a forecast. |
+| `rows_n`, `rows_no_precedent_n` | int | **Phase total only.** Rows in the phase, and rows whose figure for this cmd was `null` — the total covers `rows_n − rows_no_precedent_n` of them, and says so. |
+
+**Which checklist is the app's** (fixed 2026-11-08). Never the first `*-Checklist.md` found: TechieBlog keeps `Prod-Deploy-Checklist.md` beside its own, and it was read as the app. In order: `--app <App>` (the task passes `{App}`, as the verifier is given it); core-config.yaml `customTechnicalDocuments.brd`; the one checklist (not `-P<n>-`, not `-Deployment-`) with its own `<X>-BRD.md`; otherwise the script stops and asks for `--app`.
+
+**How the history is chosen.** Live run records only: never backfilled, never voided (§2.7). Only runs with `reqs_count > 0` (a run that touched no row cannot be divided among rows). Only runs of the same `cmd` that touched at least one row of the same **prefix** (`REQ-UI`, `REQ-FN`, `REQ-RAG`, `REQ-NFR` …), so a UI row is estimated from UI history. A run that touched any row **of the phase being estimated** is left out, so a phase is never estimated from its own runs, and a finished phase can be estimated honestly after the fact. A run with no measured tokens (`tokens_scope:"none"`) or no measurable duration is left out and counted.
+
+**Three rules the script enforces, and `tf-emit.sh` refuses to break.**
+1. **Fewer than three runs is no precedent, never a number** — the `MIN_N` rule of §8 applied to a forecast. `tf-emit.sh` refuses a record whose `basis` is `none` but carries a figure, or whose figure is `null` without `basis` `none`.
+2. **Low ≤ mid ≤ high**, all non-negative; anything else is refused.
+3. **Owner UAT time has no stream** and is printed as "not measured". It is never estimated.
+
+**Not per-feature timing (§0).** A row's figure is an input to the phase total. The reconciliation — `tf-metrics.sh --estimates`, the `estimates` block of `--report` / `--rollup`, metrics-report question 6, the last table `*handoff-phase` prints — is per phase, per step and per estimating model, and ends with the phase in three parts (build, machine QA, after handoff), each estimate beside actual over the same rows: the latest estimate's mid and range **beside** the actual, where the actual is the live runs of that cmd whose `reqs_touched` meet the rows the estimate covered, each contributing the share of its tokens and time that its rows in the phase make up (labelled **apportioned** when that share is below one). Fewer than three runs: `insufficient data (n=…)`. Estimate and actual are two columns, never one number: no ratio, no accuracy percentage.
+
+**Known bias, stated rather than hidden.** A row's QA figure is the cost of **one** verify pass and **one** fix pass on one row; a phase that re-verifies its rows many times spends more than that, and the reconciliation will show it.
 
 ## 3. `docs/metrics/gates.jsonl` — one record per REQ verdict per verify run
 
@@ -694,13 +735,14 @@ Who sets the window:
 
 A miss written before 2026-11-05 has no `discovery_scope` and is "not recorded": outside every divisor (§5.5.8). `tf-metrics.sh` reports `discovery_tokens_per_miss`, `discovery_minutes_per_miss` and their `_n`, and per miss (`per_miss_cost`) the discovery cost beside the latest fix's cost: whole when the fix was `sole`, its labelled share when `shared:N` (§5.5.3). Proved by `tests/regression/run.sh bl_004`.
 
-## 6. Provenance — three separations, one rule applied three times
+## 6. Provenance — four separations, one rule applied four times
 
 **Data from different provenances never merges.**
 
 1. **Live vs backfilled.** Records not written at the moment of the event carry `backfilled: true` and never pool with live records.
 2. **Across `project_type`.** Records never pool across types where the available gates differ.
 3. **Across attribution confidence and cost attribution** (added 2026-08-28, §5.5). A `miss` whose `origin_confidence` is not `linked` never pools into a per-model, per-agent or per-phase figure. A `miss-fix` whose `cost_attribution` is not `sole` never pools into a headline cost figure.
+4. **Estimate vs measurement** (added 2026-11-08, §2.8). An `estimate` never pools with a measurement. No figure adds, averages or divides an `estimates.jsonl` value with a `runs.jsonl` value, and no reader of `runs.jsonl` ever reads an estimate, because estimates live on their own stream. The reconciliation sets the estimate's mid and range **beside** the actual, two columns; an actual built from runs that also touched rows outside the phase is labelled **apportioned**.
 
 No report may produce a single **first-pass rate**, **gate catch distribution**, **escape rate**, **per-model / per-agent / per-phase miss rate**, or **cost per miss** that crosses any of these boundaries — not as a merged figure, not as a "total" row, not as an "overall" summary line. Data on the wrong side of a boundary may appear in an adjacent **labelled column**, never summed with the figure it sits beside.
 

@@ -106,10 +106,10 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout">
   <nav class="side">
     <h1>TechieFlow — Changelog</h1>
-    <div class="sub">Last rendered: 2026-11-05</div>
+    <div class="sub">Last rendered: 2026-11-08</div>
     <div class="group">Contents</div>
     <ol>
-        <li><a href="#unreleased-since-v1-2-4-ships-as-v1-2-5">Unreleased (since v1.2.4) — ships as v1.2.5</a></li>
+        <li><a href="#unreleased-since-v1-2-4-ships-as-v1-3-0">Unreleased (since v1.2.4) — ships as v1.3.0</a></li>
         <li><a href="#v1-2-4-since-v1-2-3">v1.2.4 (since v1.2.3)</a></li>
         <li><a href="#v1-2-3-since-v1-2-1">v1.2.3 (since v1.2.1)</a></li>
         <li><a href="#v1-1-1-and-v1-2-0-since-v1-1-0">v1.1.1 and v1.2.0 (since v1.1.0)</a></li>
@@ -235,12 +235,12 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
   </nav>
   <main>
     <h1>TechieFlow — Changelog</h1>
-    <div class="subtitle">Rendered 2026-11-05 &middot; source <code>CHANGELOG.md</code></div>
+    <div class="subtitle">Rendered 2026-11-08 &middot; source <code>CHANGELOG.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
       <ol>
-        <li><a href="#unreleased-since-v1-2-4-ships-as-v1-2-5">Unreleased (since v1.2.4) — ships as v1.2.5</a></li>
+        <li><a href="#unreleased-since-v1-2-4-ships-as-v1-3-0">Unreleased (since v1.2.4) — ships as v1.3.0</a></li>
         <li><a href="#v1-2-4-since-v1-2-3">v1.2.4 (since v1.2.3)</a></li>
         <li><a href="#v1-2-3-since-v1-2-1">v1.2.3 (since v1.2.1)</a></li>
         <li><a href="#v1-1-1-and-v1-2-0-since-v1-1-0">v1.1.1 and v1.2.0 (since v1.1.0)</a></li>
@@ -373,10 +373,67 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </tbody>
 </table>
 <hr>
-<h2 id="unreleased-since-v1-2-4-ships-as-v1-2-5"><a id="unreleased-since-v124--ships-as-v125"></a>Unreleased (since v1.2.4) — ships as v1.2.5<a class="anchor-link" href="#unreleased-since-v1-2-4-ships-as-v1-2-5">#</a></h2>
-<p>v1.2.4 is the tag at <code>4699d14</code>. What follows is in no published package yet and goes out as v1.2.5: bug fixes,
-one rule made stricter at the owner's request, and two small new scripts the fixes need, so a patch version.</p>
+<h2 id="unreleased-since-v1-2-4-ships-as-v1-3-0"><a id="unreleased-since-v124--ships-as-v130"></a>Unreleased (since v1.2.4) — ships as v1.3.0<a class="anchor-link" href="#unreleased-since-v1-2-4-ships-as-v1-3-0">#</a></h2>
+<p>v1.2.4 is the tag at <code>4699d14</code>. What follows is in no published package yet and goes out as <strong>v1.3.0</strong>, not
+v1.2.5: besides the bug fixes it adds a feature, effort estimates in tokens with a new command, a new script and
+a new telemetry stream, so a minor version (owner, 2026-11-08).</p>
 <ul>
+<li><strong>New: <code>*estimate-phase {App}</code> — what a phase should cost in tokens and time, set beside what it did cost.</strong>
+<ul>
+<li>Run before <code>*build-phase</code>. <code>tf-estimate.sh &lt;repo&gt; --phase N [--family &lt;repo&gt; ...] [--dry-run] [--json]</code> reads the phase's checklist rows and the repo's live run records. Per cmd (build-phase, verify-phase, fix-issues) and per row prefix (REQ-UI, REQ-FN, REQ-RAG, REQ-NFR …) it takes each earlier run's output tokens and wall time per row, and gives each row the first quartile, median and third quartile: low, mid, high. A UI row is estimated from UI history only.
+</li>
+<li>Fewer than three runs: the history of the family repos the owner names is added (basis <code>family</code>). Still fewer than three: "no precedent", never a number. Runs on the phase's own rows are left out, so a finished phase can be estimated honestly after the fact.
+</li>
+<li>It prints per row and per phase: build, machine QA (verify plus fix) and the total, with the basis and the model that made the estimate. Owner UAT time has no stream and prints "not measured".
+</li>
+<li>The records go to a new stream, <code>docs/metrics/estimates.jsonl</code> (SCHEMA.md §2.8), through <code>tf-emit.sh</code>, never to <code>runs.jsonl</code>. The rule that tokens are never estimated into a measurement stands. <code>tf-emit.sh</code> refuses an estimate whose figures are out of order, or that carries a number with basis <code>none</code>.
+</li>
+<li><code>tf-emit.sh --current-model</code> names the estimating model, read from the session pointer the way a run's window is read.
+</li>
+<li>Reconciliation: <code>tf-metrics.sh --estimates</code>, and an <code>estimates</code> block in <code>--report</code> and <code>--rollup</code>. Per phase and estimating model it prints the estimate's mid and range beside the actual. The actual is the live runs of that cmd that touched the phase's rows; a run that also touched other rows counts its share only, labelled apportioned. Fewer than three runs: insufficient data. Two columns, never one number.
+</li>
+<li>metrics-report gains question 6, "estimate against actual", and its provenance rule a fourth separation: an estimate never pools with a measurement (SCHEMA.md §6). <code>*handoff-phase</code> prints the reconciliation table last; <code>build-phase.md</code> names <code>*estimate-phase</code> as the step before.
+</li>
+<li>Registered in the Claude mirror, <code>opencode.jsonc</code>, the flow-master command table, <code>routing.yaml</code> (economy), the README and How-It-Works. <code>install-metrics.sh</code> seeds the sixth stream.
+</li>
+<li><strong>Known bias, stated:</strong> a row's QA figure is one verify pass and one fix pass. On Sevak phase 3, the first reconciliation, verify ran 40 times over the phase's rows and its actual sits far above the estimate.
+</li>
+<li>Suite: <code>tests/estimate/run.sh</code> (19 cases: enough history, family fallback, no precedent, the refusals, the model, the reconciliation). DECISIONS.md 2026-11-08 says why estimates have their own stream.
+</li>
+</ul>
+</li>
+<li><strong>TechieRag TF-009 and TF-010 (2026-11-05 and 2026-11-08): the verifier raised rows it had not measured, and could not measure a test that only fits in memory alone.</strong>
+<ul>
+<li><code>tf-verify-verdict.py</code>: a <code>Blocked</code> row whose checks all pass stays <code>Blocked</code> (new verdict <code>BLOCKED-HELD</code>: Status and % kept, the pass in the Remark, no gate record). REQ-RAG-146 was written <code>Verified 100%</code> on a test of its built half while its other half waited on the owner.
+</li>
+<li><code>tf-verify-verdict.py</code>: a row some of whose tests passed and some were skipped is <code>NOT-TESTED</code>, never <code>Verified</code> (the Sevak TF-004 rule, for every test). REQ-RAG-155 was Verified on stand-in tests while its three live tests skipped. Measured on every project's latest test results: 20 rows will read <code>NOT-TESTED</code> at their next verify (TechieRag 11, Chatur 6, AstroLyfe 2, Lekhak 1). Those with an earlier PASS on record keep <code>Verified</code>, marked not re-measured.
+</li>
+<li><code>tf-verify-tests.sh --filter "&lt;dotnet test filter&gt;"</code>: runs only the unit tests the filter selects, no browser tests, into <code>tests-filter-&lt;filter&gt;.json</code>, which <code>--merge</code> combines with the full run so a pass alone stands over the earlier skip. verify-phase.md step 5 names it.
+</li>
+<li>Cases <code>tr_009</code> and <code>tr_010</code>; all four checks fail against the v1.2.4 scripts.
+</li>
+</ul>
+</li>
+<li><strong><code>tf-estimate.sh</code> read TechieBlog's Prod-Deploy-Checklist.md as the app (owner, 2026-11-08).</strong> It took the first <code>*-Checklist.md</code> by name, and "Prod-Deploy" sorts before "TechieBlog", so every phase-1 row read "no precedent" even with a family. The app is now resolved as the framework names it: <code>--app {App}</code> (the task passes it), then core-config.yaml <code>customTechnicalDocuments.brd</code>, then the one checklist with its own BRD, otherwise the script stops and asks. Case <code>es_017</code> (a repo with a second checklist that sorts first).
+</li>
+<li><strong>A phase estimated after the fact is labelled (owner, 2026-11-08).</strong> When runs on the phase's own rows already exist, the records carry <code>basis_note: "retro"</code>, the table prints ESTIMATED AFTER THE FACT and the reconciliation prints "estimated after the fact" on that phase; a forecast of the same phase always wins over a later retro batch. SCHEMA.md §2.8, DECISIONS.md 2026-11-08. Cases <code>es_018</code>, <code>es_019</code>.
+</li>
+<li><strong>After handoff, estimated and reconciled on its own line (owner, 2026-11-08).</strong> <code>*triage-and-fix</code> and <code>*triage-issues</code> runs are a step of their own, "after handoff", never counted inside machine QA's <code>fix-issues</code>. <code>tf-estimate.sh</code> estimates it from triage history by row prefix with the same rule (three runs, else the family, else no precedent) and prints it in its own column; the records carry <code>cmd</code> <code>triage</code>. <code>tf-metrics.sh --estimates</code> gives it its own line, apportioned by the rows each run named, with the runs that named none counted, and ends each phase with three parts, build, machine QA and after handoff, each estimate beside actual over the same rows. <code>*triage-and-fix</code> step 6 prints the table. Before this, TrBlazeUI's 36 triage runs (4.4M output tokens) and Lekhak's 15 (965k) were in no estimate and no actual. Cases <code>es_015</code> and <code>es_016</code>.
+</li>
+<li><strong>The reconciliation now counts runs that named no row.</strong> <code>tf-metrics.sh --estimates</code> prints, per cmd, how many runs in the repo recorded no row: they cannot be placed in any phase, so their cost is in no actual and is never shared out. On Sevak that is 29 fix-issues runs, which is why its phase-3 fix actual reads low.
+</li>
+<li><strong>CI was red on 8bd1909 (run 42172148834): the installer kept its own copy of the <code>.gitignore</code> lines.</strong> On 2026-11-05 the three shell scripts gained <code>tests/verify/testsettings.Local.json</code> (Sevak TF-015) and <code>scripts/install.mjs</code> did not, so <code>npm run test:install</code> failed six checks, each with one difference, <code>.gitignore</code>, on both runners.
+<ul>
+<li>The lines now live in one file, <code>.tfcore/data/gitignore-blocks.tsv</code>. The three scripts read it through <code>.tfcore/utils/tf-gitignore-blocks.sh</code>, and the installer reads the same file. No route keeps a copy.
+</li>
+<li>New installer check: every line of the list is written by both routes, and no script carries a list of its own.
+</li>
+<li><code>tests/requirements/run.sh</code> failed with it: FR-48, FR-49, FR-51 and FR-63 run <code>npm run test:install</code>. It prints <code>FR-48   FAIL</code>, which the workflow's <code>^FAIL</code> filter never matched, so the stock-Mac job was red with no annotation at all. The filter now matches that shape too, and each annotation carries the note line under its FAIL.
+</li>
+<li><code>tests/regression/run.sh</code> <code>tf_043c</code> (two builds, one lock) failed on Ubuntu only. It is not from 8bd1909: the same case failed on 215a333 and 4699d14 and passed on re-run, and it passes every time here, under load too. Its <code>order:</code> note now reaches the annotation, so the next red run says what happened.
+</li>
+</ul>
+</li>
 <li><strong>TechieBlog TF-004 (owner, 2026-11-05): a defect found during a run had no discovery cost of its own.</strong> A run's tokens are one window over every row it touched. Misses are written together at a command's close, so "from the step's start to the record" would give them all the same window. Each miss gets a slice of its own instead: from the latest mark before it (a new <code>tf-triage.sh &lt;App&gt; look "&lt;problem&gt;"</code>, run as triage starts on each issue; the previous finding; or the start) to when it was logged.
 <ul>
 <li><code>tf-emit.sh</code> reads that slice's tokens from the transcript or opencode.db, as for a run. Slices never overlap.

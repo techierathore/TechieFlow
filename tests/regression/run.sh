@@ -7533,9 +7533,93 @@ PY
     || bad clock_readers "read the local clock but are not listed at the top of tests/regression/run.sh: $got"
 }
 
+# --- TechieRag TF-009: a Blocked row raised to Verified, and a row Verified with tests skipped -----------
+# REQ-RAG-146 was Blocked (its GPU half waits on the owner); one test of its built half passed and the verify
+# wrote Verified 100% and a PASS gate record. REQ-RAG-155 was Verified on stand-in tests while its three live
+# tests skipped (2026-11-05 and 2026-11-08). A Blocked row stays Blocked; a skipped test is not measured.
+tr_009() {
+  local e="$SCRATCH/tr009"; mkdir -p "$e/docs" "$e/tests/.artifacts/verify"
+  cat > "$e/tests/.artifacts/verify/tests.json" <<'JS'
+{"reqs":{
+ "REQ-RAG-146":{"result":"PASS","source":"unit","tests":["REQ-RAG-146 GpuModelRefusedBeforeDownload"],"skipped":[],"passed":1,"failed":0,"reason":"","screenshot":""},
+ "REQ-RAG-155":{"result":"PASS","source":"unit","tests":["REQ-RAG-155 StandIn"],"skipped":["REQ-RAG-155 LiveOne","REQ-RAG-155 LiveTwo","REQ-RAG-155 LiveThree"],"passed":1,"failed":0,"reason":"","screenshot":"",
+   "outcomes":{"REQ-RAG-155 StandIn":{"outcome":"pass","reason":"","source":"unit"},"REQ-RAG-155 LiveOne":{"outcome":"skip","reason":"no live model here","source":"unit"}}},
+ "REQ-RAG-160":{"result":"PASS","source":"unit","tests":["REQ-RAG-160 AllRan"],"skipped":[],"passed":1,"failed":0,"reason":"","screenshot":""}},
+ "browser":{"ran":false},"unit":{"ran":true,"line":"PASS"}}
+JS
+  cat > "$e/tests/.artifacts/verify/list.json" <<'JS'
+{"app":"Fx","scope":"all","phase":1,"kind":"library","checklist":"docs/Fx-Checklist.md","screens":[],"unresolved":[],
+ "rows":[{"id":"REQ-RAG-146","class":"RAG","title":"GPU","screen":"","route":"","status_raw":"Blocked"},
+         {"id":"REQ-RAG-155","class":"RAG","title":"Live","screen":"","route":"","status_raw":"Implemented"},
+         {"id":"REQ-RAG-160","class":"RAG","title":"Plain","screen":"","route":"","status_raw":"Implemented"}]}
+JS
+  printf '{"mode":"served","reason":"","reason_kind":"","head":"lib","rung":"test","url":""}\n' > "$e/tests/.artifacts/verify/boot.json"
+  ( cd "$e" && python3 "$UTILS/tf-verify-verdict.py" Fx --dir tests/.artifacts/verify >"$e/out.txt" 2>&1 )
+  local got; got="$(python3 - "$e/tests/.artifacts/verify/verdicts.json" "$e/out.txt" <<'PY'
+import json, sys, re
+try:
+    rows = {r["id"]: r for r in json.load(open(sys.argv[1]))["rows"]}
+except Exception:
+    txt = open(sys.argv[2]).read()
+    rows = {}
+    for m in re.finditer(r"\| (REQ-[A-Z]+-\d+) \| ([A-Z-]+) \| [^|]* \| ([^|]+?) \|", txt):
+        rows[m.group(1)] = {"verdict": m.group(2), "status": m.group(3), "emit_gate": None}
+def g(k):
+    r = rows.get(k, {})
+    return "%s/%s/%s" % (r.get("verdict"), (r.get("status") or "").strip(), r.get("emit_gate"))
+print(g("REQ-RAG-146"), g("REQ-RAG-155"), g("REQ-RAG-160"))
+PY
+)"
+  case "$got" in
+    "BLOCKED-HELD/Blocked/False "*) ok tr_009a "a Blocked row whose test passes stays Blocked, with no PASS gate record" ;;
+    *) bad tr_009a "a Blocked row was raised by a passing test"; note "$got // $(head -c 300 "$e/out.txt")" ;;
+  esac
+  case "$got" in
+    *" NOT-TESTED/Implemented/"*" PASS/Verified/True") ok tr_009b "a row with a skipped test is not measured; a row whose tests all ran is still Verified" ;;
+    *) bad tr_009b "a row with skipped tests was Verified on the ones that ran"; note "$got" ;;
+  esac
+}
+
+# --- TechieRag TF-010: one memory-heavy test could not be run on its own ----------------------------------
+# REQ-RAG-150's only test loads a 4.7 GB model and skips itself when its whole project runs. tf-verify-tests.sh
+# had no filter, so the row was never measured. --filter passes through to dotnet test, writes its own part,
+# and --merge lets the pass stand over the earlier skip. A stand-in dotnet on PATH; nothing is built.
+tr_010() {
+  local d="$SCRATCH/tr010"; mkdir -p "$d/bin" "$d/tests/T" "$d/tests/.artifacts/verify"
+  printf '<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="xunit" Version="2.9.0" /></ItemGroup></Project>\n' > "$d/tests/T/T.csproj"
+  cat > "$d/bin/dotnet" <<'SH'
+#!/usr/bin/env bash
+echo "$*" >> "__D__/calls"
+if [[ "$1" == "test" ]]; then
+  echo "  Passed REQ-RAG-150 LiveCalendarPageTitlesAndTimes [5 m 17 s]"
+  echo "Passed!  - Failed:     0, Passed:     1, Skipped:     0, Total:     1"
+fi
+exit 0
+SH
+  tf_sed_inplace "s#__D__#$d#" "$d/bin/dotnet"; chmod +x "$d/bin/dotnet"
+  cat > "$d/tests/.artifacts/verify/tests.json" <<'JS'
+{"reqs":{"REQ-RAG-150":{"result":"NOT-TESTED","source":"unit","tests":[],"skipped":["REQ-RAG-150 LiveCalendarPageTitlesAndTimes"],"passed":0,"failed":0,"reason":"not enough memory","screenshot":"",
+  "outcomes":{"REQ-RAG-150 LiveCalendarPageTitlesAndTimes":{"outcome":"skip","reason":"not enough memory","source":"unit"}}}},"browser":{"ran":false},"unit":{"ran":true,"line":"PASS"}}
+JS
+  local out; out="$( cd "$d" && PATH="$d/bin:$PATH" TF_TEST_USERS=0 tf_timeout 120 bash "$UTILS/tf-verify-tests.sh" --filter "DisplayName~REQ-RAG-150" --target tests/T/T.csproj 2>&1 )"
+  local part="$d/tests/.artifacts/verify/tests-filter-DisplayName-REQ-RAG-150.json"
+  if grep -q -- '--filter DisplayName~REQ-RAG-150' "$d/calls" 2>/dev/null && [[ -f "$part" ]] && ! grep -q 'browser tests: ran' <<<"$out"; then
+    ok tr_010a "--filter reaches dotnet test, runs no browser tests, and writes a part file named for the filter"
+  else
+    bad tr_010a "the filter did not reach dotnet test, or wrote no part file"; note "$(cat "$d/calls" 2>/dev/null | tail -1) // $(tr '\n' ' ' <<<"$out" | cut -c1-240)"
+  fi
+  ( cd "$d" && bash "$UTILS/tf-verify-tests.sh" --merge tests/.artifacts/verify/tests.json "$part" --json-out tests/.artifacts/verify/merged.json >/dev/null 2>&1 )
+  local r; r="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['reqs']['REQ-RAG-150']['result'])" "$d/tests/.artifacts/verify/merged.json" 2>&1)"
+  if [[ "$r" == "PASS" ]]; then
+    ok tr_010b "merged with the full run, the test run alone stands over its earlier skip"
+  else
+    bad tr_010b "the merged row reads $r, not PASS"
+  fi
+}
+
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 tf_055 tf_056 fw_001 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 am_030 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 ch_013 ch_014 ch_015 ch_016 ch_017 ch_018 ch_019 ch_020 ch_021 ch_022 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 sv_007 sv_008 sv_009 sv_010 sv_011 sv_012 sv_013 sv_014 sv_015 sv_016 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 bl_001 bl_002 bl_003 bl_004 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 lk_036 lk_037 lk_038 lk_039 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 tr_008 std_q4a owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 tf_055 tf_056 fw_001 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 am_030 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 ch_013 ch_014 ch_015 ch_016 ch_017 ch_018 ch_019 ch_020 ch_021 ch_022 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 sv_007 sv_008 sv_009 sv_010 sv_011 sv_012 sv_013 sv_014 sv_015 sv_016 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 bl_001 bl_002 bl_003 bl_004 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 lk_036 lk_037 lk_038 lk_039 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 tr_008 tr_009 tr_010 std_q4a owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

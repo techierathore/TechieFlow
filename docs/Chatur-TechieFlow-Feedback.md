@@ -4,7 +4,7 @@
 |---|---|
 | App | Chatur |
 | Upstream | TechieFlow |
-| Updated | 2026-11-05 (TF-022 fixed upstream, ships in TechieFlow v1.2.5) |
+| Updated | 2026-11-05 (TF-022 fixed upstream, ships in TechieFlow v1.3.0) |
 
 ## Summary
 
@@ -307,7 +307,7 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 
 ### TF-022 — The menu walk reports a submenu row (▸) as "does nothing when clicked"
 
-- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.2.5; not yet re-checked here.
+- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.3.0; not yet re-checked here.
 - **Severity:** minor
 - **Blocks:** no, with a workaround (updated 2026-11-05). Left alone, it fails render on every main-window screen, about 90 rows in phases 1 to 3. The 5 Nov verify passed `--no-click "Recent projects" --no-click "Zoom"` to the screen and mockup checks, so those two rows are not measured. The JSON wrongly gives the reason as "ends the session or deletes".
 - **Repro:** TrBlazeUI 2.2.2, Chatur's main window with File ▸ Recent projects ▸ and View ▸ Zoom ▸ built as `MenubarSub` (TR-020). Run `bash .tfcore/utils/tf-mockup-parity.sh --base http://localhost:5280 --screen main=/ --mockup-dir docs/mockups --login-path /sign-in --user chatur-owner@techierathore.com --password <pw> --json-out tests/.artifacts/verify/parity-main.json`.
@@ -394,7 +394,7 @@ Ships in **TechieFlow v1.2.2**, the next release after v1.2.1. Already in this p
 
 ### Resolution status (TechieFlow team, 2026-11-05)
 
-Ships in **TechieFlow v1.2.5**, the next release after v1.2.4. Already in this project's `.tfcore/` through the framework update of 2026-11-06. The regression case fails against the v1.2.4 script and passes now.
+Ships in **TechieFlow v1.3.0**, the next release after v1.2.4. Already in this project's `.tfcore/` through the framework update of 2026-11-06. The regression case fails against the v1.2.4 script and passes now.
 
 | ID | Fix | Check it here |
 |---|---|---|

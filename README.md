@@ -75,7 +75,8 @@ flowchart TD
   A["scaffold-greenfield.sh ."] --> B["/analyst *day1-greenfield {App}<br/>stage 1: Architecture + BRD + mockups"]
   B --> C{"Owner reviews the three"}
   C -->|"go ahead"| D["stage 2: the checklist and the rest of the day-1 documents"]
-  D --> E["/flow-master *build-phase {App}"]
+  D --> E0["/flow-master *estimate-phase {App}<br/>tokens and time, from past runs"]
+  E0 --> E["/flow-master *build-phase {App}"]
   E --> F["/verifier *verify all"]
   F --> G{"Every row Verified?"}
   G -->|"bugs you found yourself"| X["/flow-master *triage-and-fix {App} {evidence}"]
@@ -109,6 +110,7 @@ Replace `{App}` with your application name. Claude Code takes the long persona p
 | Requirements into the checklist | `… analyst *split-brd {App}` | `/flow-analyst *split-brd {App}` |
 | A change to an existing project | `… analyst *amend-docs {App} "<what changed>"` | `/flow-analyst *amend-docs {App} "…"` |
 | Brainstorm, brief, research | `… analyst *brainstorm {topic}` · `*create-project-brief` · `*research-prompt {topic}` | same, on `/flow-analyst` |
+| Estimate the phase first | `/TechieFlow:agents:flow-master *estimate-phase {App} [family repos]` | `/flow-master *estimate-phase {App}` |
 | Build everything open | `/TechieFlow:agents:flow-master *build-phase {App}` | `/flow-master *build-phase {App}` |
 | Verify | `/TechieFlow:agents:verifier *verify ui\|functional\|all {App} [--phase N\|all]` | `/flow-verifier *verify all {App} [--phase N\|all]` |
 | Bugs: log and analyse only | `… flow-master *triage-issues {App} {evidence} [verify]` | `/flow-master *triage-issues …` |
@@ -157,7 +159,7 @@ The shipped configuration allows every file operation and all of Bash with no pr
 
 ## 7. What it measures
 
-Five append-only streams per project under `docs/metrics/`, read with `*metrics {App}`: command runs, verification verdicts, misses, chat sessions, and your own commits. They answer five questions — the first-pass rate, which check caught the failure, the escape rate, what misses cost to fix, and the effort per phase. Definitions, real figures and the sentence to say about each are in [`docs/TechieFlow-Telemetry-Explained.md`](docs/TechieFlow-Telemetry-Explained.md); the field contract is `.tfcore/telemetry/SCHEMA.md`.
+Six append-only streams per project under `docs/metrics/`, read with `*metrics {App}`: command runs, verification verdicts, misses, chat sessions, your own commits, and the estimates `*estimate-phase` makes before a build (a forecast, kept apart from every measurement). They answer six questions — the first-pass rate, which check caught the failure, the escape rate, what misses cost to fix, the effort per phase, and the estimate against what the phase actually cost. Definitions, real figures and the sentence to say about each are in [`docs/TechieFlow-Telemetry-Explained.md`](docs/TechieFlow-Telemetry-Explained.md); the field contract is `.tfcore/telemetry/SCHEMA.md`.
 
 Standing rules: provenance never merges, only identifiers and counts are recorded, telemetry has no veto, and an agent never writes what it cannot know. **Tokens are what is recorded; money is worked out when the report runs.** A record stores what the provider itself charged — only a metered provider charges per token — and never a computed price. The report separately prints a **list price**, the published rate applied to the tokens actually measured, which is the one figure that compares a Claude phase with an OpenCode one. A price is never called a bill, and a monthly plan's allowance is counted apart from both.
 

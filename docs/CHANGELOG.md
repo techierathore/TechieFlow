@@ -8,10 +8,98 @@
 
 ---
 
-## Unreleased (since v1.2.4) — ships as v1.2.5
+## Unreleased (since v1.2.4) — ships as v1.3.0
 
-v1.2.4 is the tag at `4699d14`. What follows is in no published package yet and goes out as v1.2.5: bug fixes,
-one rule made stricter at the owner's request, and two small new scripts the fixes need, so a patch version.
+v1.2.4 is the tag at `4699d14`. What follows is in no published package yet and goes out as **v1.3.0**, not
+v1.2.5: besides the bug fixes it adds a feature, effort estimates in tokens with a new command, a new script and
+a new telemetry stream, so a minor version (owner, 2026-11-08).
+
+- **New: `*estimate-phase {App}` — what a phase should cost in tokens and time, set beside what it did cost.**
+  - Run before `*build-phase`. `tf-estimate.sh <repo> --phase N [--family <repo> ...] [--dry-run] [--json]`
+    reads the phase's checklist rows and the repo's live run records. Per cmd (build-phase, verify-phase,
+    fix-issues) and per row prefix (REQ-UI, REQ-FN, REQ-RAG, REQ-NFR …) it takes each earlier run's output
+    tokens and wall time per row, and gives each row the first quartile, median and third quartile: low,
+    mid, high. A UI row is estimated from UI history only.
+  - Fewer than three runs: the history of the family repos the owner names is added (basis `family`).
+    Still fewer than three: "no precedent", never a number. Runs on the phase's own rows are left out, so a
+    finished phase can be estimated honestly after the fact.
+  - It prints per row and per phase: build, machine QA (verify plus fix) and the total, with the basis and
+    the model that made the estimate. Owner UAT time has no stream and prints "not measured".
+  - The records go to a new stream, `docs/metrics/estimates.jsonl` (SCHEMA.md §2.8), through `tf-emit.sh`,
+    never to `runs.jsonl`. The rule that tokens are never estimated into a measurement stands. `tf-emit.sh`
+    refuses an estimate whose figures are out of order, or that carries a number with basis `none`.
+  - `tf-emit.sh --current-model` names the estimating model, read from the session pointer the way a run's
+    window is read.
+  - Reconciliation: `tf-metrics.sh --estimates`, and an `estimates` block in `--report` and `--rollup`. Per
+    phase and estimating model it prints the estimate's mid and range beside the actual. The actual is the
+    live runs of that cmd that touched the phase's rows; a run that also touched other rows counts its share
+    only, labelled apportioned. Fewer than three runs: insufficient data. Two columns, never one number.
+  - metrics-report gains question 6, "estimate against actual", and its provenance rule a fourth
+    separation: an estimate never pools with a measurement (SCHEMA.md §6). `*handoff-phase` prints the
+    reconciliation table last; `build-phase.md` names `*estimate-phase` as the step before.
+  - Registered in the Claude mirror, `opencode.jsonc`, the flow-master command table, `routing.yaml`
+    (economy), the README and How-It-Works. `install-metrics.sh` seeds the sixth stream.
+  - **Known bias, stated:** a row's QA figure is one verify pass and one fix pass. On Sevak phase 3, the first
+    reconciliation, verify ran 40 times over the phase's rows and its actual sits far above the estimate.
+  - Suite: `tests/estimate/run.sh` (19 cases: enough history, family fallback, no precedent, the refusals,
+    the model, the reconciliation). DECISIONS.md 2026-11-08 says why estimates have their own stream.
+
+- **TechieRag TF-009 and TF-010 (2026-11-05 and 2026-11-08): the verifier raised rows it had not measured,
+  and could not measure a test that only fits in memory alone.**
+  - `tf-verify-verdict.py`: a `Blocked` row whose checks all pass stays `Blocked` (new verdict `BLOCKED-HELD`:
+    Status and % kept, the pass in the Remark, no gate record). REQ-RAG-146 was written `Verified 100%` on
+    a test of its built half while its other half waited on the owner.
+  - `tf-verify-verdict.py`: a row some of whose tests passed and some were skipped is `NOT-TESTED`, never
+    `Verified` (the Sevak TF-004 rule, for every test). REQ-RAG-155 was Verified on stand-in tests while
+    its three live tests skipped. Measured on every project's latest test results: 20 rows will read
+    `NOT-TESTED` at their next verify (TechieRag 11, Chatur 6, AstroLyfe 2, Lekhak 1). Those with an
+    earlier PASS on record keep `Verified`, marked not re-measured.
+  - `tf-verify-tests.sh --filter "<dotnet test filter>"`: runs only the unit tests the filter selects, no
+    browser tests, into `tests-filter-<filter>.json`, which `--merge` combines with the full run so a pass
+    alone stands over the earlier skip. verify-phase.md step 5 names it.
+  - Cases `tr_009` and `tr_010`; all four checks fail against the v1.2.4 scripts.
+
+- **`tf-estimate.sh` read TechieBlog's Prod-Deploy-Checklist.md as the app (owner, 2026-11-08).** It took the
+  first `*-Checklist.md` by name, and "Prod-Deploy" sorts before "TechieBlog", so every phase-1 row read "no
+  precedent" even with a family. The app is now resolved as the framework names it: `--app {App}` (the task
+  passes it), then core-config.yaml `customTechnicalDocuments.brd`, then the one checklist with its own BRD,
+  otherwise the script stops and asks. Case `es_017` (a repo with a second checklist that sorts first).
+
+- **A phase estimated after the fact is labelled (owner, 2026-11-08).** When runs on the phase's own rows already
+  exist, the records carry `basis_note: "retro"`, the table prints ESTIMATED AFTER THE FACT and the
+  reconciliation prints "estimated after the fact" on that phase; a forecast of the same phase always wins over
+  a later retro batch. SCHEMA.md §2.8, DECISIONS.md 2026-11-08. Cases `es_018`, `es_019`.
+
+- **After handoff, estimated and reconciled on its own line (owner, 2026-11-08).** `*triage-and-fix` and
+  `*triage-issues` runs are a step of their own, "after handoff", never counted inside machine QA's
+  `fix-issues`. `tf-estimate.sh` estimates it from triage history by row prefix with the same rule (three
+  runs, else the family, else no precedent) and prints it in its own column; the records carry `cmd`
+  `triage`. `tf-metrics.sh --estimates` gives it its own line, apportioned by the rows each run named, with
+  the runs that named none counted, and ends each phase with three parts, build, machine QA and after
+  handoff, each estimate beside actual over the same rows. `*triage-and-fix` step 6 prints the table.
+  Before this, TrBlazeUI's 36 triage runs (4.4M output tokens) and Lekhak's 15 (965k) were in no estimate
+  and no actual. Cases `es_015` and `es_016`.
+
+- **The reconciliation now counts runs that named no row.** `tf-metrics.sh --estimates` prints, per cmd,
+  how many runs in the repo recorded no row: they cannot be placed in any phase, so their cost is in no
+  actual and is never shared out. On Sevak that is 29 fix-issues runs, which is why its phase-3 fix actual
+  reads low.
+
+- **CI was red on 8bd1909 (run 42172148834): the installer kept its own copy of the `.gitignore` lines.**
+  On 2026-11-05 the three shell scripts gained `tests/verify/testsettings.Local.json` (Sevak TF-015) and
+  `scripts/install.mjs` did not, so `npm run test:install` failed six checks, each with one difference,
+  `.gitignore`, on both runners.
+  - The lines now live in one file, `.tfcore/data/gitignore-blocks.tsv`. The three scripts read it through
+    `.tfcore/utils/tf-gitignore-blocks.sh`, and the installer reads the same file. No route keeps a copy.
+  - New installer check: every line of the list is written by both routes, and no script carries a list of
+    its own.
+  - `tests/requirements/run.sh` failed with it: FR-48, FR-49, FR-51 and FR-63 run `npm run test:install`.
+    It prints `FR-48   FAIL`, which the workflow's `^FAIL` filter never matched, so the stock-Mac job was red
+    with no annotation at all. The filter now matches that shape too, and each annotation carries the note
+    line under its FAIL.
+  - `tests/regression/run.sh` `tf_043c` (two builds, one lock) failed on Ubuntu only. It is not from 8bd1909:
+    the same case failed on 215a333 and 4699d14 and passed on re-run, and it passes every time here, under
+    load too. Its `order:` note now reaches the annotation, so the next red run says what happened.
 
 - **TechieBlog TF-004 (owner, 2026-11-05): a defect found during a run had no discovery cost of its own.**
   A run's tokens are one window over every row it touched. Misses are written together at a command's close,

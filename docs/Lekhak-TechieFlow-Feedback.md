@@ -4,11 +4,11 @@
 |---|---|
 | App | Lekhak |
 | Upstream | TechieFlow |
-| Updated | 2026-11-05 (TF-038 and TF-039 fixed upstream, ship in TechieFlow v1.2.5) |
+| Updated | 2026-11-05 (TF-038 and TF-039 fixed upstream, ship in TechieFlow v1.3.0) |
 
 ## Summary
 
-39 entries: 0 blocking now, 0 open, 3 fixed upstream and not yet re-checked (TF-037, ships in TechieFlow v1.2.4; TF-038 and TF-039, ship in v1.2.5), 36 closed after a re-check here.
+39 entries: 0 blocking now, 0 open, 3 fixed upstream and not yet re-checked (TF-037, ships in TechieFlow v1.2.4; TF-038 and TF-039, ship in v1.3.0), 36 closed after a re-check here.
 
 Nothing is blocked. TF-038: the mockup check measured a desktop screen as the last test left it. TF-039: a fix's miss stayed open after its re-verify passed; three older misses with the same fault are named in the reply.
 
@@ -669,7 +669,7 @@ Nothing is blocked. TF-038: the mockup check measured a desktop screen as the la
 
 ### TF-038 — On a desktop head already on the screen's route, the mockup check measures the page as a test left it (scrolled), and reports the top bar "cut off"
 
-- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.2.5; not yet re-checked here.
+- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.3.0; not yet re-checked here.
 - **Severity:** minor
 - **Blocks:** no. A fresh page (navigate away, scroll to top) graded PASS with 0 findings.
 - **Repro:**
@@ -691,7 +691,7 @@ Nothing is blocked. TF-038: the mockup check measured a desktop screen as the la
 
 ### TF-039 — tf-fix-close.sh does not rewrite a miss-fix after a later verify passes, and its --misses form refuses the fix command triage-and-fix
 
-- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.2.5; not yet re-checked here.
+- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.3.0; not yet re-checked here.
 - **Severity:** minor
 - **Blocks:** no. `--misses <id> --fix-cmd fix-issues --verdict Verified` closed the miss.
 - **Repro:**
@@ -725,7 +725,7 @@ Nothing is blocked. TF-038: the mockup check measured a desktop screen as the la
 
 ### Resolution status (TechieFlow team, 2026-11-05)
 
-Ships in **TechieFlow v1.2.5**, the next release after v1.2.4. Already in this project's `.tfcore/` through the framework update of 2026-11-06. Each fix has a regression case in `tests/regression/run.sh` that fails against the v1.2.4 scripts and passes now.
+Ships in **TechieFlow v1.3.0**, the next release after v1.2.4. Already in this project's `.tfcore/` through the framework update of 2026-11-06. Each fix has a regression case in `tests/regression/run.sh` that fails against the v1.2.4 scripts and passes now.
 
 | ID | Fix | Check it here |
 |---|---|---|

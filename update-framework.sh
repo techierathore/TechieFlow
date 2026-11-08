@@ -52,10 +52,10 @@
 # loads them from opencode.jsonc via {file:./.tfcore/...} references.
 #
 # Ensured (append-only, idempotent):
-#   .gitignore — framework block (.tfcore/, .claude/, .opencode/, /CLAUDE.md,
-#   /opencode.jsonc, /.tf-scaffold-note.txt): deployed copies
-#   must never be committed in an app repo. Existing entries are respected;
-#   nothing is removed or rewritten.
+#   .gitignore — framework block and agent-artifact block, the lines listed in
+#   .tfcore/data/gitignore-blocks.tsv (the one list the Node installer reads too):
+#   deployed copies and machine-generated output must never be committed in an
+#   app repo. Existing entries are respected; nothing is removed or rewritten.
 #
 # Preserved (per-project work product — never touched):
 #   .tfcore/core-config.yaml         (customTechnicalDocuments paths)
@@ -879,26 +879,11 @@ fi
 #    if any of these are already tracked, the owner must run
 #    `git rm -r --cached <path>` once (git is manual, owner-only).
 # --------------------------------------------------------------------------
-# tests/verify/testsettings.Local.json holds this machine's test passwords and keys (Sevak TF-015): never committed
-GI_LINES=(".tfcore/" ".claude/" ".opencode/" "/CLAUDE.md" "/opencode.jsonc" "/.tf-scaffold-note.txt" "tests/verify/testsettings.Local.json")
-GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?CLAUDE\.md$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$' '^/?(tests/verify/|\*\*/)?testsettings\.Local\.json$')
-GI_MISSING=()
-for i in "${!GI_LINES[@]}"; do
-  # tr strips CR so CRLF .gitignore files (Windows-authored) still match the $-anchor
-  [[ -f .gitignore ]] && grep -qE "${GI_PATS[$i]}" <<<"$(tr -d '\r' < .gitignore)" && continue
-  GI_MISSING+=("${GI_LINES[$i]}")
-done
-if [[ ${#GI_MISSING[@]} -eq 0 ]]; then
-  echo "  .gitignore — framework entries already present"
-elif [[ $DRY_RUN -eq 1 ]]; then
-  echo "  .gitignore — WOULD add framework entries: ${GI_MISSING[*]}"
-else
-  { echo ""
-    echo "# TechieFlow framework — deployed copies, never commit (managed by scaffold/update-framework.sh)"
-    printf '%s\n' "${GI_MISSING[@]}"
-  } >> .gitignore
-  echo "  .gitignore — added framework entries: ${GI_MISSING[*]}"
-fi
+# The lines live in .tfcore/data/gitignore-blocks.tsv, the one list the Node installer reads too
+# (FW-2026-11-08: the scripts gained tests/verify/testsettings.Local.json on 2026-11-05 and the
+# installer did not, so every installer check failed). Never add a line here: add it to the list.
+source "$TEMPLATE/.tfcore/utils/tf-gitignore-blocks.sh"
+tf_gitignore_block "$TEMPLATE/.tfcore/data/gitignore-blocks.tsv" framework $DRY_RUN
 
 # --------------------------------------------------------------------------
 # 8b. .gitignore — agent test-harness & log artifacts. The verifier SELF-
@@ -916,24 +901,7 @@ fi
 #     Same reminder as 8: ignore rules don't UNtrack already-committed files —
 #     run `git rm -r --cached <path>` once for any of these already tracked.
 # --------------------------------------------------------------------------
-GI2_LINES=("node_modules/" "/package.json" "/package-lock.json" "tests/.artifacts/" "test-results/" "test-results-*/" "/scripts-*/" "playwright-report/" ".verify/" "logs/" "/docs/.last-verify.json" ".DS_Store")
-GI2_PATS=('^/?node_modules/?$' '^/?package\.json$' '^/?package-lock\.json$' '^/?tests/\.artifacts/?$' '^/?test-results/?$' '^/?test-results-\*/?$' '^/scripts-\*/?$' '^/?playwright-report/?$' '^/?\.verify/?$' '^/?logs/?$' '^/?docs/\.last-verify\.json$' '^\.DS_Store$')
-GI2_MISSING=()
-for i in "${!GI2_LINES[@]}"; do
-  [[ -f .gitignore ]] && grep -qE "${GI2_PATS[$i]}" <<<"$(tr -d '\r' < .gitignore)" && continue
-  GI2_MISSING+=("${GI2_LINES[$i]}")
-done
-if [[ ${#GI2_MISSING[@]} -eq 0 ]]; then
-  echo "  .gitignore — agent-artifact entries already present"
-elif [[ $DRY_RUN -eq 1 ]]; then
-  echo "  .gitignore — WOULD add agent-artifact entries: ${GI2_MISSING[*]}"
-else
-  { echo ""
-    echo "# TechieFlow agent artifacts — machine-generated test harness & logs, never commit (managed by scaffold/update-framework.sh)"
-    printf '%s\n' "${GI2_MISSING[@]}"
-  } >> .gitignore
-  echo "  .gitignore — added agent-artifact entries: ${GI2_MISSING[*]}"
-fi
+tf_gitignore_block "$TEMPLATE/.tfcore/data/gitignore-blocks.tsv" artifacts $DRY_RUN
 
 # --------------------------------------------------------------------------
 # 8b2. .gitignore — the PROJECT'S OWN build output, and whether it is tracked.

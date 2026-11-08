@@ -31,7 +31,9 @@ NOT-OBSERVABLE (an NFR row with no budget and no unit test) · NOT-BUILT (a Not 
 failing check is its route answering 404: it keeps Not Started and emits no miss, Chatur TF-013) · NOT-DRIVEN (its screen was never driven:
 the head could not be booted, or has no driver) · DEFECT-OPEN (every check passed, but the old Remarks
 carry a defect no verify can see, tf_defect.py: the row goes to Needs re-verify, and so to a fix, with
-the defect kept; AppManager TF-021). A row is Verified only on PASS. NOT-* rows keep their
+the defect kept; AppManager TF-021) · BLOCKED-HELD (a Blocked row whose checks all passed: it stays Blocked
+with the pass in its Remark and no gate record, TechieRag TF-009). A row some of whose tests passed and
+some were skipped is NOT-TESTED: the skipped one is part of its acceptance (TechieRag TF-009). A row is Verified only on PASS. NOT-* rows keep their
 status and get a Remark saying so; nothing is ever written as a static-only pass. A NOT-* row that
 reads Verified keeps it only when an earlier PASS is on record (its Remark or the ledger), and its
 Remark names that date; otherwise it goes to Needs re-verify (Chatur TF-017). On a Mac web-view head
@@ -245,6 +247,17 @@ def main(argv):
             if not unit_only:
                 notes.append(f"acceptance not measured ({len(t.get('skipped') or [])} test(s) skipped, none ran)")
             t = None
+        # TechieRag TF-009: a row whose tests partly passed and partly SKIPPED was written Verified on the
+        # ones that ran: REQ-RAG-155 on its stand-in tests while its three live tests skipped. A skipped
+        # test carrying the id is part of the row's acceptance, so the row is not measured until it runs
+        # (the Sevak TF-004 rule, for every test, not only on-app ones). tests/regression/run.sh tr_009b.
+        elif t and t.get("result") == "PASS" and t.get("skipped") and not t.get("failed"):
+            sk = t.get("skipped") or []
+            why = (t.get("outcomes") or {}).get(sk[0], {}).get("reason") or ""
+            unit_only = (f"{t.get('passed', 0)} test(s) named {rid} passed and {len(sk)} skipped "
+                         f"({quoted(sk[0], 50)}{': ' + why[:60] if why else ''}); a skipped test is part of the row's "
+                         f"acceptance, so it is not measured until that test runs")
+            t = None
         # the OS zoom keys (coding-standards-dotnet.md §9b): a row whose acceptance carries "zoom-check: keys"
         # or "zoom-check: kept" is graded by tf-verify-zoom.sh --json-out zoom/<REQ>.json, which stands as its
         # test; a failing zoom outranks a passing test, and "kept" counts only a run made after a restart
@@ -428,6 +441,12 @@ def main(argv):
         kept = tf_defect.unseen(r.get("remarks"))
         if kept and verdict == "PASS":
             verdict = "DEFECT-OPEN"
+        # TechieRag TF-009: a Blocked row is waiting on something no test measures (an owner decision, a
+        # device, a library gap). A passing test proves the part that is built, so the row stays Blocked
+        # with the pass in its Remark, and no PASS gate record is written. tests/regression/run.sh tr_009a.
+        if verdict == "PASS" and prior.strip("`* ").lower().startswith("blocked"):
+            verdict = "BLOCKED-HELD"
+            detail = f"{detail}; stays Blocked: the tests measure the part that is built, not what the row waits on"
         status = STATUS.get(verdict, "Needs re-verify" if verdict == "DEFECT-OPEN" else prior)
         pct = r.get("pct")
         # Chatur TF-017: a row whose tests were all skipped kept the Verified it read before, with a Remark
@@ -450,7 +469,7 @@ def main(argv):
         marks = {"FAIL": "⚠ acceptance", "BUILD-FAIL": "⚠ build", "TEST-USERS-FAIL": "⚠ test-users", "RENDER-FAIL": "⚠ render", "ASSET-FAIL": "⚠ assets",
                  "VISUAL-FAIL": "⚠ visual", "MOCKUP-FAIL": "⚠ mockup-parity", "PERF-FAIL": "⚠ perf",
                  "NOT-TESTED": "not measured", "NOT-OBSERVABLE": "not observable", "NOT-DRIVEN": "not measured", "PASS": "PASS",
-                 "NOT-BUILT": "not built",
+                 "NOT-BUILT": "not built", "BLOCKED-HELD": "tests pass, still Blocked",
                  "DEFECT-OPEN": "checks pass, defect open"}
         remark = f"{today} verify: {marks[verdict]} — {detail}"
         if evidence:

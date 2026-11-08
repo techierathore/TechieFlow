@@ -31,8 +31,14 @@
 #   tf-emit.sh --origin-of REQ-UI-014           # prints "<started> <cmd> <agent>" of the last build or fix
 #                                               # run that touched the row, nothing when there is none
 #   tf-emit.sh --where                          # prints the resolved docs/metrics dir
+#   tf-emit.sh --current-model                  # prints the model this session is running on, read from
+#                                               # the session pointer exactly as enrich_run reads a run's
+#                                               # window (the last 6 hours), nothing when it cannot tell.
+#                                               # tf-estimate.sh stamps it on the estimates it prints.
 #
-# STREAMS: runs | gates | sessions | commits | misses   (anything else is dropped)
+# STREAMS: runs | gates | sessions | commits | misses | estimates   (anything else is dropped)
+#   estimates.jsonl (SCHEMA.md §2.8, added 2026-11-08) holds token and time ESTIMATES, written by
+#   tf-estimate.sh. It is never read into a measurement and nothing here copies it into runs.jsonl.
 #
 # misses.jsonl is the one stream carrying THREE record kinds — `miss` (opened),
 # `miss-fix` (closed, linked by miss_id) and `miss-amend` (completes a field the
@@ -591,7 +597,8 @@ TF_ALLOW_OVERLAP=0
 for _a in "$@"; do [[ "$_a" == "--allow-overlap" ]] && TF_ALLOW_OVERLAP=1; done
 export TF_ALLOW_OVERLAP
 case "$STREAM" in
-  runs|gates|sessions|commits|misses) ;;
+  runs|gates|sessions|commits|misses|estimates) ;;
+  --current-model) ;;   # a question, not a record: answered by the same program, below
   *) _warn "unknown stream '${STREAM:-<none>}' — event dropped"; exit 0 ;;
 esac
 
@@ -1571,6 +1578,11 @@ _ALLOWED = {
                              "tokens_cache_write", "cost_usd", "tokens_scope", "model",
                              "billing_mode", "cost_source"},
     ("misses", "miss-amend"): {"miss_id", "field", "value"},
+    # An ESTIMATE, never a measurement (SCHEMA.md §2.8, added 2026-11-08): one per checklist row per cmd
+    # and one per phase total per cmd, written by tf-estimate.sh. Its own stream, so no reader of
+    # runs.jsonl can ever take one for a run; `model` here is the model that made the estimate.
+    ("estimates", "estimate"): {"phase", "req_id", "cmd", "tokens_out", "duration_s", "basis", "basis_runs",
+                                "model", "rows_n", "rows_no_precedent_n", "basis_note"},
     # a miss that should never have been written, withdrawn by --void-miss (SCHEMA.md §5.5.11)
     ("misses", "miss-void"): {"miss_id", "reason"},
     # an owner review of a phase's output (FR-36, built 2026-09-06): how many corrections were
@@ -1608,6 +1620,8 @@ def _shape_ok(rec):
     if kind == "gate" and not rec.get("backfilled") and not (rec.get("req_id") and rec.get("verdict")):
         sys.stdout.write("tf-emit: REFUSED — a gate record is one REQ's verdict and needs both req_id and verdict (SCHEMA.md §3). A suite result (unit tests, the whole browser run) belongs in the run record's notes, not here. Nothing was appended.\n")
         return False
+    if kind == "estimate" and not _estimate_ok(rec):
+        return False
     if kind == "miss" and not rec.get("miss_id"):
         sys.stdout.write("tf-emit: REFUSED — a miss record needs a miss_id; get one with: bash .tfcore/utils/tf-emit.sh --next-miss-id. Nothing was appended.\n")
         return False
@@ -1615,6 +1629,68 @@ def _shape_ok(rec):
         for f in _DERIVED:
             rec.pop(f, None)
     return True
+
+
+def _estimate_ok(rec):
+    """SCHEMA.md §2.8. A figure is {low, mid, high} with low <= mid <= high, or null when there was no
+    precedent — and a null figure must say basis "none", because "no precedent" is never a number."""
+    def bad(why):
+        sys.stdout.write("tf-emit: REFUSED — estimate: %s (SCHEMA.md §2.8). Nothing was appended.\n" % why)
+        return False
+    # "triage" = the after-handoff step, *triage-and-fix + *triage-issues pooled (never inside fix-issues)
+    if rec.get("cmd") not in ("build-phase", "verify-phase", "fix-issues", "triage"):
+        return bad("cmd must be build-phase, verify-phase, fix-issues or triage; got %r" % (rec.get("cmd"),))
+    if not isinstance(rec.get("phase"), int) or rec["phase"] < 1:
+        return bad("phase must be a whole number from 1")
+    basis = rec.get("basis")
+    if basis not in ("repo", "family", "none"):
+        return bad("basis must be repo, family or none; got %r" % (basis,))
+    for f in ("tokens_out", "duration_s"):
+        v = rec.get(f)
+        if v is None:
+            if basis != "none":
+                return bad("%s is null but basis is %r — a figure with no precedent says basis none" % (f, basis))
+            continue
+        if basis == "none":
+            return bad("basis none carries no figures, but %s has one" % f)
+        if not (isinstance(v, dict) and set(v) == {"low", "mid", "high"}
+                and all(isinstance(v[k], (int, float)) and v[k] >= 0 for k in v)
+                and v["low"] <= v["mid"] <= v["high"]):
+            return bad("%s must be {\"low\",\"mid\",\"high\"} numbers with low <= mid <= high" % f)
+    # "retro": estimated after the fact, runs on the phase's own rows already existed (hindsight, not a forecast)
+    if "basis_note" in rec and rec["basis_note"] != "retro":
+        return bad("basis_note is \"retro\" or absent; got %r" % (rec.get("basis_note"),))
+    if rec.get("req_id") is not None and not re.match(r"^REQ-[A-Z]+-\d+$", str(rec.get("req_id"))):
+        return bad("req_id must be a REQ id, or null on the phase total")
+    return True
+
+
+def _current_model():
+    """The model this session is running on: the dominant one (most output tokens) over the last six
+    hours of the store the session pointer names — the reading enrich_run makes for a run's window."""
+    t1 = int(time.time() * 1000)
+    t0 = t1 - 6 * 3600 * 1000
+    win = None
+    try:
+        if HARNESS == "claude-code":
+            win = _window_claude(t0, t1)
+        elif HARNESS == "opencode":
+            win = _window_opencode(t0, t1)
+        if not win:     # harness undetected (a plain shell): try each pointer that exists
+            win = _window_claude(t0, t1) or _window_opencode(t0, t1)
+    except Exception:
+        win = None
+    if not win or not win.get("models"):
+        return None
+    return max(win["models"], key=win["models"].get)
+
+
+def enrich_estimate(rec):
+    if stream != "estimates":
+        return rec
+    if not rec.get("model"):
+        rec["model"] = _current_model()
+    return rec
 
 
 def enrich_miss(rec):
@@ -1700,6 +1776,10 @@ def enrich_miss(rec):
         warn("miss enrichment failed (%s) — record kept unenriched" % e)
     return rec
 
+if stream == "__model__":            # tf-emit.sh --current-model
+    print(_current_model() or "")
+    raise SystemExit(0)
+
 # --- append --------------------------------------------------------------
 # newline="\n" is NOT optional. Python's text mode translates "\n" to the
 # platform separator, so on native Windows every append would land as CRLF —
@@ -1715,7 +1795,7 @@ for rec in records:
     base = enrich(rec)
     if not _overlap_ok(base):
         continue
-    out = enrich_miss(enrich_run(stamp_attempt(base)))
+    out = enrich_estimate(enrich_miss(enrich_run(stamp_attempt(base))))
     if out is None:                 # a refused miss-amend (§5.5.7) — dropped, never appended
         continue
     line = json.dumps(out, separators=(",", ":"), ensure_ascii=False)
@@ -1736,6 +1816,12 @@ except Exception as e:
     warn("append failed (%s) — event dropped" % e)
     raise SystemExit(0)
 PY
+# --current-model: the same program, asked one question instead of handed a record. It is the one place
+# that knows how to read the session pointer, so nothing else re-implements that reading.
+if [[ "$STREAM" == "--current-model" ]]; then
+  printf '{}' | python3 -c "$TF_PROG" "$MET_DIR" "__model__" "$ROOT" 2>"$TF_ERR"
+  exit 0
+fi
 python3 -c "$TF_PROG" "$MET_DIR" "$STREAM" "$ROOT" 2>"$TF_ERR"
 
 # The readable miss list beside the record (FR-31, Session 5 2026-09-07): after any write to the

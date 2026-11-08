@@ -2,6 +2,26 @@
 
 > **The Codex adapter was removed on 2026-09-07** (D-14, FR-42). The framework supports Claude Code and OpenCode. Everything below that describes `.codex/`, `.agents/skills/` or a Codex code path is history, kept for traceability; see `docs/CHANGELOG.md`.
 
+## 2026-11-08 — Effort estimates get a stream of their own, never a field on a run
+
+**Trigger.** The owner asked for effort estimates in tokens, made before a phase is built and reconciled against the runs afterwards (v1.3.0, `*estimate-phase`, SCHEMA.md §2.8).
+
+**Decision.** Estimates are written to `docs/metrics/estimates.jsonl`, kind `estimate`, by `tf-estimate.sh` through `tf-emit.sh`. They never touch `runs.jsonl`, and no field of a run record carries one. The reconciliation sets the estimate beside the actual as two columns (`tf-metrics.sh --estimates`), and SCHEMA.md §6 gains a fourth separation: an estimate never pools with a measurement.
+
+**Why a separate stream.**
+1. **The standing rule is that tokens are never estimated into a measurement** (§2.5: `tokens_scope:"none"` rather than a guess; `cost_usd` null on Claude Code rather than a rate card). An estimated figure on a run record would sit one field away from the measured figure. Every reader of `runs.jsonl`, TfLens included, would have to know which fields were forecasts, and the first that did not would pool them.
+2. **The unit differs.** A run is one window of measured work. An estimate is a forecast per row and per phase, made before any run exists, and remade when the history grows. It belongs to no run, so it cannot be a field of one.
+3. **The rule is structural, not remembered.** On their own stream, estimates cannot reach a first-pass rate, an effort-per-phase figure or a cost per miss, because none of those readers opens the file. The same reasoning put misses on their own stream (2026-08-28).
+4. **It stays honest about its inputs.** Each record names its basis (`repo`, `family` or `none`), how many runs it was computed over, and the model that made it. "No precedent" is a record with no figures, never a smaller number.
+
+**What it is not.** Not per-feature timing: SCHEMA.md §0's non-goal stands, a row's figure is an input to the phase total, and the reconciliation headline is per phase. Not a gate: a missing estimate never blocks `*build-phase`. Owner UAT time has no stream and is printed "not measured", never estimated.
+
+**A hindsight estimate is labelled, never passed off as a forecast (added 2026-11-08).** The first reconciliation estimated Sevak phase 3 after it was finished. Nothing in such a record said so, and a figure made after the fact reads, a month later, exactly like one made before. A forecast is worth something because it was made without the answer; a hindsight figure is still useful (it tests the method on a finished phase) but it proves nothing about forecasting. So an estimate made when runs on the phase's own rows already exist carries `basis_note: "retro"`, every table prints "estimated after the fact", and a forecast of the same phase always wins in the reconciliation. The test is mechanical (runs on the phase's rows exist), not a judgement: a phase re-estimated midway is partly hindsight too, and is labelled the same.
+
+**Alternative rejected.** Storing the estimate's mid in `runs.jsonl` beside the actual at handoff, so one record carried both. That writes a derived comparison into a stream (§8 forbids it) and puts a forecast in the stream that measures. The reconciliation is computed at report time instead.
+
+---
+
 ## 2026-08-24 — Codex is the third additive harness
 
 Canonical tasks/personas remain in `.tfcore/`. Codex consumes thin repository

@@ -408,24 +408,11 @@ done
 #    package for library personas) and must never be committed in the app repo.
 #    Append-only + idempotent: existing anchored/slash variants are respected;
 #    user content is never rewritten.
-# tests/verify/testsettings.Local.json holds this machine's test passwords and keys (Sevak TF-015): never committed
-GI_LINES=(".tfcore/" ".claude/" ".opencode/" "/CLAUDE.md" "/opencode.jsonc" "/.tf-scaffold-note.txt" "tests/verify/testsettings.Local.json")
-GI_PATS=('^/?\.tfcore/?$' '^/?\.claude/?$' '^/?\.opencode/?$' '^/?CLAUDE\.md$' '^/?opencode\.jsonc$' '^/?\.tf-scaffold-note\.txt$' '^/?(tests/verify/|\*\*/)?testsettings\.Local\.json$')
-GI_MISSING=()
-for i in "${!GI_LINES[@]}"; do
-  # tr strips CR so CRLF .gitignore files (Windows-authored) still match the $-anchor
-  [[ -f .gitignore ]] && grep -qE "${GI_PATS[$i]}" <<<"$(tr -d '\r' < .gitignore)" && continue
-  GI_MISSING+=("${GI_LINES[$i]}")
-done
-if [[ ${#GI_MISSING[@]} -gt 0 ]]; then
-  { echo ""
-    echo "# TechieFlow framework — deployed copies, never commit (managed by scaffold/update-framework.sh)"
-    printf '%s\n' "${GI_MISSING[@]}"
-  } >> .gitignore
-  echo "  .gitignore — added framework entries: ${GI_MISSING[*]}"
-else
-  echo "  .gitignore — framework entries already present"
-fi
+# The lines live in .tfcore/data/gitignore-blocks.tsv, the one list the Node installer reads too
+# (FW-2026-11-08: the scripts gained tests/verify/testsettings.Local.json on 2026-11-05 and the
+# installer did not, so every installer check failed). Never add a line here: add it to the list.
+source "$TEMPLATE/.tfcore/utils/tf-gitignore-blocks.sh"
+tf_gitignore_block "$TEMPLATE/.tfcore/data/gitignore-blocks.tsv" framework 0
 
 # 9b. .gitignore — agent test-harness & log artifacts. The verifier SELF-
 #     PROVISIONS npm/Playwright per project (verify-phase §1) and Serilog
@@ -439,22 +426,7 @@ fi
 #     used to write per-cluster siblings (test-results-cluster-a/ ...) that the
 #     bare pattern never matched, so screenshot dumps piled up untracked at the
 #     repo root. A compliant run now writes none of them.
-GI2_LINES=("node_modules/" "/package.json" "/package-lock.json" "tests/.artifacts/" "test-results/" "test-results-*/" "/scripts-*/" "playwright-report/" ".verify/" "logs/" "/docs/.last-verify.json" ".DS_Store")
-GI2_PATS=('^/?node_modules/?$' '^/?package\.json$' '^/?package-lock\.json$' '^/?tests/\.artifacts/?$' '^/?test-results/?$' '^/?test-results-\*/?$' '^/scripts-\*/?$' '^/?playwright-report/?$' '^/?\.verify/?$' '^/?logs/?$' '^/?docs/\.last-verify\.json$' '^\.DS_Store$')
-GI2_MISSING=()
-for i in "${!GI2_LINES[@]}"; do
-  [[ -f .gitignore ]] && grep -qE "${GI2_PATS[$i]}" <<<"$(tr -d '\r' < .gitignore)" && continue
-  GI2_MISSING+=("${GI2_LINES[$i]}")
-done
-if [[ ${#GI2_MISSING[@]} -gt 0 ]]; then
-  { echo ""
-    echo "# TechieFlow agent artifacts — machine-generated test harness & logs, never commit (managed by scaffold/update-framework.sh)"
-    printf '%s\n' "${GI2_MISSING[@]}"
-  } >> .gitignore
-  echo "  .gitignore — added agent-artifact entries: ${GI2_MISSING[*]}"
-else
-  echo "  .gitignore — agent-artifact entries already present"
-fi
+tf_gitignore_block "$TEMPLATE/.tfcore/data/gitignore-blocks.tsv" artifacts 0
 
 # --------------------------------------------------------------------------
 # 9b2. .gitignore — the PROJECT'S OWN build output, and whether it is tracked.

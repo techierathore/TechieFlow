@@ -2,6 +2,8 @@
 
 `*build-phase {App}` implements every open row of the phase's checklist, smoke-tests each screen it changed, chains the verifier, and repairs what the verifier fails. It runs to completion: YOLO is its default mode, and the pass ends only when every row on the working list is at least `Implemented` or genuinely `Blocked`. Never edit the BRD or the mockups here; a specification gap is logged, not fixed. Never edit the checklist by shell: the Write tool, so the guards can see it.
 
+Before: `*estimate-phase {App}` (`estimate-phase.md`) is the step before this one for the `appPhase` phase: it records what the phase should cost in tokens and time, so `*handoff-phase` can set it beside what the runs measured. If `docs/metrics/estimates.jsonl` has no record for this phase, say so in the report's first line and carry on; the build is never blocked by a missing estimate.
+
 First: `bash .tfcore/utils/tf-phase.sh start build-phase {App}` prints the start time and marks the command running; a database migration is refused without that marker.
 
 ## Read

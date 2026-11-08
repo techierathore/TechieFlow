@@ -118,6 +118,14 @@ Then explicitly tell the user:
 3. After UAT passes, manually update `PROJECT-STATUS.md`: `current_phase: Released`.
 4. For end-user / external documentation, run `*productguide {AppName}` (flow-master) — it builds a screenshot-illustrated, task-oriented user manual (MD + HTML) from the DevGuide's screen map + captured screenshots. On-demand; re-run with `--update` as the UI evolves.
 
+### 6. Estimate against actual — print it last
+
+```bash
+bash .tfcore/telemetry/tf-metrics.sh --estimates .
+```
+
+Paste its table **as printed** at the very end of the output, under the heading `Estimate against actual`. It sets the latest `*estimate-phase` figures for each phase (mid and range, per cmd, per estimating model) beside what the runs of that phase measured, with apportioned runs labelled and `insufficient data` where fewer than three runs exist (SCHEMA.md §2.8). Two columns, never one number: do not add a ratio, an "accuracy" percentage or a verdict of your own. When it prints `no estimates yet`, print that line; it is the answer, and the next phase should start with `*estimate-phase {AppName}`. Owner UAT time has no stream: say "not measured".
+
 ## Output Checklist
 
 - [ ] `docs/{AppName}-UsageGuide.md` finalized — Test-users table reconciled with the DB (created accounts ✅) + screen-by-screen plan current + prereqs/build/run/test/smoke; its `.html` re-rendered
@@ -126,3 +134,4 @@ Then explicitly tell the user:
 - [ ] `docs/{AppName}-BRD.html`, `docs/{AppName}-Architecture.html`, `PROJECT-STATUS.html`, the UsageGuide + DevGuide HTML re-rendered (the checklist is NOT rendered to HTML — markdown only)
 - [ ] Per-library feedback files consolidated, one per library (if applicable; legacy combined file split + archived)
 - [ ] Ship-readiness verdict delivered with explicit next steps
+- [ ] `tf-metrics.sh --estimates .` table printed last, as printed (or its `no estimates yet` line)

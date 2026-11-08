@@ -257,6 +257,28 @@ accurately tasks self-report.
 
 ---
 
+## 6c. Estimate against actual — two columns, never one number
+
+<!-- Source: tf-metrics.sh --estimates (or the `estimates` block of --report --json). SCHEMA.md §2.8.
+     The latest *estimate-phase per phase and estimating model, beside what the runs measured.
+     No ratio, no accuracy percentage: an estimate never pools with a measurement (§6, fourth
+     separation). Delete this section when it prints `no estimates yet`. -->
+
+<!-- One row per step (build-phase, verify-phase, fix-issues, after handoff = triage-and-fix + triage-issues),
+     then the phase in three parts: build · machine QA · after handoff, each estimate beside actual. -->
+
+| Phase | Estimated by | Step | Estimate mid (low–high) | Actual | In range | Actual runs (apportioned · named no row) |
+|---|---|---|---|---|---|---|
+| {n} | `{model}` | `{cmd}` [{covered}/{rows}] | {tokens} ({low}–{high}) · {time} | {tokens} · {time} | {below/within/above} | {n} ({n} · {n}) |
+
+A row with no precedent is outside the estimate, and `[n/m]` says how many rows it covers. A run that
+also touched rows outside the phase counts its share only and is labelled apportioned; a run that named
+no row cannot be placed in any phase and is counted, never shared out. Fewer than 3 runs: `insufficient
+data (n=…)`. A row's QA estimate is one verify and one fix pass, so a phase that re-verifies many times
+sits above it. Owner UAT time is not measured.
+
+---
+
 ## 7. What is missing
 
 <!-- Name every metric that had no data or too little. A missing number reported as

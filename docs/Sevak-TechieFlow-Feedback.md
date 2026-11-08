@@ -4,7 +4,7 @@
 |---|---|
 | App | Sevak |
 | Upstream | TechieFlow |
-| Updated | 2026-11-05 (TF-015 and TF-016 fixed upstream, ship in TechieFlow v1.2.5) |
+| Updated | 2026-11-05 (TF-015 and TF-016 fixed upstream, ship in TechieFlow v1.3.0) |
 
 ## Summary
 
@@ -211,7 +211,7 @@ TF-013 (the Mac boot passes no settings) is fixed upstream and waits for a Mac c
 
 ### TF-015 — The verify harness reads its settings from environment variables and a `.env.local` file, not from an appsettings-style file
 
-- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.2.5; not yet re-checked here.
+- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.3.0; not yet re-checked here.
 - **Blocks:** no — the tests run; Sevak's own specs moved their values to a JSON settings file.
 - **Severity:** minor
 - **Repro:** Sevak, 2026-11-03, read not run: the harness takes its settings (test mailbox, AppManager test users, data folder, debugging address) from environment variables and `tests/verify/.env.local`, and the specs read them with `process.env`.
@@ -231,7 +231,7 @@ TF-013 (the Mac boot passes no settings) is fixed upstream and waits for a Mac c
 
 ### TF-016 — The test-users rule allows a Register submit with test user 1's address, which creates that user when AppManager no longer holds it
 
-- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.2.5; not yet re-checked here.
+- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.3.0; not yet re-checked here.
 - **Blocks:** no — Sevak's REQ-UI-006 test now signs in as test user 1 first and never submits Register unless that sign-in works.
 - **Severity:** major
 - **Repro:** Sevak, 2026-11-03. `tf-test-users-check.py` and `verify-phase.md` step 4 say the automated Register row checks "the email already in use path using test user 1", and the check passes a Register submit whose only address is a Test users address. On 2026-11-03 test user 1 (`sevak-owner@techierathore.com`) no longer signed in on the production AppManager (`INVALID_CREDENTIALS` from the first attempt). The REQ-UI-006 test, written to that rule, submitted Register with that address and its password, and AppManager created the account (it is now user 14).
@@ -244,7 +244,7 @@ TF-013 (the Mac boot passes no settings) is fixed upstream and waits for a Mac c
 
 ## Resolution status (TechieFlow team, 2026-11-05)
 
-Ships in **TechieFlow v1.2.5**, the next release after v1.2.4. Already in this project's `.tfcore/` through the framework update of 2026-11-06. Each fix has a regression case in `tests/regression/run.sh` that fails against the v1.2.4 scripts and passes now.
+Ships in **TechieFlow v1.3.0**, the next release after v1.2.4. Already in this project's `.tfcore/` through the framework update of 2026-11-06. Each fix has a regression case in `tests/regression/run.sh` that fails against the v1.2.4 scripts and passes now.
 
 | ID | Fix | Check it here |
 |---|---|---|

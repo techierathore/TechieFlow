@@ -36,7 +36,7 @@ COMMAND = re.compile(r"(?<![\w*])\*([a-z][a-z0-9]*(?:-[a-z0-9]+)*)\b")
 # a sentence that puts a command in front of the owner as work still to do
 TO_RUN = re.compile(r"(?i)\b(run|rerun|re-run|pending|next|not (?:yet )?(?:been )?run|still|should|must|"
                     r"needs?|to do|waiting|before|then)\b")
-COMMANDS = {"verify", "build-phase", "fix-issues", "triage-issues", "triage-and-fix", "amend-docs",
+COMMANDS = {"verify", "estimate-phase", "build-phase", "fix-issues", "triage-issues", "triage-and-fix", "amend-docs",
             "refresh-status", "handoff-phase", "log-miss", "deploy-checklist", "day1-greenfield",
             "day1-brownfield", "devguide", "productguide", "metrics", "split-brd", "mockups", "yolo"}
 TEMPLATED = re.compile(

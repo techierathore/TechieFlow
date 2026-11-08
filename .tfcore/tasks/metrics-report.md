@@ -4,15 +4,18 @@
 
 Turn `docs/metrics/*.jsonl` into a report the owner can read and, more importantly, **defend**. Produces `docs/metrics/METRICS.md` + `docs/metrics/METRICS.html`.
 
-This task answers five questions and nothing else:
+This task answers six questions and nothing else:
 
 1. **First-pass rate** — what fraction of REQs reach `Verified` on attempt 1?
 2. **Gate catch distribution** — of all failures, which gate caught them?
 3. **Escape rate** — what fraction of defects reached UAT/production instead of being caught by a gate?
 4. **Miss attribution and rework cost** — *what* was missed, *which phase / agent / model* let it through, and *what did fixing it cost*? (SCHEMA.md §5.5)
 5. **Effort per phase** — what did each phase cost in **wall clock**, **tokens**, on **which model**, and with how much **subagent fan-out**? (SCHEMA.md §2.6, added 2026-08-31)
+6. **Estimate against actual** — for each phase that was estimated with `*estimate-phase`, what did the estimate say (mid and range, per cmd, per estimating model) and what did the runs measure? (SCHEMA.md §2.8, added 2026-11-08)
 
-Everything else in the report is context for those five.
+Everything else in the report is context for those six.
+
+**Question 6 is two columns, never one number.** The estimate comes from `estimates.jsonl`, the actual from `runs.jsonl`, and they stand side by side. No ratio, no "accuracy %", no blended figure: an estimate is a forecast, and dividing a measurement by a forecast makes a number that is neither.
 
 **Question 5 is about the RUN, not the ticket.** It is an aggregate over `runs.jsonl` grouped by `cmd`. It is emphatically **not** cycle-time-per-feature — that remains a non-goal (SCHEMA.md §0), there is no per-feature timing field, and there will not be one. "`*build-phase` runs cost a median of 26 minutes and 39k output tokens" is a phase figure. "REQ-UI-004 took two hours" is not, and nothing in the streams can honestly produce it.
 
@@ -41,6 +44,12 @@ bash .tfcore/telemetry/tf-metrics.sh --phases .          # or --phases . /path/t
 
 Same standing as `--report`: read-only, no git, agent-safe.
 
+The **estimate-against-actual** block (question 6) rides in the same payload under `estimates`. On its own:
+
+```bash
+bash .tfcore/telemetry/tf-metrics.sh --estimates .       # or --estimates . /path/to/OtherApp --json
+```
+
 **Use this output. Do not recompute anything by hand.** The provenance separations of §2 are enforced inside that script — it has no code path that emits a combined figure. Hand arithmetic over the raw JSONL is exactly how an indefensible number gets into a report, and it is also how "insufficient data" quietly becomes "0%".
 
 `--report` and `--rollup` are read-only and run no git. **Never run `--backfill-commits` or `--backfill-gates`** — those are owner-only, and `--backfill-commits` invokes git, which agents never do.
@@ -55,7 +64,8 @@ If the streams are empty or the script reports nothing: say so plainly, write no
 
 - **live vs backfilled** — records reconstructed after the fact never pool with records written at the moment of the event;
 - **`project_type`** — `app`, `library`, and `docs` never pool with each other;
-- **attribution and cost confidence** (§5.5) — a miss whose `origin_confidence` is not `linked` never enters a per-phase / per-agent / per-model figure, and a `miss-fix` whose `cost_attribution` is not `sole` never enters a headline cost figure.
+- **attribution and cost confidence** (§5.5) — a miss whose `origin_confidence` is not `linked` never enters a per-phase / per-agent / per-model figure, and a `miss-fix` whose `cost_attribution` is not `sole` never enters a headline cost figure;
+- **estimate vs measurement** (§2.8, added 2026-11-08) — an estimate never pools with a measurement. A figure from `estimates.jsonl` is never added to, averaged with, or divided into a figure from `runs.jsonl`; question 6 prints them as two labelled columns, and an actual built from runs that also touched other rows is labelled **apportioned**.
 
 Not as a merged figure. Not as a "total" row. Not as an "overall" summary line. Not as a helpfully-labelled average in the intro paragraph. Data on the wrong side of a boundary may appear in an **adjacent, labelled column** — never summed with the figure beside it.
 
@@ -104,6 +114,7 @@ Gate catch: {top gate} {n}%  |  Escape rate: {x}%
 Misses: {m} logged ({o} open) · design-miss share {d}% · attributed {a}/{m}
 Rework cost: {tokens} tokens per miss (measured, n={s}) {| $X measured, OpenCode only}
 Effort/phase: heaviest {cmd} — {time} wall, {tokens} out ({pct} of all output), fan-out observed on {n}/{N} runs
+Estimate vs actual: {per estimated phase: build est {mid} ({low}–{high}) | actual {x} — or "no estimates yet"}
 Written: docs/metrics/METRICS.md + .html
 {if backfilled records present: "Backfilled data is reported in a separate column and cannot support a published first-pass rate."}
 ```
@@ -114,7 +125,7 @@ Then stop. Do not run the status gate — this task reports on history, it does 
 
 ## Hard rules
 
-- **No combined figure across live/backfilled, across `project_type`, across attribution confidence, or across cost attribution** — for first-pass rate, gate catch distribution, escape rate, miss rates, or cost per miss. This is the rule the whole task exists for.
+- **No combined figure across live/backfilled, across `project_type`, across attribution confidence, across cost attribution, or across estimate and measurement** — for first-pass rate, gate catch distribution, escape rate, miss rates, or cost per miss. This is the rule the whole task exists for.
 - **The miss stream's escape share is reported BESIDE the `gates.jsonl` escape rate, never merged into it.** They are computed from different records by different definitions; presenting one number for both would make the word meaningless.
 - **Never run git**, and never run `tf-metrics.sh --backfill-*` — owner-only.
 - **Never write into `PROJECT-STATUS.md`, any `*-Checklist.md`, or any `.jsonl` stream.**
@@ -137,6 +148,7 @@ Then stop. Do not run the status gate — this task reports on history, it does 
 - [ ] Every per-phase token figure carries `tokens_measured_n` / `tokens_unmeasured_n`; every fan-out figure carries `fanout.observed_n` and names why the rest were excluded (not `tree` scope vs predating the field)
 - [ ] Declared (`subagents`) and measured (`subagent_runs`) fan-out both shown where they disagree, with the measured one named as authoritative
 - [ ] No per-feature or per-REQ cycle time anywhere on the page — the unit is the run
+- [ ] Estimate-against-actual section written from `estimates` (question 6): per phase and estimating model, estimate mid + range beside the actual, apportioned runs labelled, `insufficient data` where fewer than 3 runs — two columns, never a ratio or one blended number
 - [ ] Dollars quoted only where a harness measured them; no rate-card estimate anywhere on the page
 - [ ] No "overall" / "total" / "combined" figure for first-pass rate, gate distribution, or escape rate
 - [ ] Every table containing backfilled data carries the inferred-fields footnote

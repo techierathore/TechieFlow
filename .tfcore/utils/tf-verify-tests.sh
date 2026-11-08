@@ -3,7 +3,7 @@
 #
 #   bash .tfcore/utils/tf-verify-tests.sh [--base URL] [--target <sln|csproj>] [--no-browser] [--no-unit]
 #                                         [--shard N/M] [--spec <file or glob>]… [--list <list.json>] [--all-specs]
-#                                         [--json-out tests/.artifacts/verify/tests.json]
+#                                         [--filter <dotnet test filter>] [--json-out tests/.artifacts/verify/tests.json]
 #   bash .tfcore/utils/tf-verify-tests.sh --merge <tests-a.json> <tests-b.json>… [--json-out tests/.artifacts/verify/tests.json]
 #
 # Browser tests: `npx playwright test` over tests/verify/ (the JSON reporter). Unit tests:
@@ -22,6 +22,9 @@
 # When tf-verify-list.sh was given a list of ids, the browser run keeps only the tests carrying them
 # (`--grep`), and is skipped when no row has a screen and no browser test names one (Lekhak TF-017).
 # `--list` names another list.json; `--all-specs` runs every browser test whatever the scope.
+# `--filter "DisplayName~REQ-RAG-150"` runs only the unit tests the filter selects (dotnet test --filter),
+# no browser tests, into tests-filter-<expr>.json: a memory-heavy test that skips itself when its whole
+# project runs is run on its own, and its part is merged into the run with --merge (TechieRag TF-010).
 # A desktop head's debugging address (--base answering /json/version, or boot.json mode=cdp) also
 # reaches the tests as CDP_URL; a suite that reads it nowhere is refused, not run (Lekhak TF-021).
 # A Mac Catalyst head (boot.json mode=appium) reaches them as APPIUM_URL, TF_BUNDLE_ID and TF_APP_PATH.
@@ -29,7 +32,7 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/tf-portable.sh"   # tf_read_lines, for bash 3.2 on a stock Mac
-BASE=""; TARGET=""; BROWSER=1; UNIT=1; OUT=""; SHARD=""; SPECS=(); MERGE=(); LIST="tests/.artifacts/verify/list.json"; ALLSPECS=0
+BASE=""; TARGET=""; BROWSER=1; UNIT=1; OUT=""; SHARD=""; SPECS=(); MERGE=(); LIST="tests/.artifacts/verify/list.json"; ALLSPECS=0; FILTER=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base) BASE="${2:-}"; shift 2 ;;
@@ -40,9 +43,10 @@ while [[ $# -gt 0 ]]; do
     --spec) SPECS+=("${2:-}"); shift 2 ;;
     --list) LIST="${2:-}"; shift 2 ;;
     --all-specs) ALLSPECS=1; shift ;;
+    --filter) FILTER="${2:-}"; BROWSER=0; shift 2 ;;
     --merge) shift; MERGING=1; while [[ $# -gt 0 && "$1" != --* ]]; do MERGE+=("$1"); shift; done ;;
     --json-out) OUT="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "tf-verify-tests: unknown argument $1" >&2; exit 2 ;;
   esac
 done
@@ -55,6 +59,11 @@ PART=""
 if [[ -n "$SHARD" ]]; then
   [[ "$SHARD" =~ ^([1-9][0-9]*)/([1-9][0-9]*)$ ]] || { echo "tf-verify-tests: --shard takes N/M, such as 2/4" >&2; exit 2; }
   PART="${BASH_REMATCH[1]}of${BASH_REMATCH[2]}"
+fi
+if [[ -n "$FILTER" ]]; then
+  [[ $UNIT -eq 1 ]] || { echo "tf-verify-tests: --filter selects unit tests, so it cannot go with --no-unit or --shard" >&2; exit 2; }
+  # its own part file, named for the filter, so it merges beside the full run instead of replacing it
+  [[ -z "$PART" ]] && PART="filter-$(printf '%s' "$FILTER" | tr -c 'A-Za-z0-9' '-' | cut -c1-40)"
 fi
 [[ -n "$OUT" ]] || OUT="tests/.artifacts/verify/tests${PART:+-$PART}.json"
 mkdir -p "$(dirname "$OUT")" tests/.artifacts/verify
@@ -266,6 +275,7 @@ print(next(iter(flags)) if mtp and len(flags) == 1 and "?" not in flags else ("m
 PY
 )"
     UARGS=(--logger "console;verbosity=normal")
+    [[ -n "$FILTER" ]] && UARGS+=(--filter "$FILTER")
     case "$MTP" in
       --report-*) UARGS+=("-p:TestingPlatformCommandLineArguments=$MTP") ;;
       mixed) echo "unit tests: note  the Testing Platform projects here take different report switches, so none was passed; their tests are not mapped to rows" ;;

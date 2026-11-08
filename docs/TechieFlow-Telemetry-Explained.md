@@ -197,9 +197,28 @@ Three things make this a correction rather than a cover-up. The reason travels w
 
 ---
 
+## 5d. Estimate against actual (added 2026-11-08)
+
+**What it means.** Before a phase is built, `*estimate-phase` writes down what it should cost in output tokens and time, for the build, for the machine checks (verify and fix) and for both together, as a low, middle and high figure. After the phase, the report sets that estimate beside what the phase's runs actually used. It shows whether the past is a fair guide to the next phase, and where it is not.
+
+**How it is worked out.** Each requirement is estimated from earlier runs on requirements of the same kind in the same project: screens from screen history, functions from function history. The middle figure is the median of those runs, per requirement; low and high are the quarter and three-quarter marks. Fewer than three earlier runs: the other projects the owner names are added. Still fewer than three: "no precedent", never a number. The estimate lives in a file of its own and never mixes with a measured figure.
+
+| Sevak phase 3 | Estimate (middle, range) | What the runs used |
+|---|---|---|
+| Build, 21 of 27 requirements | 466,000 tokens (219,000–738,000), 2 h 13 min | 525,000 tokens, 2 h 15 min — inside the range |
+| Verify | 113,000 tokens (57,000–218,000), 53 min | 496,000 tokens, 19 h 43 min — above it |
+| Fix, 21 of 27 requirements | 261,000 tokens (141,000–356,000), 36 min | 77,000 tokens, 21 min |
+
+The build estimate held. Verify did not, for a reason the numbers show: the estimate counts one verification pass per requirement and Sevak's phase-3 requirements were verified 40 times. Fix reads low because 29 of Sevak's fix runs did not record which requirement they fixed, so they cannot be counted toward any phase. Six RAG requirements had no precedent anywhere and were left out.
+
+**On stage.** {The owner writes this sentence once two phases have been estimated and reconciled.}
+
+---
+
 ## 6. What is not in the numbers yet
 
 - **Owner reviews.** Since 2026-09-06 a review of a phase's output is a record: how many corrections the owner gave, what producing the output cost, what the corrections cost. The report prints them; the figure is not yet worth a sentence.
 - **Idea-stage commands** (brainstorm, project brief) write no run record yet, so their cost is unknown.
+- **The owner's own testing time** after handoff has no record anywhere, so an estimate prints it as "not measured" and the report has nothing to compare it with.
 - **Runs whose window could not be read** (142 of 624 in this rollup) are outside every token figure. The per-run medians are of the measured ones, and the table says how many that is.
 - **Dollars actually billed for Claude Code** will never appear; that is a decision, not a gap. Since 2026-09-10 the report does put a **list price** on its runs — the rate card applied to the tokens they measured — which is a different question and is labelled as one (§5a).

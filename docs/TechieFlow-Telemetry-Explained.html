@@ -106,7 +106,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout">
   <nav class="side">
     <h1>TechieFlow — Telemetry Explained</h1>
-    <div class="sub">Last rendered: 2026-10-12</div>
+    <div class="sub">Last rendered: 2026-11-08</div>
     <div class="group">Contents</div>
     <ol>
         <li><a href="#where-the-numbers-come-from-and-how-to-answer-how-do-you-know">0. Where the numbers come from, and how to answer &quot;how do you know&quot;</a></li>
@@ -118,12 +118,13 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
         <li><a href="#a-what-a-cost-number-means-added-2026-09-10">5a. What a cost number means (added 2026-09-10)</a></li>
         <li><a href="#b-when-a-record-turns-out-to-be-wrong">5b. When a record turns out to be wrong</a></li>
         <li><a href="#c-what-verified-does-not-mean">5c. What Verified does not mean</a></li>
+        <li><a href="#d-estimate-against-actual-added-2026-11-08">5d. Estimate against actual (added 2026-11-08)</a></li>
         <li><a href="#what-is-not-in-the-numbers-yet">6. What is not in the numbers yet</a></li>
     </ol>
   </nav>
   <main>
     <h1>TechieFlow — Telemetry Explained</h1>
-    <div class="subtitle">Rendered 2026-10-12 &middot; source <code>TechieFlow-Telemetry-Explained.md</code></div>
+    <div class="subtitle">Rendered 2026-11-08 &middot; source <code>TechieFlow-Telemetry-Explained.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
@@ -137,6 +138,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
         <li><a href="#a-what-a-cost-number-means-added-2026-09-10">5a. What a cost number means (added 2026-09-10)</a></li>
         <li><a href="#b-when-a-record-turns-out-to-be-wrong">5b. When a record turns out to be wrong</a></li>
         <li><a href="#c-what-verified-does-not-mean">5c. What Verified does not mean</a></li>
+        <li><a href="#d-estimate-against-actual-added-2026-11-08">5d. Estimate against actual (added 2026-11-08)</a></li>
         <li><a href="#what-is-not-in-the-numbers-yet">6. What is not in the numbers yet</a></li>
       </ol>
     </div>
@@ -290,11 +292,27 @@ in no figure above. Both records stay on the stream; nothing was deleted:
 <p><code>Verified</code> means every check the framework knows how to run passed on that requirement. It does not mean there was a check for everything that matters. On Chatur's 11 Oct nightly, six rows were marked <code>Verified</code> even though their acceptance tests were skipped; the screens rendered and looked right, but the behaviour was not measured. I found that by reading the checklist, not because any check failed.</p>
 <p><strong>On stage.</strong> "Verified does not mean perfect. It means the checks that ran and passed — and some of those checks can still be placeholders."</p>
 <hr>
+<h2 id="d-estimate-against-actual-added-2026-11-08"><a id="5d-estimate-against-actual-added-2026-11-08"></a>5d. Estimate against actual (added 2026-11-08)<a class="anchor-link" href="#d-estimate-against-actual-added-2026-11-08">#</a></h2>
+<p><strong>What it means.</strong> Before a phase is built, <code>*estimate-phase</code> writes down what it should cost in output tokens and time, for the build, for the machine checks (verify and fix) and for both together, as a low, middle and high figure. After the phase, the report sets that estimate beside what the phase's runs actually used. It shows whether the past is a fair guide to the next phase, and where it is not.</p>
+<p><strong>How it is worked out.</strong> Each requirement is estimated from earlier runs on requirements of the same kind in the same project: screens from screen history, functions from function history. The middle figure is the median of those runs, per requirement; low and high are the quarter and three-quarter marks. Fewer than three earlier runs: the other projects the owner names are added. Still fewer than three: "no precedent", never a number. The estimate lives in a file of its own and never mixes with a measured figure.</p>
+<table>
+<thead><tr><th>Sevak phase 3</th><th>Estimate (middle, range)</th><th>What the runs used</th></tr></thead>
+<tbody>
+<tr><td>Build, 21 of 27 requirements</td><td>466,000 tokens (219,000–738,000), 2 h 13 min</td><td>525,000 tokens, 2 h 15 min — inside the range</td></tr>
+<tr><td>Verify</td><td>113,000 tokens (57,000–218,000), 53 min</td><td>496,000 tokens, 19 h 43 min — above it</td></tr>
+<tr><td>Fix, 21 of 27 requirements</td><td>261,000 tokens (141,000–356,000), 36 min</td><td>77,000 tokens, 21 min</td></tr>
+</tbody>
+</table>
+<p>The build estimate held. Verify did not, for a reason the numbers show: the estimate counts one verification pass per requirement and Sevak's phase-3 requirements were verified 40 times. Fix reads low because 29 of Sevak's fix runs did not record which requirement they fixed, so they cannot be counted toward any phase. Six RAG requirements had no precedent anywhere and were left out.</p>
+<p><strong>On stage.</strong> {The owner writes this sentence once two phases have been estimated and reconciled.}</p>
+<hr>
 <h2 id="what-is-not-in-the-numbers-yet"><a id="6-what-is-not-in-the-numbers-yet"></a>6. What is not in the numbers yet<a class="anchor-link" href="#what-is-not-in-the-numbers-yet">#</a></h2>
 <ul>
 <li><strong>Owner reviews.</strong> Since 2026-09-06 a review of a phase's output is a record: how many corrections the owner gave, what producing the output cost, what the corrections cost. The report prints them; the figure is not yet worth a sentence.
 </li>
 <li><strong>Idea-stage commands</strong> (brainstorm, project brief) write no run record yet, so their cost is unknown.
+</li>
+<li><strong>The owner's own testing time</strong> after handoff has no record anywhere, so an estimate prints it as "not measured" and the report has nothing to compare it with.
 </li>
 <li><strong>Runs whose window could not be read</strong> (142 of 624 in this rollup) are outside every token figure. The per-run medians are of the measured ones, and the table says how many that is.
 </li>

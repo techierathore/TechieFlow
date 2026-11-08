@@ -1,0 +1,37 @@
+# The .gitignore lines TechieFlow manages, in ONE place (FW-2026-11-08).
+#
+# Read by scaffold-greenfield.sh, scaffold-brownfield.sh and update-framework.sh (through
+# .tfcore/utils/tf-gitignore-blocks.sh) and by the Node installer scripts/install.mjs. Until this
+# file existed each of the four carried its own copy of these lines; on 2026-11-05 the three shell
+# scripts gained tests/verify/testsettings.Local.json, the installer did not, and npm run
+# test:install failed six checks on every runner. One list cannot drift from itself.
+#
+# Format: tab-separated, one entry per line.
+#   @<block>  <header comment written above the block>  <label printed in the script's output>
+#   <block>   <line written to .gitignore>              <extended regex: a line already present that matches it counts>
+# The regex is read by grep -E (bash) and by new RegExp (Node): keep to the common subset
+# (^ $ ? . * | ( ) [ ] and backslash escapes). Lines starting with # and blank lines are skipped.
+# Order matters: entries are appended in the order listed. Append-only and idempotent: an entry
+# whose pattern already matches a line is never written twice, and nothing is ever rewritten.
+@framework	# TechieFlow framework — deployed copies, never commit (managed by scaffold/update-framework.sh)	framework entries
+framework	.tfcore/	^/?\.tfcore/?$
+framework	.claude/	^/?\.claude/?$
+framework	.opencode/	^/?\.opencode/?$
+framework	/CLAUDE.md	^/?CLAUDE\.md$
+framework	/opencode.jsonc	^/?opencode\.jsonc$
+framework	/.tf-scaffold-note.txt	^/?\.tf-scaffold-note\.txt$
+# this machine's test passwords and keys (Sevak TF-015): never committed
+framework	tests/verify/testsettings.Local.json	^/?(tests/verify/|\*\*/)?testsettings\.Local\.json$
+@artifacts	# TechieFlow agent artifacts — machine-generated test harness & logs, never commit (managed by scaffold/update-framework.sh)	agent-artifact entries
+artifacts	node_modules/	^/?node_modules/?$
+artifacts	/package.json	^/?package\.json$
+artifacts	/package-lock.json	^/?package-lock\.json$
+artifacts	tests/.artifacts/	^/?tests/\.artifacts/?$
+artifacts	test-results/	^/?test-results/?$
+artifacts	test-results-*/	^/?test-results-\*/?$
+artifacts	/scripts-*/	^/scripts-\*/?$
+artifacts	playwright-report/	^/?playwright-report/?$
+artifacts	.verify/	^/?\.verify/?$
+artifacts	logs/	^/?logs/?$
+artifacts	/docs/.last-verify.json	^/?docs/\.last-verify\.json$
+artifacts	.DS_Store	^\.DS_Store$

@@ -4,11 +4,11 @@
 |---|---|
 | App | TechieBlog |
 | Upstream | TechieFlow |
-| Updated | 2026-11-05 (TF-003 fixed upstream, TF-004 filed and fixed upstream; both ship in TechieFlow v1.2.5) |
+| Updated | 2026-11-05 (TF-003 fixed upstream, TF-004 filed and fixed upstream; both ship in TechieFlow v1.3.0) |
 
 ## Summary
 
-- 4 entries: 0 blocking, 0 open, 3 fixed upstream and not yet re-checked here (TF-001 major; TF-003 and TF-004 minor, ship in TechieFlow v1.2.5), 1 closed (TF-002).
+- 4 entries: 0 blocking, 0 open, 3 fixed upstream and not yet re-checked here (TF-001 major; TF-003 and TF-004 minor, ship in TechieFlow v1.3.0), 1 closed (TF-002).
 - Last consolidated: 2026-11-05. No duplicates; every entry carries every schema field.
 - TF-001 needs a project size change to re-check; none happened since the fix.
 - TF-002 closed 2026-11-05: not reproducible on this machine (WSL runs mirrored networking since October; the NAT path was fixed upstream on 1 Nov).
@@ -19,7 +19,7 @@
 
 ### TF-004 — A defect found during a run has no discovery cost of its own; the run's one token window is shared across its rows
 
-- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.2.5; not yet re-checked here.
+- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.3.0; not yet re-checked here.
 - **Severity:** minor
 - **Blocks:** no — the metrics still count the miss; only what finding it cost is missing
 - **Repro:** `*triage-and-fix TechieBlog`, 2026-11-05 (run of 06:14:25, 445,629 output tokens). It found that an Author can edit any post by its id (REQ-UI-016) while it touched four other rows (REQ-UI-017, REQ-UI-025, REQ-UI-047, REQ-FN-031). Then `bash .tfcore/telemetry/tf-metrics.sh --report .`
@@ -37,7 +37,7 @@
 
 ### TF-003 — A miss whose latest fix record says `wont-fix` still blocks a new miss on the same row
 
-- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.2.5; not yet re-checked here.
+- **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.3.0; not yet re-checked here.
 - **Severity:** minor
 - **Blocks:** no — the new defect is still in the checklist row and the gate record; only its own miss record is missing
 - **Repro:** a row with a miss whose latest `miss-fix` carries `verdict_after: "wont-fix"` (here REQ-UI-016, MISS-TechieBlog-20260906-12, whose fix record of 2026-09-07 says `wont-fix`); then `bash .tfcore/utils/tf-triage.sh TechieBlog demote REQ-UI-016 "<a different defect>"` and `… close`
@@ -89,7 +89,7 @@ now:      "2,786 words; the Large maximum is 1,200 (target 800). ..."
 
 ### Resolution status (TechieFlow team, 2026-11-05)
 
-Ships in **TechieFlow v1.2.5**, the next release after v1.2.4. Already in this project's `.tfcore/` through the framework update of 2026-11-06. Each regression case fails against the v1.2.4 scripts and passes now.
+Ships in **TechieFlow v1.3.0**, the next release after v1.2.4. Already in this project's `.tfcore/` through the framework update of 2026-11-06. Each regression case fails against the v1.2.4 scripts and passes now.
 
 | ID | Fix | Check it here |
 |---|---|---|

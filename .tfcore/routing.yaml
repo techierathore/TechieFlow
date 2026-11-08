@@ -126,6 +126,7 @@ phases:
   amend-docs: frontier
   mockups: standard
   split-brd: standard
+  estimate-phase: economy
   build-phase: standard
   fix-issues: frontier
   triage-and-fix: frontier

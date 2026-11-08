@@ -50,8 +50,15 @@ jobs:
             echo "::group::$suite"
             rc=0; bash "$suite" > "$RUNNER_TEMP/suite.out" 2>&1 || rc=$?; cat "$RUNNER_TEMP/suite.out"
             if [ "$rc" -eq 0 ]; then echo "PASS $suite"; else echo "FAIL $suite (exit $rc)"; failed="$failed $suite"
-              # the failing cases on the run page itself: a log needs a sign-in, an annotation does not
-              grep -E '^FAIL' "$RUNNER_TEMP/suite.out" | head -8 | while IFS= read -r l; do echo "::error title=$suite ($TZ)::$l"; done; fi
+              # the failing cases on the run page itself: a log needs a sign-in, an annotation does not.
+              # Each FAIL carries the indented note line under it (tf_043c's "order: …" was the one
+              # line that said what went wrong, and the annotation left it out). tests/requirements
+              # prints "FR-48   FAIL …", which ^FAIL never matched: the Mac job of 8bd1909 failed
+              # with no annotation at all (FW-2026-11-08).
+              awk '/^FAIL/ || /^[A-Z]+-[0-9]+ +FAIL / {if (l != "") print l; l = $0; next}
+                   l != "" && /^     [^ ]/ {sub(/^ +/, ""); print l " | " $0; l = ""; next}
+                   {if (l != "") print l; l = ""}
+                   END {if (l != "") print l}' "$RUNNER_TEMP/suite.out" | head -8 | while IFS= read -r l; do echo "::error title=$suite ($TZ)::$l"; done; fi
             echo "::endgroup::"
           done
           if [ -n "$failed" ]; then echo "failed:$failed"; exit 1; fi
@@ -67,8 +74,15 @@ jobs:
             echo "::group::$suite"
             rc=0; bash "$suite" > "$RUNNER_TEMP/suite.out" 2>&1 || rc=$?; cat "$RUNNER_TEMP/suite.out"
             if [ "$rc" -eq 0 ]; then echo "PASS $suite"; else echo "FAIL $suite (exit $rc)"; failed="$failed $suite"
-              # the failing cases on the run page itself: a log needs a sign-in, an annotation does not
-              grep -E '^FAIL' "$RUNNER_TEMP/suite.out" | head -8 | while IFS= read -r l; do echo "::error title=$suite ($TZ)::$l"; done; fi
+              # the failing cases on the run page itself: a log needs a sign-in, an annotation does not.
+              # Each FAIL carries the indented note line under it (tf_043c's "order: …" was the one
+              # line that said what went wrong, and the annotation left it out). tests/requirements
+              # prints "FR-48   FAIL …", which ^FAIL never matched: the Mac job of 8bd1909 failed
+              # with no annotation at all (FW-2026-11-08).
+              awk '/^FAIL/ || /^[A-Z]+-[0-9]+ +FAIL / {if (l != "") print l; l = $0; next}
+                   l != "" && /^     [^ ]/ {sub(/^ +/, ""); print l " | " $0; l = ""; next}
+                   {if (l != "") print l; l = ""}
+                   END {if (l != "") print l}' "$RUNNER_TEMP/suite.out" | head -8 | while IFS= read -r l; do echo "::error title=$suite ($TZ)::$l"; done; fi
             echo "::endgroup::"
           done
           if [ -n "$failed" ]; then echo "failed:$failed"; exit 1; fi
@@ -139,8 +153,15 @@ jobs:
             echo "::group::$suite"
             rc=0; /bin/bash "$suite" > "$RUNNER_TEMP/suite.out" 2>&1 || rc=$?; cat "$RUNNER_TEMP/suite.out"
             if [ "$rc" -eq 0 ]; then echo "PASS $suite"; else echo "FAIL $suite (exit $rc)"; failed="$failed $suite"
-              # the failing cases on the run page itself: a log needs a sign-in, an annotation does not
-              grep -E '^FAIL' "$RUNNER_TEMP/suite.out" | head -8 | while IFS= read -r l; do echo "::error title=$suite ($TZ)::$l"; done; fi
+              # the failing cases on the run page itself: a log needs a sign-in, an annotation does not.
+              # Each FAIL carries the indented note line under it (tf_043c's "order: …" was the one
+              # line that said what went wrong, and the annotation left it out). tests/requirements
+              # prints "FR-48   FAIL …", which ^FAIL never matched: the Mac job of 8bd1909 failed
+              # with no annotation at all (FW-2026-11-08).
+              awk '/^FAIL/ || /^[A-Z]+-[0-9]+ +FAIL / {if (l != "") print l; l = $0; next}
+                   l != "" && /^     [^ ]/ {sub(/^ +/, ""); print l " | " $0; l = ""; next}
+                   {if (l != "") print l; l = ""}
+                   END {if (l != "") print l}' "$RUNNER_TEMP/suite.out" | head -8 | while IFS= read -r l; do echo "::error title=$suite ($TZ)::$l"; done; fi
             echo "::endgroup::"
           done
           if [ -n "$failed" ]; then echo "failed:$failed"; exit 1; fi
@@ -156,8 +177,15 @@ jobs:
             echo "::group::$suite"
             rc=0; /bin/bash "$suite" > "$RUNNER_TEMP/suite.out" 2>&1 || rc=$?; cat "$RUNNER_TEMP/suite.out"
             if [ "$rc" -eq 0 ]; then echo "PASS $suite"; else echo "FAIL $suite (exit $rc)"; failed="$failed $suite"
-              # the failing cases on the run page itself: a log needs a sign-in, an annotation does not
-              grep -E '^FAIL' "$RUNNER_TEMP/suite.out" | head -8 | while IFS= read -r l; do echo "::error title=$suite ($TZ)::$l"; done; fi
+              # the failing cases on the run page itself: a log needs a sign-in, an annotation does not.
+              # Each FAIL carries the indented note line under it (tf_043c's "order: …" was the one
+              # line that said what went wrong, and the annotation left it out). tests/requirements
+              # prints "FR-48   FAIL …", which ^FAIL never matched: the Mac job of 8bd1909 failed
+              # with no annotation at all (FW-2026-11-08).
+              awk '/^FAIL/ || /^[A-Z]+-[0-9]+ +FAIL / {if (l != "") print l; l = $0; next}
+                   l != "" && /^     [^ ]/ {sub(/^ +/, ""); print l " | " $0; l = ""; next}
+                   {if (l != "") print l; l = ""}
+                   END {if (l != "") print l}' "$RUNNER_TEMP/suite.out" | head -8 | while IFS= read -r l; do echo "::error title=$suite ($TZ)::$l"; done; fi
             echo "::endgroup::"
           done
           if [ -n "$failed" ]; then echo "failed:$failed"; exit 1; fi

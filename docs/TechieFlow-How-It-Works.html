@@ -106,7 +106,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout">
   <nav class="side">
     <h1>TechieFlow — How It Works</h1>
-    <div class="sub">Last rendered: 2026-10-11</div>
+    <div class="sub">Last rendered: 2026-11-08</div>
     <div class="group">Contents</div>
     <ol>
         <li><a href="#overview">1. Overview</a></li>
@@ -129,14 +129,14 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
         <li><a href="#fixed-instruction-cost-per-command">5. Fixed instruction cost per command</a></li>
         <li><a href="#telemetry">6. Telemetry</a></li>
         <li class="h3"><a href="#observed-run-cost-from-the-run-stream">6.1 Observed run cost, from the run stream</a></li>
-        <li class="h3"><a href="#the-five-questions-the-report-answers">6.2 The five questions the report answers</a></li>
+        <li class="h3"><a href="#the-six-questions-the-report-answers">6.2 The six questions the report answers</a></li>
         <li><a href="#instruction-size-and-its-effect">7. Instruction size and its effect</a></li>
         <li><a href="#defects-and-gaps-found-in-the-session-1-review">8. Defects and gaps found in the Session 1 review</a></li>
     </ol>
   </nav>
   <main>
     <h1>TechieFlow — How It Works</h1>
-    <div class="subtitle">Rendered 2026-10-11 &middot; source <code>TechieFlow-How-It-Works.md</code></div>
+    <div class="subtitle">Rendered 2026-11-08 &middot; source <code>TechieFlow-How-It-Works.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
@@ -161,7 +161,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
         <li><a href="#fixed-instruction-cost-per-command">5. Fixed instruction cost per command</a></li>
         <li><a href="#telemetry">6. Telemetry</a></li>
         <li class="h3"><a href="#observed-run-cost-from-the-run-stream">6.1 Observed run cost, from the run stream</a></li>
-        <li class="h3"><a href="#the-five-questions-the-report-answers">6.2 The five questions the report answers</a></li>
+        <li class="h3"><a href="#the-six-questions-the-report-answers">6.2 The six questions the report answers</a></li>
         <li><a href="#instruction-size-and-its-effect">7. Instruction size and its effect</a></li>
         <li><a href="#defects-and-gaps-found-in-the-session-1-review">8. Defects and gaps found in the Session 1 review</a></li>
       </ol>
@@ -233,7 +233,8 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
         D1B --&gt; SB
     end
     subgraph Build
-        SB -.-&gt; BP["*build-phase"]
+        SB -.-&gt; EP["*estimate-phase"]
+        EP --&gt; BP["*build-phase"]
         BP --&gt; TB["/trblazeui sub-agent"]
         BP --&gt; TR["/techierag sub-agent"]
         BP --&gt; VP["*verify"]
@@ -316,6 +317,17 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </li>
 </ul>
 <h3 id="build-flow-master"><a id="34-build--flow-master"></a>3.4 Build — flow-master<a class="anchor-link" href="#build-flow-master">#</a></h3>
+<p><strong><code>*estimate-phase {App} [family repos]</code></strong> (added 2026-11-08, v1.3.0)</p>
+<ul>
+<li>Run before <code>*build-phase</code>, for the phase in progress.
+</li>
+<li>Reads: the phase's checklist rows and this repo's own past run records (never reconstructed ones). Where the repo has fewer than three earlier runs of a kind, it also reads the other projects the owner names.
+</li>
+<li>Does: <code>tf-estimate.sh</code> gives every row a low, middle and high figure for output tokens and wall time, from earlier runs on rows of the same kind (UI rows from UI history, FN rows from FN history), for the build, for machine QA (verify plus fix), and for both together, then adds them up for the phase. A row with fewer than three earlier runs to go on is printed "no precedent", never a number, and the agent writes a remark on it. The owner's own testing time is printed "not measured": nothing records it.
+</li>
+<li>Writes: <code>docs/metrics/estimates.jsonl</code>, a stream of its own, never <code>runs.jsonl</code>; remarks on rows with no precedent. At handoff, <code>tf-metrics.sh --estimates</code> sets the estimate beside what the phase's runs measured, as two columns.
+</li>
+</ul>
 <p><strong><code>*build-phase {App}</code></strong></p>
 <ul>
 <li>Reads: checklist, Architecture, Coding Standards, UIDesign and mockups, build invocation ladder.
@@ -360,7 +372,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <p><strong><code>*fix-issues {App} {folder}</code></strong>: takes a folder of screenshots and an optional notes file, reproduces each bug, fixes the code (UI via the TrBlazeUI sub-agent), re-smokes, re-verifies the touched rows, updates the documents.</p>
 <p><strong><code>*log-miss {App} "description"</code></strong>: the twenty-second record. First sorts the miss with four questions, asked in order (did the app's spec say it; did the framework say it; was there a check that did not catch it; was it written and ignored), because the answer decides the fix: a checklist line, a requirement line plus a check, a fixed check, or a hook. Then writes one miss record carrying the sentence and the answer, a remark on the checklist row, and one row in the readable <code>docs/&lt;App&gt;-Misses.md</code>, which is rebuilt from the records after every miss. No reproduction, no code. D-10 closed in Session 5 (2026-09-07).</p>
 <h3 id="ship-flow-master"><a id="38-ship--flow-master"></a>3.8 Ship — flow-master<a class="anchor-link" href="#ship-flow-master">#</a></h3>
-<p><strong><code>*handoff-phase {App}</code></strong>: run once when the checklist is green, before owner testing. Finalises the UsageGuide (test users, screen-by-screen test plan), generates or refreshes the DevGuide, consolidates library feedback, re-renders HTML, sets status to Handoff.</p>
+<p><strong><code>*handoff-phase {App}</code></strong>: run once when the checklist is green, before owner testing. Finalises the UsageGuide (test users, screen-by-screen test plan), generates or refreshes the DevGuide, consolidates library feedback, re-renders HTML, sets status to Handoff, and ends by printing the phase's estimate beside what its runs measured (<code>tf-metrics.sh --estimates</code>).</p>
 <p><strong><code>*devguide {App} [--update]</code></strong>: the developer's low-level document. Every screen traced from page to control to service to data access, with a screenshot. Re-runnable for changed screens only. Generated automatically at brownfield day-1 and at handoff. <strong>Defect:</strong> D-7.</p>
 <p><strong><code>*productguide {App}</code></strong>: the end-user manual, screenshot-illustrated, task by task. On demand. Owner usage: not yet used.</p>
 <p><strong><code>*deploy-checklist {App} {pipeline-document}</code></strong> (added in Sitting 4b, 2026-09-06): the steps to put the application on its host, one document per hosting target, written after UAT from the owner's pipeline guidance document and the Stack answers about hosting and production secrets. Every step is a checkbox, every secret is named once, and the document says what has been executed for real. Schema: <code>TechieFlow-Document-Schemas.md</code> §3.10.</p>
@@ -548,8 +560,8 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </tbody>
 </table>
 <p>Fix, verify and build account for 90 of the 142 recorded runs. The run record does not carry the mode (YOLO or interactive), so cost by mode cannot yet be reported (D-12). Dollar cost is recorded only for OpenCode runs.</p>
-<h3 id="the-five-questions-the-report-answers"><a id="62-the-five-questions-the-report-answers"></a>6.2 The five questions the report answers<a class="anchor-link" href="#the-five-questions-the-report-answers">#</a></h3>
-<p>The report (<code>*metrics</code>) answers five questions.</p>
+<h3 id="the-six-questions-the-report-answers"><a id="62-the-six-questions-the-report-answers"></a>6.2 The six questions the report answers<a class="anchor-link" href="#the-six-questions-the-report-answers">#</a></h3>
+<p>The report (<code>*metrics</code>) answers six questions.</p>
 <ol>
 <li><strong>First-pass rate.</strong> Of all requirements, the share marked Verified on their first verification. It measures how often the agent gets a requirement right without rework. Example: 100 requirements, 70 verified first time, first-pass rate 70 percent. Across projects a requirement is counted by its project and its id together, because every project has a REQ-UI-001; until 2026-09-07 the rollup counted by id alone and printed 72 percent where the figure is 48 (Session 5). The five numbers, with real figures and the sentence to say about each, are in <code>TechieFlow-Telemetry-Explained.md</code>.
 </li>
@@ -560,6 +572,8 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <li><strong>Misses and rework cost.</strong> For each miss: its kind (wrong behaviour, partial implementation, not in the specification), the phase that caused it, who found it, and the tokens the fix consumed. It shows where the process leaks and what each leak costs. Across all repositories, 63 misses were classified "the verify method was insufficient" and 44 "the checklist item was missing or its acceptance was vague".
 </li>
 <li><strong>Effort per phase.</strong> For each command: elapsed time, tokens, model, sub-agent count. It shows what each stage costs and allows a cheap model to be compared with an expensive one on the same kind of work.
+</li>
+<li><strong>Estimate against actual</strong> (added 2026-11-08, v1.3.0). For each phase that <code>*estimate-phase</code> estimated: the estimate's middle figure and its range for build, verify and fix, beside what the runs on that phase's rows actually used. The two stand in separate columns and are never turned into one number such as an accuracy percentage. Example from Sevak phase 3: the build was estimated at 466,000 output tokens (219,000 to 738,000) and used 525,000, inside the range; verify was estimated at 113,000 and used 496,000, because the phase was verified 40 times and the estimate counts one pass.
 </li>
 </ol>
 <p>Dollar figures on a <em>record</em> exist only for OpenCode runs: Claude Code reports tokens and never a price, and no record ever stores a computed one. Converting tokens to money is the report's job, not the framework's, so <code>*metrics</code> prices every run at the published rate when it runs — a <strong>list price</strong>, never called a bill — and keeps three things apart that used to be one column: what a provider actually billed, what a monthly plan's allowance was consumed by, and what a flat fee had already paid for.</p>

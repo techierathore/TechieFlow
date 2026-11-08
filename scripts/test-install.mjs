@@ -263,7 +263,9 @@ try {
       ".opencode/plugin/techieflow.js", ".opencode/opencode.jsonc", "opencode.jsonc",
       ".tf-scaffold-note.txt",
       "docs/metrics/runs.jsonl", "docs/metrics/gates.jsonl", "docs/metrics/sessions.jsonl",
-      "docs/metrics/commits.jsonl", "docs/metrics/misses.jsonl", "docs/metrics/README.md",
+      "docs/metrics/commits.jsonl", "docs/metrics/misses.jsonl", "docs/metrics/estimates.jsonl", "docs/metrics/README.md",
+      ".tfcore/telemetry/tf-estimate.sh", ".tfcore/tasks/estimate-phase.md", ".claude/commands/TechieFlow/tasks/estimate-phase.md",
+      ".tfcore/data/gitignore-blocks.tsv", ".tfcore/utils/tf-gitignore-blocks.sh",
       ".git/hooks/pre-commit", ".gitattributes",
     ]) assert(existsSync(join(brownNpm, path)), `missing ${path}`);
     assert(!existsSync(join(brownNpm, ".claude/commands/techierag.md")), "a library persona was installed from the framework");
@@ -282,6 +284,25 @@ try {
       assert(all.has(entry), `.gitignore is missing ${entry}`);
     }
     assert(!all.has("docs/") && !all.has("docs/metrics/"), ".gitignore hides docs/metrics");
+  });
+  // FW-2026-11-08: the three shell scripts gained tests/verify/testsettings.Local.json on 2026-11-05
+  // and the installer kept its own copy of the list without it, so six checks failed on every runner.
+  // The lines now live in ONE file; this fails if a route grows its own copy again or skips a line.
+  check("one .gitignore list: every line of .tfcore/data/gitignore-blocks.tsv is written by both routes, and no route keeps its own copy", () => {
+    const listed = read(join(root, ".tfcore/data/gitignore-blocks.tsv")).replace(/\r/g, "").split("\n")
+      .filter((l) => l.trim() && !l.startsWith("#") && !l.startsWith("@")).map((l) => l.split("\t")[1]);
+    assert(listed.includes("tests/verify/testsettings.Local.json"), "the shared list lost tests/verify/testsettings.Local.json");
+    for (const dir of [brownShell, brownNpm]) {
+      const all = new Set(lines(join(dir, ".gitignore")));
+      const absent = listed.filter((entry) => !all.has(entry));
+      assert(absent.length === 0, `${basename(dir)}/.gitignore is missing ${absent.join(", ")}`);
+    }
+    for (const file of ["scaffold-greenfield.sh", "scaffold-brownfield.sh", "update-framework.sh", "scripts/install.mjs"]) {
+      const text = read(join(root, file));
+      assert(!/GI2?_LINES=\(|"\/\.tf-scaffold-note\.txt"|"tests\/verify\/testsettings\.Local\.json"/.test(text),
+        `${file} carries its own copy of the .gitignore lines; read .tfcore/data/gitignore-blocks.tsv instead`);
+      if (file.endsWith(".sh")) assert(text.includes("gitignore-blocks.tsv"), `${file} does not read the shared list`);
+    }
   });
   check("brownfield: Claude mirror is byte-identical to .tfcore/", () => {
     const diff = mirrorDifferences(brownNpm);

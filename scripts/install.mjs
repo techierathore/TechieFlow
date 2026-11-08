@@ -234,20 +234,27 @@ function ensureSafeTarget() {
 
 // ---------------------------------------------------------------- managed blocks in .gitignore and .gitattributes
 
-// Same lines, same patterns and same header text as the shell scripts. Append-only: an
-// entry already present in any anchored or slash variant is respected, nothing is rewritten.
-const frameworkIgnore = {
-  lines: [".tfcore/", ".claude/", ".opencode/", "/CLAUDE.md", "/opencode.jsonc", "/.tf-scaffold-note.txt"],
-  patterns: [/^\/?\.tfcore\/?$/, /^\/?\.claude\/?$/, /^\/?\.opencode\/?$/, /^\/?CLAUDE\.md$/, /^\/?opencode\.jsonc$/, /^\/?\.tf-scaffold-note\.txt$/],
-  header: ["# TechieFlow framework — deployed copies, never commit (managed by scaffold/update-framework.sh)"],
-  label: "framework entries",
-};
-const artifactIgnore = {
-  lines: ["node_modules/", "/package.json", "/package-lock.json", "tests/.artifacts/", "test-results/", "test-results-*/", "/scripts-*/", "playwright-report/", ".verify/", "logs/", "/docs/.last-verify.json", ".DS_Store"],
-  patterns: [/^\/?node_modules\/?$/, /^\/?package\.json$/, /^\/?package-lock\.json$/, /^\/?tests\/\.artifacts\/?$/, /^\/?test-results\/?$/, /^\/?test-results-\*\/?$/, /^\/scripts-\*\/?$/, /^\/?playwright-report\/?$/, /^\/?\.verify\/?$/, /^\/?logs\/?$/, /^\/?docs\/\.last-verify\.json$/, /^\.DS_Store$/],
-  header: ["# TechieFlow agent artifacts — machine-generated test harness & logs, never commit (managed by scaffold/update-framework.sh)"],
-  label: "agent-artifact entries",
-};
+// The .gitignore blocks come from .tfcore/data/gitignore-blocks.tsv, the ONE list the three shell
+// scripts read too (through .tfcore/utils/tf-gitignore-blocks.sh). Until 2026-11-08 this file kept
+// its own copy, the scripts gained tests/verify/testsettings.Local.json on 2026-11-05 and this copy
+// did not, and every installer check failed on .gitignore. Append-only: an entry already present
+// in any anchored or slash variant is respected, nothing is rewritten.
+function gitignoreBlock(name) {
+  const block = { lines: [], patterns: [], header: [], label: `${name} entries` };
+  const listPath = join(sourceRoot, ".tfcore", "data", "gitignore-blocks.tsv");
+  for (const raw of read(listPath).replace(/\r/g, "").split("\n")) {
+    if (!raw.trim() || raw.startsWith("#")) continue;
+    const [blk, line, pattern] = raw.split("\t");
+    if (blk === `@${name}`) { block.header = [line]; if (pattern) block.label = pattern; continue; }
+    if (blk !== name) continue;
+    block.lines.push(line);
+    block.patterns.push(new RegExp(pattern));
+  }
+  if (!block.lines.length) throw new Error(`${listPath} has no "${name}" entries — the framework copy is incomplete.`);
+  return block;
+}
+const frameworkIgnore = gitignoreBlock("framework");
+const artifactIgnore = gitignoreBlock("artifacts");
 const attributes = {
   lines: ["* text=auto eol=lf", "*.bat text eol=crlf", "*.cmd text eol=crlf", "docs/metrics/*.jsonl text eol=lf merge=union"],
   patterns: [/^\*[ \t]+text=auto[ \t]+eol=lf$/, /^\*\.bat[ \t]+text[ \t]+eol=crlf$/, /^\*\.cmd[ \t]+text[ \t]+eol=crlf$/, /^docs\/metrics\/\*\.jsonl[ \t]+text[ \t]+eol=lf[ \t]+merge=union$/],
@@ -569,7 +576,7 @@ function deployHousekeeping() {
   } else say("  .gitignore — not edited (--no-gitignore)");
   if (dryRun && !existsSync(target)) {
     say("  gitignore audit — WOULD run once the folder exists (build-output rules for the detected stack)");
-    say("  telemetry — WOULD create docs/metrics/ and seed runs/gates/sessions/commits/misses.jsonl");
+    say("  telemetry — WOULD create docs/metrics/ and seed runs/gates/sessions/commits/misses/estimates.jsonl");
   } else {
     // Build-output rules for the stack the project is written in, and whether that output is
     // already tracked. Reads .git/index directly; never runs git.
