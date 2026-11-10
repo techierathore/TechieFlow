@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 308 logged: 56 open, 250 fixed, 1 will not fix, 1 withdrawn |
+| Count | 327 logged: 56 open, 269 fixed, 1 will not fix, 1 withdrawn |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-11-01 |
+| Updated | 2026-11-10 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -70,10 +70,29 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (250)
+## Fixed (269)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261110-19 | 2026-11-10 by owner | 2026-11-10 by log-miss | the check was too weak | lk_037b failed again in a full run after the second run of 2026-11-10 called it deterministic: the cause given then (a one-second wait margin) was wrong. The arrival rule took one new control for the screen, a shared top bar included, so a page drawn late by an earlier move passed for the next scree |
+| MISS-TechieFlow-20261110-18 | 2026-11-10 by owner | 2026-11-10 by log-miss | the check was too weak | Chatur TF-025: the menu walk clicked every branch in the branch picker and left the project on the last one, so the next screen was compared against a state its seed had not made |
+| MISS-TechieFlow-20261110-17 | 2026-11-10 by owner | 2026-11-10 by log-miss | the framework never said it | Chatur TF-024: on WSL a build failed with Razor parse errors from a stale compiler server on unchanged files, and tf-build.sh reported them as real errors although a build-server shutdown cleared them |
+| MISS-TechieFlow-20261110-16 | 2026-11-10 by owner | 2026-11-10 by log-miss | the check was too weak | Chatur TF-023: the reachability check credited only the clicked menu row that carries the mockup's link, so a screen opened by a row of that row's submenu was reported UNREACHABLE and six Chatur rows were held |
+| MISS-TechieFlow-20261110-15 | 2026-11-10 by owner | 2026-11-10 by log-miss | said and ignored | The morning run of 2026-11-10 fixed three Sevak entries and left out the three things the maintenance contract asks for: no miss was logged, no maintenance run record was written and WorkFlow-Context.md was not refreshed; the owner had to ask |
+| MISS-TechieFlow-20261110-14 | 2026-11-10 by owner | 2026-11-10 by log-miss | the check was too weak | tests/goal/run.sh started from a TechieFlow session inherited CLAUDE_PROJECT_DIR; its stand-in harness wrote a sentinel into the framework's own .tfcore/.session, removed the session's YOLO flag and rewrote .opencode/opencode.jsonc |
+| MISS-TechieFlow-20261110-13 | 2026-11-10 by owner | 2026-11-10 by log-miss | the check was too weak | tf-mockup-parity compared the page still on view when a desktop app had not moved to the screen within the wait, and said PASS on the shared top bar; lk_037b failed once in a full run for it |
+| MISS-TechieFlow-20261110-12 | 2026-11-10 by owner | 2026-11-10 by log-miss | the check was too weak | A page load cut off by a change of the machine's network (net::ERR_NETWORK_CHANGED) was graded as a screen that could not be opened; lk_035a failed once in a full run for it |
+| MISS-TechieFlow-20261110-11 | 2026-11-10 by owner | 2026-11-10 by log-miss | the framework never said it | The phase filter added on the morning of 2026-11-10 left out every test whose title carries no row id and printed nothing about it; three Sevak tests stopped running in silence |
+| MISS-TechieFlow-20261110-10 | 2026-11-10 by owner | 2026-11-10 by log-miss | the check was too weak | update-framework.sh and the npm installer removed the whole of .codex/, and with it two agent files the TechieRag and TrBlazeUI packages had installed, in four projects |
+| MISS-TechieFlow-20261110-09 | 2026-11-10 by owner | 2026-11-10 by log-miss | the check was too weak | Five Chatur entries were answered in the reply tables, one closed by Chatur, and each still began Status: open, so the owner listed five fixed problems as unfixed on 2026-11-10; no check looked at the entry's own Status line |
+| MISS-TechieFlow-20261110-08 | 2026-11-10 by owner | 2026-11-10 by log-miss | the framework never said it | A day-one project's TF-001: the run record's description in SCHEMA.md listed only build, fix and null for mode, while day1-greenfield, develop-end-to-end and refresh-status write stage1, stage2, launch and reconcile |
+| MISS-TechieFlow-20261110-07 | 2026-11-10 by owner | 2026-11-10 by log-miss | the check was too weak | Sevak TF-022: tf-verify-boot counted every boot record not marked stopped, so it said 10 other Windows heads were up when none was running, and a process id reused by another program would have counted too |
+| MISS-TechieFlow-20261110-06 | 2026-11-10 by owner | 2026-11-10 by log-miss | the framework never said it | Sevak TF-019: the overlap check had no way to mark a control drawn over its neighbour on purpose, so the library's sidebar grab handle failed every screen |
+| MISS-TechieFlow-20261110-05 | 2026-11-10 by owner | 2026-11-10 by log-miss | the framework never said it | Sevak TF-018: a mockup control that a later phase builds could only be excused with data-tf-state, which means another state, on a file a build may not edit; there was no mark for a later phase |
+| MISS-TechieFlow-20261110-04 | 2026-11-10 by owner | 2026-11-10 by log-miss | the check was too weak | Sevak TF-017: the verdict rewrote a Blocked row to Needs re-verify and replaced its Remark when its screen failed a check, although verify-phase says a Blocked row stays Blocked |
+| MISS-TechieFlow-20261110-03 | 2026-11-10 by owner | 2026-11-10 by log-miss | the check was too weak | Sevak TF-020 and TF-024: the screen check read only a control's own style, so every control inside a display:none column was graded visible with zero width |
+| MISS-TechieFlow-20261110-02 | 2026-11-10 by owner | 2026-11-10 by log-miss | the check was too weak | Sevak TF-021: a verify of one phase with scope all ran every phase's browser specs on the same boot, 192 tests in 72 minutes, and the earlier phases' specs left the app where 50 of 80 phase 4 rows failed |
+| MISS-TechieFlow-20261110-01 | 2026-11-10 by owner | 2026-11-10 by log-miss | the check was too weak | Sevak TF-023: tf-mockup-parity compared a checkbox by its paint, so a native checked checkbox in the mockup beside a component library's role=checkbox failed the icon and colour clauses on every screen that draws one, and nine Sevak Import rows stayed at Needs re-verify |
 | MISS-TechieFlow-20261101-08 | 2026-11-01 by owner | 2026-11-01 by log-miss | the check was too weak | TfLens TF-056: tf-mockup-parity read a mockup's translucent tint at full strength, so an 8 percent blue note bucketed as accent against the app's opaque pale blue (neutral) and REQ-UI-072 stayed Needs re-verify |
 | MISS-TechieFlow-20261101-07 | 2026-11-01 by owner | 2026-11-01 by log-miss | said and ignored | FW-001: verify tests created a new account on the shared production AppManager on every run (Chatur signin-register.spec.ts:96 for REQ-FN-004, Sevak a-setup-shell-auth.spec.ts:377 for REQ-UI-006); the rule was a sentence in the prompts and no code enforced it, so the owner deleted the users by hand |
 | MISS-TechieFlow-20261101-06 | 2026-11-01 by owner | 2026-11-01 by log-miss | the check was too weak | Chatur TF-021 and TfLens TF-055: tf-triage new counted a test's sample id REQ-UI-999 into the highest id and handed out REQ-UI-1000, which tf-req-ids cut to REQ-UI-100; and a section over its size limit was old in the doc-check baseline only at the identical word count |

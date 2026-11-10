@@ -4,11 +4,11 @@
 |---|---|
 | App | Sevak |
 | Upstream | TechieFlow |
-| Updated | 2026-11-05 (TF-015 and TF-016 fixed upstream, ship in TechieFlow v1.3.0) |
+| Updated | 2026-11-10, second run (TF-017, TF-018, TF-019 and TF-022 fixed upstream, in `.tfcore/`; no entry is open) · 2026-11-10 (TF-020, TF-021, TF-023 and TF-024 fixed upstream, in `.tfcore/` from the framework update of the same day) · 2026-11-09 evening (TF-021 to TF-023 added in the phase 4 build: scope `all` runs every phase's specs on one boot; the boot script's head count) · 2026-11-09 (TF-018 to TF-020 added in phase 4 fix cycle 1; TF-018 blocks) · 2026-11-05 (TF-015 and TF-016 fixed upstream, ship in TechieFlow v1.3.0) |
 
 ## Summary
 
-Nothing is blocked. 16 entries: 0 open, 9 fixed upstream and not yet re-checked (TF-005, TF-008, TF-009, TF-011 to TF-016), 7 closed (TF-001 to TF-004, TF-006, TF-007, TF-010).
+No entry blocks. TF-018 stopped blocking on 2026-11-09: `*amend-docs` marked the phase 5 controls `data-tf-state="phase-5"` in every mockup, which the render check already honours; the dedicated later-phase mark, `data-tf-phase`, came with the TF-018 fix of 2026-11-10. 24 entries: 0 open, 16 fixed upstream and not yet re-checked (TF-005, TF-008, TF-009, TF-011 to TF-014, TF-016 to TF-024), 8 closed (TF-001 to TF-004, TF-006, TF-007, TF-010, TF-015).
 
 New on 2026-11-03: TF-015, the verify harness reads its settings from environment variables and a `.env.local` file instead of an appsettings-style JSON file. TF-016, the test-users rule lets a test submit Register with test user 1's address, and when AppManager no longer holds that user the submit creates it.
 
@@ -211,6 +211,8 @@ TF-013 (the Mac boot passes no settings) is fixed upstream and waits for a Mac c
 
 ### TF-015 — The verify harness reads its settings from environment variables and a `.env.local` file, not from an appsettings-style file
 
+> ✅ **Closed 2026-11-10** — re-checked here: Ran the reply's prompt 2026-11-09: tests/verify/testsettings.json carries the framework keys with empty values, testsettings.Local.json holds the test users and mailbox, boot-safe.sh and the specs read them through tf-testsettings.py / testsettings.ts, the Usage Guide's Test users table names TestUsers:<n>:Password; .env.local, .env.example and tests/verify/register-test-users.mjs deleted. grep -rn env.local tests docs/Sevak-UsageGuide.md finds only the test that asserts none is committed; *verify all Sevak --phase 1 signed in as test user 1 from the Local file (64 rows PASS).
+
 - **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.3.0; not yet re-checked here.
 - **Blocks:** no — the tests run; Sevak's own specs moved their values to a JSON settings file.
 - **Severity:** minor
@@ -241,6 +243,131 @@ TF-013 (the Mac boot passes no settings) is fixed upstream and waits for a Mac c
 - **Workaround:** the test signs in as test user 1 first and skips, never submitting Register, when that sign-in is refused.
 - **Suggested fix:** in `verify-phase.md` step 4 and the check's docstring, require a successful sign-in as test user 1 in the same test before any Register submit; have `tf-test-users-check.py` flag a Register submit with a Test users address that no sign-in with the same address comes before.
 - **Reply (TechieFlow team, 2026-11-05):** Fixed as you suggested. `tf-test-users-check.py` now allows a Register submit (or a register call) that uses a Test users address only when the same test signs in with that address earlier and stops between the sign-in and the submit. A stop is a skip, a return, a throw or an assertion. The address may be written out, kept in a constant, or typed by name (`OWNER_EMAIL`). Anything else fails: `register: submits Register with a test user's address with no successful sign-in as that user before it …`. A sign-in form's own submit button is not counted as a Register submit. The same sentence is now in verify-phase step 4, the verifier, the check's own text and the usage-guide template. Stack rule Q4a now says the owner-run register-test-users script is the only place a test user is ever registered, never a verify test. Regression case `sv_016`: your 3 Nov test shape fails, today's passes, and a sign-in with no stop after it still fails. **On your repo:** the check passes. REQ-UI-006 signs in at line 397, stops at line 399 when the sign-in is refused, and submits at line 408. **Across the other projects** one new finding, in TfLens (`tests/verify/ui-auth-shell.spec.ts:129`); the owner has a prompt for TfLens's agent. **Not ours, for you:** AppManager user 14, created on 3 Nov, is still on the production AppManager unless someone has deleted it. **Check it here:** paste into Sevak's agent: `/TechieFlow:agents:verifier *verify all Sevak --phase 1`. REQ-UI-006 does not fail on gate test-users.
+
+### TF-024 — The screen check grades a control inside a `display: none` ancestor as visible with zero width
+
+- **Status:** fixed upstream 2026-11-10, in this project's `.tfcore/` since the framework update of 2026-11-10; not yet re-checked here.
+- **Blocks:** no — Sevak adds `visibility: hidden` beside `display: none` on its hidden chat-pane column, which every control inside inherits.
+- **Severity:** minor
+- **Repro:** `tf-verify-screens.sh` on a screen whose mockup hides a region at one width (Sevak's chat pane at a phone or narrow width) and whose app hides it the same way with `display: none` on the region. `inspect()`'s `vis(el)` reads only the control's own computed style, so each anchored control inside reads `visible: true` with `w = 0`, and the visual check fails with `anchored control "assistant-pane-model" has zero width` — while `hiddenByWidth` already excused the same anchors for that width.
+- **Expected:** a control whose ancestor is not rendered is not visible (`el.checkVisibility()` or an `offsetParent` test, as `hiddenByWidth` already uses), so the excuse for that width applies.
+- **Actual:** visual FAIL on a control that is correctly hidden.
+- **Encountered in:** Sevak verify of Document library at `--widths 1280,1024`, 2026-11-09.
+- **Workaround:** above.
+- **Suggested fix:** in `vis(el)`, use `el.checkVisibility({ visibilityProperty: true, opacityProperty: true })` when present.
+- **Reply (TechieFlow team, 2026-11-10):** Fixed, with TF-020: one fault, one change. In `tf-verify-screens.mjs`, `vis(el)` now also looks at every box around the control and returns not visible when one of them has `display: none`. The controls in your chat pane's hidden column are then present and not visible, so nothing is graded on them: no `has zero width`, and no "not on the page" either. Your suggestion was `el.checkVisibility(...)`. We walk the parents instead, because `checkVisibility` also answers false for a `display: contents` wrapper and for a box inside a fade that has not finished, and either would hide real controls from the check on other projects. `visibility: hidden` on a box was already seen, since it is inherited. Regression case `sv_024`: a pane hidden at 1024 px in the mockup and the app reads OK at 1280 and 1024; a control on view that really has no width is still reported. Both checks fail on the script you had (`assistant-pane-model has zero width` at 1024). **Proved on a fixture, not on your running app.** **Not changed:** a control the app hides where its mockup shows it at that width is not a finding of this check, as before for a control hidden by its own style. **Check it here:** paste into Sevak's agent: `Take visibility: hidden off the chat-pane column, leaving display: none, then run tf-verify-screens.sh on Document library at --widths 1280,1024 as on 2026-11-09 and report its screen line.` The line carries no `has zero width` finding at 1024.
+
+
+### TF-017 — The verdict rewrites a Blocked row to "Needs re-verify" when its screen fails a check
+
+- **Status:** fixed upstream 2026-11-10, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-10; not yet re-checked here.
+- **Blocks:** no — the verifier put the two rows back to Blocked by hand, with their library reason.
+- **Severity:** minor
+- **Repro:** Sevak `*verify all Sevak --phase 4`, 2026-11-09. REQ-RAG-116 and REQ-UI-087 are Blocked (they wait for TechieRag 1.1.9, TR-RAG-056 and TR-RAG-057) and have no test. Their screen, Assistant, failed the render check (mockup sidebar items absent). `tf-verify-verdict.sh Sevak --apply` wrote both rows as `Needs re-verify` and replaced their Remarks, so the library reason was lost.
+- **Expected:** verify-phase step 5 says "a `Blocked` row stays `Blocked` whatever its tests say" (TechieRag TF-009); the same should hold for every check. The verdict keeps Status `Blocked` and the reason, and only appends what this run found.
+- **Actual:** Status and Remarks are rewritten from the first failing check.
+- **Workaround:** the Status and the reason restored by hand after `--apply` (Blocked is not a `Verified`, so the hook allows it).
+- **Suggested fix:** in `tf-verify-verdict.py`, read the row's Status first; for `Blocked`, keep it and its reason, and append this run's finding.
+- **Reply (TechieFlow team, 2026-11-10):** Fixed in Sevak's `.tfcore/`, as you suggested. `tf-verify-verdict.py` reads the row's Status first. A `Blocked` row keeps Status `Blocked`, its % and its reason whatever the run found: a failing check, a failing test, no test at all, or a pass (TechieRag TF-009). What the run found is appended after the reason: `<your reason> · 2026-11-10 verify: still Blocked; this run found ⚠ render — <the finding>`. The reason is kept whole up to 35 words, and the next run replaces the appended part, so the Remark does not grow. No gate record and no miss is written for the row. Regression case `sv_017`, three checks; two fail on the script you had (it wrote `Needs re-verify` and dropped the reason). **Proved on a fixture, not on your checklist.** **Check it here:** paste into Sevak's agent: `/TechieFlow:agents:verifier *verify all Sevak --phase 4`. REQ-RAG-116 and REQ-UI-087 stay `Blocked` with their TechieRag reason first, and need no hand repair.
+
+### TF-018 — A mockup control that belongs to a later phase can only be excused by editing the mockup, which a build may not do
+
+- **Status:** fixed upstream 2026-11-10, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-10; not yet re-checked here.
+- **Blocks:** no (since 2026-11-09, `*amend-docs` marked these controls `data-tf-state="phase-5"` plus class `show`). Before that, every phase 4 screen fails the render check on `nav-ideas`, `nav-senders`, `nav-content` and `nav-browser` (phase 5 screens), and Memory, Plan and Routines also on `assistant-pane-member` (phase 5, BRD-292, REQ-UI-116).
+- **Severity:** major
+- **Repro:** `*verify all Sevak --phase 4`, 2026-11-09. `docs/mockups/assistant.html` draws the whole sidebar, phase 5 items included, with a `data-testid` on each; `docs/Sevak-Phases.md` puts Ideas, Senders, Content and Browser in phase 5. `tf-verify-screens.mjs` `grade()` reports each absent anchor as `blank-data`.
+- **Expected:** a supported way to say "this anchor is owed from phase N", read by `tf-verify-screens.mjs` and `tf-mockup-parity.mjs` without touching the mockup: a `data-tf-phase="5"` mark that the mockups task writes, or a per-phase list (for example `tests/verify/later-phase-anchors.json`, or the phase's UIDesign naming the anchors it adds), so a later-phase anchor is not owed while the graded phase is earlier.
+- **Actual:** the only excuses are `data-tf-state`, `data-state-testid` and `data-tf-sample` on the mockup itself, and the build and fix tasks may not edit `docs/mockups/`. The fix builder has no move left but faking the anchors in the app.
+- **Workaround:** none. The anchors were not faked in the app; the spec side is MISS-Sevak-20261109-54 and -55.
+- **Suggested fix:** `data-tf-phase="<n>"` on a control or a box around it, treated like `data-tf-state` when the list's `phase` is lower; and the mockups task writes it for every control whose BRD item belongs to a later phase.
+- **Reply (TechieFlow team, 2026-11-10):** Fixed in Sevak's `.tfcore/`, the first way you suggested. A mockup control that a later phase builds carries `data-tf-phase="<n>"`, on the control or on a box around it. The screen check (`tf-verify-screens`), the mockup check (`tf-mockup-parity`) and the menu walk read it: while the phase being graded is lower than n the control is treated like another state of the screen, so it is not owed, and when the app does draw it, it is graded like any other. From phase n on the mark means nothing and the control is owed. The phase graded comes from `--phase N`, else from `list.json`, else from `appPhase`. The mockups task now writes the mark for every control that `docs/<App>-Phases.md` gives to a later phase. Regression case `sv_018`: graded as phase 4, controls marked `data-tf-phase="5"` pass both checks; graded as phase 5, both report them missing. On the scripts you had, phase 4 fails both. **Proved on a fixture, not on your app.** **Not done:** a per-phase list file (`later-phase-anchors.json`); one mark in the mockup is enough and keeps the mockup the one place that says it. **Your mockups today** carry `data-tf-state="phase-5"` on these controls, which still works and is left alone. To say it properly, paste into Sevak's agent: `/TechieFlow:agents:analyst *amend-docs Sevak` with the request `In every file under docs/mockups, replace data-tf-state="phase-5" (and the class show added with it) by data-tf-phase="5" on the same elements.` Then `*verify all Sevak --phase 4` reads the same as now, and in phase 5 the controls become owed without another mockup edit.
+
+### TF-019 — The overlap check has no way to mark a deliberate edge handle or overlay, so the library's SidebarRail fails every screen
+
+- **Status:** fixed upstream 2026-11-10, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-10; not yet re-checked here.
+- **Blocks:** no — Sevak marks the rail `aria-hidden="true"` (a pointer-only duplicate of `sidebar-trigger`, tabindex -1), which the check's `vis()` skips; the rail still works by mouse.
+- **Severity:** minor
+- **Repro:** any Sevak screen at 1280 px. TrBlazeUI's `SidebarRail` is `absolute inset-y-0 w-4 -translate-x-1/2 -right-4`: a 16 px hit area centred on the sidebar's edge, half of it over the sidebar, exactly as the mockup's `.sidebar-rail` (6 px, `right:-3px`) is drawn. `grade()` reports "sidebar overlaps sidebar-rail at 1280px" because half the rail's box is inside the sidebar (over the 25 % floor) and the rail is not the sidebar's descendant in the measured list.
+- **Expected:** a control drawn the same way in its mockup is not an overlap; or a supported mark (`data-tf-overlay`) for a control that sits on another by design.
+- **Actual:** only `aria-hidden="true"`, an ancestor relation, or more than 90 % containment excuse it.
+- **Workaround:** `aria-hidden="true"` on the rail, as above. It is right for assistive technology here, but it is not a general answer: a focusable overlay cannot take it.
+- **Suggested fix:** compare the pair against the mockup at the same width and skip an overlap the mockup also draws; or honour `data-tf-overlay` on the mockup control.
+- **Reply (TechieFlow team, 2026-11-10):** Fixed in Sevak's `.tfcore/`, the second way you suggested. A control the mockup marks `data-tf-overlay`, on the control's own tag, is left out of the overlap check and still graded on everything else (present, filled, not off screen, not zero size). The mockups task now says when to write it: a control drawn over its neighbour on purpose, such as an edge grab handle or a floating button. Regression case `sv_019`: a 16 px rail half over the sidebar, marked in the mockup, is no finding; two unmarked buttons on top of each other on the same screen are still reported, and only that pair. On the script you had, the rail fails (`sidebar overlaps sidebar-rail at 1280px`). **Proved on a fixture, not on your app.** **Not done:** comparing every overlap with the mockup at the same width; a mockup is not drawn to the pixel, and that would excuse real overlaps a mockup happens to share. **Check it here:** paste into Sevak's agent: `/TechieFlow:agents:analyst *amend-docs Sevak` with the request `Add data-tf-overlay to the sidebar-rail button in every file under docs/mockups, and take aria-hidden="true" off the app's SidebarRail.` Then a verify of any screen at 1280 carries no `sidebar overlaps sidebar-rail` finding.
+
+### TF-020 — `vis()` does not look at ancestors, so the controls inside a `display: none` column are reported as having zero width
+
+- **Status:** fixed upstream 2026-11-10, in this project's `.tfcore/` since the framework update of 2026-11-10; not yet re-checked here.
+- **Blocks:** no — Sevak no longer renders the chat pane's column on a phone-width window (it opens as a sheet from "Ask Sevak").
+- **Severity:** minor
+- **Repro:** Sevak Memory at 390 px before fix cycle 1: the pane column had `display: none`; the screen reported "anchored control assistant-pane-model has zero width" and eight more, for controls nobody can see.
+- **Expected:** a control whose ancestor is `display: none` is not visible, so it is neither "visible with zero width" nor owed (the mockup hides the same pane at that width).
+- **Actual:** `vis()` reads only the element's own `display`, `visibility` and `opacity`.
+- **Suggested fix:** use `el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })`, or test `offsetParent === null` for a non-fixed element.
+- **Reply (TechieFlow team, 2026-11-10):** Fixed by the same change as TF-024; the reply is under that entry. Regression case `sv_024`. The 390 px case you met on Memory is the same path: a control inside a `display: none` box is not visible, so it is neither "visible with zero width" nor owed when the mockup hides it at that width.
+
+
+### TF-021 — A verify with scope `all` runs every phase's browser specs on one boot, and the earlier phases' specs break the state the graded phase's specs need
+
+- **Status:** fixed upstream 2026-11-10, in this project's `.tfcore/` since the framework update of 2026-11-10; not yet re-checked here.
+- **Blocks:** no — the phase 4 verify ran its browser specs with `--spec tests/verify/p4`, merged with one unit run, as the task's part-and-merge procedure allows; the work carried on.
+- **Severity:** minor
+- **Repro:** `*build-phase Sevak` chains the verifier with scope `all` on `--phase 4`. `tf-verify-tests.sh` sees scope `all` and runs every spec under `tests/verify/` (192 tests, 72 minutes). The phase 1 specs expect a fresh install, the phase 2 specs change the theme and the language and restore a backup, a phase 3 spec expects the first sign-in; when the phase 4 specs run, the shell is on another page and the pane's Send is disabled, so 50 of 80 phase 4 rows fail on `toBeVisible` (two runs, 2026-11-09). The morning fix cycle passed because an id-list scope `--grep`s only those rows' tests.
+- **Expected:** with `--phase N`, the browser run covers the specs carrying that phase's row ids, as an id-list scope does; `--phase all` grades the phases one boot each.
+- **Actual:** `ui`, `functional` and `all` always run the whole tree.
+- **Encountered in:** Sevak `*build-phase` phase 4, 2026-11-09 08:37Z and 09:53Z runs (`tests/.artifacts/verify/playwright.json`).
+- **Workaround:** `--spec tests/verify/p4` for the browser part, merged with the unit run.
+- **Suggested fix:** when `--phase N` is given with a word scope, grep the specs by the phase's row ids and print which specs ran.
+- **Reply (TechieFlow team, 2026-11-10):** Fixed as you suggested, in three places. (1) `tf-verify-list.py` writes the phases that have a checklist into `list.json` (`"phases": [1, 2, 3, 4, 5]` here). (2) `tf-verify-tests.sh`: on a project with more than one phase checklist, scope `ui`, `functional` or `all` passes Playwright `--grep` with the row ids of the phase in `list.json`, the way a list of ids already did. It prints `browser tests: ran only the tests carrying the 80 row id(s) of phase 4 …` and then `browser tests: specs run (N file(s)): …` with each spec file and its test count. `--all-specs` still runs every phase's specs. A project with one checklist runs everything, as before. The unit tests are not filtered. (3) `--phase all`: `verify-phase.md` and the line `tf-verify-list.sh … --phase all` prints now say each phase is graded on its own boot (steps 1 and 3 to 7 once per phase), no longer every phase on one boot. Regression case `sv_021`, five checks; three fail on the scripts you had. **Read only on your repo:** phase 4's 80 ids keep 47 of the tests under `tests/verify/p4` and none of the 145 under `p1`, `p2` and `p3`. One thing to know: a test whose title carries no row id is no longer run by a phase verify. Here that is two tests. `tests/verify/p4/ready.spec.ts` ("phase 4 app is set up and signed in"): every phase 4 spec calls `ready()` itself, so nothing waits on it. And "ChatPane in Pane mode on another screen …" in `assistant-screen.spec.ts`: with no id it never counted for a row; put its row's id at the start of the title if it should. `--spec <file>` still runs either by name. **Not run on your app.** A test whose title mentions a phase 4 id while it sits in another phase's spec is still kept: the filter reads titles, not folders. **Check it here:** paste into Sevak's agent: `/TechieFlow:agents:verifier *verify all Sevak --phase 4`. The `specs run` line names only files under `tests/verify/p4`, and the `--spec tests/verify/p4` workaround can go.
+
+
+### TF-022 — `tf-verify-boot.sh` says "10 other Windows head(s) up" when one Sevak.exe is running
+
+- **Status:** fixed upstream 2026-11-10, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-10; not yet re-checked here.
+- **Blocks:** no — the boot worked and the verify carried on; the message was checked against the process list and ignored.
+- **Severity:** minor
+- **Repro:** `bash tests/verify/boot-safe.sh p4-verify --port 9333` on a machine where `Get-CimInstance Win32_Process -Filter "Name='Sevak.exe'"` lists one process prints `tf-verify-boot: 10 other Windows head(s) up — this one gets DevTools port 29333`.
+- **Expected:** the count names this app's running heads, or says what it counted (other apps' WebView2 DevTools ports, stale `boot.json` records).
+- **Actual:** a number no process list matches, so a reader looks for ten orphaned apps that are not there.
+- **Encountered in:** Sevak phase 4 verify boots, 2026-11-09 (`tests/.artifacts/verify/boot.json`).
+- **Workaround:** none needed.
+- **Suggested fix:** count processes of the head's image name from `boot.json`, or name the source of the count in the message.
+- **Reply (TechieFlow team, 2026-11-10):** Fixed in Sevak's `.tfcore/`, both parts of your suggestion. The count was every `boot-*.json` in `tests/.artifacts/verify/` not marked stopped, and an app that is closed by hand or killed never passes through `stop`. `tf-verify-boot.sh` now asks Windows once (`tasklist.exe`) and counts a record only while a process it names is still running under the same program name. A record whose app is gone is marked stopped, with the reason. The line names what it counted: `1 other Windows head(s) up, by this folder's boot records: port 9341 (Sevak.exe, pid 16764) …`. When Windows cannot be asked, the records are counted as before and the line says they were not checked. New command: `bash .tfcore/utils/tf-verify-boot.sh heads` prints the count on its own. Regression case `sv_022`, three checks; all fail on the script you had. **Run on your real records, 2026-11-10:** ten records said up; nine apps were gone, and the tenth's process id (17636) now belonged to `msedge.exe`, which is why the program name is compared too. Result: `0 other Windows head(s) up`. Those ten records are now marked stopped in your `tests/.artifacts/verify/`; nothing else there was changed. **Check it here:** `bash .tfcore/utils/tf-verify-boot.sh heads` with one Sevak window open prints `0 other` from another port's point of view, or names that one window by port.
+
+### TF-023 — The mockup-parity check reads a native checked checkbox as "no fill, no icon", so a component library's checkbox fails the icon and colour clauses on every screen that draws one
+
+- **Status:** fixed upstream 2026-11-10, in this project's `.tfcore/` since the framework update of 2026-11-10; not yet re-checked here.
+- **Blocks:** no — the nine Import rows stay below Verified on this one finding and everything else carried on; the control itself is right.
+- **Severity:** minor
+- **Repro:** `docs/mockups/import.html` draws `import-tick` as `<input type="checkbox" checked>`; Chromium paints its fill and tick glyph itself, so the computed style the tool reads is transparent with no icon. The app's TrBlazeUI `Checkbox` draws the same checked box as DOM (primary fill, an svg tick). `tf-mockup-parity.sh` then reports `import-tick` icon ("app carries an icon the mockup does not") and colour ("mockup neutral, app accent") at 1280 and 390, light and dark — 8 findings, the only ones left on Import after the phase 4 fix cycle.
+- **Expected:** a toggle is compared as a toggle: checked state and size, not the paint Chromium does for a native input.
+- **Actual:** TF-035's toggle exemption covers the stroke clause only; icon and colour still compare computed styles.
+- **Encountered in:** Sevak phase 4 verify, Import (`/tools/import`), `tests/.artifacts/verify/parity.json`, 2026-11-09.
+- **Workaround:** none taken; a raw `<input type="checkbox">` is forbidden by the trblazeui persona, and hiding the tick to satisfy the measurement would make a worse control.
+- **Suggested fix:** extend the toggle exemption to the icon and colour clauses (or compare `:checked` state and box size for inputs of type checkbox and radio).
+- **Reply (TechieFlow team, 2026-11-10):** Fixed as you suggested, in `tf-mockup-parity.mjs`. A checkbox, radio or switch (`input[type=checkbox]`, `input[type=radio]`, `role="checkbox"`, `role="switch"`, `role="radio"`), on either side, is no longer compared by its icon, its colour or its badge shape, as it already was not by its border (Lekhak TF-035). What is drawn inside a toggle, the svg tick or a switch's thumb, is also no longer counted as an icon or a badge of the boxes around it; without that the finding would have moved from `import-tick` to the table cell. **Not done:** the checked state is not compared. The tick follows the app's data (your rows are ticked or not by what the user chose), so comparing it with the mockup's sample would fail honest screens. A toggle the app does not draw at all is still the screen check's finding. Regression case `sv_023`: your shape (a native checked checkbox in the mockup, a filled `role="checkbox"` button with an svg tick in the app) gives no finding on the toggle or on the card around it, a switch beside a native checkbox gives none either, and an icon added to an ordinary control is still reported. On the script you had, the same fixture gives your two findings word for word (`app carries an icon the mockup does not`, `mockup neutral, app accent`). **Proved on a fixture, not on your running app.** **Check it here:** paste into Sevak's agent: `/TechieFlow:agents:verifier *verify all Sevak --phase 4`. Import carries no `import-tick` finding at 1280 or 390, light or dark, and the nine Import rows are graded on their other checks.
+
+
+## Resolution status (TechieFlow team, 2026-11-10, second run)
+
+Fixed in Sevak's `.tfcore/` through the second framework update of 2026-11-10. With these four, no Sevak entry is open. All four were proved on fixtures; TF-022 was also run on this project's own boot records. Two more changes of the same day touch this project and are not entries of yours: a phase verify now prints every test it leaves out for having no row id (`NOT RUN (no row id) …`; here `p1/c-documents-data.spec.ts` "Data and storage buttons …", `p4/assistant-screen.spec.ts` "ChatPane in Pane mode …" and `p4/ready.spec.ts`), and the framework update no longer removes `.codex/agents/techierag.toml` and `trblazeui.toml`, which the library packages install.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-017 | Fixed upstream. The reply is under the entry. | `/TechieFlow:agents:verifier *verify all Sevak --phase 4`. REQ-RAG-116 and REQ-UI-087 stay `Blocked` with their reason. |
+| TF-018 | Fixed upstream. The reply is under the entry. | the `*amend-docs` prompt in the reply, then the same verify. |
+| TF-019 | Fixed upstream. The reply is under the entry. | the `*amend-docs` prompt in the reply, then a verify of any screen; no `sidebar overlaps sidebar-rail`. |
+| TF-022 | Fixed upstream. The reply is under the entry. | `bash .tfcore/utils/tf-verify-boot.sh heads`. |
+
+## Resolution status (TechieFlow team, 2026-11-10)
+
+Already in this project's `.tfcore/` through the framework update of 2026-11-10. They go out to the other projects with the next TechieFlow release. Each fix has a regression case in `tests/regression/run.sh` that fails against the scripts this project had before today's update and passes now. All three were proved on fixtures; none was run on the Sevak app.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-020 | Fixed upstream with TF-024. The reply is under the entry. | as TF-024. |
+| TF-021 | Fixed upstream. The reply is under the entry. | `/TechieFlow:agents:verifier *verify all Sevak --phase 4`. The `browser tests: specs run` line names only files under `tests/verify/p4`. |
+| TF-023 | Fixed upstream. The reply is under the entry. | the same verify. Import carries no `import-tick` finding. |
+| TF-024 | Fixed upstream. The reply is under the entry. | the prompt in the reply; Document library carries no `has zero width` finding at 1024. |
 
 ## Resolution status (TechieFlow team, 2026-11-05)
 

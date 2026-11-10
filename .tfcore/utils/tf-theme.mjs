@@ -199,3 +199,38 @@ const AUDIT = ({ dark, min, cap }) => {
   return { low: low.slice(0, cap), light: light.slice(0, cap), low_n: low.length, light_n: light.length };
 };
 export const audit = (page, dark, min = 3.0, cap = 5) => page.evaluate(AUDIT, { dark, min, cap }).catch(() => null);
+
+// ---- Sevak TF-018: a mockup control that belongs to a later phase -------------------------------------
+// A mockup draws the whole screen, the parts a later phase builds included (Sevak's sidebar draws the
+// phase 5 screens' nav items in phase 4). Each was reported "not on the page", and the only excuses were
+// marks that say something else (data-tf-state) on a file a build may not edit. The mockups task now
+// writes data-tf-phase="<n>" on such a control or on a box around it. While the phase being graded is
+// lower than n, the mark is read as another state of the screen: the control is not owed, and when the
+// app draws it anyway it is graded like any other. From phase n on the mark means nothing.
+// gradedPhase: --phase N, else the phase in the list.json given or the one tf-verify-list.sh last wrote,
+// else appPhase in .tfcore/core-config.yaml; null when none says (then every control is owed).
+import { existsSync as tfExists, readFileSync as tfRead } from 'node:fs';
+export function gradedPhase(argPhase, listPath) {
+  const n = (v) => { const x = parseInt(v, 10); return Number.isFinite(x) && x > 0 ? x : null; };
+  if (n(argPhase)) return n(argPhase);
+  for (const f of [listPath, 'tests/.artifacts/verify/list.json']) {
+    if (!f || !tfExists(f)) continue;
+    try { const p = n(JSON.parse(tfRead(f, 'utf8')).phase); if (p) return p; } catch (e) { /* next source */ }
+    if (f === listPath) break;   // a list that was named and says no phase: do not read another run's
+  }
+  try {
+    const m = tfRead('.tfcore/core-config.yaml', 'utf8').match(/^appPhase:\s*["']?(\d+)/m);
+    if (m) return n(m[1]);
+  } catch (e) { /* no config here */ }
+  return null;
+}
+// run on a mockup page right after it loads; returns how many controls it marked
+export const markLaterPhase = (page, phase) => (phase === null || phase === undefined ? Promise.resolve(0)
+  : page.evaluate((ph) => {
+    let n = 0;
+    for (const el of document.querySelectorAll('[data-tf-phase]')) {
+      const of = parseInt(el.getAttribute('data-tf-phase'), 10);
+      if (Number.isFinite(of) && of > ph && !el.hasAttribute('data-tf-state')) { el.setAttribute('data-tf-state', `phase-${of}`); n++; }
+    }
+    return n;
+  }, phase).catch(() => 0));

@@ -21,6 +21,9 @@
 # parts' rows and totals into one tests.json; a later run of the same test stands for it (Lekhak TF-007).
 # When tf-verify-list.sh was given a list of ids, the browser run keeps only the tests carrying them
 # (`--grep`), and is skipped when no row has a screen and no browser test names one (Lekhak TF-017).
+# On a project with several phase checklists, `ui`, `functional` and `all` keep only the tests carrying
+# the graded phase's row ids too, and the spec files that ran are printed (Sevak TF-021). A test left
+# out because its title carries no row id is printed by name as a finding and kept in tests.json.
 # `--list` names another list.json; `--all-specs` runs every browser test whatever the scope.
 # `--filter "DisplayName~REQ-RAG-150"` runs only the unit tests the filter selects (dotnet test --filter),
 # no browser tests, into tests-filter-<expr>.json: a memory-heavy test that skips itself when its whole
@@ -146,8 +149,13 @@ for rid, o in outs.items():
                  "skipped": [n for n, _ in skips], "passed": npass, "failed": len(fails), "reason": reason,
                  "screenshot": fails[0][1].get("screenshot", "") if fails else "", "outcomes": o}
 mentioned = {rid: sorted(set(v))[:3] for rid, v in elsewhere.items() if rid not in reqs}
+unnumbered = []   # the tests a phase verify left out for carrying no row id, from every part, once each
+for d, _i, p in loaded:
+    for t in d.get("unnumbered_not_run") or []:
+        if t not in unnumbered:
+            unnumbered.append(t)
 json.dump({"reqs": reqs, "browser": browser, "unit": unit, "merged_from": parts, "superseded": superseded,
-           "named_only_by_other_rows_tests": mentioned},
+           "named_only_by_other_rows_tests": mentioned, "unnumbered_not_run": unnumbered},
           open(os.environ["TF_OUT"], "w"), indent=1)
 p = sum(1 for r in reqs.values() if r["result"] == "PASS"); f = sum(1 for r in reqs.values() if r["result"] == "FAIL")
 ns = sum(1 for r in reqs.values() if r["result"] == "NOT-TESTED")
@@ -205,6 +213,11 @@ print(b.get("url", ""), b.get("bundle_id", ""), b.get("app_path", "")) if b.get(
       # none when no row in scope has a screen and no file under tests/verify/ names one of them. A
       # verify of one no-screen NFR row ran the whole suite and was stopped at 30 minutes. ui,
       # functional and all run everything; so do --spec, --all-specs and a run without list.json.
+      # Sevak TF-021: on a project with several phase checklists a word scope is that phase's rows, and
+      # "everything" ran the other phases' specs on the same boot: 192 tests in 72 minutes, and the
+      # phase 1 to 3 specs (fresh install, theme, language, a backup restored) left the app where 50 of
+      # 80 phase 4 rows failed on toBeVisible. There a word scope keeps the tests carrying the graded
+      # phase's row ids, as a list of ids does. A project with one checklist runs everything as before.
       SCOPE=""
       [[ $ALLSPECS -eq 0 && ${#SPECS[@]} -eq 0 && -f "$LIST" ]] && SCOPE="$(python3 - "$LIST" <<'SCOPEPY'
 import json, sys
@@ -212,12 +225,14 @@ try:
     d = json.load(open(sys.argv[1], encoding="utf-8"))
 except Exception:
     sys.exit(0)
-if str(d.get("scope", "")).strip().lower() in ("", "ui", "functional", "all"):
+word = str(d.get("scope", "")).strip().lower() in ("", "ui", "functional", "all")
+if word and len(d.get("phases") or []) < 2:
     sys.exit(0)
 rows = d.get("rows", [])
 ids = [r["id"] for r in rows if r.get("id")]
 if ids:
-    print(("screen " if any(r.get("screen") for r in rows) else "none ") + "|".join(ids))
+    # a word scope is never skipped for having no screen row: "phase" runs what carries the ids
+    print(("phase%s " % d.get("phase", "") if word else "screen " if any(r.get("screen") for r in rows) else "none ") + "|".join(ids))
 SCOPEPY
 )"
       if [[ "$SCOPE" == none\ * ]] && ! grep -rqsE "${SCOPE#none }" tests/verify; then
@@ -225,8 +240,81 @@ SCOPEPY
         rm -f "$PWJSON"
       else
         [[ -n "$SCOPE" ]] && PWARGS+=(--grep "${SCOPE#* }")
+        # A test whose title carries no row id belongs to no phase, so a phase's filter leaves it out. It
+        # is named, never dropped in silence (2026-11-10: Sevak's "phase 4 app is set up and signed in"
+        # and "ChatPane in Pane mode …" stopped running with nothing printed). Listed before the run, by
+        # asking Playwright for every test it would collect; each is printed below as a finding and kept
+        # in tests.json (unnumbered_not_run), which the verdict prints again under its table.
+        UNNUM="tests/.artifacts/verify/unnumbered${PART:+-$PART}.json"; rm -f "$UNNUM"
+        if [[ "$SCOPE" == phase* ]]; then
+          PLAYWRIGHT_JSON_OUTPUT_NAME="$UNNUM.list" npx playwright test --list --reporter=json > /dev/null 2>&1 || true
+          TF_HERE="$HERE" python3 - "$UNNUM.list" "$UNNUM" <<'UNNUMPY'
+import importlib.util, json, os, sys
+_spec = importlib.util.spec_from_file_location("tf_req_ids", os.path.join(os.environ.get("TF_HERE", ".tfcore/utils"), "tf-req-ids.py"))
+rq = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(rq)
+try:
+    data = json.load(open(sys.argv[1], encoding="utf-8"))
+except Exception:
+    sys.exit(0)   # Playwright could not list: nothing is claimed either way
+found = []
+def walk(s, path, f):
+    f = s.get("file") or f
+    t = s.get("title") or ""
+    here = path if (not t or t.endswith((".ts", ".js", ".mjs", ".tsx", ".jsx"))) else path + [t]
+    for sp in s.get("specs", []):
+        if not rq.ID.search(" ".join(here + [sp.get("title", "")])):
+            found.append({"file": sp.get("file") or f, "title": sp.get("title", "")})
+    for c in s.get("suites", []):
+        walk(c, here, f)
+for s in data.get("suites", []):
+    walk(s, [], s.get("file", ""))
+json.dump(found, open(sys.argv[2], "w"), indent=1)
+UNNUMPY
+          rm -f "$UNNUM.list"
+        fi
         APPIUM_URL="$APPIUMURL" TF_BUNDLE_ID="$BUNDLEID" TF_APP_PATH="$APPPATH" CDP_URL="$CDPURL" BASE_URL="$BASE" PLAYWRIGHT_JSON_OUTPUT_NAME="$PWJSON" npx playwright test "${PWARGS[@]}" ${SPECS[@]+"${SPECS[@]}"} > "$PWLOG" 2>&1
-        echo "browser tests: ran${SHARD:+ shard $SHARD}${SPECS:+ (${#SPECS[@]} spec argument(s))}${SCOPE:+ only the tests carrying ${SCOPE#* } (the scope in $LIST)} (log $PWLOG)"; ran_any=1
+        if [[ "$SCOPE" == phase* ]]; then
+          NIDS="$(tr '|' '\n' <<<"${SCOPE#* }" | grep -c .)"
+          echo "browser tests: ran${SHARD:+ shard $SHARD} only the tests carrying the $NIDS row id(s) of phase $(tr -d a-z <<<"${SCOPE%% *}") in $LIST, not the other phases' specs (--all-specs runs every spec) (log $PWLOG)"
+          # which spec files ran, so a reader sees no other phase's spec took part
+          python3 - "$PWJSON" <<'RANPY'
+import json, sys
+try:
+    data = json.load(open(sys.argv[1], encoding="utf-8"))
+except Exception:
+    sys.exit(0)
+ran = {}
+def walk(s, f):
+    f = s.get("file") or f
+    for sp in s.get("specs", []):
+        ran[sp.get("file") or f] = ran.get(sp.get("file") or f, 0) + len(sp.get("tests", []))
+    for c in s.get("suites", []):
+        walk(c, f)
+for s in data.get("suites", []):
+    walk(s, s.get("file", ""))
+if ran:
+    print("browser tests: specs run (%d file(s)): %s" % (len(ran), ", ".join("%s (%d)" % (k, v) for k, v in sorted(ran.items()))))
+else:
+    print("browser tests: specs run: none — no test title carries one of those ids")
+RANPY
+          [[ -f "$UNNUM" ]] && python3 - "$UNNUM" <<'SAYPY'
+import json, sys
+try:
+    un = json.load(open(sys.argv[1], encoding="utf-8"))
+except Exception:
+    un = []
+if un:
+    print("browser tests: FINDING — %d test(s) carry no row id in their title, so this phase verify did not run them. "
+          "Put the row's id at the start of the title, or run the file with --spec:" % len(un))
+    for t in un[:30]:
+        print('  NOT RUN (no row id) %s — "%s"' % (t["file"], t["title"][:120]))
+    if len(un) > 30:
+        print("  … and %d more, all in %s" % (len(un) - 30, sys.argv[1]))
+SAYPY
+        else
+          echo "browser tests: ran${SHARD:+ shard $SHARD}${SPECS:+ (${#SPECS[@]} spec argument(s))}${SCOPE:+ only the tests carrying ${SCOPE#* } (the scope in $LIST)} (log $PWLOG)"
+        fi
+        ran_any=1
       fi
     else
       echo "browser tests: @playwright/test is not installed here (bash .tfcore/utils/tf-verify-env.sh); skipped"; rm -f "$PWJSON"
@@ -292,7 +380,7 @@ PY
   fi
 fi
 
-TF_HERE="$HERE" TF_LIST="$LIST" TF_PWJSON="$PWJSON" TF_UNITLOG="$UNITLOG" TF_UNITLINE="$UNITLINE" TF_TRX="${TRX:-}" TF_OUT="$OUT" python3 - <<'PY'
+TF_UNNUM="${UNNUM:-}" TF_HERE="$HERE" TF_LIST="$LIST" TF_PWJSON="$PWJSON" TF_UNITLOG="$UNITLOG" TF_UNITLINE="$UNITLINE" TF_TRX="${TRX:-}" TF_OUT="$OUT" python3 - <<'PY'
 import json, os, re
 import xml.etree.ElementTree as ET
 import importlib.util
@@ -491,8 +579,14 @@ unit["not_tested"] = sum(1 for r in reqs.values() if r["source"] == "unit" and r
 
 import datetime
 ran_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+# the tests a phase verify left out because their title carries no row id (named, never silent)
+unnumbered = []
+try:
+    unnumbered = json.load(open(os.environ.get("TF_UNNUM", ""), encoding="utf-8"))
+except Exception:
+    pass
 json.dump({"reqs": reqs, "browser": browser, "unit": unit, "ran_at": ran_at, "named_only_by_other_rows_tests": mentioned,
-           "tests_older_than_row": predates},
+           "tests_older_than_row": predates, "unnumbered_not_run": unnumbered},
           open(os.environ["TF_OUT"], "w"), indent=1)
 p = sum(1 for r in reqs.values() if r["result"] == "PASS")
 f = sum(1 for r in reqs.values() if r["result"] == "FAIL")

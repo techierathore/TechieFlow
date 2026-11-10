@@ -4,11 +4,11 @@
 |---|---|
 | App | Chatur |
 | Upstream | TechieFlow |
-| Updated | 2026-11-05 (TF-022 fixed upstream, ships in TechieFlow v1.3.0) |
+| Updated | 2026-11-10, later (TF-023, TF-024 and TF-025 fixed upstream, in `.tfcore/` from the framework update of the same day) · 2026-11-10 (TF-023 to TF-025 filed; TF-022 re-checked and closed) · 2026-11-10 (five stale `Status: open` lines corrected: TF-008, TF-009, TF-018, TF-019, TF-021; no new fix) · 2026-11-05 (TF-022 fixed upstream, ships in TechieFlow v1.3.0) |
 
 ## Summary
 
-22 entries: 0 open, 11 fixed upstream and not yet re-checked (TF-008, TF-010, TF-013 to TF-019, TF-021, TF-022), 11 closed (TF-001 to TF-007, TF-009, TF-011, TF-012, TF-020). 0 blocking.
+25 entries: 0 open, 13 fixed upstream and not yet re-checked (TF-008, TF-010, TF-013 to TF-019, TF-021, TF-023 to TF-025), 12 closed (TF-001 to TF-007, TF-009, TF-011, TF-012, TF-020, TF-022). 0 blocking.
 
 TF-007 was re-checked here on 2026-10-03: no list box on Start, Workbench, Prerequisites, Providers or Corrections reports "app carries an icon the mockup does not" at either width, and Start, Prerequisites, Providers and Corrections now pass mockup parity outright.
 
@@ -117,7 +117,7 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 
 ### TF-008 — A screen whose route takes a value is graded Verified with its mockup comparison silently left out
 
-- **Status:** open, filed 2026-10-07
+- **Status:** fixed upstream 2026-10-08, already in this project's `.tfcore/` (its regression case passes against that copy, 2026-11-10); not yet re-checked here. Filed 2026-10-07.
 - **Severity:** major
 - **Blocks:** no — giving the comparison each screen's checklist name (`--screen "Process run=/processes/6/run"` with `--list`) makes it count, and Chatur now runs it that way; the danger is a false Verified for anyone who does not.
 - **Repro:** `tf-mockup-parity.sh --screen process-run=/processes/6/run --screen agent-workspace=/workspace/verifier …`, then `tf-verify-verdict.sh Chatur --apply`, with the verify list's routes `/processes/{id}/run` and `/workspace/{agent}`
@@ -131,7 +131,7 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 
 > ✅ **Closed 2026-10-09** — re-checked here: 2026-10-09 06:05 verify of phase 3: tf-verify-screens.sh on End-to-end run (/auto) with seed auto-run.sh gave render OK at 1280 and 390 (no progress-bar empty finding); the bar is TrBlazeUI Progress (role=progressbar, aria-valuenow). All 10 End-to-end run rows Verified.
 
-- **Status:** open, filed 2026-10-08
+- **Status:** fixed upstream 2026-10-09 and closed here the same day (the mark above). Filed 2026-10-08.
 - **Severity:** major
 - **Blocks:** yes — all 8 End-to-end run rows (REQ-FN-061..066, REQ-UI-055, REQ-UI-056) are written RENDER-FAIL and cannot reach Verified while the bar is drawn correctly.
 - **Repro:** `tf-verify-screens.sh --list tests/.artifacts/verify/list.json …` on `/auto` with a run going (seed `tests/verify/seed/auto-run.sh`); the mockup's `progress-bar` is a track `div` holding a fill `div`, and the app's is TrBlazeUI `Progress` (`role="progressbar"`, `aria-valuenow`) at 50%.
@@ -254,7 +254,7 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 
 ### TF-018 — Verify on WSL cannot boot the head, so verdicts are written without a boot record
 
-- **Status:** open, filed 2026-10-25
+- **Status:** fixed upstream 2026-11-01, already in this project's `.tfcore/` (its regression case passes against that copy, 2026-11-10); not yet re-checked here. Filed 2026-10-25.
 - **Severity:** major
 - **Blocks:** yes — every verdict written from this machine on 2026-10-25 came from a head the tooling did not boot. The verdict header prints `booted: not booted`, and rows whose checks need the boot record fail with `ENOENT '/proc/undefined/cmdline'` (REQ-FN-055, REQ-FN-061).
 - **Repro:** `bash .tfcore/utils/tf-verify-boot.sh start` on WSL with the published harness on `http://localhost:5280`. It prints `NONE head=web kind=host reason=the published copy … did not answer on http://localhost:5280/ within 120 s although its log says it is listening`. The log shows `Application started`.
@@ -268,7 +268,7 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 
 ### TF-019 — The screen check's default sign-in path is /login, but this app signs in at /sign-in
 
-- **Status:** open, filed 2026-10-25
+- **Status:** fixed upstream 2026-11-01, already in this project's `.tfcore/` (its regression case passes against that copy, 2026-11-10); not yet re-checked here. Filed 2026-10-25.
 - **Severity:** minor
 - **Blocks:** no — passing `--login-path /sign-in` by hand works, and the screens were then driven.
 - **Repro:** `bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --base http://localhost:5280 --login-path /login --user chatur-owner@techierathore.com`, against an app whose sign-in page is `/sign-in`. The run ends `LOGIN failed … no user or email field found on the sign-in page`.
@@ -295,7 +295,7 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 
 ### TF-021 — tf-triage.sh new hands out four-digit ids that the test mapping cannot read
 
-- **Status:** open, filed 2026-10-30
+- **Status:** fixed upstream 2026-11-01, already in this project's `.tfcore/` (its regression case passes against that copy, 2026-11-10); not yet re-checked here. Filed 2026-10-30.
 - **Severity:** major
 - **Blocks:** no — the four rows were renumbered by hand to free three-digit ids (REQ-UI-079 to REQ-UI-082), and the run went on.
 - **Repro:** on Chatur, whose highest UI id is REQ-UI-078, run `bash .tfcore/utils/tf-triage.sh Chatur new "<title>" "<When … then …>" --prefix UI --section "Workbench"` four times. The rows come back as REQ-UI-1000, REQ-UI-1001, REQ-UI-1002 and REQ-UI-1003. Then run `tf-verify-tests.sh` over specs whose tests are titled `REQ-UI-1001 …`, `REQ-UI-1002 …`.
@@ -307,6 +307,8 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 
 ### TF-022 — The menu walk reports a submenu row (▸) as "does nothing when clicked"
 
+> ✅ **Closed 2026-11-10** — re-checked here: Re-checked 2026-11-10 in *triage-and-fix Chatur: tf-verify-screens.sh over phase 1 with no --no-click options, signed in as chatur-owner on the WSL web head :5290. screens.json records 'File › Recent projects ▸' as 'opened its submenu' and walks its rows (DefaultApp changed the page; Project list navigated to /start?all=1); no screen reports a ▸ row as 'does nothing when clicked'. The branch menu's sample items no longer fail Workbench render.
+
 - **Status:** fixed upstream 2026-11-05, ships in TechieFlow v1.3.0; not yet re-checked here.
 - **Severity:** minor
 - **Blocks:** no, with a workaround (updated 2026-11-05). Left alone, it fails render on every main-window screen, about 90 rows in phases 1 to 3. The 5 Nov verify passed `--no-click "Recent projects" --no-click "Zoom"` to the screen and mockup checks, so those two rows are not measured. The JSON wrongly gives the reason as "ends the session or deletes".
@@ -317,6 +319,45 @@ On a fresh fixture with one seeded check-in the `history-table` box finding did 
 - **Workaround:** `--no-click` on the two submenu rows (see Blocks).
 - **Suggested fix:** in `tf-menus.mjs`, count `aria-expanded` turning `true` on an `aria-haspopup` item as an effect, and walk the list it opened as a nested menu.
 - **Reply (TechieFlow team, 2026-11-05):** Fixed as you suggested. The cause: the walk judges a click by what changes outside the menus (address, text, dialogs, zoom, theme), and a submenu opening changes none of those. In `tf-menus.mjs`, a row with `aria-haspopup="menu"` or `"true"`, or a label ending in ▸, is now graded by its submenu appearing: `aria-expanded` turning `true`, or another menu showing beside it. Its child rows are then opened through it, one at a time from a freshly opened menu, and clicked and graded like any item. A dead child still fails, as `"File › Recent projects ▸ › <name>" does nothing when clicked`. It goes one level deep. Also fixed: a row skipped with `--no-click` now reads `not clicked (--no-click)` in the JSON, not "ends the session or deletes". Regression case `ch_022`. **Proved on your web head** (`tf-verify-boot.sh start --head web --port 5280`, signed in as chatur-owner, main window at 1280, light). v1.2.4 gives `"File › Recent projects ▸" does nothing when clicked` and `"View › Zoom ▸" does nothing when clicked`. The fix gives neither: Recent projects opened its submenu and DefaultApp opened, and Zoom opened with Zoom in and Zoom out zooming and Actual size acting. **Not ours, for you:** render still reads EMPTY on this screen for two other findings, in both runs: `the menu "main2 to push" has no "feature/board" item` and the same for `run/BRD-96-101`. Those are sample branches the mockup draws in the branch menu without `data-tf-sample` (the TF-011 reply named this). Mark them, or the app's branches will never match. **Check it here:** paste into Chatur's agent: `/TechieFlow:agents:verifier *verify ui Chatur --phase 1`, without the two `--no-click` options. No screen reports `Recent projects ▸" does nothing` or `Zoom ▸" does nothing`.
+
+### TF-023 — A screen reached through a submenu row is reported UNREACHABLE
+
+- **Status:** fixed upstream 2026-11-10, in this project's `.tfcore/` since the framework update of 2026-11-10; not yet re-checked here. Filed 2026-11-10.
+- **Severity:** minor
+- **Blocks:** no — the Start window is reached in the app (File ▸ Recent projects ▸ Project list lands on `/start?all=1`, and File ▸ Close project does too, proven by the REQ-UI-073 test). Only the six Start rows (REQ-UI-005 to REQ-UI-009, REQ-FN-006) are held below Verified on render.
+- **Repro:** Chatur, `docs/mockups/main.html` draws `<a href="start.html">Recent projects ▸</a>` and `<a href="start.html">Close project</a>` in the File menu. The app builds Recent projects as a `MenubarSub` (TR-020) whose last row, Project list, opens `/start?all=1`. Run `bash .tfcore/utils/tf-verify-screens.sh --list tests/.artifacts/verify/list.json --base http://localhost:5290 --login-path /sign-in --user chatur-owner@techierathore.com --password <pw>` (phase 1 list).
+- **Expected:** Start is reached: a child row of the ▸ row that carries the mockup's link landed on Start's route (`screens.json` → `menus.clicks`: `"menu": "File › Recent projects ▸", "label": "Project list", "effect": "navigated", "landed": {"url": "…/start?all=1"}`).
+- **Actual:** `FAIL Start (/start?all=1) — render UNREACHABLE … no menu click reaches /start?all=1: File › Recent projects ▸ (opened its submenu)`. `reachability()` in `tf-menus.mjs` takes only the clicks whose own `href` is the screen's mockup; the ▸ row "opened its submenu" and landed nowhere, and its children carry no `href`, so they are never looked at. Close project, the other way in, is never clicked by design.
+- **Encountered in:** `*triage-and-fix Chatur`, 2026-11-10 (TF-022's re-check)
+- **Workaround:** none in the app; the rows stay below Verified with this reason.
+- **Suggested fix:** in `reachability()`, when a way-in click opened a submenu, count any click in `submenu` (or any click whose `menu` starts with that row's `menu › label`) that landed on the route; or treat a way in whose only effect was opening a submenu as left unclicked, so the screen is not judged, as for Sign out.
+- **Reply (TechieFlow team, 2026-11-10):** Fixed in the framework, the first way you suggested, and in this project's `.tfcore/` from today's update. In `tf-menus.mjs`, `reachability()` now lets a way in that "opened its submenu" stand for the rows of that submenu: the screen is reached when any of them lands on its route, or draws half of its own controls. The line then names the whole path, `File › Recent projects ▸ › Project list`. When every row of the submenu lands somewhere else the screen is still UNREACHABLE and each row is named with where it landed. A submenu none of whose rows is clicked (all of them of the Sign out kind) leaves the screen unjudged, as a way in that is never clicked already did. Regression case `ch_023`, built from the click records in your entry; it fails on the script you had (Start not reached). **Proved on those records, not on your running app.** **Check it here:** paste into Chatur's agent: `/TechieFlow:agents:verifier *verify REQ-UI-005,REQ-UI-006,REQ-UI-007,REQ-UI-008,REQ-UI-009,REQ-FN-006 Chatur --phase 1`. Start is no longer UNREACHABLE and the six rows are graded on their other checks.
+
+### TF-024 — The WSL build fails with Razor parse errors on files that build on Windows, until the compiler server is shut down
+
+- **Status:** fixed upstream 2026-11-10, in this project's `.tfcore/` since the framework update of 2026-11-10; not yet re-checked here. Filed 2026-11-10.
+- **Severity:** minor
+- **Blocks:** no — `~/.dotnet/dotnet build-server shutdown` cleared it and the same files built at once.
+- **Repro:** Chatur on WSL, in one session: `tf-build.sh build` (Windows rung, PASS), several `tf-verify-boot.sh start --port 5290` (WSL publish, PASS), a `tf-build.sh test` on the Windows rung, then `tf-verify-boot.sh start --port 5290` again.
+- **Expected:** the WSL publish builds the files it built twenty minutes earlier.
+- **Actual:** `NONE kind=build-error … 122 error line(s), first: src/ChaturUI/Pages/AutoRun.razor(110,232): error RZ1021`, plus RZ1009 on `ConversationPanel.razor(23,51)` at a valid `@(…)`. None of the six files had changed since October; the Windows rung built them. Twice in a row, then a PASS straight after `~/.dotnet/dotnet build-server shutdown` (log `tests/.artifacts/build/20261110T065659Z-publish-40608.log`).
+- **Encountered in:** `*triage-and-fix Chatur`, 2026-11-10, twice; each time straight after a `tf-build.sh test` or `build` on the Windows rung (cmd.exe) over the same tree. It cost about 4 minutes the first time.
+- **Workaround:** `~/.dotnet/dotnet build-server shutdown`, then the same command.
+- **Suggested fix:** in `tf-build.sh`, when a WSL rung fails only with RZ errors (or with CS errors in files unchanged since the last PASS), shut the build servers down and try once more before reporting FAIL; say so in the verdict line.
+- **Reply (TechieFlow team, 2026-11-10):** Fixed in the framework, the first half of your suggestion, and in this project's `.tfcore/` from today's update. In `tf-build.sh`, on WSL, a WSL-side rung (`dotnet`, `~/.dotnet/dotnet`) that fails with any Razor error (`error RZ…`) runs `<that dotnet> build-server shutdown` and then the same build, test or publish once more, before anything is reported. When the second try passes, the verdict line says so: `PASS … the first try failed on 122 Razor error line(s) from a stale compiler server, and it passed once the build servers were shut down`. When the errors are still there they are real, and the line says that too: `FAIL real errors … still there after the build servers were shut down and the build was run again`. `tf-verify-boot.sh start` publishes through `tf-build.sh`, so the boot gets the same retry. A build that fails on C# errors alone is reported at once, with no shutdown. Regression case `ch_024`, three checks; two fail on the script you had. **Proved with a stand-in `dotnet` that gives your two errors until its servers are shut down; the real stale server was not reproduced here.** **Not done:** the second half, C# errors in files unchanged since the last PASS. Telling those from a real break needs a record of what each PASS built, and a wrong guess would hide a real error behind a retry; file it again if you meet that shape. A real Razor error now costs one extra build before it is reported. **Check it here:** nothing to run; the next time it happens the build passes on its own and the PASS line carries the sentence above.
+
+### TF-025 — The menu walk switches the project's branch, so a later screen is compared against a state its seed did not make
+
+- **Status:** fixed upstream 2026-11-10, in this project's `.tfcore/` since the framework update of 2026-11-10; not yet re-checked here. Filed 2026-11-10.
+- **Severity:** minor
+- **Blocks:** no — Repository passes when compared on its own straight after `tests/verify/seed/repository.sh`; the run used that measurement.
+- **Repro:** Chatur, phase 1 list. `tf-verify-screens.sh` runs `seed/repository.sh` (hand check-ins on main, two `run/…` branches), then walks every menu. On the main window the branch picker (`branch-pop`) lists main, feature/board and the run branches, and the walk clicks each, which checks the branch out in the fixture repository. `tf-mockup-parity.sh` over the same list then compares Repository with HEAD on the last branch clicked.
+- **Expected:** a screen is compared in the state its seed made.
+- **Actual:** `repository FAIL {'icon': 12}`: the history shows the two process check-ins at rows 1 and 2 and none of the hand check-ins, because HEAD is on feature/board; the mockup draws them at rows 3 and 5.
+- **Encountered in:** `*triage-and-fix Chatur`, 2026-11-10
+- **Workaround:** remove the fixture's `.git`, run the seed, then `tf-mockup-parity.sh --screen repository=/repository` alone.
+- **Suggested fix:** run a screen's seed again right before that screen is compared, in both scripts; or have the walk put a pick-list choice back (as it already does for the theme) after clicking it.
+- **Reply (TechieFlow team, 2026-11-10):** Fixed in the framework, the second way you suggested, and in this project's `.tfcore/` from today's update. In `tf-menus.mjs`, when a menu opens with exactly one ticked item that is not a checkbox (the branch checked out), and a click on another item took effect, the walk opens the menu again at the end; if the tick has moved, it chooses the item that was ticked at the start. `screens.json` records it under that menu as `put_back` (the label, what was ticked instead, and what the click did). So the walk still clicks every branch, and the project is back on `main` when it has finished with the picker. Regression case `ch_025`: the fixture's app reports every checkout to its server; the walk checks out `feature/board` and `run/BRD-96-101`, and the last checkout is `main`. On the script you had the last checkout is the run branch. **Proved on that fixture, not on your repository.** **Not done:** running a screen's seed again before each comparison. A seed is not always safe to run twice (yours needed the fixture's `.git` removed first), so the walk now leaves the state as it found it instead. A one-of choice inside a submenu is not put back yet; none of your menus has one. **Check it here:** paste into Chatur's agent: `/TechieFlow:agents:verifier *verify all Chatur --phase 1`. After the screen check the branch picker on the main window still shows `main` ticked, and Repository is compared with the hand check-ins in place.
 
 ## Replies from TechieFlow
 
@@ -410,3 +451,24 @@ Ships in **TechieFlow v1.2.4**, the next release after v1.2.3; already in this p
 | TF-019 | Fixed upstream in `tf-login.mjs`. The sign-in tries the path it was given, then `/login`, `/sign-in`, `/signin` and `/account/login`, and says which worked: "LOGIN signed in at /sign-in: /login has no sign-in form". Case `ch_019`. | After the framework update: the screen check with `--login-path /login`: expect "LOGIN signed in at /sign-in" and the screens driven. |
 | TF-021 | Fixed upstream in `tf-checklist-edit.py` and `tf-req-ids.py`. `tests/verify/process-run.spec.ts` holds `REQ-UI-999` as sample data; the TechieRag TF-008 scan counted it into the highest id, so the next was 1000. Ids in code and tests now only rule an id out and never raise the count, and a four-digit id is read whole. On a copy of your repo: `REQ-UI-1000` → `REQ-UI-083`. Case `ch_021`. | After the framework update: `bash .tfcore/utils/tf-triage.sh Chatur new …` on a copy: expect the next three-digit id. |
 
+### Resolution status (TechieFlow team, 2026-11-10)
+
+No new fix for Chatur today. Five entries still carried the line `Status: open` although each was answered in the tables above, so they read as unfixed to anyone who looked at the entry and not at the reply. The fixes are in the framework and already in this project's `.tfcore/`: on 2026-11-10 each regression case below was run against Chatur's own copy of the scripts and passed. Only the five Status lines were changed; nothing else in this file was touched. `bash .tfcore/utils/tf-feedback.sh Chatur` will name any entry left in that state from the next release on.
+
+| ID | State | Regression case, run against Chatur's `.tfcore/` on 2026-11-10 |
+|---|---|---|
+| TF-008 | Fixed upstream 2026-10-08, waiting for your re-check | `ch_008`, 2 checks pass |
+| TF-009 | Fixed upstream 2026-10-09, closed by Chatur the same day | `ch_009` passes |
+| TF-018 | Fixed upstream 2026-11-01, waiting for your re-check | `ch_018`, 3 checks pass |
+| TF-019 | Fixed upstream 2026-11-01, waiting for your re-check | `ch_019`, 2 checks pass |
+| TF-021 | Fixed upstream 2026-11-01, waiting for your re-check | `ch_021`, 2 checks pass |
+
+### Resolution status (TechieFlow team, 2026-11-10, TF-023 to TF-025)
+
+In this project's `.tfcore/` through the framework update of 2026-11-10; the other projects get them at the next release. Each fix has a regression case in `tests/regression/run.sh` that fails against the scripts this project had before the update. None was run on the Chatur app.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-023 | Fixed upstream. The reply is under the entry. | the verify of the six Start rows in the reply; Start is not UNREACHABLE. |
+| TF-024 | Fixed upstream. The reply is under the entry. | nothing to run; a stale-server failure now passes on its own and the PASS line says so. |
+| TF-025 | Fixed upstream. The reply is under the entry. | `*verify all Chatur --phase 1`; the branch picker still shows `main` ticked after the screen check. |

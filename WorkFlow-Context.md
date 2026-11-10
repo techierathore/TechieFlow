@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-11-01 (gate `test-users`, FW-001; v1.2.3 is the last tag). |
+| Last updated | 2026-11-10 (every open feedback entry answered; v1.2.4 is the last tag). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -115,9 +115,9 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | Three requirements name a **script that has not been written**: FR-58 (refuse `done complete` while rows are unfinished), FR-60 (refuse a banned head name in a brief), FR-61 (grade a row not observable when the environment lacks the data). The idea-stage commands still emit no run record (FR-34, FR-60). | Maintainer |
 | **Model routing is deployed everywhere and enabled in three**: 19 repositories carry `tf-model-pick.sh` and a `routing.yaml` with a `fallbacks:` chain and a `billing:` block (added by the updater, never overwriting a line); three of them have `enabled: true` and generated bindings, the other sixteen keep their own `enabled: false`. Turning one on is `bash .tfcore/utils/tf-routing.sh on` in that project — Routing-Guide §2b. | Owner decision, per project |
 | **Open misses**: `docs/TechieFlow-Misses.md`. | Maintainer |
-| **Not proved on real machines** (v1.2.4): window restore, Mac `--env`, NAT fallback; the translucent-colour fix (TfLens TF-056) is unmeasured on running apps. `tests/goal` fails only inside Claude Code. | Maintainer |
+| **Not proved on real machines** (v1.2.4): window restore, Mac `--env`, NAT fallback; the translucent-colour fix (TfLens TF-056) is unmeasured on running apps. The 2026-11-10 check fixes: fixtures only. | Maintainer |
 | **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` (that repository, not this one) and waiting on the owner's go-ahead. | Separate repo |
-| **Every feedback entry answered so far is fixed and deployed everywhere.** Several wait for their project's re-check; `tf-feedback.sh <App> --waiting` lists them. | Each project (close) |
+| **No feedback entry is open** (2026-11-10); that day's fixes ship with v1.3.0. Several await their project's re-check: `tf-feedback.sh <App> --waiting`. | Each project (close) |
 | **TrBlazeUI TR-004**: disabled menu items lack `aria-disabled`; the menu bar ignores Escape. `tf-menus.mjs` works around both. | TrBlazeUI |
 | **Mockup parity pairs live rows with sample rows by position** (MISS-TechieFlow-20261003-02): row N of the app is graded against whatever kind of row the mockup drew at N, so data in another order gives row-level icon findings. Chatur's Repository rows are blocked on it. A fix would pair each app row with the best-matching sample row. | Maintainer |
 | **Blazor Hybrid heads owe OS zoom** (standards §9b): TrSetup lacks it and the macOS 27 scene rule; TrStudio's is unbuilt (GitHub Packages 401); one private project unchecked. | Those projects |

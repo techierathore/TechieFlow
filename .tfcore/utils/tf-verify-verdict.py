@@ -444,9 +444,17 @@ def main(argv):
         # TechieRag TF-009: a Blocked row is waiting on something no test measures (an owner decision, a
         # device, a library gap). A passing test proves the part that is built, so the row stays Blocked
         # with the pass in its Remark, and no PASS gate record is written. tests/regression/run.sh tr_009a.
-        if verdict == "PASS" and prior.strip("`* ").lower().startswith("blocked"):
-            verdict = "BLOCKED-HELD"
-            detail = f"{detail}; stays Blocked: the tests measure the part that is built, not what the row waits on"
+        # Sevak TF-017: the same holds whatever this run found. REQ-RAG-116 and REQ-UI-087 wait on a library
+        # release and have no test; their screen failed the render check, and the verdict wrote them Needs
+        # re-verify and replaced the Remark, so the reason they are Blocked was lost. A Blocked row keeps its
+        # Status, its % and its reason; what this run found is appended, and no gate record or miss is written.
+        held_from = None
+        if prior.strip("`* ").lower().startswith("blocked"):
+            if verdict == "PASS":
+                detail = f"{detail}; stays Blocked: the tests measure the part that is built, not what the row waits on"
+            else:
+                held_from = verdict
+            verdict, cls, kept = "BLOCKED-HELD", None, []
         status = STATUS.get(verdict, "Needs re-verify" if verdict == "DEFECT-OPEN" else prior)
         pct = r.get("pct")
         # Chatur TF-017: a row whose tests were all skipped kept the Verified it read before, with a Remark
@@ -472,12 +480,21 @@ def main(argv):
                  "NOT-BUILT": "not built", "BLOCKED-HELD": "tests pass, still Blocked",
                  "DEFECT-OPEN": "checks pass, defect open"}
         remark = f"{today} verify: {marks[verdict]} — {detail}"
+        if held_from:
+            remark = f"{today} verify: still Blocked; this run found {marks[held_from]} — {detail}"
         if evidence:
             remark += f" ({evidence})"
         if notes:
             remark += "; " + "; ".join(notes[:2])
         carried = words(" ".join(kept).replace("|", "/"), 30) if kept else ""
         remark = words(remark.replace("|", "/"), 60 - len(carried.split())) + (f" {carried}" if carried else "")
+        if verdict == "BLOCKED-HELD":
+            # the reason first and whole (up to 35 words), then this run in what is left of the 60; an
+            # earlier run's appended finding is dropped, so the Remark does not grow run after run
+            why = re.split(r"\s*·\s*\d{4}-\d\d-\d\d verify: ", (r.get("remarks") or "").strip())[0]
+            why = "" if re.match(r"\d{4}-\d\d-\d\d verify: ", why) else words(why.replace("|", "/"), 35)
+            if why:
+                remark = f"{why} · " + words(remark, 59 - len(why.split()))
         emit = verdict == "PASS" or gate is not None
         row = {"id": rid, "class": r["class"], "verdict": verdict, "gate": gate, "gates_run": ran, "failure_class": cls if gate else None,
                "prior_verdict": prior or None, "status": status, "pct": pct, "remark": remark, "screen": r.get("screen"),
@@ -559,6 +576,12 @@ def main(argv):
         loose = [f for f in tu.get("findings") or [] if not f.get("reqs")]
         print(f"test-users: FAIL — {len(tu.get('findings') or [])} finding(s) ({os.path.join(d, 'test-users.json')})"
               + (f"; {len(loose)} in no row's test, fix them too: " + ", ".join(f"{f['file']}:{f['line']}" for f in loose[:4]) if loose else ""))
+    # a phase verify runs only the tests carrying the phase's row ids; one with no id at all is named here
+    un = (load(os.path.join(d, "tests.json")) or {}).get("unnumbered_not_run") or []
+    if un:
+        print(f"tests not run: {len(un)} test(s) carry no row id in their title, so this phase verify left them out "
+              "(put the row's id at the start of the title, or run the file with --spec): "
+              + "; ".join(f"{t.get('file')} \"{str(t.get('title'))[:60]}\"" for t in un[:6]) + (" …" if len(un) > 6 else ""))
     print()
     print(f"Ledger: docs/.last-verify.json ({len(ledger_rows)} rows graded now, {len(all_rows)} in all). Verdicts: {os.path.join(d, 'verdicts.json')}."
           + (f" Checklist: {applied} row(s) rewritten in {lst.get('checklist')}." if apply else " Checklist untouched (no --apply)."))

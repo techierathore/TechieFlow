@@ -405,7 +405,7 @@ def main(argv):
                 die(f"no checklist for {app} under docs/")
             print(f"# tf-verify-list — {app} — phase all — scope {scope}")
             print("PHASES " + " ".join(str(p) for p in have))
-            print("Grade them one at a time, in this order: steps 1 and 4 to 6 of verify-phase.md with "
+            print("Grade them one at a time, in this order, each on its own boot: steps 1 and 3 to 7 of verify-phase.md with "
                   + ", then ".join(f"--phase {p} ({checklist_of(app, p)})" for p in have) + ". Nothing was written.")
             return 0
         if not val.isdigit() or int(val) < 1:
@@ -524,7 +524,8 @@ def main(argv):
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
-        json.dump({"app": app, "scope": scope, "phase": phase, "kind": cfg("appKind", "app"), "checklist": cl,
+        # "phases": every phase with a checklist, so the test run can tell a project with several (Sevak TF-021)
+        json.dump({"app": app, "scope": scope, "phase": phase, "phases": have, "kind": cfg("appKind", "app"), "checklist": cl,
                    "rows": work, "screens": screen_list, "screens_source": source, "unresolved": unresolved, "test_users": users,
                    "skipped_na": skipped, "total": len(rows)}, f, indent=1)
     print()

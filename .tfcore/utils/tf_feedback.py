@@ -67,6 +67,18 @@ def unquoted(t):
     return re.sub(r"[\"“][^\"”\n]*[\"”]", "", t)
 
 
+# An entry's own "- **Status:** open …" line. Chatur's TF-008, TF-009, TF-018, TF-019 and TF-021 kept it for
+# weeks after their replies said fixed, one after Chatur had closed it: the reader went by the reply, and a
+# person reading the entry went by the line and counted five problems as unfixed (2026-11-10). An entry
+# that is fixed or closed and still says open is listed as stale, so whoever answers it changes the line.
+STATUS_OPEN = re.compile(r"(?mi)^\s*[-*]\s*\*\*Status:?\*\*:?\s*open\b")
+
+
+def stale_status(path):
+    """-> the ids of entries that are fixed or closed while their own Status line still says open."""
+    return [e["id"] for e in entries(path) if e["state"] != "open" and e.get("says_open")]
+
+
 def entries(path):
     """-> [{id, title, state, since, blocks, start, end}] in file order."""
     text = open(path, encoding="utf-8", errors="replace").read()
@@ -85,6 +97,7 @@ def entries(path):
         b = BLOCKS.search(body)
         out.setdefault(m.group(2), {"id": m.group(2), "title": m.group(3).strip(" `"), "state": state,
                                     "since": "", "blocks": b.group(1).lower() if b else "",
+                                    "says_open": bool(STATUS_OPEN.search(body)),
                                     "start": m.start(), "end": m.end() + len(body)})
     # the upstream team's replies, in the shapes they have actually been written in
     for rid, date in replied_fixed(text, list(out)):
@@ -270,6 +283,10 @@ def main(argv):
         print(summary_line(f, app))
         for e in es:
             print(f"  {e['id']:<12} {e['state']:<7} {e['since'] or '':<10} {e['title'][:80]}")
+        stale = stale_status(f)
+        if stale:
+            print(f"  note: {', '.join(stale)} — answered above, but the entry's own Status line still says "
+                  f"open; change that line to what the reply says ({os.path.basename(f)})")
     return 0
 
 

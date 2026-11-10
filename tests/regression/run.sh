@@ -462,6 +462,18 @@ _pw_dir() {
     [[ -n "$c" && -d "$c/node_modules/playwright" ]] && { printf '%s' "$c"; return; }
   done
 }
+# a fixture's http.server is ready when it answers, not after a fixed sleep: wait up to 10 s for the port
+_wait_port() {
+  python3 -c '
+import socket, sys, time
+end = time.time() + 10
+while time.time() < end:
+    try:
+        socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=0.5).close(); sys.exit(0)
+    except OSError:
+        time.sleep(0.1)
+sys.exit(1)' "$1"
+}
 tf_021() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
@@ -1254,7 +1266,8 @@ own = {"AppManager": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^am_0?(\d{2,3
        "TechieBlog": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^bl_0?(\d{2,3})\(\)", suite)},
        "Lekhak": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^lk_0?(\d{2,3})\(\)", suite)},
        "Sevak": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^sv_0?(\d{2,3})\(\)", suite)},
-       "TechieRag": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^tr_0?(\d{2,3})\(\)", suite)}}
+       "TechieRag": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^tr_0?(\d{2,3})\(\)", suite)},
+       "MyDiary": {"TF-%03d" % int(n) for n in re.findall(r"(?m)^md_0?(\d{2,3})\(\)", suite)}}
 for f in sorted(glob.glob(os.path.join(root, "docs", "*-TechieFlow-Feedback.md"))):
     app = os.path.basename(f).split("-")[0]
     for e in tf_feedback.entries(f):
@@ -6208,6 +6221,21 @@ for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], '|'.jo
     && grep -q '^blank EMPTY anchored control "show-verify-stories-toggle" (div) is empty' <<<"$out" \
     && ok lk_035a "an unticked role=checkbox or role=switch that paints its own box is drawn; an unpainted empty box is still empty" \
     || { bad lk_035a "unticked checkbox: $(tr '\n' ' ' <<<"$out" | cut -c1-260)"; }
+  # 2026-11-10: lk_035a failed once in a full run on "could not open /blank/: page.goto: net::ERR_NETWORK_CHANGED".
+  # The host's network changed while the page loaded; nothing in this suite can stop that, so the checks now
+  # load again. Proved on a stand-in page whose first load fails that way: no network is needed to prove it.
+  local rt; rt="$(cd "$d" && node --input-type=module -e "
+import { gotoRetry } from './tf-login.mjs';
+const page = (fails, msg) => ({ n: 0, async goto() { this.n++; if (this.n <= fails) throw new Error(msg); return { status: () => 200 }; } });
+const a = page(1, 'page.goto: net::ERR_NETWORK_CHANGED at http://127.0.0.1:1/blank/');
+const ra = await gotoRetry(a, 'x', {}, 10);
+const b = page(1, 'page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:1/');
+let rb = 'no error'; try { await gotoRetry(b, 'x', {}, 10); } catch (e) { rb = 'thrown after ' + b.n; }
+const c = page(9, 'page.goto: net::ERR_NETWORK_CHANGED'); let rc = 'no error'; try { await gotoRetry(c, 'x', {}, 10); } catch (e) { rc = 'thrown after ' + c.n; }
+console.log(ra.status(), a.n, '|', rb, '|', rc);" 2>&1)"
+  [[ "$rt" == "200 2 | thrown after 1 | thrown after 3" ]] \
+    && ok lk_035c "a page load cut off by a network change is tried again (three tries in all); any other failure is reported at once" \
+    || { bad lk_035c "a network change during a load is still graded as the screen's fault"; note "$(head -2 <<<"$rt" | cut -c1-200)"; }
   grep -q '^checkbox $' <<<"$par" && grep -q '^switch $' <<<"$par" \
     && ok lk_035b "the mockup check does not compare a native checkbox and a library checkbox by border style" \
     || { bad lk_035b "border finding on a checkbox: $(tr '\n' ' ' <<<"$par" | cut -c1-260)"; }
@@ -7024,8 +7052,9 @@ var PAGES = {'/studio': '<header data-testid="admin-topbar">Story Studio</header
              '/ai-setup': '<header data-testid="admin-topbar">AI Setup</header><div class="card" data-testid="embedding-card">Embeddings</div><div class="card" data-testid="embedding-status">Ready</div>'};
 var DRAWN = '';
 function draw(at){ DRAWN = at || location.pathname; document.getElementById('root').innerHTML = PAGES[DRAWN] || '<p>Home</p>'; }
-window.addEventListener('popstate', function(){ var at = location.pathname; if (MODE === 'scrolled' && at === DRAWN) return; if (MODE === 'slow') setTimeout(function(){ draw(at); }, 4000); else draw(at); });
-draw();
+window.addEventListener('popstate', function(){ var at = location.pathname; if (MODE === 'scrolled' && at === DRAWN) return; if (MODE === 'stale') { setTimeout(function(){ draw('/studio'); }, 1000); setTimeout(function(){ draw(at); }, 3000); return; }
+  if (MODE === 'slow' || MODE === 'stuck') setTimeout(function(){ draw(at); }, MODE === 'stuck' ? 9000 : 4000); else draw(at); });
+draw(MODE === 'stale' ? '/' : undefined);
 if (MODE === 'scrolled') { document.body.insertAdjacentHTML('beforeend', '<div style="height:3000px"></div>');
   document.querySelector('[data-testid=admin-topbar]').insertAdjacentHTML('beforeend', '<div style="height:60px">Review queue (12) · verifying</div>'); window.scrollTo(0, 25); }
 </script></body></html>"""
@@ -7060,10 +7089,16 @@ lk_037() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then printf 'skip lk_037 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/lk037"; _cdp_app "$d" slow; _cdp_copy "$d"
-  ( cd "$d" && tf_timeout 180 node tf-verify-screens.mjs --cdp "http://127.0.0.1:$CDP_PORT" --screen studio=/studio --screen aisetup=/ai-setup \
-      --widths 1280 --themes light --json-out "$d/screens.json" >/dev/null 2>&1 )
-  ( cd "$d" && tf_timeout 180 node tf-mockup-parity.mjs --cdp "http://127.0.0.1:$CDP_PORT" --mockups docs/mockups --screen studio=/studio --screen aisetup=/ai-setup \
-      --widths 1280 --themes light --json-out "$d/parity.json" >/dev/null 2>&1 )
+  # --render-wait 20000: the page draws 4 s late and the default wait is 5 s; the case proves the wait, not
+  # its default length. That was not why lk_037b failed twice in five full runs on 2026-11-10, though: the
+  # screen check's last move was still being drawn (4 s late) when the mockup check began, and that old
+  # page passed for the next screen. The cause is proved on its own below (lk_037d); here the two tools are
+  # run as two runs, the second once the app has finished drawing what the first asked for.
+  ( cd "$d" && tf_timeout 240 node tf-verify-screens.mjs --cdp "http://127.0.0.1:$CDP_PORT" --screen studio=/studio --screen aisetup=/ai-setup \
+      --widths 1280 --themes light --render-wait 20000 --json-out "$d/screens.json" >/dev/null 2>&1 )
+  sleep 5   # every route change in this app is drawn 4 s late: let the last one land
+  ( cd "$d" && tf_timeout 240 node tf-mockup-parity.mjs --cdp "http://127.0.0.1:$CDP_PORT" --mockups docs/mockups --screen studio=/studio --screen aisetup=/ai-setup \
+      --widths 1280 --themes light --render-wait 20000 --json-out "$d/parity.json" >/dev/null 2>&1 )
   kill "$CDP_BR" "$CDP_SRV" 2>/dev/null; wait "$CDP_BR" "$CDP_SRV" 2>/dev/null
   local got
   got="$(python3 -c "
@@ -7081,6 +7116,33 @@ except Exception as e: print('no-output', e)" 2>&1)"
   [[ "$got" == "PASS compared 3 of the app's 3 controls"* ]] \
     && ok lk_037b "the mockup check compares the screen the app moved to, not the one it left" \
     || { bad lk_037b "the mockup check compared the previous page"; note "$got"; }
+  # the cause of that failure, made certain: the page draws 9 s late and the wait is 5 s. The mockup check
+  # used to compare the page still on view and say PASS; it now says the screen was not measured.
+  d="$SCRATCH/lk037c"; _cdp_app "$d" stuck; _cdp_copy "$d"
+  ( cd "$d" && tf_timeout 180 node tf-mockup-parity.mjs --cdp "http://127.0.0.1:$CDP_PORT" --mockups docs/mockups --screen aisetup=/ai-setup \
+      --widths 1280 --themes light --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$CDP_BR" "$CDP_SRV" 2>/dev/null; wait "$CDP_BR" "$CDP_SRV" 2>/dev/null
+  got="$(python3 -c "
+import json
+try: a=json.load(open('$d/parity.json'))['screens'][0]; print(a['verdict'], '/'.join(str(w.get('error',''))[:70] for w in a.get('widths',[])))
+except Exception as e: print('no-output', e)" 2>&1)"
+  [[ "$got" == "NOT-MEASURED not measured: the app did not move to /ai-setup within 5 s"* ]] \
+    && ok lk_037c "a screen the app has not moved to when the wait runs out is not measured, never compared as the page it left" \
+    || { bad lk_037c "the mockup check graded the page the app was still on"; note "$got"; }
+  # the cause of lk_037b's failures, made certain: the app is on a page with no control; one second after
+  # the move it draws ANOTHER screen's page (Story Studio, which shares the top bar), and the screen asked
+  # for two seconds later. One new control used to be enough to call the screen arrived.
+  d="$SCRATCH/lk037d"; _cdp_app "$d" stale; _cdp_copy "$d"
+  ( cd "$d" && tf_timeout 180 node tf-mockup-parity.mjs --cdp "http://127.0.0.1:$CDP_PORT" --mockups docs/mockups --screen aisetup=/ai-setup \
+      --widths 1280 --themes light --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$CDP_BR" "$CDP_SRV" 2>/dev/null; wait "$CDP_BR" "$CDP_SRV" 2>/dev/null
+  got="$(python3 -c "
+import json
+try: a=json.load(open('$d/parity.json'))['screens'][0]; c=a['coverage']; print(a['verdict'], f\"compared {c['compared']} of the app's {c['app_controls']} controls\")
+except Exception as e: print('no-output', e)" 2>&1)"
+  [[ "$got" == "PASS compared 3 of the app's 3 controls" ]] \
+    && ok lk_037d "another screen's page drawn first, sharing only the top bar, is not taken for the screen: the check waits for the screen's own controls" \
+    || { bad lk_037d "a page of another screen passed for this one"; note "$got"; }
 }
 
 # needs _cdp_app and _cdp_copy from lk_037.sh
@@ -7662,9 +7724,574 @@ fw_002() {
   fi
 }
 
+# --- Sevak TF-021: a verify of one phase ran every phase's browser specs on the same boot -------------------
+# `*build-phase Sevak` chains the verifier with scope all on --phase 4. tf-verify-tests.sh read "all" as
+# "every spec under tests/verify/": 192 tests in 72 minutes, and the phase 1 to 3 specs (a fresh install,
+# the theme and language changed, a backup restored) left the app where 50 of 80 phase 4 rows failed on
+# toBeVisible. list.json now names the phases that have a checklist, and on a project with several a word
+# scope keeps only the tests carrying the graded phase's row ids and prints the spec files that ran.
+# The stand-in npx below filters by --grep the way Playwright does, so the result file is a real one.
+sv_021() {
+  local d="$SCRATCH/sv021"; mkdir -p "$d/bin"
+  cat > "$d/bin/npx" <<'SH'
+#!/usr/bin/env bash
+echo "$*" > npx.args
+python3 - "$@" <<'NPXPY'
+import glob, json, os, re, sys
+a = sys.argv[1:]
+grep = re.compile(a[a.index("--grep") + 1]) if "--grep" in a else None
+suites = []
+for f in sorted(glob.glob("tests/verify/**/*.spec.ts", recursive=True)):
+    titles = [t for t in re.findall(r"test\('([^']+)'", open(f).read()) if not grep or grep.search(t)]
+    if titles:
+        suites.append({"title": os.path.basename(f), "file": f[len("tests/verify/"):],
+                       "specs": [{"title": t, "file": f[len("tests/verify/"):], "tests": [{"status": "expected", "results": [{"status": "passed"}]}]} for t in titles]})
+json.dump({"suites": suites}, open(os.environ["PLAYWRIGHT_JSON_OUTPUT_NAME"], "w"))
+NPXPY
+SH
+  chmod +x "$d/bin/npx"
+  _sv021_fx() {   # $1 folder, $2 "one" or "two" phases
+    local p="$d/$1"; mkdir -p "$p/docs" "$p/.tfcore" "$p/tests/verify/p1" "$p/tests/verify/p2" "$p/tests/.artifacts/verify" "$p/node_modules/@playwright/test"
+    cp -r "$UTILS" "$p/.tfcore/"
+    printf '{"name":"@playwright/test","main":"index.js"}\n' > "$p/node_modules/@playwright/test/package.json"
+    : > "$p/node_modules/@playwright/test/index.js"
+    local hd='| ID | Title | Status | %% | Remarks | Details |\n|---|---|---|---|---|---|\n'
+    printf "# Fx — Checklist\n\n$hd| REQ-UI-001 | First run | Verified | 100%% | | |\n| REQ-UI-002 | Theme | Verified | 100%% | | |\n" > "$p/docs/Fx-Checklist.md"
+    printf "import { test } from '@playwright/test';\ntest('REQ-UI-001 a fresh install opens the wizard', async () => {});\ntest('REQ-UI-002 the theme changes', async () => {});\n" > "$p/tests/verify/p1/setup.spec.ts"
+    printf 'appPhase: 1\nappKind: app\n' > "$p/.tfcore/core-config.yaml"
+    if [[ "$2" == two ]]; then
+      printf 'appPhase: 2\nappKind: app\n' > "$p/.tfcore/core-config.yaml"
+      printf "# Fx — Checklist\n\n$hd| REQ-UI-010 | Ask | Implemented | 75%% | | |\n| REQ-FN-011 | Send | Implemented | 75%% | | |\n" > "$p/docs/Fx-P2-Checklist.md"
+      printf "import { test } from '@playwright/test';\ntest('REQ-UI-010 the pane opens', async () => {});\ntest('REQ-FN-011 Send answers', async () => {});\n" > "$p/tests/verify/p2/assistant.spec.ts"
+      printf "import { test } from '@playwright/test';\ntest('the app is set up and signed in', async () => {});\n" > "$p/tests/verify/p2/ready.spec.ts"
+    fi
+  }
+  in21() { ( cd "$d/$1" && shift && CLAUDE_PROJECT_DIR= TF_SKIP_SELFCHECK=1 PATH="$d/bin:$PATH" "$@" ) 2>&1; }
+  local out ids
+  _sv021_fx two two
+  in21 two bash .tfcore/utils/tf-verify-list.sh Fx all --phase 2 >/dev/null
+  out="$(in21 two bash .tfcore/utils/tf-verify-tests.sh --no-unit)"
+  grep -qE -- '--grep (REQ-UI-010\|REQ-FN-011|REQ-FN-011\|REQ-UI-010)( |$)' "$d/two/npx.args" 2>/dev/null \
+    && ok sv_021a "scope all on --phase 2 of a two-phase project runs only the browser tests carrying phase 2's row ids" \
+    || { bad sv_021a "a one-phase verify ran every phase's specs"; note "npx $(cat "$d/two/npx.args" 2>/dev/null) // $(grep 'browser tests' <<<"$out" | head -1 | cut -c1-160)"; }
+  ids="$(python3 -c "import json; print(' '.join(sorted(json.load(open('$d/two/tests/.artifacts/verify/tests.json'))['reqs'])))" 2>&1)"
+  grep -q '^browser tests: specs run (1 file(s)): p2/assistant.spec.ts (2)$' <<<"$out" && [[ "$ids" == "REQ-FN-011 REQ-UI-010" ]] \
+    && ok sv_021b "the spec files that ran are printed, phase 1's is not among them, and only phase 2's rows have a result" \
+    || { bad sv_021b "the specs that ran were not named, or another phase's rows were run"; note "rows: $ids // $(grep 'specs run' <<<"$out" | cut -c1-160)"; }
+  # 2026-11-10: the test with no row id in its title is left out by the filter, and is named, not dropped in silence
+  local un; un="$(python3 -c "import json; print(' | '.join(t['file'] + ' ' + t['title'] for t in json.load(open('$d/two/tests/.artifacts/verify/tests.json')).get('unnumbered_not_run', [])))" 2>&1)"
+  grep -q '^browser tests: FINDING — 1 test(s) carry no row id in their title' <<<"$out" \
+    && grep -q '^  NOT RUN (no row id) p2/ready.spec.ts — "the app is set up and signed in"$' <<<"$out" \
+    && [[ "$un" == "p2/ready.spec.ts the app is set up and signed in" ]] \
+    && ok sv_021f "a test the phase filter leaves out because its title carries no row id is printed by name as a finding and kept in tests.json" \
+    || { bad sv_021f "a test was left out of the phase verify in silence"; note "tests.json: $un // $(grep -E 'FINDING|NOT RUN' <<<"$out" | tr '\n' ';' | cut -c1-200)"; }
+  printf '{"mode":"served","reason":"","reason_kind":"","head":"web","rung":"x","url":"http://localhost:1"}\n' > "$d/two/tests/.artifacts/verify/boot.json"
+  local vd; vd="$(in21 two bash .tfcore/utils/tf-verify-verdict.sh Fx 2>&1)"
+  grep -q '^tests not run: 1 test(s) carry no row id in their title.*p2/ready.spec.ts "the app is set up and signed in"' <<<"$vd" \
+    && ok sv_021g "the verdict repeats it under its table, so the verify report carries it" \
+    || { bad sv_021g "the verdict does not name the test that was left out"; note "$(grep -E 'tests not run|Error|error' <<<"$vd" | head -2 | cut -c1-200)"; }
+  out="$(in21 two bash .tfcore/utils/tf-verify-tests.sh --no-unit --all-specs)"
+  [[ -f "$d/two/npx.args" ]] && ! grep -q -- '--grep' "$d/two/npx.args" \
+    && ok sv_021c "--all-specs still runs every phase's specs" \
+    || { bad sv_021c "--all-specs was filtered"; note "$(cat "$d/two/npx.args" 2>/dev/null)"; }
+  _sv021_fx one one
+  in21 one bash .tfcore/utils/tf-verify-list.sh Fx all >/dev/null
+  out="$(in21 one bash .tfcore/utils/tf-verify-tests.sh --no-unit)"
+  [[ -f "$d/one/npx.args" ]] && ! grep -q -- '--grep' "$d/one/npx.args" \
+    && ok sv_021d "a project with one checklist still runs every browser test on scope all" \
+    || { bad sv_021d "a one-phase project was filtered or skipped"; note "$(cat "$d/one/npx.args" 2>/dev/null) $(grep 'browser tests' <<<"$out" | head -1)"; }
+  out="$(in21 two bash .tfcore/utils/tf-verify-list.sh Fx all --phase all)"
+  grep -q 'each on its own boot' <<<"$out" \
+    && ok sv_021e "--phase all tells the task to grade each phase on its own boot" \
+    || { bad sv_021e "--phase all still grades every phase on one boot"; note "$(tail -1 <<<"$out" | cut -c1-200)"; }
+}
+
+# --- Sevak TF-023: a library's checked checkbox failed the icon and colour clauses beside a native one ------
+# The mockup draws `<input type="checkbox" checked>`; Chromium paints its fill and tick itself, so the
+# computed style is transparent with no icon. TrBlazeUI's Checkbox draws the same box as a filled
+# role="checkbox" button holding an <svg> tick: "app carries an icon the mockup does not" and "mockup
+# neutral, app accent" on Sevak's Import at both widths and themes, nine rows held at Needs re-verify.
+# A toggle's icon, colour and badge clauses are now not applicable, and its tick is no icon of the box
+# around it. An icon on an ordinary control that the mockup does not carry is still reported.
+sv_023() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip sv_023 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/sv023"
+  mkdir -p "$d/docs/mockups" "$d/site/import"
+  local css='<style>body{margin:0;font:14px/20px system-ui;padding:16px;background:#fff;color:#111} .card{border:1px solid #ccc;border-radius:8px;padding:12px;width:600px} .cb{width:16px;height:16px;border:1px solid #4f46e5;border-radius:4px;background:#4f46e5;color:#fff;padding:0;display:inline-flex} .sw{width:32px;height:18px;border:0;border-radius:9px;background:#4f46e5;padding:2px} .sw span{display:block;width:14px;height:14px;border-radius:7px;background:#fff}</style>'
+  local tick='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+  local page='<!doctype html><html><head><meta charset="utf-8">%s</head><body><h1>Import</h1>%s</body></html>\n'
+  printf "$page" "$css" '<div class="card" data-testid="import-card"><table><tr><td><input type="checkbox" checked data-testid="import-tick"></td><td><b>Money</b></td></tr></table><label>Keep folders <input type="checkbox" checked data-testid="keep-toggle"></label></div><p><span data-testid="plain">Folders</span></p>' > "$d/docs/mockups/import.html"
+  printf "$page" "$css" "<div class=\"card\" data-testid=\"import-card\"><table><tr><td><button type=\"button\" class=\"cb\" role=\"checkbox\" aria-checked=\"true\" data-state=\"checked\" data-testid=\"import-tick\">$tick</button></td><td><b>Money</b></td></tr></table><label>Keep folders <button type=\"button\" class=\"sw\" role=\"switch\" aria-checked=\"true\" data-testid=\"keep-toggle\"><span></span></button></label></div><p><span data-testid=\"plain\">$tick Folders</span></p>" > "$d/site/import/index.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  ( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen import=/import/ --widths 1280,390 --json-out "$d/parity.json" >/dev/null 2>&1 )
+  kill "$srv" 2>/dev/null
+  local par
+  par="$(python3 -c "
+import json
+for s in json.load(open('$d/parity.json'))['screens']:
+    for f in s.get('findings', []): print(f.get('width'), f['key'], f['class'], f['detail'][:50])" 2>&1)"
+  [[ -f "$d/parity.json" ]] && ! grep -qE ' (import-tick|keep-toggle|import-card)( |$)' <<<"$par" \
+    && ok sv_023a "a native checked checkbox beside a library's role=checkbox or role=switch: no icon, colour or badge finding on it or on the card around it" \
+    || { bad sv_023a "a toggle was compared by its paint: $(tr '\n' '|' <<<"$par" | cut -c1-300)"; }
+  grep -q '^1280 plain icon app carries an icon the mockup does not' <<<"$par" && grep -q '^390 plain icon ' <<<"$par" \
+    && ok sv_023b "an icon the app adds to an ordinary control is still reported, at both widths" \
+    || { bad sv_023b "the icon finding on an ordinary control was lost: $(tr '\n' '|' <<<"$par" | cut -c1-300)"; }
+}
+
+# --- Sevak TF-024 and TF-020: a control inside a display:none box was graded visible with zero width ------
+# Sevak hides its chat pane's column at 1024px and at a phone width with display:none on the column, as
+# its mockup does. inspect()'s vis() read only each control's own style, so every anchored control in the
+# pane was "visible" with no size: "anchored control assistant-pane-model has zero width" and eight more,
+# while the same anchors were already excused for that width. vis() now looks at the boxes around it.
+# A control that is on view and really has no width is still reported.
+sv_024() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip sv_024 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/sv024" s
+  mkdir -p "$d/docs/mockups" "$d/site/library" "$d/site/squeezed"
+  local css='<style>body{margin:0;font:14px/20px system-ui;background:#fff;color:#111} .shell{display:flex;gap:16px;padding:16px} main{flex:1} .pane{width:320px;border:1px solid #ccc;padding:12px} @media (max-width:1100px){.pane{display:none}}</style>'
+  local page='<!doctype html><html><head><meta charset="utf-8">%s</head><body><div class="shell"><main><h1 data-testid="library-title">Document library</h1><p data-testid="library-count">12 documents</p>%s</main><aside class="pane"><select data-testid="assistant-pane-model"><option>Built-in model</option></select><button type="button" data-testid="assistant-pane-send">Send</button></aside></div></body></html>\n'
+  for s in library squeezed; do printf "$page" "$css" '<span data-testid="library-tag">Area</span>' > "$d/docs/mockups/$s.html"; done
+  printf "$page" "$css" '<span data-testid="library-tag">Area</span>' > "$d/site/library/index.html"
+  printf "$page" "$css" '<span data-testid="library-tag" style="display:inline-block;width:0;overflow:hidden">Area</span>' > "$d/site/squeezed/index.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-verify-screens.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  sleep 1
+  ( cd "$d" && tf_timeout 120 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen library=/library/ --screen squeezed=/squeezed/ --widths 1280,1024 --themes light --render-wait 500 --json-out "$d/screens.json" >/dev/null 2>&1 )
+  kill "$srv" 2>/dev/null
+  local out
+  out="$(python3 -c "
+import json
+for s in json.load(open('$d/screens.json'))['screens']:
+    print(s['name'], s.get('render'), s.get('visual'), '|'.join('%s: %s' % (w['width'], f['detail'][:70]) for w in s['widths'] for f in w.get('findings', [])))" 2>&1)"
+  grep -q '^library OK OK $' <<<"$out" \
+    && ok sv_024a "controls inside a pane hidden with display:none at 1024px, as the mockup hides it, are not visible: no zero-width finding" \
+    || { bad sv_024a "controls in a hidden pane were graded: $(grep '^library' <<<"$out" | cut -c1-280)"; }
+  grep -q '^squeezed .*anchored control "library-tag" has zero width' <<<"$out" && ! grep -q '^squeezed .*assistant-pane' <<<"$out" \
+    && ok sv_024b "a control on view that really has no width is still reported, and only that one" \
+    || { bad sv_024b "a real zero-width control: $(grep '^squeezed' <<<"$out" | cut -c1-280)"; }
+}
+
+# --- Sevak TF-017: a Blocked row was rewritten to Needs re-verify when its screen failed a check ----------
+# REQ-RAG-116 and REQ-UI-087 wait for a library release and have no test. Their screen failed the render
+# check, and tf-verify-verdict --apply wrote both Needs re-verify and replaced the Remark, so the reason
+# they were Blocked was lost. A Blocked row now keeps Status, % and reason whatever the run found; the
+# finding is appended, no gate record is written, and a second run does not make the Remark grow.
+sv_017() {
+  local d="$SCRATCH/sv017"; vd_fixture "$d" base
+  local why='waits for TechieRag 1.1.9 (TR-RAG-056)'
+  _sv017_block() {   # the Settings row is Blocked, with the Remark the checklist holds now
+    python3 - "$d" "$why" <<'PY'
+import json, re, sys
+d, why = sys.argv[1], sys.argv[2]
+cl = d + "/docs/Fx-Checklist.md"
+t = open(cl, encoding="utf-8").read()
+m = re.search(r"^\| REQ-UI-102 \| Settings \|([^|]*)\|([^|]*)\|([^|]*)\|", t, re.M)
+remark = m.group(3).strip() or why
+t = t.replace(m.group(0), "| REQ-UI-102 | Settings | Blocked | 40% | " + remark + " |")
+open(cl, "w", encoding="utf-8").write(t)
+lp = d + "/tests/.artifacts/verify/list.json"
+l = json.load(open(lp))
+for r in l["rows"]:
+    if r["id"] == "REQ-UI-102":
+        r["status_raw"], r["pct"], r["remarks"] = "Blocked", 40, remark
+json.dump(l, open(lp, "w"))
+PY
+  }
+  _sv017_block
+  (cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --apply >/dev/null 2>&1)
+  local cl="$d/docs/Fx-Checklist.md" emit row
+  emit="$(python3 -c 'import json,sys; r={x["id"]:x for x in json.load(open(sys.argv[1]))["rows"]}; print(r["REQ-UI-102"]["verdict"], r["REQ-UI-102"]["emit_gate"], r["REQ-UI-102"]["gate"])' "$d/tests/.artifacts/verify/verdicts.json" 2>&1)"
+  row="$(grep '^| REQ-UI-102 ' "$cl")"
+  grep -q "^| REQ-UI-102 | Settings | Blocked | 40% | $why · [0-9-]* verify: still Blocked; this run found ⚠ render — /settings answered HTTP 404" <<<"$row" \
+    && [[ "$emit" == "BLOCKED-HELD False None" ]] \
+    && ok sv_017a "a Blocked row whose screen fails the render check stays Blocked with its % and its reason; the finding is appended and no gate record is written" \
+    || { bad sv_017a "a Blocked row was rewritten by a failing check ($emit)"; note "$(cut -c1-220 <<<"$row")"; }
+  _sv017_block
+  (cd "$d" && bash "$UTILS/tf-verify-verdict.sh" Fx --apply >/dev/null 2>&1)
+  row="$(grep '^| REQ-UI-102 ' "$cl")"
+  [[ "$(grep -o 'verify: ' <<<"$row" | wc -l)" -eq 1 ]] && grep -q "| Blocked | 40% | $why · " <<<"$row" \
+    && ok sv_017b "a second verify replaces the appended finding: the reason is still first and the Remark does not grow" \
+    || { bad sv_017b "the Remark grew or lost its reason on the second run"; note "$(cut -c1-260 <<<"$row")"; }
+  grep -q '^| REQ-UI-103 | Home | Verified' "$cl" \
+    && ok sv_017c "the other rows are still graded" \
+    || { bad sv_017c "another row was not graded"; note "$(grep '^| REQ-UI-103' "$cl" | cut -c1-160)"; }
+}
+
+# --- Sevak TF-022: "10 other Windows head(s) up" with one Sevak.exe running -------------------------------
+# The boot counted every boot-*.json not marked stopped. An app closed by hand or killed never passes
+# through `stop`, so ten old records said "up" and a reader went looking for ten orphaned apps. A record
+# now counts only while a Windows process it names is running (tasklist.exe, stood in for here); a dead
+# one is marked stopped, and the line names the ports it counted.
+sv_022() {
+  local d="$SCRATCH/sv022" v="$SCRATCH/sv022/tests/.artifacts/verify" n; mkdir -p "$d/bin" "$v"
+  # tasklist: only pid 16764 (the head on port 9341) is running; pid 5100 of a closed head now belongs to msedge.exe
+  printf '#!/usr/bin/env bash\nprintf '"'"'"System Idle Process","0","Services","0","8 K"\\r\\n"Sevak.exe","16764","Console","1","412,000 K"\\r\\n"msedge.exe","5100","Console","1","29,204 K"\\r\\n'"'"'\n' > "$d/bin/tasklist.exe"; chmod +x "$d/bin/tasklist.exe"
+  for n in 1 2 3 4 5 6 7 8 9; do
+    printf '{"head":"windows","mode":"cdp","url":"http://localhost:93%s1","pids":[1],"stopped":false,"win_image":"Sevak.exe","win_pids":[5%s00]}\n' "$n" "$n" > "$v/boot-93${n}1.json"
+  done
+  printf '{"head":"windows","mode":"cdp","url":"http://localhost:9341","pids":[1],"stopped":false,"win_image":"Sevak.exe","win_pids":[16764]}\n' > "$v/boot-9341.json"
+  printf '{"head":"windows","mode":"cdp","url":"http://localhost:9333","pids":[1],"stopped":false,"win_image":"Sevak.exe","win_pids":[777]}\n' > "$v/boot-9333.json"
+  local out; out="$( cd "$d" && PATH="$d/bin:$PATH" bash "$UTILS/tf-verify-boot.sh" heads --port 9333 2>&1 )"
+  grep -q '^1 other Windows head(s) up: port 9341 (Sevak.exe, pid 16764); 8 older boot record(s) whose app was no longer running were marked stopped$' <<<"$out" \
+    && ok sv_022a "ten boot records not marked stopped and one app running: 1 other head, named by port and process" \
+    || { bad sv_022a "the head count is not the running heads"; note "$(head -2 <<<"$out" | cut -c1-240)"; }
+  local st; st="$(python3 -c "
+import json,glob
+print(sum(1 for f in glob.glob('$v/boot-9*.json') if json.load(open(f)).get('stopped')), json.load(open('$v/boot-9341.json')).get('stopped'), json.load(open('$v/boot-9333.json')).get('stopped'))" 2>&1)"
+  [[ "$st" == "8 False False" ]] \
+    && ok sv_022b "the eight records whose app is gone are marked stopped; the running head's and this boot's own are left alone" \
+    || { bad sv_022b "the dead records were not marked, or a live one was"; note "$st"; }
+  # no tasklist.exe (a host that cannot ask Windows): counted as before, and the line says it was not checked
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$d/bin/tasklist.exe"
+  printf '{"head":"windows","mode":"cdp","url":"http://localhost:9351","pids":[1],"stopped":false,"win_image":"Sevak.exe","win_pids":[4242]}\n' > "$v/boot-9351.json"
+  out="$( cd "$d" && PATH="$d/bin:$PATH" bash "$UTILS/tf-verify-boot.sh" heads --port 9333 2>&1 )"
+  grep -q '^2 other Windows head(s) up: .*not checked against the running processes' <<<"$out" \
+    && ok sv_022c "when Windows cannot be asked, the records are counted as before and the line says they were not checked" \
+    || { bad sv_022c "an unchecked count was printed as fact"; note "$(head -1 <<<"$out" | cut -c1-240)"; }
+}
+
+# --- Sevak TF-018: a mockup control of a later phase could only be excused by editing the mockup's meaning --
+# Sevak's mockups draw the whole sidebar, the phase 5 screens' items included, each with a data-testid. In
+# phase 4 every screen failed the render check on nav-ideas and three more, and the only excuse was
+# data-tf-state, which says something else. data-tf-phase="<n>" on the control or a box around it is now
+# read by both checks: not owed while the phase graded is lower than n, owed from phase n on.
+sv_018() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip sv_018 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/sv018"
+  mkdir -p "$d/docs/mockups" "$d/site/today"
+  local css='<style>body{margin:0;font:14px/20px system-ui;background:#fff;color:#111;padding:16px} nav a{display:block;padding:6px 0} .badge{display:inline-block;padding:2px 10px;border-radius:10px;background:#e0e7ff;color:#3730a3} .pane{border:1px solid #ccc;border-radius:8px;padding:12px;width:320px}</style>'
+  local page='<!doctype html><html><head><meta charset="utf-8">%s</head><body><h1 data-testid="today-title">Today</h1><nav><a href="#" data-testid="nav-today">Today</a>%s</nav><div class="pane" data-testid="assistant-pane"><span class="badge">Built-in model</span>%s</div></body></html>\n'
+  printf "$page" "$css" '<a href="#" data-testid="nav-ideas" data-tf-phase="5">Ideas</a>' '<span class="badge" data-tf-phase="5">Member</span>' > "$d/docs/mockups/today.html"
+  printf "$page" "$css" '' '' > "$d/site/today/index.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-verify-screens.mjs" "$UTILS/tf-mockup-parity.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  _wait_port "$port"
+  local ph
+  for ph in 4 5; do
+    ( cd "$d" && tf_timeout 120 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen today=/today/ --phase $ph --widths 1280 --themes light --render-wait 300 --json-out "$d/screens$ph.json" >/dev/null 2>&1 )
+    ( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen today=/today/ --phase $ph --widths 1280 --themes light --json-out "$d/parity$ph.json" >/dev/null 2>&1 )
+  done
+  kill "$srv" 2>/dev/null
+  local out
+  out="$(python3 - "$d" <<'PY'
+import json, sys
+d = sys.argv[1]
+for ph in (4, 5):
+    try:
+        s = json.load(open(f"{d}/screens{ph}.json"))["screens"][0]
+        print(f"screens{ph}", s.get("render"), "|".join(f["detail"][:60] for w in s["widths"] for f in w.get("findings", [])))
+    except Exception as e:
+        print(f"screens{ph} unreadable {e}")
+    try:
+        p = json.load(open(f"{d}/parity{ph}.json"))["screens"][0]
+        print(f"parity{ph}", p.get("verdict"), "|".join(f"{f['class']} {f['key']}" for f in p.get("findings", [])))
+    except Exception as e:
+        print(f"parity{ph} unreadable {e}")
+PY
+)"
+  grep -q '^screens4 OK $' <<<"$out" && grep -q '^parity4 PASS $' <<<"$out" \
+    && ok sv_018a "graded as phase 4, the controls marked data-tf-phase=\"5\" are not owed: the screen check and the mockup check both pass" \
+    || { bad sv_018a "a later phase's control was asked for: $(grep -E '^(screens|parity)4' <<<"$out" | tr '\n' ' ' | cut -c1-260)"; }
+  grep -q '^screens5 .*anchored control "nav-ideas" is not on the page' <<<"$out" && grep -q '^parity5 FAIL .*missing ' <<<"$out" \
+    && ok sv_018b "graded as phase 5, the same controls are owed and their absence is reported by both checks" \
+    || { bad sv_018b "from its own phase on the control must be owed: $(grep -E '^(screens|parity)5' <<<"$out" | tr '\n' ' ' | cut -c1-260)"; }
+}
+
+# --- Sevak TF-019: a deliberate edge handle failed the overlap check on every screen -----------------------
+# TrBlazeUI's SidebarRail is a 16px grab handle centred on the sidebar's edge, half of it over the sidebar,
+# as the mockup draws it: "sidebar overlaps sidebar-rail at 1280px" on every Sevak screen. The only excuse
+# was aria-hidden on the app's control, which a focusable overlay cannot take. A control the mockup marks
+# data-tf-overlay is left out of the overlap check. Two unmarked controls on top of each other still fail.
+sv_019() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip sv_019 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/sv019" s
+  mkdir -p "$d/docs/mockups" "$d/site/rail" "$d/site/clash"
+  local css='<style>body{margin:0;font:14px/20px system-ui;background:#fff;color:#111} .side{position:absolute;left:0;top:0;width:240px;height:400px;background:#f3f4f6} .rail{position:absolute;left:232px;top:0;width:16px;height:400px;border:0;background:transparent;padding:0} main{margin-left:280px;padding:16px} .a{position:absolute;left:300px;top:200px;width:120px;height:32px} .b{position:absolute;left:360px;top:210px;width:120px;height:32px}</style>'
+  local page='<!doctype html><html><head><meta charset="utf-8">%s</head><body><button type="button" class="side" data-testid="sidebar">Sevak menu</button><button type="button" class="rail" aria-label="Toggle sidebar" data-testid="sidebar-rail"%s></button><main><h1 data-testid="page-title">Today</h1>%s</main></body></html>\n'
+  local clash='<button type="button" class="a" data-testid="save">Save</button><button type="button" class="b" data-testid="cancel">Cancel</button>'
+  printf "$page" "$css" ' data-tf-overlay' '' > "$d/docs/mockups/rail.html"
+  printf "$page" "$css" ' data-tf-overlay' "$clash" > "$d/docs/mockups/clash.html"
+  printf "$page" "$css" '' '' > "$d/site/rail/index.html"
+  printf "$page" "$css" '' "$clash" > "$d/site/clash/index.html"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-verify-screens.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
+  _wait_port "$port"
+  ( cd "$d" && tf_timeout 120 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen rail=/rail/ --screen clash=/clash/ --widths 1280 --themes light --render-wait 300 --json-out "$d/screens.json" >/dev/null 2>&1 )
+  kill "$srv" 2>/dev/null
+  local out
+  out="$(python3 -c "
+import json
+for s in json.load(open('$d/screens.json'))['screens']:
+    print(s['name'], s.get('render'), s.get('visual'), '|'.join(f['detail'][:60] for w in s['widths'] for f in w.get('findings', [])))" 2>&1)"
+  grep -q '^rail OK OK $' <<<"$out" \
+    && ok sv_019a "a grab handle the mockup marks data-tf-overlay, half over the sidebar, is not an overlap" \
+    || { bad sv_019a "a marked overlay was reported: $(grep '^rail' <<<"$out" | cut -c1-240)"; }
+  grep -q '^clash OK FAIL save overlaps cancel at 1280px$' <<<"$out" \
+    && ok sv_019b "two unmarked controls drawn on top of each other are still reported, and only that pair" \
+    || { bad sv_019b "a real overlap: $(grep '^clash' <<<"$out" | cut -c1-240)"; }
+}
+
+# --- MyDiary TF-001: the run record's description left out mode values the tasks write --------------------
+# day1-greenfield writes "mode":"stage1" and "stage2"; SCHEMA.md §2 listed only build, fix and null, so a
+# reader of the description took the task's value for a mistake. Every mode a task tells an agent to write
+# must be named in the description's `mode` row.
+md_001() {
+  local base; base="$(dirname "$UTILS")"
+  local out; out="$(python3 - "$base" <<'PY'
+import glob, os, re, sys
+base = sys.argv[1]
+row = next((l for l in open(os.path.join(base, "telemetry", "SCHEMA.md"), encoding="utf-8") if l.startswith("| `mode` |")), "")
+named = set(re.findall(r"`([a-z0-9-]+)`", row))
+missing = set()
+for f in sorted(glob.glob(os.path.join(base, "tasks", "*.md"))):
+    for v in re.findall(r'"mode"\s*:\s*"([a-z0-9-]+)"', open(f, encoding="utf-8").read()):
+        if v not in named:
+            missing.add("%s (%s)" % (v, os.path.basename(f)))
+print(" ".join(sorted(missing)) if row else "no mode row in SCHEMA.md")
+PY
+)"
+  [[ -z "$out" ]] && ok md_001 "every mode value a task writes into a run record (stage1, stage2, launch, reconcile, build, fix) is named in SCHEMA.md's mode row" \
+                  || { bad md_001 "a task writes a mode the run record's description does not list: $out"; }
+}
+
+# --- an answered entry whose own Status line still said open (2026-11-10) ------------------------------------
+# Chatur's TF-008, TF-009, TF-018, TF-019 and TF-021 were answered in the reply tables, one of them closed by
+# Chatur, and each entry still began "Status: open". The reader went by the reply; the owner went by the line
+# and listed five problems as unfixed. tf-feedback.sh now names such an entry, and no feedback file kept in
+# this repository may hold one: whoever answers an entry changes its Status line too.
+status_stale() {
+  local d="$SCRATCH/stale"; mkdir -p "$d/docs"
+  cat > "$d/docs/Fx-TechieFlow-Feedback.md" <<'MD'
+# Fx — TechieFlow framework feedback
+
+## Entries
+
+### TF-001 — answered, and the line was never changed
+
+- **Status:** open, filed 2026-10-07
+- **Blocks:** no
+
+### TF-002 — answered, and the line says so
+
+- **Status:** fixed upstream 2026-10-08; not yet re-checked here.
+
+### TF-003 — nobody has answered it
+
+- **Status:** open, filed 2026-10-09
+
+## Replies from TechieFlow
+
+### Resolution status (TechieFlow team, 2026-10-08)
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-001 | Fixed upstream. | run it |
+| TF-002 | Fixed upstream. | run it |
+MD
+  local out; out="$(cd "$d" && python3 "$UTILS/tf_feedback.py" Fx 2>&1)"
+  grep -q "^  note: TF-001 — answered above, but the entry's own Status line still says open" <<<"$out" \
+    && ok status_stale_a "tf-feedback names the answered entry whose Status line still says open, and neither the corrected one nor the unanswered one" \
+    || { bad status_stale_a "a stale Status line was not named, or the wrong entries were"; note "$(grep -E 'note:|TF-00' <<<"$out" | tr '\n' ';' | cut -c1-240)"; }
+  out="$(python3 - "$ROOT" "$UTILS" <<'PY'
+import glob, os, sys
+sys.path.insert(0, sys.argv[2])
+import tf_feedback
+for f in sorted(glob.glob(os.path.join(sys.argv[1], "docs", "*-TechieFlow-Feedback.md"))):
+    stale = tf_feedback.stale_status(f) if hasattr(tf_feedback, "stale_status") else ["(this copy of the reader cannot tell)"]
+    if stale:
+        print(os.path.basename(f) + ": " + ", ".join(stale))
+PY
+)"
+  [[ -z "$out" ]] && ok status_stale_b "no feedback file kept here holds an answered entry that still says Status: open" \
+                  || { bad status_stale_b "answered, but the entry's Status line still says open: $(tr '\n' ' ' <<<"$out" | cut -c1-240)"; }
+}
+
+# --- the updater deleted Codex files it had not installed (2026-11-10) ---------------------------------------
+# update-framework.sh removed the whole of .codex/ as "the retired Codex adapter". In Sevak, Chatur,
+# TechieBlog and Lekhak that folder holds agents/techierag.toml and trblazeui.toml, put there by the two
+# library packages for their own Codex users. Both install routes now take out only the framework's own
+# files (its rules file, a config or hooks file that names TechieFlow, an agent wrapper whose description
+# begins "TechieFlow") and leave the folder when anything else is in it. Run for real on a project outside
+# this repository, because the updater refuses a folder inside it.
+codex_keep() {
+  local route d out left
+  for route in shell npm; do
+    d="$(mktemp -d "${TMPDIR:-/tmp}/tf-codex.XXXXXX")"
+    mkdir -p "$d/.tfcore" "$d/.codex/agents" "$d/.codex/rules" "$d/docs"
+    printf 'appPhase: 1\nappKind: app\n' > "$d/.tfcore/core-config.yaml"
+    printf 'name = "techierag"\ndescription = "Expert .NET developer specializing in the TechieRag library."\n' > "$d/.codex/agents/techierag.toml"
+    printf 'name = "trblazeui"\ndescription = "Expert .NET and Blazor specialist for TrBlazeUI."\n' > "$d/.codex/agents/trblazeui.toml"
+    printf 'name = "flow-master"\ndescription = "TechieFlow flow-master role."\n' > "$d/.codex/agents/flow-master.toml"
+    printf '# TechieFlow adapter\n[hooks]\n' > "$d/.codex/config.toml"
+    printf '{"hooks":{"cmd":"python3 .tfcore/hooks/x.py"}}\n' > "$d/.codex/hooks.json"
+    printf 'the adapter rules\n' > "$d/.codex/rules/techieflow.rules"
+    if [[ "$route" == shell ]]; then out="$(bash "$ROOT/update-framework.sh" "$d" 2>&1)"
+    else
+      if ! command -v node >/dev/null 2>&1; then printf 'skip codex_keep_npm — node is not installed here\n'; rm -rf "$d"; continue; fi
+      out="$(cd "$d" && node "$ROOT/scripts/install.mjs" update --target="$d" 2>&1)"
+    fi
+    left="$(cd "$d" && find .codex -type f 2>/dev/null | sort | tr '\n' ' ')"
+    [[ "$left" == ".codex/agents/techierag.toml .codex/agents/trblazeui.toml " ]] \
+      && ok "codex_keep_$route" "the $route route removes the retired adapter's own five files and keeps the two the library packages installed" \
+      || { bad "codex_keep_$route" "the updater removed a file it did not install, or left its own"; note "left: ${left:-nothing} // $(grep -i 'codex' <<<"$out" | head -3 | tr '\n' ';' | cut -c1-220)"; }
+    rm -rf "$d"
+  done
+  # a project holding only the framework's files loses the folder altogether
+  d="$(mktemp -d "${TMPDIR:-/tmp}/tf-codex.XXXXXX")"; mkdir -p "$d/.tfcore" "$d/.codex/rules" "$d/docs"
+  printf 'appPhase: 1\nappKind: app\n' > "$d/.tfcore/core-config.yaml"; printf 'the adapter rules\n' > "$d/.codex/rules/techieflow.rules"
+  bash "$ROOT/update-framework.sh" "$d" >/dev/null 2>&1
+  [[ ! -e "$d/.codex" ]] && ok codex_keep_empty "a .codex/ holding only the framework's files is removed whole" \
+                         || { bad codex_keep_empty "an emptied .codex/ was left behind"; note "$(cd "$d" && find .codex | tr '\n' ' ')"; }
+  rm -rf "$d"
+}
+
+# --- a goal run inside another project's session wrote into that project's session folder (2026-11-10) ------
+# tests/goal/run.sh, started from a TechieFlow session, inherited the session's CLAUDE_PROJECT_DIR. The
+# stand-in harness ran `tf-yolo.sh done complete`, which wrote goal-done.json into TechieFlow's own
+# .tfcore/.session/, removed the session's YOLO flag and rewrote .opencode/opencode.jsonc; the run never saw
+# its own sentinel, so three checks failed and the suite ran for minutes. tf-goal.sh now pins the whole
+# run to the app folder. Here the "other project" is a stand-in folder, so nothing real is at stake.
+goal_guard() {
+  local d="$SCRATCH/goalguard"; local app="$d/app" par="$d/parent"
+  mkdir -p "$app/.tfcore/utils" "$app/docs" "$par/.tfcore/.session"
+  cp "$UTILS/tf-yolo.sh" "$app/.tfcore/utils/"; [[ -f "$UTILS/tf-yolo-perms.py" ]] && cp "$UTILS/tf-yolo-perms.py" "$app/.tfcore/utils/"
+  printf '{"on":true,"since":"2026-11-10T07:36:42Z","source":"tfyolo","goal":"","harness":"claude-code"}\n' > "$par/.tfcore/.session/yolo.json"
+  local before; before="$(cd "$par/.tfcore/.session" && ls | tr '\n' ' '; cksum < "$par/.tfcore/.session/yolo.json")"
+  local rc
+  ( cd "$d" && CLAUDE_PROJECT_DIR="$par" TF_PROJECT_DIR="$par" TF_GOAL_FAKE_CMD='bash .tfcore/utils/tf-yolo.sh done complete "from inside another session"' \
+      TF_GOAL_STALL_TICK=1 tf_timeout 90 bash "$UTILS/tf-goal.sh" --idle-retry-sec 1 --max-cycles 2 "$app" "guard test" > "$d/goal.log" 2>&1 ); rc=$?
+  local after; after="$(cd "$par/.tfcore/.session" && ls | tr '\n' ' '; cksum < "$par/.tfcore/.session/yolo.json" 2>/dev/null)"
+  [[ "$after" == "$before" ]] \
+    && ok goal_guard_a "a goal started from inside another project's session leaves that project's session folder as it was: its YOLO flag stays, no sentinel is written there" \
+    || { bad goal_guard_a "the goal run wrote into the session folder of the project it was started from"; note "before: $before // after: $after"; }
+  [[ $rc -eq 0 ]] && grep -q '"outcome":"complete"' "$app/.tfcore/.session/goal-done.json" 2>/dev/null \
+    && ok goal_guard_b "the run finds its own sentinel in the app's folder and completes on the first cycle" \
+    || { bad goal_guard_b "the run never saw its own sentinel (exit $rc)"; note "$(tail -2 "$d/goal.log" | tr '\n' ' ' | cut -c1-200)"; }
+  # and the goal suite itself starts without the session's variables and checks the framework's own folder
+  grep -q '^unset CLAUDE_PROJECT_DIR TF_PROJECT_DIR' "$ROOT/tests/goal/run.sh" && grep -q 'own_restore' "$ROOT/tests/goal/run.sh" \
+    && ok goal_guard_c "tests/goal/run.sh drops the session's variables and compares the framework's own session folder before and after" \
+    || bad goal_guard_c "tests/goal/run.sh has no guard on the framework's own session folder"
+}
+
+# --- Chatur TF-023: a screen reached through a submenu row was reported UNREACHABLE --------------------------
+# The mockup draws "Recent projects ▸" as a link to start.html. The app builds that row as a submenu whose
+# last row, Project list, opens /start?all=1. reachability() looked only at the clicked row that carries the
+# mockup's link: it "opened its submenu" and landed nowhere, so Start was UNREACHABLE and six rows were held.
+# A way in that opened a submenu now stands for the rows of that submenu. The clicks below are the shape
+# Chatur's screens.json held; reachability() is a pure function, so no browser is needed.
+ch_023() {
+  if ! command -v node >/dev/null 2>&1; then printf 'skip ch_023 — node is not installed here\n'; return; fi
+  local d="$SCRATCH/ch023"; mkdir -p "$d"; cp "$UTILS/tf-menus.mjs" "$d/"
+  local out; out="$(cd "$d" && node --input-type=module -e "
+import { reachability } from './tf-menus.mjs';
+const screens = [{ name: 'Start', route: '/start?all=1', mockup: 'docs/mockups/start.html', anchors: ['start-list'] },
+                 { name: 'Help', route: '/help', mockup: 'docs/mockups/help.html', anchors: ['help-body'] }];
+const kids = (landed, id = 'start-list') => [
+  { menu: 'File › Recent projects ▸', label: 'TfLens', effect: 'navigated', landed: { url: 'http://h/main', ids: ['main-board'] }, ids_before: ['main-board'] },
+  { menu: 'File › Recent projects ▸', label: 'Project list', effect: 'navigated', landed: { url: landed, ids: [id] }, ids_before: ['main-board'] }];
+const row = (sub) => ({ menu: 'File', label: 'Recent projects ▸', href: 'start.html', effect: 'opened its submenu', submenu: sub });
+const close = { menu: 'File', label: 'Close project', href: 'start.html', effect: 'not clicked (ends the session or deletes)' };
+const a = reachability(screens, [row(kids('http://h/start?all=1')), ...kids('http://h/start?all=1'), close]);
+const b = reachability(screens, [row(kids('http://h/settings', 'settings-form')), close]);
+const c = reachability(screens, [{ menu: 'Help', label: 'User guide ▸', href: 'help.html', effect: 'opened its submenu',
+  submenu: [{ menu: 'Help › User guide ▸', label: 'Sign out', effect: 'not clicked (ends the session or deletes)' }] }]);
+console.log(JSON.stringify([a.Start && a.Start.reached, a.Start && a.Start.by, b.Start && b.Start.reached, (b.Start && b.Start.tried || []).length, 'Help' in c]));" 2>&1)"
+  [[ "$out" == '[true,"File › Recent projects ▸ › Project list",false,2,false]' ]] \
+    && ok ch_023 "a submenu row that lands on the screen's route reaches it; rows that all land elsewhere still read unreachable, naming each; a submenu whose rows are never clicked is not judged" \
+    || { bad ch_023 "a screen reached through a submenu row is not counted as reached"; note "$(head -2 <<<"$out" | cut -c1-240)"; }
+}
+
+# --- Chatur TF-025: the menu walk left the project on another branch -----------------------------------------
+# The branch picker lists main (ticked), feature/board and a run branch. The walk clicks every item, which
+# checks each branch out, and it left the project on the last one: the mockup comparison that followed read
+# Repository with none of the hand check-ins and failed on 12 icons. A one-of choice the walk moved is now
+# chosen back to the item ticked at the start. The fixture's app tells its server about every checkout
+# (tests/regression/ch025/make.sh), so the last line of the log is the branch the walk left it on.
+ch_025() {
+  local pw; pw="$(_pw_dir)"
+  if [[ -z "$pw" ]]; then printf 'skip ch_025 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  local d="$SCRATCH/ch025"; mkdir -p "$d"
+  bash "$ROOT/tests/regression/ch025/make.sh" "$d"
+  ln -sfn "$pw/node_modules" "$d/node_modules"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" "$UTILS/tf-menus.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
+  local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 "$d/server.py" "$port" "$d" >/dev/null 2>&1 & local srv=$!
+  _wait_port "$port"
+  ( cd "$d" && tf_timeout 300 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen main=/main/ \
+      --widths 1280 --themes light --render-wait 500 --wait 300 --json-out "$d/s.json" --shots-dir "$d/shots" > "$d/s.log" 2>&1 )
+  kill "$srv" 2>/dev/null
+  local log; log="$(tr '\n' ' ' < "$d/checkouts.log" 2>/dev/null)"
+  local out; out="$(python3 -c "
+import json
+s = json.load(open('$d/s.json'))['screens'][0]
+print(' | '.join(f['detail'] for w in s['widths'] for f in w['findings']))" 2>&1)"
+  grep -q 'feature/board' <<<"$log" && grep -q 'run/BRD-96-101' <<<"$log" && [[ "$log" == *"main " ]] \
+    && ok ch_025a "the walk still clicks every branch, and the last checkout is main: the choice is put back as the walk found it" \
+    || { bad ch_025a "the menu walk left the project on another branch"; note "checkouts: ${log:-none}"; }
+  ! grep -q 'does nothing when clicked' <<<"$out" \
+    && ok ch_025b "no branch is reported as an item that does nothing" \
+    || { bad ch_025b "a branch was reported dead"; note "$(cut -c1-240 <<<"$out")"; }
+}
+
+# --- Chatur TF-024: a WSL build failed on Razor errors that a compiler-server shutdown cleared -----------------
+# After a build on the Windows rung, the WSL publish of the same tree failed twice with 122 Razor parse
+# errors (RZ1021, RZ1009 at a valid expression) on files unchanged for weeks, and passed straight after
+# `dotnet build-server shutdown`. tf-build.sh now does that itself: a WSL-side rung that fails with an RZ
+# error shuts the build servers down and runs once more before it reports. The stand-in dotnet below gives
+# the Razor errors until it has been told to shut its servers down.
+ch_024() {
+  local e="$SCRATCH/ch024"; mkdir -p "$e/bin" "$e/home"
+  printf '<Project Sdk="Microsoft.NET.Sdk.Web"></Project>\n' > "$e/Fx.csproj"
+  cat > "$e/bin/dotnet" <<'SH'
+#!/usr/bin/env bash
+here="$(cd "$(dirname "$0")/.." && pwd)"
+echo "$*" >> "$here/calls"
+if [[ "$1" == "build-server" ]]; then touch "$here/servers-down"; echo "Razor build server shut down."; exit 0; fi
+case "$(cat "$here/mode")" in
+  stale) if [[ -f "$here/servers-down" ]]; then echo "Build succeeded."; exit 0; fi
+         echo 'src/UI/Pages/AutoRun.razor(110,232): error RZ1021: A space or line break was encountered after the "@" character.'
+         echo 'src/UI/ConversationPanel.razor(23,51): error RZ1009: The "@" character must be followed by a ":", "(", or a C# identifier.'; exit 1 ;;
+  real)  echo 'src/UI/Pages/AutoRun.razor(110,232): error RZ1021: A space or line break was encountered after the "@" character.'; exit 1 ;;
+  cs)    echo 'src/UI/Start.cs(4,9): error CS0103: The name x does not exist in the current context'; exit 1 ;;
+esac
+SH
+  chmod +x "$e/bin/dotnet"
+  _ch024() { rm -f "$e/calls" "$e/servers-down"; echo "$1" > "$e/mode"
+    ( cd "$e" && PATH="$e/bin:/usr/bin:/bin" HOME="$e/home" TF_BUILD_PLATFORM=wsl TF_TEST_USERS=0 bash "$UTILS/tf-build.sh" build Fx.csproj 2>&1 | grep -m1 -E '^(PASS|FAIL|NOT-RUN)' ); }
+  local line calls
+  line="$(_ch024 stale)"; calls="$(tr '\n' ';' < "$e/calls" 2>/dev/null)"
+  grep -q '^PASS .*the first try failed on 2 Razor error line(s) from a stale compiler server, and it passed once the build servers were shut down' <<<"$line" \
+    && [[ "$(grep -c '^build-server shutdown$' "$e/calls")" -eq 1 && "$(grep -c '^build ' "$e/calls")" -eq 2 ]] \
+    && ok ch_024a "Razor errors from a stale compiler server: the build servers are shut down, the build runs once more and passes, and the verdict line says so" \
+    || { bad ch_024a "the WSL build reported Razor errors a build-server shutdown would have cleared"; note "${line:0:200} // calls: ${calls:0:160}"; }
+  line="$(_ch024 real)"
+  grep -q '^FAIL  real errors .*error RZ1021.*still there after the build servers were shut down and the build was run again' <<<"$line" \
+    && [[ "$(grep -c '^build-server shutdown$' "$e/calls")" -eq 1 && "$(grep -c '^build ' "$e/calls")" -eq 2 ]] \
+    && ok ch_024b "a Razor error that is really in the code is still a FAIL, after one shutdown and one more try, and the line says both" \
+    || { bad ch_024b "a real Razor error was not reported, or was retried more than once"; note "${line:0:220}"; }
+  line="$(_ch024 cs)"
+  grep -q '^FAIL  real errors .*error CS0103' <<<"$line" && ! grep -q 'build-server' "$e/calls" && [[ "$(grep -c '^build ' "$e/calls")" -eq 1 ]] \
+    && ok ch_024c "a C# error with no Razor error is reported at once: no shutdown, no second build" \
+    || { bad ch_024c "a plain C# error was retried"; note "${line:0:200} // $(tr '\n' ';' < "$e/calls")"; }
+}
+
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
-for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 tf_055 tf_056 fw_001 fw_002 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 am_030 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 ch_013 ch_014 ch_015 ch_016 ch_017 ch_018 ch_019 ch_020 ch_021 ch_022 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 sv_007 sv_008 sv_009 sv_010 sv_011 sv_012 sv_013 sv_014 sv_015 sv_016 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 bl_001 bl_002 bl_003 bl_004 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 lk_036 lk_037 lk_038 lk_039 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 tr_008 tr_009 tr_010 std_q4a owner_handoff harness_env feedback_state replies_complete gitignore_once dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
+for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 tf_055 tf_056 fw_001 fw_002 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 am_030 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 ch_013 ch_014 ch_015 ch_016 ch_017 ch_018 ch_019 ch_020 ch_021 ch_022 ch_023 ch_024 ch_025 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 sv_007 sv_008 sv_009 sv_010 sv_011 sv_012 sv_013 sv_014 sv_015 sv_016 sv_017 sv_018 sv_019 sv_021 sv_022 sv_023 sv_024 md_001 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 bl_001 bl_002 bl_003 bl_004 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 lk_036 lk_037 lk_038 lk_039 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 tr_008 tr_009 tr_010 std_q4a owner_handoff harness_env feedback_state replies_complete status_stale gitignore_once codex_keep goal_guard dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t"
 done

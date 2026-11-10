@@ -726,20 +726,47 @@ if [[ -f opencode.jsonc ]]; then
 fi
 
 # 4b. Codex adapter — REMOVED 2026-09-07 (D-14, FR-42). The framework supports two
-# harnesses, Claude Code and OpenCode. The adapter was frozen through the reset and is
-# now taken out of every project it was deployed to. Nothing here is project content:
-# .codex/ held a config file plus generated bindings, and .agents/skills/ was generated
-# in full from .tfcore/tasks/. A project that wants Codex back takes it from git history.
-for legacy_codex in .codex .agents/skills; do
-  if [[ -e "$legacy_codex" ]]; then
-    if [[ $DRY_RUN -eq 1 ]]; then
-      echo "  WOULD remove $legacy_codex/ — the Codex adapter is no longer part of the framework"
-    else
-      rm -rf "$legacy_codex"
-      echo "  removed $legacy_codex/ — the Codex adapter is no longer part of the framework"
-    fi
+# harnesses, Claude Code and OpenCode, and takes its old adapter out of every project it
+# was deployed to. It takes out ONLY what it installed (2026-11-10): the whole of .codex/
+# used to go, and with it .codex/agents/techierag.toml and trblazeui.toml, which the
+# TechieRag and TrBlazeUI packages put there for their own Codex users (Sevak, Chatur,
+# TechieBlog and Lekhak hold them). The framework's own files were:
+#   .codex/rules/techieflow.rules
+#   .codex/config.toml and .codex/hooks.json   — removed when they name TechieFlow or .tfcore
+#   .codex/agents/*.toml                       — only a wrapper it wrote itself, which begins
+#                                                description = "TechieFlow …
+# Anything else under .codex/ is someone else's and stays; a folder is removed only once empty.
+# .agents/skills/ was generated in full from .tfcore/tasks/ and still goes whole.
+remove_fw() {  # <path> <why>
+  if [[ $DRY_RUN -eq 1 ]]; then echo "  WOULD remove $1 — $2"
+  else rm -f "$1"; echo "  removed $1 — $2"; fi
+}
+if [[ -d .codex ]]; then
+  [[ -f .codex/rules/techieflow.rules ]] && remove_fw .codex/rules/techieflow.rules "the retired Codex adapter's rules"
+  for legacy_codex in .codex/config.toml .codex/hooks.json; do
+    [[ -f "$legacy_codex" ]] || continue
+    if grep -qE 'TechieFlow|\.tfcore' "$legacy_codex" 2>/dev/null; then remove_fw "$legacy_codex" "the retired Codex adapter's file"
+    else echo "  $legacy_codex — preserved (it names neither TechieFlow nor .tfcore, so the framework did not write it)"; fi
+  done
+  for legacy_codex in .codex/agents/*.toml; do
+    [[ -f "$legacy_codex" ]] || continue
+    if grep -qE '^description = "TechieFlow ' "$legacy_codex" 2>/dev/null; then remove_fw "$legacy_codex" "a wrapper the retired Codex adapter generated"
+    else echo "  $legacy_codex — preserved (not installed by the framework)"; fi
+  done
+  if [[ $DRY_RUN -eq 0 ]]; then
+    rmdir .codex/rules 2>/dev/null || true
+    rmdir .codex/agents 2>/dev/null || true
+    if rmdir .codex 2>/dev/null; then echo "  removed the emptied .codex/"; fi
   fi
-done
+fi
+if [[ -e .agents/skills ]]; then
+  if [[ $DRY_RUN -eq 1 ]]; then
+    echo "  WOULD remove .agents/skills/ — the Codex adapter is no longer part of the framework"
+  else
+    rm -rf .agents/skills
+    echo "  removed .agents/skills/ — the Codex adapter is no longer part of the framework"
+  fi
+fi
 [[ $DRY_RUN -eq 0 && -d .agents ]] && rmdir .agents 2>/dev/null && echo "  removed the emptied .agents/"
 
 # Library agents under .opencode/command/ root preserved

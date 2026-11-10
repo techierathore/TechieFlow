@@ -31,7 +31,7 @@ import { chromium } from 'playwright';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { parseThemes, useTheme, surface, differs, audit } from './tf-theme.mjs';
+import { parseThemes, useTheme, surface, differs, audit, gradedPhase, markLaterPhase } from './tf-theme.mjs';
 import { mockupMenus, walkMenus, placeholdersOnPage, reachability } from './tf-menus.mjs';
 
 const argv = process.argv.slice(2);
@@ -41,6 +41,7 @@ const args = (n) => argv.flatMap((a, i) => (a === n && i + 1 < argv.length ? [ar
 const BASE = (arg('--base') || '').replace(/\/$/, '');
 const CDP = arg('--cdp') || '';
 const LIST = arg('--list');
+const PHASE = gradedPhase(arg('--phase'), LIST);   // which data-tf-phase marks are still ahead (Sevak TF-018)
 const MOCKUPS = arg('--mockups', 'docs/mockups');
 const WIDTHS = (arg('--widths', '1280,390')).split(',').map((w) => parseInt(w.trim(), 10)).filter(Boolean);
 const OUT = arg('--json-out', 'tests/.artifacts/verify/screens.json');
@@ -186,6 +187,7 @@ async function stateOnlyOf(b, mockup, anchors) {
       ctx = await b.newContext();
       const p = await ctx.newPage();
       await p.goto('file://' + resolve(mockup), { waitUntil: 'load', timeout: 15000 });
+      await markLaterPhase(p, PHASE);   // a later phase's control is another state until its phase (Sevak TF-018)
       return await p.evaluate(({ anchors, attr }) => anchors.filter((id) => {
         const el = document.querySelector(`[${attr}="${CSS.escape(id)}"]`);
         return !!el && !!el.closest('[data-tf-state],[data-state-testid],[data-tf-sample]');
@@ -193,7 +195,27 @@ async function stateOnlyOf(b, mockup, anchors) {
     } catch (e) { /* fall through to the mark on the control itself */ } finally { if (ctx) await ctx.close().catch(() => {}); }
   }
   const html = readFileSync(mockup, 'utf8');
-  return anchors.filter((id) => new RegExp(`<[^>]*\\bdata-(?:tf-state|state-testid|tf-sample)\\b[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']|<[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*\\bdata-(?:tf-state|state-testid|tf-sample)\\b`).test(html));
+  const later = (id) => {   // data-tf-phase on the control's own tag, read without a browser
+    const m = html.match(new RegExp(`<[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*>`));
+    const ph = m && m[0].match(/\bdata-tf-phase\s*=\s*["']?(\d+)/);
+    return !!ph && PHASE !== null && parseInt(ph[1], 10) > PHASE;
+  };
+  return anchors.filter((id) => later(id) || new RegExp(`<[^>]*\\bdata-(?:tf-state|state-testid|tf-sample)\\b[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']|<[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*\\bdata-(?:tf-state|state-testid|tf-sample)\\b`).test(html));
+}
+
+// Sevak TF-019: a control drawn over its neighbour on purpose. The library's SidebarRail is a 16px grab
+// handle centred on the sidebar's edge, half of it over the sidebar, as the mockup draws it; "sidebar
+// overlaps sidebar-rail" failed every screen, and the only excuse was aria-hidden on the app's control,
+// which a focusable overlay cannot take. The mockup says so: data-tf-overlay on the control. Such a
+// control is left out of the overlap check and graded on everything else. Read from the control's own
+// tag, so it needs no browser.
+function overlayOf(mockup, anchors) {
+  if (!mockup || !existsSync(mockup) || !anchors || !anchors.length) return [];
+  const html = readFileSync(mockup, 'utf8').replace(/<!--[\s\S]*?-->/g, '').replace(/<(style|script)\b[\s\S]*?<\/\1\s*>/gi, '');
+  return anchors.filter((id) => {
+    const m = html.match(new RegExp(`<[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*>`));
+    return !!m && /\bdata-tf-overlay\b/.test(m[0]);
+  });
 }
 
 // A screen whose mockup draws sample data the app has none of is compared against an empty view
@@ -249,7 +271,7 @@ function writeOut(extra, results = [], login = null) {
 // The sign-in recipe (TF-033, TF-044) and the way a screen behind an in-page sign-in is reached
 // (AppManager TF-006) live in tf-login.mjs since AppManager TF-011, shared with tf-mockup-parity
 // and tf-assets so every check reaches a screen the same way.
-import { signIn, signedOut as signedOutShared, navigateInApp as navigateInAppShared, anchorsPresent, waitArrived, ensureDrawing, openFresh } from './tf-login.mjs';
+import { signIn, signedOut as signedOutShared, navigateInApp as navigateInAppShared, anchorsPresent, waitArrived, ensureDrawing, openFresh, gotoRetry } from './tf-login.mjs';
 const LOGIN_OPTS = { base: BASE, loginPath: LOGIN_PATH, user: USER, password: PASS, attr: ATTR, settle: SETTLE, renderWait: RENDER_WAIT };
 const login = (page) => signIn(page, LOGIN_OPTS);
 
@@ -278,7 +300,7 @@ async function navigate(page, route, anchors = []) {
     } catch (e) { return { status: 0, error: e.message.split('\n')[0] }; }
   }
   try {
-    const resp = await page.goto(BASE + route, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const resp = await gotoRetry(page, BASE + route, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(SETTLE);
     return { status: resp ? resp.status() : 0, url: page.url() };
@@ -319,6 +341,14 @@ async function inspect(page, anchors, attr, errorSelectors) {
       const cs = getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return false;
       if (el.getAttribute('aria-hidden') === 'true') return false;
+      // Sevak TF-020 and TF-024: display:none on a box hides everything inside it, while each control
+      // inside still computes its own display as written. Sevak's chat pane, hidden as a column at
+      // 1024px the way its mockup hides it, read "anchored control assistant-pane-model has zero
+      // width" and eight more, for controls nobody can see. (visibility is inherited, so the lines
+      // above already see it on an ancestor.)
+      for (let p = el.parentElement; p; p = p.parentElement) {
+        if (getComputedStyle(p).display === 'none') return false;
+      }
       const r = el.getBoundingClientRect();
       if (r.width <= 1 && r.height <= 1 && cs.position === 'absolute') return false; // sr-only
       return true;
@@ -424,7 +454,7 @@ async function inspect(page, anchors, attr, errorSelectors) {
   }, { anchors, attr, errorSelectors });
 }
 
-function grade(info, consoleErrors, width, excused = [], stateOnly = []) {
+function grade(info, consoleErrors, width, excused = [], stateOnly = [], overlay = []) {
   const findings = [];
   // a control of another state is graded only when this view draws it, visible and filled (TF-005)
   const soft = new Set(stateOnly);
@@ -452,11 +482,13 @@ function grade(info, consoleErrors, width, excused = [], stateOnly = []) {
     if (a.present && a.visible && a.w > 0 && aw > 0 && (ax + aw > info.vw + 2 || ax < -2)) findings.push({ check: 'visual', class: 'offscreen', detail: `anchored control "${a.id}" sits outside the viewport at ${width}px` });
   }
   const rel = new Set(info.rel.map(([a, b]) => `${a}-${b}`));
+  const over = new Set(overlay);
   const boxes = info.boxes.filter((b) => b.w > 0 && b.h > 0);
   let overlaps = 0;
   for (let i = 0; i < boxes.length && overlaps < 5; i++) for (let j = i + 1; j < boxes.length && overlaps < 5; j++) {
     const a = boxes[i], b = boxes[j];
     if (rel.has(`${a.i}-${b.i}`)) continue;
+    if (over.has(a.id) || over.has(b.id)) continue;   // drawn over its neighbour by design (Sevak TF-019)
     const ix = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
     const iy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
     if (ix <= 4 || iy <= 4) continue;
@@ -510,6 +542,7 @@ for (const width of WIDTHS) {
       r = { name: s.name, route: s.route, mockup: s.mockup, rows: s.rows, anchors: anchorsOf(s.mockup), widths: [] }; results.push(r);
       r.hidden_by_width = await hiddenByWidth(mockBrowser, s.mockup, r.anchors);
       r.state_only = await stateOnlyOf(mockBrowser, s.mockup, r.anchors);
+      r.overlay = overlayOf(s.mockup, r.anchors);
       if (s.route_pattern) r.route_pattern = s.route_pattern;
       if (s.seed) r.seed = runSeed(s.seed);
     }
@@ -578,7 +611,7 @@ for (const width of WIDTHS) {
         te.theme = theme;
         const info = await inspect(page, r.anchors || [], ATTR, ERROR_SELECTORS);
         info.contrast = await audit(page, theme === 'dark', MIN_CONTRAST);
-        const g = grade(info, theme === 'light' ? consoleErrors : [], width, excused, stateOnly);
+        const g = grade(info, theme === 'light' ? consoleErrors : [], width, excused, stateOnly, r.overlay || []);
         // a screen still showing placeholder text its mockup does not draw is not built (Chatur TF-011)
         if (theme === (THEMES || ['light'])[0]) {
           for (const p of await placeholdersOnPage(page, mockTextOf(s.mockup), PLACEHOLDER_EXTRA)) g.findings.push({ check: 'render', class: 'placeholder', detail: `the screen shows placeholder text "${p}"` });
@@ -614,7 +647,7 @@ if (WALK_MENUS && mockBrowser) {
   { const ctx = await mockBrowser.newContext(); const mp = await ctx.newPage();
     for (const s of screens) {
       if (!s.mockup || !existsSync(s.mockup)) continue;
-      try { await mp.goto('file://' + resolve(s.mockup), { waitUntil: 'load', timeout: 15000 }); byScreen[s.name] = await mockupMenus(mp, ATTR); } catch (e) { byScreen[s.name] = []; }
+      try { await mp.goto('file://' + resolve(s.mockup), { waitUntil: 'load', timeout: 15000 }); await markLaterPhase(mp, PHASE); byScreen[s.name] = await mockupMenus(mp, ATTR); } catch (e) { byScreen[s.name] = []; }
     }
     await ctx.close().catch(() => {}); }
   const key = (m) => `${m.trigger}|${m.popup}`;

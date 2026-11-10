@@ -16,6 +16,7 @@
 //   - an enabled item that does nothing when clicked: no address, window, dialog, zoom, text or theme
 //     changed. A choice that is already the state (Light, in a light app) is clicked again after a
 //     sibling has moved the state, and the theme the walk changed is put back (Sevak TF-006).
+// A one-of choice the walk moved (the branch checked out) is chosen back to the item ticked at the start (Chatur TF-025).
 // An item the mockup marks data-tf-sample is sample data and is not owed by its label; a pick-list (a
 // select's options) is checked but not clicked; a trigger disabled in this state is passed over. A menu inside
 // a box marked as another state (data-tf-state="mockup-only" …) is not owed at all. An item whose
@@ -480,6 +481,22 @@ export async function walkMenus(page, mockMenus, o = {}) {
       }
       findings.push({ class: 'menu', popup: m.popup, detail: `"${name} › ${item.label}" does nothing when clicked` });
     }
+    // Chatur TF-025: a one-of choice put back as the walk found it. The branch picker lists main (ticked),
+    // feature/board and the run branches; the walk clicked each, which checked each branch out, and left
+    // the project on the last one. A later screen was then compared against a state its seed had not
+    // made: Repository showed none of the hand check-ins and failed on 12 icons. When the menu opened
+    // with exactly one ticked item that is not a checkbox, and a click on another item took effect, the
+    // menu is opened again; if the tick has moved, the item ticked at the start is chosen again.
+    const ticked0 = got.items.filter((x) => x.checked && !x.checkbox && !x.sub);
+    if (ticked0.length === 1 && mine.some(({ c, item }) => item.label !== ticked0[0].label && !item.checkbox && c.effect
+        && !/^(nothing|disabled|not clicked|menu did not reopen|already the state|could not be clicked|opened its submenu)/.test(c.effect))) {
+      const nowOpen = await open(m);
+      const cur = (nowOpen.items || []).filter((x) => x.checked && !x.checkbox && !x.sub);
+      await shut(m);
+      if (nowOpen.items && !(cur.length === 1 && cur[0].label === ticked0[0].label)) {
+        rec.put_back = { label: ticked0[0].label, was: cur.map((x) => x.label).join(', ') || 'no item ticked', effect: await press(m, ticked0[0].label) };
+      }
+    }
     // the theme put back as the walk found it: an attached desktop head is the viewer's app
     if (startLook) {
       const themed = mine.filter((x) => /^changed the theme/.test(x.c.effect || '')).map((x) => x.item);
@@ -511,9 +528,14 @@ export function reachability(screens, clicks) {
   const out = {};
   for (const s of screens) {
     if (!s.mockup) continue;
-    const ways = clicks.filter((c) => c.href && base(c.href) === base(s.mockup));
+    // Chatur TF-023: the mockup draws one link, "Recent projects ▸" → start.html, and the app builds that row
+    // as a submenu whose last row, Project list, opens Start. The ▸ row "opened its submenu" and landed
+    // nowhere, its rows carry no link of their own, and Start was UNREACHABLE with six rows held on it.
+    // A way in that opened a submenu stands for the rows of that submenu: any of them may land on the screen.
+    const ways = clicks.filter((c) => c.href && base(c.href) === base(s.mockup))
+      .flatMap((c) => (c.effect === 'opened its submenu' && (c.submenu || []).length ? c.submenu : [c]));
     if (!ways.length) continue;
-    const tried = ways.filter((c) => c.effect && !/^not clicked|^menu did not reopen/.test(c.effect));
+    const tried = ways.filter((c) => c.effect && !/^not clicked|^menu did not reopen|^submenu did not reopen/.test(c.effect));
     if (!tried.length) continue;
     const re = routeRe(s.route_pattern || s.route);
     const want = (s.anchors || []).filter((a) => !(s.state_only || []).includes(a));

@@ -19,7 +19,28 @@ GOAL_SH="$ROOT/.tfcore/utils/tf-goal.sh"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/tf-goal-test.XXXXXX")"
 APP="$WORK/fakeapp"; mkdir -p "$APP/.tfcore/utils" "$APP/docs"
 cp "$ROOT/.tfcore/utils/tf-yolo.sh" "$APP/.tfcore/utils/"
-trap 'rm -rf "$WORK"' EXIT
+# The guard (2026-11-10). Run from inside a TechieFlow session, this suite inherited that session's
+# CLAUDE_PROJECT_DIR; its stand-in harness then ran `tf-yolo.sh done` against the framework's own
+# .tfcore/.session/: the session's YOLO flag was removed, .opencode/opencode.jsonc rewritten, a
+# goal-done.json left behind, and three checks failed. Two things stop that for good: the suite starts
+# without the session's variables, and it compares the framework's own session folder before and after.
+# A change there is a failure that names the file, and the folder is put back as it was, on every exit.
+unset CLAUDE_PROJECT_DIR TF_PROJECT_DIR TF_METRICS_ROOT
+OWN="$ROOT/.tfcore/.session"; OWN_OC="$ROOT/.opencode/opencode.jsonc"
+own_sum() { { [[ -d "$OWN" ]] && (cd "$OWN" && find . -type f ! -name 'sweep.stamp' ! -name 'claude-code.json' ! -name 'opencode.json' -exec cksum {} + | sort -k3); [[ -f "$OWN_OC" ]] && cksum < "$OWN_OC"; } 2>/dev/null; }
+[[ -d "$OWN" ]] && cp -Rp "$OWN" "$WORK/own-session"
+[[ -f "$OWN_OC" ]] && cp -p "$OWN_OC" "$WORK/own-opencode.jsonc"
+OWN_BEFORE="$(own_sum)"
+own_restore() {   # only when something changed: the folder and the config back as they were
+  [[ "$(own_sum)" == "$OWN_BEFORE" ]] && return 0
+  if [[ -d "$WORK/own-session" ]]; then
+    (cd "$OWN" 2>/dev/null && find . -type f ! -name 'sweep.stamp' ! -name 'claude-code.json' ! -name 'opencode.json' -exec rm -f {} +)
+    cp -Rp "$WORK/own-session/." "$OWN/" 2>/dev/null
+  fi
+  [[ -f "$WORK/own-opencode.jsonc" ]] && cp -p "$WORK/own-opencode.jsonc" "$OWN_OC"
+  return 1
+}
+trap 'own_restore; rm -rf "$WORK"' EXIT
 pass=0; fail=0
 ok()   { pass=$((pass+1)); echo "ok   $*"; }
 bad()  { fail=$((fail+1)); echo "FAIL $*"; }
@@ -188,6 +209,14 @@ TF_GOAL_FAKE_CMD="bash $WORK/fb.sh" TF_GOAL_STALL_TICK=1 \
 check "an exhausted chain says so and waits" \
   "$(grep -q 'no fallback left' "$APP/.tfcore/.session/goal.log" && grep -q 'USAGE LIMIT hit' "$APP/.tfcore/.session/goal.log"; echo $?)"
 rm -f "$TF_MODEL_HEALTH_FILE"
+
+# ---- the guard: this suite wrote nothing into the framework's own session folder ------------
+OWN_AFTER="$(own_sum)"
+if [[ "$OWN_AFTER" == "$OWN_BEFORE" ]]; then ok "the framework's own .tfcore/.session/ and OpenCode config are as they were before the suite"
+else
+  bad "the suite changed the framework's own session files: $(diff <(printf '%s\n' "$OWN_BEFORE") <(printf '%s\n' "$OWN_AFTER") | grep '^[<>]' | awk '{print $1 $NF}' | tr '\n' ' ' | cut -c1-200)(put back as they were)"
+  own_restore || true
+fi
 
 echo "tests/goal: $pass passed, $fail failed"
 [[ $fail -eq 0 ]]

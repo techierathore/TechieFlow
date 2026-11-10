@@ -44,7 +44,7 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { signIn, reach, anchorsPresent, waitArrived, ensureDrawing, openFresh } from './tf-login.mjs';
-import { parseThemes, useTheme, surface, differs, looksDark } from './tf-theme.mjs';
+import { parseThemes, useTheme, surface, differs, looksDark, gradedPhase, markLaterPhase } from './tf-theme.mjs';
 import { mockupMenus, walkMenus, placeholdersOnPage, reachability } from './tf-menus.mjs';
 
 // ---------------------------------------------------------------- arguments
@@ -73,7 +73,9 @@ const fromSettings = (k) => (TS ? TS.setting(k) : '') || null;
 const LOGIN_PATH = arg('--login-path') || fromSettings('Verify:Login:Path');
 const USER = arg('--user') || fromSettings('Verify:Login:User'); const PASS = arg('--password') || (arg('--user') ? null : fromSettings('Verify:Login:Password'));
 const STORAGE = arg('--storage-state');
-const LOGIN_OPTS = { base: BASE, loginPath: LOGIN_PATH, user: USER, password: PASS, settle: 1500, renderWait: 5000 };
+// --render-wait <ms>: how long a screen may take to draw before it is read (default 5000), as tf-verify-screens takes it
+const RENDER_WAIT = parseInt(arg('--render-wait', '5000'), 10) || 5000;
+const LOGIN_OPTS = { base: BASE, loginPath: LOGIN_PATH, user: USER, password: PASS, settle: 1500, renderWait: RENDER_WAIT };
 const HEADERS = [];
 for (let i = 0; i < argv.length; i++) if (argv[i] === '--header' && argv[i + 1]) HEADERS.push(argv[i + 1]);
 const SCREENS = [];
@@ -90,6 +92,7 @@ for (let i = 0; i < argv.length; i++) {
 // of --mockups is looked for in its subfolders, and used when exactly one file has that name.
 const MOCK_OF = {};
 const LIST = arg('--list');
+const PHASE = gradedPhase(arg('--phase'), LIST);   // which data-tf-phase marks are still ahead (Sevak TF-018)
 if (LIST) {
   const slug = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   let listed = [];
@@ -291,6 +294,7 @@ const PROBE = (wanted = []) => {
   const drawnBorder = (cs) => (parseFloat(cs.borderTopWidth) || 0) > 0 && !!RGB(cs.borderTopColor);
 
   const semanticColor = (el) => {
+    if (el.matches(TOGGLE)) return null;   // the browser paints a native toggle's fill itself (Sevak TF-023)
     const cs = getComputedStyle(el);
     const bg = RGB(cs.backgroundColor);
     const fg = RGB(cs.color);
@@ -309,6 +313,13 @@ const PROBE = (wanted = []) => {
   // A checkbox, switch or radio is not compared by its border (Lekhak TF-035): a native
   // <input type="checkbox"> computes border-style none because the browser draws its box, while a
   // library's role="checkbox" draws the same box as a CSS border. Same control, so not applicable.
+  // Nor by its fill, its tick or its pill shape (Sevak TF-023): Chromium paints a native checked box's
+  // fill and tick itself, so its computed style is transparent with no icon, while a library draws the
+  // same checked box as a filled button holding an <svg> tick. "App carries an icon the mockup does
+  // not" and "mockup neutral, app accent" on every screen that draws one. A toggle's colour, icon and
+  // badge clauses are not applicable, and what is drawn inside a toggle (the tick, a switch's thumb) is
+  // not an icon or a badge of any box around it. The checked state is not compared: the tick follows
+  // the app's data. A toggle the app does not draw, or draws with no size, is the screen check's finding.
   const TOGGLE = 'input[type="checkbox"],input[type="radio"],[role="checkbox"],[role="switch"],[role="radio"]';
   const strokeOf = (el) => {
     if (el.matches(TOGGLE)) return null;
@@ -332,7 +343,7 @@ const PROBE = (wanted = []) => {
   const SAMPLE = '[data-tf-sample],[data-tf-state="sample-data"]';
   // A chart's <svg> is not an icon (TF-054): an svg larger than 48px on either side is left out.
   const glyph = (x) => x.tagName.toLowerCase() !== 'svg' || (() => { const r = x.getBoundingClientRect(); return r.width <= 48 && r.height <= 48; })();
-  const own = (el, sel) => [...el.querySelectorAll(sel)].filter((x) => (!x.closest(STATE) || el.closest(STATE)) && (sel !== ICON || glyph(x)));
+  const own = (el, sel) => [...el.querySelectorAll(sel)].filter((x) => (!x.closest(STATE) || el.closest(STATE)) && (sel !== ICON || (glyph(x) && !x.closest(TOGGLE))));
   const ownText = (el) => {
     if (!el.querySelector(STATE) || el.closest(STATE)) return el.textContent || '';
     const c = el.cloneNode(true);
@@ -346,7 +357,7 @@ const PROBE = (wanted = []) => {
   // Every icon on the page by number, so the node side can tell that an anchor and the wrappers
   // above it hold the same icon as the element it sits in: the icon clause asks "any icon inside?",
   // and one Select chevron was reported at four levels of TfLens /misses (TF-046).
-  const iconNo = new Map([...document.querySelectorAll(ICON)].filter(glyph).map((i, n) => [i, n]));
+  const iconNo = new Map([...document.querySelectorAll(ICON)].filter((i) => glyph(i) && !i.closest(TOGGLE)).map((i, n) => [i, n]));
   const iconIds = (el) => own(el, ICON).map((i) => iconNo.get(i));
   const depthOf = (el) => { let n = 0; for (let p = el.parentElement; p; p = p.parentElement) n++; return n; };
 
@@ -505,7 +516,7 @@ const PROBE = (wanted = []) => {
       },
       tag: el.tagName.toLowerCase(),
       text: ownText(el).trim().replace(/\s+/g, ' ').slice(0, 60),
-      badge: chrome ? chrome.badge : null,
+      badge: chrome && !el.matches(TOGGLE) ? chrome.badge : null,
       full: ownText(el).trim().replace(/\s+/g, ' ').slice(0, 400),
       // a box the mockup marks as sample data, drawn only when the app has data there (Chatur TF-002)
       sample: el.matches(SAMPLE),
@@ -519,7 +530,8 @@ const PROBE = (wanted = []) => {
           top: x.parentElement?.closest('[data-testid]') === el })).slice(0, 200),
       depth: depthOf(el),
       // badges drawn anywhere inside, so a badge one wrapper deeper still counts under its parent (TF-045)
-      badges: own(el, '*').filter((c) => !isHidden(c) && chromeOn(c)?.badge).length,
+      badges: own(el, '*').filter((c) => !isHidden(c) && !c.closest(TOGGLE) && chromeOn(c)?.badge).length,
+      toggle: el.matches(TOGGLE),   // its icon, colour and badge clauses are not applicable (Sevak TF-023)
       color: semanticColor(el),
       stroke: strokeOf(el),
       wrap: lineCount(el),
@@ -657,7 +669,7 @@ const CLAUSES = {
     if ((m.badge ? a : m).near?.badge) return false;
     return `mockup renders this as a ${m.badge ? 'badge/pill' : 'plain element'}, app renders it as a ${a.badge ? 'badge/pill' : 'plain element'}`;
   },
-  icon: (m, a) => (m.icon === a.icon ? false
+  icon: (m, a) => (m.toggle || a.toggle ? null : m.icon === a.icon ? false
     : m.icon && !a.icon ? 'mockup carries an icon here; the app does not'
       : 'app carries an icon the mockup does not'),
   color: (m, a) => (m.color === null || a.color === null ? null
@@ -969,6 +981,12 @@ async function reachCdp(page, route, anchors = []) {
     // Sevak TF-011: a minimized desktop window draws nothing, and nothing read from it can be trusted
     const dr = await ensureDrawing(page, CDP);
     if (!dr.drawing) return { status: 0, not_drawing: true, error: `not measured: the app window is not drawing (minimized, or the screen is locked?) — 0 animation frames in 1 s${dr.restored ? `; restore: ${dr.restored}` : ''}` };
+    // 2026-11-10: the app had not moved to the screen when the wait ran out, and the page still on view
+    // was compared instead: the shared top bar matched, and the screen read "PASS, compared 1 of the
+    // app's 2 controls". A screen none of whose own controls appeared is not measured, never compared.
+    if (a.arrived === false && a.fresh > 0) {
+      return { status: 0, not_drawing: true, error: `not measured: the app did not move to ${route} within ${Math.round(Math.max(RENDER_WAIT, 5000) / 1000)} s — none of the screen's own controls appeared, so the page still on view was not compared (--render-wait <ms> waits longer)` };
+    }
     return { status: 200, url: page.url(), arrived: a.arrived, reset: a.reset };
   } catch (e) { return { status: 0, error: e.message.split('\n')[0] }; }
 }
@@ -1021,6 +1039,7 @@ for (const s of SCREENS) {
     const unSite = async () => { if (saved && saved.changed) await page.evaluate(APPLY_THEME, saved.before).catch(() => {}); saved = null; };
     try {
       await mockPage.goto(pathToFileURL(mockPath).href, { waitUntil: 'load' });
+      await markLaterPhase(mockPage, PHASE);   // a later phase's control is another state until its phase (Sevak TF-018)
       mock = await mockPage.evaluate(PROBE);
       // The document may answer 401 and still draw the screen signed in (AppManager TF-006/TF-011):
       // reach() judges by what the page draws, signs in again from inside the page when it must, and
@@ -1210,6 +1229,7 @@ if (WALK_MENUS && results.length) {
     if (r.verdict === 'NO-MOCKUP' || r.verdict === 'ERROR' || r.verdict === 'NOT-MEASURED') continue;
     try {
       await mockPage.goto(pathToFileURL(findMockup(r.screen)).href, { waitUntil: 'load' });
+      await markLaterPhase(mockPage, PHASE);
       byScreen[r.screen] = await mockupMenus(mockPage, 'data-testid');
       mockText[r.screen] = await mockPage.evaluate(() => document.body.innerText || '');
       // the controls that say a click landed on this screen: anchors outside any other state or open menu

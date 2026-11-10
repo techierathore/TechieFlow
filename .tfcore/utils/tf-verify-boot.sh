@@ -16,6 +16,7 @@
 # TF_BOOT_RUNNER, TF_BOOT_WAIT and TF_WIN_APPDATA still work for one release, with a warning naming the key.
 #   bash .tfcore/utils/tf-verify-boot.sh stop [--port N]
 #   bash .tfcore/utils/tf-verify-boot.sh status [--port N]
+#   bash .tfcore/utils/tf-verify-boot.sh heads [--port N]     (the Windows heads still running, by port; N is left out)
 #
 # Heads:
 #   web      a project on Microsoft.NET.Sdk.Web: published by `tf-build.sh publish` (its rungs, one
@@ -91,6 +92,57 @@ for p in os.environ["TF_BOOT_FILES"].split():
     s=json.load(open(p)); s[sys.argv[1]]=json.loads(sys.argv[2]); json.dump(s,open(p,"w"),indent=1)' "$1" "$2"
 }
 
+# Sevak TF-022: "10 other Windows head(s) up" with one Sevak.exe running. The count was every boot-*.json
+# not marked stopped, and an app that was closed by hand, crashed or was killed with its window never
+# passes through `stop`, so its record said "up" for good. A record now counts only while one of the
+# Windows processes it names is still running under the same program name (one tasklist.exe call). A record whose processes are all
+# gone is marked stopped, with the reason, and the line names the ports it counted. When tasklist.exe
+# does not answer, the records are counted as before and the line says they were not checked.
+# Prints "<count>|<what was counted>"; $1 the folder, $2 this boot's own port (left out).
+other_heads() {
+  python3 - "$1" "${2:-}" <<'HEADSPY'
+import glob, json, os, re, subprocess, sys
+d, mine = sys.argv[1], sys.argv[2]
+live = None
+try:
+    out = subprocess.run(["tasklist.exe", "/FO", "CSV", "/NH"], capture_output=True, text=True, timeout=20)
+    if out.returncode == 0:
+        live = {int(n): img.lower() for img, n in re.findall(r'^"([^"]*)","(\d+)"', out.stdout, re.M)}
+except Exception:
+    live = None
+up, gone = [], 0
+for f in sorted(glob.glob(os.path.join(d, "boot-*.json"))):
+    port = os.path.basename(f)[5:-5]
+    if port == mine:
+        continue
+    try:
+        s = json.load(open(f))
+    except Exception:
+        continue
+    if not (s.get("head") == "windows" and s.get("mode") == "cdp" and not s.get("stopped")):
+        continue
+    wp = [int(x) for x in s.get("win_pids") or [] if str(x).isdigit()]
+    # a process id is handed out again: pid 17636 of a closed Sevak.exe was msedge.exe a day later, so the
+    # id counts only while it still belongs to the program the record names
+    img = (s.get("win_image") or "").lower()
+    if live is not None and wp and not any(x in live and (not img or live[x] == img) for x in wp):
+        s["stopped"], s["stopped_why"] = True, "its Windows process was no longer running when another head booted"
+        try:
+            json.dump(s, open(f, "w"), indent=1)
+        except OSError:
+            pass
+        gone += 1
+        continue
+    up.append("port %s (%s%s)" % (port, s.get("win_image") or "app", ", pid " + "/".join(map(str, wp)) if wp else ""))
+what = ", ".join(up)
+if live is None and up:
+    what += "; not checked against the running processes, tasklist.exe did not answer"
+if gone:
+    what += ("; " if what else "") + "%d older boot record(s) whose app was no longer running were marked stopped" % gone
+print("%d|%s" % (len(up), what))
+HEADSPY
+}
+
 find_projects() { # prints csproj paths under src/, source/, the root and one level down; never tests
   find . -maxdepth 4 -name '*.csproj' -not -path '*/bin/*' -not -path '*/obj/*' -not -path '*/node_modules/*' \
        -not -path './tests/*' -not -path '*/test/*' -not -path '*Tests/*' -not -path '*.Tests/*' 2>/dev/null | sed 's#^\./##' | sort
@@ -137,6 +189,13 @@ CODE_ERR='error (CS|RZ|BL|XC|XLS)[0-9]{3,5}|error MSB[0-9]{4}: .*(does not exist
 cmd="${1:-}"; shift || true
 SPORT=""; [[ "${1:-}" == "--port" && "$cmd" != "start" ]] && SPORT="${2:-}"
 case "$cmd" in
+  heads)  # the Windows heads this folder's boot records say are up, checked against the running processes
+          H="$(other_heads "$DIR" "$SPORT")"
+          W="${H#*|}"
+          if [[ -z "$W" ]]; then echo "${H%%|*} other Windows head(s) up"
+          elif [[ "${H%%|*}" == 0 ]]; then echo "0 other Windows head(s) up ($W)"
+          else echo "${H%%|*} other Windows head(s) up: $W"; fi
+          exit 0 ;;
   status) f="$STATE"; [[ -n "$SPORT" ]] && f="$DIR/boot-$SPORT.json"
           if [[ -f "$f" ]]; then cat "$f"; else echo "NONE no boot state${SPORT:+ for port $SPORT}"; fi; exit 0 ;;
   stop)
@@ -778,26 +837,14 @@ RELAY_PORT="${PORT:-9223}"; keyed "$RELAY_PORT"
 # up also gets its own WebView2 data folder: two copies of one app would otherwise share one browser
 # process, whose single DevTools port lists both.
 if [[ "$RELAY_PORT" == "9223" ]]; then CDP_PORT=9222; else CDP_PORT=$((RELAY_PORT + 20000)); fi
-OTHERS="$(python3 - "$DIR" "$RELAY_PORT" <<'PY'
-import glob, json, os, sys
-n = 0
-for f in glob.glob(os.path.join(sys.argv[1], "boot-*.json")):
-    if f.endswith(f"boot-{sys.argv[2]}.json"):
-        continue
-    try:
-        s = json.load(open(f))
-    except Exception:
-        continue
-    if s.get("head") == "windows" and s.get("mode") == "cdp" and not s.get("stopped"):
-        n += 1
-print(n)
-PY
-)"
+HEADS="$(other_heads "$DIR" "$RELAY_PORT")"; OTHERS="${HEADS%%|*}"; HEADS_WHAT="${HEADS#*|}"
 UDF_SET=""
 if [[ "${OTHERS:-0}" -gt 0 ]]; then
   UDF="$DIR/webview-$RELAY_PORT"; mkdir -p "$UDF"
   UDF_SET="set WEBVIEW2_USER_DATA_FOLDER=$(wslpath -w "$UDF")&& "
-  echo "tf-verify-boot: $OTHERS other Windows head(s) up — this one gets DevTools port $CDP_PORT and its own WebView2 data folder ($UDF), so neither sees the other's pages" >&2
+  echo "tf-verify-boot: $OTHERS other Windows head(s) up, by this folder's boot records: $HEADS_WHAT — this one gets DevTools port $CDP_PORT and its own WebView2 data folder ($UDF), so neither sees the other's pages" >&2
+elif [[ -n "$HEADS_WHAT" ]]; then
+  echo "tf-verify-boot: no other Windows head is up ($HEADS_WHAT)" >&2
 fi
 WP="$(winarg "$(wslpath -w "$PROJECT")")"; RELAY="$(wslpath -w "$HERE/tf-cdp-relay.ps1")"
 echo "### windows head: $PROJECT -f $TFM (DevTools $CDP_PORT, relay $RELAY_PORT)" >> "$LOG"

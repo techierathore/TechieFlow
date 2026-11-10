@@ -103,6 +103,12 @@ if [[ -z "$APP_DIR" || ( -z "$GOAL_ARG" && $RESUME -eq 0 ) ]]; then
   echo "usage: tf-goal.sh [options] <app-dir> \"<goal>\" | @goal.md   (or --resume <app-dir>)" >&2; exit 2
 fi
 APP_DIR="$(cd "$APP_DIR" 2>/dev/null && pwd)" || { echo "no such dir: $1" >&2; exit 2; }
+# Everything this run starts works in the APP: the harness, and every script the agent runs inside it.
+# A goal started from inside another project's session (the goal suite run from a TechieFlow session,
+# 2026-11-10) inherited that project's CLAUDE_PROJECT_DIR, and the agent's `tf-yolo.sh done` then wrote
+# its sentinel into the OTHER project's .tfcore/.session/, switched that session's YOLO flag off and
+# rewrote its OpenCode config, while this run never saw its own sentinel and went on to the last cycle.
+export CLAUDE_PROJECT_DIR="$APP_DIR" TF_PROJECT_DIR="$APP_DIR"
 [[ -d "$APP_DIR/.tfcore" ]] || { echo "$APP_DIR has no .tfcore/ — scaffold it first" >&2; exit 2; }
 case "$HARNESS" in claude|opencode) ;; *) echo "--harness must be claude|opencode" >&2; exit 2 ;; esac
 case "$TIER" in frontier|standard|economy) ;; *) echo "--tier must be frontier|standard|economy" >&2; exit 2 ;; esac

@@ -44,6 +44,102 @@ a new telemetry stream, so a minor version (owner, 2026-11-08).
   - Suite: `tests/estimate/run.sh` (19 cases: enough history, family fallback, no precedent, the refusals,
     the model, the reconciliation). DECISIONS.md 2026-11-08 says why estimates have their own stream.
 
+- **Chatur TF-023, TF-024 and TF-025 (2026-11-10, third run).**
+  - `tf-menus.mjs` (TF-023): a way in that "opened its submenu" stands for the rows of that submenu, so a
+    screen opened by one of them is reached, and the line names the whole path. Start was UNREACHABLE and
+    six rows were held: the mockup links "Recent projects ▸" and the app opens Start from that row's last
+    child. Case `ch_023`, from the click records in the entry.
+  - `tf-menus.mjs` (TF-025): a one-of choice the walk moved is chosen back. When a menu opens with exactly
+    one ticked item that is not a checkbox and a click on another item took effect, the item ticked at the
+    start is chosen again at the end (`put_back` in `screens.json`). The walk had left Chatur's fixture on
+    the last branch it clicked. Case `ch_025`, whose app reports every checkout to its server. A one-of
+    choice inside a submenu is not put back yet.
+  - `tf-build.sh` (TF-024): on WSL a WSL-side rung that fails with a Razor (RZ) error shuts the build
+    servers down and runs once more before it reports; the PASS or FAIL line says it did. C# errors alone
+    are reported at once. Case `ch_024`, with a stand-in dotnet; the real stale server was not reproduced.
+  - `tf-login.mjs` (`lk_037b`, the real cause): the case failed again in this run's first full regression,
+    so the cause given in the second run, a one-second wait margin, was wrong. A screen counted as arrived
+    as soon as one control it had not seen before was attached, a control every screen shares included.
+    A page drawn late by an earlier move then passed for the next screen, and every screen was read one
+    page behind. Arrival now needs a new control and at least half of the screen's own controls; when
+    the wait runs out, a first view that draws fewer than half still counts if one new control is there.
+    Case `lk_037d` gives the wrong "PASS, compared 1 of the app's 2 controls" on the script before the
+    fix. `lk_037` also lets the stand-in app finish drawing between its two tool runs. Five runs in a
+    row pass. A sparse first view on a desktop head now takes the whole wait (5 s) before it is read.
+  - Misses `MISS-TechieFlow-20261110-16` to `-19`, the last for that wrong diagnosis. Deployed to Chatur
+    and Sevak.
+
+- **Every open feedback entry, and five faults of the framework's own (2026-11-10, second run).**
+  Found first: 19 projects carry `.tfcore/`, 9 have a TechieFlow feedback file, and 5 entries were open
+  (Sevak TF-017, TF-018, TF-019, TF-022 and a day-one project's TF-001). Five Chatur entries and TechieRag
+  TF-009 read open to the owner and were not: each was fixed, in the framework and in the project's own
+  `.tfcore/`; the entry's own `Status: open` line had never been changed.
+  - `tf-verify-verdict.py` (Sevak TF-017): a `Blocked` row keeps its Status, its % and its reason
+    whatever the run found. The finding is appended after the reason, no gate record or miss is written,
+    and a second run replaces the appended finding, so the Remark does not grow. Case `sv_017`.
+  - `tf-theme.mjs`, `tf-verify-screens.mjs`, `tf-mockup-parity.mjs`, `mockups.md` (Sevak TF-018): a mockup
+    control that a later phase builds carries `data-tf-phase="<n>"`, on it or on a box around it. Both
+    checks read it as another state while the phase graded is lower than n, and as nothing from phase n
+    on. The phase comes from `--phase`, the list, or `appPhase`. Case `sv_018`.
+  - `tf-verify-screens.mjs`, `mockups.md` (Sevak TF-019): a control the mockup marks `data-tf-overlay`
+    (an edge grab handle, a floating button) is left out of the overlap check. Case `sv_019`.
+  - `tf-verify-boot.sh` (Sevak TF-022): another Windows head counts only while a process its boot record
+    names is running under the same program name (one `tasklist.exe` call). A record whose app is gone is
+    marked stopped, and the line names the ports it counted. New `heads [--port N]` prints the count. On
+    Sevak's real records: 10 → 0, one of them a process id that now belongs to a browser. Case `sv_022`.
+  - `SCHEMA.md` (a day-one project's TF-001): the run record's `mode` row names `stage1`, `stage2`,
+    `launch` and `reconcile` beside `build` and `fix`. Case `md_001` reads every task for a mode the row
+    does not name.
+  - `tf_feedback.py`: an entry that is fixed or closed while its own Status line still says open is named
+    by `tf-feedback.sh <App>`, and no feedback file kept here may hold one. Case `status_stale`. The five
+    Chatur lines were corrected in Chatur's file and here.
+  - `update-framework.sh`, `scripts/install.mjs`: the retired Codex adapter is removed file by file: its
+    rules file, a config or hooks file that names TechieFlow, an agent wrapper whose description begins
+    "TechieFlow". Anything else under `.codex/` stays; the folder goes only when empty. The whole folder
+    used to go, and with it the two agent files the TechieRag and TrBlazeUI packages install (Sevak,
+    Chatur, TechieBlog and Lekhak hold them). Case `codex_keep` runs both routes for real.
+  - `tf-verify-tests.sh`, `tf-verify-verdict.py`: a phase verify lists every test whose title carries no
+    row id before it runs, prints each as `NOT RUN (no row id) <file> — "<title>"` under a FINDING line,
+    keeps them in `tests.json` (`unnumbered_not_run`, carried through `--merge`), and the verdict repeats
+    them under its table. On Sevak's tree: 3 of 194 tests. Cases `sv_021f` and `sv_021g`. One more
+    Playwright call (`--list`), 14 s on Sevak.
+  - `tf-login.mjs` (the cause of `lk_035a`'s one failure): a page load cut off by a change of the
+    machine's network (`net::ERR_NETWORK_CHANGED`) is tried again, three tries in all; any other failure
+    is reported at once. Case `lk_035c`, on a stand-in page, with no network.
+  - `tf-mockup-parity.mjs` (the cause of `lk_037b`'s one failure): when a desktop app had not moved to
+    the screen within the wait, the page still on view was compared and passed on the shared top bar. It
+    is now NOT-MEASURED with the reason. `--render-wait <ms>` is accepted, as the screen check takes it.
+    Case `lk_037c` (9 s late against a 5 s wait) gives the wrong PASS on the script before the fix;
+    `lk_037a` and `lk_037b` now wait 20 s for a page that draws 4 s late, where the margin was 1 s.
+  - `tf-goal.sh`, `tests/goal/run.sh`: a goal run pins `CLAUDE_PROJECT_DIR` and `TF_PROJECT_DIR` to the app
+    for everything it starts. Started from inside a TechieFlow session, the goal suite's stand-in harness
+    had written a sentinel into the framework's own `.tfcore/.session/`, removed the session's YOLO flag
+    and rewritten `.opencode/opencode.jsonc`, and three checks failed. The suite also starts without the
+    session's variables and compares that folder before and after (check 37). Case `goal_guard`.
+  - Fifteen misses, `MISS-TechieFlow-20261110-01` to `-15`, the last for the morning run leaving out its
+    own misses, run record and briefing refresh. Deployed to Sevak only.
+
+- **Sevak TF-020, TF-021, TF-023 and TF-024 (2026-11-10): three checks that failed rows for no fault of the app.**
+  - `tf-mockup-parity.mjs` (TF-023): a checkbox, radio or switch is no longer compared by its fill, its
+    tick or its pill shape. Chromium paints a native checked box itself, so it read "no fill, no icon"
+    beside a library's `role="checkbox"` button holding an svg tick: an icon and a colour finding on
+    Sevak's Import at both widths and themes, nine rows held at Needs re-verify. The icon, colour and
+    badge clauses are not applicable to a toggle, and what is drawn inside one is no icon or badge of the
+    box around it. The checked state is not compared, because the tick follows the app's data.
+  - `tf-verify-list.py`, `tf-verify-tests.sh`, `verify-phase.md` (TF-021): `list.json` names the phases
+    that have a checklist. On a project with several, scope `ui`, `functional` or `all` keeps only the
+    browser tests carrying the graded phase's row ids, as a list of ids already did, and prints the spec
+    files that ran. `--all-specs` still runs everything, and a project with one checklist is unchanged.
+    `--phase all` now boots once per phase (steps 1 and 3 to 7 per phase) instead of sharing one boot.
+    On Sevak's files, read only: phase 4's 80 ids keep 47 tests under `tests/verify/p4` and none of the
+    145 under `p1` to `p3`.
+  - `tf-verify-screens.mjs` (TF-020, TF-024): a control inside a box with `display: none` is not
+    visible. It was graded "visible, zero width" because only the control's own style was read.
+    **Not changed:** a control the app hides where its mockup shows it is still not a finding of this
+    check, whether the control or a box around it is hidden.
+  - Cases `sv_021` (5 checks, 3 fail on the scripts before the fix), `sv_023` (2 checks, 1 fails) and
+    `sv_024` (2 checks, both fail). Not measured on the other projects' running apps: none was booted.
+
 - **TechieRag TF-009 and TF-010 (2026-11-05 and 2026-11-08): the verifier raised rows it had not measured,
   and could not measure a test that only fits in memory alone.**
   - `tf-verify-verdict.py`: a `Blocked` row whose checks all pass stays `Blocked` (new verdict `BLOCKED-HELD`:

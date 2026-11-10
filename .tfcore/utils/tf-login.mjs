@@ -44,7 +44,7 @@ export async function signIn(page, o) {
     const tried = [];
     for (const path of [loginPath, ...LOGIN_PATHS.filter((x) => x.toLowerCase() !== loginPath.toLowerCase())]) {
       tried.push(path);
-      await page.goto(base + path, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await gotoRetry(page, base + path, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
       // a page that draws its form a moment after it arrives has no field to pick yet
       await page.waitForSelector('input', { state: 'visible', timeout: tried.length === 1 ? 15000 : 5000 }).catch(() => {});
@@ -160,7 +160,7 @@ export async function reach(page, o, route) {
   const { base, loginPath, user, settle } = opts(o);
   let status = 0, url = '', error = '';
   try {
-    const resp = await page.goto(base + route, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const resp = await gotoRetry(page, base + route, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(settle);
     status = resp ? resp.status() : 0; url = page.url();
@@ -190,6 +190,20 @@ export async function reach(page, o, route) {
 // matches the route and one of the screen's own anchors that was not there before is attached, then
 // until the page stops changing for 300 ms. It never decides anything: on the timeout the page is
 // graded as it stands, and `arrived: false` says so.
+// 2026-11-10: "could not open /blank/: page.goto: net::ERR_NETWORK_CHANGED". Chromium cancels every request
+// in flight when the machine's network changes (a Wi-Fi or VPN switch, a virtual adapter coming up; on
+// WSL the Windows host's changes arrive too), a page on 127.0.0.1 included, and the screen was graded
+// unreachable for it. That says nothing about the app, so the load is tried again, twice, a second apart.
+// Any other failure is thrown at once, as before.
+export async function gotoRetry(page, url, options = {}, pause = 1000) {
+  for (let attempt = 0; ; attempt++) {
+    try { return await page.goto(url, options); } catch (e) {
+      if (attempt >= 2 || !/ERR_NETWORK_CHANGED|ERR_NETWORK_IO_SUSPENDED/.test(String(e && e.message))) throw e;
+      await new Promise((r) => setTimeout(r, pause));
+    }
+  }
+}
+
 export async function anchorsPresent(page, anchors = [], attr = 'data-testid') {
   if (!anchors || !anchors.length) return [];
   try {
@@ -204,14 +218,27 @@ export async function waitArrived(page, route, anchors = [], before = [], o = {}
   const t0 = Date.now();
   let arrived = true;
   try {
-    await page.waitForFunction(({ want, fresh, attr }) => {
-      const has = fresh.some((id) => document.querySelector(`[${attr}="${CSS.escape(id)}"]`));
-      if (has) return true;
+    // 2026-11-10: one new control was enough, and a control every screen shares counted as new when the
+    // page before had none. A page drawn late by an EARLIER move (the app still finishing what the last
+    // tool asked of it) then passed for this screen: AI Setup was compared on Story Studio's page, top
+    // bar matching, "PASS, compared 1 of the app's 2 controls" (lk_037b, 2 full runs in 5). The screen
+    // has arrived when a control that was not there before is attached AND at least half of the
+    // screen's own controls are; a page of another screen holds the shared ones only.
+    const all = (anchors || []);
+    await page.waitForFunction(({ want, fresh, all, attr }) => {
+      const on = (id) => !!document.querySelector(`[${attr}="${CSS.escape(id)}"]`);
+      const enough = all.filter(on).length >= Math.ceil(all.length / 2);
+      if (fresh.some(on) && enough) return true;
       const norm = (x) => (x || '').replace(/\/+$/, '').toLowerCase() || '/';
       const rx = new RegExp('^' + norm(want).split(/(\{[^}]*\})/).map((p) => p.startsWith('{') ? '[^/]+' : p.replace(/[.*+?^$()|[\]\\]/g, '\\$&')).join('') + '$');
-      return !fresh.length && rx.test(norm(location.pathname));
-    }, { want, fresh, attr }, { timeout: Math.max(renderWait, 5000), polling: 100 });
-  } catch (e) { arrived = false; }
+      return !fresh.length && enough && rx.test(norm(location.pathname));
+    }, { want, fresh, all, attr }, { timeout: Math.max(renderWait, 5000), polling: 100 });
+  } catch (e) {
+    // the wait ran out. A first view that draws fewer than half of its mockup's controls (the rest belong
+    // to data it does not have yet) has still arrived when one of its new controls is there, as before;
+    // it only took the whole wait to say so. Nothing new at all: not arrived.
+    arrived = fresh.length > 0 && (await anchorsPresent(page, fresh, attr)).length > 0;
+  }
   // then quiet: nothing in the page changed for 300 ms (at most 3 s), so the top bar has caught up too
   await page.evaluate(() => new Promise((res) => {
     let t; const done = () => { mo.disconnect(); clearTimeout(cap); clearTimeout(t); res(); };

@@ -41,6 +41,8 @@
 # (tests/.artifacts/build/.lock names who holds it). Builders side by side each rebuilt the same
 # obj/ under the others: a running app lost its stylesheet or its process, and a publish carried a
 # dll older than its own source (TF-043). A lock whose process has gone is taken over.
+# On WSL a WSL-side rung that fails with Razor (RZ) errors shuts the build servers down and runs once
+# more before it reports anything: a stale compiler server gave them on unchanged files (Chatur TF-024).
 set -u
 # mapfile and the other bash-4 / GNU-only spellings go through the shim (a stock Mac has bash 3.2).
 source "$(dirname "${BASH_SOURCE[0]}")/tf-portable.sh"
@@ -309,9 +311,25 @@ for r in "${rungs[@]}"; do
     rc="$(tail -1 "$LOG" | sed 's/### exit //')"
     seg="$(tail -n +"$from" "$LOG")"
   fi
+  # Chatur TF-024: on WSL, a build on a WSL rung failed with Razor parse errors (RZ1021, RZ1009 at a valid
+  # @(…)) on files nobody had changed and the Windows rung had just built: 122 error lines, twice in a
+  # row, and a PASS straight after `dotnet build-server shutdown`. The compiler server kept by the WSL
+  # side had gone stale once the Windows side built the same tree. So a WSL-side rung that fails with any
+  # RZ error shuts the build servers down and runs once more before anything is reported; the verdict
+  # line says it did. Errors that are still there are real and are reported as before.
+  retried=""
+  if [[ "$rc" != "0" && "$PLATFORM" == wsl && "$(side_of "$r")" == wsl ]] && grep -qE 'error RZ[0-9]{3,5}' <<<"$seg" && ! grep -qE "$WRONG_RUNG" <<<"$seg"; then
+    rz="$(grep -cE 'error RZ[0-9]+' <<<"$seg" || true)"
+    { echo "### rung $n: ${cmd[0]} build-server shutdown (after $rz Razor error line(s))"; "${cmd[0]}" build-server shutdown 2>&1; echo "### shutdown exit $?"; } >> "$LOG" 2>&1
+    from=$(( $(wc -l < "$LOG") + 1 ))
+    { echo "### rung $n, after the build servers were shut down: ${cmd[*]}"; "${cmd[@]}" 2>&1; echo "### exit $?"; } >> "$LOG" 2>&1
+    rc="$(tail -1 "$LOG" | sed 's/### exit //')"
+    seg="$(tail -n +"$from" "$LOG")"
+    retried="$rz"
+  fi
   if [[ "$rc" == "0" ]]; then
     warns="$(grep -cE 'warning [A-Z]+[0-9]+' <<<"$seg" || true)"
-    echo "PASS  $MODE on $PLATFORM via $label (rung $n) — $warns warning line(s); log $LOG"
+    echo "PASS  $MODE on $PLATFORM via $label (rung $n) — $warns warning line(s)${retried:+; the first try failed on $retried Razor error line(s) from a stale compiler server, and it passed once the build servers were shut down}; log $LOG"
     exit 0
   fi
   # Code errors: C# (CS), Razor (RZ), Blazor (BL), XAML (XC, XLS), missing reference (MSB/NU).
@@ -320,7 +338,7 @@ for r in "${rungs[@]}"; do
   if grep -qE 'error (CS|RZ|BL|XC|XLS)[0-9]{3,5}|error MSB[0-9]{4}: .*(does not exist|could not be found)|error NU1' <<<"$seg" && ! grep -qE "$WRONG_RUNG" <<<"$seg"; then
     errs="$(grep -cE 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" || true)"
     first="$(grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" | head -1 | sed 's/^[[:space:]]*//' | cut -c1-160)"
-    echo "FAIL  real errors on $PLATFORM via $label (rung $n): $errs error line(s), first: $first; log $LOG"
+    echo "FAIL  real errors on $PLATFORM via $label (rung $n): $errs error line(s), first: $first${retried:+; still there after the build servers were shut down and the $MODE was run again}; log $LOG"
     grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" | sed 's/^[[:space:]]*//' | sort -u | head -10
     exit 1
   fi
