@@ -125,7 +125,7 @@ def main(argv):
     phase = 1
     cfg = os.path.join(".tfcore", "core-config.yaml")
     if os.path.isfile(cfg):
-        m = re.search(r"(?m)^appPhase:\s*(\d+)", open(cfg, encoding="utf-8").read())
+        m = re.search(r"(?m)^appPhase:\s*[\"']?(\d+)", open(cfg, encoding="utf-8").read())
         phase = int(m.group(1)) if m else 1
     cl = os.path.join("docs", f"{app}-Checklist.md" if phase <= 1 else f"{app}-P{phase}-Checklist.md")
     has_cl = os.path.isfile(cl)

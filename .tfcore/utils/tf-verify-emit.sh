@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tf-verify-emit.sh — the telemetry of a verify run, from its verdict file (Sitting 4c, 2026-09-06).
 #
-#   bash .tfcore/utils/tf-verify-emit.sh <App> [--dir tests/.artifacts/verify] [--mode <mode>] [--started <ISO>]
+#   bash .tfcore/utils/tf-verify-emit.sh <App> [--dir tests/.artifacts/verify] [--started <ISO>]
 #
 # Reads <dir>/verdicts.json (written by tf-verify-verdict.sh) and appends, through tf-emit.sh only:
 #   gates.jsonl   one record per row that passed or failed a check: the first failing check (or null),
@@ -23,7 +23,6 @@ DIR="tests/.artifacts/verify"; MODE=""; STARTED=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dir) DIR="${2:-}"; shift 2 ;;
-    --mode) MODE="${2:-}"; shift 2 ;;
     --started) STARTED="${2:-}"; shift 2 ;;
     *) echo "tf-verify-emit: unknown argument $1" >&2; exit 3 ;;
   esac

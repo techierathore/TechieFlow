@@ -18,8 +18,8 @@
 #   - A paragraph stuffed into `current_phase:` (must be ONE short line).
 #   - A full-file Write longer than 120 lines (template shape is ~60).
 #   - (Bash) any shell command that WRITES the file — redirection, tee, cp, mv,
-#     sed -i, a Python/Node one-liner — because a shell write is invisible to the
-#     Write/Edit checks above (reset Session 3, 2026-09-04). Reading it is fine.
+#     sed -i, a Python/Node command that writes — because a shell write is invisible
+#     to the Write/Edit checks above. Reading it is fine, with python or node too.
 # Content rules (section word limits, the two command blocks, the five-row log)
 # are checked by .tfcore/utils/tf-doc-check.sh at the status gate.
 # Fails OPEN (exit 0) if python3 or parseable JSON is unavailable.
@@ -38,18 +38,18 @@ except Exception:
 
 ti = data.get("tool_input") or {}
 
-# --- Bash branch: refuse shell writes to PROJECT-STATUS.md -------------------
+# --- Bash branch: refuse shell writes to PROJECT-STATUS.md (python/node only when it writes, anywhere in the command) ---
 cmd = ti.get("command")
+WRITEY = r"(?:['\"][wax]b?\+?['\"]|\.write(?:lines|_text|_bytes)?\b|json\.dump\b|\btruncate\b|\bos\.(?:rename|replace)\b|\bshutil\.(?:copy|move)|createWriteStream|writeFile|appendFile|copyFile|renameSync)"
 if isinstance(cmd, str):
-    if re.search(r"PROJECT-STATUS\.md", cmd, re.I) and re.search(
+    if re.search(r"PROJECT-STATUS\.md", cmd, re.I) and (re.search(r"\b(python3?|node)\b", cmd) and re.search(WRITEY, cmd) or re.search(
         r"(>>?\s*[\"']?[^\s|;&]*PROJECT-STATUS\.md)"      # > / >> redirection
         r"|(\btee\b[^|;&]*PROJECT-STATUS\.md)"            # tee
         r"|(\b(cp|mv|install)\b[^|;&]*PROJECT-STATUS\.md)"  # copy / move onto it
         r"|(\b(sed|perl)\b[^|;&]*\s-[a-zA-Z]*i[a-zA-Z]*\b[^|;&]*PROJECT-STATUS\.md)"  # in-place edit
-        r"|(\b(python3?|node)\b[^|;&]*PROJECT-STATUS\.md)"  # a one-liner that opens it
         r"|(\b(truncate|dd)\b[^|;&]*PROJECT-STATUS\.md)",
         cmd, re.I,
-    ):
+    )):
         print(
             "BLOCKED by TechieFlow policy: PROJECT-STATUS.md is written ONLY through "
             "the harness Write/Edit tool, never through the shell (redirection, tee, "

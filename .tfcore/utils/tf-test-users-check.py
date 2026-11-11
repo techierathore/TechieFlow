@@ -55,6 +55,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 SKIP_DIRS = {"node_modules", "bin", "obj", ".git", ".tfcore", ".artifacts", "dist", "build", "packages", ".venv",
              "venv", "__pycache__", ".claude", ".opencode", "playwright-report", "test-results", ".tfbuild",
@@ -504,7 +505,8 @@ def emit_gates(cmd, app, by_req, findings):
     marker = os.path.join(ROOT, ".tfcore", ".session", "phase.json")
     run_id = ""
     try:
-        run_id = json.load(open(marker, encoding="utf-8")).get("started", "")
+        if time.time() - os.path.getmtime(marker) < 24 * 3600:   # an older marker is a killed session's (tf-phase.sh)
+            run_id = json.load(open(marker, encoding="utf-8")).get("started", "")
     except (OSError, ValueError):
         pass
     emit = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tf-emit.sh")

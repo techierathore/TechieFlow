@@ -26,6 +26,7 @@ import sys
 TERMINAL = {"verified", "done", "done (pre-existing)", "n/a"}
 FIX = {"fail", "partial", "in progress", "needs re-verify"}
 BLOCKED = {"blocked"}
+OWNER = {"owner-uat"}   # built and verified as far as a machine can; only the owner closes it (tf-status-facts.py)
 BUILDER = {"UI": "trblazeui", "RAG": "techierag", "FN": "builder", "NFR": "builder"}
 TPL = os.path.join(".tfcore", "templates", "v4custom", "build-subagent-prompt.md")
 
@@ -43,7 +44,7 @@ def read(p):
 def config_phase():
     p = os.path.join(".tfcore", "core-config.yaml")
     if os.path.isfile(p):
-        m = re.search(r"(?m)^appPhase:\s*(\d+)", read(p))
+        m = re.search(r"(?m)^appPhase:\s*[\"']?(\d+)", read(p))
         if m:
             return int(m.group(1))
     return 1
@@ -157,10 +158,10 @@ def main(argv):
     import tf_roadmap
     import tf_defect
     marked = tf_roadmap.ids(text)
-    roadmap = [r for r in rows if r["id"].upper() in marked and r["status"] not in TERMINAL | BLOCKED]
+    roadmap = [r for r in rows if r["id"].upper() in marked and r["status"] not in TERMINAL | BLOCKED | OWNER]
 
     fix_rows = [r for r in rows if r["status"] in FIX and r not in roadmap]
-    open_rows = [r for r in rows if r["status"] not in TERMINAL | BLOCKED and r not in roadmap]
+    open_rows = [r for r in rows if r["status"] not in TERMINAL | BLOCKED | OWNER and r not in roadmap]
     # Repair before new work, but never INSTEAD of it. A row can sit at `Needs re-verify`
     # permanently -- TfLens REQ-FN-067 and -070 need a repository that emits events.ndjson
     # and none exists, so every honest verify run re-confirms that gate rather than clearing
@@ -184,15 +185,16 @@ def main(argv):
                         and r["remarks"] else [])) if r in fix_rows else []
     terminal = sum(1 for r in rows if r["status"] in TERMINAL)
     blocked = [r for r in rows if r["status"] in BLOCKED]
+    owner = [r for r in rows if r["status"] in OWNER]
     print(f"# tf-build-list — {app} — {cl} — phase {phase}")
     print(f"Mode: {mode} — {len(work)} row(s) to build; {terminal} terminal, {len(blocked)} Blocked, "
-          f"{len(roadmap)} roadmap, {len(rows)} total"
+          f"{len(roadmap)} roadmap, " + (f"{len(owner)} Owner-UAT, " if owner else "") + f"{len(rows)} total"
           + (f" — {', '.join(r['id'] for r in work[:8])}{' …' if len(work) > 8 else ''}" if work else ""))
     # Every row is in exactly one of the five counts, and the arithmetic is printed so a
     # reader can check it rather than trust it. A row missing from all of them is the
     # failure this line exists to make impossible.
-    if len(work) + terminal + len(blocked) + len(roadmap) != len(rows):
-        print(f"⚠ {len(rows) - len(work) - terminal - len(blocked) - len(roadmap)} row(s) are in no category — "
+    if len(work) + terminal + len(blocked) + len(roadmap) + len(owner) != len(rows):
+        print(f"⚠ {len(rows) - len(work) - terminal - len(blocked) - len(roadmap) - len(owner)} row(s) are in no category — "
               "the checklist carries a status this script does not know; fix the row or the script")
     if roadmap:
         print("Roadmap, not in this phase's scope (not built; the owner moves them with *amend-docs): "
@@ -202,6 +204,8 @@ def main(argv):
               f"then {len(work) - len(fix_rows)} not yet started")
     if blocked:
         print("Blocked (library gaps, pass through unless the feedback entry is resolved): " + ", ".join(r["id"] for r in blocked))
+    if owner:
+        print("Owner-UAT (not a builder's: the owner closes them from the usage guide's test plan): " + ", ".join(r["id"] for r in owner))
     if not work:
         print("Nothing to build. Run the status gate; the next command is the verifier's or the owner's.")
         return 0

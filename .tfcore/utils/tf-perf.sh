@@ -42,7 +42,6 @@ while [[ $# -gt 0 ]]; do
     --paths)        PATHS="${2:-}"; shift 2 ;;
     --levels)       LEVELS="${2:-}"; shift 2 ;;
     --requests)     REQS="${2:-}"; shift 2 ;;
-    --warmup)       WARMUP="${2:-}"; shift 2 ;;
     --timeout)      TIMEOUT="${2:-}"; shift 2 ;;
     --build-config) BUILD="${2:-}"; shift 2 ;;
     --label)        LABEL="${2:-}"; shift 2 ;;

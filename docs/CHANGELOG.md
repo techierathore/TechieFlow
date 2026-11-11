@@ -44,6 +44,56 @@ a new telemetry stream, so a minor version (owner, 2026-11-08).
   - Suite: `tests/estimate/run.sh` (19 cases: enough history, family fallback, no precedent, the refusals,
     the model, the reconciliation). DECISIONS.md 2026-11-08 says why estimates have their own stream.
 
+- **The per-fix routine runs the portability scan and the installer test on every fix (owner, 2026-11-11).**
+  Not only before a release: main went red on 10 Nov because a fix skipped both. `WorkFlow-Context.md` §7 item 4,
+  the Release Guide and the header of `tests/regression/run.sh` say so.
+
+- **Code review of 2026-11-10: its faults fixed, a size rule, and a table of what a change does to every project
+  (2026-11-11, after the v1.3.0 tag; deployed to Sevak and Chatur that evening, nowhere else).** `docs/TechieFlow-Code-Review-2026-11-10.md` is the review.
+  - **The Validate workflow was red on main since `d12f51c` (run 42866216408).** Two causes, both from the
+    10 Nov change that makes the updater keep other packages' `.codex` files. The install test's stand-in for
+    the retired adapter's `config.toml` did not name TechieFlow, so the updater now kept it and "the retired
+    adapter is removed by both routes" failed. And the new case `codex_keep_empty` put `mktemp` and `mkdir -p`
+    on one line, which the portability rule reads as GNU `mktemp -p`; that one finding failed the validator,
+    the portability step and, because `tests/portability/run.sh` is one of `tests/*/run.sh`, both every-suite
+    steps on both jobs. Fixed in `scripts/test-install.mjs` (the fixture) and `tests/regression/run.sh` (the line).
+  - **Faults found by reading, each with a case in the new `tests/faults/run.sh` that fails on the old script.**
+    `guard-status.sh` refused any python or node command naming `PROJECT-STATUS.md`, a read included, and missed a
+    one-liner with a `;` before the path; it now refuses those only when they write (`status_read`).
+    `tf-emit.sh`, `tf-test-users-check.py` and `tf-register-test-users.mjs` used a command marker of any age;
+    they now ignore one older than 24 hours, as `tf-phase.sh` says (`marker_age`). `tf-emit.sh` reads
+    `TF_PROJECT_DIR` (`emit_root`) and `TF_YOLO_TTL_HOURS` (`yolo_ttl`). `tf-doc-check.py` reads a checklist row
+    whose id is in backticks (`backtick_row`). `tf-build-list.py` no longer hands an `Owner-UAT` row to a builder
+    (`owner_uat`). Seven scripts read `appPhase: "2"` as phase 1 (`quoted_phase`). `tf-assets.sh` takes the
+    sign-in from the test settings as the screen check does (`assets_login`).
+  - **`handoff-phase.md` told the model to write what `tf-doc-check.py` fails** (`handoff_prose`): four usage-guide
+    sections the template does not have, one bare next-command line, seven feedback fields of eight, a Summary
+    with no blocking count. It now names the template's sections and points at the scripts that print the rest.
+    It and `productguide.md` start the command marker like every other command.
+  - **Sevak TF-025.** A select (`<select>` or `role="combobox"`) is no longer compared by its icon, and the
+    chevron inside one is no icon of the boxes around it, the way TF-023 treats a checkbox. Case `sv_025`.
+  - **Not reproduced as faults, code left alone:** the fix close writing `Needs re-verify` for a held Blocked
+    row (the miss vocabulary has no Blocked value and the miss stays open either way); the phone-height
+    threshold, 600 px in the screen check and 700 in the mockup check (no project measures at a width between).
+  - **New: `scripts/measure-projects.py`.** Before a deploy or release it runs the old and the new scripts over a
+    copy of every project's documents, spec files and saved verify records and prints per project the rows
+    whose verdict moves, the tests a phase verify stops running, and the findings that appear or go. Read only.
+    Project folders come from `~/.techieflow/project-roots.txt`. The maintenance contract asks for its table in
+    every fix reply (`WorkFlow-Context.md` §7, 4b).
+  - **New: the size rule** (`tests/mirror/size-check.py`, ceilings in `size-ceilings.txt`): 600 lines and 40,000
+    bytes a script, 30 lines a python or node block inside bash, 1,500 lines a test file. A file already over is
+    listed with its size and may not grow. Nine scripts, 27 files with long blocks and the regression file are
+    listed; nothing had to shrink.
+  - **Cuts that change no result.** Defect history out of the body comments of the six check scripts (the
+    headers and docstrings print as help and were left). Unused: two imports each in `tf-mockup-parity.mjs` and
+    `tf-verify-screens.mjs`, `tests_ran` in the verdict, `glob` in `tf-status-facts.py`. Thirteen flags no task,
+    test or project passes: `tf-verify-boot.sh --probe-path` and `adopt --url`/`--log`; `tf-goal.sh
+    --default-wait-min`, `--probe-max-hours`, `--stall-min`; `tf-mockup-parity.mjs --max-findings`,
+    `--thin-ratio`; `tf-assets.sh --min-bytes`; `tf-perf.sh --warmup`; `tf-status-evidence.sh --no-build`;
+    `tf-verify-emit.sh --mode`. Kept: `tf-verify-boot.sh --config` (TfLens's documents use it),
+    `tf-assets.sh --include-external` (the script's own output names it), `tf-routing.sh` (the README and the
+    Routing Guide name it), and the two mockup marks of 10 Nov.
+
 - **Chatur TF-023, TF-024 and TF-025 (2026-11-10, third run).**
   - `tf-menus.mjs` (TF-023): a way in that "opened its submenu" stands for the rows of that submenu, so a
     screen opened by one of them is reached, and the line names the whole path. Start was UNREACHABLE and

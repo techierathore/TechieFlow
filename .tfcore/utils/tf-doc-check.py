@@ -647,7 +647,7 @@ def check_entry_rule(rule, ename, etxt, rel, root, path, rep):
         if not re.search(r"(?im)^\s*[-*]?\s*\**expected", etxt):
             rep.fail(rel, f'entry "{ename}" has no "Expected:" line')
     elif rule == "entry-feedback-fields":
-        # A feedback entry is a bug report, not an essay. Same eight fields every time,
+        # A feedback entry is a bug report, not an essay: the same eight fields,
         # so the upstream team reads them in one shape and the owner reads "Blocks" first.
         for field in ("Severity", "Blocks", "Repro", "Expected", "Actual",
                       "Encountered in", "Workaround", "Suggested fix"):
@@ -1093,7 +1093,7 @@ def check_checklist(c, rep):
         return
     if not any(re.sub(r"\s+", " ", l.strip()) == CHECKLIST_HEADER for l in clean.splitlines()):
         rep.fail(rel, f"the Requirements Status table header must be exactly {CHECKLIST_HEADER}")
-    rows = [l for l in txt.splitlines() if re.match(r"^\s*\|\s*REQ-", l)]
+    rows = [l for l in txt.splitlines() if re.match(r"^\s*\|\s*[`*]*REQ-", l)]
     ids = []
     row_status = {}
     for l in rows:

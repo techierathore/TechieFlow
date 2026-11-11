@@ -23,7 +23,6 @@ Writes nothing. The agent writes PROJECT-STATUS.md with the harness Write tool.
 Python 3 standard library only. Exit 0 printed, 2 could not run.
 """
 import datetime
-import glob
 import json
 import os
 import re
@@ -201,7 +200,7 @@ def feedback_lines(root, app):
 def config_phase(root):
     p = os.path.join(root, ".tfcore", "core-config.yaml")
     if os.path.isfile(p):
-        m = re.search(r"(?m)^appPhase:\s*(\d+)", read(p))
+        m = re.search(r"(?m)^appPhase:\s*[\"']?(\d+)", read(p))
         if m:
             return int(m.group(1))
     return 1

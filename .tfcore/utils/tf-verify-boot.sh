@@ -2,10 +2,10 @@
 # tf-verify-boot.sh — start the application for a verify, reach it, and stop it (Sitting 4c, 2026-09-06).
 #
 #   bash .tfcore/utils/tf-verify-boot.sh start [--head web|windows|static] [--project <csproj>] [--dry-run]
-#                                              [--port N] [--config Release] [--static <dir>] [--probe-path /healthz]
+#                                              [--port N] [--config Release] [--static <dir>]
 #                                              [--environment Development]   (web: ASPNETCORE_ENVIRONMENT)
 #                                              [--env NAME=VALUE]…  (any head; kept in the record as "env")
-#   bash .tfcore/utils/tf-verify-boot.sh adopt --port N [--pid P] [--url U]   (a head started by hand)
+#   bash .tfcore/utils/tf-verify-boot.sh adopt --port N [--pid P]   (a head started by hand)
 # Settings: tests/verify/testsettings.json laid under the git-ignored testsettings.Local.json, read by
 # tf-testsettings.py (Sevak TF-015; no environment variable is a setting):
 #   Verify:Runner wsl|windows    on WSL, the side a web head runs on (default: WSL for a web project
@@ -59,7 +59,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/tf-portable.sh"   # bash-4 and GNU-only spellings go through the shim (stock Mac)
 DIR="tests/.artifacts/verify"; STATE="$DIR/boot.json"; LOG="$DIR/app.log"; KEYED=""
 mkdir -p "$DIR"
-# once the port is known: this app's own state file and log (TF-034)
+# once the port is known: this app's own state file and log
 keyed() { KEYED="$DIR/boot-$1.json"; LOG="$DIR/app-$1.log"; : > "$LOG"; }
 
 PLATFORM="linux"
@@ -70,7 +70,7 @@ else PLATFORM="windows"; fi
 PLATFORM="${TF_BOOT_PLATFORM:-$PLATFORM}"   # the self-tests only
 
 winarg() { # a Windows path as a cmd.exe argument: bare when it has no space (a quote passed
-  # through the WSL bridge reaches dotnet as part of the path: "does not exist: \"C:\...\""; miss 23)
+  # through the WSL bridge reaches dotnet as part of the path: "does not exist: \"C:\...\"")
   if [[ "$1" == *" "* ]]; then printf '"%s"' "$1"; else printf '%s' "$1"; fi; }
 json_escape() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
 
@@ -92,12 +92,11 @@ for p in os.environ["TF_BOOT_FILES"].split():
     s=json.load(open(p)); s[sys.argv[1]]=json.loads(sys.argv[2]); json.dump(s,open(p,"w"),indent=1)' "$1" "$2"
 }
 
-# Sevak TF-022: "10 other Windows head(s) up" with one Sevak.exe running. The count was every boot-*.json
-# not marked stopped, and an app that was closed by hand, crashed or was killed with its window never
-# passes through `stop`, so its record said "up" for good. A record now counts only while one of the
-# Windows processes it names is still running under the same program name (one tasklist.exe call). A record whose processes are all
-# gone is marked stopped, with the reason, and the line names the ports it counted. When tasklist.exe
-# does not answer, the records are counted as before and the line says they were not checked.
+# A boot record counts as a head that is up only while one of the Windows processes it names is still
+# running under the same program name (one tasklist.exe call): an app closed by hand, crashed or killed
+# with its window never passes through `stop`. A record whose processes are all gone is marked stopped,
+# with the reason, and the line names the ports it counted. When tasklist.exe does not answer, every
+# record not marked stopped is counted and the line says they were not checked.
 # Prints "<count>|<what was counted>"; $1 the folder, $2 this boot's own port (left out).
 other_heads() {
   python3 - "$1" "${2:-}" <<'HEADSPY'
@@ -122,8 +121,8 @@ for f in sorted(glob.glob(os.path.join(d, "boot-*.json"))):
     if not (s.get("head") == "windows" and s.get("mode") == "cdp" and not s.get("stopped")):
         continue
     wp = [int(x) for x in s.get("win_pids") or [] if str(x).isdigit()]
-    # a process id is handed out again: pid 17636 of a closed Sevak.exe was msedge.exe a day later, so the
-    # id counts only while it still belongs to the program the record names
+    # a process id is handed out again, so the id counts only while it still belongs to the program the
+    # record names
     img = (s.get("win_image") or "").lower()
     if live is not None and wp and not any(x in live and (not img or live[x] == img) for x in wp):
         s["stopped"], s["stopped_why"] = True, "its Windows process was no longer running when another head booted"
@@ -150,8 +149,7 @@ find_projects() { # prints csproj paths under src/, source/, the root and one le
 is_web()  { grep -qE 'Microsoft\.NET\.Sdk\.Web|Microsoft\.NET\.Sdk\.BlazorWebAssembly' "$1"; }
 is_maui_win() { grep -qiE '<UseMaui>[[:space:]]*true|Microsoft\.NET\.Sdk\.Maui' "$1" && grep -qE 'net[0-9.]+-windows' "$1"; }
 # A Windows head is driven over its web view's DevTools port, so only a Blazor Hybrid app has one. A
-# plain MAUI app (TechieRag's samples/TechieRag.Probe) was picked as the windows head and waited the
-# full 300 s for a port it can never open (TechieRag TF-006).
+# plain MAUI app can never open that port.
 is_hybrid() {
   grep -qE 'Microsoft\.AspNetCore\.Components\.WebView\.Maui' "$1" && return 0
   grep -rqlE 'AddMauiBlazorWebView|BlazorWebView' --include='*.cs' --include='*.xaml' --exclude-dir=bin --exclude-dir=obj "$(dirname "$1")" 2>/dev/null
@@ -163,8 +161,7 @@ poll_http() { # url seconds pid-to-watch(optional) -> 0 when it answers
   while [[ $i -lt $secs ]]; do
     code="$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$url" 2>/dev/null || true)"
     # Any HTTP answer means the app is serving; this asks whether it is up, not whether the page is
-    # right. A Web API with nothing at / answers 404, and was polled for 120 s, called "not brought up"
-    # and stopped while its log said "Application started" (AppManager TF-004).
+    # right. A Web API with nothing at / answers 404 and is up all the same.
     [[ "$code" =~ ^[1-5][0-9][0-9]$ ]] && return 0
     if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then return 1; fi
     sleep 2; i=$((i+2))
@@ -234,9 +231,9 @@ d, port = sys.argv[1], sys.argv[2]
 main = os.path.join(d, "boot.json")
 path = os.path.join(d, f"boot-{port}.json") if port else main
 s = json.load(open(path))
-# A Mac Catalyst head is quit the way Cmd-Q quits it. Killed, macOS offered at the next start to reopen
-# the windows of a run that "quit unexpectedly", and that dialog stood in front of the first screen
-# (Lekhak TF-026). It is killed below only when it has not quit within 15 s.
+# A Mac Catalyst head is quit the way Cmd-Q quits it. After a kill, macOS offers at the next start to
+# reopen the windows of a run that "quit unexpectedly", and that dialog stands in front of the first
+# screen. It is killed below only when it has not quit within 15 s.
 if s.get("bundle_id") and s.get("app_path") and not s.get("stopped"):
     exe_dir = os.path.join(s["app_path"], "Contents", "MacOS") + os.sep
     def mac_running():
@@ -264,11 +261,11 @@ for pid in s.get("pids", []):
         time.sleep(1)
 image = s.get("win_image") or ""
 if s.get("win_pids"):
-    # this boot's own processes only (Sevak TF-003: /IM stopped every copy, another agent's included)
+    # this boot's own processes only (/IM stops every copy, another agent's included)
     for wp in s["win_pids"]:
         subprocess.run(["taskkill.exe", "/F", "/T", "/PID", str(wp)], capture_output=True)
 elif image:
-    # a state written before win_pids: by name, as before, unless another start of it is still up
+    # a state with no win_pids: by name, unless another start of it is still up
     others = []
     for f in os.listdir(d):
         if f.startswith("boot-") and f.endswith(".json") and os.path.join(d, f) != path:
@@ -284,7 +281,7 @@ if s.get("win_port"):
     ps = f"Get-NetTCPConnection -LocalPort {s['win_port']} -State Listen -ErrorAction SilentlyContinue | ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}"
     subprocess.run(["powershell.exe", "-NoProfile", "-Command", ps], capture_output=True)
 # An app whose starter died is nobody's child any more, so the kills above miss it and it keeps its
-# port and its files. The published copy names it: stop whatever runs from run-<port>/ (TF-043).
+# port and its files. The published copy names it: stop whatever runs from run-<port>/.
 m = re.search(r":(\d+)$", s.get("url") or "")
 run_port = port or (m.group(1) if m else "")
 marks = [os.path.join(os.getcwd(), d, f"run-{run_port}") + os.sep] if run_port else []
@@ -336,18 +333,14 @@ print(f"STOPPED head={s.get('head')} mode={s.get('mode')} pids={s.get('pids')}")
 PY
     exit 0 ;;
   adopt)
-    # Chatur TF-018: a head started by hand (when the boot could not reach its own) left no boot record:
-    # the verdict wrote "not booted" over checks that had run, and a test reading pids[0] opened
-    # /proc/undefined. `adopt` records it: the process listening on the port, the URL, a boot record
+    # `adopt` records a head started by hand: the process listening on the port, the URL, a boot record
     # like start's, so the verdict, the tests and `stop` treat it as booted.
     APORT=""; APID=""; AURL=""; APROJ=""; ALOG=""
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --port) APORT="${2:-}"; shift 2 ;;
         --pid) APID="${2:-}"; shift 2 ;;
-        --url) AURL="${2:-}"; shift 2 ;;
         --project) APROJ="${2:-}"; shift 2 ;;
-        --log) ALOG="${2:-}"; shift 2 ;;
         *) echo "tf-verify-boot: unknown argument $1" >&2; exit 3 ;;
       esac
     done
@@ -372,14 +365,13 @@ esac
 HEAD=""; PROJECT=""; PORT=""; CONFIG=""; STATIC=""; PROBE="/"; DRYRUN=0; ENVNAME=""; APPENV=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    # Sevak TF-013: a variable the app reads (a throw-away data folder, a verification switch), on every
+    # --env: a variable the app reads (a throw-away data folder, a verification switch), on every
     # head: the web copy's environment, the Windows head's `set`, and on a Mac `open --env` and the mac2
     # session's appium:environment. Kept in the boot record as "env", so every later session reuses it.
     --env) [[ "${2:-}" =~ ^[A-Za-z_][A-Za-z0-9_]*=.*$ ]] || { echo "tf-verify-boot: --env takes NAME=VALUE, got '${2:-}'" >&2; exit 3; }
            APPENV+=("$2"); shift 2 ;;
-    --environment) ENVNAME="${2:-}"; shift 2 ;;   # the web head's ASPNETCORE_ENVIRONMENT (Lekhak TF-001)
-    --probe-path) PROBE="${2:-/}"; [[ "$PROBE" == /* ]] || PROBE="/$PROBE"; shift 2 ;;
-    --dry-run) DRYRUN=1; shift ;;   # print which project and head would boot, and stop (TF-010)
+    --environment) ENVNAME="${2:-}"; shift 2 ;;   # the web head's ASPNETCORE_ENVIRONMENT
+    --dry-run) DRYRUN=1; shift ;;   # print which project and head would boot, and stop
     --head) HEAD="${2:-}"; shift 2 ;;
     --project) PROJECT="${2:-}"; shift 2 ;;
     --port) PORT="${2:-}"; shift 2 ;;
@@ -389,8 +381,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-tfset() { python3 "$HERE/tf-testsettings.py" get "$@"; }   # Sevak TF-015: the settings files, the old variable for one release
-RUNNER="$(tfset Verify:Runner --env-name TF_BOOT_RUNNER)"   # wsl | windows: the side of a WSL machine a web head runs on (Chatur TF-018)
+tfset() { python3 "$HERE/tf-testsettings.py" get "$@"; }   # the settings files, the old variable for one release
+RUNNER="$(tfset Verify:Runner --env-name TF_BOOT_RUNNER)"   # wsl | windows: the side of a WSL machine a web head runs on
 case "$RUNNER" in ""|wsl|windows) ;; *) echo "tf-verify-boot: Verify:Runner (testsettings) is wsl or windows, not '$RUNNER'" >&2; exit 3 ;; esac
 WAIT="$(tfset Verify:BootWaitSeconds --env-name TF_BOOT_WAIT)"; [[ "$WAIT" =~ ^[0-9]+$ ]] || WAIT=120   # seconds a web copy has to answer
 WINAPPDATA="$(tfset Verify:WindowsAppData --env-name TF_WIN_APPDATA)"
@@ -432,8 +424,8 @@ for p in ${ALL[@]+"${ALL[@]}"}; do
 done
 # a Mac Catalyst head is picked unasked only on a Mac, the one host that runs it
 [[ "$PLATFORM" == "macos" ]] || MAC=()
-# Several web projects: the one that serves screens. The first in sorted order booted AppManager's
-# external API, which has no screens, in front of its admin site (AppManager TF-010). A project
+# Several web projects: the one that serves screens, not the first in sorted order, which can be an
+# API with no screens. A project
 # serves screens when its own folder holds .razor or .cshtml pages, or it references a project
 # built with the Razor SDK. One such project is taken and said so; several, or none, stop with the
 # candidates named, because a guess between them grades the wrong app.
@@ -499,8 +491,8 @@ CFGARGS=(); [[ -n "$CONFIG" ]] && CFGARGS=(-c "$CONFIG")
 # ---- maccatalyst (MAUI on this Mac, reached over Appium's mac2 driver) -----------------------
 if [[ "$HEAD" == "maccatalyst" ]]; then
   # A Blazor Hybrid head draws its screens in a web view, and on a Mac neither data-testid nor an
-  # HTML id reaches mac2 or the macOS accessibility tree (probed 2026-10-07). It is driven all the
-  # same, without control names (owner decision A): the state says webview, the screen check skips
+  # HTML id reaches mac2 or the macOS accessibility tree. It is driven all the
+  # same, without control names: the state says webview, the screen check skips
   # the name check, and the verdict writes it as not measured.
   WEBVIEW=0; grep -q 'Microsoft\.AspNetCore\.Components\.WebView\.Maui' "$PROJECT" && WEBVIEW=1
   TFM="$(grep -oE 'net[0-9.]+-maccatalyst[0-9.]*' "$PROJECT" | head -1)"
@@ -521,8 +513,8 @@ PY
   mac_none() { # reason: a host fault found before anything was started
     write_state maccatalyst none "" "" "" "$PROJECT" "$1" host "$PLATFORM"
     echo "NONE head=maccatalyst kind=host reason=$1"; exit 2; }
-  # Lekhak TF-026: two set-up faults of a fresh macOS 27 / Xcode 27 machine, each of which stopped every
-  # mac2 session with an error that does not name its fix. Checked here, before a build of minutes.
+  # Two set-up faults of a fresh macOS 27 / Xcode 27 machine, each of which stops every mac2 session
+  # with an error that does not name its fix. Checked here, before a build of minutes.
   # 1. mac2 turns Automation Mode on for each session; when that needs a password it never comes, and
   #    the session fails with "Timed out while enabling automation mode".
   if command -v automationmodetool >/dev/null 2>&1 && automationmodetool 2>&1 | grep -q '^This device REQUIRES user authentication'; then
@@ -530,8 +522,8 @@ PY
   fi
   # 2. mac2 builds its WebDriverAgentMac with the Xcode on this Mac. Before 4.1.1 that build fails
   #    under Xcode 27 (deployment target 10.15 below its 12.0 minimum, xcodebuild exit 65). An
-  #    `appium driver update mac2` left the driver unloadable ("Cannot find package 'appium'");
-  #    uninstalling and installing again is what worked.
+  #    `appium driver update mac2` leaves the driver unloadable ("Cannot find package 'appium'"),
+  #    so the fix named is to uninstall and install again.
   if command -v appium >/dev/null 2>&1; then
     M2="$(appium driver list --installed --json 2>/dev/null | python3 -c 'import json,sys
 try: print(json.load(sys.stdin).get("mac2", {}).get("version", ""))
@@ -577,7 +569,7 @@ sys.exit(0 if v < (4, 1, 1) else 1)' "$M2"; then
   echo "### build $PROJECT -f $TFM" >> "$LOG"
   out="$(bash "$HERE/tf-build.sh" build "$PROJECT" -- "${BARGS[@]}" 2>&1)"; brc=$?
   # A Mac Catalyst SDK names the one Xcode it was made for and refuses a newer one; tf-build.sh builds
-  # again with the check off and says so in a note line (Lekhak TF-032), which the state carries.
+  # again with the check off and says so in a note line, which the state carries.
   XNOTE="$(grep -oE 'requires Xcode [0-9.]+[.] The current version of Xcode is [0-9.]+' <<<"$(grep '^note' <<<"$out")" | head -1)"
   printf '%s\n' "$out" >> "$LOG"
   verdict="$(grep -E '^(PASS|FAIL|NOT-RUN)' <<<"$out" | tail -1)"
@@ -601,9 +593,9 @@ sys.exit(0 if v < (4, 1, 1) else 1)' "$M2"; then
   fi
   MARK="$DIR/.launch-$APORT"; : > "$MARK"; ROOT_LOG="$PWD/$LOG"
   # Opened the way Finder opens it: macOS kills a sandboxed app started from its binary directly
-  # ("Killed: 9", Lekhak BlogAdmin, 2026-10-07). Its output goes to the log through open's own options.
-  # -ApplePersistenceIgnoreState: never offer to reopen the windows of an earlier run (Lekhak TF-026)
-  OENV=(); for kv in ${APPENV[@]+"${APPENV[@]}"}; do OENV+=(--env "$kv"); done   # Sevak TF-013
+  # ("Killed: 9"). Its output goes to the log through open's own options.
+  # -ApplePersistenceIgnoreState: never offer to reopen the windows of an earlier run
+  OENV=(); for kv in ${APPENV[@]+"${APPENV[@]}"}; do OENV+=(--env "$kv"); done   # --env
   OPENERR="$(open -n ${OENV[@]+"${OENV[@]}"} -o "$ROOT_LOG" --stderr "$ROOT_LOG" "$APP" --args -ApplePersistenceIgnoreState YES 2>&1)"; printf '%s\n' "$OPENERR" >> "$LOG"
   APP_PID=""; i=0
   while [[ $i -lt 10 && -z "$APP_PID" ]]; do sleep 1; i=$((i+1)); APP_PID="$(pgrep -f "$APP/Contents/MacOS/$EXE" | head -1)"; done
@@ -612,7 +604,7 @@ sys.exit(0 if v < (4, 1, 1) else 1)' "$M2"; then
     stop_appium
     crash="$(find "$HOME/Library/Logs/DiagnosticReports" -name "$EXE-*.ips" -newer "$MARK" 2>/dev/null | head -1)"
     hint=""; grep -qs NoSceneLifecycleAdoption "$crash" && hint="; macOS stops a UIKit app that has not adopted scenes: add UIApplicationSceneManifest to Platforms/MacCatalyst/Info.plist and a SceneDelegate : MauiUISceneDelegate"
-    # macOS refused to start it at all (Lekhak BlogAdmin, 2026-10-07: "Launch failed", POSIX 163): a
+    # macOS refused to start it at all ("Launch failed", POSIX 163): a
     # locally signed build that asks for keychain-access-groups, which needs a provisioning profile
     if grep -q 'Launch failed' <<<"$OPENERR"; then
       hint="; macOS refused to start it ($(grep -oE 'Code=[0-9]+ "[^"]*"' <<<"$OPENERR" | tail -1))"
@@ -625,7 +617,7 @@ sys.exit(0 if v < (4, 1, 1) else 1)' "$M2"; then
   set_state bundle_id "$(json_escape "$BUNDLE")"
   set_state app_path "$(json_escape "$APP")"
   save_env   # before the first session: tf-appium.mjs openSession() passes it as appium:environment
-  # Lekhak TF-026: a running process and an answering Appium are not a boot. A mac2 session has to open
+  # A running process and an answering Appium are not a boot. A mac2 session has to open
   # and find the app's own window on view, not a system dialog, before this says BOOTED.
   SHOT="$PWD/$DIR/boot-$APORT-window.png"
   FIRST="$(TF_A="$AURL" TF_B="$BUNDLE" TF_P="$APP" TF_S="$SHOT" node --input-type=module -e "
@@ -669,10 +661,8 @@ if [[ "$HEAD" == "web" ]]; then
   fi
   URL="http://localhost:$PORT"
   keyed "$PORT"
-  # TF-043. `dotnet run` served the shared bin/ and obj/, which the next builder rewrites under a
-  # running app: on TfLens, 2026-09-12, four apps side by side, one sent its stylesheet as 200 with
-  # 0 bytes, one answered 500, and one ran a dll older than its own source. Each looked healthy and
-  # every measurement taken on it was wrong. So the app runs from a copy of its own, published by
+  # `dotnet run` serves the shared bin/ and obj/, which the next builder rewrites under a running
+  # app. So the app runs from a copy of its own, published by
   # tf-build.sh, which lets one build run at a time; settings, secrets and files beside the project
   # are read from the project folder, as `dotnet run` reads them.
   if ! grep -q 'Microsoft\.NET\.Sdk\.BlazorWebAssembly' "$PROJECT"; then
@@ -696,11 +686,9 @@ for k, v in env.items():
 PY
 )
     LSENV+=(${APPENV[@]+"${APPENV[@]}"})   # --env NAME=VALUE: the caller's own, after the profile's
-    # AppManager TF-030, TechieBlog TF-002, Chatur TF-018: the side of a WSL machine the copy runs on.
-    # It followed the publish's rung, and a web project in a solution with a MAUI head is built
-    # Windows-side (Lekhak TF-036), so the copy ran there: in NAT networking WSL cannot reach a Windows
-    # `localhost`, and a Windows process cannot read the WSL paths the tests type. A web project with no
-    # MAUI target of its own now publishes and runs on the WSL side; when WSL cannot build it (no dotnet
+    # The side of a WSL machine the copy runs on. In NAT networking WSL cannot reach a Windows
+    # `localhost`, and a Windows process cannot read the WSL paths the tests type, so a web project with no
+    # MAUI target of its own publishes and runs on the WSL side; when WSL cannot build it (no dotnet
     # there), the Windows side is tried, bound to every interface and reached at localhost or the WSL
     # gateway. Verify:Runner wsl|windows (testsettings) names the side and is never second-guessed.
     SIDES=("")
@@ -715,8 +703,8 @@ PY
       rm -rf "$RUN"
       echo "### publish $PROJECT into $RUN${SIDE:+ (side $SIDE)}" >> "$LOG"
       # Debug unless --config says otherwise: `dotnet publish` alone builds Release, which is not the app
-      # `dotnet run` ran, and a Release publish over a Debug-built tree stamped the pages with one scope
-      # and the stylesheet with another (TfLens cluster E, in TF-043)
+      # `dotnet run` runs, and a Release publish over a Debug-built tree stamps the pages with one scope
+      # and the stylesheet with another
       pub="$(TF_BUILD_SIDE="$SIDE" bash "$HERE/tf-build.sh" publish "$PROJECT" -- -o "$RUN" -c "${CONFIG:-Debug}" 2>&1)"; prc=$?
       printf '%s\n' "$pub" >> "$LOG"
       verdict="$(grep -E '^(PASS|FAIL|NOT-RUN)' <<<"$pub" | tail -1)"
@@ -731,7 +719,7 @@ PY
       case "$verdict" in
         *"via cmd.exe"*|*"via winrun"*|*"via powershell.exe"*)
           # bound to every interface: WSL reaches it at localhost (mirrored networking) or at the gateway
-          # (NAT), the way the Windows head's DevTools port is reached (TechieBlog TF-002)
+          # (NAT), the way the Windows head's DevTools port is reached
           WIN=1; [[ -n "$GW" ]] && HOSTS+=("$GW")
           WPD="$(winarg "$(wslpath -w "$PDIR")")"; WDLL="$(winarg "$(wslpath -w "$RUN/$ASM.dll")")"
           WWEB=""; [[ -d "$RUN/wwwroot" ]] && WWEB="--webroot $(winarg "$(wslpath -w "$RUN/wwwroot")")"
@@ -740,9 +728,8 @@ PY
           PID=$!; label="cmd.exe /c dotnet" ;;
         *)
           runner="dotnet"; [[ "$verdict" == *"via ~/.dotnet/dotnet"* ]] && runner="$HOME/.dotnet/dotnet"
-          # Lekhak TF-001. A copy run on the WSL side reads user-secrets from ~/.microsoft/usersecrets,
-          # while `dotnet user-secrets set` on Windows wrote them to %APPDATA%\Microsoft\UserSecrets:
-          # "Required configuration value(s) not set" on an app that starts under `dotnet run`. The
+          # A copy run on the WSL side reads user-secrets from ~/.microsoft/usersecrets, while
+          # `dotnet user-secrets set` on Windows writes them to %APPDATA%\Microsoft\UserSecrets. The
           # secrets reader looks under $APPDATA first on any system, so when only the Windows store
           # holds this project's secrets, the app is pointed at it.
           SID="$(grep -oE '<UserSecretsId>[^<]+' "$PROJECT" 2>/dev/null | head -1 | sed 's/<UserSecretsId>//')"
@@ -759,7 +746,7 @@ PY
           fi
           WEBR=(); [[ -d "$RUN/wwwroot" ]] && WEBR=(--webroot "$ROOTDIR/$RUN/wwwroot")
           # the redirections belong to the whole background group and the group becomes the app: a group
-          # left waiting on its app kept this script's output open, so a caller reading it waited for ever
+          # left waiting on its app keeps this script's output open, so a caller reading it waits for ever
           ( cd "$PDIR" || exit 1; exec env ${LSENV[@]+"${LSENV[@]}"} nohup "$runner" "$ROOTDIR/$RUN/$ASM.dll" --urls "$URL" --contentRoot "$PWD" ${WEBR[@]+"${WEBR[@]}"} ) \
               >> "$ROOTDIR/$LOG" 2>&1 < /dev/null &
           PID=$!; label="$([[ "$runner" == dotnet ]] && echo dotnet || echo '~/.dotnet/dotnet')" ;;
@@ -777,7 +764,7 @@ PY
       pkill -P "$PID" 2>/dev/null; kill "$PID" 2>/dev/null
       [[ -n "$WIN" ]] && powershell.exe -NoProfile -Command "Get-NetTCPConnection -LocalPort $PORT -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" >/dev/null 2>&1
       last="$(grep -vE '^[[:space:]]*$' "$LOG" | tail -3 | tr '\n' ' ' | cut -c1-240)"
-      # say what the log says: "no rung brought it up" sent a reader to the build when the app had started
+      # say what the log says, so a reader is not sent to the build when the app has started
       said=""; grep -q 'Now listening on' "$LOG" && said=" although its log says it is listening"
       tried+=("$label${SIDE:+ ($SIDE side)} on ${HOSTS[*]}: no answer within $WAIT s$said")
     done
@@ -812,8 +799,8 @@ PY
       echo "BOOTED head=web mode=base url=$URL rung=$label project=$PROJECT pid=$PID log=$LOG stop=\"bash .tfcore/utils/tf-verify-boot.sh stop --port $PORT\""; exit 0
     fi
     pkill -P "$PID" 2>/dev/null; kill "$PID" 2>/dev/null
-    # killing cmd.exe on this side leaves the Windows-side app running and holding the build output
-    # (TF-034): stop whatever listens on THIS start's port, never by program name
+    # killing cmd.exe on this side leaves the Windows-side app running and holding the build output:
+    # stop whatever listens on THIS start's port, never by program name
     [[ "$r" == "cmd.exe" ]] && powershell.exe -NoProfile -Command "Get-NetTCPConnection -LocalPort $PORT -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" >/dev/null 2>&1
     seg="$(awk '/^### rung: /{p=0} index($0,"### rung: '"$r"'")==1{p=1} p' "$LOG")"
     if grep -qE "$CODE_ERR" <<<"$seg" && ! grep -qE "$WRONG_RUNG" <<<"$seg"; then
@@ -831,9 +818,8 @@ fi
 command -v cmd.exe >/dev/null 2>&1 || { write_state windows none "" "" "" "$PROJECT" "cmd.exe not reachable" host "$PLATFORM"; echo "NONE head=windows reason=cmd.exe is not reachable from this shell"; exit 2; }
 TFM="$(grep -oE 'net[0-9.]+-windows[0-9.]*' "$PROJECT" | head -1)"
 RELAY_PORT="${PORT:-9223}"; keyed "$RELAY_PORT"
-# Each boot drives its own embedded browser (Sevak TF-003). The DevTools port was 9222 for every
-# head, so with two up the relay on 9223 listed pages of both apps and a smoke drove the other
-# agent's window. The port now follows the relay port (9223 keeps 9222). A second head while one is
+# Each boot drives its own embedded browser: the DevTools port follows the relay port (9223 keeps
+# 9222), so a relay never lists the pages of another head. A second head while one is
 # up also gets its own WebView2 data folder: two copies of one app would otherwise share one browser
 # process, whose single DevTools port lists both.
 if [[ "$RELAY_PORT" == "9223" ]]; then CDP_PORT=9222; else CDP_PORT=$((RELAY_PORT + 20000)); fi
@@ -849,10 +835,10 @@ fi
 WP="$(winarg "$(wslpath -w "$PROJECT")")"; RELAY="$(wslpath -w "$HERE/tf-cdp-relay.ps1")"
 echo "### windows head: $PROJECT -f $TFM (DevTools $CDP_PORT, relay $RELAY_PORT)" >> "$LOG"
 # this start's own Windows processes: the app's ids before it, so the new ones are this boot's and
-# stop kills them alone, never every copy of the program (taskkill /IM stopped another agent's app)
+# stop kills them alone, never every copy of the program (taskkill /IM stops another agent's app too)
 win_ids() { powershell.exe -NoProfile -Command "Get-Process -Name '$ASM' -ErrorAction SilentlyContinue | ForEach-Object { \$_.Id }" 2>/dev/null | tr -d '\r' | grep -E '^[0-9]+$' | sort; }
 BEFORE_IDS="$(win_ids)"
-APPSET=""; for kv in ${APPENV[@]+"${APPENV[@]}"}; do APPSET+="set $kv&& "; done   # --env (Sevak TF-013, Chatur TF-018)
+APPSET=""; for kv in ${APPENV[@]+"${APPENV[@]}"}; do APPSET+="set $kv&& "; done   # --env
 nohup cmd.exe /c "${UDF_SET}${APPSET}set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=$CDP_PORT&& dotnet run --project $WP -f $TFM ${CFGARGS[*]:-}" >> "$LOG" 2>&1 < /dev/null &
 APP_PID=$!
 nohup powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$RELAY" -ListenPort "$RELAY_PORT" -TargetPort "$CDP_PORT" >> "$DIR/relay.log" 2>&1 < /dev/null &
@@ -880,8 +866,8 @@ MINE="$(comm -13 <(printf '%s\n' "$BEFORE_IDS") <(win_ids) | tr '\n' ' ')"
 if [[ -z "$URL" ]]; then
   pkill -P "$APP_PID" 2>/dev/null; kill "$APP_PID" "$RELAY_PID" 2>/dev/null
   for w in $MINE; do taskkill.exe /F /T /PID "$w" >/dev/null 2>&1; done
-  # the relay runs Windows-side and outlives its WSL parent: a second try then failed "Only one usage
-  # of each socket address" (TechieRag TF-006)
+  # the relay runs Windows-side and outlives its WSL parent: left up, a second try fails "Only one
+  # usage of each socket address"
   powershell.exe -NoProfile -Command "Get-NetTCPConnection -LocalPort $RELAY_PORT -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" >/dev/null 2>&1
   write_state windows none "" "" "cmd.exe /c dotnet run -f $TFM" "$PROJECT" "the DevTools port $RELAY_PORT never answered within 300 s" host "$PLATFORM"
   echo "NONE head=windows kind=host reason=the app's DevTools port never answered on ${HOSTS[*]}:$RELAY_PORT within 300 s (log $LOG, relay $DIR/relay.log)"; exit 2

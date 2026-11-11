@@ -127,7 +127,7 @@ def quoted(s, n=None):
 
 def words(s, n=60):
     w = s.split()
-    return s if len(w) <= n else " ".join(w[:n]) + "…"   # the ellipsis rides on the last word: the checker counts words, and a bare "…" was a 61st (miss 29)
+    return s if len(w) <= n else " ".join(w[:n]) + "…"   # the ellipsis rides on the last word: the checker counts words, and a bare "…" is one more
 
 
 def test_users(app, d):
@@ -170,10 +170,9 @@ def main(argv):
     lst = load(os.path.join(d, "list.json")) or die("list.json missing: run tf-verify-list.sh first")
     boot = load(os.path.join(d, "boot.json")) or {"mode": "none", "reason": "tf-verify-boot.sh was not run", "reason_kind": "host", "head": "none"}
     tests = (load(os.path.join(d, "tests.json")) or {}).get("reqs", {})
-    tests_ran = os.path.isfile(os.path.join(d, "tests.json"))
     screens = load(os.path.join(d, "screens.json")) or {}
     scr_by_name = {s["name"]: s for s in screens.get("screens", [])}
-    # screens tf-verify-screens did not drive because their route needs a sample value (Lekhak TF-005)
+    # screens tf-verify-screens did not drive because their route needs a sample value
     scr_skipped = {s["name"]: s for s in screens.get("skipped", []) or []}
     assets = load(os.path.join(d, "assets.json")) or {}
     pages = {norm_route(p.get("path")): p for p in assets.get("pages", [])}
@@ -185,7 +184,7 @@ def main(argv):
     tu_by, tu = test_users(app, d)
     tu_on = bool(tu) and tu.get("enforced", False)
 
-    # the last ledger: an earlier PASS lets a row this run could not measure keep its Verified (TF-017)
+    # the last ledger: an earlier PASS lets a row this run could not measure keep its Verified
     prev = load(os.path.join("docs", ".last-verify.json")) if os.path.isfile(os.path.join("docs", ".last-verify.json")) else None
     prev_ok = isinstance(prev, dict) and prev.get("app") in (None, app) and isinstance(prev.get("rows"), dict)
 
@@ -200,8 +199,8 @@ def main(argv):
 
     booted = boot.get("mode") not in (None, "none")
     build_failed = boot.get("reason_kind") == "build-error"
-    # the packages the Architecture requires are in the code (tf_stack_check.py): a model once replaced the
-    # mandated UI library with plain components and had every row Verified
+    # the packages the Architecture requires are in the code (tf_stack_check.py): no row is Verified on an
+    # app that replaced a mandated library with a workaround
     stack = tf_stack_check.check(os.getcwd(), app)
     if stack["verdict"] == "FAIL":
         build_failed = True
@@ -219,25 +218,25 @@ def main(argv):
         prior = r.get("status_raw") or ""
         notes = []
         scr = scr_by_name.get(r.get("screen") or "")
-        # Chatur TF-016, Sevak TF-014: a Mac web-view head shows the web view to Appium as one empty
-        # element, so a screen behind Sign in (or the first-run screen) is never reached. That is a tool
-        # limit, not the app's: the screen is not measured, and the row is graded as not driven.
+        # A Mac web-view head shows the web view to Appium as one empty element, so a screen behind Sign in
+        # (or the first-run screen) is never reached. That is a tool limit, not the app's: the screen is
+        # not measured, and the row is graded as not driven.
         unmeasured = bool(scr) and (scr.get("render") == "NOT-MEASURED"
                                     or (scr.get("render") == "UNREACHABLE" and scr.get("anchors_not_measured")
                                         and boot.get("mode") == "appium"))
         driven = bool(scr) and scr.get("render") not in ("UNREACHABLE", "NOT-MEASURED")
         nonames = " (names not measured on a Mac)" if scr and scr.get("anchors_not_measured") else ""
         t = tests.get(rid)
-        # TechieRag TF-008: tests that carried the id before triage logged the row may test something else
+        # tests that carried the id before triage logged the row may test something else
         if t and t.get("predates"):
             notes.append(f"⚠ its tests carried {rid} from {t['predates']['tests_from']}, before the row was logged on "
                          f"{t['predates']['logged']}: check they test this row")
         # A row whose every clause was SKIPPED is NOT-TESTED: the acceptance gate did not run on
         # it. It is neither a pass nor a defect, so it grades exactly like a row with no test at
-        # all — never Verified, no gate record (TF-022). `t` is kept for the note.
+        # all — never Verified, no gate record. `t` is kept for the note.
         skipped_only = bool(t) and t.get("result") == "NOT-TESTED"
-        # Sevak TF-009: a row whose unit tests passed while its on-app test was skipped (Sevak TF-004)
-        # was written "no unit test carrying its id"; the tests ran, they just do not count
+        # a row whose unit tests passed while its on-app test was skipped: the Remark says the tests
+        # ran and do not count, never "no unit test carrying its id"
         unit_only = ""
         if skipped_only and t.get("passed"):
             why = re.sub(r"^on-app test skipped [(](.*)[)]; a unit test.*$", r"\1", t.get("reason") or "")
@@ -247,10 +246,8 @@ def main(argv):
             if not unit_only:
                 notes.append(f"acceptance not measured ({len(t.get('skipped') or [])} test(s) skipped, none ran)")
             t = None
-        # TechieRag TF-009: a row whose tests partly passed and partly SKIPPED was written Verified on the
-        # ones that ran: REQ-RAG-155 on its stand-in tests while its three live tests skipped. A skipped
-        # test carrying the id is part of the row's acceptance, so the row is not measured until it runs
-        # (the Sevak TF-004 rule, for every test, not only on-app ones). tests/regression/run.sh tr_009b.
+        # A skipped test carrying the id is part of the row's acceptance, so a row whose tests partly
+        # passed and partly SKIPPED is not measured until the skipped ones run (any test, not only on-app).
         elif t and t.get("result") == "PASS" and t.get("skipped") and not t.get("failed"):
             sk = t.get("skipped") or []
             why = (t.get("outcomes") or {}).get(sk[0], {}).get("reason") or ""
@@ -278,8 +275,7 @@ def main(argv):
 
         # 1 build
         checks.append(("build", booted or build_failed, build_failed, "BUILD-FAIL", "build-error", boot.get("reason", "build failed"), ""))
-        # 1b test-users: a test that creates an account on the shared AppManager is wrong whatever it
-        # proved (Chatur REQ-FN-004, Sevak REQ-UI-006, 1 Nov 2026: the owner deleted the accounts by hand)
+        # 1b test-users: a test that creates an account on the shared AppManager is wrong whatever it proved
         if rid in tu_by:
             f = tu_by[rid][0]
             checks.append(("test-users", True, True, "TEST-USERS-FAIL", "test-users",
@@ -292,7 +288,7 @@ def main(argv):
         if t:
             checks.append(("acceptance", True, t["result"] != "PASS", "FAIL", "assert-fail", quoted(t.get("reason")) or "test failed", t.get("screenshot") or ""))
         # 3 render
-        bad = []   # Chatur TF-015: an UNREACHABLE first screen left it unset for the Mac note below
+        bad = []   # set here: an UNREACHABLE screen never fills it, and the Mac note below reads it
         if scr and not unmeasured:
             if scr.get("render") == "UNREACHABLE":
                 f = next((x for w in scr["widths"] for x in w.get("findings", [])), {})
@@ -302,8 +298,8 @@ def main(argv):
                 w, f = bad[0] if bad else (None, None)
                 checks.append(("render", True, bool(bad), "RENDER-FAIL", f["class"] if f else None,
                                f"{f['detail']} on {r['screen']} @{w['width']}" if f else "", w.get("screenshot", "") if w else ""))
-            # a Mac web view head: blank, error bar, overlap and the picture were checked, the
-            # controls by name were not (owner decision A, 2026-10-07): said, never counted as a pass
+            # a Mac web view head: blank, error bar, overlap and the picture are checked, the
+            # controls by name are not: said, never counted as a pass
             if scr.get("anchors_not_measured") and bad:
                 notes.append(f"control names not measured on {r['screen']} (a Mac web view does not show them)")
         # 4 assets
@@ -329,9 +325,8 @@ def main(argv):
             # expected, and the row is never failed for its absence; said, not counted as a pass
             notes.append("mockup not compared on a Mac head (compare it on the web or Windows head)")
         elif not ps and driven and mockup:
-            # Chatur TF-008: /processes/6/run was compared and FAILed, but the row's route reads
-            # /processes/{id}/run and the comparison was named process-run, so it was never found and
-            # 11 rows were Verified without it. A driven screen that has a mockup and no comparison fails.
+            # A driven screen that has a mockup and no comparison fails: a missing comparison is never
+            # read as a pass.
             checks.append(("mockup-parity", True, True, "MOCKUP-FAIL", "other",
                            f"mockup-parity not found: {r['screen']} ({r.get('route')}) has mockup {mockup} and "
                            + ("parity.json has no comparison for it" if comparisons else "no mockup comparison ran")
@@ -352,10 +347,10 @@ def main(argv):
                                os.path.join(d, "parity.json")))
             elif v == "UNGRADEABLE":
                 notes.append("mockup-parity UNGRADEABLE (add data-testid anchors to the mockup)")
-            elif v == "NOT-MEASURED":   # Sevak TF-011: the desktop window drew no frames; not compared, not a pass
+            elif v == "NOT-MEASURED":   # the desktop window drew no frames; not compared, not a pass
                 parity_unmeasured = next((w.get("error") for w in ps.get("widths", []) if w.get("error")), "") or "not measured"
             nm = (ps.get("coverage") or {}).get("not_measured") or []
-            if nm:   # sample rows the app had no data for (Chatur TF-002)
+            if nm:   # sample rows the app had no data for
                 notes.append(f"mockup-parity: {len(nm)} sample box(es) not measured, the app drew no data there "
                              "(a tests/verify/seed/ script puts it in the drawn state)")
             elif v == "NO-MOCKUP":
@@ -378,9 +373,9 @@ def main(argv):
         failed = [c for c in checks if c[1] and c[2]]
         first = failed[0] if failed else None
         verdict, cls, detail, evidence = (first[3], first[4], first[5], first[6]) if first else (None, None, "", "")
-        # Chatur TF-013: a Not Started row whose only failing check is its route answering 404 (the mockup
-        # comparison could not open it either, for the same reason) was never built; it is not a defect to
-        # re-verify, so it keeps Not Started and emits no miss
+        # a Not Started row whose only failing check is its route answering 404 (the mockup comparison
+        # cannot open it either, for the same reason) is not built yet; it is not a defect to re-verify,
+        # so it keeps Not Started and emits no miss
         if verdict == "RENDER-FAIL" and all(re.search(r"HTTP 404\b", c[5] or "") for c in failed) \
                 and scr and scr.get("render") == "UNREACHABLE" \
                 and (r.get("status") or prior).strip("`* ").lower().startswith("not started") \
@@ -411,7 +406,7 @@ def main(argv):
                     + (f"; screen {r['screen']} renders and looks right{nonames}" if driven else "")
             elif r.get("screen") and not driven:
                 # a passing test is not a screen check: a row on a screen that was not driven is never
-                # Verified, booted or not. The Settings rows of /settings/{tab} were (Chatur TF-003).
+                # Verified, booted or not.
                 verdict = "NOT-DRIVEN"
                 sk = scr_skipped.get(r["screen"])
                 detail = ("test passed but " + (mac_why(r, scr) if unmeasured
@@ -437,17 +432,13 @@ def main(argv):
                 detail = "; ".join(parts)
 
         # A defect found by the guide, the owner's testing or production is not in the acceptance line, so
-        # a pass cannot clear it and a rewrite must not erase it (TF-021). tests/regression/run.sh am_021.
+        # a pass cannot clear it and a rewrite must not erase it.
         kept = tf_defect.unseen(r.get("remarks"))
         if kept and verdict == "PASS":
             verdict = "DEFECT-OPEN"
-        # TechieRag TF-009: a Blocked row is waiting on something no test measures (an owner decision, a
-        # device, a library gap). A passing test proves the part that is built, so the row stays Blocked
-        # with the pass in its Remark, and no PASS gate record is written. tests/regression/run.sh tr_009a.
-        # Sevak TF-017: the same holds whatever this run found. REQ-RAG-116 and REQ-UI-087 wait on a library
-        # release and have no test; their screen failed the render check, and the verdict wrote them Needs
-        # re-verify and replaced the Remark, so the reason they are Blocked was lost. A Blocked row keeps its
-        # Status, its % and its reason; what this run found is appended, and no gate record or miss is written.
+        # A Blocked row waits on something no test measures (an owner decision, a device, a library gap),
+        # so whatever this run found it keeps its Status, its % and its reason; the finding is appended to
+        # its Remark and no gate record or miss is written.
         held_from = None
         if prior.strip("`* ").lower().startswith("blocked"):
             if verdict == "PASS":
@@ -457,9 +448,8 @@ def main(argv):
             verdict, cls, kept = "BLOCKED-HELD", None, []
         status = STATUS.get(verdict, "Needs re-verify" if verdict == "DEFECT-OPEN" else prior)
         pct = r.get("pct")
-        # Chatur TF-017: a row whose tests were all skipped kept the Verified it read before, with a Remark
-        # saying "not verified". Nothing this run measured can write Verified: it stands only on an
-        # earlier PASS, named in the Remark so the next run still finds it; without one it is re-verified.
+        # A row that did not PASS in this run keeps Verified only on an earlier PASS, named in the Remark
+        # so the next run still finds it; without one it is re-verified.
         if verdict != "PASS" and status.strip("`* ").lower().startswith("verified"):
             when = earlier_pass(rid, r.get("remarks"))
             if when:
@@ -507,14 +497,11 @@ def main(argv):
     for c in ("build", "test-users", "acceptance", "render", "assets", "visual", "mockup-parity", "perf"):
         if any(c in x["gates_run"] for x in rows_out):
             checks.append(c)
-    # Lekhak TF-007: a targeted verify rewrote the ledger with its own rows only (395 became 1), so every
-    # other row lost its last verdict. The ledger is kept row by row: a row this run graded is replaced,
-    # with the date and run it was graded in; the rest keep theirs. A scope-all run starts it afresh.
-    # The verify guard unlocks a Verified only for a row graded today, and fix-close reads only the rows
-    # graded since its fix began, by these dates.
-    # Sevak TF-005: every row carries the phase whose checklist it was graded in, and a scope-all run
-    # starts afresh only for its own phase. Phase 2's run used to wipe phase 1's verdicts. A row from an
-    # older ledger that names no phase is kept.
+    # The ledger is kept row by row: a row this run graded is replaced, with the date and run it was
+    # graded in; the rest keep theirs. The verify guard unlocks a Verified only for a row graded today,
+    # and fix-close reads only the rows graded since its fix began, by these dates.
+    # Every row carries the phase whose checklist it was graded in, and a scope-all run starts afresh
+    # only for its own phase. A row from an older ledger that names no phase is kept.
     phase = lst.get("phase") or 1
     all_rows, row_dates, row_runs = dict(ledger_rows), {k: today for k in ledger_rows}, {k: started for k in ledger_rows}
     row_phases = {k: phase for k in ledger_rows}

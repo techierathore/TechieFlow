@@ -4,18 +4,18 @@
 |---|---|
 | App | Sevak |
 | Upstream | TechieFlow |
-| Updated | 2026-11-10, second run (TF-017, TF-018, TF-019 and TF-022 fixed upstream, in `.tfcore/`; no entry is open) · 2026-11-10 (TF-020, TF-021, TF-023 and TF-024 fixed upstream, in `.tfcore/` from the framework update of the same day) · 2026-11-09 evening (TF-021 to TF-023 added in the phase 4 build: scope `all` runs every phase's specs on one boot; the boot script's head count) · 2026-11-09 (TF-018 to TF-020 added in phase 4 fix cycle 1; TF-018 blocks) · 2026-11-05 (TF-015 and TF-016 fixed upstream, ship in TechieFlow v1.3.0) |
+| Updated | 2026-11-11, second run (TF-026 filed) · 2026-11-11 (triage-and-fix: TF-018 to TF-020, TF-023 and TF-024 re-checked and closed; TF-025 filed) · 2026-11-10, second run (TF-017, TF-018, TF-019 and TF-022 fixed upstream, in `.tfcore/`; no entry is open) · 2026-11-10 (TF-020, TF-021, TF-023 and TF-024 fixed upstream, in `.tfcore/` from the framework update of the same day) · 2026-11-09 evening (TF-021 to TF-023 added in the phase 4 build: scope `all` runs every phase's specs on one boot; the boot script's head count) · 2026-11-09 (TF-018 to TF-020 added in phase 4 fix cycle 1; TF-018 blocks) · 2026-11-05 (TF-015 and TF-016 fixed upstream, ship in TechieFlow v1.3.0) |
 
 ## Summary
 
-No entry blocks. TF-018 stopped blocking on 2026-11-09: `*amend-docs` marked the phase 5 controls `data-tf-state="phase-5"` in every mockup, which the render check already honours; the dedicated later-phase mark, `data-tf-phase`, came with the TF-018 fix of 2026-11-10. 24 entries: 0 open, 16 fixed upstream and not yet re-checked (TF-005, TF-008, TF-009, TF-011 to TF-014, TF-016 to TF-024), 8 closed (TF-001 to TF-004, TF-006, TF-007, TF-010, TF-015).
+26 entries: 1 open, 12 fixed upstream and not yet re-checked here, 13 closed. Nothing is blocked.
 
-New on 2026-11-03: TF-015, the verify harness reads its settings from environment variables and a `.env.local` file instead of an appsettings-style JSON file. TF-016, the test-users rule lets a test submit Register with test user 1's address, and when AppManager no longer holds that user the submit creates it.
+Open: TF-026, filed 2026-11-11: a phase verify cannot grade rows that need a second boot, and its test step does not survive a minimized window or a running app. Sevak worked around all three and wrote the steps into `docs/Sevak-Verification-Setup.md`.
 
-TF-013 (the Mac boot passes no settings) is fixed upstream and waits for a Mac check.
+Fixed upstream, waiting for a re-check here: TF-025 (a native select read as having no icon; the fix is in this project's `.tfcore/` since the framework update of 2026-11-11), TF-013 (the Mac boot passes no settings; waits for a Mac), and ten older entries that `bash .tfcore/utils/tf-feedback.sh Sevak --waiting` lists.
 
-- Severity across all entries, open and closed: 6 major, 8 minor (one entry has no severity line). Entries keep their id order.
-- Last consolidated: 2026-11-03 (fix-issues)
+- Severity across all entries, open and closed: 7 major, 8 minor (one entry has no severity line). Entries keep their id order.
+- Last consolidated: 2026-11-11 (triage-and-fix)
 
 ## Entries
 
@@ -246,6 +246,8 @@ TF-013 (the Mac boot passes no settings) is fixed upstream and waits for a Mac c
 
 ### TF-024 — The screen check grades a control inside a `display: none` ancestor as visible with zero width
 
+> ✅ **Closed 2026-11-11** — re-checked here: 2026-11-10 triage-and-fix: visibility hidden taken off the chat-pane column (display none kept); tf-verify-screens --screen document-library=/workspace/default/documents --widths 1280,1024: visual OK, no 'has zero width' (render EMPTY only because that boot had no documents seeded).
+
 - **Status:** fixed upstream 2026-11-10, in this project's `.tfcore/` since the framework update of 2026-11-10; not yet re-checked here.
 - **Blocks:** no — Sevak adds `visibility: hidden` beside `display: none` on its hidden chat-pane column, which every control inside inherits.
 - **Severity:** minor
@@ -272,6 +274,8 @@ TF-013 (the Mac boot passes no settings) is fixed upstream and waits for a Mac c
 
 ### TF-018 — A mockup control that belongs to a later phase can only be excused by editing the mockup, which a build may not do
 
+> ✅ **Closed 2026-11-11** — re-checked here: 2026-11-10 triage-and-fix: data-tf-state="phase-5" (and its class show) replaced by data-tf-phase="5" on 286 elements in 35 mockups; the phase 4 screen and mockup checks of Assistant, Memory, Plan, Routines and Import read OK/PASS with no later-phase anchor owed.
+
 - **Status:** fixed upstream 2026-11-10, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-10; not yet re-checked here.
 - **Blocks:** no (since 2026-11-09, `*amend-docs` marked these controls `data-tf-state="phase-5"` plus class `show`). Before that, every phase 4 screen fails the render check on `nav-ideas`, `nav-senders`, `nav-content` and `nav-browser` (phase 5 screens), and Memory, Plan and Routines also on `assistant-pane-member` (phase 5, BRD-292, REQ-UI-116).
 - **Severity:** major
@@ -284,6 +288,8 @@ TF-013 (the Mac boot passes no settings) is fixed upstream and waits for a Mac c
 
 ### TF-019 — The overlap check has no way to mark a deliberate edge handle or overlay, so the library's SidebarRail fails every screen
 
+> ✅ **Closed 2026-11-11** — re-checked here: 2026-11-10 triage-and-fix: data-tf-overlay on sidebar-rail in 35 mockups and aria-hidden taken off the app's SidebarRail; tf-verify-screens on the five phase 4 screens at 1280 and 390: visual OK, no 'sidebar overlaps sidebar-rail'.
+
 - **Status:** fixed upstream 2026-11-10, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-10; not yet re-checked here.
 - **Blocks:** no — Sevak marks the rail `aria-hidden="true"` (a pointer-only duplicate of `sidebar-trigger`, tabindex -1), which the check's `vis()` skips; the rail still works by mouse.
 - **Severity:** minor
@@ -295,6 +301,8 @@ TF-013 (the Mac boot passes no settings) is fixed upstream and waits for a Mac c
 - **Reply (TechieFlow team, 2026-11-10):** Fixed in Sevak's `.tfcore/`, the second way you suggested. A control the mockup marks `data-tf-overlay`, on the control's own tag, is left out of the overlap check and still graded on everything else (present, filled, not off screen, not zero size). The mockups task now says when to write it: a control drawn over its neighbour on purpose, such as an edge grab handle or a floating button. Regression case `sv_019`: a 16 px rail half over the sidebar, marked in the mockup, is no finding; two unmarked buttons on top of each other on the same screen are still reported, and only that pair. On the script you had, the rail fails (`sidebar overlaps sidebar-rail at 1280px`). **Proved on a fixture, not on your app.** **Not done:** comparing every overlap with the mockup at the same width; a mockup is not drawn to the pixel, and that would excuse real overlaps a mockup happens to share. **Check it here:** paste into Sevak's agent: `/TechieFlow:agents:analyst *amend-docs Sevak` with the request `Add data-tf-overlay to the sidebar-rail button in every file under docs/mockups, and take aria-hidden="true" off the app's SidebarRail.` Then a verify of any screen at 1280 carries no `sidebar overlaps sidebar-rail` finding.
 
 ### TF-020 — `vis()` does not look at ancestors, so the controls inside a `display: none` column are reported as having zero width
+
+> ✅ **Closed 2026-11-11** — re-checked here: Same change and check as TF-024 (2026-11-10): no zero-width finding for controls inside the display:none pane column.
 
 - **Status:** fixed upstream 2026-11-10, in this project's `.tfcore/` since the framework update of 2026-11-10; not yet re-checked here.
 - **Blocks:** no — Sevak no longer renders the chat pane's column on a phone-width window (it opens as a sheet from "Ask Sevak").
@@ -335,6 +343,8 @@ TF-013 (the Mac boot passes no settings) is fixed upstream and waits for a Mac c
 
 ### TF-023 — The mockup-parity check reads a native checked checkbox as "no fill, no icon", so a component library's checkbox fails the icon and colour clauses on every screen that draws one
 
+> ✅ **Closed 2026-11-11** — re-checked here: 2026-11-10 triage-and-fix: tf-mockup-parity on Import (/tools/import) at 1280 and 390, light and dark: PASS, 0 findings, no import-tick finding; the nine Import rows are Verified.
+
 - **Status:** fixed upstream 2026-11-10, in this project's `.tfcore/` since the framework update of 2026-11-10; not yet re-checked here.
 - **Blocks:** no — the nine Import rows stay below Verified on this one finding and everything else carried on; the control itself is right.
 - **Severity:** minor
@@ -346,6 +356,46 @@ TF-013 (the Mac boot passes no settings) is fixed upstream and waits for a Mac c
 - **Suggested fix:** extend the toggle exemption to the icon and colour clauses (or compare `:checked` state and box size for inputs of type checkbox and radio).
 - **Reply (TechieFlow team, 2026-11-10):** Fixed as you suggested, in `tf-mockup-parity.mjs`. A checkbox, radio or switch (`input[type=checkbox]`, `input[type=radio]`, `role="checkbox"`, `role="switch"`, `role="radio"`), on either side, is no longer compared by its icon, its colour or its badge shape, as it already was not by its border (Lekhak TF-035). What is drawn inside a toggle, the svg tick or a switch's thumb, is also no longer counted as an icon or a badge of the boxes around it; without that the finding would have moved from `import-tick` to the table cell. **Not done:** the checked state is not compared. The tick follows the app's data (your rows are ticked or not by what the user chose), so comparing it with the mockup's sample would fail honest screens. A toggle the app does not draw at all is still the screen check's finding. Regression case `sv_023`: your shape (a native checked checkbox in the mockup, a filled `role="checkbox"` button with an svg tick in the app) gives no finding on the toggle or on the card around it, a switch beside a native checkbox gives none either, and an icon added to an ordinary control is still reported. On the script you had, the same fixture gives your two findings word for word (`app carries an icon the mockup does not`, `mockup neutral, app accent`). **Proved on a fixture, not on your running app.** **Check it here:** paste into Sevak's agent: `/TechieFlow:agents:verifier *verify all Sevak --phase 4`. Import carries no `import-tick` finding at 1280 or 390, light or dark, and the nine Import rows are graded on their other checks.
 
+
+### TF-025 — The mockup-parity check reads a native `<select>` as having no icon, so a component library's Select fails the icon clause wherever the mockup draws a plain select
+
+- **Status:** fixed upstream 2026-11-11, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-11 (evening); not yet re-checked here.
+- **Blocks:** no — the control is right; Sevak's Support row stays below Verified for another reason (test user 1 has no issue), and the finding is noted beside it.
+- **Severity:** minor
+- **Repro:** `docs/mockups/support.html` draws `support-status-filter` as `<select class="input">`; Chromium paints its chevron itself, so the computed style shows no icon. The app's TrBlazeUI `SelectTrigger` (a `button` with `role="combobox"`) draws the same chevron as an svg. `tf-mockup-parity.sh --list … --cdp …` on Support reports `support-status-filter: app carries an icon the mockup does not` at 1280 and 390, light and dark (4 findings).
+- **Expected:** a select is compared as a select, the way TF-023 now compares a checkbox: not by the chevron the browser paints for a native control.
+- **Actual:** the icon clause compares a native select's computed style with the library's DOM.
+- **Encountered in:** Sevak triage-and-fix of 2026-11-10, Support (`/support`), REQ-UI-033.
+- **Workaround:** none taken; a raw `<select>` is forbidden by the trblazeui persona.
+- **Suggested fix:** extend the TF-023 toggle exemption to `select` and `role="combobox"` for the icon clause (and the svg chevron inside the trigger is not an icon of the boxes around it).
+- **Reply (TechieFlow team, 2026-11-11):** Fixed as you suggested, in `tf-mockup-parity.mjs`. A select (`<select>` or `role="combobox"`), on either side, is no longer compared by its icon, and the chevron drawn inside one is not counted as an icon of the boxes around it; without that the finding would have moved from `support-status-filter` to the filter bar. Only the icon clause changed: a select's colour, border and badge are still compared, because your mockup styles those itself. An icon the app adds to an ordinary control is still reported. Measured on the mockups of all 13 projects that have any: none draws a select as a styled box with an icon inside, so no project gains a finding from this. Case `sv_025` in `tests/faults/run.sh` (your shape: a native select in the mockup, a `role="combobox"` button with an svg chevron in the app) fails against the script you have and passes now. Proved on that fixture, not on the Sevak app. **Fixed in Sevak's `.tfcore/`:** deployed with `update-framework.sh` on 2026-11-11 (evening), once no Sevak run was in progress; all 169 framework files here match the framework repository. Check it: `bash .tfcore/utils/tf-mockup-parity.sh --list tests/.artifacts/verify/list.json --cdp <url>` on Support carries no `support-status-filter` finding.
+
+### TF-026 — A phase verify cannot grade rows that need a second boot, and its test step neither survives a minimized window nor a running app
+
+- **Blocks:** no — Sevak ran the parts by hand and merged them; every step is written in `docs/Sevak-Verification-Setup.md`.
+- **Severity:** major
+- **Repro:** `*verify all Sevak --phase 2` on 2026-11-11, Windows head over CDP. Three things, one cause (the test step assumes one boot it can leave alone):
+  ```text
+  1. seven rows are about the app in Hindi (the language applies at the next launch) and one about "restores on
+     another install": on the one boot the task makes they can only skip, so they never get a verdict.
+  2. the owner minimized the app window mid-run: tf-verify-screens.sh restores it (TF-011), tf-verify-tests.sh
+     does not, and every test of the last spec file timed out on "waiting for element to be stable".
+  3. tf-verify-tests.sh --base runs the unit tests while the app is up: MSB3027, Sevak.Core.dll "is locked by Sevak",
+     ten retries per rung; the run took over ten minutes and reported nothing new.
+  ```
+- **Expected:** the task names a way to run a part of the rows on another boot (a relaunch on the same data folder, a second fresh install) and merge it; the test step restores the window before each spec file, as the screens step does; the unit tests run before the boot.
+- **Actual:** each had to be worked out during the run.
+- **Encountered in:** Sevak *triage-and-fix 2026-11-11, phase 2.
+- **Workaround:** id lists (`tf-verify-list.sh … --json-out`, then `tf-verify-tests.sh --list`) per boot and `--merge`; `ensureDrawing` in `tests/verify/p3/cdp.ts`; `--no-browser` before the boot and `--no-unit` after it.
+- **Suggested fix:** a `needs-boot:` note on a row (relaunch, second install, language) that the list prints as its own part; `tf-verify-tests.sh` calling the TF-011 restore before each spec file; unit tests first, before `tf-verify-boot.sh start`.
+
+## Resolution status (TechieFlow team, 2026-11-11)
+
+**Fixed in Sevak's `.tfcore/`** through the framework update of 2026-11-11 (evening). The same update carries the other fixes of that day (the changelog entry "Code review of 2026-11-10"): none is an entry of yours. Proved on a fixture, not on the Sevak app.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-025 | Fixed upstream. The reply is under the entry. | a verify of Support; no `support-status-filter` icon finding at 1280 or 390, light or dark. |
 
 ## Resolution status (TechieFlow team, 2026-11-10, second run)
 

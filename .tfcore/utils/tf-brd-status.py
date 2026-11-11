@@ -143,7 +143,7 @@ def main(argv):
         phase = int(argv[i + 1])
     if phase is None:
         cfg = os.path.join(root, ".tfcore", "core-config.yaml")
-        m = re.search(r"(?m)^appPhase:\s*(\d+)", read(cfg)) if os.path.isfile(cfg) else None
+        m = re.search(r"(?m)^appPhase:\s*[\"']?(\d+)", read(cfg)) if os.path.isfile(cfg) else None
         phase = int(m.group(1)) if m else 1
     pfx = f"{app}-" if phase <= 1 else f"{app}-P{phase}-"
     cl_rel, brd_rel = f"docs/{pfx}Checklist.md", f"docs/{pfx}BRD.md"

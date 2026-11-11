@@ -194,7 +194,7 @@ function perturbInstalledProject(dir) {
   // What a project scaffolded before 2026-09-07 still carries. Both routes must remove it:
   // the Codex adapter was retired (D-14, FR-42) and WORKFLOW.html was dropped.
   mkdirSync(join(dir, ".codex", "rules"), { recursive: true });
-  writeFileSync(join(dir, ".codex", "config.toml"), "# retired adapter\n");
+  writeFileSync(join(dir, ".codex", "config.toml"), "# TechieFlow adapter (retired)\n");
   writeFileSync(join(dir, ".codex", "rules", "techieflow.rules"), "retired\n");
   mkdirSync(join(dir, ".agents", "skills", "techieflow-build"), { recursive: true });
   writeFileSync(join(dir, ".agents", "skills", "techieflow-build", "SKILL.md"), "retired\n");

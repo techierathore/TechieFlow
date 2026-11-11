@@ -19,12 +19,10 @@
 #   --buffer-min <n>            minutes added after a stated limit-reset time (default 15)
 #   --probe-min <n>             limit hit but NO reset time parseable → fire a one-turn probe every n
 #                               minutes until the API answers again, then resume (default 15)
-#   --probe-max-hours <n>       give up probing and resume anyway after n hours (default 8)
-#   --default-wait-min <n>      (legacy) only used to stamp resume_at in goal.json when probing
+#                               (probing gives up and resumes anyway after 8 hours)
 #   --max-cycles <n>            give up after n launches (default 60)
 #   --idle-retry-sec <n>        pause before re-prompting an agent that stopped without finishing (default 30)
-#   --stall-min <n>             a cycle whose output has not grown for n minutes is killed and
-#                               re-prompted (default 15; 0 disables) — MISS-TechieFlow-20260905-22
+#   (a cycle whose output has not grown for 15 minutes is killed and re-prompted)
 #   --resume                    continue the last goal run recorded in .tfcore/.session/goal.json
 #   --fresh                     with --resume: keep the goal and the cycle count but start a NEW
 #                               harness session (the old one hung on continue). The supervisor does
@@ -82,16 +80,13 @@ while [[ $# -gt 0 ]]; do
     --tier) TIER="$2"; shift 2 ;;
     --no-fallback) FALLBACK=0; shift ;;
     --buffer-min) BUFFER_MIN="$2"; shift 2 ;;
-    --default-wait-min) DEFAULT_WAIT_MIN="$2"; shift 2 ;;
     --probe-min) PROBE_MIN="$2"; shift 2 ;;
-    --probe-max-hours) PROBE_MAX_H="$2"; shift 2 ;;
     --max-cycles) MAX_CYCLES="$2"; shift 2 ;;
     --idle-retry-sec) IDLE_RETRY="$2"; shift 2 ;;
-    --stall-min) STALL_MIN="$2"; shift 2 ;;
     --resume) RESUME=1; shift ;;
     --fresh) FRESH=1; shift ;;
     --dry-run) DRY=1; shift ;;
-    -h|--help) sed -n '2,48p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,46p' "$0"; exit 0 ;;
     --) shift; break ;;
     -*) echo "unknown option $1" >&2; exit 2 ;;
     *) break ;;

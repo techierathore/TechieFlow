@@ -41,12 +41,12 @@ const args = (n) => argv.flatMap((a, i) => (a === n && i + 1 < argv.length ? [ar
 const BASE = (arg('--base') || '').replace(/\/$/, '');
 const CDP = arg('--cdp') || '';
 const LIST = arg('--list');
-const PHASE = gradedPhase(arg('--phase'), LIST);   // which data-tf-phase marks are still ahead (Sevak TF-018)
+const PHASE = gradedPhase(arg('--phase'), LIST);   // which data-tf-phase marks are still ahead
 const MOCKUPS = arg('--mockups', 'docs/mockups');
 const WIDTHS = (arg('--widths', '1280,390')).split(',').map((w) => parseInt(w.trim(), 10)).filter(Boolean);
 const OUT = arg('--json-out', 'tests/.artifacts/verify/screens.json');
 const SHOTS = arg('--shots-dir', 'tests/.artifacts/verify/screens');
-// Sevak TF-015: a sign-in the command line does not name comes from tests/verify/testsettings(.Local).json
+// A sign-in the command line does not name comes from tests/verify/testsettings(.Local).json
 // (Verify:Login:Path / User / Password, or Verify:Login:TestUser naming a Test users number).
 const TS = await import('./tf-testsettings.mjs').catch(() => null);
 const fromSettings = (k) => (TS ? TS.setting(k) : '') || null;
@@ -58,8 +58,8 @@ const SETTLE = parseInt(arg('--wait', '1500'), 10);
 // paint after the network goes quiet — a server-held connection that renders once it is up, a
 // client router resolving its first route, a lazily loaded bundle — so measuring at
 // domcontentloaded, at networkidle or even after --wait can read an empty document and report
-// every anchored control as missing while the tool's own screenshot shows them (TF-021, TfLens
-// 2026-09-09). Nothing here knows which stack it is looking at: it waits for CONTENT.
+// every anchored control as missing while the tool's own screenshot shows them. Nothing here
+// knows which stack it is looking at: it waits for CONTENT.
 const RENDER_WAIT = parseInt(arg('--render-wait', '5000'), 10);
 const ATTR = arg('--testid-attr', 'data-testid');
 // The banner a stack shows when its client side has fallen over. There is no neutral way to
@@ -69,10 +69,10 @@ const ATTR = arg('--testid-attr', 'data-testid');
 // own banner. A project on neither still gets every other render check; it simply cannot be
 // told about a banner nobody named.
 const ERROR_SELECTORS = [...args('--error-selector'), '#blazor-error-ui', '[data-error-ui]'];
-// null = auto: light, and dark when the app has a dark theme (Lekhak TF-024)
+// null = auto: light, and dark when the app has a dark theme
 const THEMES = parseThemes(arg('--themes', 'auto'));
 const MIN_CONTRAST = parseFloat(arg('--min-contrast', '3'));
-// Chatur TF-011: the menus are opened and every item clicked (tf-menus.mjs). --placeholder-text adds to
+// The menus are opened and every item clicked (tf-menus.mjs). --placeholder-text adds to
 // the deny list, --no-click to the labels never clicked; --no-menus leaves the menus closed (said in the JSON).
 const PLACEHOLDER_EXTRA = args('--placeholder-text');
 const NO_CLICK_EXTRA = args('--no-click');
@@ -82,8 +82,8 @@ if (!BASE && !CDP) { console.error('tf-verify-screens: --base URL or --cdp URL i
 
 // ---------------------------------------------------------------- screens
 let screens = [];
-// Sample values for route parameters (Lekhak TF-005): `/admin/llm-signin/{ProviderId:long}` opened as
-// written answers 404. --route-value ProviderId=21 (repeatable), or "route_values" in the list, at its
+// Sample values for route parameters: a route such as `/items/{Id:long}` opened as
+// written answers 404. --route-value Id=21 (repeatable), or "route_values" in the list, at its
 // top or on one screen. A screen whose route still needs a value is not driven, and says which.
 const ROUTE_VALUES = {};
 for (const kv of args('--route-value')) { const m = kv.match(/^([^=]+)=(.*)$/); if (m) ROUTE_VALUES[m[1].trim().toLowerCase()] = m[2]; }
@@ -126,8 +126,7 @@ const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g
 const anchorsOf = (mockup) => {
   if (!mockup || !existsSync(mockup)) return null;
   // Only an attribute ON AN ELEMENT is a control the page must carry. A stylesheet rule such as
-  // [data-testid="source-mode"] .tab{…}, a script string or a comment naming one is not: TfLens's
-  // shared mockup stylesheet made every screen owe a dialog it never draws (TF-026).
+  // [data-testid="source-mode"] .tab{…}, a script string or a comment naming one is not.
   const html = readFileSync(mockup, 'utf8')
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<(style|script)\b[\s\S]*?<\/\1\s*>/gi, '');
@@ -146,10 +145,9 @@ const mockTextOf = (mockup) => {
 };
 
 // The anchors a mockup HIDES at one width and shows at another: a sidebar that becomes a slide-out
-// menu on a phone is not owed at 390px, and asking for it failed every such screen there (TF-032,
-// TfLens 2026-09-11). Worked out by drawing the mockup itself at each width. An anchor the mockup
-// hides at every width -- a closed dialog -- is still owed, as before. None is excused when the
-// mockup cannot be drawn.
+// menu on a phone is not owed at 390px. Worked out by drawing the mockup itself at each width. An
+// anchor the mockup hides at every width -- a closed dialog -- is still owed. None is excused when
+// the mockup cannot be drawn.
 async function hiddenByWidth(b, mockup, anchors) {
   const out = {};
   if (!b || !mockup || !existsSync(mockup) || !anchors || !anchors.length) return out;
@@ -174,11 +172,11 @@ async function hiddenByWidth(b, mockup, anchors) {
   return out;
 }
 
-// The anchors a mockup marks as belonging to another state of the screen (Lekhak TF-005): a reason
+// The anchors a mockup marks as belonging to another state of the screen: a reason
 // shown only while the database is down, a result shown only after "Test". The mockup says so with
-// data-tf-state="<state>" (or data-state-testid="<id>", Lekhak TF-011) on the control or on a box around it. Such a control is not owed on the
+// data-tf-state="<state>" (or data-state-testid="<id>") on the control or on a box around it. Such a control is not owed on the
 // first view; when it is drawn and visible it is graded like any other. A control on a box marked
-// data-tf-sample (a sample row a fresh app has no data for) is treated the same way (Chatur TF-002).
+// data-tf-sample (a sample row a fresh app has no data for) is treated the same way.
 async function stateOnlyOf(b, mockup, anchors) {
   if (!mockup || !existsSync(mockup) || !anchors || !anchors.length) return [];
   if (b) {
@@ -187,7 +185,7 @@ async function stateOnlyOf(b, mockup, anchors) {
       ctx = await b.newContext();
       const p = await ctx.newPage();
       await p.goto('file://' + resolve(mockup), { waitUntil: 'load', timeout: 15000 });
-      await markLaterPhase(p, PHASE);   // a later phase's control is another state until its phase (Sevak TF-018)
+      await markLaterPhase(p, PHASE);   // a later phase's control is another state until its phase
       return await p.evaluate(({ anchors, attr }) => anchors.filter((id) => {
         const el = document.querySelector(`[${attr}="${CSS.escape(id)}"]`);
         return !!el && !!el.closest('[data-tf-state],[data-state-testid],[data-tf-sample]');
@@ -203,12 +201,9 @@ async function stateOnlyOf(b, mockup, anchors) {
   return anchors.filter((id) => later(id) || new RegExp(`<[^>]*\\bdata-(?:tf-state|state-testid|tf-sample)\\b[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']|<[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*\\bdata-(?:tf-state|state-testid|tf-sample)\\b`).test(html));
 }
 
-// Sevak TF-019: a control drawn over its neighbour on purpose. The library's SidebarRail is a 16px grab
-// handle centred on the sidebar's edge, half of it over the sidebar, as the mockup draws it; "sidebar
-// overlaps sidebar-rail" failed every screen, and the only excuse was aria-hidden on the app's control,
-// which a focusable overlay cannot take. The mockup says so: data-tf-overlay on the control. Such a
-// control is left out of the overlap check and graded on everything else. Read from the control's own
-// tag, so it needs no browser.
+// A control drawn over its neighbour on purpose, such as a grab handle centred on a sidebar's edge.
+// The mockup says so: data-tf-overlay on the control. Such a control is left out of the overlap
+// check and graded on everything else. Read from the control's own tag, so it needs no browser.
 function overlayOf(mockup, anchors) {
   if (!mockup || !existsSync(mockup) || !anchors || !anchors.length) return [];
   const html = readFileSync(mockup, 'utf8').replace(/<!--[\s\S]*?-->/g, '').replace(/<(style|script)\b[\s\S]*?<\/\1\s*>/gi, '');
@@ -218,8 +213,8 @@ function overlayOf(mockup, anchors) {
   });
 }
 
-// A screen whose mockup draws sample data the app has none of is compared against an empty view
-// (Chatur TF-002). Its seed, tests/verify/seed/<mockup name>.sh (tf-verify-list.py finds it), puts the
+// A screen whose mockup draws sample data the app has none of is compared against an empty view.
+// Its seed, tests/verify/seed/<mockup name>.sh (tf-verify-list.py finds it), puts the
 // running app in the state the mockup draws, once, before the screen is first opened. It is given the
 // app's address as TF_BASE. A seed that fails is the screen's render finding: the screen was not in
 // the state it is graded in.
@@ -250,7 +245,7 @@ function writeOut(extra, results = [], login = null) {
     mode: CDP ? 'cdp' : 'base', base: BASE || CDP, widths: WIDTHS, login,
     themes: THEMES || (darkOffered ? ['light', 'dark'] : ['light']),
     screens: results,
-    skipped,   // screens not driven because their route needs a value (TF-005)
+    skipped,   // screens not driven because their route needs a value
     summary: {
       screens: results.length,
       skipped: skipped.length,
@@ -268,17 +263,17 @@ function writeOut(extra, results = [], login = null) {
   return summary;
 }
 
-// The sign-in recipe (TF-033, TF-044) and the way a screen behind an in-page sign-in is reached
-// (AppManager TF-006) live in tf-login.mjs since AppManager TF-011, shared with tf-mockup-parity
-// and tf-assets so every check reaches a screen the same way.
-import { signIn, signedOut as signedOutShared, navigateInApp as navigateInAppShared, anchorsPresent, waitArrived, ensureDrawing, openFresh, gotoRetry } from './tf-login.mjs';
+// The sign-in recipe and the way a screen behind an in-page sign-in is reached live in
+// tf-login.mjs, shared with tf-mockup-parity and tf-assets so every check reaches a screen the
+// same way.
+import { signIn, signedOut as signedOutShared, navigateInApp as navigateInAppShared, ensureDrawing, openFresh, gotoRetry } from './tf-login.mjs';
 const LOGIN_OPTS = { base: BASE, loginPath: LOGIN_PATH, user: USER, password: PASS, attr: ATTR, settle: SETTLE, renderWait: RENDER_WAIT };
 const login = (page) => signIn(page, LOGIN_OPTS);
 
 async function contextFor(width) {
   if (CDP) { await cdpPage.setViewportSize({ width, height: width < 600 ? 844 : 800 }).catch(() => {}); return { page: cdpPage, close: async () => {} }; }
-  // a development head on HTTPS carries a certificate nothing trusts; tf-mockup-parity and tf-assets
-  // already accept it, and without it every screen was UNREACHABLE (Lekhak TF-002)
+  // a development head on HTTPS carries a certificate nothing trusts; unless it is accepted, as
+  // tf-mockup-parity and tf-assets accept it, every screen is UNREACHABLE
   const opts = { viewport: { width, height: width < 600 ? 844 : 800 }, ignoreHTTPSErrors: true };
   if (STORAGE && existsSync(STORAGE)) opts.storageState = STORAGE;
   const ctx = await browser.newContext(opts);
@@ -293,7 +288,7 @@ async function contextFor(width) {
 async function navigate(page, route, anchors = []) {
   if (CDP) {
     try {
-      // Lekhak TF-037: wait until the app has moved to the screen, not a fixed settle; Lekhak TF-038: from
+      // wait until the app has moved to the screen, not a fixed settle, and start from
       // the screen's own first state, scrolled to the top, whatever the last test left (tf-login.mjs)
       const a = await openFresh(page, route, anchors, LOGIN_OPTS);
       return { status: 200, url: page.url(), arrived: a.arrived, arrive_ms: a.ms, reset: a.reset };
@@ -308,15 +303,15 @@ async function navigate(page, route, anchors = []) {
 }
 
 // Signed out: on the sign-in address, or drawing a sign-in form — a password field WITH a sign-in
-// button. A password field alone is not the sign-in page: AppManager's signed-in "Create user" form
-// has one for the new account and was graded unreachable (AppManager TF-012). tf-login.mjs decides.
+// button. A password field alone is not the sign-in page: a signed-in "Create user" form
+// has one for the new account. tf-login.mjs decides.
 const signedOut = (page) => signedOutShared(page, LOGIN_OPTS);
 // Open a route from inside the page, the way its own links do (tf-login.mjs).
 const navigateInApp = (page, route) => navigateInAppShared(page, LOGIN_OPTS, route);
 
 // Wait for the screen's first render before measuring anything. Returns the milliseconds waited.
 // It never decides anything: when nothing appears within RENDER_WAIT the page is graded exactly as
-// it stands, so a control that is genuinely missing is still reported (TF-021).
+// it stands, so a control that is genuinely missing is still reported.
 async function waitForRender(page, anchors, attr) {
   if (RENDER_WAIT <= 0) return 0;
   const t0 = Date.now();
@@ -341,11 +336,9 @@ async function inspect(page, anchors, attr, errorSelectors) {
       const cs = getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return false;
       if (el.getAttribute('aria-hidden') === 'true') return false;
-      // Sevak TF-020 and TF-024: display:none on a box hides everything inside it, while each control
-      // inside still computes its own display as written. Sevak's chat pane, hidden as a column at
-      // 1024px the way its mockup hides it, read "anchored control assistant-pane-model has zero
-      // width" and eight more, for controls nobody can see. (visibility is inherited, so the lines
-      // above already see it on an ancestor.)
+      // display:none on a box hides everything inside it, while each control inside still computes
+      // its own display as written. (visibility is inherited, so the lines above already see it on
+      // an ancestor.)
       for (let p = el.parentElement; p; p = p.parentElement) {
         if (getComputedStyle(p).display === 'none') return false;
       }
@@ -355,10 +348,9 @@ async function inspect(page, anchors, attr, errorSelectors) {
     };
     // The rectangle an element actually PAINTS in: its own box intersected with the clip
     // rectangle of every ancestor that clips (any overflow other than `visible`). A table row
-    // inside a horizontal scroller measures 1167px wide in a container 492px wide, so the
-    // unclipped box reaches x=1480 while the pixels stop at x=805 — and the card beside it, at
-    // x=846, was reported as being overlapped by something nothing draws (TF-021, TfLens
-    // 2026-09-09). Overlap and off-screen are judged on this rectangle; zero-size still uses the
+    // inside a horizontal scroller is laid out wider than the scroller, so its unclipped box
+    // reaches past the point where its pixels stop and would seem to cover the card beside it.
+    // Overlap and off-screen are judged on this rectangle; zero-size still uses the
     // element's own box, since a control scrolled out of view is not a collapsed one.
     const clipRect = (el) => {
       const r = el.getBoundingClientRect();
@@ -394,7 +386,7 @@ async function inspect(page, anchors, attr, errorSelectors) {
       const tag = el.tagName.toLowerCase();
       const r = el.getBoundingClientRect();
       const text = String(el.innerText || el.value || el.getAttribute('aria-label') || '').trim();
-      // A progress bar shows its value as a filled width, not as text (Chatur TF-009): a native
+      // A progress bar shows its value as a filled width, not as text: a native
       // progress or meter, a role="progressbar" carrying aria-valuenow, or a track holding a fill
       // that has size and paints something (a background, an image or a border).
       const bar = '[role="progressbar"][aria-valuenow],progress,meter';
@@ -405,9 +397,9 @@ async function inspect(page, anchors, attr, errorSelectors) {
         return !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(cs.backgroundColor) || cs.backgroundImage !== 'none'
           || ['Top', 'Right', 'Bottom', 'Left'].some((s) => parseFloat(cs[`border${s}Width`]) > 0 && cs[`border${s}Style`] !== 'none');
       };
-      // A checkbox, switch or radio drawn by a library (TrBlazeUI: <button role="checkbox"
+      // A checkbox, switch or radio drawn by a library (<button role="checkbox"
       // aria-checked="false">, no text, no child while unticked) paints its own box, the way a native
-      // <input type="checkbox"> does (Lekhak TF-035). Counted filled when it paints; an unpainted one
+      // <input type="checkbox"> does. Counted filled when it paints; an unpainted one
       // with no size is still empty.
       const toggle = '[role="checkbox"],[role="switch"],[role="radio"],[aria-checked]';
       const filled = text.length > 0 || ['input', 'select', 'textarea', 'img', 'svg', 'canvas', 'video', 'iframe', 'progress', 'meter'].includes(tag)
@@ -432,7 +424,7 @@ async function inspect(page, anchors, attr, errorSelectors) {
       const c = clipRect(el);            // what is painted, not what is laid out
       // An inline element that wraps paints one fragment per line, and its bounding box is the union
       // of them: two sentences sharing a line then "overlap" across the tile's whole width though no
-      // pixel of one is drawn over the other (TF-036, TfLens /effort 2026-09-11). Keep the fragments,
+      // pixel of one is drawn over the other. Keep the fragments,
       // each cut to the painted rectangle, and compare those.
       let frags = null;
       if (getComputedStyle(el).display === 'inline') {
@@ -456,7 +448,7 @@ async function inspect(page, anchors, attr, errorSelectors) {
 
 function grade(info, consoleErrors, width, excused = [], stateOnly = [], overlay = []) {
   const findings = [];
-  // a control of another state is graded only when this view draws it, visible and filled (TF-005)
+  // a control of another state is graded only when this view draws it, visible and filled
   const soft = new Set(stateOnly);
   info = { ...info, anchors: info.anchors.filter((a) => !soft.has(a.id) || (a.present && a.visible && a.filled && a.w > 0 && a.h > 0)) };
   if (info.error_banner) findings.push({ check: 'render', class: 'exception', detail: `the application's error banner is showing (${info.error_banner})` });
@@ -488,12 +480,12 @@ function grade(info, consoleErrors, width, excused = [], stateOnly = [], overlay
   for (let i = 0; i < boxes.length && overlaps < 5; i++) for (let j = i + 1; j < boxes.length && overlaps < 5; j++) {
     const a = boxes[i], b = boxes[j];
     if (rel.has(`${a.i}-${b.i}`)) continue;
-    if (over.has(a.id) || over.has(b.id)) continue;   // drawn over its neighbour by design (Sevak TF-019)
+    if (over.has(a.id) || over.has(b.id)) continue;   // drawn over its neighbour by design
     const ix = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
     const iy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
     if (ix <= 4 || iy <= 4) continue;
     let inter = ix * iy, small = Math.min(a.w * a.h, b.w * b.h);
-    if (a.frags || b.frags) {            // a wrapped inline element: what its fragments share (TF-036)
+    if (a.frags || b.frags) {            // a wrapped inline element: what its fragments share
       const fa = a.frags || [a], fb = b.frags || [b];
       const area = (fs) => fs.reduce((s, f) => s + f.w * f.h, 0);
       inter = 0;
@@ -510,7 +502,7 @@ function grade(info, consoleErrors, width, excused = [], stateOnly = [], overlay
     const nm = (e) => e.id || `${e.tag} "${e.text || ''}"`;
     findings.push({ check: 'visual', class: 'overlap', detail: `${nm(a)} overlaps ${nm(b)} at ${width}px` });
   }
-  // Lekhak TF-024: text a reader cannot read, and a white panel left in a dark shell
+  // text a reader cannot read, and a white panel left in a dark shell
   const c = info.contrast;
   if (c) {
     for (const x of c.low) findings.push({ check: 'visual', class: 'low-contrast',
@@ -529,7 +521,7 @@ mkdirSync(SHOTS, { recursive: true });
 const results = [];
 let loginResult = null;
 let firstUnreachable = false;
-let darkOffered = false;  // auto mode: has any screen shown a dark theme yet? (Lekhak TF-024)
+let darkOffered = false;  // auto mode: has any screen shown a dark theme yet?
 for (const width of WIDTHS) {
   const { page, close } = await contextFor(width);
   const consoleErrors = [];
@@ -553,7 +545,7 @@ for (const width of WIDTHS) {
     const shot = `${SHOTS}/${slug(s.name)}-${width}.png`;
     const entry = { width, url: nav.url || '', status: nav.status, screenshot: shot, console_errors: [] };
     if (CDP && nav.arrived === false) entry.arrived = false;
-    // Sevak TF-011: a minimized desktop window draws no frames, and every click and wait on it times out.
+    // A minimized desktop window draws no frames, and every click and wait on it times out.
     // Counted before measuring; restored once by the boot's process id; still not drawing: not measured.
     if (CDP && nav.status === 200) {
       const dr = await ensureDrawing(page, CDP);
@@ -567,7 +559,7 @@ for (const width of WIDTHS) {
       }
       if (dr.restored) entry.window_restored = dr.restored;
     }
-    // --- AppManager TF-006: a sign-in the page keeps for itself, not in a cookie. The document for a
+    // A sign-in the page keeps for itself, not in a cookie. The document for a
     // signed-in screen answers 401 because the server cannot see the sign-in; the page then draws the
     // screen once its live connection reads the session in the tab, or never, when the sign-in lives
     // only in that connection. So a 401 or 403 is judged by what the page draws: signed in, the screen
@@ -582,7 +574,7 @@ for (const width of WIDTHS) {
       }
       if (how) { entry.reached = how; nav = { status: 200, url: page.url() }; entry.url = nav.url; }
     }
-    const lp = LOGIN_OPTS.loginPath;   // the sign-in address that worked (Chatur TF-019)
+    const lp = LOGIN_OPTS.loginPath;   // the sign-in address that worked
     const redirectedToLogin = lp && nav.url && new URL(nav.url).pathname.startsWith(lp) && !s.route.startsWith(lp);
     if (nav.status === 0 || nav.status >= 400 || redirectedToLogin) {
       entry.render = 'UNREACHABLE'; entry.visual = 'n/a';
@@ -594,7 +586,7 @@ for (const width of WIDTHS) {
     }
     entry.render_wait_ms = await waitForRender(page, (r.anchors || []).filter((id) => !excused.includes(id) && !stateOnly.includes(id)), ATTR);
     // one pass per theme on the same opened screen; each pass puts the page back as it found it, so an
-    // attached desktop head is left in the viewer's theme (Lekhak TF-024)
+    // attached desktop head is left in the viewer's theme
     let lightSurface = null;
     for (const theme of THEMES || ['light', 'dark']) {
       const restore = await useTheme(page, theme);
@@ -612,7 +604,7 @@ for (const width of WIDTHS) {
         const info = await inspect(page, r.anchors || [], ATTR, ERROR_SELECTORS);
         info.contrast = await audit(page, theme === 'dark', MIN_CONTRAST);
         const g = grade(info, theme === 'light' ? consoleErrors : [], width, excused, stateOnly, r.overlay || []);
-        // a screen still showing placeholder text its mockup does not draw is not built (Chatur TF-011)
+        // a screen still showing placeholder text its mockup does not draw is not built
         if (theme === (THEMES || ['light'])[0]) {
           for (const p of await placeholdersOnPage(page, mockTextOf(s.mockup), PLACEHOLDER_EXTRA)) g.findings.push({ check: 'render', class: 'placeholder', detail: `the screen shows placeholder text "${p}"` });
           if (g.render === 'OK' && g.findings.some((f) => f.class === 'placeholder')) g.render = 'EMPTY';
@@ -636,7 +628,7 @@ for (const width of WIDTHS) {
   await close();
 }
 
-// ---------------------------------------------------------------- menus (Chatur TF-011)
+// ---------------------------------------------------------------- menus
 // Every menu the mockups draw open is opened in the app and every item clicked, once per menu, on the
 // first screen that draws it, at the first width. What a menu lacks or does wrong is a render finding
 // on every screen whose mockup draws that menu. A screen a menu item links to, which no click reached,

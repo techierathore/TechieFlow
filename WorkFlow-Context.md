@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-11-10 (every open feedback entry answered; v1.2.4 is the last tag). |
+| Last updated | 2026-11-11 (code-review faults fixed, size rule, per-project table; v1.3.0 is the last tag). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -113,13 +113,13 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 |---|---|
 | **Distribution**: the framework is an npm package with a validation workflow, merged from `main` on 2026-09-07. Publishing it is the remaining step (FR-48 to FR-52). | Owner action |
 | Three requirements name a **script that has not been written**: FR-58 (refuse `done complete` while rows are unfinished), FR-60 (refuse a banned head name in a brief), FR-61 (grade a row not observable when the environment lacks the data). The idea-stage commands still emit no run record (FR-34, FR-60). | Maintainer |
-| **Model routing is deployed everywhere and enabled in three**: 19 repositories carry `tf-model-pick.sh` and a `routing.yaml` with a `fallbacks:` chain and a `billing:` block (added by the updater, never overwriting a line); three of them have `enabled: true` and generated bindings, the other sixteen keep their own `enabled: false`. Turning one on is `bash .tfcore/utils/tf-routing.sh on` in that project — Routing-Guide §2b. | Owner decision, per project |
+| **Model routing is deployed to 19 repositories and enabled in three** (`enabled: true` in `routing.yaml`). Turning one on is `bash .tfcore/utils/tf-routing.sh on` in that project — Routing-Guide §2b. | Owner decision, per project |
 | **Open misses**: `docs/TechieFlow-Misses.md`. | Maintainer |
-| **Not proved on real machines** (v1.2.4): window restore, Mac `--env`, NAT fallback; the translucent-colour fix (TfLens TF-056) is unmeasured on running apps. The 2026-11-10 check fixes: fixtures only. | Maintainer |
-| **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` (that repository, not this one) and waiting on the owner's go-ahead. | Separate repo |
-| **No feedback entry is open** (2026-11-10); that day's fixes ship with v1.3.0. Several await their project's re-check: `tf-feedback.sh <App> --waiting`. | Each project (close) |
+| **Not proved on real machines** (v1.2.4): window restore, Mac `--env`, NAT fallback; the translucent-colour fix (TfLens TF-056) is unmeasured on running apps. The check fixes of 2026-11-10 and 11: fixtures only. | Maintainer |
+| **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` and waiting on the owner's go-ahead. | Separate repo |
+| **One feedback entry is open** (2026-11-11). Fixes since v1.3.0 are in two projects only. Several await their project's re-check: `tf-feedback.sh <App> --waiting`. | Each project (close) |
 | **TrBlazeUI TR-004**: disabled menu items lack `aria-disabled`; the menu bar ignores Escape. `tf-menus.mjs` works around both. | TrBlazeUI |
-| **Mockup parity pairs live rows with sample rows by position** (MISS-TechieFlow-20261003-02): row N of the app is graded against whatever kind of row the mockup drew at N, so data in another order gives row-level icon findings. Chatur's Repository rows are blocked on it. A fix would pair each app row with the best-matching sample row. | Maintainer |
+| **Mockup parity pairs live rows with sample rows by position** (MISS-TechieFlow-20261003-02), so data in another order gives row-level icon findings; Chatur's Repository rows are blocked on it. | Maintainer |
 | **Blazor Hybrid heads owe OS zoom** (standards §9b): TrSetup lacks it and the macOS 27 scene rule; TrStudio's is unbuilt (GitHub Packages 401); one private project unchecked. | Those projects |
 | **Eighteen `.gitignore` files repeat framework blocks** (FR-76's defect; TechieBlog 50 copies, TfLens 30). Harmless; the updater no longer adds them and removes none. | Owner decision |
 | **TrSetup tracks thousands of build-output files**; its ignore rules work once the index entries go. `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the commands. | Owner action |
@@ -140,7 +140,8 @@ When you change the framework, change all of these together.
 2. **A new task needs four wirings**: the file under `.tfcore/tasks/`, the mirror, the command registered on its owning persona (mirrored too), and an entry in `opencode.jsonc`.
 2b. **Anything that changes what a project receives goes into both delivery routes**: the shell scripts and `scripts/install.mjs`. A hook registration, a new folder under `.tfcore/`, a change to how an existing project is refreshed. `npm run test:install` compares the two routes, before a release, on a normal filesystem (a Windows mount yields one false difference).
 3. **A new rule is a script or a hook, not a paragraph.** A rule ignored twice never gets a third paragraph. Task files hold steps only; explanation and history belong in the documents of §1 and in the changelog.
-4. **Prove every script by running it.** A script the maintainer has not run on a real project is not done. Both harnesses. After each fix, run `tests/regression/run.sh` once in the machine's own time zone, again with `TZ=UTC` only when a script listed at its top (one that reads the local clock) changed; portability and the install test wait for a release.
+4. **Prove every script by running it.** A script not run on a real project is not done. Both harnesses. After each fix, run `tests/regression/run.sh` once in the machine's own time zone, again with `TZ=UTC` only when a script listed at its top (one that reads the local clock) changed; and on every fix `bash tests/portability/run.sh` and `npm run test:install` (owner, 2026-11-11). New cases go in `tests/faults/run.sh`: `tests/mirror/size-check.py` caps script and test sizes, and the regression file is over its cap.
+4b. **Measure a change on every project before a deploy or release**: `python3 scripts/measure-projects.py --base <last tag>` prints per project the rows whose verdict moves, the tests that stop running and the findings that appear or go. Its table goes in every fix reply.
 5. **Log every gap as a miss** through `tf-log-miss.sh`, with its sort, before proposing the fix.
 5b. **Answer every fix in the project's feedback file.** A problem a project filed is answered by a row in a `## Resolution status (TechieFlow team, <date>)` table in `docs/<App>-TechieFlow-Feedback.md` here, which the owner copies across. `tests/regression/run.sh replies_complete` fails while a problem the suite holds a case for still reads open there. `bash .tfcore/utils/tf-feedback.sh <App>` (run in the project) is the one reading of those files: open, fixed upstream and not yet re-checked, closed.
 6. **Record the work.** A maintenance session ends with one `framework-reset` run record in this repository's own metrics, a dated entry in `docs/CHANGELOG.md`, and this file's open items and date refreshed.

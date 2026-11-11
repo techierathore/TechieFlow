@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 327 logged: 56 open, 269 fixed, 1 will not fix, 1 withdrawn |
+| Count | 333 logged: 56 open, 275 fixed, 1 will not fix, 1 withdrawn |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-11-10 |
+| Updated | 2026-11-11 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -70,10 +70,16 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (269)
+## Fixed (275)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261111-06 | 2026-11-11 by owner | 2026-11-11 by log-miss | said and ignored | The maintainer wrote two private project names into WorkFlow-Context.md while refreshing its open items on 2026-11-11; the FR-47 check in tests/mirror caught it before the reply and the line was rewritten. |
+| MISS-TechieFlow-20261111-05 | 2026-11-11 by owner | 2026-11-11 by log-miss | the check was too weak | The same rule typed in several scripts had drifted: tf-emit.sh ignored TF_PROJECT_DIR and TF_YOLO_TTL_HOURS; tf-doc-check.py skipped a checklist row whose id is in backticks; tf-build-list.py handed Owner-UAT rows to the builder; seven scripts read appPhase in quotes as phase 1; tf-assets.sh did not |
+| MISS-TechieFlow-20261111-04 | 2026-11-11 by owner | 2026-11-11 by log-miss | the check was too weak | handoff-phase.md told the model to write a usage guide with four sections the template does not have, one bare next-command line, seven feedback fields of eight and a Summary without the blocking count: following the task produced FAIL lines at the status gate. It and productguide.md also never star |
+| MISS-TechieFlow-20261111-03 | 2026-11-11 by owner | 2026-11-11 by log-miss | the check was too weak | Three readers of the command marker ignored the 24-hour rule tf-phase.sh states (tf-emit.sh, tf-test-users-check.py, tf-register-test-users.mjs): a marker a killed session left stamped a later run's start, tied gate records to a dead run and refused the owner's register script. Fixed 2026-11-11 with |
+| MISS-TechieFlow-20261111-02 | 2026-11-11 by owner | 2026-11-11 by log-miss | the check was too weak | guard-status.sh refused every python or node command that named PROJECT-STATUS.md, a read included, while its own message tells the agent to run the document check on that file; a one-liner with a semicolon before the path was not seen at all. The same fault was fixed in guard-metrics.sh on 9 Sep an |
+| MISS-TechieFlow-20261111-01 | 2026-11-11 by owner | 2026-11-11 by log-miss | the check was too weak | The Validate workflow on GitHub went red on main with commit d12f51c (10 Nov): the change that keeps other packages' .codex files was shipped without the install test and the portability scan being run, the install test's stand-in adapter file did not name TechieFlow so the updater kept it, and one |
 | MISS-TechieFlow-20261110-19 | 2026-11-10 by owner | 2026-11-10 by log-miss | the check was too weak | lk_037b failed again in a full run after the second run of 2026-11-10 called it deterministic: the cause given then (a one-second wait margin) was wrong. The arrival rule took one new control for the screen, a shared top bar included, so a page drawn late by an earlier move passed for the next scree |
 | MISS-TechieFlow-20261110-18 | 2026-11-10 by owner | 2026-11-10 by log-miss | the check was too weak | Chatur TF-025: the menu walk clicked every branch in the branch picker and left the project on the last one, so the next screen was compared against a state its seed had not made |
 | MISS-TechieFlow-20261110-17 | 2026-11-10 by owner | 2026-11-10 by log-miss | the framework never said it | Chatur TF-024: on WSL a build failed with Razor parse errors from a stale compiler server on unchanged files, and tf-build.sh reported them as real errors although a build-server shutdown cleared them |

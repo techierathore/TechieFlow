@@ -19,6 +19,8 @@ Output: `docs/{AppName}-ProductGuide.md` (single doc, small apps) **or** a `docs
 
 ## SEQUENTIAL Execution
 
+First: `bash .tfcore/utils/tf-phase.sh start productguide {AppName}` prints the start time and marks the command running.
+
 ### 1. Confirm there is a built, runnable UI
 
 The Product Guide documents the real running app. If the repo is doc-only / not yet built (e.g. greenfield before any build), HALT: "No built UI yet — the Product Guide documents the running app with real screenshots. Build first, then run `*productguide {AppName}`." (A greenfield app gets its Product Guide AFTER it is built, exactly like its DevGuide.)

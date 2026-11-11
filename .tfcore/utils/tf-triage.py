@@ -63,7 +63,7 @@ def cfg_phase():
     p = os.path.join(".tfcore", "core-config.yaml")
     if os.path.isfile(p):
         import re
-        m = re.search(r"(?m)^appPhase:\s*(\d+)", open(p, encoding="utf-8").read())
+        m = re.search(r"(?m)^appPhase:\s*[\"']?(\d+)", open(p, encoding="utf-8").read())
         if m:
             return int(m.group(1))
     return 1

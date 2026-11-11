@@ -86,7 +86,7 @@ def entries_of(text):
         if a:
             rid = a.group(1).upper()
             # an anchor written above its own page heading belongs to that page, not the one before
-            # (AppManager's older entries: `<a id>` then `### Page:` then the row)
+            # (`<a id>` then `### Page:` then the row)
             nxt = next((l for l in lines[i + 1:i + 3] if l.strip()), "")
             h = re.match(r"^#{2,3}\s+(?:page|screen)\s*:\s*(.+)$", nxt, re.I)
             if h:
@@ -216,7 +216,7 @@ def plain(cell):
     return re.sub(r"(\*\*|__|\*)", "", t).strip()
 
 
-# --- how each screen is reached, read from the code (Lekhak TF-027) ---------------------------------
+# --- how each screen is reached, read from the code -------------------------------------------------
 # A Blazor Hybrid head on a Mac shows mac2 no data-testid and no URL, so its screens are reached by
 # clicking what a person clicks. The code says what that is: a page declares its route with @page, and
 # a link or button anywhere names a route in href/Href with its visible text. A link in a file that is
@@ -345,7 +345,7 @@ def test_users(path):
             continue                                        # the header rule
         if len(c) > max(cols["user"], cols["role"]) and plain(c[cols["user"]]) and not plain(c[cols["user"]]).isdigit():
             # The cell is Markdown. The user is its first code span when it has one ("`a@b.c` (username
-            # `a`)" is a@b.c); every field is plain text, never with a stray backtick (Lekhak TF-027).
+            # `a`)" is a@b.c); every field is plain text, never with a stray backtick.
             u = re.match(r"\s*`([^`]+)`", c[cols["user"]])
             users.append({"user": u.group(1).strip() if u else plain(c[cols["user"]]),
                           "password_source": plain(c[cols["pw"]]) if cols["pw"] is not None and len(c) > cols["pw"] else "",
@@ -393,9 +393,8 @@ def main(argv):
         print(__doc__)
         return 0
     app, scope = argv[1], argv[2]
-    # Sevak TF-005: *verify graded only appPhase's checklist, so phases 1 and 2 (86 rows waiting) were
-    # never graded. --phase N grades that phase's checklist; --phase all prints the phases to grade, in
-    # order, and the task runs one pass per phase. Every later script reads the checklist from list.json.
+    # --phase N grades that phase's checklist (appPhase when not given); --phase all prints the phases to
+    # grade, in order, and the task runs one pass per phase. Every later script reads the checklist from list.json.
     have = phases_of(app)
     phase = int(cfg("appPhase", "1"))
     if "--phase" in argv:
@@ -429,7 +428,7 @@ def main(argv):
     dialogs = dialogs_of_brd(os.path.join("docs", f"{pfx}BRD.md"))
     users = test_users(usage_guide(app))
     by_name = {norm_name(s["name"]): s for s in screens}
-    for s in screens:                   # a split screen's own name reaches its first tab (Chatur TF-003)
+    for s in screens:                   # a split screen's own name reaches its first tab
         if s.get("parent"):
             by_name.setdefault(norm_name(s["parent"]), s)
     by_mock = {s["mockup"]: s for s in screens if s["mockup"]}
@@ -500,7 +499,7 @@ def main(argv):
            if s["mockup"] and "{" not in s["route"]]
     if par:
         # --list carries each screen's mockup path: the --screen name is the file's stem only, so
-        # docs/mockups/admin/prompt-manager.html read as NO-MOCKUP (Lekhak TF-022)
+        # a mockup in a subfolder is not found by it
         print(f"Mockup parity: {' '.join(par)} --list {out_path}")
     print()
     print("## Rows")
@@ -524,7 +523,7 @@ def main(argv):
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
-        # "phases": every phase with a checklist, so the test run can tell a project with several (Sevak TF-021)
+        # "phases": every phase with a checklist, so the test run can tell a project with several
         json.dump({"app": app, "scope": scope, "phase": phase, "phases": have, "kind": cfg("appKind", "app"), "checklist": cl,
                    "rows": work, "screens": screen_list, "screens_source": source, "unresolved": unresolved, "test_users": users,
                    "skipped_na": skipped, "total": len(rows)}, f, indent=1)

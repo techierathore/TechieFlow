@@ -1,0 +1,41 @@
+# tests/mirror/size-ceilings.txt — every file or block over a size limit, and the size it may not pass.
+# Read by tests/mirror/size-check.py (limits: script 600 lines and 40,000 bytes; python or node block
+# inside bash 30 lines; test file 1,500 lines). Written 2026-11-11 by size-check.py --write; a line is
+# added or raised only on purpose. Columns: kind, lines and bytes (or the block lengths), path.
+script  685 28701  .tfcore/utils/tf-ci-repro.py
+script  1617 88234  .tfcore/utils/tf-doc-check.py
+script  1832 91590  .tfcore/utils/tf-emit.sh
+script  640 35311  .tfcore/utils/tf-goal.sh
+script  555 40233  .tfcore/utils/tf-menus.mjs
+script  1268 73278  .tfcore/utils/tf-mockup-parity.mjs
+script  809 32452  .tfcore/utils/tf-render-html.py
+script  881 57708  .tfcore/utils/tf-verify-boot.sh
+script  709 47501  .tfcore/utils/tf-verify-screens.mjs
+blocks  214  .tfcore/hooks/block-git.sh
+blocks  67  .tfcore/hooks/guard-artifacts.sh
+blocks  47  .tfcore/hooks/guard-build.sh
+blocks  166  .tfcore/hooks/guard-db.sh
+blocks  46  .tfcore/hooks/guard-metrics.sh
+blocks  202  .tfcore/hooks/guard-status-html.sh
+blocks  118  .tfcore/hooks/guard-status.sh
+blocks  94  .tfcore/hooks/guard-verify-deps.sh
+blocks  113  .tfcore/hooks/guard-verify.sh
+blocks  87  .tfcore/hooks/metrics-session.sh
+blocks  32  .tfcore/hooks/session-pointer.sh
+blocks  193  .tfcore/hooks/sweep-artifacts.sh
+blocks  282  .tfcore/utils/tf-assets.sh
+blocks  86  .tfcore/utils/tf-develop.sh
+blocks  1209,64,40,34,32  .tfcore/utils/tf-emit.sh
+blocks  168  .tfcore/utils/tf-fix-close.sh
+blocks  263  .tfcore/utils/tf-gitignore-audit.sh
+blocks  111  .tfcore/utils/tf-goal.sh
+blocks  414  .tfcore/utils/tf-model-pick.sh
+blocks  176  .tfcore/utils/tf-perf.sh
+blocks  268  .tfcore/utils/tf-routing-bind.sh
+blocks  79,35  .tfcore/utils/tf-routing.sh
+blocks  321  .tfcore/utils/tf-selfcheck.sh
+blocks  104,39  .tfcore/utils/tf-verify-boot.sh
+blocks  128  .tfcore/utils/tf-verify-emit.sh
+blocks  221,93  .tfcore/utils/tf-verify-tests.sh
+blocks  44  .tfcore/utils/tf-yolo.sh
+test    8299 607612  tests/regression/run.sh

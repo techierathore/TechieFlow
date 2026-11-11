@@ -143,7 +143,7 @@ def config_phase():
     """appPhase from .tfcore/core-config.yaml; 1 when absent or null."""
     p = os.path.join(".tfcore", "core-config.yaml")
     if os.path.isfile(p):
-        m = re.search(r"(?m)^appPhase:\s*(\d+)", read(p))
+        m = re.search(r"(?m)^appPhase:\s*[\"']?(\d+)", read(p))
         if m:
             return int(m.group(1))
     return 1

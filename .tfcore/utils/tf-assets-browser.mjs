@@ -24,7 +24,10 @@ const BASE = (arg('--base') || '').replace(/\/$/, '');
 const PATHS = (arg('--paths', '/') || '').split(',').map((p) => p.trim()).filter(Boolean).map((p) => (p.startsWith('/') ? p : '/' + p));
 const OUT = arg('--json-out');
 const COOKIE = arg('--cookie'); const STORAGE = arg('--storage-state');
-const LOGIN_OPTS = { base: BASE, loginPath: arg('--login-path'), user: arg('--user'), password: arg('--password'), settle: 1500, renderWait: 5000 };
+const TS = await import('./tf-testsettings.mjs').catch(() => null);   // a user the command line does not name, as tf-verify-screens.mjs
+const fromSettings = (k) => (TS ? TS.setting(k) : '') || null;
+const LOGIN_OPTS = { base: BASE, loginPath: arg('--login-path'), user: arg('--user') || fromSettings('Verify:Login:User'),
+  password: arg('--password') || (arg('--user') ? null : fromSettings('Verify:Login:Password')), settle: 1500, renderWait: 5000 };
 // Lekhak TF-006: a desktop head, attached over its DevTools port. Its pages and assets are served by
 // the embedded browser itself, so no request from outside can fetch them: each path is opened by
 // pushState, and every asset the document declares is fetched from inside the page, its status and

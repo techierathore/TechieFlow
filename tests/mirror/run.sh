@@ -8,6 +8,8 @@
 #      and every {file:./.tfcore/...} reference in opencode.jsonc resolves to a file
 #   4. every task file is under the FR-43 frontier budget of 7,000 words, and the shared rule files
 #      together stay under 3,000 (FR-44); every persona under 1,500
+#   6. no script, embedded python or node block, or test file grows past its size limit, and one
+#      already past it does not grow (size-check.py, ceilings in size-ceilings.txt)
 # Run: bash tests/mirror/run.sh   (a second's work; the distribution pipeline runs it too)
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; ROOT="$(cd "$HERE/../.." && pwd)"
@@ -200,6 +202,15 @@ for leftover in "$ROOT/.codex" "$ROOT/.agents" "$ROOT/WORKFLOW.html" \
   [[ -e "$leftover" ]] && bad "FR-42: $(basename "$leftover") is still on disk"
 done
 [[ ! -e "$ROOT/.codex" && ! -e "$ROOT/WORKFLOW.html" ]] && ok "FR-42/FR-62: .codex/, .agents/ and WORKFLOW.html are gone from the framework"
+
+# 6. size limits: 600 lines and 40,000 bytes a script, 30 lines a python or node block inside
+#    bash, 1,500 lines a test file. A file already over is listed with its size and may not grow.
+if sz_out="$(python3 "$ROOT/tests/mirror/size-check.py" 2>&1)"; then
+  ok "${sz_out#ok   }"
+else
+  bad "a script, an embedded block or a test file grew past its size limit"
+  printf '%s\n' "$sz_out" | sed 's/^/     /'
+fi
 
 echo
 echo "mirror self-test: $pass passed, $fail failed"

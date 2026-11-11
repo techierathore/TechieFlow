@@ -26,8 +26,10 @@ const dry = argv.includes('--dry-run');
 const files = argv.flatMap((a, i) => (a === '--appsettings' && argv[i + 1] ? [argv[i + 1]] : []));
 
 try {
-  const marker = JSON.parse(fs.readFileSync('.tfcore/.session/phase.json', 'utf8'));
-  if (marker && marker.cmd === 'verify-phase') {
+  const markerFile = '.tfcore/.session/phase.json';
+  const marker = JSON.parse(fs.readFileSync(markerFile, 'utf8'));
+  // a marker older than 24 hours is a killed session's, not a running verify (tf-phase.sh)
+  if (marker && marker.cmd === 'verify-phase' && Date.now() - fs.statSync(markerFile).mtimeMs < 24 * 3600 * 1000) {
     console.error('tf-register-test-users: REFUSED — a verify is running. Test users are registered by the owner, never by a verify (stack rule Q4a).');
     process.exit(3);
   }

@@ -14,39 +14,40 @@ After the checklist's Requirements Status table is green (or `Blocked` library-g
 
 ## SEQUENTIAL Execution
 
+First: `bash .tfcore/utils/tf-phase.sh start handoff-phase {AppName}` prints the start time and marks the command running.
+
 ### 1. Finalize `docs/{AppName}-UsageGuide.md`
 
 The Usage Guide was created at day-1 (`day1-*` §7.4) from `.tfcore/templates/v4custom/app-usageguide-tmpl.md`. **Update it in place — do not create a new doc.** (If it's missing — a project that predates this step — create it now from that template.) At handoff, bring every section up to ship-reality and **TERSELY**. Hard rules:
 
-- **Test-users table:** reconcile with the database — every account that actually exists now is marked `Created? = ✅`; drop or mark any planned ⬜ account that was never created. This table is what UAT logs in with, so it must match the live DB.
+- **Test-users table:** reconcile with the database — every account that actually exists now reads `yes` in the `Exists` column; drop, or mark `no`, any planned account that was never created. This table is what UAT logs in with, so it must match the live DB.
 - **Screen-by-screen test plan:** ensure every shipped feature has a walkthrough block; remove blocks for cut features.
 
-Below, "populate" means refresh these sections of the existing doc. Hard rules:
+The sections are the template's, under the template's own headings. `bash .tfcore/utils/tf-doc-check.sh docs/{AppName}-UsageGuide.md` fails a heading the template does not have, so never add one, and run it when the guide is written. Below, "populate" means refresh these sections of the existing doc. Hard rules:
 
-- **No narrative prose anywhere.** No "this app is built this way because…", no caveats, no explanations. The deployment-steps section must look like a runbook — one command per line, numbered in execution order.
+- **No narrative prose anywhere.** No "this app is built this way because…", no caveats, no explanations. The Execution guide must look like a runbook — one code block, one command per line, in execution order.
 - **Skip any step that doesn't apply.** If the repo has no SQL migrations, omit the database-setup step entirely — do not leave "N/A" placeholders or "// not applicable" comments.
-- **No optional steps in the numbered list.** The numbered deployment-steps section is the minimum sufficient set of commands to go from `git clone` to a running app. Anything optional goes in "Known limitations" or a separate doc.
+- **No optional steps in the code block.** The Execution guide is the minimum sufficient set of commands to go from `git clone` to a running app. Anything optional goes in "Known limitations" or a separate doc.
 
 Detection sources for each section:
 
 **Every command below comes from the project, never from this file.** The restore, build, run and test commands are the ones the project's Architecture stack table and `docs/{App}-Coding-Standards.md` name, and `bash .tfcore/utils/tf-build.sh --print` prints the build command this repository actually uses. A toolchain assumed here would be wrong on the next project.
 
-- **Prerequisites**: the runtime version from wherever this stack pins it (the Architecture stack table names the file). Then one line for each external runtime the build, run or test commands depend on — a package runtime only if the tests need one, a database server only if migrations exist, a platform workload only if a project targets that platform. One line each. No prose.
-- **Deployment steps**: detect in this order and emit one numbered step per command:
+- **Execution guide**: first its `Prerequisites:` line — the runtime version from wherever this stack pins it (the Architecture stack table names the file), then each external runtime the build, run or test commands depend on: a package runtime only if the tests need one, a database server only if migrations exist, a platform workload only if a project targets that platform. One line, no prose. Then one code block; detect in this order and emit one line per command:
   1. `git clone <repo>` (always)
   2. Restore dependencies — the stack's restore command (always)
   3. Database migrations — scan the migration folders the Architecture names, plus the conventional ones (`database/`, `db/migrations/`, `migrations/`). List the migration files in the order they run, one per line; if the stack has a migration runner, prefer one step invoking it over listing every file.
   4. Build — the stack's build command
   5. Backend run — find the service or API entry point. One line, with the port it listens on.
   6. Frontend run — find the UI entry point. One line, with its port.
-  7. "Open http://localhost:<frontend port> in a browser."
+  7. Under the code block, not in it: "Open http://localhost:<frontend port> and sign in as user 1."
   - A packaged desktop or mobile head replaces steps 5 and 6 with that platform's build-and-run pair.
   - If frontend and backend are one process, collapse steps 5 and 6 into one.
-- **Test**: the stack's test command. Add the browser-test command ONLY if such tests are checked in.
-- **Smoke checklist**: one checkbox per top-level BRD capability (5–10 max). Each line is a user action, not a technical step ("Log in as admin and load the dashboard" — NOT "verify JWT validation").
+- **Automated tests**: the stack's test command in a code block, and one line saying what the suite covers. Add the browser-test command ONLY if such tests are checked in.
+- **How to test, screen by screen**: one `###` block per screen, with the template's four lines (Sign in as, Steps numbered `1) 2) 3)`, Expected, Covers). Every top-level BRD capability is covered by a block. Each step is a user action, not a technical step ("Log in as admin and load the dashboard" — NOT "verify JWT validation").
 - **Known limitations**: pull every `Blocked` REQ row from the checklist Status table + every entry from the per-library feedback files (`docs/{AppName}-{Library}-Feedback.md`, one per library the project uses). One line each. Cross-reference each to its issue id.
 
-**If you find yourself writing more than one line per numbered step, you're doing it wrong** — the user has explicitly called out that the deployment steps got polluted with "unnecessary details" in past runs. Strip aggressively.
+**If you find yourself writing more than one line per command, you're doing it wrong** — the user has explicitly called out that the deployment steps got polluted with "unnecessary details" in past runs. Strip aggressively.
 
 ### 2. Update `PROJECT-STATUS.md` (per `.tfcore/tasks/_status-update-gate.md`)
 
@@ -55,11 +56,11 @@ Detection sources for each section:
 - `last_verified_build: PASS` (you just verified — confirm with `bash .tfcore/utils/tf-build.sh` if uncertain)
 - `last_verified_date`: today
 - "Where I am": one paragraph — "All REQ-* verified; awaiting UAT per usage doc."
-- "Next command to run": `Manual UAT per docs/{AppName}-UsageGuide.md smoke checklist.`
+- "Next command to run": the two one-line code blocks, Claude Code then OpenCode, copied as `bash .tfcore/utils/tf-status-facts.sh {AppName} handoff-phase` prints them; after a handoff they hold the owner's UAT step. Never one bare line.
 - "Open requirements": list any REQ-* not `Verified` in the checklist Status table (`Blocked`-by-library or deferred). Empty if all clear.
 - "Library feedback summary": refresh counts from the consolidated library-feedback doc (§4 below)
 - "Standards compliance": copy from the latest verifier run (recorded in the checklist Status table Remarks / prior PROJECT-STATUS entry)
-- Append a "Verification log" row for the handoff (Result = ship-readiness verdict; Status table column → `docs/{AppName}-Checklist.md#requirements-status`)
+- Add one "Verification log" row for the handoff and keep the last five rows (Result = ship-readiness verdict, a count, at most 20 words; Status table column → `docs/{AppName}-Checklist.md#requirements-status`)
 - **BRD §4 Development status** — per the gate's item 9, roll the now-final checklist statuses up into the BRD §4 table (at handoff, most features should land on `Done`). If the BRD has no §4 section (legacy), say so and point the user at `*refresh-status {AppName}` to add it. The re-render in §3 picks up the change.
 
 ### 2a. Emit the run record (telemetry)
@@ -95,12 +96,13 @@ Run `.tfcore/tasks/devguide.md` for `{AppName}` (`*devguide {AppName}`) so the s
 For EACH `docs/{AppName}-{Upstream}-Feedback.md` that exists — one per library the project uses, plus the framework's own — they are separate files because each goes to a different team:
 - Deduplicate entries (same expected/actual pair = duplicate; merge them).
 - Sort by severity: blocker → major → minor → nice-to-have.
-- Ensure each entry has all the schema fields (Severity, Repro, Expected, Actual, Encountered in, Workaround, Suggested fix). Fill in missing ones from context if possible.
-- Refresh the file's summary block:
+- Ensure each entry has all the schema fields (Severity, Blocks, Repro, Expected, Actual, Encountered in, Workaround, Suggested fix). Fill in missing ones from context if possible.
+- Refresh the file's summary block, the template's shape, with the counts `bash .tfcore/utils/tf-feedback.sh {AppName}` prints:
   ```markdown
   ## Summary
-  - {N blockers, M majors, P minors, Q nice-to-haves}
-  - Last consolidated: {today}
+  {N} entries: {n} blocking now, {n} filed and not blocking, {n} fixed upstream.
+
+  {One sentence naming what is blocked right now, or the sentence "Nothing is blocked."}
   ```
 - If a legacy combined `docs/{AppName}-Library-Feedback.md` exists (pre-split projects), split its sections into the per-library files first, then archive it to `docs/OldDocs/`.
 
@@ -113,7 +115,7 @@ Deliver:
 - "⚠ {AppName} has {N} `Blocked` (library-gap) items — see the `docs/{AppName}-{Upstream}-Feedback.md` files before UAT."
 
 Then explicitly tell the user:
-1. Open `docs/{AppName}-UsageGuide.md` and run the smoke checklist.
+1. Open `docs/{AppName}-UsageGuide.md` and walk "How to test, screen by screen".
 2. Hand each feedback file to the team named in its file name (or file its entries as issues against that repository). Those teams use this same framework, so the file drops straight into their flow.
 3. After UAT passes, manually update `PROJECT-STATUS.md`: `current_phase: Released`.
 4. For end-user / external documentation, run `*productguide {AppName}` (flow-master) — it builds a screenshot-illustrated, task-oriented user manual (MD + HTML) from the DevGuide's screen map + captured screenshots. On-demand; re-run with `--update` as the UI evolves.
@@ -128,7 +130,7 @@ Paste its table **as printed** at the very end of the output, under the heading 
 
 ## Output Checklist
 
-- [ ] `docs/{AppName}-UsageGuide.md` finalized — Test-users table reconciled with the DB (created accounts ✅) + screen-by-screen plan current + prereqs/build/run/test/smoke; its `.html` re-rendered
+- [ ] `docs/{AppName}-UsageGuide.md` finalized — Test-users table reconciled with the DB (created accounts ✅) + screen-by-screen plan current + Execution guide and Automated tests current; its `.html` re-rendered
 - [ ] Developer Guide generated/refreshed (`*devguide {AppName}`) — screen-by-screen code map (page→control→service→data-access→proc) + its `.html`
 - [ ] `PROJECT-STATUS.md` updated with handoff phase + UAT next-step
 - [ ] `docs/{AppName}-BRD.html`, `docs/{AppName}-Architecture.html`, `PROJECT-STATUS.html`, the UsageGuide + DevGuide HTML re-rendered (the checklist is NOT rendered to HTML — markdown only)

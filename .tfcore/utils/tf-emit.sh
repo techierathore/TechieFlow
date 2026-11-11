@@ -90,15 +90,13 @@ TF_ERR=/dev/null
 [[ -n "$TF_DEBUG" ]] && TF_ERR=/dev/stderr
 
 # --- resolve the app repo root -------------------------------------------
-# Explicit override first, then the harness's project dir, then walk up looking
-# for a TechieFlow-shaped repo, then give up on the cwd.
+# Explicit override, then the harness's project dir (TF_PROJECT_DIR first, as
+# tf-harness.sh), then walk up to a TechieFlow-shaped repo, then the cwd.
 _find_root() {
-  if [[ -n "$TF_METRICS_ROOT" && -d "$TF_METRICS_ROOT" ]]; then
-    printf '%s' "$TF_METRICS_ROOT"; return 0
-  fi
-  if [[ -n "$CLAUDE_PROJECT_DIR" && -d "$CLAUDE_PROJECT_DIR" ]]; then
-    printf '%s' "$CLAUDE_PROJECT_DIR"; return 0
-  fi
+  local v
+  for v in "$TF_METRICS_ROOT" "${TF_PROJECT_DIR:-}" "$CLAUDE_PROJECT_DIR"; do
+    [[ -n "$v" && -d "$v" ]] && { printf '%s' "$v"; return 0; }
+  done
   local d; d="$(pwd -P 2>/dev/null)" || return 1
   while [[ -n "$d" && "$d" != "/" ]]; do
     if [[ -d "$d/.tfcore" || -d "$d/docs" ]]; then printf '%s' "$d"; return 0; fi
@@ -768,23 +766,22 @@ def enrich(rec):
     DECISIONS.md 2026-08-20)."""
     rec.setdefault("v", 1)
     rec.setdefault("ts", NOW)
-    # A run record says whether YOLO was on (D-12, FR-35; Sitting 4c, 2026-09-06): the task
-    # never has to remember it. TF_YOLO=1 (the supervisor) or a live .tfcore/.session/yolo.json.
+    # A run record says whether YOLO was on: TF_YOLO=1 (the supervisor) or a live .tfcore/.session/yolo.json.
     if rec.get("kind") == "run" and "yolo" not in rec:
         on = os.environ.get("TF_YOLO") == "1"
         if not on:
             try:
-                fl = os.path.join(root, ".tfcore", ".session", "yolo.json")
-                on = os.path.isfile(fl) and (time.time() - os.path.getmtime(fl)) < 24 * 3600
+                fl = os.path.join(root, ".tfcore", ".session", "yolo.json"); ttl = float(os.environ.get("TF_YOLO_TTL_HOURS") or 24)
+                on = os.path.isfile(fl) and (ttl == 0 or (time.time() - os.path.getmtime(fl)) < ttl * 3600)   # tf-yolo.sh's rule
             except Exception:
                 on = False
         rec["yolo"] = bool(on)
-    # A run record without `started` takes it from the command marker written by
-    # tf-phase.sh start (step 0 of every task), when the marker names the same command.
+    # A run record without `started` takes it from the marker tf-phase.sh start wrote,
+    # when the marker names the same command and is under 24 hours old.
     if rec.get("kind") == "run" and not rec.get("started"):
         try:
-            with open(os.path.join(root, ".tfcore", ".session", "phase.json"), encoding="utf-8") as fh:
-                mk = json.load(fh) or {}
+            pj = os.path.join(root, ".tfcore", ".session", "phase.json")
+            mk = (json.load(open(pj, encoding="utf-8")) or {}) if time.time() - os.path.getmtime(pj) < 24 * 3600 else {}
             if mk.get("started") and (not rec.get("cmd") or mk.get("cmd") == rec.get("cmd")):
                 rec["started"] = mk["started"]
                 rec.setdefault("ended", NOW)

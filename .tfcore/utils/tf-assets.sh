@@ -68,7 +68,6 @@ while [[ $# -gt 0 ]]; do
     --timeout)          TIMEOUT="${2:-}"; shift 2 ;;
     --label)            LABEL="${2:-}"; shift 2 ;;
     --json-out)         OUT="${2:-}"; shift 2 ;;
-    --min-bytes)        MINBYTES="${2:-}"; shift 2 ;;
     --include-external) EXTERNAL=1; shift ;;
     --header)           HDRS="${HDRS}${2:-}"$'\n'; shift 2 ;;
     --cookie)           HDRS="${HDRS}Cookie: ${2:-}"$'\n'; COOKIE="${2:-}"; shift 2 ;;
@@ -92,6 +91,9 @@ command -v python3 >/dev/null 2>&1 || { echo '{"status":"no-python3"}'; exit 3; 
 
 # ---- the documents, through a signed-in browser when a sign-in is given (TF-011) --------------
 DOCS=""
+# A sign-in the command line does not name comes from tests/verify/testsettings(.Local).json, as in the
+# screen and mockup checks (Verify:Login:Path; tf-assets-browser.mjs reads the user and password there).
+[[ -z "$CDP$LOGIN_PATH$STORAGE$COOKIE$HDRS" ]] && LOGIN_PATH="$(python3 "$HERE/tf-testsettings.py" get Verify:Login:Path 2>/dev/null)"
 if [[ -n "$CDP" ]]; then
   if ! command -v node >/dev/null 2>&1 || ! node -e "import('playwright').then(()=>process.exit(0)).catch(()=>process.exit(1))" 2>/dev/null; then
     echo '{"status":"no-playwright","note":"--cdp needs node and playwright (verify-phase §1 installs the verify environment)"}'; exit 3

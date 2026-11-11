@@ -27,8 +27,8 @@
 #   .tfcore/utils/tf-brd-status.py      .tfcore/hooks/guard-verify.sh
 # A new script that reads the local clock is added to this list. CI (validate.yml) still runs every
 # tests/*/run.sh in UTC and in Asia/Kolkata. The portability check (tests/portability) and the
-# install-route comparison (npm run test:install) do not depend on a fix: they run before a release
-# (docs/TechieFlow-Release-Guide.md), not after every fix.
+# install-route comparison (npm run test:install) also run after every fix (owner, 2026-11-11;
+# docs/TechieFlow-Release-Guide.md).
 #
 # Exit 0 all held, 1 a case failed. Python 3 standard library only. Never runs git.
 set -u
@@ -8151,8 +8151,8 @@ codex_keep() {
     rm -rf "$d"
   done
   # a project holding only the framework's files loses the folder altogether
-  d="$(mktemp -d "${TMPDIR:-/tmp}/tf-codex.XXXXXX")"; mkdir -p "$d/.tfcore" "$d/.codex/rules" "$d/docs"
-  printf 'appPhase: 1\nappKind: app\n' > "$d/.tfcore/core-config.yaml"; printf 'the adapter rules\n' > "$d/.codex/rules/techieflow.rules"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/tf-codex.XXXXXX")"
+  mkdir -p "$d/.tfcore" "$d/.codex/rules" "$d/docs"; printf 'appPhase: 1\nappKind: app\n' > "$d/.tfcore/core-config.yaml"; printf 'the adapter rules\n' > "$d/.codex/rules/techieflow.rules"
   bash "$ROOT/update-framework.sh" "$d" >/dev/null 2>&1
   [[ ! -e "$d/.codex" ]] && ok codex_keep_empty "a .codex/ holding only the framework's files is removed whole" \
                          || { bad codex_keep_empty "an emptied .codex/ was left behind"; note "$(cd "$d" && find .codex | tr '\n' ' ')"; }

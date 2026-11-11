@@ -137,7 +137,7 @@ Commit the changes as usual and push to `main`. Every push runs the **Validate**
 
 The Validate workflow does more than the release does. It runs as two jobs, one on Linux and one on a stock Mac (Apple's bash 3.2 at `/bin/bash` and the BSD tools, with Homebrew taken off the path). Each job runs `npm run validate`, `npm run test:install` and then every `tests/*/run.sh` twice, once with the time zone set to UTC and once to Asia/Kolkata, so a script that mixes local and UTC time fails. The Mac job also runs the portability check on its own. All of it must be green.
 
-Run these two before a release, not after every fix. Neither depends on what a fix changed: one checks the shell scripts against a stock Mac, the other compares the two install routes.
+Run these two before a release, and after every fix as well (owner, 2026-11-11: main went red on 10 Nov because a fix skipped them). One checks the shell scripts against a stock Mac, the other compares the two install routes.
 
 ```bash
 npm run validate
@@ -147,7 +147,13 @@ npm run validate
 npm run test:install
 ```
 
-After each fix, the routine is shorter. Run the regression suite once, in your machine's own time zone (`bash tests/regression/run.sh`), plus the suite of the area the fix touched. Run the regression suite a second time with `TZ=UTC` only when the fix touched a script that reads the local clock. Those scripts are listed at the top of `tests/regression/run.sh`. The two-time-zone run stays in the Validate workflow.
+Then measure the release on every project before it is published or deployed. This command reads each project's documents, spec files and saved verify records, writes nothing, and prints one table: the rows whose verdict would move, the tests a phase verify would stop running, and the findings that would appear or go. Read the table before you go on. Give it the last release tag:
+
+```bash
+python3 scripts/measure-projects.py --base v1.3.0
+```
+
+After each fix, the routine is: the portability check (`bash tests/portability/run.sh`), the installer test (`npm run test:install`), and the regression suite once, in your machine's own time zone (`bash tests/regression/run.sh`), plus `bash tests/faults/run.sh` and the suite of the area the fix touched. Run the regression suite a second time with `TZ=UTC` only when the fix touched a script that reads the local clock. Those scripts are listed at the top of `tests/regression/run.sh`. The two-time-zone run stays in the Validate workflow.
 
 ---
 

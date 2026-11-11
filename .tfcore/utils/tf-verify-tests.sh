@@ -53,8 +53,8 @@ while [[ $# -gt 0 ]]; do
     *) echo "tf-verify-tests: unknown argument $1" >&2; exit 2 ;;
   esac
 done
-# Chatur TF-018: `--merge` with no part files fell through to a full test run, minutes long, over the
-# suite the caller meant only to combine. It is refused.
+# `--merge` with no part files is refused: it would fall through to a full test run over the suite the
+# caller meant only to combine.
 if [[ "${MERGING:-0}" == 1 && ${#MERGE[@]} -eq 0 ]]; then
   echo "tf-verify-tests: --merge needs the part files to combine (--merge tests-1of2.json tests-2of2.json); nothing was run" >&2; exit 2
 fi
@@ -78,10 +78,9 @@ import json, os, re, sys
 import importlib.util
 _spec = importlib.util.spec_from_file_location("tf_req_ids", os.path.join(os.environ.get("TF_HERE", ".tfcore/utils"), "tf-req-ids.py"))
 rq = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(rq)
-# Lekhak TF-007. The parts are read oldest first (by the time each ran, else in the order given), and
-# a later run of the SAME test stands for it: a test that failed because its service was not started,
-# run again once it was, clears the row. A later skip never replaces a run that happened. A part
-# written before tests carried their own outcome counts each of its tests as the row's result.
+# The parts are read oldest first (by the time each ran, else in the order given), and a later run of
+# the SAME test stands for it. A later skip never replaces a run that happened. A part written before
+# tests carried their own outcome counts each of its tests as the row's result.
 loaded = []
 for i, p in enumerate(sys.argv[1:]):
     try:
@@ -101,8 +100,8 @@ for d, _i, p in loaded:
             oc.update({t: {"outcome": "skip", "reason": r.get("reason", ""), "screenshot": ""} for t in r.get("skipped", [])})
         o = outs.setdefault(rid, {})
         for name, rec in oc.items():
-            # a part read before Chatur TF-012 counted a test for every id its name carried: a test that
-            # does not claim this row is dropped here, and the row noted if that test passed
+            # an older part counted a test for every id its name carried: a test that does not claim
+            # this row is dropped here, and the row noted if that test passed
             # (a browser test's name was stored with its describe titles joined on, so there each title is read)
             segs = re.split(r"\s+(?=REQ-)", name) if rec.get("source", r.get("source")) == "browser" else [name]
             if not any(rid in rq.ids_of(seg) for seg in segs):
@@ -139,7 +138,7 @@ for rid, o in outs.items():
     skips = [(n, x) for n, x in o.items() if x["outcome"] == "skip"]
     result = "FAIL" if fails else "PASS" if npass else "NOT-TESTED"
     reason = fails[0][1]["reason"] if fails else (skips[0][1]["reason"] if skips and not npass else "")
-    # Sevak TF-004: a unit pass does not stand in for a row's on-app tests when they were all skipped
+    # a unit pass does not stand in for a row's on-app tests when they were all skipped
     app = [x for x in o.values() if x.get("source") == "browser"]
     if result == "PASS" and app and all(x["outcome"] == "skip" for x in app):
         why = next((x["reason"] for x in app if x["reason"]), "the test was skipped")
@@ -172,15 +171,14 @@ PY
   exit 0
 fi
 
-source "$HERE/tf-lock.sh"; tf_take_lock "verify-tests${PART:+ $PART}"   # one browser check at a time (TF-048)
+source "$HERE/tf-lock.sh"; tf_take_lock "verify-tests${PART:+ $PART}"   # one browser check at a time
 PWJSON="tests/.artifacts/verify/playwright${PART:+-$PART}.json"; PWLOG="tests/.artifacts/verify/playwright${PART:+-$PART}.log"; UNITLOG=""; UNITLINE=""
 ran_any=0
 
 if [[ $BROWSER -eq 1 ]]; then
   # A desktop head is reached over its debugging address (tf-verify-boot.sh prints mode=cdp). The tests
-  # get it as CDP_URL as well as BASE_URL: Lekhak's helper fell back to its own default port and every
-  # desktop test failed after ten minutes (Lekhak TF-021). --base is that address when it answers
-  # /json/version; without --base, boot.json's url when its mode is cdp.
+  # get it as CDP_URL as well as BASE_URL, so a helper never falls back to its own default port. --base
+  # is that address when it answers /json/version; without --base, boot.json's url when its mode is cdp.
   CDPURL=""
   if [[ -n "$BASE" ]]; then
     curl -s -m 3 "${BASE%/}/json/version" 2>/dev/null | grep -q webSocketDebuggerUrl && CDPURL="${BASE%/}"
@@ -199,7 +197,7 @@ print(b.get("url", ""), b.get("bundle_id", ""), b.get("app_path", "")) if b.get(
   if ls tests/verify/*.spec.* >/dev/null 2>&1 || ls tests/verify/**/*.spec.* >/dev/null 2>&1; then
     # --base reaches the tests only as BASE_URL, which Playwright never reads by itself. When neither
     # the config nor a spec reads it, every test opens the config's own address, where an older build
-    # may still be running and pass in the new one's name (TfLens TF-031, 2026-09-11): refuse instead.
+    # may still be running and pass in the new one's name: refuse instead.
     if [[ -n "$BASE" ]] && ! grep -qs "BASE_URL" playwright.config.* tests/verify/*.spec.* tests/verify/**/*.spec.*; then
       echo "browser tests: NOT RUN — nothing reads BASE_URL, so the tests would open another address than --base $BASE; run bash .tfcore/utils/tf-verify-env.sh, which makes playwright.config.ts read it"
       rm -f "$PWJSON"
@@ -209,15 +207,11 @@ print(b.get("url", ""), b.get("bundle_id", ""), b.get("app_path", "")) if b.get(
     elif node -e "require.resolve('@playwright/test')" >/dev/null 2>&1; then
       PWARGS=(--reporter=json); [[ -n "$SHARD" ]] && PWARGS+=("--shard=$SHARD")
       # (the block below ends in SCOPEPY, not PY: tests/regression lifts the PY blocks out verbatim)
-      # Lekhak TF-017: a verify of a list of ids runs only the browser tests carrying those ids, and
-      # none when no row in scope has a screen and no file under tests/verify/ names one of them. A
-      # verify of one no-screen NFR row ran the whole suite and was stopped at 30 minutes. ui,
-      # functional and all run everything; so do --spec, --all-specs and a run without list.json.
-      # Sevak TF-021: on a project with several phase checklists a word scope is that phase's rows, and
-      # "everything" ran the other phases' specs on the same boot: 192 tests in 72 minutes, and the
-      # phase 1 to 3 specs (fresh install, theme, language, a backup restored) left the app where 50 of
-      # 80 phase 4 rows failed on toBeVisible. There a word scope keeps the tests carrying the graded
-      # phase's row ids, as a list of ids does. A project with one checklist runs everything as before.
+      # A verify of a list of ids runs only the browser tests carrying those ids, and none when no row
+      # in scope has a screen and no file under tests/verify/ names one of them. ui, functional and
+      # all run everything; so do --spec, --all-specs and a run without list.json.
+      # On a project with several phase checklists a word scope keeps the tests carrying the graded
+      # phase's row ids, as a list of ids does; a project with one checklist runs everything.
       SCOPE=""
       [[ $ALLSPECS -eq 0 && ${#SPECS[@]} -eq 0 && -f "$LIST" ]] && SCOPE="$(python3 - "$LIST" <<'SCOPEPY'
 import json, sys
@@ -241,10 +235,9 @@ SCOPEPY
       else
         [[ -n "$SCOPE" ]] && PWARGS+=(--grep "${SCOPE#* }")
         # A test whose title carries no row id belongs to no phase, so a phase's filter leaves it out. It
-        # is named, never dropped in silence (2026-11-10: Sevak's "phase 4 app is set up and signed in"
-        # and "ChatPane in Pane mode …" stopped running with nothing printed). Listed before the run, by
-        # asking Playwright for every test it would collect; each is printed below as a finding and kept
-        # in tests.json (unnumbered_not_run), which the verdict prints again under its table.
+        # is named, never dropped in silence. Listed before the run, by asking Playwright for every test
+        # it would collect; each is printed below as a finding and kept in tests.json
+        # (unnumbered_not_run), which the verdict prints again under its table.
         UNNUM="tests/.artifacts/verify/unnumbered${PART:+-$PART}.json"; rm -f "$UNNUM"
         if [[ "$SCOPE" == phase* ]]; then
           PLAYWRIGHT_JSON_OUTPUT_NAME="$UNNUM.list" npx playwright test --list --reporter=json > /dev/null 2>&1 || true
@@ -326,19 +319,18 @@ else rm -f "$PWJSON"; fi
 
 if [[ $UNIT -eq 1 ]]; then
   # Each pattern on its own: `ls *.sln *.slnx` fails when either matches nothing, so a .slnx-only
-  # solution read as none; and a test project may sit at any depth under tests/, not one folder down
-  # (AppManager TF-007: tests/unit/AppManager.UnitTests/). tf-build.sh finds a root solution itself;
-  # without one it is handed the only test project, and several are named rather than guessed between.
+  # solution would read as none; and a test project may sit at any depth under tests/, not one folder
+  # down. tf-build.sh finds a root solution itself; without one it is handed the only test project,
+  # and several are named rather than guessed between.
   ROOTSLN="$(compgen -G '*.sln'; compgen -G '*.slnx'; compgen -G '*.csproj')"
   tf_read_lines TESTPROJ < <(find tests -name '*.csproj' -not -path 'tests/.artifacts/*' -not -path '*/bin/*' -not -path '*/obj/*' -not -path '*/node_modules/*' 2>/dev/null | sort)
   [[ -z "$TARGET" && -z "$ROOTSLN" && ${#TESTPROJ[@]} -eq 1 ]] && TARGET="${TESTPROJ[0]}"
   if [[ -z "$TARGET" && -z "$ROOTSLN" && ${#TESTPROJ[@]} -gt 1 ]]; then
     echo "unit tests: NOT RUN — no solution here and ${#TESTPROJ[@]} test projects under tests/ (${TESTPROJ[*]}); name one with --target"
   elif [[ -n "$TARGET" || -n "$ROOTSLN" ]]; then
-    # the VERDICT line, not the first line: tf-build.sh may print a note before it, and a note read
-    # as the verdict left 975 passing TfLens tests recorded as never run (TF-037)
-    # A test project on Microsoft.Testing.Platform ignores --logger and prints no line per test, so no
-    # unit test ever reached a row (AppManager TF-005, xunit.v3, 286 tests). Such a project is asked for
+    # the VERDICT line, not the first line: tf-build.sh may print a note before it
+    # A test project on Microsoft.Testing.Platform ignores --logger and prints no line per test, so
+    # none of its tests would reach a row. Such a project is asked for
     # a TRX report, the per-test record both platforms write, through the property `dotnet test` passes
     # to it. One switch serves every project or none is passed: an unknown switch stops a test app.
     MTP="$(python3 - <<'PY'
@@ -369,7 +361,7 @@ PY
       mixed) echo "unit tests: note  the Testing Platform projects here take different report switches, so none was passed; their tests are not mapped to rows" ;;
     esac
     # the stamp sits on the project's own drive: one in /tmp takes its time from WSL's clock and the
-    # report on /mnt/c from Windows', which drift apart, so a fresh report could read as older (2026-10-02)
+    # report on /mnt/c from Windows', which drift apart, so a fresh report could read as older
     mkdir -p tests/.artifacts; STAMP="$(mktemp tests/.artifacts/.unit-stamp.XXXXXX)"
     UNITLINE="$(bash "$HERE/tf-build.sh" test ${TARGET:+"$TARGET"} -- "${UARGS[@]}" 2>&1 | grep -m1 -E '^(PASS|FAIL|NOT-RUN)' || true)"
     UNITLOG="$(sed -n 's/.*log \(tests\/\.artifacts\/build\/[^ ;]*\).*/\1/p' <<<"$UNITLINE" | head -1)"
@@ -386,7 +378,7 @@ import xml.etree.ElementTree as ET
 import importlib.util
 _spec = importlib.util.spec_from_file_location("tf_req_ids", os.path.join(os.environ.get("TF_HERE", ".tfcore/utils"), "tf-req-ids.py"))
 rq = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(rq)
-ID, ids_of = rq.ID, rq.ids_of   # Chatur TF-012: a test claims the ids its name starts with (tf-req-ids.py)
+ID, ids_of = rq.ID, rq.ids_of   # a test claims the ids its name starts with (tf-req-ids.py)
 elsewhere = {}   # row -> names of passing tests that mention it without claiming it
 def claims(names, outcome):
     """the ids a test claims: the leading run of each name given (a browser test's describe titles and
@@ -414,8 +406,8 @@ def add(rid, outcome, name, source, reason="", shot=""):
     r = reqs.setdefault(rid.upper(), {"result": "NOT-TESTED", "source": source, "tests": [],
                                       "skipped": [], "passed": 0, "failed": 0,
                                       "reason": "", "screenshot": "", "outcomes": {}})
-    # each test's own outcome, so a merge can let a later run of the same test stand (Lekhak TF-007),
-    # and where it ran, so a unit pass never stands in for a skipped on-app test (Sevak TF-004)
+    # each test's own outcome, so a merge can let a later run of the same test stand,
+    # and where it ran, so a unit pass never stands in for a skipped on-app test
     r["outcomes"][name] = {"outcome": outcome, "reason": (reason or "")[:200], "screenshot": shot, "source": source}
     if r["source"] != source:
         r["source"] = "browser+unit"
@@ -447,7 +439,7 @@ if pw and os.path.isfile(pw):
                     res = t.get("results", [])
                     last = res[-1] if res else {}
                     status = last.get("status", t.get("status", "unexpected"))
-                    # skipped is read FIRST: it is neither a pass nor a failure (TF-022)
+                    # skipped is read FIRST: it is neither a pass nor a failure
                     if status == "skipped" or t.get("status") == "skipped":
                         outcome = "skip"
                     elif status in ("passed", "expected") or t.get("status") == "expected":
@@ -491,7 +483,7 @@ for trx in [p for p in os.environ.get("TF_TRX", "").splitlines() if p.strip()]:
         if not el.tag.endswith("UnitTestResult"):
             continue
         name = (el.get("testName") or "").strip()
-        oc = (el.get("outcome") or "").lower()          # Passed / Failed / NotExecuted …, any case (TF-005)
+        oc = (el.get("outcome") or "").lower()          # Passed / Failed / NotExecuted …, any case
         outcome = "pass" if oc == "passed" else "skip" if oc in ("notexecuted", "inconclusive", "pending", "notrunnable", "disconnected") else "fail"
         if (name, outcome) in seen:
             continue
@@ -506,38 +498,37 @@ ul = os.environ.get("TF_UNITLOG", "")
 if ul and os.path.isfile(ul):
     unit["ran"] = True
     for line in open(ul, encoding="utf-8", errors="replace"):
-        # any case, and a "(133ms)" tail: the Testing Platform's own log writes "failed REQ-NFR-007 … (133ms)" (TF-005)
+        # any case, and a "(133ms)" tail: the Testing Platform's own log writes "failed REQ-NFR-007 … (133ms)"
         m = re.match(r"\s*(passed|failed|skipped)\s+(\S.*?)\s*(?:\[[^\]]*\]|\(\d+(?:\.\d+)?\s*m?s\))?\s*$", line, re.I)
         if not m:
             continue
         # a skipped unit test is recorded as skipped, not dropped: the row then reads
-        # NOT-TESTED with the evidence, rather than looking as if no test exists (TF-022)
+        # NOT-TESTED with the evidence, rather than looking as if no test exists
         outcome = {"passed": "pass", "failed": "fail", "skipped": "skip"}[m.group(1).lower()]
         name = m.group(2).strip()
         if (name, outcome) in seen:
             continue
         seen.add((name, outcome))
-        # a pass has no reason: every non-failure was once written "unit test skipped" (Lekhak TF-018)
+        # a pass has no reason; only a failure or a skip is given one
         for rid in claims([name], outcome):
             add(rid, outcome, name, "unit",
                 "unit test failed: " + name[:120] if outcome == "fail"
                 else "unit test skipped: " + name[:120] if outcome == "skip" else "")
-# Sevak TF-004: a row that has an on-app test is accepted on the app. When every on-app test of the
-# row was skipped (`test.skip()`: not observable on this host) and none failed, a passing unit test
-# with the same id does not measure it: the row is NOT-TESTED, with the skip's reason. A failure, from
-# either side, still makes it FAIL; a row with no on-app test is graded on its unit tests as before.
+# A row that has an on-app test is accepted on the app. When every on-app test of the row was skipped
+# (`test.skip()`: not observable on this host) and none failed, a passing unit test with the same id
+# does not measure it: the row is NOT-TESTED, with the skip's reason. A failure, from either side,
+# still makes it FAIL; a row with no on-app test is graded on its unit tests.
 for rid, r in reqs.items():
     app = [x for x in r["outcomes"].values() if x.get("source") == "browser"]
     if app and all(x["outcome"] == "skip" for x in app) and r["result"] == "PASS":
         why = next((x["reason"] for x in app if x["reason"]), "the test was skipped")
         r["result"] = "NOT-TESTED"
         r["reason"] = ("on-app test skipped (" + why + "); a unit test does not measure on-app acceptance")[:200]
-# a row no test claims, whose id a passing test about another row carries, is flagged: it was once
-# counted as tested on that name, and it is not
+# a row no test claims, whose id a passing test about another row carries, is flagged: that test
+# does not test it
 mentioned = {rid: sorted(set(v))[:3] for rid, v in elsewhere.items() if rid not in reqs}
-# TechieRag TF-008: triage gave a new row an id the tests already carried, and the row passed on those
-# older tests. A row logged by triage ("logged from UAT 2026-10-29") whose tests carried its id before that
-# day is warned about: the tests may be about something else. The day an id first appeared is read from
+# A row logged by triage ("logged from UAT <date>") whose tests carried its id before that day is
+# warned about: the tests may be about something else. The day an id first appeared is read from
 # the history (the first commit that added it under tests/ or src/), else from the files' own dates.
 import datetime
 import subprocess

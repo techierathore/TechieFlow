@@ -2,28 +2,27 @@
 # tf-status-evidence.sh — the evidence *refresh-status rebuilds PROJECT-STATUS from, after a
 # session died before its status gate (Sitting 4b, 2026-09-06). Reads only; never git.
 #
-#   bash .tfcore/utils/tf-status-evidence.sh <App> [--no-build] [--phase N]
+#   bash .tfcore/utils/tf-status-evidence.sh <App> [--phase N]
 #
 # Prints, in this order:
 #   1. what the stale PROJECT-STATUS.md claims (last_updated, current_phase, the next command)
 #   2. files under src/ and tests/ changed after that file was last written (work the gate never saw)
 #   3. checklist rows left at Implemented / In Progress / Needs re-verify / PARTIAL / FAIL
 #      (the fingerprint of a smoke that ran and a verify that did not)
-#   4. the build verdict from tf-build.sh (skipped with --no-build)
+#   4. the build verdict from tf-build.sh
 # Then the agent decides the interruption signature and runs tf-status-facts.sh for the gate.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/tf-portable.sh"   # GNU-only commands, for a stock Mac
 APP="${1:-}"; [[ -z "$APP" ]] && { sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
 shift
-BUILD=1; PHASE=""
+PHASE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --no-build) BUILD=0; shift ;;
     --phase) PHASE="$2"; shift 2 ;;
     *) shift ;;
   esac
 done
-[[ -z "$PHASE" ]] && PHASE="$(grep -oE '^appPhase:[[:space:]]*[0-9]+' .tfcore/core-config.yaml 2>/dev/null | grep -oE '[0-9]+' || echo 1)"
+[[ -z "$PHASE" ]] && PHASE="$(grep -oE "^appPhase:[[:space:]]*[\"']?[0-9]+" .tfcore/core-config.yaml 2>/dev/null | grep -oE '[0-9]+' || echo 1)"
 [[ "$PHASE" -le 1 ]] && CL="docs/${APP}-Checklist.md" || CL="docs/${APP}-P${PHASE}-Checklist.md"
 ST="PROJECT-STATUS.md"
 
@@ -62,9 +61,5 @@ else
 fi
 echo
 echo "## 4. Build"
-if [[ $BUILD -eq 1 ]]; then
-  bash "$(dirname "${BASH_SOURCE[0]}")/tf-build.sh" build 2>&1 | tail -3 | sed 's/^/- /'
-else
-  echo "- skipped (--no-build)"
-fi
+bash "$(dirname "${BASH_SOURCE[0]}")/tf-build.sh" build 2>&1 | tail -3 | sed 's/^/- /'
 exit 0
