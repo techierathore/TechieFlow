@@ -98,8 +98,8 @@ def build(root, app):
         by_id.setdefault(m["miss_id"], m)
     for a in sorted((r for r in recs if r.get("kind") == "miss-amend"), key=lambda r: r.get("ts") or ""):
         p = by_id.get(a.get("miss_id"))
-        if p is not None and a.get("field") and p.get(a["field"]) is None:
-            p[a["field"]] = a.get("value")
+        if p is not None and a.get("field") and (p.get(a["field"]) is None or (a.get("reason") or "").strip()):
+            p[a["field"]] = a.get("value")   # a correction (with a reason) replaces the value
     latest = {}
     for f in recs:
         if f.get("kind") != "miss-fix" or not f.get("miss_id"):

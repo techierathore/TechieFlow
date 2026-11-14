@@ -158,6 +158,17 @@ Two simplifications in that price, stated rather than hidden: the **base** rate 
 
 Tokens remain the unit that works everywhere, and they are what every figure is built from. `cost_usd` is whatever the provider itself reported, and `billing_mode` is what stops a reader mistaking a meter, a flat fee and an invoice for one another.
 
+### 2.5c What the checks themselves ran on (added 2026-11-14, Chatur TF-028; written by script, never by an agent)
+
+`model` is the agent's own model. An app whose browser tests call a model (a chat app, an assistant) runs its checks against a provider and model of its own, and that is a different fact.
+
+| Field | Type | Meaning / source |
+|---|---|---|
+| `checks_provider` | string | The provider the app under test called while the checks ran. `run` records of `verify-phase` (`tf-verify-emit.sh`) and of a fix command (`tf-fix-close.sh`, the first record of the run). Read by `tf-checks-model.py` from `tests/verify/testsettings.Local.json`, `testsettings.json` or `test-settings.json`: `testProvider.name`, `Verify.TestProvider.Name` or the flat key `Verify:TestProvider:Name`. |
+| `checks_model` | string | The model id beside it (`testProvider.model` and the same alternatives). |
+
+Both are optional. **Absent means the project names no provider for its checks**, and every record written before 2026-11-14 has neither, so a reader treats a missing field as "not recorded", never as "none". Only the name and the model are read; a key or an address in the same block never reaches a record. A report reads them beside `model`, never in place of it, and adds no tokens or cost for them: the app's calls are not the agent's.
+
 ### 2.6 Per-phase effort fields (added 2026-08-31; injected by `tf-emit.sh`, never emitted by an agent)
 
 Added so the question *"what did each phase cost — in time, in tokens, on which model, with how much fan-out?"* is answerable from the streams rather than reconstructed by hand. §2 and §2.5 already carried `cmd`, `started`/`ended`/`duration_s`, the four token counters, `model`, `harness`, `tier`/`tier_model`/`routed` and `attempt`. Three things were missing, and each was missing for the same reason: it was either **self-reported** or **not represented at all**.
@@ -521,7 +532,7 @@ The agent's job on a `miss` record is therefore small and honest: name what was 
 |---|---|---|
 | `miss_id` | string | The link. A `miss-fix` matching no `miss` is reported as an **orphan** and counted, never silently dropped. |
 | `req_id` | string \| null | Copied from the miss, for readability. |
-| `fix_run_id` | string | `started` of the repair run. **This is where the cost comes from.** |
+| `fix_run_id` | string | `started` of the repair run. **This is where the cost comes from.** A fix that chained verifies is recorded in segments around them (`tf-fix-close.sh`); since 2026-11-14 the cost is every segment of that fix, each starting where the record before it ended, never the first one alone (Sevak: 26 misses had carried the fix's first 61 s). The chained verifies keep their own records and are not added. |
 | `fix_cmd` | string | `fix-issues` \| `triage-and-fix` \| `build-phase` \| `triage-issues` \| `amend-docs` \| `log-miss` |
 | `fix_attempt` | int | `1 +` the count of prior `miss-fix` records for this `miss_id`. `tf-emit.sh --next-fix-attempt <miss_id>`. |
 | `verdict_after` | string | `Verified` \| `Needs re-verify` \| `FAIL` \| `deferred` \| `wont-fix` |
@@ -633,6 +644,15 @@ bash .tfcore/utils/tf-emit.sh --amend MISS-App-20260828-01 why_missed missing-ch
 It **prints its refusal on stdout** rather than failing silently — an agent that believes it recorded a correction and did not is worse off than one that is told no. It still exits 0: telemetry has no veto (§10), and neither does a refused amend. A hand-written `miss-amend` piped onto the stream faces the identical checks and is dropped if it fails them — two doors, one enforcement.
 
 **Readers fold amendments into the parent before counting anything**, and re-apply the null-check while doing it: a stream merged from another machine can carry an amend and a later-written value in either order.
+
+**A correction (added 2026-11-14, Sevak).** On 13 Nov a duplicate check wrote one problem's `why_missed` and `sort` onto MISS-Sevak-20261112-21, and the never-overwrite rule above left no way back. A correction is a `miss-amend` that carries a **`reason`**, the sentence saying why the value set is wrong. It replaces the value, or clears it with `none` (stored as `null`) when nobody can vouch for one; the earlier value and the correction both stay on the stream, so the change is recorded, never an edit. Without a reason the never-overwrite rule holds as before.
+
+```bash
+bash .tfcore/utils/tf-emit.sh --amend MISS-App-20261112-21 why_missed none "the cause of another miss, written here by a duplicate check"
+# -> tf-emit: corrected MISS-App-20261112-21 — why_missed = none
+```
+
+Readers apply amendments in time order: a plain amend fills a `null`, a correction replaces whatever is there. `tf-metrics.sh` and `tf-misses-md.py` do; a reader that ignores `reason` keeps the first value, which is the stream's state before the correction.
 
 ### 5.5.7b Closed vocabularies are enforced ON WRITE (added 2026-08-31)
 

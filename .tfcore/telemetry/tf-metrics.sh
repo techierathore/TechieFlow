@@ -406,7 +406,9 @@ def analyse_misses(misses):
         val = a.get("value")
         ok = (isinstance(val, str) and val.strip()) if fld in AMENDABLE_TEXT_FIELDS \
              else (val in AMENDABLE_FIELDS.get(fld, ()))
-        if parent.get(fld) is None and ok:
+        # a correction names why the value set was wrong, and replaces it (or clears it: value null)
+        fix = bool((a.get("reason") or "").strip()) and (ok or val is None)
+        if (parent.get(fld) is None and ok) or fix:
             parent[fld] = val
             amended += 1
 

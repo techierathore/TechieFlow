@@ -153,7 +153,7 @@ for row in v["rows"]:
 touched = [r["id"] for r in v["rows"] if r.get("emit_gate")]
 rec = {"kind": "run", "app": app, "cmd": "verify-phase", "mode": mode, "yolo": yolo, "ended": now,
        "reqs_touched": touched, "reqs_count": len(touched), "subagents": [], "files_written": 2,
-       "build_result": v.get("build_result", "not-run")}
+       "build_result": v.get("build_result", "not-run"), **json.loads(subprocess.run(["python3", os.path.join(os.path.dirname(EMIT), "tf-checks-model.py")], capture_output=True, text=True).stdout or "{}")}  # checks_provider/_model: Chatur TF-028
 if run_id:
     rec["started"] = run_id
 if phase:

@@ -44,6 +44,80 @@ a new telemetry stream, so a minor version (owner, 2026-11-08).
   - Suite: `tests/estimate/run.sh` (19 cases: enough history, family fallback, no precedent, the refusals,
     the model, the reconciliation). DECISIONS.md 2026-11-08 says why estimates have their own stream.
 
+- **Ten faults of 13 Nov from five projects (2026-11-14; deployed to Chatur, Sevak, Lekhak, TfLens, AppManager,
+  AstroLyfe and TechieRag).** Each has a case in `tests/faults/run.sh` that fails on the scripts of the last
+  commit and passes now, with a control half that shows a real finding is still reported. Proved on fixtures;
+  `scripts/measure-projects.py --base HEAD`: no row verdict, test or document finding moves in 13 projects; the
+  browser-side changes (parity, menus, dropdowns) need a running app and were not measured.
+  - **Chatur TF-027** (`ch_027`): a picker's own arrow counts as an icon on neither side. A trigger (a button, or a box
+    with one) paired with the app's `[role=combobox]` or native select gives up its icons, as the app's arrow
+    always did; a plain `<span>` with a chevron is still compared (`tf_046`); the date-box rule of Sevak TF-027 runs through the same lines (`pick` in the in-page
+    signature). Held 32 Chatur rows. `sv_025` to `sv_032` pass unchanged beside it.
+  - **Chatur TF-026** (`ch_026`): the menu walk notes the submenu row whose label the page shows outside the
+    menus (the open project's name) and clicks it again after the rows, so later screens and seeds run on the
+    project the walk found. `tf-menus.mjs`'s submenu path is one helper now (`toChild`).
+  - **Chatur TF-028** (`ch_028`): run records gain `checks_provider` and `checks_model` (SCHEMA.md §2.5c), the
+    provider and model the app under test called, read by the new `tf-checks-model.py` from the test settings
+    and written by `tf-verify-emit.sh` and `tf-fix-close.sh`. Optional; never the key; TfLens reads them beside
+    `model`.
+  - **TfLens TF-058** (`tf_058`): the new `tf-dropdowns.mjs`, run by the screen check at every width, opens each
+    `[role=combobox]` / `[aria-haspopup=listbox]` list once: an option cut short or a list outside the window is
+    a visual finding. A native select is left out. Adds findings.
+  - **Sevak TF-033 to TF-035** (filed here from the owner's report): `tf-log-miss.py` takes a miss's discovery
+    window from the latest `tf-triage.sh look` mark (`sv_033`); a miss-fix carries every part of a fix recorded
+    around chained verifies, not the first (`sv_034`; 26 Sevak records had 61 s of a 111-minute fix); `--amend`
+    with a reason is a correction that replaces a set value or clears it with `none`, recorded on the stream
+    and applied by `tf-metrics.sh` and `tf-misses-md.py` (`sv_035`, SCHEMA.md §5.5.7).
+  - **AstroLyfe TF-001** (`as_001`; the file was started here): `tf-verify-tests.sh` writes the boot address
+    into `tests/verify/testsettings.Local.json` as `Verify:BaseUrl` / `Verify:CdpUrl` for the run and puts the
+    keys back after (`tf-verify-settings.py`); `BASE_URL` and `CDP_URL` stay set until v1.5. The
+    test-users check also reads `docs/<App>-TestNUsageDoc.md`, a section running to the next heading of its level.
+  - **AppManager TF-031** (`am_031`): `tf-verify-list.py` printed the guide's Password column; it prints
+    `password: set|not set` now and keeps no value in `list.json`. `tests/faults/secrets/scan.py` runs every
+    script in `.tfcore/utils` four ways against a project of fake secrets and fails on any that appears.
+  - **AppManager TF-032** (`am_032`): `tf-brd-status.py` without `--phase` refreshes every phase whose checklist
+    is newer than its BRD, the status gate's own test.
+  - Over-limit files took out what they added (`tf-emit.sh` 1832 → 1822 lines, `tf-menus.mjs`,
+    `tf-mockup-parity.mjs`, `tf-verify-screens.mjs`); the ceilings were lowered.
+
+- **Sevak TF-031 and TF-032, TfLens TF-057 (2026-11-12, evening; deployed to Sevak, Chatur and TfLens only).**
+  Each has a case in `tests/faults/run.sh` that fails on the scripts of the last commit and passes now, with a
+  control half that shows a real finding is still reported.
+  - **TF-032** (`sv_032`): `tf-mockup-parity.mjs` listed at most 200 anchors inside a box, so the rows that
+    repeat a mockup sample row (same anchor, or the same with other numbers) past the 200th kept their icons on
+    the box: Sevak's Assistant conversation with about 95 answers read "app carries an icon the mockup does
+    not". The list is complete now; the rule is unchanged. It cannot meet TF-029's: that one decides which
+    clauses compare the one element paired with the sample, this one which icons count on the boxes around.
+  - **TF-031** (`sv_031`): a test tagged `@boot:<kind>` runs only on the run of `list-<kind>.json`, alone of
+    its row, and the main run leaves every `@boot:` test out (`tf_boot_grep` in `tf-verify-around.sh`).
+    Untagged, the other boot runs every test of the row as before and says so. No project carries the tag yet.
+  - **TF-057** (`tf_057`): `tf-phase.sh end` inside a nested command gives the marker back to the outer
+    command, its start unchanged, instead of deleting it. Ending the outer one, or a lone command, removes it.
+
+- **Sevak TF-026 to TF-030 and the set-up rule (2026-11-12; deployed to Sevak, Chatur and TrStudio only).**
+  Each has a case in `tests/faults/run.sh` that fails on the scripts of the last commit and passes now.
+  - **TF-028** (`sv_028`): `tf-mockup-parity.mjs` no longer counts an icon nobody sees, one with no box at all
+    (`hidden`, `display:none` or under one), as an icon of the boxes around it, on either side. Sevak keeps its
+    other tab panels mounted and hidden. On the mockups of all projects this takes 75 hidden icons out of the
+    count (closed dropdown menus, the other theme's toggle icon, hidden empty states and alerts).
+  - **TF-029** (`sv_029`): an anchor inside a mockup sample box (`data-tf-sample`) that shows another value
+    than the sample is not compared by colour or badge; with the same value it still is. Before, only the
+    box's unanchored children were spared.
+  - **TF-027** (`sv_027`): a native date, time, month or week box in the mockup is not compared by its icon,
+    and the icons the app draws at its place (a picker's calendar) are no box's icon, as TF-025 did for a select.
+  - **TF-030** (`sv_030`): `tf-login.mjs openFresh` makes the hop away a second time, to a route no page
+    answers, when the first one leaves the address on the screen or every one of its controls in place: the
+    screen the app's root opens can now be measured at its second width.
+  - **TF-026** (`sv_026`): a row whose checklist entry says `needs-boot: relaunch` (or `install`) is listed
+    by `tf-verify-list.py` under "Rows on another boot", with a list file and the line that runs and merges it.
+    While the browser tests run, `tf-verify-tests.sh` restores the desktop head's window whenever it is
+    minimized (`tf-login.mjs keepDrawing`), and it does not build the unit tests while a desktop head is up;
+    `verify-phase.md` runs them before the boot and merges them.
+  - **Set-up tests (owner, 2026-11-11 19:07)** (`setup_first`): a test tagged `@setup` runs first in every
+    phase verify, is graded against no row and is not listed as "no row id". New file
+    `.tfcore/utils/tf-verify-around.sh`; `measure-projects.py` no longer counts such a test as left out.
+  - `tf-mockup-parity.mjs` and `tf-verify-tests.sh` took out as many lines as they gained (size rule).
+
 - **The per-fix routine runs the portability scan and the installer test on every fix (owner, 2026-11-11).**
   Not only before a release: main went red on 10 Nov because a fix skipped both. `WorkFlow-Context.md` §7 item 4,
   the Release Guide and the header of `tests/regression/run.sh` say so.

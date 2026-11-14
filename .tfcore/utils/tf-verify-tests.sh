@@ -6,35 +6,32 @@
 #                                         [--filter <dotnet test filter>] [--json-out tests/.artifacts/verify/tests.json]
 #   bash .tfcore/utils/tf-verify-tests.sh --merge <tests-a.json> <tests-b.json>… [--json-out tests/.artifacts/verify/tests.json]
 #
-# Browser tests: `npx playwright test` over tests/verify/ (the JSON reporter). Unit tests:
-# `tf-build.sh test` with normal console verbosity. A test belongs to a row when its name STARTS with
-# the row's id (REQ-UI-004 …; tf-req-ids.py): an id later in the name, or in a theory case's arguments,
-# is what the test is about, not what it proves, and a row only named that way is listed under
-# named_only_by_other_rows_tests (Chatur TF-012). A row is PASS when a test carrying its id passed and none failed,
-# FAIL when one failed (the reason and the screenshot, when the reporter kept one, are recorded),
-# NOT-TESTED when every test carrying its id was SKIPPED, and absent when no test carries its id.
+# Browser tests: `npx playwright test` over tests/verify/ (JSON reporter); unit tests: `tf-build.sh test`.
+# A test belongs to a row when its name STARTS with the row's id (tf-req-ids.py); a row only named later
+# in another test's name is listed under named_only_by_other_rows_tests (Chatur TF-012).
+# A row is PASS when a test carrying its id passed and none failed, FAIL when one failed (reason and
+# screenshot recorded), NOT-TESTED when every test carrying its id was SKIPPED, absent when none carries it.
 # A skipped clause is a third outcome, never a failure: `test.skip(!SEEDED, …)` says the state does
 # not exist in the data, which is not a defect (TF-022). Writes tests/.artifacts/verify/tests.json.
-# A suite too long for one command runs in parts (AppManager TF-013): `--shard N/M` runs Playwright's
-# shard N of M (browser only; run the unit tests once with --no-browser), `--spec` names files, and
-# each part writes its own playwright-<part>.json and tests-<part>.json. `--merge` then combines the
-# parts' rows and totals into one tests.json; a later run of the same test stands for it (Lekhak TF-007).
+# A suite too long for one command runs in parts (AppManager TF-013): `--shard N/M` (browser only) and
+# `--spec` each write their own playwright-<part>.json and tests-<part>.json; `--merge` combines the parts
+# into one tests.json, and a later run of the same test stands for it (Lekhak TF-007).
 # When tf-verify-list.sh was given a list of ids, the browser run keeps only the tests carrying them
 # (`--grep`), and is skipped when no row has a screen and no browser test names one (Lekhak TF-017).
 # On a project with several phase checklists, `ui`, `functional` and `all` keep only the tests carrying
 # the graded phase's row ids too, and the spec files that ran are printed (Sevak TF-021). A test left
 # out because its title carries no row id is printed by name as a finding and kept in tests.json.
-# `--list` names another list.json; `--all-specs` runs every browser test whatever the scope.
-# `--filter "DisplayName~REQ-RAG-150"` runs only the unit tests the filter selects (dotnet test --filter),
-# no browser tests, into tests-filter-<expr>.json: a memory-heavy test that skips itself when its whole
-# project runs is run on its own, and its part is merged into the run with --merge (TechieRag TF-010).
-# A desktop head's debugging address (--base answering /json/version, or boot.json mode=cdp) also
-# reaches the tests as CDP_URL; a suite that reads it nowhere is refused, not run (Lekhak TF-021).
-# A Mac Catalyst head (boot.json mode=appium) reaches them as APPIUM_URL, TF_BUNDLE_ID and TF_APP_PATH.
+# `--list` names another list.json; `--all-specs` runs every browser test whatever the scope. Set-up tests
+# (@setup) run first; @boot:<kind> tests only on that boot; no unit tests while a head is up (tf-verify-around.sh).
+# `--filter "DisplayName~REQ-RAG-150"` runs only the unit tests it selects into tests-filter-<expr>.json, to
+# be merged: a memory-heavy test that skips itself when its whole project runs (TechieRag TF-010).
+# The address reaches the tests as Verify:BaseUrl (Verify:CdpUrl for a desktop head) in testsettings.Local.json,
+# put back after (tf-verify-settings.py), and until v1.5 as BASE_URL / CDP_URL too (Lekhak TF-021). A Mac Catalyst head
+# (boot.json mode=appium) reaches them as APPIUM_URL, TF_BUNDLE_ID and TF_APP_PATH.
 # Exit 0 ran (whatever the results) · 2 nothing could run.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$HERE/tf-portable.sh"   # tf_read_lines, for bash 3.2 on a stock Mac
+source "$HERE/tf-portable.sh"; source "$HERE/tf-verify-around.sh"   # tf_read_lines for bash 3.2; tf_setup_first …
 BASE=""; TARGET=""; BROWSER=1; UNIT=1; OUT=""; SHARD=""; SPECS=(); MERGE=(); LIST="tests/.artifacts/verify/list.json"; ALLSPECS=0; FILTER=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -49,7 +46,7 @@ while [[ $# -gt 0 ]]; do
     --filter) FILTER="${2:-}"; BROWSER=0; shift 2 ;;
     --merge) shift; MERGING=1; while [[ $# -gt 0 && "$1" != --* ]]; do MERGE+=("$1"); shift; done ;;
     --json-out) OUT="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "tf-verify-tests: unknown argument $1" >&2; exit 2 ;;
   esac
 done
@@ -172,8 +169,7 @@ PY
 fi
 
 source "$HERE/tf-lock.sh"; tf_take_lock "verify-tests${PART:+ $PART}"   # one browser check at a time
-PWJSON="tests/.artifacts/verify/playwright${PART:+-$PART}.json"; PWLOG="tests/.artifacts/verify/playwright${PART:+-$PART}.log"; UNITLOG=""; UNITLINE=""
-ran_any=0
+PWJSON="tests/.artifacts/verify/playwright${PART:+-$PART}.json"; PWLOG="tests/.artifacts/verify/playwright${PART:+-$PART}.log"; UNITLOG=""; UNITLINE=""; ran_any=0
 
 if [[ $BROWSER -eq 1 ]]; then
   # A desktop head is reached over its debugging address (tf-verify-boot.sh prints mode=cdp). The tests
@@ -198,10 +194,10 @@ print(b.get("url", ""), b.get("bundle_id", ""), b.get("app_path", "")) if b.get(
     # --base reaches the tests only as BASE_URL, which Playwright never reads by itself. When neither
     # the config nor a spec reads it, every test opens the config's own address, where an older build
     # may still be running and pass in the new one's name: refuse instead.
-    if [[ -n "$BASE" ]] && ! grep -qs "BASE_URL" playwright.config.* tests/verify/*.spec.* tests/verify/**/*.spec.*; then
+    if [[ -n "$BASE" ]] && ! grep -qsE "BASE_URL|BaseUrl" playwright.config.* tests/verify/*.ts tests/verify/**/*.ts; then
       echo "browser tests: NOT RUN — nothing reads BASE_URL, so the tests would open another address than --base $BASE; run bash .tfcore/utils/tf-verify-env.sh, which makes playwright.config.ts read it"
       rm -f "$PWJSON"
-    elif [[ -n "$CDPURL" ]] && ! grep -qsE "env(\.|\[['\"])CDP_URL" playwright.config.* tests/verify/*.ts tests/verify/**/*.ts; then
+    elif [[ -n "$CDPURL" ]] && ! grep -qsE "env(\.|\[['\"])CDP_URL|CdpUrl" playwright.config.* tests/verify/*.ts tests/verify/**/*.ts; then
       echo "browser tests: NOT RUN — $CDPURL is a desktop app's debugging address and no test reads CDP_URL, so they would attach to another address; make the connectOverCDP helper read process.env.CDP_URL first"
       rm -f "$PWJSON"
     elif node -e "require.resolve('@playwright/test')" >/dev/null 2>&1; then
@@ -233,7 +229,7 @@ SCOPEPY
         echo "browser tests: skipped — no row in scope (${SCOPE#none }) has a screen and no file under tests/verify/ names one; its tests are unit tests (--all-specs runs every spec anyway)"
         rm -f "$PWJSON"
       else
-        [[ -n "$SCOPE" ]] && PWARGS+=(--grep "${SCOPE#* }")
+        TF_BOOT_ARGS=(); [[ ${#SPECS[@]} -eq 0 && $ALLSPECS -eq 0 ]] && tf_boot_grep "$LIST" "${SCOPE#* }" || { [[ -n "$SCOPE" ]] && TF_BOOT_ARGS=(--grep "${SCOPE#* }"); }; PWARGS+=(${TF_BOOT_ARGS[@]+"${TF_BOOT_ARGS[@]}"})
         # A test whose title carries no row id belongs to no phase, so a phase's filter leaves it out. It
         # is named, never dropped in silence. Listed before the run, by asking Playwright for every test
         # it would collect; each is printed below as a finding and kept in tests.json
@@ -255,7 +251,8 @@ def walk(s, path, f):
     t = s.get("title") or ""
     here = path if (not t or t.endswith((".ts", ".js", ".mjs", ".tsx", ".jsx"))) else path + [t]
     for sp in s.get("specs", []):
-        if not rq.ID.search(" ".join(here + [sp.get("title", "")])):
+        names = here + [sp.get("title", "")]   # a set-up test (@setup) ran first: tf-verify-around.sh
+        if not rq.ID.search(" ".join(names)) and not any(x.lstrip("@") == "setup" or "@setup" in x for x in names + sp.get("tags", [])):
             found.append({"file": sp.get("file") or f, "title": sp.get("title", "")})
     for c in s.get("suites", []):
         walk(c, here, f)
@@ -265,7 +262,10 @@ json.dump(found, open(sys.argv[2], "w"), indent=1)
 UNNUMPY
           rm -f "$UNNUM.list"
         fi
+        tf_keep_drawing start "$CDPURL"; [[ -n "$BASE" ]] && python3 "$HERE/tf-verify-settings.py" put "$BASE" "$CDPURL"   # AstroLyfe: through the settings file
+        [[ "$SCOPE" == phase* ]] && tf_setup_first APPIUM_URL="$APPIUMURL" TF_BUNDLE_ID="$BUNDLEID" TF_APP_PATH="$APPPATH" CDP_URL="$CDPURL" BASE_URL="$BASE"
         APPIUM_URL="$APPIUMURL" TF_BUNDLE_ID="$BUNDLEID" TF_APP_PATH="$APPPATH" CDP_URL="$CDPURL" BASE_URL="$BASE" PLAYWRIGHT_JSON_OUTPUT_NAME="$PWJSON" npx playwright test "${PWARGS[@]}" ${SPECS[@]+"${SPECS[@]}"} > "$PWLOG" 2>&1
+        tf_keep_drawing stop; [[ -n "$BASE" ]] && python3 "$HERE/tf-verify-settings.py" back
         if [[ "$SCOPE" == phase* ]]; then
           NIDS="$(tr '|' '\n' <<<"${SCOPE#* }" | grep -c .)"
           echo "browser tests: ran${SHARD:+ shard $SHARD} only the tests carrying the $NIDS row id(s) of phase $(tr -d a-z <<<"${SCOPE%% *}") in $LIST, not the other phases' specs (--all-specs runs every spec) (log $PWLOG)"
@@ -317,6 +317,8 @@ SAYPY
   fi
 else rm -f "$PWJSON"; fi
 
+HELD="$([[ $UNIT -eq 1 ]] && tf_head_holds_build)"
+[[ -n "$HELD" ]] && { UNIT=0; echo "unit tests: NOT RUN — the desktop head at $HELD is up and holds the build output (Sevak TF-026); run them before the boot (--no-browser --json-out tests/.artifacts/verify/tests-unit.json) and --merge that part"; }
 if [[ $UNIT -eq 1 ]]; then
   # Each pattern on its own: `ls *.sln *.slnx` fails when either matches nothing, so a .slnx-only
   # solution would read as none; and a test project may sit at any depth under tests/, not one folder

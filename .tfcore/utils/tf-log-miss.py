@@ -67,6 +67,36 @@ def emit(stream, rec):
     return ok, reason
 
 
+def discovery(started, now, found_run):
+    """Sevak, 2026-11-13: what finding the root cause cost, from the `tf-triage.sh look` marks set in the
+    running command (tests/.artifacts/verify/triage.json). The window starts at the latest mark, or at
+    the last miss this command logged after it, and ends now. -> (start, None), (None, why) or (None, None)
+    when no mark was set. Two misses logged within 120 s with no mark between were found together."""
+    try:
+        acts = json.load(open(os.path.join("tests", ".artifacts", "verify", "triage.json"), encoding="utf-8")).get("actions", [])
+    except (OSError, ValueError, AttributeError):
+        return None, None
+    looks = [a["ts"] for a in acts if a.get("verb") == "look" and started <= (a.get("ts") or "") <= now]
+    if not looks:
+        return None, None
+    look, prev = max(looks), []
+    try:
+        root = os.environ.get("TF_METRICS_ROOT") or "."
+        for line in open(os.path.join(root, "docs", "metrics", "misses.jsonl"), encoding="utf-8"):
+            r = json.loads(line) if line.strip() else {}
+            if r.get("kind") == "miss" and r.get("found_run_id") == found_run and look <= (r.get("ts") or "") <= now:
+                prev.append((r["ts"], r.get("miss_id")))
+    except (OSError, ValueError):
+        pass
+    if not prev:
+        return look, None
+    t, mid = max(prev)
+    sec = lambda x: datetime.datetime.strptime(x, "%Y-%m-%dT%H:%M:%SZ").timestamp()
+    if sec(now) - sec(t) <= 120:
+        return None, f"found together with {mid}: logged within 120 s of it with no `tf-triage.sh look` between them"
+    return t, None
+
+
 def main(argv):
     if len(argv) < 2 or argv[1] in ("-h", "--help") or "--what" not in argv:
         print(__doc__)
@@ -171,6 +201,12 @@ def main(argv):
            # TechieBlog TF-004: a defect told to *log-miss was found outside any run's window
            "discovery_why": ("found by the owner or in production, not by a run" if found_by in ("owner", "production")
                              else "logged after the fact by *log-miss; it has no window of its own")}
+    ds, dwhy = discovery(started, now, started)
+    if ds:
+        rec.pop("discovery_why")
+        rec["discovery_started"], rec["discovery_ended"] = ds, now
+    elif dwhy:
+        rec["discovery_why"] = dwhy
     attributed = "inferred, no run record found"
     if req and cls not in ("unspecified-gap", "spec-contradiction"):
         o = q("--origin-of", req).split()
@@ -215,6 +251,7 @@ def main(argv):
     print(f"Owning REQ : {req or 'none'}")
     print(f"Attributed : {rec['origin_phase']} ({rec['origin_agent']}) — {attributed}")
     print(f"Found by   : {found_by}")
+    print(f"Discovery  : " + (f"{ds} to {now}, from the `look` mark" if ds else rec.get("discovery_why", "")))
     print(f"Docs       : {doc_line}; docs/{app}-Misses.md rewritten")
     if fix_line:
         print(f"Fix        : {fix_line}")

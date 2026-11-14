@@ -12,7 +12,8 @@ Reads the phase's checklist, the UIDesign, the BRD screens table and the UsageGu
   - the screens to drive, each with its route, its mockup and the rows it owns; a dialog row
     is listed under its parent screen (Schemas §2: a dialog is verified on its page)
   - rows whose screen could not be resolved (graded by their test only)
-  - the test users from the UsageGuide, as plain text (no Markdown)
+  - the test users from the UsageGuide, as plain text (no Markdown): each user's name and role, and
+    whether a password is set, never the password itself
   - for each screen, from the code: the page file that serves its route, that file's project, and
     the labels of the links or buttons to click from the app's menu to reach it (Lekhak TF-027)
 Writes the same as JSON (default tests/.artifacts/verify/list.json) for the other verify scripts.
@@ -91,7 +92,7 @@ def entries_of(text):
             h = re.match(r"^#{2,3}\s+(?:page|screen)\s*:\s*(.+)$", nxt, re.I)
             if h:
                 current = h.group(1).strip()
-            e = {"section": current, "acceptance": "", "mockup": "", "brd": "", "perf_budget": "", "zoom_check": ""}
+            e = {"section": current, "acceptance": "", "mockup": "", "brd": "", "perf_budget": "", "zoom_check": "", "needs_boot": ""}
             for j in range(i, min(i + 14, len(lines))):
                 l = lines[j]
                 if re.search(r"\*Acceptance:?\*|^\s*[-*]\s*Acceptance:", l, re.I) and not e["acceptance"]:
@@ -108,6 +109,9 @@ def entries_of(text):
                 zc = re.search(r"zoom-check:\s*(keys|kept)\b", l)   # coding-standards-dotnet.md §9b
                 if zc and not e["zoom_check"]:
                     e["zoom_check"] = zc.group(1)
+                nb = re.search(r"needs-boot:\s*`?([A-Za-z][\w-]*)", l)   # Sevak TF-026: graded on a boot of its own
+                if nb and not e["needs_boot"]:
+                    e["needs_boot"] = nb.group(1).lower()
                 if j > i and re.match(r"^\s*(?:[-*]\s*)?<a id=|^## ", l):
                     break   # the next entry starts: nothing below belongs to this row
             out[rid] = e
@@ -388,6 +392,34 @@ def phases_of(app):
     return sorted(set(found))
 
 
+def boot_parts(work, out_path, app, phase, have):
+    """Sevak TF-026: a row whose entry says `needs-boot: <kind>` (relaunch: the app started again on the
+    same data, as a language chosen for the next launch; install: a second fresh install) cannot be
+    graded on the main boot. Its tests skip there; each kind gets its own list, list-<kind>.json, for a
+    test run on that boot, merged into the main run afterwards (a later run of a test stands for it)."""
+    kinds = {}
+    for r in work:
+        if r.get("needs_boot"):
+            kinds.setdefault(r["needs_boot"], []).append(r)
+    if not kinds:
+        return {}
+    print()
+    print(f"## Rows on another boot ({sum(len(v) for v in kinds.values())}): graded on a boot of their own, then merged")
+    out = {}
+    for kind, rows in sorted(kinds.items()):
+        p = os.path.join(os.path.dirname(out_path) or ".", f"list-{kind}.json")
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump({"app": app, "scope": ",".join(r["id"] for r in rows), "phase": phase, "phases": have,
+                       "kind": cfg("appKind", "app"), "needs_boot": kind, "rows": rows, "screens": []}, f, indent=1)
+        out[kind] = p
+        print(f"- needs-boot {kind} ({len(rows)}): {', '.join(r['id'] for r in rows)}")
+        print(f"    after the main run, on that boot (a test tagged @boot:{kind} runs only there): bash .tfcore/utils/tf-verify-tests.sh --no-unit --list {p} "
+              f"--json-out tests/.artifacts/verify/tests-{kind}.json, then --merge tests/.artifacts/verify/tests.json "
+              f"tests/.artifacts/verify/tests-{kind}.json")
+    return out
+
+
 def main(argv):
     if len(argv) < 3 or argv[1] in ("-h", "--help"):
         print(__doc__)
@@ -426,7 +458,10 @@ def main(argv):
     if not screens:
         screens, source = screens_of_checklist(text, ent), "checklist's Page headings"
     dialogs = dialogs_of_brd(os.path.join("docs", f"{pfx}BRD.md"))
-    users = test_users(usage_guide(app))
+    # AppManager, 2026-11-13: a guide's Password column can hold the password itself. No script prints a
+    # password, a key, a token or a connection string: the user, the role, and whether a password is set.
+    users = [{"user": u["user"], "role": u["role"], "password_set": bool(u["password_source"]) and not
+              re.match(r"(?i)\s*(none|no sign-in|-|n/?a)\b", u["password_source"])} for u in test_users(usage_guide(app))]
     by_name = {norm_name(s["name"]): s for s in screens}
     for s in screens:                   # a split screen's own name reaches its first tab
         if s.get("parent"):
@@ -444,7 +479,7 @@ def main(argv):
             continue
         e = ent.get(r["id"], {"section": "", "acceptance": "", "mockup": "", "brd": "", "perf_budget": "", "zoom_check": ""})
         row = dict(r, acceptance=e["acceptance"], mockup=e["mockup"], brd=e["brd"], perf_budget=e["perf_budget"],
-                   zoom_check=e.get("zoom_check", ""),
+                   zoom_check=e.get("zoom_check", ""), needs_boot=e.get("needs_boot", ""),
                    section=e["section"], screen="", route="", dialog="")
         cand = [screen_from_acceptance(e["acceptance"]), e["section"], r["title"]]
         if e["section"] in by_section:     # a screen read from the checklist: the heading the row sits under
@@ -511,13 +546,14 @@ def main(argv):
                + f" --json-out tests/.artifacts/verify/zoom/{r['id']}.json)" if r.get("zoom_check") else "")
         print(f"- {r['id']} [{r['status_raw']}] {r['title']} — {where}{extra}")
         print(f"    acceptance: {r['acceptance'] or 'MISSING — the row cannot be graded; fix the checklist'}")
+    parts = boot_parts(work, out_path, app, phase, have)
     if unresolved:
         print()
         print(f"## No screen resolved ({len(unresolved)}): graded by their test only — " + ", ".join(unresolved))
     print()
     print("## Test users (UsageGuide)")
     for u in users:
-        print(f"- {u['user']} — {u['role']} — password: {u['password_source']}")
+        print(f"- {u['user']} — {u['role']} — password: {'set' if u['password_set'] else 'not set'}")
     if not users:
         print("- none in the UsageGuide: the smoke policy says what to do")
 
@@ -526,7 +562,7 @@ def main(argv):
         # "phases": every phase with a checklist, so the test run can tell a project with several
         json.dump({"app": app, "scope": scope, "phase": phase, "phases": have, "kind": cfg("appKind", "app"), "checklist": cl,
                    "rows": work, "screens": screen_list, "screens_source": source, "unresolved": unresolved, "test_users": users,
-                   "skipped_na": skipped, "total": len(rows)}, f, indent=1)
+                   "skipped_na": skipped, "total": len(rows), "boot_parts": parts}, f, indent=1)
     print()
     print(f"JSON: {out_path}")
     return 0

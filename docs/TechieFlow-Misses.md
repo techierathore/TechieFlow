@@ -3,16 +3,19 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 333 logged: 56 open, 275 fixed, 1 will not fix, 1 withdrawn |
+| Count | 356 logged: 59 open, 295 fixed, 1 will not fix, 1 withdrawn |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-11-11 |
+| Updated | 2026-11-13 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
-## Open (56)
+## Open (59)
 
 | Miss | Found | Whose gap | What went wrong |
 |---|---|---|---|
+| MISS-TechieFlow-20261113-13 | 2026-11-13 by owner | the check was too weak | tf-log-miss.sh's duplicate check takes a new problem on a row for the open miss of the same class and completes that miss's why_missed and sort with the new one's |
+| MISS-TechieFlow-20261113-12 | 2026-11-13 by owner | the framework never said it | A tf-log-miss.sh --fixed --fix-run <start> written before that fix's run record exists carries no cost (five Sevak log-miss fixes of 13 Nov) |
+| MISS-TechieFlow-20261113-11 | 2026-11-13 by owner | said and ignored | Maintainer slip 2026-11-14: a sed meant to mask AstroLyfe's TestNUsageDoc table did not match, and the command printed the test-user passwords into the session |
 | MISS-TechieFlow-20261009-04 | 2026-10-09 by owner | the check was too weak | tf-mockup-parity drops a theme pass that throws (the error stays in that width's entry) and grades the screen on what is left, so a crash in the dark pass gave PASS with only light graded and nothing in the verdict said dark was not compared; found by the maintainer while fixing Lekhak TF-025 |
 | MISS-TechieFlow-20261008-01 | 2026-10-08 by owner | said and ignored | The Lekhak TF-024 contrast rule was shipped to 18 projects proved only on a fixture, without measuring how many screens already Verified it will fail; and the summary left the full regression re-run to the owner. |
 | MISS-TechieFlow-20261003-02 | 2026-10-03 by owner | the check was too weak | Chatur Repository after the TF-006 fix: tf-mockup-parity pairs live rows with the mockup's sample rows by position, so app row N is graded against whatever kind of row the mockup happened to draw at N (commit-row-1 a process check-in with an icon against a hand check-in without one); five 'commit-ro |
@@ -70,10 +73,30 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (275)
+## Fixed (295)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261113-14 | 2026-11-13 by owner | 2026-11-13 by log-miss | said and ignored | Maintainer slips 2026-11-14 caught by the suites before deploy: an apostrophe in a tf-emit.sh heredoc (portability), a picker rule that stopped reporting a plain span's chevron (tf_046), private project names in WorkFlow-Context (mirror FR-47) |
+| MISS-TechieFlow-20261113-10 | 2026-11-13 by production | 2026-11-13 by log-miss | the check was too weak | AppManager 13 Nov: tf-brd-status.sh refreshed only appPhase's BRD after a row moved phases, so the status gate blocked on phase 1's |
+| MISS-TechieFlow-20261113-09 | 2026-11-13 by production | 2026-11-13 by log-miss | the framework never said it | AppManager 13 Nov: tf-verify-list.sh printed the test users' passwords from the UsageGuide into the session |
+| MISS-TechieFlow-20261113-08 | 2026-11-13 by production | 2026-11-13 by log-miss | the framework never said it | AstroLyfe 13 Nov: the boot address reached the browser tests only as BASE_URL, and the test-users check never read docs/<App>-TestNUsageDoc.md |
+| MISS-TechieFlow-20261113-07 | 2026-11-13 by production | 2026-11-13 by log-miss | the framework never said it | Sevak 13 Nov: no command could correct a miss field written wrongly (a duplicate check put one miss's cause on MISS-Sevak-20261112-21) |
+| MISS-TechieFlow-20261113-06 | 2026-11-13 by production | 2026-11-13 by log-miss | the check was too weak | Sevak 13 Nov: a miss-fix copied only the first part of a fix recorded around chained verifies (26 records with 61 s of a 111-minute fix) |
+| MISS-TechieFlow-20261113-05 | 2026-11-13 by production | 2026-11-13 by log-miss | the framework never said it | Sevak 13 Nov: tf-log-miss.sh never read the tf-triage.sh look marks, so every miss said its discovery was not measured |
+| MISS-TechieFlow-20261113-04 | 2026-11-13 by production | 2026-11-13 by log-miss | the framework never said it | TfLens TF-058: no verify check opened a dropdown, so a list too narrow to read passed every gate |
+| MISS-TechieFlow-20261113-03 | 2026-11-13 by production | 2026-11-13 by log-miss | the framework never said it | Chatur TF-028: a run record had no field for the provider and model the app under test called during the checks |
+| MISS-TechieFlow-20261113-02 | 2026-11-13 by production | 2026-11-13 by log-miss | the check was too weak | Chatur TF-026: the menu walk clicked every Recent projects row and left the app on another project, so later screens and seeds ran there |
+| MISS-TechieFlow-20261113-01 | 2026-11-13 by production | 2026-11-13 by log-miss | the check was too weak | Chatur TF-027: the mockup check counted a picker's arrow on the mockup side only (a button.pick against a combobox), holding 32 rows |
+| MISS-TechieFlow-20261112-04 | 2026-11-12 by owner | 2026-11-12 by log-miss | said and ignored | Claude's slip 2026-11-12 evening: wrote a private project name into WorkFlow-Context, one word over its budget, and let tf-mockup-parity.mjs grow 72 bytes past its ceiling; tests/mirror caught all three before the deploy |
+| MISS-TechieFlow-20261112-03 | 2026-11-12 by owner | 2026-11-12 by log-miss | the check was too weak | TfLens TF-057: tf-phase.sh end deleted the marker even when it carried an outer command, losing the outer command's start |
+| MISS-TechieFlow-20261112-02 | 2026-11-12 by owner | 2026-11-12 by log-miss | the framework never said it | Sevak TF-031: the run of a needs-boot install list ran every test of the row, so the first-install half re-ran on the second install and the second half skipped |
+| MISS-TechieFlow-20261112-01 | 2026-11-12 by owner | 2026-11-12 by log-miss | the check was too weak | Sevak TF-032: tf-mockup-parity listed at most 200 anchors inside a box, so the icons of rows repeating a mockup sample row past the 200th stayed on the box (Assistant conversation with ~95 answers) |
+| MISS-TechieFlow-20261111-11 | 2026-11-11 by owner | 2026-11-11 by log-miss | the check was too weak | Sevak TF-030: tf-mockup-parity could not measure the screen an app's root opens at its second width: the hop to / landed on the same screen, so none of its controls was new on the way back |
+| MISS-TechieFlow-20261111-10 | 2026-11-11 by owner | 2026-11-11 by log-miss | the framework never said it | Sevak TF-026: a phase verify had no way to grade rows that need a second start or a second install, its test step did not restore a minimized window, and it built the unit tests while the desktop head held the build output |
+| MISS-TechieFlow-20261111-09 | 2026-11-11 by owner | 2026-11-11 by log-miss | the check was too weak | Sevak TF-027: tf-mockup-parity read a native date input in the mockup as having no icon, so a component library's date picker failed the icon clause on Event log |
+| MISS-TechieFlow-20261111-08 | 2026-11-11 by owner | 2026-11-11 by log-miss | the check was too weak | Sevak TF-029: tf-mockup-parity compared the colour of a pill anchored inside a mockup sample row even when the app's pill showed another value, so 9 Connectors and Event log rows stayed below Verified |
+| MISS-TechieFlow-20261111-07 | 2026-11-11 by owner | 2026-11-11 by log-miss | the check was too weak | Sevak TF-028: tf-mockup-parity counted icons inside hidden tab panels kept mounted (no box, display:none), so App settings, Agents and Automations carried an icon the mockup does not and 17 phase 2 rows stayed below Verified |
 | MISS-TechieFlow-20261111-06 | 2026-11-11 by owner | 2026-11-11 by log-miss | said and ignored | The maintainer wrote two private project names into WorkFlow-Context.md while refreshing its open items on 2026-11-11; the FR-47 check in tests/mirror caught it before the reply and the line was rewritten. |
 | MISS-TechieFlow-20261111-05 | 2026-11-11 by owner | 2026-11-11 by log-miss | the check was too weak | The same rule typed in several scripts had drifted: tf-emit.sh ignored TF_PROJECT_DIR and TF_YOLO_TTL_HOURS; tf-doc-check.py skipped a checklist row whose id is in backticks; tf-build-list.py handed Owner-UAT rows to the builder; seven scripts read appPhase in quotes as phase 1; tf-assets.sh did not |
 | MISS-TechieFlow-20261111-04 | 2026-11-11 by owner | 2026-11-11 by log-miss | the check was too weak | handoff-phase.md told the model to write a usage guide with four sections the template does not have, one bare next-command line, seven feedback fields of eight and a Summary without the blocking count: following the task produced FAIL lines at the status gate. It and productguide.md also never star |

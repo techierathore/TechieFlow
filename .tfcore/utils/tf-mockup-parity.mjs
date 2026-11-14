@@ -7,34 +7,17 @@
 // pixels. Pixel diffing on live data is unusable and would be switched off within
 // a week; that is why this grades named structural classes instead.
 //
-// THE FOUR DEFECTS THIS IMPLEMENTATION IS BUILT AROUND (TfLens TF-008/009/011/012).
-// They are not four bugs — they are one shape seen four times: *a gate reports on
-// what it happens to be able to reach, and reports success when it reaches nothing.*
-//
-//   TF-008  No gate compared a built screen to its design at all. §4a asks "does the
-//           control show data?" (a badge rendered as bare text HAS text) and §4b asks
-//           "does anything overlap?" (a header wrapped to two rows overlaps nothing).
-//           13 of 14 screens carried structural drift with every gate green.
-//
-//   TF-009  The first implementation graded six classes and `border-style` was in
-//           none of them, so a card lost its dashed "this is an estimate" treatment
-//           and passed: a dashed grey border and a solid grey border land in the same
-//           semantic COLOUR bucket. -> the `stroke` clause below.
-//
-//   TF-011  Depth was bounded by how many data-testid anchors the MOCKUP happened to
-//           carry, and the gate walked a <table> into tr/td but walked nothing else.
-//           So the two screens whose mockups used tables produced 44 findings and
-//           looked thorough, while card-built screens produced silence and PASS. The
-//           failure is silent AND inverted: **the less of a screen the gate can see,
-//           the cleaner its verdict looks.** -> the structural walker, the coverage
-//           accounting, and the UNGRADEABLE verdict below. A PASS must mean "graded",
-//           never "there was nothing to compare".
-//
-//   TF-012  The `clip` clause counted screen-reader-only text as overflow, so every
-//           accessible screen failed it — 8 of 10 screens, identical message, always.
-//           A finding that appears everywhere always trains a reader to skim the whole
-//           report, which is the most expensive failure a gate can have. -> isHidden()
-//           and the visible-extent overflow measurement below.
+// THE FOUR DEFECTS THIS IMPLEMENTATION IS BUILT AROUND (TfLens TF-008/009/011/012), one shape seen
+// four times: *a gate reports on what it can reach, and reports success when it reaches nothing.*
+//   TF-008  No gate compared a built screen to its design: 13 of 14 screens drifted with every gate green.
+//   TF-009  `border-style` was graded by no class, so a card lost its dashed "estimate" border and
+//           passed (dashed and solid grey share a colour bucket). -> the `stroke` clause.
+//   TF-011  Depth was bounded by the mockup's anchors and only <table> was walked: table screens gave 44
+//           findings, card screens silence and PASS. **The less of a screen the gate sees, the cleaner its
+//           verdict looks.** -> the structural walker, the coverage accounting, UNGRADEABLE. A PASS
+//           means "graded", never "there was nothing to compare".
+//   TF-012  `clip` counted screen-reader-only text as overflow on 8 of 10 screens; a finding that is
+//           always there trains a reader to skim. -> isHidden() and the visible-extent measurement.
 //
 // It produces FINDINGS and a per-screen verdict. verify-phase §4b2 decides what that
 // means for a REQ.
@@ -293,19 +276,17 @@ const PROBE = (wanted = []) => {
   // The border STYLE is a class of its own: a mockup says "provisional / estimated /
   // inactive" with it. Quantised to the three values that carry meaning rather than the
   // full CSS keyword set, so the clause stays as noise-free as the colour buckets.
-  // A checkbox, switch or radio is not compared by its border: a native
-  // <input type="checkbox"> computes border-style none because the browser draws its box, while a
-  // library's role="checkbox" draws the same box as a CSS border. Same control, so not applicable.
-  // A toggle is not compared by its fill, tick or pill shape: the browser paints a native one itself,
+  // A checkbox, switch or radio is not compared by its border (a native one computes none, a
+  // library's draws one), nor by its fill, tick or pill shape: the browser paints a native one itself,
   // a library draws it with CSS and an <svg>. What is drawn inside a toggle is no icon or badge of the
   // boxes around it. The checked state is not compared: the tick follows the app's data. A toggle the
   // app does not draw, or draws with no size, is the screen check's finding.
   const TOGGLE = 'input[type="checkbox"],input[type="radio"],[role="checkbox"],[role="switch"],[role="radio"]';
-  // A select is compared as a select, not by its chevron: the browser paints a native
-  // <select>'s chevron itself, while a library's role="combobox" trigger draws it as an <svg>. The icon
-  // clause is not applicable to either, and the chevron is no icon of the boxes around it.
+  // A picker (select, combobox, date box) is not compared by its arrow or calendar, which a browser
+  // paints and a library draws as an <svg>: on neither side is it an icon of any box (TF-025, TF-027).
   const SELECT = 'select,[role="combobox"]';
-  const PAINTED = `${TOGGLE},${SELECT}`;
+  const DATE = ['date', 'time', 'datetime-local', 'month', 'week'].map((t) => `input[type="${t}"]`).join(',');
+  const PAINTED = `${TOGGLE},${SELECT}`, PICK = `${SELECT},${DATE}`, BTN = 'button,[role="button"]';
   const strokeOf = (el) => {
     if (el.matches(TOGGLE)) return null;
     const cs = getComputedStyle(el);
@@ -323,8 +304,9 @@ const PROBE = (wanted = []) => {
   // data-tf-state="sample-data" is not another state: it is sample data, the data-tf-sample rule.
   const STATE = '[data-tf-state]:not([data-tf-state="sample-data"]),[data-state-testid]';
   const SAMPLE = '[data-tf-sample],[data-tf-state="sample-data"]';
-  // A chart's <svg> is not an icon: an svg larger than 48px on either side is left out.
-  const glyph = (x) => x.tagName.toLowerCase() !== 'svg' || (() => { const r = x.getBoundingClientRect(); return r.width <= 48 && r.height <= 48; })();
+  // A chart's <svg> is not an icon: an svg larger than 48px on either side is left out. Nor is an icon
+  // nobody sees, one with no box at all (Sevak TF-028: a hidden tab panel kept mounted).
+  const glyph = (x) => x.getClientRects().length > 0 && (x.tagName.toLowerCase() !== 'svg' || (() => { const r = x.getBoundingClientRect(); return r.width <= 48 && r.height <= 48; })());
   const own = (el, sel) => [...el.querySelectorAll(sel)].filter((x) => (!x.closest(STATE) || el.closest(STATE)) && (sel !== ICON || (glyph(x) && !x.closest(PAINTED))));
   const ownText = (el) => {
     if (!el.querySelector(STATE) || el.closest(STATE)) return el.textContent || '';
@@ -491,21 +473,26 @@ const PROBE = (wanted = []) => {
       text: ownText(el).trim().replace(/\s+/g, ' ').slice(0, 60),
       badge: chrome && !el.matches(TOGGLE) ? chrome.badge : null,
       full: ownText(el).trim().replace(/\s+/g, ' ').slice(0, 400),
-      // a box the mockup marks as sample data, drawn only when the app has data there
+      // a box the mockup marks as sample data, drawn only when the app has data there, and anything in one
       sample: el.matches(SAMPLE),
+      sampled: !!el.closest(SAMPLE),
       icon: hasIcon(el),
       icons: iconCount(el),
       icon_ids: iconIds(el),   // which icons, so a finding repeated at a container can be told apart
-      // the anchors inside and the icons each holds, so a row graded on its own can be taken off
-      // the box around it
+      // the anchors inside and their icons, so a row graded on its own comes off
+      // the box around it, every one (Sevak TF-032)
       nested: own(el, '[data-testid]').filter((x) => !isHidden(x))
         .map((x) => ({ id: x.getAttribute('data-testid'), ids: iconIds(x),
-          top: x.parentElement?.closest('[data-testid]') === el })).slice(0, 200),
+          top: x.parentElement?.closest('[data-testid]') === el })),
       depth: depthOf(el),
       // badges drawn anywhere inside, so a badge one wrapper deeper still counts under its parent
       badges: own(el, '*').filter((c) => !isHidden(c) && !c.closest(TOGGLE) && chromeOn(c)?.badge).length,
       toggle: el.matches(TOGGLE),   // its icon, colour and badge clauses are not applicable
       select: el.matches(SELECT),   // its icon clause is not applicable
+      // a picker, or a box whose one control is one; a trigger, a button or a box with one (Chatur TF-027)
+      pick: el.matches(PICK) || (el.querySelectorAll('a,button,input,select,textarea').length === 1 && !!el.querySelector(PICK)),
+      trig: el.matches(BTN) || el.querySelectorAll(BTN).length === 1,
+      date: el.matches(DATE),       // nor here; and the app side's icons are no one's (diff)
       color: semanticColor(el),
       stroke: strokeOf(el),
       wrap: lineCount(el),
@@ -535,12 +522,9 @@ const PROBE = (wanted = []) => {
     return `${parentKey} > ${tag}[${n}]`;
   };
 
-  // The same badge, one wrapper deeper. Keys are positional, so a component library that
-  // wraps a card header's contents in one more <div> moves every badge in it to a key the mockup
-  // never has. For every text a mockup badge carries, the elements under the same anchor that carry it
-  // are kept here at any depth, so the node side can find the badge where the app put it. Digits
-  // are folded, because live data is not the mockup's sample: "87 of 91" is "39 of 41". Case is
-  // kept: a card titled "Draft" is not its badge "draft".
+  // The same badge, one wrapper deeper (keys are positional): for every text a mockup badge carries,
+  // the elements under the same anchor that carry it are kept at any depth, so the node side finds the
+  // badge where the app put it. Digits are folded ("87 of 91" is "39 of 41"); case is kept.
   const norm = (t) => (t || '').replace(/\d[\d,.]*/g, '#').replace(/\s+/g, ' ').trim();
   const want = new Set((wanted || []).map(norm).filter(Boolean));
   const pool = {};
@@ -636,7 +620,7 @@ const CLAUSES = {
     if ((m.badge ? a : m).near?.badge) return false;
     return `mockup renders this as a ${m.badge ? 'badge/pill' : 'plain element'}, app renders it as a ${a.badge ? 'badge/pill' : 'plain element'}`;
   },
-  icon: (m, a) => (m.toggle || a.toggle || m.select || a.select ? null : m.icon === a.icon ? false
+  icon: (m, a) => (m.toggle || a.toggle || m.select || a.select || m.date ? null : m.icon === a.icon ? false
     : m.icon && !a.icon ? 'mockup carries an icon here; the app does not'
       : 'app carries an icon the mockup does not'),
   color: (m, a) => (m.color === null || a.color === null ? null
@@ -780,6 +764,11 @@ function diff(mock, app, screen, width, skip = null) {
   const some = (rows) => rows.filter((r) => r.ids.length);
   if (some(sampleGone).length) mock = { ...mock, index: strip(mock.index, rowsGone(some(sampleGone), mockAll)) };
   if (some(inPlace).length) app = { ...app, index: strip(app.index, rowsGone(some(inPlace), appAll)) };
+  // the icons of a trigger paired with a picker (a mockup's button.pick, a library's date button) are no box's
+  const pickIcons = (x, y) => new Set(Object.keys(x.index).filter((k) => y.index[k]?.pick && !x.index[k].pick && x.index[k].trig).flatMap((k) => x.index[k].icon_ids || []));
+  const pm = pickIcons(mock, app), pa = pickIcons(app, mock);
+  if (pm.size) mock = { ...mock, index: strip(mock.index, () => pm) };
+  if (pa.size) app = { ...app, index: strip(app.index, () => pa) };
   const findings = [];
   const clauseCoverage = Object.fromEntries(Object.keys(CLAUSES).map((k) => [k, 0]));
   clauseCoverage.missing = 0;
@@ -878,7 +867,8 @@ function diff(mock, app, screen, width, skip = null) {
     compared++;
     for (const [name, fn] of Object.entries(CLAUSES)) {
       if (skip && skip.has(name)) continue;     // a clause the mockup says nothing about in this theme
-      if (inSample && SAMPLE_SKIP.has(name)) continue;
+      // and an anchor inside a sample box showing another value than the sample's (Sevak TF-029)
+      if ((inSample || (m.sampled && norm(m.text) !== norm(a.text))) && SAMPLE_SKIP.has(name)) continue;
       const r = fn(m, a);
       if (r === null) continue;
       clauseCoverage[name]++;
@@ -1094,20 +1084,11 @@ for (const s of SCREENS) {
   const appAnchors = Math.max(0, ...ok.map((w) => w.appAnchors || 0));
   const mockAnchors = Math.max(0, ...ok.map((w) => w.mockAnchors || 0));
 
-  // --- The central rule. A PASS from a gate whose stated purpose is
-  // "a built screen is graded against its approved mockup, mechanically" must mean
-  // the screen was GRADED. So a screen where no clause that requires reaching
-  // inside a container ever fired is UNGRADEABLE, never PASS. The measure is
-  // deliberately NOT an anchor ratio: count comparisons that could have produced a finding.
-  //
-  // An UNGRADEABLE screen is NOT-OBSERVABLE in checklist terms and must not license
-  // a `Verified` — the same principle the perf gate already applies with
-  // PERF-UNMEASURED.
-  //
-  // PRECEDENCE: a finding is positive evidence of a defect and outranks the absence
-  // of evidence, so FAIL beats UNGRADEABLE. But a FAIL that graded nothing else must
-  // not read as a thorough screen with one problem — `coverage.ungradeable` stays
-  // true either way, so the report can say both things at once.
+  // --- The central rule. A PASS must mean the screen was GRADED: a screen where no clause that
+  // reaches inside a container fired is UNGRADEABLE, never PASS (comparisons that could have produced
+  // a finding, not an anchor ratio). UNGRADEABLE is NOT-OBSERVABLE and never licenses `Verified`, as
+  // PERF-UNMEASURED does not. A finding outranks the absence of evidence, so FAIL beats UNGRADEABLE,
+  // and `coverage.ungradeable` stays true either way so the report can say both.
   const ungradeable = contentGraded === 0;
   // A width or theme pass that threw was not compared, so it cannot be part of a PASS.
   const failedPasses = perWidth.filter((w) => w.error);

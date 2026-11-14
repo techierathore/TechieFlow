@@ -4,13 +4,13 @@
 # added or raised only on purpose. Columns: kind, lines and bytes (or the block lengths), path.
 script  685 28701  .tfcore/utils/tf-ci-repro.py
 script  1617 88234  .tfcore/utils/tf-doc-check.py
-script  1832 91590  .tfcore/utils/tf-emit.sh
+script  1822 90823  .tfcore/utils/tf-emit.sh
 script  640 35311  .tfcore/utils/tf-goal.sh
-script  555 40233  .tfcore/utils/tf-menus.mjs
-script  1268 73278  .tfcore/utils/tf-mockup-parity.mjs
+script  553 40106  .tfcore/utils/tf-menus.mjs
+script  1249 72844  .tfcore/utils/tf-mockup-parity.mjs
 script  809 32452  .tfcore/utils/tf-render-html.py
 script  881 57708  .tfcore/utils/tf-verify-boot.sh
-script  709 47501  .tfcore/utils/tf-verify-screens.mjs
+script  706 47436  .tfcore/utils/tf-verify-screens.mjs
 blocks  214  .tfcore/hooks/block-git.sh
 blocks  67  .tfcore/hooks/guard-artifacts.sh
 blocks  47  .tfcore/hooks/guard-build.sh
@@ -25,7 +25,7 @@ blocks  32  .tfcore/hooks/session-pointer.sh
 blocks  193  .tfcore/hooks/sweep-artifacts.sh
 blocks  282  .tfcore/utils/tf-assets.sh
 blocks  86  .tfcore/utils/tf-develop.sh
-blocks  1209,64,40,34,32  .tfcore/utils/tf-emit.sh
+blocks  1208,55,40,34,32  .tfcore/utils/tf-emit.sh
 blocks  168  .tfcore/utils/tf-fix-close.sh
 blocks  263  .tfcore/utils/tf-gitignore-audit.sh
 blocks  111  .tfcore/utils/tf-goal.sh
@@ -38,4 +38,4 @@ blocks  104,39  .tfcore/utils/tf-verify-boot.sh
 blocks  128  .tfcore/utils/tf-verify-emit.sh
 blocks  221,93  .tfcore/utils/tf-verify-tests.sh
 blocks  44  .tfcore/utils/tf-yolo.sh
-test    8299 607612  tests/regression/run.sh
+test    8299 607585  tests/regression/run.sh

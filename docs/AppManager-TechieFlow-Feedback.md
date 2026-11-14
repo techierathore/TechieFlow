@@ -434,9 +434,49 @@ A trap sits next to it: `--output Detailed`, the platform's own verbosity switch
 - **Workaround:** Build the web and API projects on WSL (`~/.dotnet/dotnet build`; the Windows build leaves Windows paths in the static web assets manifest, and the WSL run then stops with "The path must be absolute") and let Playwright's `webServer` start both.
 - **Suggested fix:** In the web head, choose the side from the project being booted, not from the solution: a project with no MAUI target publishes and runs on the WSL rungs.
 
+### TF-031 — `tf-verify-list.sh` prints the test users' passwords from the UsageGuide into the session
+
+- **Status:** fixed upstream 2026-11-14, fixed in AppManager's `.tfcore/` by the framework update of 2026-11-14; not yet re-checked here.
+- **Filed by:** the TechieFlow team, from the owner's report of AppManager's run of 13 Nov (no entry was filed here).
+- **Severity:** major
+- **Blocks:** no — but two passwords reached a session transcript.
+- **Repro:** `bash .tfcore/utils/tf-verify-list.sh AppManager all`. The guide's Test users table holds the passwords themselves in its Password column, and the list printed each one after `password:`, and wrote it into `tests/.artifacts/verify/list.json`.
+- **Expected:** no framework script prints a password, key, token or connection string; it prints the name and whether it is set.
+- **Actual:** the column was printed as it stood, because the template means it for where the password lives ("user secrets"), not the password.
+
+### TF-032 — After a row moved from phase 1 to a new phase 2, `tf-brd-status.sh` refreshed only phase 2's BRD, so the status gate blocked on phase 1's
+
+- **Status:** fixed upstream 2026-11-14, fixed in AppManager's `.tfcore/` by the framework update of 2026-11-14; not yet re-checked here.
+- **Filed by:** the TechieFlow team, from the owner's report of AppManager's run of 13 Nov (no entry was filed here).
+- **Severity:** minor
+- **Blocks:** no — `tf-brd-status.sh AppManager --phase 1` by hand cleared it.
+- **Repro:** move a row from `docs/AppManager-Checklist.md` to a new `docs/AppManager-P2-Checklist.md`, set `appPhase: 2`, run the status gate's `bash .tfcore/utils/tf-brd-status.sh AppManager`. Only `docs/AppManager-P2-BRD.md` is rewritten; the Stop hook then says `docs/AppManager-BRD.md is older than docs/AppManager-Checklist.md`.
+- **Expected:** every phase whose checklist changed in the run gets its BRD refreshed.
+- **Actual:** without `--phase` the script refreshed appPhase's BRD only.
+
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### Resolution status (TechieFlow team, 2026-11-14)
+
+**Fixed in AppManager's `.tfcore`** through the framework update of 2026-11-14, when no AppManager run was in progress. Both came from the owner's report of your run of 13 Nov, where no entry had been filed; they are entered above. Each has a case in `tests/faults/run.sh` that fails on the scripts you had and passes now, with a control half.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-031 | Fixed upstream in `tf-verify-list.py`: each test user is printed with its role and `password: set` or `not set`, never the value, and `list.json` keeps only whether it is set. A new case, `am_031`, runs every script in `.tfcore/utils` (91 of them, four ways each) against a project holding fake passwords, keys, tokens and connection strings everywhere a project keeps them, and fails if one appears in any output; on the scripts you had it caught exactly this one. Its control half: a planted script that prints the guide is caught. | `bash .tfcore/utils/tf-verify-list.sh AppManager all`: the Test users lines end `password: set`. |
+| TF-032 | Fixed upstream in `tf-brd-status.py`: without `--phase` it refreshes appPhase's BRD and every other phase whose checklist is newer than its BRD, the same test the status gate makes. Case `am_032`; its control half: the gate still names a BRD left older than its checklist. | after the next run that changes two phases' checklists, the Stop hook names no BRD. |
+
+### TF-031 — fixed 2026-11-14
+
+- **Fix.** `tf-verify-list.py` prints `- <user> — <role> — password: set|not set`. The value never leaves the guide. The rule for every framework script: print the name and whether it is set.
+- **Proof.** `tests/faults/secrets/scan.py`: 364 runs of 91 scripts against the fake-secret project, 0 leaks; on the scripts you had, 2 (`tf-verify-list.sh` and `.py` with `all`).
+- **Verify from here.** `bash .tfcore/utils/tf-verify-list.sh AppManager all`, then `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-031 "<what you ran and what it showed>"`. Your session transcript of 13 Nov still holds the two passwords; change them if that transcript is shared.
+
+### TF-032 — fixed 2026-11-14
+
+- **Fix.** `tf-brd-status.sh AppManager` refreshes `docs/AppManager-BRD.md` and `docs/AppManager-P2-BRD.md` when both checklists changed. `--phase N` still refreshes only N.
+- **Verify from here.** After the next run that touches both checklists, the Stop hook passes with no BRD line; then `bash .tfcore/utils/tf-feedback.sh AppManager --close TF-032 "<what you saw>"`.
 
 ### Resolution status (TechieFlow team, 2026-11-01)
 

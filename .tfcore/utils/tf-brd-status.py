@@ -4,7 +4,7 @@
     bash .tfcore/utils/tf-brd-status.sh <App> [--no-render] [--phase N]
 
 On a Large project the pair is the phase being worked: --phase N, else appPhase in
-.tfcore/core-config.yaml (phase 1 is docs/<App>-BRD.md and -Checklist.md, phase n is
+.tfcore/core-config.yaml and, with it, every other phase whose checklist is newer than its BRD (phase 1 is docs/<App>-BRD.md and -Checklist.md, phase n is
 docs/<App>-Pn-BRD.md and docs/<App>-Pn-Checklist.md). A name that carries the phase, as the file
 stem does (<App>-P3), is read as <App> --phase 3.
 
@@ -141,10 +141,26 @@ def main(argv):
         if phase is not None and phase != int(argv[i + 1]):
             die(f"{argv[1]} names phase {phase} but --phase says {argv[i + 1]}")
         phase = int(argv[i + 1])
-    if phase is None:
-        cfg = os.path.join(root, ".tfcore", "core-config.yaml")
-        m = re.search(r"(?m)^appPhase:\s*[\"']?(\d+)", read(cfg)) if os.path.isfile(cfg) else None
-        phase = int(m.group(1)) if m else 1
+    if phase is not None:
+        return one(app, phase, root, render)
+    cfg = os.path.join(root, ".tfcore", "core-config.yaml")
+    m = re.search(r"(?m)^appPhase:\s*[\"']?(\d+)", read(cfg)) if os.path.isfile(cfg) else None
+    # AppManager, 2026-11-13: a row moved from phase 1 to a new phase 2 changed both checklists, and only
+    # phase 2's BRD was refreshed, so the status gate blocked on phase 1's. Without --phase every phase
+    # whose checklist is newer than its BRD is refreshed too, the gate's own test (guard-status-html.sh).
+    phases = [int(m.group(1)) if m else 1]
+    for n in sorted(os.listdir(os.path.join(root, "docs")) if os.path.isdir(os.path.join(root, "docs")) else []):
+        k = re.match(rf"^{re.escape(app)}-(?:P(\d+)-)?Checklist\.md$", n)
+        b = k and os.path.join(root, "docs", n[: -len("Checklist.md")] + "BRD.md")
+        if k and os.path.isfile(b) and os.path.getmtime(os.path.join(root, "docs", n)) > os.path.getmtime(b):
+            phases.append(int(k.group(1) or 1))
+    rc = 0
+    for ph in sorted(set(phases)):
+        rc = max(rc, one(app, ph, root, render))
+    return rc
+
+
+def one(app, phase, root, render):
     pfx = f"{app}-" if phase <= 1 else f"{app}-P{phase}-"
     cl_rel, brd_rel = f"docs/{pfx}Checklist.md", f"docs/{pfx}BRD.md"
     cl = os.path.join(root, cl_rel)

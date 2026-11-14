@@ -35,7 +35,7 @@ import tempfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BROWSER_SIDE = ["tf-verify-screens.mjs", "tf-mockup-parity.mjs", "tf-menus.mjs", "tf-login.mjs", "tf-theme.mjs",
-                "tf-assets.sh", "tf-assets-browser.mjs", "tf-verify-native.mjs", "tf-verify-boot.sh", "tf-verify-tests.sh"]
+                "tf-assets.sh", "tf-assets-browser.mjs", "tf-verify-native.mjs", "tf-verify-boot.sh", "tf-verify-tests.sh", "tf-dropdowns.mjs"]
 DOC_KEEP = (".md", ".json", ".jsonl", ".yaml", ".yml")
 SKIP_DIRS = {"node_modules", ".artifacts", "bin", "obj", "test-results", "playwright-report", ".git", "__pycache__"}
 ENV = {k: v for k, v in os.environ.items()
@@ -204,7 +204,9 @@ def measure(box, app, phases):
             if f.endswith("-Checklist.md") and "Deployment" not in f:
                 ids |= {x.upper() for x in re.findall(r"(?m)^\s*\|\s*[`*]*(REQ-[A-Z]+-\d+)", open(os.path.join(box, "docs", f), encoding="utf-8", errors="replace").read())}
         named = lambda text: {x.upper() for x in re.findall(r"REQ-[A-Za-z]+-\d+", text)} & ids
-        m["left_out"] = sorted((f, t) for f, t, text in tests if not named(text))
+        # a set-up test (@setup) runs first in every phase verify where the scripts know the tag (Sevak TF-026)
+        setup = os.path.isfile(os.path.join(box, ".tfcore", "utils", "tf-verify-around.sh"))
+        m["left_out"] = sorted((f, t) for f, t, text in tests if not named(text) and not (setup and "@setup" in t))
         # the surest part of that count: files that name no row id anywhere in their text
         m["no_id_files"] = sorted(f for f in {f for f, _t, _x in tests}
                                   if not named(open(os.path.join(box, f), encoding="utf-8", errors="replace").read()))

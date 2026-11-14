@@ -16,7 +16,8 @@ Two findings, each a failure that names the file and the line:
   email      an email address built at run time (Date.now(), a Guid, random, uuid, a time, a
              timestamp in the local part) that is not in the usage guide's Test users table
 Allowed:
-  - an address in docs/<App>-UsageGuide.md's Test users section (table or the lines under it)
+  - an address in the Test users section (table or the lines under it, to the next heading of its
+    level) of docs/<App>-UsageGuide.md or docs/<App>-TestNUsageDoc.md (AstroLyfe, 2026-11-13)
   - an address ending in .invalid or @example.com, built at run time or not, in a test that submits
     no register form and calls no register endpoint (it is only typed into a form that rejects it,
     such as Forgot password)
@@ -141,7 +142,7 @@ def guides(root, app):
     docs = os.path.join(root, "docs")
     if not os.path.isdir(docs):
         return []
-    pat = re.compile(rf"^{re.escape(app)}-(?:P\d+-)?Usage-?Guide\.md$", re.I)
+    pat = re.compile(rf"^{re.escape(app)}-(?:P\d+-)?(?:Usage-?Guide|TestNUsageDoc)\.md$", re.I)
     return [os.path.join(docs, n) for n in sorted(os.listdir(docs)) if pat.match(n)]
 
 
@@ -150,7 +151,9 @@ def test_users(root, app):
     under it (a guide that also names a seeded local account there documents it)."""
     users, where, text = set(), [], ""
     for g in guides(root, app):
-        m = re.search(r"(?ms)^#{2,3}\s+(?:\d+[.)]\s*)?Test users[^\n]*\n(.*?)(?=^#{1,3} |\Z)", read(g))
+        # "## Test users", "## 2. Test User Accounts": the section runs to the next heading of its level
+        h = re.search(r"(?m)^(#{2,3})\s+(?:\d+[.)]\s*)?[Tt]est [Uu]sers?\b[^\n]*\n", read(g))
+        m = h and re.match(rf"(?ms)(.*?)(?=^#{{1,{len(h.group(1))}}} |\Z)", read(g)[h.end():])
         if m:
             text += m.group(1)
             found = {e.lower() for e in EMAIL.findall(m.group(1))}

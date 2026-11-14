@@ -9,6 +9,7 @@
 //           no horizontal overflow; the page has a stylesheet. Overlap and off-screen are measured
 //           on the rectangle an element PAINTS in — its box clipped by every scrolling ancestor —
 //           so a wide table inside a horizontal scroller is not read as covering its neighbour.
+//           Each dropdown's list is opened once: no option cut short, no list outside the window.
 // Measurement waits for the screen's first render (--render-wait, default 5000 ms) before reading
 // the page: it waits for content to appear, knowing nothing about how the page is built.
 // Themes (Lekhak TF-024): every screen is graded in light mode, then in dark mode when the app has
@@ -33,6 +34,7 @@ import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseThemes, useTheme, surface, differs, audit, gradedPhase, markLaterPhase } from './tf-theme.mjs';
 import { mockupMenus, walkMenus, placeholdersOnPage, reachability } from './tf-menus.mjs';
+const DD = await import('./tf-dropdowns.mjs').catch(() => null);   // each dropdown's list opened (TfLens TF-058)
 
 const argv = process.argv.slice(2);
 const arg = (n, d = null) => { const i = argv.indexOf(n); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d; };
@@ -55,19 +57,15 @@ const USER = arg('--user') || fromSettings('Verify:Login:User'); const PASS = ar
 const COOKIE = arg('--cookie'); const STORAGE = arg('--storage-state');
 const SETTLE = parseInt(arg('--wait', '1500'), 10);
 // how long to keep waiting for the FIRST render after the page has settled. Plenty of stacks
-// paint after the network goes quiet — a server-held connection that renders once it is up, a
-// client router resolving its first route, a lazily loaded bundle — so measuring at
-// domcontentloaded, at networkidle or even after --wait can read an empty document and report
-// every anchored control as missing while the tool's own screenshot shows them. Nothing here
-// knows which stack it is looking at: it waits for CONTENT.
+// paint after the network goes quiet (a server-held connection, a client router, a lazy bundle),
+// so measuring at domcontentloaded, networkidle or after --wait can read an empty document and
+// report every anchored control missing. Nothing here knows the stack: it waits for CONTENT.
 const RENDER_WAIT = parseInt(arg('--render-wait', '5000'), 10);
 const ATTR = arg('--testid-attr', 'data-testid');
-// The banner a stack shows when its client side has fallen over. There is no neutral way to
-// detect one -- every stack names its own -- so this is a LIST a project extends rather than a
-// selector the framework assumes: --error-selector '.my-crash-banner', repeatable. The two
+// The banner a stack shows when its client side has fallen over. Every stack names its own, so
+// this is a LIST a project extends: --error-selector '.my-crash-banner', repeatable. The two
 // defaults are one widely used framework's id and a plain attribute any project can put on its
-// own banner. A project on neither still gets every other render check; it simply cannot be
-// told about a banner nobody named.
+// own banner. A project on neither gets every other render check.
 const ERROR_SELECTORS = [...args('--error-selector'), '#blazor-error-ui', '[data-error-ui]'];
 // null = auto: light, and dark when the app has a dark theme
 const THEMES = parseThemes(arg('--themes', 'auto'));
@@ -593,9 +591,8 @@ for (const width of WIDTHS) {
       try {
         if (theme === 'light') lightSurface = await surface(page);
         if (theme === 'dark' && !THEMES && !darkOffered) {
-          // auto: the app has a dark theme when dark changes what it paints. Asked screen by screen until
-          // one answers yes; from then on every screen is graded in dark, so a screen that ignores the
-          // dark theme altogether is graded in it too, and fails.
+          // auto: the app has a dark theme when dark changes what it paints, asked screen by screen until one
+          // says yes; from then on every screen is graded in dark, one that ignores it too, and fails.
           darkOffered = differs(lightSurface, await surface(page));
           if (!darkOffered) { r.dark = 'not offered'; continue; }
         }
@@ -608,6 +605,7 @@ for (const width of WIDTHS) {
         if (theme === (THEMES || ['light'])[0]) {
           for (const p of await placeholdersOnPage(page, mockTextOf(s.mockup), PLACEHOLDER_EXTRA)) g.findings.push({ check: 'render', class: 'placeholder', detail: `the screen shows placeholder text "${p}"` });
           if (g.render === 'OK' && g.findings.some((f) => f.class === 'placeholder')) g.render = 'EMPTY';
+          for (const f of DD ? await DD.dropdownFindings(page, width) : []) { g.findings.push(f); g.visual = 'FAIL'; }
         }
         if (r.seed && !r.seed.ok) {
           g.findings.unshift({ check: 'render', class: 'other', detail: `seed ${r.seed.path} failed (exit ${r.seed.exit ?? '?'}): ${r.seed.output}` });
@@ -629,10 +627,9 @@ for (const width of WIDTHS) {
 }
 
 // ---------------------------------------------------------------- menus
-// Every menu the mockups draw open is opened in the app and every item clicked, once per menu, on the
-// first screen that draws it, at the first width. What a menu lacks or does wrong is a render finding
-// on every screen whose mockup draws that menu. A screen a menu item links to, which no click reached,
-// is UNREACHABLE.
+// Every menu the mockups draw open is opened and every item clicked, once, on the first screen that
+// draws it, at the first width: what it lacks or does wrong is a render finding on every screen whose
+// mockup draws it. A screen a menu item links to, which no click reached, is UNREACHABLE.
 let menuWalk = { walked: WALK_MENUS, menus: [], clicks: [] };
 if (WALK_MENUS && mockBrowser) {
   const byScreen = {};

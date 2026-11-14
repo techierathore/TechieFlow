@@ -4,7 +4,8 @@
 #   bash .tfcore/utils/tf-phase.sh start <command> [App]   # step 0 of every task: prints the start
 #                                                          # time and writes the marker
 #   bash .tfcore/utils/tf-phase.sh show                    # prints the marker, or "none"
-#   bash .tfcore/utils/tf-phase.sh end                     # removes the marker
+#   bash .tfcore/utils/tf-phase.sh end [command] [App]     # removes the marker; inside another command,
+#                                                          # gives the marker back to that one (TfLens TF-057)
 #   bash .tfcore/utils/tf-phase.sh goal [App]              # tf-goal.sh only: an unclaimed marker the first
 #                                                          # command's `start` claims, keeping its started
 #
@@ -115,8 +116,20 @@ case "${1:-}" in
     if [[ -f "$FILE" ]]; then cat "$FILE"; else echo "none"; fi
     ;;
   end)
-    rm -f "$FILE"
-    echo "tf-phase: marker removed"
+    # A command started inside another one ends by giving the marker back to the outer one, whose start
+    # tf-triage.sh close, tf-fix-close.sh and tf-emit.sh still read (TfLens TF-057: `end amend-docs`
+    # inside *triage-and-fix deleted it). Ending the outer command by name, or a marker with no outer,
+    # removes it.
+    E="${2:-}"; E="${E#\*}"
+    OUT="$(sed -n 's/^{"outer":\({[^}]*}\),.*/\1/p' "$FILE" 2>/dev/null)"
+    IC="$(sed -n 's/.*"cmd":"\([^"]*\)".*/\1/p' "$FILE" 2>/dev/null)"
+    if [[ -n "$OUT" && ( -z "$E" || "$E" == "$IC" ) ]]; then
+      printf '%s\n' "$OUT" > "$FILE"
+      echo "tf-phase: $IC ended — marker back to the outer command: $OUT"
+    else
+      rm -f "$FILE"
+      echo "tf-phase: marker removed"
+    fi
     ;;
   *)
     sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'

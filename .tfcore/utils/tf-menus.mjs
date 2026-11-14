@@ -1,10 +1,6 @@
 // tf-menus.mjs — open every menu, click every item, and say which screens a click reaches (Chatur TF-011).
 // Imported by tf-verify-screens.mjs and tf-mockup-parity.mjs; not run on its own.
 //
-// Both gates used to load each route directly and compare the closed page with its mockup. A closed
-// menu bar matches its mockup, so File, Edit and View holding only "Nothing to do yet" passed, and
-// Settings, Prerequisites and Repository passed though no click in the desktop app opened them.
-//
 // The mockup says what the menus are: a box marked data-tf-state="popup-open" is a menu or drop-down
 // drawn open, and the nearest box around it with a data-testid is what opens it. For each one the app
 // draws, the walk opens it and grades it against the mockup:
@@ -17,6 +13,7 @@
 //     changed. A choice that is already the state (Light, in a light app) is clicked again after a
 //     sibling has moved the state, and the theme the walk changed is put back (Sevak TF-006).
 // A one-of choice the walk moved (the branch checked out) is chosen back to the item ticked at the start (Chatur TF-025).
+// So is a submenu row the page showed outside the menus at the start, the open project (Chatur TF-026).
 // An item the mockup marks data-tf-sample is sample data and is not owed by its label; a pick-list (a
 // select's options) is checked but not clicked; a trigger disabled in this state is passed over. A menu inside
 // a box marked as another state (data-tf-state="mockup-only" …) is not owed at all. An item whose
@@ -196,7 +193,7 @@ const SIGNATURE = (menuSel) => {
       [...el.attributes].filter((a) => /^data-.*(theme|mode|scheme)/i.test(a.name)).map((a) => `${a.name}=${a.value}`).sort().join(' '),
       cs.backgroundColor, cs.colorScheme].join('|');
   }).join('||');
-  return { url: location.href, text: h, len: s.length, dialogs, zoom: `${window.devicePixelRatio}|${getComputedStyle(document.documentElement).zoom || ''}|${document.body ? document.body.style.zoom : ''}`, look, ids };
+  return { url: location.href, text: h, shown: parts.slice(0, 300), len: s.length, dialogs, zoom: `${window.devicePixelRatio}|${getComputedStyle(document.documentElement).zoom || ''}|${document.body ? document.body.style.zoom : ''}`, look, ids };
 };
 const changed = (a, b) => a.url !== b.url || a.text !== b.text || a.dialogs !== b.dialogs || a.zoom !== b.zoom || a.look !== b.look;
 const effectOf = (before, after) => !before || !after ? 'unknown' : before.url !== after.url ? 'navigated' : before.dialogs !== after.dialogs ? 'opened a dialog'
@@ -332,9 +329,8 @@ export async function walkMenus(page, mockMenus, o = {}) {
     rec.items = got.items.map((x) => ({ label: x.label, disabled: x.disabled }));
     const ph = placeholderIn(got.text);
     if (ph) findings.push({ class: 'placeholder', popup: m.popup, detail: `the menu "${name}" shows placeholder text "${got.text.match(ph)[0].trim()}"` });
-    // what the mockup owes. One item disabled is the state the app is in (no file open, nothing to
-    // redo), so it is noted; a menu whose every item is disabled where the mockup draws one enabled is
-    // a menu that does nothing, which is a finding.
+    // what the mockup owes. One item disabled is the state the app is in, so it is noted; a menu whose
+    // every item is disabled where the mockup draws one enabled does nothing, which is a finding.
     const offVsMock = [];
     for (const want of m.items) {
       if (want.sample) continue;
@@ -371,29 +367,35 @@ export async function walkMenus(page, mockMenus, o = {}) {
           }
           return null;
         };
+        const shown0 = ((await page.evaluate(SIGNATURE, MENU_SEL).catch(() => null)) || {}).shown || [];
         await page.locator(`[data-tf-walk="${fresh.i}"]`).first().click({ timeout: 3000 }).catch((e) => { c.error = e.message.split('\n')[0]; });
         const opened = c.error ? null : await subOpen();
         if (opened) {
           c.effect = 'opened its submenu';
           c.submenu = [];
+          // the menu, the submenu row, then the child, from a freshly opened menu: null, menu gone; false, child gone
+          const toChild = async (label) => {
+            const row2 = (await open(m)).items && await current(m, item.label);
+            if (!row2) return null;
+            await page.locator(`[data-tf-walk="${row2.i}"]`).first().click({ timeout: 3000 }).catch(() => {});
+            for (let t = 0; t < settle; t += 150) {
+              const g = await page.evaluate(SUB_ITEMS, { row: String(row2.i), controls: row2.controls }).catch(() => null);
+              const x = g && g.items.find((y) => y.label === label);
+              if (x) return x;
+              await page.waitForTimeout(150);
+            }
+            return false;
+          };
+          // Chatur TF-026: the one row the page shows outside the menus (the open project) is chosen again after
+          const was = opened.items.filter((x) => !x.disabled && shown0.includes(x.label));
           for (const child of opened.items) {
             const cc = { popup: m.popup, menu: `${name} › ${item.label}`, label: child.label, disabled: child.disabled };
             c.submenu.push(cc); clicks.push(cc);
             if (child.disabled) { cc.effect = 'disabled'; continue; }
             if (noClick.some((n) => norm(child.label) === n || norm(child.label).startsWith(n + ' '))) { cc.effect = skipWhy(child.label); continue; }
             if (child.checked) { cc.effect = 'already the state (ticked)'; continue; }
-            // the path again from a freshly opened menu: the menu, the submenu row, the child
-            const again2 = await open(m);
-            const row2 = again2.items && await current(m, item.label);
-            if (!row2) { cc.effect = 'menu did not reopen'; continue; }
-            await page.locator(`[data-tf-walk="${row2.i}"]`).first().click({ timeout: 3000 }).catch(() => {});
-            let sub2 = null;
-            for (let t = 0; t < settle && !sub2; t += 150) {
-              const g = await page.evaluate(SUB_ITEMS, { row: String(row2.i), controls: row2.controls }).catch(() => null);
-              if (g && g.items.length) sub2 = g; else await page.waitForTimeout(150);
-            }
-            const target = sub2 && sub2.items.find((x) => x.label === child.label);
-            if (!target) { cc.effect = 'submenu did not reopen'; await shut(m); continue; }
+            const target = await toChild(child.label);
+            if (!target) { cc.effect = `${target === null ? '' : 'sub'}menu did not reopen`; await shut(m); continue; }
             const before2 = await page.evaluate(SIGNATURE, MENU_SEL).catch(() => null);
             const pagesBefore2 = new Set(await pagesNow());
             await page.locator(`[data-tf-walk-sub="${target.j}"]`).first().click({ timeout: 3000 }).catch((e) => { cc.error = e.message.split('\n')[0]; });
@@ -415,6 +417,8 @@ export async function walkMenus(page, mockMenus, o = {}) {
             const now2 = await page.evaluate(SIGNATURE, MENU_SEL).catch(() => null);
             if (o.back && (!now2 || !before2 || now2.url !== before2.url || now2.dialogs > before2.dialogs)) await o.back();
           }
+          const t = was.length === 1 && !(((await page.evaluate(SIGNATURE, MENU_SEL).catch(() => null)) || {}).shown || []).includes(was[0].label) && await toChild(was[0].label);
+          if (t) { await page.locator(`[data-tf-walk-sub="${t.j}"]`).first().click({ timeout: 3000 }).catch(() => {}); c.put_back = was[0].label; await page.waitForTimeout(settle); }
           await page.keyboard.press('Escape').catch(() => {});
           await shut(m);
           continue;
@@ -481,12 +485,8 @@ export async function walkMenus(page, mockMenus, o = {}) {
       }
       findings.push({ class: 'menu', popup: m.popup, detail: `"${name} › ${item.label}" does nothing when clicked` });
     }
-    // Chatur TF-025: a one-of choice put back as the walk found it. The branch picker lists main (ticked),
-    // feature/board and the run branches; the walk clicked each, which checked each branch out, and left
-    // the project on the last one. A later screen was then compared against a state its seed had not
-    // made: Repository showed none of the hand check-ins and failed on 12 icons. When the menu opened
-    // with exactly one ticked item that is not a checkbox, and a click on another item took effect, the
-    // menu is opened again; if the tick has moved, the item ticked at the start is chosen again.
+    // Chatur TF-025: a one-of choice put back as the walk found it (the branch checked out): when the menu
+    // opened with one ticked item and a click on another took effect, the item ticked at the start is chosen again.
     const ticked0 = got.items.filter((x) => x.checked && !x.checkbox && !x.sub);
     if (ticked0.length === 1 && mine.some(({ c, item }) => item.label !== ticked0[0].label && !item.checkbox && c.effect
         && !/^(nothing|disabled|not clicked|menu did not reopen|already the state|could not be clicked|opened its submenu)/.test(c.effect))) {
@@ -528,10 +528,8 @@ export function reachability(screens, clicks) {
   const out = {};
   for (const s of screens) {
     if (!s.mockup) continue;
-    // Chatur TF-023: the mockup draws one link, "Recent projects ▸" → start.html, and the app builds that row
-    // as a submenu whose last row, Project list, opens Start. The ▸ row "opened its submenu" and landed
-    // nowhere, its rows carry no link of their own, and Start was UNREACHABLE with six rows held on it.
-    // A way in that opened a submenu stands for the rows of that submenu: any of them may land on the screen.
+    // Chatur TF-023: a way in that opened a submenu (Recent projects ▸ → start.html, whose last row opens
+    // Start) stands for the rows of that submenu: any of them may land on the screen.
     const ways = clicks.filter((c) => c.href && base(c.href) === base(s.mockup))
       .flatMap((c) => (c.effect === 'opened its submenu' && (c.submenu || []).length ? c.submenu : [c]));
     if (!ways.length) continue;

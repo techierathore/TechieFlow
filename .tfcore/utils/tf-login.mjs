@@ -274,11 +274,14 @@ export async function scrollToTop(page) {
   // one frame to paint, bounded: a minimized window draws none (Sevak TF-011) and would wait forever
   await page.evaluate(() => new Promise((r) => { requestAnimationFrame(() => r()); setTimeout(r, 300); })).catch(() => {});
 }
+// Sevak TF-030: an app whose root opens the screen itself ('/' draws Today) is still on it after the hop
+// to '/', so no control of the screen was new when it came back and the second width was "not measured".
+// When the hop leaves the address on the route, or leaves every one of the screen's controls in place,
+// it is made again to a route no page answers.
 export async function openFresh(page, route, anchors = [], o = {}) {
   let reset = false;
   const here = await page.evaluate(() => location.pathname + location.search).catch(() => '');
-  if (samePath(here, route)) {
-    const away = samePath(route, '/') ? '/tf-verify-away' : '/';
+  const hop = async (away) => {
     const was = await page.evaluate(() => (document.body ? document.body.innerText : '')).catch(() => '');
     await pushRoute(page, away);
     // until the app has drawn the other page (an app that draws late, Lekhak TF-037, would otherwise draw
@@ -286,6 +289,13 @@ export async function openFresh(page, route, anchors = [], o = {}) {
     await page.waitForFunction((w) => (document.body ? document.body.innerText : '') !== w, was,
       { timeout: Math.max(opts(o).renderWait, 5000), polling: 100 }).catch(() => {});
     await quiet(page);
+  };
+  if (samePath(here, route)) {
+    const on = await anchorsPresent(page, anchors, opts(o).attr);
+    await hop(samePath(route, '/') ? '/tf-verify-away' : '/');
+    const still = await anchorsPresent(page, anchors, opts(o).attr);
+    const there = await page.evaluate(() => location.pathname + location.search).catch(() => '');
+    if (!samePath(route, '/') && (samePath(there, route) || (on.length > 0 && on.every((x) => still.includes(x))))) await hop('/tf-verify-away');
     reset = true;
   }
   const before = await anchorsPresent(page, anchors, opts(o).attr);
@@ -311,9 +321,8 @@ export async function framesDrawn(page, ms = 1000) {
 
 // Restore the head's own window, by the Windows process ids the boot recorded (boot.json win_pids):
 // ShowWindow(SW_RESTORE) on that process's main window, no keyboard or mouse input. Returns what it did.
-export async function restoreWindow(cdpUrl, dir = 'tests/.artifacts/verify') {
+async function winPids(cdpUrl, dir) {
   const { existsSync, readdirSync, readFileSync } = await import('node:fs');
-  const { spawnSync } = await import('node:child_process');
   let pids = [];
   try {
     const files = existsSync(dir) ? readdirSync(dir).filter((f) => /^boot(-\d+)?\.json$/.test(f)) : [];
@@ -325,6 +334,11 @@ export async function restoreWindow(cdpUrl, dir = 'tests/.artifacts/verify') {
       if (pids.length) break;
     }
   } catch (e) { /* no boot record: nothing to restore */ }
+  return pids;
+}
+export async function restoreWindow(cdpUrl, dir = 'tests/.artifacts/verify') {
+  const { spawnSync } = await import('node:child_process');
+  const pids = await winPids(cdpUrl, dir);
   if (!pids.length) return 'no Windows process id in the boot record';
   const ps = 'Add-Type -Name W -Namespace TfW -MemberDefinition \'[DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int c);\'; '
     + `foreach ($i in @(${pids.join(',')})) { $p = Get-Process -Id $i -ErrorAction SilentlyContinue; if ($p -and $p.MainWindowHandle -ne 0) { [void][TfW.W]::ShowWindow($p.MainWindowHandle, 9); 'restored ' + $i } }`;
@@ -340,4 +354,26 @@ export async function ensureDrawing(page, cdpUrl) {
   const restored = await restoreWindow(cdpUrl);
   frames = await framesDrawn(page, 1000);
   return { drawing: frames !== 0, frames, restored };
+}
+
+// Sevak TF-026: the owner minimized the app during the test step and every test of the last spec file
+// timed out on "waiting for element to be stable". While the stop file exists, one PowerShell loop
+// restores the head's window whenever it is minimized (IsIconic), never a window that is merely in the
+// background or maximized; at most 4 hours. Prints what it restored. tf-verify-tests.sh runs it.
+export async function keepDrawing(stop, cdpUrl, dir = 'tests/.artifacts/verify') {
+  const { existsSync } = await import('node:fs');
+  const { spawn, spawnSync } = await import('node:child_process');
+  const pids = await winPids(cdpUrl, dir);
+  if (!pids.length || !existsSync(stop)) return;
+  const w = spawnSync('wslpath', ['-w', stop], { encoding: 'utf8' });
+  const winStop = (w.status === 0 && w.stdout.trim()) || stop;
+  const ps = 'Add-Type -Name K -Namespace TfK -MemberDefinition \'[DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int c); [DllImport("user32.dll")] public static extern bool IsIconic(System.IntPtr h);\'; '
+    + `$end = (Get-Date).AddHours(4); while ((Test-Path -LiteralPath '${winStop.replace(/'/g, "''")}') -and (Get-Date) -lt $end) { `
+    + `foreach ($i in @(${pids.join(',')})) { $p = Get-Process -Id $i -ErrorAction SilentlyContinue; if ($p -and $p.MainWindowHandle -ne 0 -and [TfK.K]::IsIconic($p.MainWindowHandle)) { [void][TfK.K]::ShowWindow($p.MainWindowHandle, 9); 'restored the minimized window of process ' + $i } }; Start-Sleep -Milliseconds 1500 }`;
+  const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { stdio: ['ignore', 'inherit', 'ignore'] });
+  child.on('error', () => {});
+  await new Promise((res) => {
+    const t = setInterval(() => { if (!existsSync(stop)) { clearInterval(t); child.kill(); res(); } }, 1000);
+    child.on('exit', () => { clearInterval(t); res(); });
+  });
 }

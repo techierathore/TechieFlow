@@ -403,42 +403,31 @@ fi
 # a value. It COMPLETES a record; it never alters a fact. Exits 0 either way —
 # telemetry has no veto (§10), and neither does a refused amend.
 if [[ "$1" == "--amend" ]]; then
-  AMID="$2"; AFLD="$3"; AVAL="$4"
+  AMID="$2"; AFLD="$3"; AVAL="$4"; AWHY="${5:-}"
   if [[ -z "$AMID" || -z "$AFLD" || -z "$AVAL" ]]; then
-    echo "tf-emit: --amend needs <miss_id> <field> <value>"
+    echo "tf-emit: --amend needs <miss_id> <field> <value> [\"<why the value set is wrong>\"]"
     exit 0
   fi
-  AREC="$(python3 - "$MET_DIR/misses.jsonl" "$AMID" "$AFLD" "$AVAL" 2>"$TF_ERR" <<'PY' || true
+  AREC="$(python3 - "$MET_DIR/misses.jsonl" "$AMID" "$AFLD" "$AVAL" "$AWHY" 2>"$TF_ERR" <<'PY' || true
 import json, sys
-path, mid, fld, val = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+path, mid, fld, val, why = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5].strip()
+val = None if why and val == "none" else val   # a correction may clear a value nobody can vouch for
 
-# THE ALLOWLIST, and the rule for extending it (SCHEMA.md §5.5.7).
-# A field is amendable only when it is (a) a closed-vocabulary JUDGEMENT that a
-# reader can still make correctly later, and (b) not derived by this emitter.
-# An OBSERVATION is never amendable — §3.5's rule for a gate added mid-stream
-# ("never backfill the old records with a verdict they never had") is the same
-# rule seen from the other side: `why_missed` is a classification an analyst can
-# still make honestly next week; `found_gate` is a fact about a run that is over.
-# Attribution and cost fields are excluded outright: the emitter derives those,
-# and an amend that could set them would be a hole straight through §5.5.1.
+# THE ALLOWLIST (SCHEMA.md §5.5.7): a closed-vocabulary JUDGEMENT a reader can still make later
+# (why_missed), never an OBSERVATION (found_gate) nor a field this emitter derives (cost, attribution).
 AMENDABLE = {
     "why_missed": ("missing-checklist-item", "insufficient-verify-method",
                    "code-audit-limitation", "ambiguous-acceptance",
                    "dependency-not-declared", "instruction-ignored", "other"),
-    # whose gap it was, the four-question sort (FR-32, Session 5): a judgement a reader can
-    # still make later, so a miss logged before the field existed can be sorted now.
     "sort": ("spec", "unsaid", "weak-check", "ignored"),
 }
-    # `what` is the miss's own sentence, and it is FREE TEXT -- the one field here that
-    # is not a closed vocabulary. It is allowed because the protection was never the
-    # vocabulary: an amend may only fill a field that is still null and can never
-    # overwrite one that is set (below), so free text cannot rewrite a fact, only
-    # supply one that was missing. Validated as non-empty text instead.
-    # MISS-TechieFlow-20260909-02; tests/regression/run.sh tf_018.
+# `what` is free text, safe because an amend only fills a null (tf_018); a correction names why.
 AMENDABLE_TEXT = ("what",)
 if fld not in AMENDABLE and fld not in AMENDABLE_TEXT:
     print("REFUSED %s is not an amendable field (SCHEMA.md §5.5.7)" % fld); raise SystemExit(0)
-if fld in AMENDABLE_TEXT:
+if val is None:
+    pass
+elif fld in AMENDABLE_TEXT:
     if not isinstance(val, str) or not val.strip():
         print("REFUSED %s must be a non-empty sentence" % fld); raise SystemExit(0)
 elif val not in AMENDABLE[fld]:
@@ -466,18 +455,20 @@ except FileNotFoundError:
 
 if parent is None:
     print("REFUSED no miss record %s on this stream" % mid); raise SystemExit(0)
-if current is not None:
-    print("REFUSED %s is already %r on %s — an amend completes a record, never "
-          "overwrites a value" % (fld, current, mid)); raise SystemExit(0)
-
-print("OK " + json.dumps({"kind": "miss-amend", "miss_id": mid,
-                          "field": fld, "value": val},
-                         separators=(",", ":"), ensure_ascii=False))
+# A CORRECTION (Sevak 2026-11-13: a duplicate check put one miss cause on MISS-Sevak-20261112-21)
+# names why the value set is wrong; it replaces the value, and its reason stays on the stream.
+if current is not None and not why:
+    print("REFUSED %s is already %r on %s — an amend completes a record; to correct a wrong value, add "
+          "why: --amend %s %s <value|none> \"<why>\"" % (fld, current, mid, mid, fld)); raise SystemExit(0)
+if why and current == val:
+    print("REFUSED %s is already %r on %s" % (fld, current, mid)); raise SystemExit(0)
+print("OK " + json.dumps({"kind": "miss-amend", "miss_id": mid, "field": fld, "value": val,
+                          **({"reason": why} if why else {})}, separators=(",", ":"), ensure_ascii=False))
 PY
 )"
   case "$AREC" in
     "OK "*) printf '%s' "${AREC#OK }" | bash "${BASH_SOURCE[0]}" misses
-            echo "tf-emit: amended $AMID — $AFLD = $AVAL" ;;
+            echo "tf-emit: $([[ -n "$AWHY" ]] && echo corrected || echo amended) $AMID — $AFLD = $AVAL" ;;
     "REFUSED "*) echo "tf-emit: amend refused — ${AREC#REFUSED }" ;;
     *) echo "tf-emit: amend could not be evaluated — nothing written" ;;
   esac
@@ -1380,12 +1371,8 @@ def _discovery(rec):
 _RUNS_BY_START = None
 
 def _fixes_on_run(fix_run_id, this_miss_id):
-    """How many DISTINCT misses this fix run has closed, counting the one being
-    written. The divisor for a repo with no REQs (see the miss-fix branch below).
-    Counts miss_ids, not records, so a re-attempt on the same miss never inflates
-    it. Returns 1 on any failure — the run measured a window and closed at least
-    this miss, so 1 is the floor, and a floor understates the share rather than
-    inventing one."""
+    """How many DISTINCT miss_ids this fix run has closed, this one counted: the divisor for a
+    repo with no REQs. 1 on any failure, a floor that understates rather than invents."""
     n = {this_miss_id} if this_miss_id else set()
     try:
         with open(os.path.join(met_dir, "misses.jsonl"), encoding="utf-8") as fh:
@@ -1403,6 +1390,23 @@ def _fixes_on_run(fix_run_id, this_miss_id):
     except Exception:
         pass
     return max(len(n), 1)
+
+
+def _whole_fix(src, runs):
+    """A fix that chained verifies is recorded in segments around them (tf-fix-close.sh); its
+    miss-fix carries every segment, not the first minute (Sevak, 2026-11-13). The segments are
+    the same cmd's records with no rows, each starting where the record before it ended."""
+    if not src or not src.get("ended"):
+        return src
+    out, end = dict(src), src["ended"]
+    for r in sorted((x for x in runs.values() if (x.get("started") or "") > src["started"]), key=lambda x: x["started"]):
+        if r.get("started") != end or (r.get("cmd") == src.get("cmd") and r.get("reqs_touched")):
+            break
+        end = r.get("ended") or ""
+        for f in ("tokens_in", "tokens_out", "tokens_cache_read", "tokens_cache_write", "cost_usd"):
+            if r.get("cmd") == src.get("cmd") and isinstance(r.get(f), (int, float)):
+                out[f] = (out.get(f) or 0) + r[f]
+    return out
 
 
 def _runs_by_start():
@@ -1428,10 +1432,8 @@ def _runs_by_start():
 _COST_FIELDS = ("tokens_in", "tokens_out", "tokens_cache_read", "tokens_cache_write",
                 "cost_usd", "tokens_scope", "model", "billing_mode", "cost_source")
 
-# Kept identical to the --amend branch above. Two doors, ONE enforcement: an
-# agent that hand-writes a miss-amend record onto the stream faces the same
-# checks as one that calls --amend, because the invariant belongs to the
-# emitter and not to whichever path reached it (SCHEMA.md §5.5.7).
+# Kept identical to the --amend branch above: a hand-written miss-amend faces the
+# same checks as one from --amend (SCHEMA.md §5.5.7).
 _AMENDABLE = {
     "why_missed": ("missing-checklist-item", "insufficient-verify-method",
                    "code-audit-limitation", "ambiguous-acceptance",
@@ -1441,14 +1443,14 @@ _AMENDABLE = {
 _AMENDABLE_TEXT = ("what",)   # free text, guarded by the never-overwrite rule (see --amend)
 
 def _amend_ok(rec):
-    """True when this miss-amend may be appended. Returning False DROPS it —
-    an invalid amend writes nothing rather than landing as a record the reader
-    then has to defend itself against."""
-    mid, fld, val = rec.get("miss_id"), rec.get("field"), rec.get("value")
+    """True when this miss-amend may be appended; False DROPS it."""
+    mid, fld, val, why = rec.get("miss_id"), rec.get("field"), rec.get("value"), (rec.get("reason") or "").strip()
     if not mid:
         warn("amend refused — no miss_id")
         return False
-    if fld in _AMENDABLE_TEXT:
+    if val is None and why and (fld in _AMENDABLE or fld in _AMENDABLE_TEXT):
+        pass
+    elif fld in _AMENDABLE_TEXT:
         if not isinstance(val, str) or not val.strip():
             warn("amend refused — %s must be a non-empty sentence" % fld)
             return False
@@ -1476,7 +1478,7 @@ def _amend_ok(rec):
     if parent is None:
         warn("amend refused — no miss record %s on this stream" % mid)
         return False
-    if current is not None:
+    if current is not None and (not why or current == val):   # a correction names why
         warn("amend refused — %s already set on %s" % (fld, mid))
         return False
     return True
@@ -1537,11 +1539,11 @@ def _enums_ok(rec, table):
     return True
 
 
-# --- shape check (added 2026-09-05, reset Sitting 4a) ------------------------
-# A record may carry only the fields SCHEMA.md defines for its kind (plus the
-# ones this script injects). A `miss` must carry a miss_id from --next-miss-id.
-# Anything else is REFUSED on stdout and never appended, the same choice as
-# _enums_ok(): a field nobody defined is a field no report can read.
+# --- shape check (added 2026-09-05, reset Sitting 4a) --------------------
+# A record may carry only the fields SCHEMA.md defines for its kind (and
+# what this script injects). A `miss` needs a miss_id from --next-miss-id.
+# Anything else is REFUSED on stdout, never appended (as _enums_ok()):
+# a field nobody defined is one no report can read.
 _COMMON = {"v", "ts", "kind", "app", "project_type", "project_type_inferred", "harness", "backfilled"}
 _ALLOWED = {
     ("runs", "run"): {"cmd", "mode", "yolo", "started", "ended", "duration_s", "reqs_touched", "reqs_count",
@@ -1549,7 +1551,7 @@ _ALLOWED = {
                       "routed", "tokens_in", "tokens_out", "tokens_cache_read", "tokens_cache_write",
                       "cost_usd", "tokens_scope", "attempt", "subagent_runs", "tokens_out_subagents",
                       "model_tokens_out", "session_id", "usage_start_event_ts", "usage_end_event_ts",
-                      "billing_mode", "cost_source", "fallback_from", "app_phase"},
+                      "billing_mode", "cost_source", "fallback_from", "app_phase", "checks_provider", "checks_model"},
     # A correction, not a deletion: it names a run record that is wrong by the pair every
     # run carries (`cmd` + `started`) and says why, so every figure can skip it while the
     # record itself stays where it is. Written by --void-run, which refuses one that names
@@ -1574,7 +1576,7 @@ _ALLOWED = {
                              "reopened", "cost_attribution", "tokens_in", "tokens_out", "tokens_cache_read",
                              "tokens_cache_write", "cost_usd", "tokens_scope", "model",
                              "billing_mode", "cost_source"},
-    ("misses", "miss-amend"): {"miss_id", "field", "value"},
+    ("misses", "miss-amend"): {"miss_id", "field", "value", "reason"},
     # An ESTIMATE, never a measurement (SCHEMA.md §2.8, added 2026-11-08): one per checklist row per cmd
     # and one per phase total per cmd, written by tf-estimate.sh. Its own stream, so no reader of
     # runs.jsonl can ever take one for a run; `model` here is the model that made the estimate.
@@ -1733,7 +1735,7 @@ def enrich_miss(rec):
                 rec["origin_model"] = None
                 rec["origin_harness"] = None
         elif kind == "miss-fix":
-            src = runs.get(rec.get("fix_run_id")) if rec.get("fix_run_id") else None
+            src = _whole_fix(runs.get(rec.get("fix_run_id")) if rec.get("fix_run_id") else None, runs)
             for f in _COST_FIELDS:
                 rec.pop(f, None)            # a caller's cost figure is never kept
             if src:
@@ -1749,21 +1751,9 @@ def enrich_miss(rec):
                     elif len(touched) > 1:
                         rec["cost_attribution"] = "shared:%d" % len(touched)
                     else:
-                        # reqs_touched is EMPTY but the run resolved and measured a
-                        # real window. Until 2026-08-28 this fell through to "none",
-                        # which §5.5.3 defines as "tokens_scope was none, or the
-                        # fix_run_id matched no run" — neither is true here, so the
-                        # stream was calling a measured window unattributable and
-                        # every cost figure for these repos was structurally zero.
-                        # A `framework` or `docs` project has no REQs to touch AT
-                        # ALL, so keying the divisor on reqs_touched can never work
-                        # there (the same blind spot as project_type:"framework",
-                        # fixed earlier the same day). The divisor is instead the
-                        # number of misses this run closed. That count is only
-                        # complete once the batch is on the stream, so what is
-                        # stored here is the count SO FAR and `tf-metrics.sh`
-                        # recomputes it per fix_run_id at report time (§8: derived
-                        # metrics are computed, never trusted from storage).
+                        # no rows touched but a measured window (a framework or docs project,
+                        # 2026-08-28): the divisor is the misses this run closed SO FAR;
+                        # tf-metrics.sh recomputes it at report time (§8).
                         _n = _fixes_on_run(rec.get("fix_run_id"), rec.get("miss_id"))
                         rec["cost_attribution"] = "sole" if _n == 1 else "shared:%d" % _n
             else:

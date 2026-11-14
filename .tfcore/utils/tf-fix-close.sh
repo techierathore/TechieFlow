@@ -150,10 +150,10 @@ for i, (s, e) in enumerate(gaps):
     first = i == 0
     run = {"kind": "run", "app": app, "cmd": cmd, "mode": "fix", "ended": e, "reqs_touched": reqs if first else [],
            "reqs_count": len(reqs) if first else 0, "subagents": subs if first else [],
-           "files_written": (int(files) if files.isdigit() else len(reqs)) if first else 0, "build_result": os.environ["TF_BUILD"]}
+           "files_written": (int(files) if files.isdigit() else len(reqs)) if first else 0, "build_result": os.environ["TF_BUILD"],
+           **(json.loads(subprocess.run(["python3", os.path.join(os.path.dirname(EMIT), "tf-checks-model.py")], capture_output=True, text=True).stdout or "{}") if first else {})}  # the provider and model the checks ran on (Chatur TF-028)
     if s: run["started"] = s
-    # one run record per start: a close called twice must not count the fix twice
-    if s and s in existing:
+    if s and s in existing:  # one run record per start: a close called twice must not count the fix twice
         had += 1; continue
     wrote += emit("runs", run)
 chained = [w for w in inner if w[2] != cmd]

@@ -4,18 +4,13 @@
 |---|---|
 | App | Sevak |
 | Upstream | TechieFlow |
-| Updated | 2026-11-11, second run (TF-026 filed) · 2026-11-11 (triage-and-fix: TF-018 to TF-020, TF-023 and TF-024 re-checked and closed; TF-025 filed) · 2026-11-10, second run (TF-017, TF-018, TF-019 and TF-022 fixed upstream, in `.tfcore/`; no entry is open) · 2026-11-10 (TF-020, TF-021, TF-023 and TF-024 fixed upstream, in `.tfcore/` from the framework update of the same day) · 2026-11-09 evening (TF-021 to TF-023 added in the phase 4 build: scope `all` runs every phase's specs on one boot; the boot script's head count) · 2026-11-09 (TF-018 to TF-020 added in phase 4 fix cycle 1; TF-018 blocks) · 2026-11-05 (TF-015 and TF-016 fixed upstream, ship in TechieFlow v1.3.0) |
+| Updated | 2026-11-12, evening (TF-031 and TF-032 fixed upstream, in `.tfcore/`; no entry is open) · 2026-11-12 (TF-026 to TF-030 fixed upstream, in `.tfcore/`; no entry is open) · 2026-11-11, evening (triage-and-fix: TF-025 re-checked and closed; TF-027 to TF-030 filed) · 2026-11-11, second run (TF-026 filed) · 2026-11-11 (triage-and-fix: TF-018 to TF-020, TF-023 and TF-024 re-checked and closed; TF-025 filed) · 2026-11-10, second run (TF-017, TF-018, TF-019 and TF-022 fixed upstream, in `.tfcore/`; no entry is open) · 2026-11-10 (TF-020, TF-021, TF-023 and TF-024 fixed upstream, in `.tfcore/` from the framework update of the same day) · 2026-11-09 evening (TF-021 to TF-023 added in the phase 4 build: scope `all` runs every phase's specs on one boot; the boot script's head count) · 2026-11-09 (TF-018 to TF-020 added in phase 4 fix cycle 1; TF-018 blocks) · 2026-11-05 (TF-015 and TF-016 fixed upstream, ship in TechieFlow v1.3.0) |
 
 ## Summary
 
-26 entries: 1 open, 12 fixed upstream and not yet re-checked here, 13 closed. Nothing is blocked.
+32 entries: 0 blocking now, 0 open, 13 fixed upstream, 19 closed.
 
-Open: TF-026, filed 2026-11-11: a phase verify cannot grade rows that need a second boot, and its test step does not survive a minimized window or a running app. Sevak worked around all three and wrote the steps into `docs/Sevak-Verification-Setup.md`.
-
-Fixed upstream, waiting for a re-check here: TF-025 (a native select read as having no icon; the fix is in this project's `.tfcore/` since the framework update of 2026-11-11), TF-013 (the Mac boot passes no settings; waits for a Mac), and ten older entries that `bash .tfcore/utils/tf-feedback.sh Sevak --waiting` lists.
-
-- Severity across all entries, open and closed: 7 major, 8 minor (one entry has no severity line). Entries keep their id order.
-- Last consolidated: 2026-11-11 (triage-and-fix)
+Nothing is blocked, and no entry is open. TF-031 (a row split across two installs ran both halves on the second install) and TF-032 (the screen check counted the Speak icons of answers past the 200th anchor as the conversation box's own; it held 17 phase 4 Assistant rows) were fixed upstream on 12 Nov, evening, and are in this project's `.tfcore/`: replies under each entry. TF-031 needs one tag here first, `@boot:install` on the restore test. TF-026 to TF-030 were re-checked on the Sevak app on 12 Nov and closed.
 
 ## Entries
 
@@ -359,6 +354,8 @@ Fixed upstream, waiting for a re-check here: TF-025 (a native select read as hav
 
 ### TF-025 — The mockup-parity check reads a native `<select>` as having no icon, so a component library's Select fails the icon clause wherever the mockup draws a plain select
 
+> ✅ **Closed 2026-11-11** — re-checked here: 2026-11-11 triage-and-fix: tf-mockup-parity.sh --cdp on Support (/support) at 1280 and 390, light and dark: verdict PASS, 0 findings, no support-status-filter icon finding (tests/.artifacts/verify/parity-tfx1.json).
+
 - **Status:** fixed upstream 2026-11-11, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-11 (evening); not yet re-checked here.
 - **Blocks:** no — the control is right; Sevak's Support row stays below Verified for another reason (test user 1 has no issue), and the finding is noted beside it.
 - **Severity:** minor
@@ -372,6 +369,9 @@ Fixed upstream, waiting for a re-check here: TF-025 (a native select read as hav
 
 ### TF-026 — A phase verify cannot grade rows that need a second boot, and its test step neither survives a minimized window nor a running app
 
+> ✅ **Closed 2026-11-12** — re-checked here: Re-checked 2026-11-12 on the Sevak app: @setup tags ran first (SET-UP lines, graded against no row); tf-verify-list printed 'Rows on another boot' (relaunch 8, install 1); unit tests ran before every boot; the relaunch and install lines graded 7 Hindi rows, REQ-FN-042 and REQ-FN-046 (all PASS). The window restore did not meet a minimized window in this run. Install-boot test selection filed as TF-031.
+
+- **Status:** fixed upstream 2026-11-12, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-12; not yet re-checked here.
 - **Blocks:** no — Sevak ran the parts by hand and merged them; every step is written in `docs/Sevak-Verification-Setup.md`.
 - **Severity:** major
 - **Repro:** `*verify all Sevak --phase 2` on 2026-11-11, Windows head over CDP. Three things, one cause (the test step assumes one boot it can leave alone):
@@ -388,6 +388,199 @@ Fixed upstream, waiting for a re-check here: TF-025 (a native select read as hav
 - **Encountered in:** Sevak *triage-and-fix 2026-11-11, phase 2.
 - **Workaround:** id lists (`tf-verify-list.sh … --json-out`, then `tf-verify-tests.sh --list`) per boot and `--merge`; `ensureDrawing` in `tests/verify/p3/cdp.ts`; `--no-browser` before the boot and `--no-unit` after it.
 - **Suggested fix:** a `needs-boot:` note on a row (relaunch, second install, language) that the list prints as its own part; `tf-verify-tests.sh` calling the TF-011 restore before each spec file; unit tests first, before `tf-verify-boot.sh start`.
+- **Reply (TechieFlow team, 2026-11-12):** Fixed in three parts, as you suggested, plus the owner's set-up rule. **1. Rows that need another boot.** A row whose checklist entry carries a line `needs-boot: relaunch` (or `needs-boot: install`; any one word names the kind) is listed by `tf-verify-list.sh` under "Rows on another boot", with a list of its own, `tests/.artifacts/verify/list-<kind>.json`, and the line to run on that boot: `tf-verify-tests.sh --no-unit --list tests/.artifacts/verify/list-relaunch.json --json-out tests/.artifacts/verify/tests-relaunch.json`, then `--merge tests/.artifacts/verify/tests.json tests/.artifacts/verify/tests-relaunch.json`. On the main boot those tests skip, as yours do; in the merge the later run stands. `verify-phase.md` step 5 says to do it after the other checks: stop the head, boot it as the kind says (`relaunch` on the same data, `install` fresh), run the line, merge. The framework does not know how your app keeps its data folder, so the boot itself stays yours (`boot-safe.sh --reuse`). **2. A minimized window.** While the browser tests run, `tf-verify-tests.sh` restores the head's window whenever it is minimized: one PowerShell loop over the process ids in `boot.json` (`win_pids`), `IsIconic` then `ShowWindow`; a window that is only behind others, or maximized, is left alone. It covers the whole run, not only the start of each spec file. **3. Unit tests before the boot.** `verify-phase.md` step 2 now runs `tf-verify-tests.sh --no-browser --json-out tests/.artifacts/verify/tests-unit.json` before the boot, and step 5 runs the browser tests with `--no-unit` and merges the two. `tf-verify-tests.sh` refuses to build the unit tests while a desktop head answers at its debugging address, in one line that says what to run instead. **Set-up tests** (owner, 2026-11-11): a test whose title or tag carries `@setup` runs first in every phase verify, on the same boot and with the same settings as the row tests; its result goes to `setup.json`, it is graded against no row and it is not listed as "no row id". **Your two set-up files carry no tag yet, so nothing changes for them until they do.** Cases `sv_026` (a, b, c) and `setup_first` (a, b) in `tests/faults/run.sh` fail on the scripts you had and pass now. Proved on fixtures with stand-ins for Playwright and PowerShell, not on the Sevak app; the window restore has not yet met a real minimized window. **Fixed in Sevak's `.tfcore/`:** deployed with `update-framework.sh` on 2026-11-12, when no Sevak run was in progress. **Check it here:** paste into Sevak's agent: `Tag the two set-up tests with @setup in their titles (tests/verify/p2/set-language.spec.ts, tests/verify/p4/ready.spec.ts). In docs/Sevak-P2-Checklist.md add the line "needs-boot: relaunch" under the entries of REQ-UI-039, REQ-UI-050, REQ-UI-051, REQ-UI-055, REQ-UI-056, REQ-UI-058 and REQ-UI-059, and "needs-boot: install" under REQ-FN-046. Then run /TechieFlow:agents:verifier *verify all Sevak --phase 2 and follow its "Rows on another boot" section.` The list prints two parts (relaunch 7, install 1), the test step prints `SET-UP p2/set-language.spec.ts …` first, and no unit-test build runs while the app is up.
+
+### TF-027 — The mockup-parity check reads a native date input as having no icon, so a component library's date picker fails the icon clause wherever the mockup draws a plain date box
+
+> ✅ **Closed 2026-11-12** — re-checked here: Re-checked 2026-11-12: tf-mockup-parity on admin-events (1280/390, light/dark) PASS, 0 findings; no events-filter-from/-to icon finding.
+
+- **Status:** fixed upstream 2026-11-12, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-12; not yet re-checked here.
+- **Blocks:** no — the control is right; Sevak's Event log row (REQ-UI-026) stays below Verified on this finding alone, noted beside it.
+- **Severity:** minor
+- **Repro:** `docs/mockups/admin-events.html` draws `events-filter-from` and `events-filter-to` as `<input class="input" type="date">`; Chromium paints the calendar glyph itself, so the computed style shows no icon. The app's TrBlazeUI `DatePicker` draws the same calendar as an svg in its trigger button. `bash .tfcore/utils/tf-mockup-parity.sh --cdp http://localhost:9223 --screen admin-events=/admin/events` reports, after the TF-025 fix:
+  ```text
+  events-filter-from: app carries an icon the mockup does not   (1280 and 390, light and dark: 4 findings)
+  events-filter-to:   app carries an icon the mockup does not   (4 findings)
+  ```
+- **Expected:** a date field is compared as a date field, the way TF-025 now compares a select: not by the glyph the browser paints for a native control.
+- **Actual:** the icon clause compares a native date input's computed style with the library's DOM.
+- **Encountered in:** Sevak triage-and-fix of 2026-11-11 (evening), Event log (`/admin/events`), REQ-UI-026.
+- **Workaround:** none taken; the trblazeui persona forbids a raw `<input type="date">` and hiding the picker's icon would only hide the finding.
+- **Suggested fix:** extend the TF-025 exemption to `input[type=date|time|datetime-local|month|week]` on the mockup side and to a date picker's trigger (a button holding a calendar svg, or `role="combobox"` with a calendar) on the app side, for the icon clause only.
+- **Reply (TechieFlow team, 2026-11-12):** Fixed as you suggested, in `tf-mockup-parity.mjs`. A native date, time, datetime-local, month or week box in the mockup is no longer compared by its icon, and the icons the app draws at its place (your `DatePicker`'s calendar inside the anchored span) are not counted as icons of any box around it; without that the finding would have moved to the filter bar. The app side is recognised by the pair, not by the library: whatever the app draws where the mockup has a native date box. An icon the app adds to an ordinary control is still reported. On the mockups of all projects, 13 native date boxes carry an anchor (in 5 projects); for each this can only take a finding away. Case `sv_027` in `tests/faults/run.sh` (your shape, plus a time box) fails on the script you had and passes now. Proved on a fixture, not on the Sevak app. **Fixed in Sevak's `.tfcore/`:** deployed with `update-framework.sh` on 2026-11-12, when no Sevak run was in progress. **Check it here:** `bash .tfcore/utils/tf-mockup-parity.sh --list tests/.artifacts/verify/list.json --cdp <url> --screen admin-events=/admin/events` carries no `events-filter-from` or `events-filter-to` icon finding.
+
+### TF-028 — The mockup-parity check counts icons inside hidden tab panels, so a page whose other tabs stay mounted "carries an icon the mockup does not"
+
+> ✅ **Closed 2026-11-12** — re-checked here: Re-checked 2026-11-12: admin-settings, agents and automations PASS with 0 findings at 1280/390 in light and dark; no appset-page, agents-content or auto-content icon finding.
+
+- **Status:** fixed upstream 2026-11-12, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-12; not yet re-checked here.
+- **Blocks:** no — the visible page matches; the finding is noted beside each row it holds.
+- **Severity:** minor
+- **Repro:** App settings (`/admin/settings`) keeps its Branding and Updates tab panels mounted and hidden (`TabsContent ForceMount="true"`, so a half-filled form survives a tab switch). The mockup marks its hidden panels `data-tf-state="tab-…"`, which the check leaves out. On the app side `own(el, ICON)` in `tf-mockup-parity.mjs` has no visibility test: `glyph()` passes a 0×0 svg (0 ≤ 48), so the icons of the hidden panels (an alert icon, the Updates panel's round icon, the branding image) count as icons of `appset-page`:
+  ```text
+  appset-page: app carries an icon the mockup does not   (1280 and 390, light and dark: 4 findings)
+  visible icons inside appset-page: only the select chevron (excluded by TF-025)
+  ```
+  The same shape holds `agents-content` (Skill catalogue, MCP servers and Run history panels) and `auto-content` (Flows and Run history panels).
+- **Expected:** an icon the user cannot see (inside `display:none`, `hidden`, or a box with no client rects) is not an icon of the box around it, as the mockup's hidden states are not.
+- **Actual:** every icon in the DOM under the anchor is counted, visible or not.
+- **Encountered in:** Sevak triage-and-fix of 2026-11-11 (evening): App settings, Agents and Automations.
+- **Workaround:** none; unmounting the hidden panels would lose what the user typed in them.
+- **Suggested fix:** in `own()`, drop an icon whose `getClientRects().length === 0` or that sits under a `hidden` / `display:none` / `[data-state="inactive"][role="tabpanel"]` box, on the app side.
+- **Reply (TechieFlow team, 2026-11-12):** Fixed as you suggested, in `tf-mockup-parity.mjs`. An icon nobody sees, one with no box at all (`hidden`, `display:none`, or inside either), is no longer an icon of the boxes around it. This applies to both sides: a mockup icon in a closed menu or a hidden alert is not counted either, so the two sides are measured the same way. On the mockups of all projects that takes 75 hidden icons out of the mockup side (closed dropdown menus, the other theme's toggle icon, hidden empty states), in 4 projects; where the app hides the same things, nothing changes, and where the app shows an icon the mockup hides, that is now reported. A visible icon the mockup does not draw is still reported. Case `sv_028` in `tests/faults/run.sh` (a page whose other tab panels are mounted and hidden, one by `hidden` and one by `display:none`) fails on the script you had and passes now. Proved on a fixture, not on the Sevak app. **Fixed in Sevak's `.tfcore/`:** deployed with `update-framework.sh` on 2026-11-12, when no Sevak run was in progress. **Check it here:** a verify of App settings, Agents and Automations carries no `appset-page`, `agents-content` or `auto-content` icon finding.
+
+### TF-029 — The mockup-parity check compares the colour of a pill in a sample row even when the app's pill shows another value
+
+> ✅ **Closed 2026-11-12** — re-checked here: Re-checked 2026-11-12: connectors and admin-events PASS with 0 findings while the app's rows showed other values than the samples.
+
+- **Status:** fixed upstream 2026-11-12, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-12; not yet re-checked here.
+- **Blocks:** no — the pills are right for their values; the finding is noted beside the rows it holds (Connectors, Event log).
+- **Severity:** minor
+- **Repro:** `docs/mockups/connectors.html` draws three sample job rows (`data-tf-sample`) with the statuses Running (blue), Completed (green) and Failed (red); `docs/mockups/admin-events.html` draws Auth (blue) first. After a verify's tests the app's first rows are real runs that ingested nothing (amber) and an Ingestion event (green). In dark mode:
+  ```text
+  conn-job-status-1: semantic colour differs — mockup accent, app warning     mockup "Running", app "Nothing ingested"
+  conn-job-status-2: semantic colour differs — mockup positive, app warning   mockup "Completed", app "Nothing ingested"
+  events-row-category: semantic colour differs — mockup accent, app positive  mockup "Auth", app "Ingestion"
+  ```
+- **Expected:** inside a sample box, a pill whose text differs from the mockup's is another value of the data, so its colour is not compared (as a sample badge read otherwise is already not reported missing). Compared only when the texts match.
+- **Actual:** the colour clause runs on the pair by position, whatever each shows.
+- **Encountered in:** Sevak triage-and-fix of 2026-11-11 (evening), Connectors and Event log, after the phase 2 tests had made runs and events.
+- **Workaround:** none; a seed that made the app's first rows match the mockup's samples would test the seed, not the screen.
+- **Suggested fix:** in the colour (and badge-tone) clause, skip a pair with `in_sample` when `norm(m.text) !== norm(a.text)`.
+- **Reply (TechieFlow team, 2026-11-12):** Fixed as you suggested, in `tf-mockup-parity.mjs`. An element with its own anchor inside a mockup sample box (`data-tf-sample`) is compared by colour and badge only when it shows the sample's text; showing another value, it is the app's data. Before, the rule covered only the sample box's unanchored children, which is why your anchored pills were compared. A pill that shows the sample's own value in another colour is still reported. This can only take findings away. Case `sv_029` in `tests/faults/run.sh` (your three job rows: Running and Completed against "Nothing ingested", and Failed in another colour) fails on the script you had and passes now. Proved on a fixture, not on the Sevak app. **Fixed in Sevak's `.tfcore/`:** deployed with `update-framework.sh` on 2026-11-12, when no Sevak run was in progress. **Check it here:** a verify of Connectors and Event log carries no `conn-job-status-…` or `events-row-category` colour finding while the app's rows show other values than the mockup's samples.
+
+### TF-030 — The mockup-parity check cannot measure the screen an app's root opens: its "go away first" step lands on that same screen
+
+> ✅ **Closed 2026-11-12** — re-checked here: Re-checked 2026-11-12 on the Sevak app with the life setup done and the app already on Today: tf-mockup-parity --screen today=/today measured 1280 and 390 in light and dark, PASS, 0 findings. Before Sevak's own fix of the same day, the away move to /tf-verify-away ended the app's session (TrBlazeUI SidebarProvider teardown, TR-049), which is why it read 'not measured'.
+
+- **Status:** fixed upstream 2026-11-12, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-12; not yet re-checked here.
+- **Blocks:** no — measured one width at a time from another screen and merged; how is written below.
+- **Severity:** minor
+- **Repro:** in Sevak `/` opens Today. `openFresh` in `tf-login.mjs`, finding the app already on `/today`, pushes `/` to leave it and then waits for one of Today's own anchors that was not there before. Leaving for `/` lands on Today again, so every anchor is already present and the arrival is never seen:
+  ```text
+  bash .tfcore/utils/tf-mockup-parity.sh --cdp http://localhost:9223 --screen today=/today
+  -> 1280 (when the app was elsewhere): compared, 0 findings
+  -> 390: not measured: the app did not move to /today within 5 s — none of the screen's own controls appeared
+  ```
+  The second width of any single screen starts on that screen, so Today is never measured at its second width; a run with Today alone after the screens step (which leaves the app on Today) measures neither width.
+- **Expected:** the step that leaves the screen goes somewhere that is not the screen, whatever the app's root opens.
+- **Actual:** it goes to `/` unless the route is `/` itself.
+- **Encountered in:** Sevak triage-and-fix of 2026-11-11 (evening), phase 3 verify of REQ-FN-055 (Today).
+- **Workaround:** `--widths 1280` and `--widths 390` as two runs, each after moving the app to `/tasks`, and the two screen results merged into `parity.json` (both PASS, 0 findings).
+- **Suggested fix:** in `openFresh`, after pushing the away route, check that the path changed and that the anchors' set changed; if not, push `/tf-verify-away` (or the previous screen of the run) instead.
+- **Reply (TechieFlow team, 2026-11-12):** Fixed as you suggested, in `tf-login.mjs` (`openFresh`, used by the mockup check and the screen check). When the app is already on the screen, it is moved away and back so it draws the screen afresh. If the move to `/` leaves the address on the screen, or leaves every one of the screen's controls in place (your root draws Today), it is moved a second time, to `/tf-verify-away`, a route no page answers. Case `sv_030` in `tests/faults/run.sh` (an app whose `/` and `/today` both draw Today, with one control that needs data) fails on the script you had (`arrived: false`) and passes now. Proved on a fixture, not on the Sevak app. **Fixed in Sevak's `.tfcore/`:** deployed with `update-framework.sh` on 2026-11-12, when no Sevak run was in progress. **Check it here:** `bash .tfcore/utils/tf-mockup-parity.sh --cdp <url> --screen today=/today` with the app already on Today measures both widths.
+
+### TF-031 — A `needs-boot: install` row runs every test carrying its id on the second install, so the half that belongs to the first install runs again and the second half cannot pass
+
+> ✅ **Closed 2026-11-13** — re-checked here: Re-checked on the Sevak app 13 Nov 2026: tagged the restore test in p2/g-restore-other-install.spec.ts { tag: '@boot:install' }. Main boot (fresh): the REQ-FN-046 run ran only the export test (1/1), the restore was left out. Second fresh install: the install line tf-verify-list printed, without --spec, ran only the restore (1/1, title shows @boot:install). Merge: REQ-FN-046 PASS, Verified in docs/Sevak-P2-Checklist.md. One Sevak-side change was needed and is not a framework defect: the export test now adds a note to an empty Default workspace first, since run alone it had nothing to hand over.
+
+- **Status:** fixed upstream 2026-11-12 (evening), fixed in Sevak's `.tfcore/` by the framework update of 2026-11-12 (evening); not yet re-checked here.
+- **Blocks:** no — Sevak ran the second half alone with `--spec` and merged it; REQ-FN-046 is Verified.
+- **Severity:** minor
+- **Repro:** `*verify all Sevak --phase 2` on 2026-11-12 after the TF-026 fix. REQ-FN-046 ("exports … and restores on another install") has two tests, one per install, and the line `needs-boot: install`. The smallest page that shows it:
+  ```text
+  tests/verify/p2/f-automations-operator.spec.ts  test('REQ-FN-046 one workspace exported to a .tdbak archive')       first install
+  tests/verify/p2/g-restore-other-install.spec.ts test('REQ-FN-046 the exported archive restores on another install') second install
+
+  bash .tfcore/utils/tf-verify-tests.sh --no-unit --list tests/.artifacts/verify/list-install.json --json-out tests/.artifacts/verify/tests-install.json
+  -> REQ-FN-046 one workspace exported …             pass   (ran again, on the second install: exports its own empty workspace)
+  -> REQ-FN-046 the exported archive restores …     skip   "this is the install that made the archive"
+  --merge … tests-install.json  -> the later skip stands over the first install's run: REQ-FN-046 "not measured"
+  ```
+- **Expected:** the other-boot line runs only the tests meant for that boot, or a skip in a later part does not replace a pass of the same row's other test from an earlier part.
+- **Actual:** every test whose title carries the row id runs on the second install; the export test re-runs there and the restore test then finds its own install's archive.
+- **Encountered in:** Sevak *triage-and-fix 2026-11-12, phase 2 verify, REQ-FN-046.
+- **Workaround:** on the second install `tf-verify-tests.sh --no-unit --list tests/.artifacts/verify/list-install.json --spec tests/verify/p2/g-restore-other-install.spec.ts --json-out tests/.artifacts/verify/tests-install.json`, then `--merge`.
+- **Suggested fix:** a test tag naming its boot (`@boot:install`, `@boot:relaunch`) that the other-boot line selects by, with untagged tests of the row left to the main boot; or in `--merge`, a skip never replaces a pass of a different test.
+- **Reply (TechieFlow team, 2026-11-12, evening):** Fixed upstream as your first suggestion, in `tf-verify-tests.sh` and `tf-verify-around.sh`. A test tagged `@boot:<kind>` (`test('…', { tag: '@boot:install' }, …)`, or `@boot:install` in its title) belongs to that boot. The run of `list-install.json` runs only the row's tests carrying the tag, and the main run leaves every `@boot:` test out; the row's untagged tests stay with the main boot. Until a test is tagged, the run on the other boot runs every test of the row as before and prints a line saying so: nothing changes for a project with no `@boot:` tag, and none has one today. `verify-phase.md` and the line `tf-verify-list` prints name the tag. Case `sv_031` in `tests/faults/run.sh` (your two REQ-FN-046 tests, with a stand-in Playwright that applies the filter as Playwright does): on the script you had, the second install ran the export again and the restore skipped; now the main boot runs only the export and the second install only the restore. Its control half: a restore that fails on the second install still fails the row. Proved on a fixture, not on the Sevak app. **Fixed in Sevak's `.tfcore/`:** deployed with `update-framework.sh` on 2026-11-12 (evening), when no Sevak run was in progress. **Check it here:** tag the test in `p2/g-restore-other-install.spec.ts` with `{ tag: '@boot:install' }`, then run the install line `tf-verify-list` prints, without `--spec`, and merge: only the restore runs there, and REQ-FN-046 merges PASS.
+
+### TF-032 — The mockup-parity check counts the icons of repeated rows beyond the mockup's sample as icons of the box around them
+
+> ✅ **Closed 2026-11-13** — re-checked here: Re-checked on the Sevak app 13 Nov 2026: tf-mockup-parity.sh on /assistant on a fresh boot (3 answers): PASS, 0 findings. On two boots after the full phase 4 tests, with 137 turns / 73 answers and then 175 turns / 93 answers in the day's conversation: Assistant PASS, 0 findings at 1280 and 390, light and dark; no assistant-conversation icon finding. The 17 Assistant rows re-graded with a verify of phase 4: all Verified (phase 4 is 80 of 80).
+
+- **Status:** fixed upstream 2026-11-12 (evening), fixed in Sevak's `.tfcore/` by the framework update of 2026-11-12 (evening); not yet re-checked here.
+- **Blocks:** no — the Assistant rows are graded on their tests; the screen check fails on this finding alone and is noted beside them.
+- **Severity:** minor
+- **Repro:** `docs/mockups/assistant.html` draws the conversation (`assistant-conversation`) with 4 sample answers (`data-tf-sample`), each with a Speak button holding an svg (`assistant-speak`). After a verify's tests the app's conversation holds about 95 answers, each with the same Speak button. `bash .tfcore/utils/tf-mockup-parity.sh --cdp <url> --screen assistant=/assistant` on 2026-11-12:
+  ```text
+  assistant-conversation: app carries an icon the mockup does not   (1280 and 390, light and dark: 4 findings)
+  visible icons inside it: only assistant-speak (95 in the app, 4 in the mockup's samples)
+  the same check on a fresh boot with 3 answers: PASS, 0 findings
+  ```
+  The smallest page that shows it: a mockup box with one sample row holding an anchored button with an svg, and the app's box with two such rows.
+- **Expected:** an icon inside an anchored element that repeats the mockup's sample (same anchor, more instances) is that element's icon, not the box's, however many rows the data has.
+- **Actual:** the icons of the instances past the sample's count are counted as the box's own.
+- **Encountered in:** Sevak *triage-and-fix 2026-11-12 (second run), phase 4 verify, Assistant (`/assistant`).
+- **Workaround:** none taken; a test boot with fewer answers would only hide it.
+- **Suggested fix:** in the icon clause, drop an icon whose nearest anchored ancestor below the box has an anchor the mockup draws (inside a sample or not), whatever the count.
+- **Reply (TechieFlow team, 2026-11-12, evening):** Fixed upstream in `tf-mockup-parity.mjs`. The cause was a cap, not the rule. For each box the check lists the anchors inside it, so that the rows repeating a mockup sample row can be taken off the box's icon count, and that list stopped at 200 anchors. Your conversation holds about 95 questions and 95 answers, each with its own anchors, so the Speak icons past the 200th anchor stayed on `assistant-conversation`. A fresh boot with 3 answers stayed under the cap, which is why it passed. The list is complete now. **The rule that decides which repeated items count**, unchanged: an app element carrying the anchor of a mockup sample row (`assistant-turn`), or the same anchor with other numbers (`commit-row-7` beside `commit-row-1`), is that row however many there are, and its icons are left out of every box around it, on both sides. A button inside the row keeps its own icon, and an icon the box draws of its own is still counted. **Against the TF-029 fix:** that rule decides which clauses compare the one app element paired with the sample (its colour and badge only when it shows the sample's text); this one decides which icons count on the boxes around the rows. They read different elements, and `sv_029` passes unchanged beside `sv_032`. Case `sv_032` in `tests/faults/run.sh` (120 question-and-answer pairs against a mockup with two sample turns) fails on the script you had (the icon finding on the conversation box at 1280 and 390) and passes now. Its control half, a box beside it with an svg of its own and the same 120 rows, is still reported at both widths. This can only take findings away. Proved on a fixture, not on the Sevak app. **Fixed in Sevak's `.tfcore/`:** deployed with `update-framework.sh` on 2026-11-12 (evening), when no Sevak run was in progress. **Check it here:** `bash .tfcore/utils/tf-mockup-parity.sh --cdp <url> --screen assistant=/assistant` after a verify's tests (about 95 answers): no `assistant-conversation` icon finding, then re-grade the 17 phase 4 Assistant rows with a verify of phase 4.
+
+### TF-033 — `tf-log-miss.sh` never reads the `tf-triage.sh look` marks, so every miss says its discovery was not measured
+
+- **Status:** fixed upstream 2026-11-14, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-14; not yet re-checked here.
+- **Filed by:** the TechieFlow team, from the owner's report of Sevak's run of 13 Nov (no entry was filed here).
+- **Blocks:** no — the misses were logged; only their discovery cost is missing.
+- **Severity:** minor
+- **Repro:** in `*triage-and-fix Sevak` on 13 Nov the agent ran `tf-triage.sh Sevak look "<problem>"` as it started on each problem, then logged it with `tf-log-miss.sh … --fixed`. Every miss record carries `discovery_why: "found by the owner or in production, not by a run"`.
+- **Expected:** the miss carries the window from the `look` mark to the moment it was logged, and the tokens of that window: what finding the root cause cost.
+- **Actual:** `tf-log-miss.py` writes a fixed `discovery_why` and never opens `tests/.artifacts/verify/triage.json`, where the marks are.
+- **Reply (TechieFlow team, 2026-11-14):** Fixed upstream in `tf-log-miss.py`. A miss logged while a command runs now takes its discovery window from the latest `look` mark set in that command: from the mark to the moment the miss is logged, or from the last miss the command logged after that same mark. Two misses logged within 120 s with no mark between them were found together, and say so instead of sharing one window (the rule `tf-triage.sh close` already used). With no mark, the miss says why it has no window, as before. The emitter reads the window's tokens, as for any miss; the report block prints a `Discovery` line. Records already on the stream are not changed. Case `sv_033` in `tests/faults/run.sh` fails on the script you had and passes now. Its control half: a miss with no mark still says why it has none. Proved on a fixture. **Fixed in Sevak's `.tfcore`:** deployed with `update-framework.sh` on 2026-11-14, when no Sevak run was in progress. **Check it here:** the next miss logged after a `look` mark carries `discovery_started` at the mark.
+
+### TF-034 — A fix's miss-fix records carry only the first part of the fix, so the cost of a fix is understated
+
+- **Status:** fixed upstream 2026-11-14, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-14; not yet re-checked here.
+- **Filed by:** the TechieFlow team, from the owner's report of Sevak's run of 13 Nov (no entry was filed here).
+- **Blocks:** no — the fixes are recorded; their cost is too low.
+- **Severity:** major
+- **Repro:** `*triage-and-fix Sevak` of 13 Nov ran from 05:43:03 to 07:34:30 around two chained verifies, so `tf-fix-close.sh` wrote its run in three parts: 05:43:03–05:44:04, 07:19:56–07:20:11 and 07:25:49–07:34:30. The 26 miss-fix records it wrote name `fix_run_id` 05:43:03 and each carries 2,272 output tokens: the first part, 61 s.
+- **Expected:** a miss-fix carries the whole fix.
+- **Actual:** the emitter copies the cost of the one run record whose start is `fix_run_id`.
+- **Reply (TechieFlow team, 2026-11-14):** Fixed upstream in `tf-emit.sh`. A miss-fix now carries every part of its fix: the same command's records with no rows, each starting where the record before it ended (the chained verifies sit between them), up to the next fix. On your 13 Nov run that is 61 + 15 + 521 s, not 61 s. The chained verifies keep their own records and are not added in, so no token is counted twice. Records already on the stream are not changed: the 26 records of 13 Nov keep the first part. Case `sv_034` in `tests/faults/run.sh` (your three parts and two verifies) fails on the script you had (100 tokens, the first part) and passes now (600). Its control half: the next fix, which starts where that one ended, keeps its own 7,000. Proved on a fixture. **Fixed in Sevak's `.tfcore`:** deployed with `update-framework.sh` on 2026-11-14, when no Sevak run was in progress. **Check it here:** after the next fix that chains a verify, its miss-fix records carry more than the first part. One gap stays open, logged on the TechieFlow side: a `tf-log-miss.sh --fixed --fix-run <start>` written before the fix's own run record exists still carries no cost (the five log-miss fixes of 13 Nov).
+
+### TF-035 — A duplicate check wrote one miss's cause onto MISS-Sevak-20261112-21, and no command can correct it
+
+- **Status:** fixed upstream 2026-11-14, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-14; not yet re-checked here.
+- **Filed by:** the TechieFlow team, from the owner's report of Sevak's run of 13 Nov (no entry was filed here).
+- **Blocks:** no — one miss carries a wrong `why_missed` and `sort`.
+- **Severity:** minor
+- **Repro:** at 07:33:33 on 13 Nov `tf-log-miss.sh … --req REQ-UI-089` found MISS-Sevak-20261112-21 open on the row in the same class, called the new problem a duplicate, and completed that miss's empty `why_missed` and `sort` with the new problem's (`insufficient-verify-method`, `weak-check`). The new problem was logged a minute later as MISS-Sevak-20261113-01.
+- **Expected:** a supported way to correct a wrongly attributed miss, with the correction recorded.
+- **Actual:** `tf-emit.sh --amend` only fills an empty field and refuses to overwrite one; the stream may not be edited.
+- **Reply (TechieFlow team, 2026-11-14):** Fixed upstream in `tf-emit.sh`, `tf-metrics.sh` and `tf-misses-md.py`. `--amend` takes a reason now: `tf-emit.sh --amend <miss> <field> <value|none> "<why the value set is wrong>"`. With a reason it is a correction: it replaces the value (or clears it with `none`), the reason is stored on the record, and the earlier value stays on the stream, so the change is recorded, never an edit. Without a reason `--amend` still only fills an empty field. The report and the readable `docs/Sevak-Misses.md` apply the latest correction. SCHEMA.md §5.5.7 says so. Case `sv_035` in `tests/faults/run.sh` fails on the script you had and passes now. Its control half: an amend without a reason still never overwrites a set value. Proved on a fixture. **Fixed in Sevak's `.tfcore`:** deployed with `update-framework.sh` on 2026-11-14, when no Sevak run was in progress. **How Sevak corrects MISS-Sevak-20261112-21** — paste into the Sevak agent:
+  ```text
+  Correct MISS-Sevak-20261112-21: its why_missed and sort were written by the duplicate check of 13 Nov 07:33 from the problem logged as MISS-Sevak-20261113-01. Run bash .tfcore/utils/tf-emit.sh --amend MISS-Sevak-20261112-21 why_missed none "written by the duplicate check of 13 Nov 07:33 from the problem logged as MISS-Sevak-20261113-01", then the same for sort. If you know MISS-Sevak-20261112-21's own cause (it was one of the 17 Assistant findings the TF-032 cap caused), give that value instead of none. Then check docs/Sevak-Misses.md shows the corrected values.
+  ```
+
+## Resolution status (TechieFlow team, 2026-11-14)
+
+**Fixed in Sevak's `.tfcore`** through the framework update of 2026-11-14. These three came from the owner's report of your run of 13 Nov, where no entry had been filed; they are entered above with their replies. Each has a case in `tests/faults/run.sh` that fails on the scripts you had, with a control half. Proved on fixtures.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-033 | Fixed upstream. A miss takes its discovery window from the `look` mark. The reply is under the entry. | the next miss logged after a `look` mark carries `discovery_started`. |
+| TF-034 | Fixed upstream. A miss-fix carries the whole fix. The reply is under the entry. | the next fix that chains a verify. |
+| TF-035 | Fixed upstream. `--amend` with a reason corrects a value. The reply is under the entry. | the prompt under the entry corrects MISS-Sevak-20261112-21. |
+
+## Resolution status (TechieFlow team, 2026-11-12, evening)
+
+**Fixed in Sevak's `.tfcore/`** through the framework update of 2026-11-12 (evening). With these two, no Sevak entry is open. Each was proved on a fixture, not on the Sevak app. The same update carries TfLens TF-057 (`tf-phase.sh end` inside a nested command keeps the outer command's marker), which is not an entry of yours.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-031 | Fixed upstream. The reply is under the entry. | tag the restore test `@boot:install`, run the install line without `--spec`, merge: REQ-FN-046 PASS. |
+| TF-032 | Fixed upstream. The reply is under the entry. | the mockup check on Assistant after a verify's tests: no `assistant-conversation` icon finding. |
+
+## Resolution status (TechieFlow team, 2026-11-12)
+
+**Fixed in Sevak's `.tfcore/`** through the framework update of 2026-11-12. With these five, no Sevak entry is open. Each was proved on a fixture, not on the Sevak app. One more change of the same day touches this project and is not an entry of yours: a test tagged `@setup` runs first in every phase verify and is graded against no row (the owner's answer to the two set-up tests the 11 Nov run listed); tag `p2/set-language.spec.ts` and `p4/ready.spec.ts` for it to apply.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-026 | Fixed upstream. The reply is under the entry. | the prompt in the reply: tag the set-up tests, add the `needs-boot:` lines, then `*verify all Sevak --phase 2`. |
+| TF-027 | Fixed upstream. The reply is under the entry. | a verify of Event log; no `events-filter-from` or `events-filter-to` icon finding. |
+| TF-028 | Fixed upstream. The reply is under the entry. | a verify of App settings, Agents and Automations; no icon finding on `appset-page`, `agents-content` or `auto-content`. |
+| TF-029 | Fixed upstream. The reply is under the entry. | a verify of Connectors and Event log; no colour finding on a pill that shows another value than the sample. |
+| TF-030 | Fixed upstream. The reply is under the entry. | the mockup check on Today with the app already on Today measures 1280 and 390. |
 
 ## Resolution status (TechieFlow team, 2026-11-11)
 
