@@ -32,7 +32,7 @@ import { chromium } from 'playwright';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { parseThemes, useTheme, surface, differs, audit, gradedPhase, markLaterPhase } from './tf-theme.mjs';
+import { parseThemes, useTheme, surface, differs, audit, gradedPhase, markLaterPhase, hiddenByWidth, stateOnlyOf } from './tf-theme.mjs';
 import { mockupMenus, walkMenus, placeholdersOnPage, reachability } from './tf-menus.mjs';
 const DD = await import('./tf-dropdowns.mjs').catch(() => null);   // each dropdown's list opened (TfLens TF-058)
 
@@ -142,63 +142,6 @@ const mockTextOf = (mockup) => {
     .replace(/<(style|script)\b[\s\S]*?<\/\1\s*>/gi, '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
 };
 
-// The anchors a mockup HIDES at one width and shows at another: a sidebar that becomes a slide-out
-// menu on a phone is not owed at 390px. Worked out by drawing the mockup itself at each width. An
-// anchor the mockup hides at every width -- a closed dialog -- is still owed. None is excused when
-// the mockup cannot be drawn.
-async function hiddenByWidth(b, mockup, anchors) {
-  const out = {};
-  if (!b || !mockup || !existsSync(mockup) || !anchors || !anchors.length) return out;
-  const shown = {};
-  for (const width of WIDTHS) {
-    let ctx;
-    try {
-      ctx = await b.newContext({ viewport: { width, height: width < 600 ? 844 : 800 } });
-      const p = await ctx.newPage();
-      await p.goto('file://' + resolve(mockup), { waitUntil: 'load', timeout: 15000 });
-      shown[width] = await p.evaluate(({ anchors, attr }) => anchors.filter((id) => {
-        const el = document.querySelector(`[${attr}="${CSS.escape(id)}"]`);
-        if (!el) return false;
-        const r = el.getBoundingClientRect();
-        const seen = el.checkVisibility ? el.checkVisibility({ visibilityProperty: true, opacityProperty: true }) : true;
-        return seen && r.width > 0 && r.height > 0;
-      }), { anchors, attr: ATTR });
-    } catch (e) { return {}; } finally { if (ctx) await ctx.close().catch(() => {}); }
-  }
-  const everShown = new Set(Object.values(shown).flat());
-  for (const width of WIDTHS) out[width] = anchors.filter((id) => everShown.has(id) && !shown[width].includes(id));
-  return out;
-}
-
-// The anchors a mockup marks as belonging to another state of the screen: a reason
-// shown only while the database is down, a result shown only after "Test". The mockup says so with
-// data-tf-state="<state>" (or data-state-testid="<id>") on the control or on a box around it. Such a control is not owed on the
-// first view; when it is drawn and visible it is graded like any other. A control on a box marked
-// data-tf-sample (a sample row a fresh app has no data for) is treated the same way.
-async function stateOnlyOf(b, mockup, anchors) {
-  if (!mockup || !existsSync(mockup) || !anchors || !anchors.length) return [];
-  if (b) {
-    let ctx;
-    try {
-      ctx = await b.newContext();
-      const p = await ctx.newPage();
-      await p.goto('file://' + resolve(mockup), { waitUntil: 'load', timeout: 15000 });
-      await markLaterPhase(p, PHASE);   // a later phase's control is another state until its phase
-      return await p.evaluate(({ anchors, attr }) => anchors.filter((id) => {
-        const el = document.querySelector(`[${attr}="${CSS.escape(id)}"]`);
-        return !!el && !!el.closest('[data-tf-state],[data-state-testid],[data-tf-sample]');
-      }), { anchors, attr: ATTR });
-    } catch (e) { /* fall through to the mark on the control itself */ } finally { if (ctx) await ctx.close().catch(() => {}); }
-  }
-  const html = readFileSync(mockup, 'utf8');
-  const later = (id) => {   // data-tf-phase on the control's own tag, read without a browser
-    const m = html.match(new RegExp(`<[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*>`));
-    const ph = m && m[0].match(/\bdata-tf-phase\s*=\s*["']?(\d+)/);
-    return !!ph && PHASE !== null && parseInt(ph[1], 10) > PHASE;
-  };
-  return anchors.filter((id) => later(id) || new RegExp(`<[^>]*\\bdata-(?:tf-state|state-testid|tf-sample)\\b[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']|<[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*\\bdata-(?:tf-state|state-testid|tf-sample)\\b`).test(html));
-}
-
 // A control drawn over its neighbour on purpose, such as a grab handle centred on a sidebar's edge.
 // The mockup says so: data-tf-overlay on the control. Such a control is left out of the overlap
 // check and graded on everything else. Read from the control's own tag, so it needs no browser.
@@ -264,7 +207,7 @@ function writeOut(extra, results = [], login = null) {
 // The sign-in recipe and the way a screen behind an in-page sign-in is reached live in
 // tf-login.mjs, shared with tf-mockup-parity and tf-assets so every check reaches a screen the
 // same way.
-import { signIn, signedOut as signedOutShared, navigateInApp as navigateInAppShared, ensureDrawing, openFresh, gotoRetry } from './tf-login.mjs';
+import { signIn, signedOut as signedOutShared, navigateInApp as navigateInAppShared, ensureDrawing, openFresh, gotoRetry, waitForRender as waitForRenderShared, quietConsole } from './tf-login.mjs';
 const LOGIN_OPTS = { base: BASE, loginPath: LOGIN_PATH, user: USER, password: PASS, attr: ATTR, settle: SETTLE, renderWait: RENDER_WAIT };
 const login = (page) => signIn(page, LOGIN_OPTS);
 
@@ -307,25 +250,9 @@ const signedOut = (page) => signedOutShared(page, LOGIN_OPTS);
 // Open a route from inside the page, the way its own links do (tf-login.mjs).
 const navigateInApp = (page, route) => navigateInAppShared(page, LOGIN_OPTS, route);
 
-// Wait for the screen's first render before measuring anything. Returns the milliseconds waited.
-// It never decides anything: when nothing appears within RENDER_WAIT the page is graded exactly as
-// it stands, so a control that is genuinely missing is still reported.
-async function waitForRender(page, anchors, attr) {
-  if (RENDER_WAIT <= 0) return 0;
-  const t0 = Date.now();
-  try {
-    // The condition names nothing about how the page is built: either a control the
-    // mockup anchors has appeared, or the document has text or a form control in it.
-    // An error banner satisfies the second, so a page that failed to start is not
-    // waited on to the timeout either.
-    await page.waitForFunction(({ anchors, attr }) => {
-      if (anchors && anchors.length) return anchors.some((id) => document.querySelector(`[${attr}="${CSS.escape(id)}"]`));
-      return (document.body && (document.body.innerText || '').trim().length > 0)
-        || document.querySelectorAll('input, select, textarea, img, svg, canvas, video').length > 0;
-    }, { anchors, attr }, { timeout: RENDER_WAIT, polling: 100 });
-  } catch (e) { /* nothing appeared in time: grade what is there */ }
-  return Date.now() - t0;
-}
+// Wait for the screen's first render before measuring anything (tf-login.mjs): it never decides
+// anything; when nothing appears within RENDER_WAIT the page is graded exactly as it stands.
+const waitForRender = (page, anchors, attr) => waitForRenderShared(page, { ...LOGIN_OPTS, attr }, anchors);
 
 // what the page says about itself: anchors, tables, text, boxes
 async function inspect(page, anchors, attr, errorSelectors) {
@@ -520,21 +447,27 @@ const results = [];
 let loginResult = null;
 let firstUnreachable = false;
 let darkOffered = false;  // auto mode: has any screen shown a dark theme yet?
+let console_before_run = 0;  // console messages an attached app logged before the run, charged to no screen
 for (const width of WIDTHS) {
   const { page, close } = await contextFor(width);
-  const consoleErrors = [];
-  page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
-  page.on('pageerror', (e) => consoleErrors.push(String(e.message || e)));
+  const consoleErrors = page._tfErrors || (page._tfErrors = []);   // one listener on an attached page, not one per width
+  if (!page._tfListens) {
+    page._tfListens = true;
+    page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
+    page.on('pageerror', (e) => consoleErrors.push(String(e.message || e)));
+  }
+  if (CDP && width === WIDTHS[0]) console_before_run = await quietConsole(page);   // Lekhak TF-040
   if (!CDP) { const l = await login(page); if (loginResult === null) loginResult = l; }
   for (const s of screens) {
     let r = results.find((x) => x.name === s.name);
     if (!r) {
       r = { name: s.name, route: s.route, mockup: s.mockup, rows: s.rows, anchors: anchorsOf(s.mockup), widths: [] }; results.push(r);
-      r.hidden_by_width = await hiddenByWidth(mockBrowser, s.mockup, r.anchors);
-      r.state_only = await stateOnlyOf(mockBrowser, s.mockup, r.anchors);
+      r.hidden_by_width = await hiddenByWidth(mockBrowser, s.mockup, r.anchors, WIDTHS, ATTR);
+      r.state_only = await stateOnlyOf(mockBrowser, s.mockup, r.anchors, PHASE, ATTR);
       r.overlay = overlayOf(s.mockup, r.anchors);
       if (s.route_pattern) r.route_pattern = s.route_pattern;
       if (s.seed) r.seed = runSeed(s.seed);
+      if (DD && s.mockup && existsSync(s.mockup)) r._statePickers = await DD.mockupStatePickers(mockBrowser, 'file://' + resolve(s.mockup));
     }
     const excused = (r.hidden_by_width || {})[width] || [];
     const stateOnly = r.state_only || [];
@@ -598,14 +531,33 @@ for (const width of WIDTHS) {
         }
         const te = theme === 'light' ? entry : { ...entry, screenshot: `${SHOTS}/${slug(s.name)}-${width}-${theme}.png` };
         te.theme = theme;
-        const info = await inspect(page, r.anchors || [], ATTR, ERROR_SELECTORS);
+        let info = await inspect(page, r.anchors || [], ATTR, ERROR_SELECTORS);
         info.contrast = await audit(page, theme === 'dark', MIN_CONTRAST);
-        const g = grade(info, theme === 'light' ? consoleErrors : [], width, excused, stateOnly, r.overlay || []);
+        let g = grade(info, theme === 'light' ? consoleErrors : [], width, excused, stateOnly, r.overlay || []);
+        // Lekhak TF-040: "Blazor has already started" failed whichever screen a run opened first, at its first
+        // width only, and never when that screen was opened again. A screen failed on console errors alone is
+        // opened once more; only an error that comes back is its own. One that does not is kept as console_once.
+        if (theme === 'light' && g.render === 'ERROR' && consoleErrors.length && g.findings.every((f) => f.class !== 'exception' || /^console error/.test(f.detail))) {
+          const first = consoleErrors.splice(0);
+          const own = (r.anchors || []).filter((id) => !excused.includes(id) && !stateOnly.includes(id));
+          await navigate(page, s.route, own); await waitForRender(page, own, ATTR);
+          const again = new Set(consoleErrors);
+          te.console_once = first.filter((e) => !again.has(e)).slice(0, 5);
+          consoleErrors.splice(0, consoleErrors.length, ...first.filter((e) => again.has(e)));
+          if (te.console_once.length) { info = { ...(await inspect(page, r.anchors || [], ATTR, ERROR_SELECTORS)), contrast: info.contrast }; g = grade(info, consoleErrors, width, excused, stateOnly, r.overlay || []); }
+        }
+        if (CDP && g.render === 'EMPTY') {   // still loading on a desktop head (Lekhak TF-040): waited for once more
+          await page.waitForTimeout(Math.max(RENDER_WAIT, 3000));
+          info = { ...(await inspect(page, r.anchors || [], ATTR, ERROR_SELECTORS)), contrast: info.contrast };
+          g = { ...grade(info, theme === 'light' ? consoleErrors : [], width, excused, stateOnly, r.overlay || []), rechecked: true };
+        }
         // a screen still showing placeholder text its mockup does not draw is not built
         if (theme === (THEMES || ['light'])[0]) {
           for (const p of await placeholdersOnPage(page, mockTextOf(s.mockup), PLACEHOLDER_EXTRA)) g.findings.push({ check: 'render', class: 'placeholder', detail: `the screen shows placeholder text "${p}"` });
           if (g.render === 'OK' && g.findings.some((f) => f.class === 'placeholder')) g.render = 'EMPTY';
-          for (const f of DD ? await DD.dropdownFindings(page, width) : []) { g.findings.push(f); g.visual = 'FAIL'; }
+          const dd = DD ? await DD.dropdownFindings(page, width) : null;
+          for (const f of dd || []) { g.findings.push(f); g.visual = 'FAIL'; }
+          if (dd) { const { names, ...t } = dd.tally; g.dropdowns = t; (r._dd ||= []).push(...names); }
         }
         if (r.seed && !r.seed.ok) {
           g.findings.unshift({ check: 'render', class: 'other', detail: `seed ${r.seed.path} failed (exit ${r.seed.exit ?? '?'}): ${r.seed.output}` });
@@ -695,9 +647,14 @@ for (const r of results) {
   r.anchors_n = (r.anchors || []).length;
   const notes = r.widths.flatMap((w) => (w.findings || []).map((f) => `${f.detail}`)).slice(0, 4);
   r.themes = [...new Set(r.widths.map((w) => w.theme).filter(Boolean))];
-  console.log(`${r.render === 'OK' && r.visual === 'OK' ? 'OK  ' : r.render === 'NOT-MEASURED' ? 'NOT ' : 'FAIL'} ${r.name} (${r.route}) — render ${r.render}, visual ${r.visual}, ${r.anchors_n} anchors${r.mockup && !existsSync(r.mockup) ? ' (no mockup file)' : ''}, ${r.themes.join(' + ') || 'no'} theme${r.themes.length === 1 ? '' : 's'}${r.dark === 'not offered' ? ' (the app has no dark theme)' : ''}${notes.length ? ' — ' + notes.join('; ') : ''}`);
+  // how many lists were opened, so a clean result is not read as one that opened nothing (Chatur TF-031)
+  const dds = r.widths.map((w) => w.dropdowns).filter(Boolean), seen = new Set(r._dd || []);
+  if (dds.length) r.dropdowns = { opened: dds.reduce((n, x) => n + x.opened, 0), triggers: dds.reduce((n, x) => n + x.triggers, 0), dialogs: dds.reduce((n, x) => n + x.dialogs, 0),
+    not_reached: (r._statePickers || []).filter((x) => !seen.has(x.id)).map((x) => `${x.id} (${x.state})`) };
+  delete r._dd; delete r._statePickers;
+  console.log(`${r.render === 'OK' && r.visual === 'OK' ? 'OK  ' : r.render === 'NOT-MEASURED' ? 'NOT ' : 'FAIL'} ${r.name} (${r.route}) — render ${r.render}, visual ${r.visual}, ${r.anchors_n} anchors${r.mockup && !existsSync(r.mockup) ? ' (no mockup file)' : ''}, ${r.themes.join(' + ') || 'no'} theme${r.themes.length === 1 ? '' : 's'}${r.dark === 'not offered' ? ' (the app has no dark theme)' : ''}${r.dropdowns ? `, ${r.dropdowns.opened} list(s) opened${r.dropdowns.not_reached.length ? `, ${r.dropdowns.not_reached.length} picker(s) inside another state not reached: ${r.dropdowns.not_reached.slice(0, 3).join(', ')}` : ''}` : ''}${notes.length ? ' — ' + notes.join('; ') : ''}`);
 }
-const out = writeOut({ menus: menuWalk }, results, loginResult);
+const out = writeOut({ menus: menuWalk, ...(CDP ? { console_before_run } : {}) }, results, loginResult);
 if (loginResult && loginResult.attempted && !loginResult.ok) console.log(`LOGIN failed at ${BASE}${LOGIN_OPTS.loginPath}: ${loginResult.error || 'still on the sign-in page'}`);
 if (loginResult && loginResult.ok && loginResult.login_path) console.log(`LOGIN signed in at ${loginResult.login_path}: ${loginResult.login_path_asked} has no sign-in form (pass --login-path ${loginResult.login_path})`);
 console.log(`screens ${out.summary.screens}${skipped.length ? ` (+${skipped.length} not driven: route needs a value)` : ''}: render ${out.summary.render_ok} OK / ${out.summary.render_fail} failed / ${out.summary.unreachable} unreachable${out.summary.not_measured ? ` / ${out.summary.not_measured} not measured` : ''}; visual ${out.summary.visual_ok} OK / ${out.summary.visual_fail} failed; screenshots ${SHOTS}; JSON ${OUT}`);

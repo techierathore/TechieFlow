@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-11-14, night (ten faults of 13 Nov from five projects; v1.3.0 is the last tag). |
+| Last updated | 2026-11-14, evening (ten faults of 14 Nov; the Linux CI of `0c8158f`; v1.3.0 is the last tag). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -114,22 +114,25 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 |---|---|
 | **Distribution**: the framework is an npm package with a validation workflow, merged from `main` on 2026-09-07. Publishing it is the remaining step (FR-48 to FR-52). | Owner action |
 | Three requirements name a **script that has not been written**: FR-58 (refuse `done complete` while rows are unfinished), FR-60 (refuse a banned head name in a brief), FR-61 (grade a row not observable when the environment lacks the data). The idea-stage commands still emit no run record (FR-34, FR-60). | Maintainer |
-| **Model routing is deployed to 19 repositories and enabled in three** (`enabled: true` in `routing.yaml`). Turning one on is `bash .tfcore/utils/tf-routing.sh on` in that project — Routing-Guide §2b. | Owner decision, per project |
+| **Model routing is enabled in three repositories.** Turn one on with `bash .tfcore/utils/tf-routing.sh on` (Routing-Guide §2b). | Owner decision, per project |
 | **Open misses**: `docs/TechieFlow-Misses.md`. | Maintainer |
 | **Not proved on real machines** (v1.2.4): window restore, Mac `--env`, NAT fallback. The check fixes since 2026-11-10: fixtures only. | Maintainer |
-| **TfLens** needs the miss stream read into its pages before its figures are quotable. Its metrics update is specified in TfLens's own `docs/TfLens-Metrics-Update-Prompt.md` and waiting on the owner's go-ahead. | Separate repo |
-| **The feedback entries of 11 to 13 Nov are fixed** (2026-11-14), in the seven projects deployed that day (TrStudio has 12 Nov's). Re-checks: `tf-feedback.sh <App> --waiting`. | Each project (close) |
+| **TfLens** must read the miss stream before its figures are quotable (`docs/TfLens-Metrics-Update-Prompt.md` there, awaiting the owner). | Separate repo |
+| **The feedback entries of 11 to 14 Nov are fixed** (2026-11-14, evening), in six projects (one waits for its running session; TrStudio has 12 Nov's). Re-checks: `tf-feedback.sh <App> --waiting`. | Each project (close) |
+| The mockup check on a still-loading screen is open. | Maintainer |
+| Linux CI has no Playwright: every browser case is counted skipped. Install it in `validate.yml`? | Owner decision |
+| `tests/requirements` grades FR lines naming one regression case by the whole suite. | Maintainer |
 | Drop `BASE_URL`/`CDP_URL` from `tf-verify-tests.sh` at v1.5; `testsettings.Local.json` carries the address (14 Nov). | Maintainer |
 | **TrBlazeUI TR-004**: disabled menu items lack `aria-disabled`; the menu bar ignores Escape. `tf-menus.mjs` works around both. | TrBlazeUI |
 | **Mockup parity pairs live rows with sample rows by position** (MISS-TechieFlow-20261003-02), so data in another order gives row-level icon findings; Chatur's Repository rows are blocked on it. | Maintainer |
 | **Blazor Hybrid heads owe OS zoom** (standards §9b): TrSetup lacks it and the macOS 27 scene rule; TrStudio's is unbuilt (GitHub Packages 401); one private project unchecked. | Those projects |
-| **Eighteen `.gitignore` files repeat framework blocks** (FR-76's defect). Harmless; the updater no longer adds them and removes none. | Owner decision |
-| **TrSetup tracks thousands of build-output files**; its ignore rules work once the index entries go. `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the commands. | Owner action |
+| Eighteen `.gitignore` files repeat framework blocks (harmless; FR-76). | Owner decision |
+| **TrSetup tracks thousands of build-output files**; `bash .tfcore/utils/tf-gitignore-audit.sh <repo>` prints the fix. | Owner action |
 | **Both library packages need republishing** so the persona fixes reach consumers (TR-002, TR-RAG-002). | Owner action |
 | **TechieRag holds two products in one repository**, which the one-checklist assumption cannot resolve: split the repo, or teach telemetry about it. | Owner decision |
 | **Mockup parity needs anchored mockups.** A project whose mockups carry no `data-testid` is reported ungradeable, never passed. Per-project work. | Per project |
 | **The scripts are not technology-neutral, though the personas and tasks are** (checked by `tests/mirror/run.sh`). `tf-build.sh` is .NET's and the browser layer is Playwright's, with no stack question behind either, so another stack gets the documents and telemetry and none of the build or verify scripts (MISS-TechieFlow-20260912-06). | Owner decision |
-| Two owner-owned HTML documents still name the pre-2026 layout; the updater reports them and never edits them. | Owner action |
+| Two owner-owned HTML documents name the pre-2026 layout (reported, never edited). | Owner action |
 
 
 ---

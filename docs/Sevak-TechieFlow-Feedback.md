@@ -517,6 +517,8 @@ Nothing is blocked, and no entry is open. TF-031 (a row split across two install
 
 ### TF-033 — `tf-log-miss.sh` never reads the `tf-triage.sh look` marks, so every miss says its discovery was not measured
 
+> ✅ **Closed 2026-11-14** — re-checked here: 14 Nov: tf-triage.sh look at 06:53:50Z, then demote REQ-RAG-125 and close: MISS-Sevak-20261114-01 carries discovery_started 06:53:50Z, discovery_ended 07:50:54Z, discovery_s 3424, scope main.
+
 - **Status:** fixed upstream 2026-11-14, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-14; not yet re-checked here.
 - **Filed by:** the TechieFlow team, from the owner's report of Sevak's run of 13 Nov (no entry was filed here).
 - **Blocks:** no — the misses were logged; only their discovery cost is missing.
@@ -527,6 +529,8 @@ Nothing is blocked, and no entry is open. TF-031 (a row split across two install
 - **Reply (TechieFlow team, 2026-11-14):** Fixed upstream in `tf-log-miss.py`. A miss logged while a command runs now takes its discovery window from the latest `look` mark set in that command: from the mark to the moment the miss is logged, or from the last miss the command logged after that same mark. Two misses logged within 120 s with no mark between them were found together, and say so instead of sharing one window (the rule `tf-triage.sh close` already used). With no mark, the miss says why it has no window, as before. The emitter reads the window's tokens, as for any miss; the report block prints a `Discovery` line. Records already on the stream are not changed. Case `sv_033` in `tests/faults/run.sh` fails on the script you had and passes now. Its control half: a miss with no mark still says why it has none. Proved on a fixture. **Fixed in Sevak's `.tfcore`:** deployed with `update-framework.sh` on 2026-11-14, when no Sevak run was in progress. **Check it here:** the next miss logged after a `look` mark carries `discovery_started` at the mark.
 
 ### TF-034 — A fix's miss-fix records carry only the first part of the fix, so the cost of a fix is understated
+
+> ✅ **Closed 2026-11-14** — re-checked here: 14 Nov: tf-fix-close.sh --cmd triage-and-fix around one chained verify recorded the run in 2 segments; MISS-Sevak-20261114-01's miss-fix carries tokens_out 210530 for the whole fix, cost_attribution sole.
 
 - **Status:** fixed upstream 2026-11-14, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-14; not yet re-checked here.
 - **Filed by:** the TechieFlow team, from the owner's report of Sevak's run of 13 Nov (no entry was filed here).
@@ -539,6 +543,8 @@ Nothing is blocked, and no entry is open. TF-031 (a row split across two install
 
 ### TF-035 — A duplicate check wrote one miss's cause onto MISS-Sevak-20261112-21, and no command can correct it
 
+> ✅ **Closed 2026-11-14** — re-checked here: 14 Nov: tf-emit.sh --amend MISS-Sevak-20261112-21 why_missed other "<reason>" printed 'corrected'; docs/Sevak-Misses.md shows the record's own sentence (the TF-032 cap). The sort correction to the same value weak-check is refused as already set, which is right.
+
 - **Status:** fixed upstream 2026-11-14, fixed in Sevak's `.tfcore/` by the framework update of 2026-11-14; not yet re-checked here.
 - **Filed by:** the TechieFlow team, from the owner's report of Sevak's run of 13 Nov (no entry was filed here).
 - **Blocks:** no — one miss carries a wrong `why_missed` and `sort`.
@@ -550,6 +556,62 @@ Nothing is blocked, and no entry is open. TF-031 (a row split across two install
   ```text
   Correct MISS-Sevak-20261112-21: its why_missed and sort were written by the duplicate check of 13 Nov 07:33 from the problem logged as MISS-Sevak-20261113-01. Run bash .tfcore/utils/tf-emit.sh --amend MISS-Sevak-20261112-21 why_missed none "written by the duplicate check of 13 Nov 07:33 from the problem logged as MISS-Sevak-20261113-01", then the same for sort. If you know MISS-Sevak-20261112-21's own cause (it was one of the 17 Assistant findings the TF-032 cap caused), give that value instead of none. Then check docs/Sevak-Misses.md shows the corrected values.
   ```
+
+### TF-036 — A miss logged with the wrong class cannot be corrected: `miss_class` is outside the `--amend` list
+
+- **Status:** fixed upstream 2026-11-14 (evening), fixed in Sevak's `.tfcore/` by the framework update of 2026-11-14 (evening); not yet re-checked here.
+- **Blocks:** no — the miss is logged and closed; only its class is wrong in the distributions.
+- **Severity:** minor
+- **Repro:** MISS-Sevak-20261113-05 (REQ-UI-089, `artifact: tests`) was logged on 13 Nov as `regression`: a test that failed on a right app, so `wrong-behaviour`. It was given `regression` because MISS-Sevak-20261113-01, `wrong-behaviour` on the same row, was still open, and the duplicate check would have folded the new problem into it. On 14 Nov:
+  ```text
+  bash .tfcore/utils/tf-emit.sh --amend MISS-Sevak-20261113-05 miss_class wrong-behaviour "a test that failed on a right app is a wrong behaviour of the test, never a regression"
+  tf-emit: amend refused — miss_class is not an amendable field (SCHEMA.md §5.5.7)
+  ```
+- **Expected:** a correction with a reason (the TF-035 route) can replace `miss_class` too, since it is a closed-vocabulary judgement an analyst can make later, like `why_missed`.
+- **Actual:** the only route is `--void-miss` and a new `tf-log-miss.sh`, which stamps the problem found on the day of the re-log, gives it a new id, and copies its fix cost a second time. Not taken.
+- **Also:** the duplicate check pushes an agent toward a wrong class. Two different problems on one row of the same class, one still open, cannot both be logged, so the second gets a class that is free. A `--distinct "<why this is not the open one>"` flag on `tf-log-miss.sh` would remove the reason to pick a wrong class.
+- **Second case, 14 Nov:** `tf-triage.sh Sevak demote REQ-RAG-125 …` then `close` wrote MISS-Sevak-20261114-01 as `regression` because the row read Verified. The "database is locked" fault was there from the day the row was built (it was noted on 12 Nov as "once in two runs"); nothing that had worked broke. `demote` takes no `--class`, so it cannot be logged as `wrong-behaviour` either.
+- **Suggested fix:** add `miss_class` to the fields a correction (with a reason) may replace, never to the plain fill; and the `--distinct` flag above. Let `tf-triage.sh demote` take `--class`.
+- **Reply (TechieFlow team, 2026-11-14, evening):** Fixed upstream in `tf-emit.sh` (its amend check moved to the new `tf-amend.py`), `tf-metrics.sh` and SCHEMA.md §5.5.7. `miss_class` may now be **replaced by a correction**: with a reason, to a value of its own list. It is never filled by a plain amend and never cleared (`none` is refused): every miss has a class. The duplicate check (`--open-miss`), the report and `docs/Sevak-Misses.md` read the corrected class, so a corrected miss no longer blocks the right one being logged. Your command from the entry now prints `corrected MISS-Sevak-20261113-05 — miss_class = wrong-behaviour`. **Not done:** the `--distinct` flag on `tf-log-miss.sh` and `--class` on `tf-triage.sh demote`; with the correction in place both are conveniences, and I left them out of tonight's change. Say if you want them. Case `sv_036` fails on the script you had (refused) and passes now; its control half: a class amend without a reason, one clearing the class, and one outside the list are still refused. Proved on a fixture. Measured on every project before the deploy (`measure-projects.py --base HEAD`, 13 projects): no row's verdict moves, no test stops running, no document finding appears or goes; the browser-side scripts that changed (screen, mockup, dropdown, sign-in, theme checks) need the running app and were not measured there. **Check it here:** run your command for MISS-Sevak-20261113-05, then the one for MISS-Sevak-20261114-01 (`wrong-behaviour`, the fault was there from the day the row was built). **Fixed in Sevak's `.tfcore`:** deployed with `update-framework.sh` on 2026-11-14 (evening), when no Sevak run was in progress.
+
+### TF-037 — `tf-build.sh test -- --filter "A|B"` breaks the next Windows build: the `|` reaches cmd.exe unquoted and the run falls to the WSL rung
+
+- **Status:** fixed upstream 2026-11-14 (evening), fixed in Sevak's `.tfcore/` by the framework update of 2026-11-14 (evening); not yet re-checked here.
+- **Blocks:** no — a Windows-side `dotnet restore Sevak.slnx` repairs it; filters are now given without `|`.
+- **Severity:** major
+- **Repro:** on WSL, `bash .tfcore/utils/tf-build.sh test tests/Sevak.Tests/Sevak.Tests.csproj -- --filter "FullyQualifiedName~SupportIssue|FullyQualifiedName~SupportWire"` (log `tests/.artifacts/build/20261114T072021Z-test-530421.log`):
+  ```text
+  rung 1 cmd.exe: 'FullyQualifiedName~SupportWire' is not recognized as an internal or external command   exit 255
+  rung 2 winrun / rung 3 powershell.exe: The term 'FullyQualifiedName~SupportWire' is not recognized       exit 1
+  rung 5 ~/.dotnet/dotnet: PASS
+  next Windows build (tf-verify-boot.sh start, twice): error NETSDK1064: Package Microsoft.AspNetCore.Components.Analyzers, version 10.0.14 was not found
+  ```
+- **Expected:** the extra arguments reach `dotnet` as given on every rung (quoted for cmd.exe and PowerShell); a shell error on a Windows rung is the command's failure, not "the wrong rung"; and a WSL rung run after Windows ones leaves `obj/project.assets.json` usable by the Windows side, as the scoped-CSS clean already does for stylesheets.
+- **Actual:** the pipe splits the command on the three Windows rungs; the fall to rung 5 restores the shared `obj/` with Linux package paths, and every later Windows build fails until a Windows restore. Two verification boots were lost (300 s each).
+- **Suggested fix:** quote each extra argument for cmd.exe (`"…"`, `^|`) and PowerShell (`'…'`); treat "is not recognized as an internal or external command" naming one of the extra arguments as a usage error; after a WSL rung on a tree with a Windows-only head, run a Windows-side restore (or refuse the WSL rung) before returning.
+- **Reply (TechieFlow team, 2026-11-14, evening):** Fixed upstream in `tf-build.sh`, one fix with Chatur's TF-029 (its reply has the detail). (1) Each extra argument reaches `dotnet` as written on every Windows rung: escaped with `^` for cmd.exe, single-quoted for PowerShell and winrun; run on this machine's own cmd.exe and powershell.exe. (2) A Windows shell that reads one of the extra arguments as a command is reported as that (`NOT-RUN the Windows shell cut the extra arguments …`), and no other rung is tried, so no WSL rung runs because of it. (3) A WSL rung on a tree the Windows side also builds (a MAUI head in it, or an `obj/` last built there) removes the restore files it wrote with Linux paths as it finishes, so the next Windows build, the boot's own `cmd.exe /c dotnet run` included, restores with Windows paths; what it built stays. That is your NETSDK1064. Case `ch_029` fails on the script you had on all three parts and passes now; its control half: a failing test behind the same filter is still a FAIL. Proved on a fixture. Measured on every project before the deploy (`measure-projects.py --base HEAD`, 13 projects): no row's verdict moves, no test stops running, no document finding appears or goes; the browser-side scripts that changed (screen, mockup, dropdown, sign-in, theme checks) need the running app and were not measured there. **Check it here:** the command in the Repro: PASS on rung 1, and the next `tf-verify-boot.sh start` builds. **Fixed in Sevak's `.tfcore`:** deployed with `update-framework.sh` on 2026-11-14 (evening), when no Sevak run was in progress.
+
+### TF-038 — The dropdown check (TF-058) opens only the pickers on a screen's first view; a picker inside a dialog is never opened
+
+- **Status:** fixed upstream 2026-11-14 (evening), fixed in Sevak's `.tfcore/` by the framework update of 2026-11-14 (evening); not yet re-checked here.
+- **Blocks:** no — not a false finding; Sevak's dialog pickers were measured by hand on 14 Nov and are sound.
+- **Severity:** minor
+- **Repro:** `tf-verify-screens.sh --list … --cdp …` over 26 Sevak screens of phases 1, 3 and 4 at 1280 and 390, 14 Nov: no dropdown finding. On Support the check found one picker (`support-status-filter`); the New issue dialog's **Type** and **Priority** pickers (`role="combobox"`, TrBlazeUI `Select`) appear only after `support-new-issue` is clicked, and `tf-dropdowns.mjs` collects its triggers once, before anything is clicked. The same holds for Inbox's *Move to* (item dialog), Setup's relationship and backup frequency (later steps of `/welcome`) and Email's mailbox picker (shown once a mailbox exists).
+  The smallest page that shows it: a button that opens a `role="dialog"` holding one `role="combobox"` whose list is 60 px wide with an option "A long option text that cannot fit" — the check reports nothing, because the trigger is not on the page when it looks.
+- **Expected:** a picker the user meets on the screen is opened at least once, in the state the mockup draws it (the mockup's `data-tf-state` boxes name those states), or the check lists it under `coverage.not_measured` so a clean result is not read as "every list measured".
+- **Actual:** silently left out; a clean result covers only first-view pickers. Measured by hand instead (`tests/.artifacts/locktest/dd/`): Support Type 396 / 318 px wide, Priority 396 / 318 px, no option cut, inside the window, at 1280 and 390.
+- **Suggested fix:** for each mockup box with `data-tf-state` whose state has an opener the app anchors (`data-testid` of the button), click it and run `dropdownFindings` inside; after each list, close it with a click on its trigger before falling back to Escape, so a host dialog stays open; print the pickers not reached.
+- **Reply (TechieFlow team, 2026-11-14, evening):** Fixed upstream in `tf-dropdowns.mjs`, in part through your app. After the first view, each visible `aria-haspopup="dialog"` trigger whose label ends nothing (Delete, Remove, Sign out …) is clicked, the pickers in the dialog it opens are graded the same way (cut, too narrow, outside the window, a native select that cuts its text), and the dialog is closed; a list is closed with a click on its own trigger before Escape, so the dialog holding it stays open. TrBlazeUI's `DialogTrigger` carries `aria-haspopup="dialog"`. **Your Support page:** `support-new-issue` is a plain `Button` with `OnClick`, so the check does not open it and does not guess at other buttons. Instead, every picker your mockup draws inside another state (`data-tf-state`) that no click reached is now named, in the JSON (`dropdowns.not_reached`) and on the screen's line: Support will say `support-new-issue-type (dialog), support-new-issue-priority (dialog)` not reached, never a silent pass. To have them opened, the button would need `aria-haspopup="dialog"` (an app change, yours to decide). Case `sv_038` (your smallest page) fails on the script you had and passes now; its control half: the first-view picker is still opened and passes. Proved on a fixture. Measured on every project before the deploy (`measure-projects.py --base HEAD`, 13 projects): no row's verdict moves, no test stops running, no document finding appears or goes; the browser-side scripts that changed (screen, mockup, dropdown, sign-in, theme checks) need the running app and were not measured there. **Check it here:** the screen check on Support names the two dialog pickers as not reached, and says how many lists it opened. **Fixed in Sevak's `.tfcore`:** deployed with `update-framework.sh` on 2026-11-14 (evening), when no Sevak run was in progress.
+
+## Resolution status (TechieFlow team, 2026-11-14, evening)
+
+**Fixed in Sevak's `.tfcore`** through the framework update of 2026-11-14 (evening). Each has a case in `tests/faults/run.sh` that fails on the scripts this project had and passes now, with a control half. Proved on fixtures, not on the Sevak app.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-036 | Fixed upstream. `miss_class` is corrected with a reason. The reply is under the entry. | your command for MISS-Sevak-20261113-05 prints `corrected`. |
+| TF-037 | Fixed upstream with Chatur's TF-029. Arguments quoted on every Windows rung; a WSL rung leaves no Linux restore files. The reply is under the entry. | the Repro's command: PASS on rung 1; the next boot builds. |
+| TF-038 | Fixed upstream for dialog triggers; other dialog pickers are named as not reached. The reply is under the entry. | the screen check on Support. |
 
 ## Resolution status (TechieFlow team, 2026-11-14)
 

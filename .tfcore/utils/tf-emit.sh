@@ -355,7 +355,7 @@ if [[ "$1" == "--open-miss" ]]; then
   python3 - "$MET_DIR/misses.jsonl" "$REQ" "$OMC" 2>"$TF_ERR" <<'PY' || true
 import json, sys
 path, req, want = sys.argv[1], sys.argv[2], sys.argv[3]
-opened, fixes, voided = [], {}, set()
+opened, fixes, voided, cls = [], {}, set(), {}
 try:
     with open(path, encoding="utf-8") as fh:
         for line in fh:
@@ -370,6 +370,8 @@ try:
                 opened.append(r)
             elif r.get("kind") == "miss-void":
                 voided.add(r.get("miss_id"))
+            elif r.get("kind") == "miss-amend" and r.get("field") == "miss_class" and (r.get("reason") or "").strip():
+                cls[r.get("miss_id")] = r.get("value")   # a corrected class (Sevak TF-036)
             elif r.get("kind") == "miss-fix":
                 mid = r.get("miss_id")
                 if mid:
@@ -381,20 +383,19 @@ except FileNotFoundError:
 for r in reversed(opened):                     # most recent first
     if r.get("miss_id") in voided:
         continue
-    if want and (r.get("miss_class") or "other") != want:
+    c = cls.get(r.get("miss_id")) or r.get("miss_class") or "other"
+    if want and c != want:
         continue
     fix = fixes.get(r.get("miss_id"))
     if fix is None or fix.get("verdict_after") not in ("Verified", "wont-fix"):
-        print("%s %s" % (r.get("miss_id"), r.get("miss_class") or "other"))
+        print("%s %s" % (r.get("miss_id"), c))
         break
 PY
   exit 0
 fi
 
 # --- write helper: complete a field that was left null --------------------
-# SCHEMA.md §5.5.7. The ONLY sanctioned way to fill a field on a record that is
-# already on the stream — and the reason constraint 5's "the correction is a new
-# record, never an edit" now names something that exists for this stream.
+# SCHEMA.md §5.5.7. The ONLY sanctioned way to fill or correct a field of a record already on the stream.
 #
 #   tf-emit.sh --amend MISS-App-20260828-01 why_missed missing-checklist-item
 #
@@ -408,64 +409,7 @@ if [[ "$1" == "--amend" ]]; then
     echo "tf-emit: --amend needs <miss_id> <field> <value> [\"<why the value set is wrong>\"]"
     exit 0
   fi
-  AREC="$(python3 - "$MET_DIR/misses.jsonl" "$AMID" "$AFLD" "$AVAL" "$AWHY" 2>"$TF_ERR" <<'PY' || true
-import json, sys
-path, mid, fld, val, why = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5].strip()
-val = None if why and val == "none" else val   # a correction may clear a value nobody can vouch for
-
-# THE ALLOWLIST (SCHEMA.md §5.5.7): a closed-vocabulary JUDGEMENT a reader can still make later
-# (why_missed), never an OBSERVATION (found_gate) nor a field this emitter derives (cost, attribution).
-AMENDABLE = {
-    "why_missed": ("missing-checklist-item", "insufficient-verify-method",
-                   "code-audit-limitation", "ambiguous-acceptance",
-                   "dependency-not-declared", "instruction-ignored", "other"),
-    "sort": ("spec", "unsaid", "weak-check", "ignored"),
-}
-# `what` is free text, safe because an amend only fills a null (tf_018); a correction names why.
-AMENDABLE_TEXT = ("what",)
-if fld not in AMENDABLE and fld not in AMENDABLE_TEXT:
-    print("REFUSED %s is not an amendable field (SCHEMA.md §5.5.7)" % fld); raise SystemExit(0)
-if val is None:
-    pass
-elif fld in AMENDABLE_TEXT:
-    if not isinstance(val, str) or not val.strip():
-        print("REFUSED %s must be a non-empty sentence" % fld); raise SystemExit(0)
-elif val not in AMENDABLE[fld]:
-    print("REFUSED %r is not in the closed vocabulary for %s" % (val, fld)); raise SystemExit(0)
-
-parent, current = None, None
-try:
-    with open(path, encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                r = json.loads(line)
-            except Exception:
-                continue
-            if r.get("kind") == "miss" and r.get("miss_id") == mid:
-                parent = r
-                current = r.get(fld)
-            elif (r.get("kind") == "miss-amend" and r.get("miss_id") == mid
-                  and r.get("field") == fld):
-                current = r.get("value")          # an earlier amend already set it
-except FileNotFoundError:
-    pass
-
-if parent is None:
-    print("REFUSED no miss record %s on this stream" % mid); raise SystemExit(0)
-# A CORRECTION (Sevak 2026-11-13: a duplicate check put one miss cause on MISS-Sevak-20261112-21)
-# names why the value set is wrong; it replaces the value, and its reason stays on the stream.
-if current is not None and not why:
-    print("REFUSED %s is already %r on %s — an amend completes a record; to correct a wrong value, add "
-          "why: --amend %s %s <value|none> \"<why>\"" % (fld, current, mid, mid, fld)); raise SystemExit(0)
-if why and current == val:
-    print("REFUSED %s is already %r on %s" % (fld, current, mid)); raise SystemExit(0)
-print("OK " + json.dumps({"kind": "miss-amend", "miss_id": mid, "field": fld, "value": val,
-                          **({"reason": why} if why else {})}, separators=(",", ":"), ensure_ascii=False))
-PY
-)"
+  AREC="$(python3 "$(dirname "${BASH_SOURCE[0]}")/tf-amend.py" "$MET_DIR/misses.jsonl" "$AMID" "$AFLD" "$AVAL" "$AWHY" 2>"$TF_ERR" || true)"
   case "$AREC" in
     "OK "*) printf '%s' "${AREC#OK }" | bash "${BASH_SOURCE[0]}" misses
             echo "tf-emit: $([[ -n "$AWHY" ]] && echo corrected || echo amended) $AMID — $AFLD = $AVAL" ;;
@@ -1448,7 +1392,11 @@ def _amend_ok(rec):
     if not mid:
         warn("amend refused — no miss_id")
         return False
-    if val is None and why and (fld in _AMENDABLE or fld in _AMENDABLE_TEXT):
+    if fld == "miss_class":   # a correction only, to a value of its vocabulary (Sevak TF-036)
+        if not why or val not in _MISS_ENUMS["miss_class"]:
+            warn("amend refused — miss_class is replaced only by a correction with a reason")
+            return False
+    elif val is None and why and (fld in _AMENDABLE or fld in _AMENDABLE_TEXT):
         pass
     elif fld in _AMENDABLE_TEXT:
         if not isinstance(val, str) or not val.strip():
@@ -1483,19 +1431,9 @@ def _amend_ok(rec):
         return False
     return True
 
-# The closed vocabularies of SCHEMA.md §5.5.1 / §5.5.2 / §3.3, enforced ON WRITE.
-#
-# Until 2026-08-31 the emitter validated the miss-amend allowlist meticulously and
-# validated a `miss` record's own enums NOT AT ALL — so a typo in miss_class landed
-# permanently on an append-only stream, invented a bucket in every distribution built
-# on it, and could not be corrected: `miss_class` is not amendable (§5.5.7 allows only
-# closed-vocabulary JUDGEMENTS the emitter does not derive), and constraint 5 forbids
-# editing the file. The only remaining move was to report it.
-#
-# That is the asymmetry this closes. Dropping an invalid record is the SAME choice
-# _amend_ok() already makes and for the same reason: a record the reader has to
-# defend itself against is worse than no record. The refusal is printed on stdout —
-# an agent that believes it logged a miss and did not is worse off than one told no.
+# The closed vocabularies of SCHEMA.md §5.5.1 / §5.5.2 / §3.3, enforced ON WRITE (until 2026-08-31 a typo in
+# miss_class landed for good and invented a bucket in every distribution). An invalid record is dropped, as
+# _amend_ok() drops one, and the refusal is printed on stdout: an agent must know its miss was not logged.
 _MISS_ENUMS = {
     "miss_class": ("missed-requirement", "partial-implementation", "wrong-behaviour",
                    "regression", "unspecified-gap", "spec-contradiction", "scope-creep",

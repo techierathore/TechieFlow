@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 356 logged: 59 open, 295 fixed, 1 will not fix, 1 withdrawn |
+| Count | 367 logged: 59 open, 306 fixed, 1 will not fix, 1 withdrawn |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-11-13 |
+| Updated | 2026-11-14 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -73,10 +73,21 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (295)
+## Fixed (306)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261114-11 | 2026-11-14 by owner | 2026-11-14 by log-miss | the check was too weak | FW (CI of 0c8158f): regression case ch_010 passed only with SDK 10, because dotnet run -p:TargetFramework does not reach the restore; the Linux runner's older SDK failed it, and with it every FR line graded by the regression suite |
+| MISS-TechieFlow-20261114-10 | 2026-11-14 by owner | 2026-11-14 by log-miss | the check was too weak | FW (owner 14 Nov): a chained verify with no start mark of its own was recorded from list.json's last write, three records of 5 to 8 seconds |
+| MISS-TechieFlow-20261114-09 | 2026-11-14 by owner | 2026-11-14 by log-miss | said and ignored | FW (owner 14 Nov): the cost of finding each root cause depended on agents setting look marks, and a run closed quietly with every one not measured |
+| MISS-TechieFlow-20261114-08 | 2026-11-14 by owner | 2026-11-14 by log-miss | the check was too weak | FW (Sevak TF-038): the dropdown check collected its pickers once, before any click, so a picker in a dialog was never opened and not named |
+| MISS-TechieFlow-20261114-07 | 2026-11-14 by owner | 2026-11-14 by log-miss | the framework never said it | FW (Sevak TF-036): miss_class could not be corrected, it was outside the --amend list |
+| MISS-TechieFlow-20261114-06 | 2026-11-14 by owner | 2026-11-14 by log-miss | the check was too weak | FW (Lekhak TF-041): the dropdown check skipped native selects, so a closed select that cuts its text passed |
+| MISS-TechieFlow-20261114-05 | 2026-11-14 by owner | 2026-11-14 by log-miss | the check was too weak | FW (Lekhak TF-040): the screen check charged a one-time console error to the first screen of a run and failed a screen still loading on a desktop head |
+| MISS-TechieFlow-20261114-04 | 2026-11-14 by owner | 2026-11-14 by log-miss | the check was too weak | FW (Chatur TF-031): the dropdown check missed lists whose options all wrap, never opened menu-built pickers, and printed no count of the lists it opened |
+| MISS-TechieFlow-20261114-03 | 2026-11-14 by owner | 2026-11-14 by log-miss | the check was too weak | FW (Chatur TF-029, Sevak TF-037): tf-build.sh joined extra arguments unquoted for cmd.exe and PowerShell, so a filter with \| was cut, and a WSL rung then left Linux restore paths that broke the next Windows build |
+| MISS-TechieFlow-20261114-02 | 2026-11-14 by owner | 2026-11-14 by log-miss | the check was too weak | FW (Chatur TF-030, TF-027 reopened): the picker-arrow rule counted the buttons of the mockup's open list, and its case ch_027 drew a popwrap without that list, so the case passed while the Board failed |
+| MISS-TechieFlow-20261114-01 | 2026-11-14 by owner | 2026-11-14 by log-miss | the check was too weak | FW (Lekhak TF-042): the mockup check called every button with a 6 px corner and a fill a pill, and printed no measured values, so Lekhak's 2 px buttons drawn in the mockup's fluent-modern site theme read as pills against the page's own styles |
 | MISS-TechieFlow-20261113-14 | 2026-11-13 by owner | 2026-11-13 by log-miss | said and ignored | Maintainer slips 2026-11-14 caught by the suites before deploy: an apostrophe in a tf-emit.sh heredoc (portability), a picker rule that stopped reporting a plain span's chevron (tf_046), private project names in WorkFlow-Context (mirror FR-47) |
 | MISS-TechieFlow-20261113-10 | 2026-11-13 by production | 2026-11-13 by log-miss | the check was too weak | AppManager 13 Nov: tf-brd-status.sh refreshed only appPhase's BRD after a row moved phases, so the status gate blocked on phase 1's |
 | MISS-TechieFlow-20261113-09 | 2026-11-13 by production | 2026-11-13 by log-miss | the framework never said it | AppManager 13 Nov: tf-verify-list.sh printed the test users' passwords from the UsageGuide into the session |

@@ -276,6 +276,32 @@ if [[ -n "$mac_tfm" && "$MODE" == build && "$TARGET" == *.csproj ]]; then
   done
 fi
 
+# Chatur TF-029, Sevak TF-037: the extra arguments reached cmd.exe and PowerShell unquoted, so a test filter
+# "A|B" was cut at the `|` ("'B' is not recognized ...") on every Windows rung and the run fell to the WSL
+# one. Each argument is passed as written: for cmd.exe ^ & | < > are escaped with ^; for PowerShell (and
+# winrun, which runs it) an argument holding anything but plain characters is put in single quotes.
+win_cmd() { local a out=""; for a in "$@"; do a="${a//^/^^}"; a="${a//&/^&}"; a="${a//|/^|}"; a="${a//</^<}"; a="${a//>/^>}"; out+="${out:+ }$a"; done; printf '%s' "$out"; }
+win_ps() { local a out="" q="'"; for a in "$@"; do [[ "$a" =~ ^[A-Za-z0-9_./:=,~+@%\\-]*$ ]] || a="$q${a//$q/$q$q}$q"; out+="${out:+ }$a"; done; printf '%s' "$out"; }
+# A WSL rung run on a tree the Windows side also builds (a MAUI head in it, or an obj/ last built there)
+# restores the shared obj/ with Linux package paths, and the next Windows build (the boot's own
+# `cmd.exe /c dotnet run` included) failed with NETSDK1064 until a Windows restore (Sevak TF-037). The
+# restore files a WSL rung wrote are removed as it finishes, so the next build on either side restores
+# again; what it built stays.
+prior_win=0; [[ $maui -eq 1 || -n "${won:-}" ]] && prior_win=1
+for d in ${pdirs[@]+"${pdirs[@]}"}; do [[ "$(cat "$d/obj/.tf-build-side" 2>/dev/null)" == windows ]] && prior_win=1; done
+last_side=""
+finish() {
+  if [[ "$PLATFORM" == wsl && "$last_side" == wsl && $prior_win -eq 1 ]] && ! printf '%s\n' ${EXTRA[@]+"${EXTRA[@]}"} | grep -qx -- '--no-restore'; then
+    local d f k=0
+    for d in ${pdirs[@]+"${pdirs[@]}"}; do
+      for f in "$d"/obj/project.assets.json "$d"/obj/project.nuget.cache "$d"/obj/*.nuget.dgspec.json "$d"/obj/*.nuget.g.props "$d"/obj/*.nuget.g.targets; do
+        [[ -f "$f" ]] && rm -f "$f" && k=$((k+1))
+      done
+    done
+    [[ $k -gt 0 ]] && echo "note  this $MODE ran on the WSL side of a tree the Windows side also builds; its $k restore file(s) under obj/ were removed so the next Windows build restores with its own paths"
+  fi
+  exit "$1"
+}
 tried=()
 n=0
 for r in "${rungs[@]}"; do
@@ -283,11 +309,11 @@ for r in "${rungs[@]}"; do
   case "$r" in
     dotnet)          cmd=(dotnet "${args[@]}"); label="dotnet" ;;
     */.dotnet/dotnet) cmd=("$r" "${args[@]}"); label="~/.dotnet/dotnet" ;;
-    winrun)          cmd=(winrun "dotnet ${args[*]}"); label="winrun dotnet" ;;
-    cmd.exe)         cmd=(cmd.exe /c "dotnet ${args[*]}"); label="cmd.exe /c dotnet" ;;
-    powershell.exe)  cmd=(powershell.exe -Command "dotnet ${args[*]}"); label="powershell.exe dotnet" ;;
+    winrun)          cmd=(winrun "dotnet $(win_ps "${args[@]}")"); label="winrun dotnet" ;;
+    cmd.exe)         cmd=(cmd.exe /c "dotnet $(win_cmd "${args[@]}")"); label="cmd.exe /c dotnet" ;;
+    powershell.exe)  cmd=(powershell.exe -Command "dotnet $(win_ps "${args[@]}")"); label="powershell.exe dotnet" ;;
   esac
-  tried+=("$label")
+  tried+=("$label"); last_side="$(side_of "$r")"
   [[ "$PLATFORM" == "wsl" ]] && cross_side "$(side_of "$r")"
   for attempt in $(seq 0 "${TF_BUILD_LOCK_RETRIES:-2}"); do
     from=1; [[ -f "$LOG" ]] && from=$(( $(wc -l < "$LOG") + 1 ))   # the redirection itself fails on a log not yet written (TF-037)
@@ -330,7 +356,7 @@ for r in "${rungs[@]}"; do
   if [[ "$rc" == "0" ]]; then
     warns="$(grep -cE 'warning [A-Z]+[0-9]+' <<<"$seg" || true)"
     echo "PASS  $MODE on $PLATFORM via $label (rung $n) — $warns warning line(s)${retried:+; the first try failed on $retried Razor error line(s) from a stale compiler server, and it passed once the build servers were shut down}; log $LOG"
-    exit 0
+    finish 0
   fi
   # Code errors: C# (CS), Razor (RZ), Blazor (BL), XAML (XC, XLS), missing reference (MSB/NU).
   # Until 2026-09-06 only CS counted, so a build failing on sixteen Razor RZ9991 errors was
@@ -340,21 +366,28 @@ for r in "${rungs[@]}"; do
     first="$(grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" | head -1 | sed 's/^[[:space:]]*//' | cut -c1-160)"
     echo "FAIL  real errors on $PLATFORM via $label (rung $n): $errs error line(s), first: $first${retried:+; still there after the build servers were shut down and the $MODE was run again}; log $LOG"
     grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" | sed 's/^[[:space:]]*//' | sort -u | head -10
-    exit 1
+    finish 1
   fi
   if [[ "$MODE" == "test" ]] && grep -qE 'Failed!|Failed:[[:space:]]+[1-9]|Tests? failed' <<<"$seg"; then
     echo "FAIL  tests failed on $PLATFORM via $label (rung $n); log $LOG"
     grep -E 'Failed |Failed!|Error Message|Total tests|Passed!' <<<"$seg" | head -12
-    exit 1
+    finish 1
   fi
   # a locked output file: the rung is right and the code is fine; another rung over the same obj/
   # is exactly what broke the stylesheets (TF-035), so stop here and name the lock
   if grep -qE "$LOCKED" <<<"$seg"; then
     first="$(grep -E "$LOCKED" <<<"$seg" | head -1 | sed 's/^[[:space:]]*//' | cut -c1-200)"
     echo "NOT-RUN the build output is held by a running process (still after $((${TF_BUILD_LOCK_RETRIES:-2} + 1)) tries on $label): $first. Stop that app -- bash .tfcore/utils/tf-verify-boot.sh stop --port <its port> -- and build again. Not a code error; log $LOG"
-    exit 2
+    finish 2
+  fi
+  # A Windows shell that cut an extra argument (one of them named as an unknown command) is the arguments'
+  # failure, never the wrong rung: the next rung would get them cut the same way (Sevak TF-037).
+  cut="$(grep -oE "'[^']+' is not recognized as an internal or external command|The term '[^']+' is not recognized" <<<"$seg" | head -1 | sed -E "s/^[^']*'([^']+)'.*/\\1/")"
+  if [[ "$(side_of "$r")" == windows && -n "$cut" ]] && printf '%s\n' ${EXTRA[@]+"${EXTRA[@]}"} | grep -qF -- "$cut"; then
+    echo "NOT-RUN the Windows shell cut the extra arguments on $label (rung $n): '$cut' was read as a command. The next rung would cut them the same way, so none was tried; give the argument without that shell character, or report it as a framework fault; log $LOG"
+    finish 2
   fi
   # anything else (workload, wrong rung, tool absent): try the next rung
 done
 echo "NOT-RUN no rung could $MODE on $PLATFORM; tried: ${tried[*]}. This is a host issue, never a project blocker; log $LOG"
-exit 2
+finish 2

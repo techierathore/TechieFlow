@@ -477,7 +477,7 @@ sys.exit(1)' "$1"
 tf_021() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip tf_021 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: tf_021 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/screens"; mkdir -p "$d/docs/mockups"
@@ -1342,7 +1342,7 @@ MD
 tf_026() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip tf_026 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: tf_026 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/cssanchor"; mkdir -p "$d/docs/mockups"
@@ -1384,7 +1384,7 @@ HTML
 tf_027() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip tf_027 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: tf_027 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/parity"; mkdir -p "$d/docs/mockups"
@@ -1582,7 +1582,7 @@ MD
 tf_031() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip tf_031 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: tf_031 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   _pwfx() { local d="$SCRATCH/$1"; mkdir -p "$d/tests/verify"; ln -sfn "$pw/node_modules" "$d/node_modules"
@@ -1617,7 +1617,7 @@ tf_031() {
 tf_032() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip tf_032 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: tf_032 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/tf032"; mkdir -p "$d/docs/mockups"
@@ -1780,7 +1780,7 @@ except Exception as e: print('none')" "$d/tests/.artifacts/verify/tests.json")"
 tf_038() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip tf_038 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: tf_038 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/tf038"; mkdir -p "$d/docs/mockups"
@@ -1927,7 +1927,7 @@ MD
 tf_042() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip tf_042 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: tf_042 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/tf042"; mkdir -p "$d/docs/mockups"
@@ -2071,7 +2071,7 @@ tf_043() {
 tf_044() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip tf_044 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: tf_044 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/tf044"; mkdir -p "$d"
@@ -2126,7 +2126,7 @@ print('ok' if l.get('ok') else (l.get('error') or 'still on the sign-in page'))"
 tf_045() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip tf_045 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: tf_045 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/tf045"; mkdir -p "$d/docs/mockups"
@@ -2191,7 +2191,7 @@ for x in s.get('findings',[]): print(x['key'].split(' > ')[0], x['class'], x['de
 tf_046() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip tf_046 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: tf_046 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/tf046"; mkdir -p "$d/docs/mockups"
@@ -2250,7 +2250,7 @@ print('\n'.join(sorted(x['key'] for x in s.get('findings',[]) if x['class']=='ic
 tf_047() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip tf_047 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: tf_047 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/tf047"; mkdir -p "$d/docs/mockups"
@@ -2499,14 +2499,14 @@ print(' '.join(f['class']+':'+f['key'].split()[0] for f in s.get('findings',[]))
 }
 tf_053() {
   local f; f="$(_tf053_findings)"
-  [[ "$f" == skip ]] && { printf 'skip tf_053 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; }
+  [[ "$f" == skip ]] && { printf 'skipped: tf_053 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; }
   if [[ "$f" != no-output ]] && ! grep -q 'clip:out' <<<"$f" && grep -q 'clip:cut' <<<"$f"; then
     ok tf_053 "a box that scrolls its own content is not cut off; an overflow:hidden box still is"
   else bad tf_053 "scroller vs hidden box"; note "findings: ${f:-none}"; fi
 }
 tf_054() {
   local f; f="$(_tf053_findings)"
-  [[ "$f" == skip ]] && { printf 'skip tf_054 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; }
+  [[ "$f" == skip ]] && { printf 'skipped: tf_054 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; }
   if [[ "$f" != no-output ]] && ! grep -q 'icon:chart' <<<"$f" && grep -q 'icon:badge' <<<"$f"; then
     ok tf_054 "a chart's svg is not an icon; a 16px glyph svg still is"
   else bad tf_054 "chart svg vs glyph svg"; note "findings: ${f:-none}"; fi
@@ -2518,7 +2518,7 @@ tf_054() {
 tf_036() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip tf_036 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: tf_036 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/tf036"; mkdir -p "$d"
@@ -2753,7 +2753,7 @@ print(r.get('REQ-NFR-007',{}).get('result'), r.get('REQ-FN-003',{}).get('result'
 am_006() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip am_006 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: am_006 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/am006"; mkdir -p "$d"
@@ -2998,7 +2998,7 @@ PY
 am_011() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip am_011 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: am_011 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/am011"; mkdir -p "$d/docs/mockups"
@@ -3025,7 +3025,7 @@ print(s['verdict'], w['compared'] > 0, w.get('reached','')[:23])" 2>&1 )"
 am_012() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip am_012 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: am_012 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/am012"; mkdir -p "$d/tests/.artifacts/verify"
@@ -3084,7 +3084,7 @@ print(r['REQ-UI-001']['result'], r['REQ-UI-001']['failed'], len(r['REQ-UI-001'][
 am_014() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip am_014 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: am_014 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/am014"; mkdir -p "$d/docs/mockups"
@@ -3118,7 +3118,7 @@ for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], ' '.jo
 am_015() {
   local pw; pw="$(_pw_dir)"
   if [[ -z "$pw" ]]; then
-    printf 'skip am_015 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
+    printf 'skipped: am_015 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'
     return
   fi
   local d="$SCRATCH/am015"; mkdir -p "$d/docs/mockups"
@@ -3554,7 +3554,7 @@ am_027() {
 # not a shell; a real shell beside a scrolling document is still reported (am_014b).
 am_028() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip am_028 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: am_028 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/am028"; mkdir -p "$d/docs/mockups"
   local rows; rows="$(printf '<tr><td>group %s</td><td>owner name that is long</td><td>2026-10-03</td><td>active</td></tr>' $(seq 1 14))"
   local css='<style>body{margin:0;font:14px/20px system-ui} .table-responsive{overflow-x:auto} table{width:900px} td{padding:4px}</style>'
@@ -3624,7 +3624,7 @@ ch_render() {
 # on This Chatur's row: "mockup carries an icon here; the app does not". The app had no newer build.
 ch_001() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip ch_001 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: ch_001 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/ch001"; mkdir -p "$d/site/pre" "$d/docs/mockups"
   local css='<style>body{margin:0;font:14px/20px system-ui} .row{display:flex;gap:8px;padding:8px} svg{width:16px;height:16px}</style>'
   printf '<!doctype html><html><head><meta charset="utf-8">%s</head><body><div data-testid="this-chatur"><div class="row"><svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg>Version 1.4</div><div class="row">Up to date<div data-tf-state="newer-build"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="8"/></svg> Download 1.5</div></div></div></body></html>\n' "$css" > "$d/docs/mockups/pre.html"
@@ -3651,7 +3651,7 @@ for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], s['ver
 # list, run before the screen is driven, given TF_BASE, and a failing one is the screen's finding.
 ch_002() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip ch_002 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: ch_002 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/ch002"; mkdir -p "$d/site/repo" "$d/site/full" "$d/site/bad" "$d/docs/mockups" "$d/tests/verify/seed" "$d/.tfcore"
   local css='<style>body{margin:0;font:14px/20px system-ui} td{padding:4px} svg{width:16px;height:16px}</style>'
   local rows='<tr data-tf-sample><td><svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg></td><td>run/REQ-FN-047</td></tr><tr data-tf-sample><td><svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg></td><td>run/REQ-FN-048</td></tr>'
@@ -3847,7 +3847,7 @@ MD
 # not measured when it draws none. A real state box (the TF-001 banner) is still left out.
 ch_005() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip ch_005 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: ch_005 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/ch005"; mkdir -p "$d/site/full" "$d/site/empty" "$d/site/bare" "$d/docs/mockups"
   local css='<style>body{margin:0;font:14px/20px system-ui} a{display:flex;gap:6px;padding:4px} svg{width:16px;height:16px}</style>'
   local ic='<svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg>'
@@ -3881,7 +3881,7 @@ for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], s['ver
 # the box outside its rows is still reported.
 ch_006() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip ch_006 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: ch_006 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/ch006"; mkdir -p "$d/site/rows" "$d/site/extra" "$d/docs/mockups"
   local css='<style>body{margin:0;font:14px/20px system-ui} td{padding:4px} svg{width:16px;height:16px}</style>'
   local ic='<svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg>'
@@ -3918,7 +3918,7 @@ for s in json.load(open('$d/parity.json'))['screens']: print(s['screen'], s['ver
 # that place out; the list's own extra icon still fails.
 ch_007() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip ch_007 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: ch_007 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/ch007"; mkdir -p "$d/site/start" "$d/site/extra" "$d/site/tools" "$d/docs/mockups"
   local css='<style>body{margin:0;font:14px/20px system-ui} a{display:flex;gap:6px;padding:4px} td{padding:4px} svg{width:16px;height:16px}</style>'
   local ic='<svg viewBox="0 0 16 16"><rect width="16" height="16"/></svg>'
@@ -4128,8 +4128,8 @@ sv_005() {
     && grep -q 'rc=2' <<<"$all9" && grep -q 'phases with a checklist are 1, 2, 3' <<<"$all9" \
     && ok sv_005a "--phase all names every phase with a checklist, phase 1 first, and writes nothing; a phase with no checklist is refused" \
     || { bad sv_005a "the phases were not listed, or a missing phase was not refused"; note "$(tr '\n' ' ' <<<"$out $all9" | cut -c1-200)"; }
-  # phase 1, then phase 2, each graded and applied with the same step-0 time, as one *verify --phase all
-  local t1; t1="$(tf_date_from -u '-10 minutes' +%Y-%m-%dT%H:%M:%SZ)"
+  # phase 1, then 2, each with the same step-0 time, as one *verify --phase all
+  local t1; t1="$(tf_date_from -u '-10 minutes' +%Y-%m-%dT%H:%M:%SZ)"; mkdir -p "$d/.tfcore/.session"; printf '{"cmd":"verify-phase","app":"Fx","started":"%s"}\n' "$t1" > "$d/.tfcore/.session/phase.json"   # step 0
   printf '{"head":"web","mode":"base","url":"http://localhost:1","rung":"x","reason":"","reason_kind":""}\n' > "$d/tests/.artifacts/verify/boot.json"
   printf '{"reqs":{"REQ-FN-001":{"result":"PASS","tests":["REQ-FN-001 a"],"skipped":[]},"REQ-FN-002":{"result":"FAIL","tests":["REQ-FN-002 e"],"skipped":[],"failed":1},"REQ-FN-010":{"result":"PASS","tests":["REQ-FN-010 s"],"skipped":[]}}}\n' > "$d/tests/.artifacts/verify/tests.json"
   local p
@@ -4186,7 +4186,7 @@ print(len(v), [r.get('app_phase') for r in v], v[0]['started']=='$t1', v[1]['sta
 # painted white in both themes, so "the app has no dark theme", and faint oklch text was never measured.
 sv_006() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip sv_006 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: sv_006 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/sv006"; mkdir -p "$d"
   bash "$ROOT/tests/regression/sv006/make.sh" "$d"
   ln -sfn "$pw/node_modules" "$d/node_modules"
@@ -4458,7 +4458,7 @@ SH
 # --- Lekhak TF-002: a development head on HTTPS was UNREACHABLE to the screen check ---------------
 lk_002() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]] || ! command -v openssl >/dev/null 2>&1; then printf 'skip lk_002 — needs playwright (TF_PLAYWRIGHT_DIR) and openssl\n'; return; fi
+  if [[ -z "$pw" ]] || ! command -v openssl >/dev/null 2>&1; then printf 'skipped: lk_002 — needs playwright (TF_PLAYWRIGHT_DIR) and openssl\n'; return; fi
   local d="$SCRATCH/lk002"; mkdir -p "$d/site" "$d/docs/mockups"
   openssl req -x509 -newkey rsa:2048 -nodes -subj /CN=localhost -days 2 -keyout "$d/key.pem" -out "$d/cert.pem" >/dev/null 2>&1
   printf '<!doctype html><html><head><meta charset="utf-8"><style>body{font:14px system-ui}</style></head><body><h1 data-testid="page-title">Home</h1><p>Signed-in home of the development head.</p></body></html>\n' > "$d/site/index.html"
@@ -4516,7 +4516,7 @@ PY
 # --- Lekhak TF-005: a route with a parameter, and a control of another state ----------------------
 lk_005() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip lk_005 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: lk_005 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/lk005"; mkdir -p "$d/site/admin/llm-signin/21" "$d/site/conn" "$d/docs/mockups" "$d/tests/.artifacts/verify"
   printf '<!doctype html><html><head><meta charset="utf-8"><style>body{font:14px system-ui}</style></head><body><h1 data-testid="page-title">LLM sign-in</h1><p data-testid="provider-name">Provider 21 — sign in to continue.</p></body></html>\n' > "$d/site/admin/llm-signin/21/index.html"
   cp "$d/site/admin/llm-signin/21/index.html" "$d/docs/mockups/llm-signin.html"
@@ -4551,7 +4551,7 @@ JS
 # one-page app that routes on popstate, as an embedded-browser head does.
 lk_006() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip lk_006 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: lk_006 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/lk006"; mkdir -p "$d/docs/mockups"
   printf '<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font:14px/20px system-ui} .badge{display:inline-block;border-radius:8px;background:#2563eb;color:#fff;padding:2px 8px;height:20px}</style></head><body><div data-testid="dash-header"><h1>Dashboard</h1><span class="badge">3 open</span></div><table data-testid="dash-table"><tr><th>Name</th><th>Count</th></tr><tr><td>Alpha</td><td>12</td></tr></table></body></html>\n' > "$d/docs/mockups/dashboard.html"
   cat > "$d/server.py" <<'PY'
@@ -4655,7 +4655,7 @@ JS
 # read "mockup accent, app neutral". The app's theme must also be back as it was when the check ends.
 lk_010() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip lk_010 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: lk_010 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/lk010"; mkdir -p "$d/site" "$d/docs/mockups"
   local css='body{margin:0;font:14px/20px system-ui} .badge{display:inline-block;border-radius:8px;padding:2px 8px;height:20px;color:#fff}
 [data-theme="light"] .badge{background:#2563eb} [data-theme="dark"] .badge{background:#555} [data-theme="dark"] body{background:#111;color:#eee}'
@@ -4818,7 +4818,7 @@ SH
 # single match in a subfolder is found without one, and two files of one name are never guessed between.
 lk_022() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip lk_022 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: lk_022 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/lk022"; mkdir -p "$d/site/admin/prompt-manager" "$d/site/story/editor" "$d/docs/mockups/admin" "$d/docs/mockups/story" "$d/docs/mockups/reader" "$d/tests/.artifacts/verify"
   local page='<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font:14px/20px system-ui}</style></head><body><h1 data-testid="pm-title">%s</h1><table data-testid="pm-table"><tr><th>Template</th></tr><tr><td>Opening</td></tr></table></body></html>\n'
   printf "$page" "Prompt Manager" > "$d/docs/mockups/admin/prompt-manager.html"
@@ -4906,17 +4906,16 @@ PY
 }
 
 # --- Chatur TF-010: on a Mac the zoom keys reached only the last window opened -------------------
-# blazor-zoom.cs.txt kept one WKWebView in a static field, so each window's Attach replaced the one
-# before. The real file is compiled with MACCATALYST against stand-ins (tests/regression/ch010/):
-# three web views attached, one Cmd+=, all three must be at 110%.
+# one static WKWebView: built on stand-ins (ch010/), one Cmd+= must zoom three web views to 110%.
 ch_010() {
   local dn; dn="$(command -v dotnet || command -v dotnet.exe || { [[ -x "/mnt/c/Program Files/dotnet/dotnet.exe" ]] && echo "/mnt/c/Program Files/dotnet/dotnet.exe"; })"
-  [[ -z "$dn" ]] && { printf 'skip ch_010 — dotnet is not installed here\n'; return; }
+  [[ -z "$dn" ]] && { printf 'skipped: ch_010 — needs dotnet\n'; return; }
   local d="$SCRATCH/ch010"; mkdir -p "$d"
   cp "$ROOT/tests/regression/ch010/"* "$d/"; cp "$UTILS/../standards/blazor-zoom.cs.txt" "$d/BlazorZoom.cs"
   local v; v="$("$dn" --version 2>/dev/null | cut -d. -f1 | tr -dc 0-9)"
-  [[ -z "$v" || "$v" -lt 8 ]] && { printf 'skip ch_010 — no .NET 8 or later SDK here\n'; return; }
-  local out; out="$(cd "$d" && tf_timeout 300 "$dn" run -v q -p:TargetFramework="net$v.0" 2>&1 | tail -1 | tr -d '\r')"
+  [[ -z "$v" || "$v" -lt 8 ]] && { printf 'skipped: ch_010 — needs a .NET 8 or later SDK\n'; return; }
+  tf_sed_inplace "s#<TargetFramework>[^<]*<#<TargetFramework>net$v.0<#" "$d/Proof.csproj"   # not -p: (restore)
+  local out; out="$(cd "$d" && tf_timeout 300 "$dn" run -v q 2>&1 | tail -1 | tr -d '\r')"
   [[ "$out" == "1.1 1.1 1.1" ]] \
     && ok ch_010 "Cmd+= zooms every attached window's web view, not only the last one opened" \
     || bad ch_010 "zoom after three windows and one Cmd+=: got '$out' (want '1.1 1.1 1.1')"
@@ -4930,7 +4929,7 @@ ch_010() {
 # built app passes both. Also: tf-triage new counted the next id in one checklist and gave REQ-UI-055 twice.
 ch_011() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip ch_011 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: ch_011 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/ch011"; mkdir -p "$d"
   bash "$ROOT/tests/regression/ch011/make.sh" "$d"
   ln -sfn "$pw/node_modules" "$d/node_modules"
@@ -4991,7 +4990,7 @@ for v in ('bad', 'good'):
 # also known by its shape. An unticked item that does nothing is still reported.
 ch_020() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip ch_020 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: ch_020 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/ch020"; mkdir -p "$d"
   bash "$ROOT/tests/regression/ch020/make.sh" "$d"
   ln -sfn "$pw/node_modules" "$d/node_modules"
@@ -5057,7 +5056,7 @@ PY
 # is still empty.
 ch_009() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip ch_009 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: ch_009 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/ch009" s
   mkdir -p "$d/docs/mockups"
   local css='<style>body{margin:0;font:14px/20px system-ui;padding:16px} .track{width:300px;height:8px;background:#eee}</style>'
@@ -5094,7 +5093,7 @@ for s in json.load(open('$d/screens.json'))['screens']: print(s['name'], s['rend
 # runs per theme too. An app with no dark theme is graded in light only, with nothing invented.
 lk_024() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip lk_024 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: lk_024 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/lk024"; mkdir -p "$d/site/studio" "$d/site/plain" "$d/docs/mockups"
   local base='body{margin:0;font:16px/24px system-ui} .card{padding:16px;margin:16px;width:600px;height:240px;border-radius:8px} .muted{color:#666}'
   # the app: a dark theme on data-theme whose card forgot its dark colours, and a disabled button
@@ -5144,7 +5143,7 @@ print(s['verdict'], ','.join(s.get('themes', [])), '|'.join(w.get('colour_not_co
 # pass, and the app is left as the viewer had it.
 lk_025() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip lk_025 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: lk_025 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/lk025"; mkdir -p "$d/site" "$d/docs/mockups"
   local css='body{margin:0;font:14px/20px system-ui} .badge{display:inline-block;border-radius:8px;padding:2px 8px;height:20px;color:#fff}
 [data-site-theme="fluent-modern"] .badge{background:#2563eb} [data-site-theme="minimal"] .badge{background:#6b7280}'
@@ -5291,7 +5290,7 @@ PY
 # Found while fixing Lekhak TF-025. This app breaks the page the moment it is put in dark mode.
 lk_025e() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip lk_025e — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: lk_025e — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/lk025e"; mkdir -p "$d/site/leaves" "$d/docs/mockups"
   local css='body{margin:0;font:16px/24px system-ui;padding:24px;background:#fff;color:#111} .btn{border:0;padding:8px 16px;color:#fff;border-radius:6px;background:#2563eb}
 [data-theme="dark"] body{background:#111;color:#eee}'
@@ -5475,7 +5474,7 @@ JS
 # *build-phase asked the owner to install Xcode 26.6. tf-build.sh now runs the rung once more with the
 # check off and says so in a note line. A stand-in dotnet plays the SDK here; macOS only.
 lk_032() {
-  if [[ "$(uname -s)" != Darwin ]]; then printf 'skip lk_032 — the Xcode check is a Mac host matter\n'; return; fi
+  if [[ "$(uname -s)" != Darwin ]]; then printf 'skipped: lk_032 — needs a Mac (the Xcode check)\n'; return; fi
   local d="$SCRATCH/lk032"; mkdir -p "$d/bin" "$d/src/App"
   echo '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0-maccatalyst</TargetFramework></PropertyGroup></Project>' > "$d/src/App/App.csproj"
   cat > "$d/bin/dotnet" <<'SH'
@@ -5639,7 +5638,7 @@ lk_014() {
 # neutral". The class must follow the mockup too, and be back on the app when the check ends.
 lk_013() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip lk_013 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: lk_013 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/lk013"; mkdir -p "$d/site" "$d/docs/mockups"
   local css='body{margin:0;font:14px/20px system-ui} .badge{display:inline-block;border-radius:8px;padding:2px 8px;height:20px;color:#fff}
 [data-theme="light"] .badge{background:#2563eb} html.dark .badge{background:#555} html.dark body{background:#111;color:#eee}'
@@ -5676,7 +5675,7 @@ import('playwright').then(async ({chromium}) => { const b = await chromium.conne
 # --- Lekhak TF-011: a state-only box first in a card shifted every positional key below it -------
 lk_011() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip lk_011 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: lk_011 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/lk011"; mkdir -p "$d/site/conn" "$d/site/conn2" "$d/docs/mockups"
   local css='<style>body{margin:0;font:14px/20px system-ui} .alert{border:1px solid #c00;padding:8px} .badge{display:inline-block;border-radius:8px;background:#2563eb;color:#fff;padding:2px 8px;height:20px}</style>'
   local row='<div class="row">Host <span class="badge">localhost</span></div><div class="row">Port <span class="badge">5432</span></div>'
@@ -6107,7 +6106,7 @@ print(r.get('tokens_scope'), r.get('tokens_out'), r.get('subagent_runs'), r.get(
 # `dark` whenever no light/dark class is on the page, and the restore takes it off again.
 lk_033() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip lk_033 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: lk_033 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/lk033"; mkdir -p "$d"
   ln -sfn "$pw/node_modules" "$d/node_modules"
   cp "$UTILS/tf-theme.mjs" "$d/"
@@ -6189,7 +6188,7 @@ MD
 # counts as drawn, the two kinds are not compared by border, and an unpainted empty box is still empty.
 lk_035() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip lk_035 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: lk_035 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/lk035" s
   mkdir -p "$d/docs/mockups"
   local css='<style>body{margin:0;font:14px/20px system-ui;padding:16px} .cb{width:16px;height:16px;border:1px solid #888;border-radius:3px;background:#fff;padding:0}</style>'
@@ -6368,7 +6367,7 @@ print(s['verdict'], ','.join(s.get('themes', [])), '|'.join(f['key'] + (' in ' +
 }
 
 sv_007() {
-  if [[ -z "$(_pw_dir)" ]]; then printf 'skip sv_007 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$(_pw_dir)" ]]; then printf 'skipped: sv_007 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/sv007"; mkdir -p "$d/site/wizard" "$d/docs/mockups"
   # Sevak's setup wizard: the selected provider row fades over .12s (here 3s, so the old read lands in it)
   local css='body{margin:0;font:14px/20px system-ui} .radio-row{display:block;padding:8px;border:1px solid #c7d2fe} .radio-row.selected{background:rgb(238,242,255)} [data-theme="dark"] body{background:#111;color:#eee} [data-theme="dark"] .radio-row.selected{background:rgb(35,42,77)}'
@@ -6384,7 +6383,7 @@ sv_007() {
 }
 
 sv_010() {
-  if [[ -z "$(_pw_dir)" ]]; then printf 'skip sv_010 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$(_pw_dir)" ]]; then printf 'skipped: sv_010 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/sv010"; mkdir -p "$d/site/welcome" "$d/docs/mockups"
   local css='body{margin:0;font:14px/20px system-ui} .badge{display:inline-block;border-radius:9px;padding:2px 8px;height:20px;color:#fff} .ok{background:#16a34a} .no{background:#dc2626} .info{background:#2563eb} .grey{background:#6b7280} [data-theme="dark"] body{background:#111;color:#eee}'
   # the welcome screen: "can it run" follows this PC (sample), the licence badge does not
@@ -6542,7 +6541,7 @@ _mac_run() {   # <dir> <fixture: opaque|signin> : screens.json from the Mac head
   kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
 }
 ch_016() {
-  if ! command -v node >/dev/null 2>&1; then printf 'skip ch_016 — node is not installed here\n'; return; fi
+  if ! command -v node >/dev/null 2>&1; then printf 'skipped: ch_016 — needs node\n'; return; fi
   local d="$SCRATCH/ch016" out s
   out="$(_mac_run "$d" opaque)"
   s="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); r={x["name"]:x["render"] for x in d["screens"]}; print(r.get("Sign in"), r.get("Settings"), (d.get("login") or {}).get("driven"))' "$d/tests/.artifacts/verify/screens.json" 2>&1)"
@@ -6579,7 +6578,7 @@ PY
     || { bad ch_016c "the verdict graded the Mac head's unmeasured screen wrong ($emit)"; note "$(grep '^| REQ-UI-10' "$cl" | cut -c1-220 | tr '\n' ' ')"; }
 }
 sv_014() {   # the same fault on Sevak's Mac Blazor Hybrid head: the first-run screen's buttons carry no label
-  if ! command -v node >/dev/null 2>&1; then printf 'skip sv_014 — node is not installed here\n'; return; fi
+  if ! command -v node >/dev/null 2>&1; then printf 'skipped: sv_014 — needs node\n'; return; fi
   local d="$SCRATCH/sv014" out s; out="$(_mac_run "$d" opaque)"; rc=$?
   s="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["summary"]["unreachable"], d["summary"]["not_measured"])' "$d/tests/.artifacts/verify/screens.json" 2>&1)"
   [[ "$s" == "0 1" ]] \
@@ -7087,7 +7086,7 @@ _cdp_copy() {   # <dir>: the shipped browser scripts, run where playwright resol
 # previous page. Here every route change draws 4 s late.
 lk_037() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip lk_037 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: lk_037 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/lk037"; _cdp_app "$d" slow; _cdp_copy "$d"
   # --render-wait 20000: the page draws 4 s late and the default wait is 5 s; the case proves the wait, not
   # its default length. That was not why lk_037b failed twice in five full runs on 2026-11-10, though: the
@@ -7151,7 +7150,7 @@ except Exception as e: print('no-output', e)" 2>&1)"
 # defect of the screen. requestAnimationFrame never calls back here, as on Sevak's minimized window.
 sv_011() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip sv_011 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: sv_011 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/sv011"; _cdp_app "$d" frozen; _cdp_copy "$d"
   ( cd "$d" && tf_timeout 180 node tf-verify-screens.mjs --cdp "http://127.0.0.1:$CDP_PORT" --screen aisetup=/ai-setup \
       --widths 1280 --themes light --json-out "$d/screens.json" >/dev/null 2>&1 )
@@ -7193,7 +7192,7 @@ J
 # email field found on the sign-in page", and no screen behind sign-in was driven.
 ch_019() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip ch_019 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: ch_019 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/ch019"; mkdir -p "$d/docs/mockups"
   printf '<!doctype html><html><body><h1 data-testid="page-title">Projects</h1><p>Your projects.</p></body></html>\n' > "$d/docs/mockups/projects.html"
   cat > "$d/server.py" <<'PY'
@@ -7242,7 +7241,7 @@ except Exception as e: print('no-output', e)" 2>&1)"
 # neutral" on a note plainly the same. A translucent colour is now blended over what is behind it. A
 # strong translucent tint (rgba(…,.9)) is still accent, so a real colour difference is still found.
 tf_056() {
-  if [[ -z "$(_pw_dir)" ]]; then printf 'skip tf_056 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$(_pw_dir)" ]]; then printf 'skipped: tf_056 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/tf056p"; mkdir -p "$d/site/prices" "$d/docs/mockups"
   local css='body{margin:0;font:14px/20px system-ui} .card{background:#fff;padding:12px} .note{display:block;padding:8px}'
   local body='<div class="card" data-testid="prices"><h1>Prices</h1><p data-testid="prices-standing-note" class="note">Prices are read daily.</p><p data-testid="prices-strong" class="note strong">Strong</p></div>'
@@ -7405,7 +7404,7 @@ TS
 # submenu changes nothing outside the menus, so the walk read it as dead and failed every main-window screen.
 ch_022() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip ch_022 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: ch_022 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/ch022"; mkdir -p "$d"
   bash "$ROOT/tests/regression/ch022/make.sh" "$d"
   ln -sfn "$pw/node_modules" "$d/node_modules"
@@ -7430,7 +7429,7 @@ print(' | '.join(f['detail'] for w in s['widths'] for f in w['findings']))" 2>&1
 # a move to another page, so the mockup check read the scrolled page and reported the top bar "cut off".
 lk_038() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip lk_038 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: lk_038 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/lk038"; _cdp_app "$d" scrolled; _cdp_copy "$d"
   ( cd "$d" && tf_timeout 180 node tf-mockup-parity.mjs --cdp "http://127.0.0.1:$CDP_PORT" --mockups docs/mockups --screen studio=/studio \
       --widths 1280 --themes light --no-menus --json-out "$d/parity.json" >/dev/null 2>&1 )
@@ -7815,7 +7814,7 @@ SH
 # around it. An icon on an ordinary control that the mockup does not carry is still reported.
 sv_023() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip sv_023 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: sv_023 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/sv023"
   mkdir -p "$d/docs/mockups" "$d/site/import"
   local css='<style>body{margin:0;font:14px/20px system-ui;padding:16px;background:#fff;color:#111} .card{border:1px solid #ccc;border-radius:8px;padding:12px;width:600px} .cb{width:16px;height:16px;border:1px solid #4f46e5;border-radius:4px;background:#4f46e5;color:#fff;padding:0;display:inline-flex} .sw{width:32px;height:18px;border:0;border-radius:9px;background:#4f46e5;padding:2px} .sw span{display:block;width:14px;height:14px;border-radius:7px;background:#fff}</style>'
@@ -7851,7 +7850,7 @@ for s in json.load(open('$d/parity.json'))['screens']:
 # A control that is on view and really has no width is still reported.
 sv_024() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip sv_024 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: sv_024 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/sv024" s
   mkdir -p "$d/docs/mockups" "$d/site/library" "$d/site/squeezed"
   local css='<style>body{margin:0;font:14px/20px system-ui;background:#fff;color:#111} .shell{display:flex;gap:16px;padding:16px} main{flex:1} .pane{width:320px;border:1px solid #ccc;padding:12px} @media (max-width:1100px){.pane{display:none}}</style>'
@@ -7965,7 +7964,7 @@ print(sum(1 for f in glob.glob('$v/boot-9*.json') if json.load(open(f)).get('sto
 # read by both checks: not owed while the phase graded is lower than n, owed from phase n on.
 sv_018() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip sv_018 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: sv_018 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/sv018"
   mkdir -p "$d/docs/mockups" "$d/site/today"
   local css='<style>body{margin:0;font:14px/20px system-ui;background:#fff;color:#111;padding:16px} nav a{display:block;padding:6px 0} .badge{display:inline-block;padding:2px 10px;border-radius:10px;background:#e0e7ff;color:#3730a3} .pane{border:1px solid #ccc;border-radius:8px;padding:12px;width:320px}</style>'
@@ -8015,7 +8014,7 @@ PY
 # data-tf-overlay is left out of the overlap check. Two unmarked controls on top of each other still fail.
 sv_019() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip sv_019 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: sv_019 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/sv019" s
   mkdir -p "$d/docs/mockups" "$d/site/rail" "$d/site/clash"
   local css='<style>body{margin:0;font:14px/20px system-ui;background:#fff;color:#111} .side{position:absolute;left:0;top:0;width:240px;height:400px;background:#f3f4f6} .rail{position:absolute;left:232px;top:0;width:16px;height:400px;border:0;background:transparent;padding:0} main{margin-left:280px;padding:16px} .a{position:absolute;left:300px;top:200px;width:120px;height:32px} .b{position:absolute;left:360px;top:210px;width:120px;height:32px}</style>'
@@ -8141,7 +8140,7 @@ codex_keep() {
     printf 'the adapter rules\n' > "$d/.codex/rules/techieflow.rules"
     if [[ "$route" == shell ]]; then out="$(bash "$ROOT/update-framework.sh" "$d" 2>&1)"
     else
-      if ! command -v node >/dev/null 2>&1; then printf 'skip codex_keep_npm — node is not installed here\n'; rm -rf "$d"; continue; fi
+      if ! command -v node >/dev/null 2>&1; then printf 'skipped: codex_keep_npm — needs node\n'; rm -rf "$d"; continue; fi
       out="$(cd "$d" && node "$ROOT/scripts/install.mjs" update --target="$d" 2>&1)"
     fi
     left="$(cd "$d" && find .codex -type f 2>/dev/null | sort | tr '\n' ' ')"
@@ -8194,7 +8193,7 @@ goal_guard() {
 # A way in that opened a submenu now stands for the rows of that submenu. The clicks below are the shape
 # Chatur's screens.json held; reachability() is a pure function, so no browser is needed.
 ch_023() {
-  if ! command -v node >/dev/null 2>&1; then printf 'skip ch_023 — node is not installed here\n'; return; fi
+  if ! command -v node >/dev/null 2>&1; then printf 'skipped: ch_023 — needs node\n'; return; fi
   local d="$SCRATCH/ch023"; mkdir -p "$d"; cp "$UTILS/tf-menus.mjs" "$d/"
   local out; out="$(cd "$d" && node --input-type=module -e "
 import { reachability } from './tf-menus.mjs';
@@ -8223,7 +8222,7 @@ console.log(JSON.stringify([a.Start && a.Start.reached, a.Start && a.Start.by, b
 # (tests/regression/ch025/make.sh), so the last line of the log is the branch the walk left it on.
 ch_025() {
   local pw; pw="$(_pw_dir)"
-  if [[ -z "$pw" ]]; then printf 'skip ch_025 — playwright is not installed here (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
+  if [[ -z "$pw" ]]; then printf 'skipped: ch_025 — needs playwright (set TF_PLAYWRIGHT_DIR=<a repo that has it>)\n'; return; fi
   local d="$SCRATCH/ch025"; mkdir -p "$d"
   bash "$ROOT/tests/regression/ch025/make.sh" "$d"
   ln -sfn "$pw/node_modules" "$d/node_modules"
@@ -8293,7 +8292,8 @@ SH
 echo "# tests/regression — the unhappy path, one case per defect a real project found"
 for t in tf_013 tf_014 tf_015 tf_016 tf_017 tf_018 tf_019 tf_020 tf_021 tf_022 tf_024 tf_025 tf_026 tf_027 tf_028 tf_029 tf_030 tf_031 tf_032 tf_034 tf_035 tf_036 tf_037 tf_038 tf_040 tf_041 tf_042 tf_043 tf_044 tf_045 tf_046 tf_047 tf_048 tf_049 tf_050 tf_051 tf_052 tf_053 tf_054 tf_055 tf_056 fw_001 fw_002 am_001 am_002 am_003 am_004 am_005 am_006 am_007 am_008 am_009 am_010 am_011 am_012 am_013 am_014 am_015 am_016 am_017 am_018 am_019 am_020 am_021 am_022 am_023 am_024 am_025 am_026 am_027 am_028 am_029 am_030 ch_render ch_001 ch_002 ch_003 ch_004 ch_005 ch_006 ch_007 ch_008 ch_009 ch_010 ch_011 ch_012 ch_013 ch_014 ch_015 ch_016 ch_017 ch_018 ch_019 ch_020 ch_021 ch_022 ch_023 ch_024 ch_025 sv_001 sv_002 sv_003 sv_004 sv_005 sv_006 sv_007 sv_008 sv_009 sv_010 sv_011 sv_012 sv_013 sv_014 sv_015 sv_016 sv_017 sv_018 sv_019 sv_021 sv_022 sv_023 sv_024 md_001 tb_001 tb_002 tb_003 tb_004 tb_005 tb_006 bl_001 bl_002 bl_003 bl_004 lk_001 lk_002 lk_004 lk_005 lk_006 lk_007 lk_008 lk_010 lk_011 lk_012 lk_013 lk_014 lk_015 lk_016 lk_017 lk_018 lk_019 lk_020 lk_021 lk_022 lk_023 lk_024 lk_025 lk_025e lk_026 lk_027 lk_028 lk_029 lk_030 lk_032 lk_033 lk_034 lk_035 lk_036 lk_037 lk_038 lk_039 tr_001 tr_002 tr_003 tr_004 tr_005 tr_006 tr_008 tr_009 tr_010 std_q4a owner_handoff harness_env feedback_state replies_complete status_stale gitignore_once codex_keep goal_guard dev_001 dev_002 dev_003 oc_v2 tf_void tf_overlap rm_wipe yolo_perms tfyolo tf_ledger guard_reads tf_selfcheck clock_readers; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
-  "$t"
+  "$t" > "$SCRATCH/case.out" 2>&1; cat "$SCRATCH/case.out"; grep '^skipped:' "$SCRATCH/case.out" >> "$SCRATCH/skipped"
 done
+k="$(grep -c . "$SCRATCH/skipped" 2>/dev/null)"; [[ "${k:-0}" -gt 0 ]] && echo "# ${k} case(s) skipped, counted as skipped and not as passed: $(sed -E 's/^skipped: ([^ ]+) — needs ([^(]*[^ (]).*/\1 (\2)/' "$SCRATCH/skipped" | paste -s -d ' ' -)"
 [[ $fail -eq 0 ]] && echo "# all regression cases hold" || echo "# regression cases FAILED"
 exit $fail

@@ -18,6 +18,8 @@
 #   Only on the turn that wrote PROJECT-STATUS.md (a command's closing turn):
 #   5. tf-owner-text.sh FAILs on the closing message or a free-form document it
 #      hands the owner                                  -> rewrite it for the owner
+#   6. a miss of this command whose finding cost is "not measured" is not named in the
+#      closing message (tf-discovery-gate.py)           -> name it
 #
 # Wired in .claude/settings.json -> hooks.Stop; OpenCode via
 # .opencode/plugin/techieflow.js session.idle (a nudge: OpenCode has no blocking
@@ -99,9 +101,7 @@ if written_this_session:
     except Exception:
         pass
 
-    # 2b. the checker passes on every checklist written this session. Until 2026-09-06 only
-    # PROJECT-STATUS was checked here, so a build closed its gate with three Remarks cells over
-    # 60 words in the checklist and nothing refused the stop (MISS-TechieFlow-20260906-06).
+    # 2b. the checker passes on every checklist written this session (MISS-TechieFlow-20260906-06).
     try:
         chk = os.path.join(root, ".tfcore", "utils", "tf-doc-check.sh")
         if os.path.isfile(chk):
@@ -118,11 +118,8 @@ if written_this_session:
     except Exception:
         pass
 
-    # 2c. a screen is not finished until it has its row, its UI design entry and its mockup. An
-    # amendment added a Price providers screen inside a requirement with none of the three, the
-    # checker's one finding was on the checklist and passed as old, and the page was built with no
-    # design (TfLens TF-030, 2026-09-11). On a turn that wrote a BRD or a UI design, those findings
-    # block; a BRD's other findings stay with *amend-docs, as before.
+    # 2c. a screen is not finished until it has its row, its UI design entry and its mockup (TfLens TF-030):
+    # on a turn that wrote a BRD or a UI design those findings block; a BRD's others stay with *amend-docs.
     try:
         chk = os.path.join(root, ".tfcore", "utils", "tf-doc-check.sh")
         chain = re.compile(r'names the screen "|has no "### Screen:" entry|is in the UIDesign but not in the BRD'
@@ -179,13 +176,10 @@ if written_this_session:
     except Exception:
         pass
 
-    # 5. what the owner reads when a command ends: the closing message, and every free-form
-    # document it hands over that this turn wrote, through tf-owner-text.sh. TfLens's hand-off of
-    # 2026-09-11 reached the owner in jargon, named upstream problems with no word on what they
-    # touch, called two fixed ones open, and gave no prompt (MISS-TechieFlow-20260911-03). Only on
-    # the turn that closed a command -- PROJECT-STATUS written after this turn's prompt -- so an
-    # ordinary conversation is never held to a hand-off's shape. Claude Code hands the hook the
-    # message; the OpenCode plugin passes the same two fields.
+    # 5. what the owner reads when a command ends: the closing message, and every free-form document it
+    # hands over that this turn wrote, through tf-owner-text.sh (MISS-TechieFlow-20260911-03). Only on the
+    # turn that closed a command (PROJECT-STATUS written after this turn's prompt). Claude Code hands the
+    # hook the message; the OpenCode plugin passes the same two fields.
     try:
         message = data.get("last_assistant_message") or ""
         turn = data.get("turn_started")
@@ -221,6 +215,12 @@ if written_this_session:
                                 "Fix each, then write the closing message again — plain words, every upstream problem "
                                 "with what it affects and its prompt, and the next prompt in a code block:")
                 problems.extend("  " + l for l in fails[:8])
+        # 6. a miss whose finding cost reads "not measured" is named in the closing message (owner, 14 Nov 2026)
+        chk6 = os.path.join(root, ".tfcore", "utils", "tf-discovery-gate.py")
+        if message.strip() and turn and md_mtime >= turn - 2 and os.path.isfile(chk6):
+            res = subprocess.run(["python3", chk6, "--root", root, "--since", str(start)], cwd=root,
+                                 input=message, capture_output=True, text=True, timeout=30)
+            problems.extend(l for l in res.stdout.splitlines() if l.strip())
     except Exception:
         pass
 

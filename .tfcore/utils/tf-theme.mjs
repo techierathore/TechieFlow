@@ -234,3 +234,108 @@ export const markLaterPhase = (page, phase) => (phase === null || phase === unde
     }
     return n;
   }, phase).catch(() => 0));
+
+// ---- the mockup check's site theme: read from the mockup, put on the app, put back (tf-mockup-parity.mjs) ----
+// The theme a page declares: data-* attributes on <html> and <body> whose name says theme, mode or
+// scheme (data-theme, data-bs-theme, data-site-theme, data-color-mode …), and the class tokens there
+// that name a light or dark mode (dark, light, theme-dark, dark-mode …), which a class-driven dark mode
+// such as Tailwind's `dark` uses. A utility class such as bg-light does not count.
+// Nothing about any one stack. The class tokens are kept under `<where>|class`, '' when there are none.
+export const READ_THEME = () => {
+  const MODE = /^(?:(?:theme|mode|scheme|color)[-_])?(?:dark|light)(?:[-_](?:theme|mode|scheme))?$/i;
+  const out = {};
+  for (const [where, el] of [['html', document.documentElement], ['body', document.body]]) {
+    if (!el) continue;
+    for (const a of el.attributes) if (/^data-.*(theme|mode|scheme)/i.test(a.name)) out[`${where}|${a.name}`] = a.value;
+    out[`${where}|class`] = [...el.classList].filter((c) => MODE.test(c)).join(' ');
+  }
+  return out;
+};
+// A page declares a theme when it has such an attribute or mode class. A mockup that declares none
+// leaves the app as it is.
+export const DECLARES_THEME = (t) => !!t && Object.entries(t).some(([k, v]) => !k.endsWith('|class') || v);
+// Sets those attributes and mode classes on this page; returns what it had, so the same call puts it
+// back. An attribute the page lacked is removed again on the way back (value null). For `|class` the
+// page's own mode tokens are replaced by the given ones; every other class is left alone.
+export const APPLY_THEME = (t) => {
+  const MODE = /^(?:(?:theme|mode|scheme|color)[-_])?(?:dark|light)(?:[-_](?:theme|mode|scheme))?$/i;
+  const before = {}; let changed = false;
+  for (const [k, v] of Object.entries(t || {})) {
+    const [where, name] = k.split('|');
+    const el = where === 'body' ? document.body : document.documentElement;
+    if (!el) continue;
+    if (name === 'class') {
+      const had = [...el.classList].filter((c) => MODE.test(c));
+      const want = String(v || '').split(/\s+/).filter(Boolean);
+      before[k] = had.join(' ');
+      if (had.slice().sort().join(' ') !== want.slice().sort().join(' ')) changed = true;
+      for (const c of had) el.classList.remove(c);
+      for (const c of want) el.classList.add(c);
+      continue;
+    }
+    const had = el.getAttribute(name);
+    before[k] = had;
+    if (had !== v) changed = true;
+    if (v === null) el.removeAttribute(name); else el.setAttribute(name, v);
+  }
+  return { before, changed };
+};
+
+// ---- the screen check's mockup helper (tf-verify-screens.mjs) ----
+import { pathToFileURL } from 'node:url';
+// The anchors a mockup HIDES at one width and shows at another: a sidebar that becomes a slide-out
+// menu on a phone is not owed at 390px. Worked out by drawing the mockup itself at each width. An
+// anchor the mockup hides at every width -- a closed dialog -- is still owed. None is excused when
+// the mockup cannot be drawn.
+export async function hiddenByWidth(b, mockup, anchors, WIDTHS, ATTR) {
+  const out = {};
+  if (!b || !mockup || !tfExists(mockup) || !anchors || !anchors.length) return out;
+  const shown = {};
+  for (const width of WIDTHS) {
+    let ctx;
+    try {
+      ctx = await b.newContext({ viewport: { width, height: width < 600 ? 844 : 800 } });
+      const p = await ctx.newPage();
+      await p.goto(pathToFileURL(mockup).href, { waitUntil: 'load', timeout: 15000 });
+      shown[width] = await p.evaluate(({ anchors, attr }) => anchors.filter((id) => {
+        const el = document.querySelector(`[${attr}="${CSS.escape(id)}"]`);
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        const seen = el.checkVisibility ? el.checkVisibility({ visibilityProperty: true, opacityProperty: true }) : true;
+        return seen && r.width > 0 && r.height > 0;
+      }), { anchors, attr: ATTR });
+    } catch (e) { return {}; } finally { if (ctx) await ctx.close().catch(() => {}); }
+  }
+  const everShown = new Set(Object.values(shown).flat());
+  for (const width of WIDTHS) out[width] = anchors.filter((id) => everShown.has(id) && !shown[width].includes(id));
+  return out;
+}
+
+// The anchors a mockup marks as belonging to another state of the screen: a reason
+// shown only while the database is down, a result shown only after "Test". The mockup says so with
+// data-tf-state="<state>" (or data-state-testid="<id>") on the control or on a box around it. Such a control is not owed on the
+// first view; when it is drawn and visible it is graded like any other. A control on a box marked
+// data-tf-sample (a sample row a fresh app has no data for) is treated the same way.
+export async function stateOnlyOf(b, mockup, anchors, PHASE, ATTR) {
+  if (!mockup || !tfExists(mockup) || !anchors || !anchors.length) return [];
+  if (b) {
+    let ctx;
+    try {
+      ctx = await b.newContext();
+      const p = await ctx.newPage();
+      await p.goto(pathToFileURL(mockup).href, { waitUntil: 'load', timeout: 15000 });
+      await markLaterPhase(p, PHASE);   // a later phase's control is another state until its phase
+      return await p.evaluate(({ anchors, attr }) => anchors.filter((id) => {
+        const el = document.querySelector(`[${attr}="${CSS.escape(id)}"]`);
+        return !!el && !!el.closest('[data-tf-state],[data-state-testid],[data-tf-sample]');
+      }), { anchors, attr: ATTR });
+    } catch (e) { /* fall through to the mark on the control itself */ } finally { if (ctx) await ctx.close().catch(() => {}); }
+  }
+  const html = tfRead(mockup, 'utf8');
+  const later = (id) => {   // data-tf-phase on the control's own tag, read without a browser
+    const m = html.match(new RegExp(`<[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*>`));
+    const ph = m && m[0].match(/\bdata-tf-phase\s*=\s*["']?(\d+)/);
+    return !!ph && PHASE !== null && parseInt(ph[1], 10) > PHASE;
+  };
+  return anchors.filter((id) => later(id) || new RegExp(`<[^>]*\\bdata-(?:tf-state|state-testid|tf-sample)\\b[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']|<[^>]*\\b${ATTR}\\s*=\\s*["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*\\bdata-(?:tf-state|state-testid|tf-sample)\\b`).test(html));
+}

@@ -44,6 +44,53 @@ a new telemetry stream, so a minor version (owner, 2026-11-08).
   - Suite: `tests/estimate/run.sh` (19 cases: enough history, family fallback, no precedent, the refusals,
     the model, the reconciliation). DECISIONS.md 2026-11-08 says why estimates have their own stream.
 
+- **Ten faults of 14 Nov from three projects, and the failed Linux CI of `0c8158f` (2026-11-14, evening;
+  deployed to Chatur, Sevak, TfLens, AppManager, AstroLyfe and TechieRag; not Lekhak, where a session was running,
+  nor TrStudio).** Each fault
+  has a case in `tests/faults/run.sh` that fails on the scripts of the last commit and passes now, with a control
+  half. Proved on fixtures; `scripts/measure-projects.py --base HEAD`: no row verdict, test or document finding
+  moves in 13 projects; the browser-side scripts that changed need a running app and were not measured.
+  - Lekhak TF-042 (`lk_042`): the check draws the app in the mockup's site theme; Lekhak's mockups say
+    fluent-modern, the app runs minimal, so its buttons had a 6 px corner there. A button or link is now a pill only
+    when fully rounded; every shape and colour finding prints both measured values and the site theme the app
+    was drawn in. No model reads either page; the clause rules are fixed code rules.
+  - Chatur TF-030 / TF-027 reopened (`ch_030`, the Board's own shape): a box's controls inside another state
+    (a mockup's open list) or `aria-hidden` are not counted when deciding trigger or picker. `ch_027` had drawn the
+    popwrap without its open list.
+  - Chatur TF-029 = Sevak TF-037 (`ch_029`): `tf-build.sh` escapes extra arguments for cmd.exe (`^`) and quotes
+    them for PowerShell and winrun; a shell that cuts one is reported, no other rung tried; a WSL rung on a tree
+    the Windows side builds removes the restore files it wrote. Proved on this machine's real cmd.exe and
+    powershell.exe.
+  - Chatur TF-031 (`ch_031`), Lekhak TF-041 (`lk_041`), Sevak TF-038 (`sv_038`): `tf-dropdowns.mjs` grades
+    wrapped options in a list narrower than the window, opens menu-built pickers outside a menu bar, measures
+    every native select (Lekhak's `cutSelects` rule), opens `aria-haspopup="dialog"` triggers and grades the
+    pickers inside, names mockup pickers in another state that no click reached, and each screen's JSON and
+    line say how many lists were opened.
+  - Lekhak TF-040 (`lk_040`): a screen failed on console errors alone is opened again and charged only the errors
+    that come back (`console_once` keeps the rest); an EMPTY screen on a desktop head is measured once more.
+    The cause on the head was not found; Chromium's console replay (Lekhak's guess) is not reproduced by stock
+    Chromium. The mockup check's half of TF-040 is still open.
+  - Sevak TF-036 (`sv_036`): `miss_class` is replaced by a correction with a reason (SCHEMA §5.5.7); the amend
+    check moved to `tf-amend.py`; `--open-miss`, the report and the miss list read the corrected class.
+  - Owner item 9 (`find_cost`; Lekhak TF-043, Chatur TF-032): the status gate (`tf-discovery-gate.py`, Stop hook
+    check 6) names every miss of the closing command whose finding cost is "not measured" until the closing
+    message says so. Chosen over an automatic mark: no script sees when an agent moves to the next problem.
+  - Owner item 10 (`verify_mark`; Chatur TF-033): `tf-verify-list.sh` marks a verify that skipped step 0; the emit
+    records from that mark and ends it; a verify with no mark gets no run record. Its program moved to
+    `tf-verify-emit.py`.
+  - Size limits held by moving code, not raising ceilings: theme and mockup helpers to `tf-theme.mjs`, the
+    duplicate render wait to `tf-login.mjs`, the amend check and the verify emit program to their own files.
+  - **CI of `0c8158f`**: the Linux job's only real failure was `ch_010`. `dotnet run -p:TargetFramework=net<N>.0`
+    restores for the project file's `net10.0` and then cannot build net<N>.0 (NETSDK1005), so the case passed only
+    where the newest SDK is 10; the runner's is older. The case now writes the target into its copied project.
+    FR-69, 72 to 77 and 85 failed with it because `tests/requirements` grades every line whose check names
+    `tests/regression/run.sh` by one run of the whole regression suite. Skip lines in the regression and faults
+    suites now read `skipped: <case> — needs <what>` and each suite ends with the count of skipped cases.
+  - Found while reproducing CI: `tests/requirements/run.sh` ran each check with the FR list still on its stdin, and
+    the regression suite read it, so FR-27 to FR-72 were never graded or printed. Checks now get no stdin, and the
+    runner fails when it reports fewer FR lines than the document has. `sv_005`'s fixture gets the start mark step 0
+    writes (it had none, which the verify's own mark of item 10 now notices); its assertion is unchanged.
+
 - **Ten faults of 13 Nov from five projects (2026-11-14; deployed to Chatur, Sevak, Lekhak, TfLens, AppManager,
   AstroLyfe and TechieRag).** Each has a case in `tests/faults/run.sh` that fails on the scripts of the last
   commit and passes now, with a control half that shows a real finding is still reported. Proved on fixtures;

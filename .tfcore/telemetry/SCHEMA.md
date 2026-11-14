@@ -654,6 +654,13 @@ bash .tfcore/utils/tf-emit.sh --amend MISS-App-20261112-21 why_missed none "the 
 
 Readers apply amendments in time order: a plain amend fills a `null`, a correction replaces whatever is there. `tf-metrics.sh` and `tf-misses-md.py` do; a reader that ignores `reason` keeps the first value, which is the stream's state before the correction.
 
+**`miss_class` by correction only (added 2026-11-14, Sevak TF-036).** A miss logged with the wrong class (a test that failed on a right app, logged `regression` because the duplicate check would have folded it into an open `wrong-behaviour` miss) had no way back but voiding it and logging it again, which gave it a new id and a second fix cost. `miss_class` may now be **replaced by a correction**, with a reason, to a value of §5.5.1's `miss_class` vocabulary. It is never filled by a plain amend and never cleared (`none` is refused): every miss has a class. `--open-miss`, `tf-metrics.sh` and `tf-misses-md.py` read the corrected class. The check lives in `tf-amend.py` and again in the emitter's `_amend_ok`.
+
+```bash
+bash .tfcore/utils/tf-emit.sh --amend MISS-App-20261113-05 miss_class wrong-behaviour "a test that failed on a right app is a wrong behaviour of the test, never a regression"
+# -> tf-emit: corrected MISS-App-20261113-05 — miss_class = wrong-behaviour
+```
+
 ### 5.5.7b Closed vocabularies are enforced ON WRITE (added 2026-08-31)
 
 **Since 2026-09-05 (reset Sitting 4a) the emitter also refuses:** a record with no `kind`; a record carrying a field this document does not define for its kind (the allowlist is `_ALLOWED` in `tf-emit.sh`, kept in step with these tables); and a `miss` with no `miss_id`. It also overwrites, never merely fills, `harness` when the harness is detected, every derived cost and model field on a `runs`/`gates` record, and the cost fields on a `miss-fix`. A caller cannot self-report any of them. The `_metrics-emit-gate.md` prose that used to say all this was deleted in the same sitting; the script is the rule.

@@ -2,32 +2,27 @@
 //
 // Driven by tf-mockup-parity.sh; run that, not this.
 //
-// WHAT IT ASKS: "does the built screen carry the structure its approved mockup
-// draws?" — mechanically, at the same viewports, comparing STRUCTURE and never
-// pixels. Pixel diffing on live data is unusable and would be switched off within
-// a week; that is why this grades named structural classes instead.
+// WHAT IT ASKS: "does the built screen carry the structure its approved mockup draws?", at the same
+// viewports, by named structural classes, never pixels (a pixel diff on live data is unusable).
+// Every clause is a measurement compared by code; no model reads either page.
 //
 // THE FOUR DEFECTS THIS IMPLEMENTATION IS BUILT AROUND (TfLens TF-008/009/011/012), one shape seen
 // four times: *a gate reports on what it can reach, and reports success when it reaches nothing.*
 //   TF-008  No gate compared a built screen to its design: 13 of 14 screens drifted with every gate green.
 //   TF-009  `border-style` was graded by no class, so a card lost its dashed "estimate" border and
 //           passed (dashed and solid grey share a colour bucket). -> the `stroke` clause.
-//   TF-011  Depth was bounded by the mockup's anchors and only <table> was walked: table screens gave 44
-//           findings, card screens silence and PASS. **The less of a screen the gate sees, the cleaner its
-//           verdict looks.** -> the structural walker, the coverage accounting, UNGRADEABLE. A PASS
-//           means "graded", never "there was nothing to compare".
-//   TF-012  `clip` counted screen-reader-only text as overflow on 8 of 10 screens; a finding that is
-//           always there trains a reader to skim. -> isHidden() and the visible-extent measurement.
+//   TF-011  Only <table> was walked: table screens gave 44 findings, card screens PASS. -> the structural
+//           walker, the coverage accounting, UNGRADEABLE: a PASS means "graded", never "nothing compared".
+//   TF-012  `clip` counted screen-reader-only text as overflow on 8 of 10 screens. -> isHidden().
 //
-// It produces FINDINGS and a per-screen verdict. verify-phase §4b2 decides what that
-// means for a REQ.
+// It produces FINDINGS and a per-screen verdict; verify-phase §4b2 decides what it means for a REQ.
 
 import { chromium } from 'playwright';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { signIn, reach, ensureDrawing, openFresh } from './tf-login.mjs';
-import { parseThemes, useTheme, surface, differs, looksDark, gradedPhase, markLaterPhase } from './tf-theme.mjs';
+import { parseThemes, useTheme, surface, differs, looksDark, gradedPhase, markLaterPhase, READ_THEME, DECLARES_THEME, APPLY_THEME } from './tf-theme.mjs';
 import { mockupMenus, walkMenus, placeholdersOnPage, reachability } from './tf-menus.mjs';
 
 // ---------------------------------------------------------------- arguments
@@ -126,50 +121,6 @@ const KEEP_APP_THEME = flag('--keep-app-theme');
 const THEMES = parseThemes(arg('--themes', 'auto'));
 const wantTheme = (t) => !THEMES || THEMES.includes(t);
 let otherSeen = false;    // auto: has any screen shown the other theme yet?
-// The theme a page declares: data-* attributes on <html> and <body> whose name says theme, mode or
-// scheme (data-theme, data-bs-theme, data-site-theme, data-color-mode …), and the class tokens there
-// that name a light or dark mode (dark, light, theme-dark, dark-mode …), which a class-driven dark mode
-// such as Tailwind's `dark` uses. A utility class such as bg-light does not count.
-// Nothing about any one stack. The class tokens are kept under `<where>|class`, '' when there are none.
-const READ_THEME = () => {
-  const MODE = /^(?:(?:theme|mode|scheme|color)[-_])?(?:dark|light)(?:[-_](?:theme|mode|scheme))?$/i;
-  const out = {};
-  for (const [where, el] of [['html', document.documentElement], ['body', document.body]]) {
-    if (!el) continue;
-    for (const a of el.attributes) if (/^data-.*(theme|mode|scheme)/i.test(a.name)) out[`${where}|${a.name}`] = a.value;
-    out[`${where}|class`] = [...el.classList].filter((c) => MODE.test(c)).join(' ');
-  }
-  return out;
-};
-// A page declares a theme when it has such an attribute or mode class. A mockup that declares none
-// leaves the app as it is.
-const DECLARES_THEME = (t) => !!t && Object.entries(t).some(([k, v]) => !k.endsWith('|class') || v);
-// Sets those attributes and mode classes on this page; returns what it had, so the same call puts it
-// back. An attribute the page lacked is removed again on the way back (value null). For `|class` the
-// page's own mode tokens are replaced by the given ones; every other class is left alone.
-const APPLY_THEME = (t) => {
-  const MODE = /^(?:(?:theme|mode|scheme|color)[-_])?(?:dark|light)(?:[-_](?:theme|mode|scheme))?$/i;
-  const before = {}; let changed = false;
-  for (const [k, v] of Object.entries(t || {})) {
-    const [where, name] = k.split('|');
-    const el = where === 'body' ? document.body : document.documentElement;
-    if (!el) continue;
-    if (name === 'class') {
-      const had = [...el.classList].filter((c) => MODE.test(c));
-      const want = String(v || '').split(/\s+/).filter(Boolean);
-      before[k] = had.join(' ');
-      if (had.slice().sort().join(' ') !== want.slice().sort().join(' ')) changed = true;
-      for (const c of had) el.classList.remove(c);
-      for (const c of want) el.classList.add(c);
-      continue;
-    }
-    const had = el.getAttribute(name);
-    before[k] = had;
-    if (had !== v) changed = true;
-    if (v === null) el.removeAttribute(name); else el.setAttribute(name, v);
-  }
-  return { before, changed };
-};
 const MAX_FINDINGS_PER_SCREEN = 40;
 // A closed menu bar matches its mockup, so menus drawn open (data-tf-state="popup-open") are
 // opened and every item clicked (tf-menus.mjs). --placeholder-text and --no-click are repeatable;
@@ -269,8 +220,10 @@ const PROBE = (wanted = []) => {
     const fg = RGB(cs.color);
     // text is seen over the element's own background, itself seen over what is behind it
     const under = bg ? seen(bg, el) : behind(el);
-    return bucket(seen(bg, el)) || (drawnBorder(cs) ? bucket(seen(RGB(cs.borderTopColor), el)) : null)
-      || bucket(fg && fg.a < 0.99 ? over(fg, under) : fg);
+    // the bucket and the measured colour that decided it, so a finding shows both (Lekhak TF-042)
+    const pick = (c) => (c ? { b: bucket(c), rgb: `rgb(${c.r},${c.g},${c.b})` } : null);
+    return pick(seen(bg, el)) || (drawnBorder(cs) ? pick(seen(RGB(cs.borderTopColor), el)) : null)
+      || pick(fg && fg.a < 0.99 ? over(fg, under) : fg);
   };
 
   // The border STYLE is a class of its own: a mockup says "provisional / estimated /
@@ -315,6 +268,7 @@ const PROBE = (wanted = []) => {
     return c.textContent || '';
   };
   const hasIcon = (el) => own(el, ICON).length > 0;
+  const ctls = (el, sel = 'a,button,input,select,textarea') => own(el, sel).filter((x) => !x.closest('[aria-hidden="true"]'));
   // how many icons the element carries at any depth: a component library that wraps an icon
   // one element deeper than the mockup moves it to another path key without removing it
   const iconCount = (el) => own(el, ICON).filter((i) => !i.parentElement || !i.parentElement.closest('svg')).length;
@@ -327,14 +281,18 @@ const PROBE = (wanted = []) => {
   // "Chrome" = a badge / pill / chip: a small element with its own fill or ring and
   // a rounded edge. A status pill is the one value on a page meant to be read at a
   // glance, so the mockup drawing one and the app rendering bare text is a finding.
+  // A button or link is a pill only when fully rounded (radius at least half its height): every
+  // button has a fill or a ring, and a 6 px corner on a 36 px button is a button (Lekhak TF-042).
+  const CTL = 'a[href],button,[role="button"],input,select,textarea,summary';
   const chromeOn = (el) => {
     const r = el.getBoundingClientRect();
     if (r.height > 44 || r.height < 6) return null;    // a card is not a badge
     const cs = getComputedStyle(el);
     const radius = parseFloat(cs.borderTopLeftRadius) || 0;
-    const filled = !!RGB(cs.backgroundColor);
+    const fill = RGB(cs.backgroundColor), filled = !!fill;
     const ringed = drawnBorder(cs);      // a transparent ring is not a ring
-    return { badge: (filled || ringed) && radius >= 6, filled, ringed, radius: Math.round(radius) };
+    return { badge: (filled || ringed) && (el.matches(CTL) ? radius >= r.height / 2 - 1 : radius >= 6), filled, ringed,
+      radius: Math.round(radius), h: Math.round(r.height), fill: fill ? `rgb(${fill.r},${fill.g},${fill.b})` : null };
   };
 
   // The treatment one element away. A component library draws the ring and the radius on
@@ -463,6 +421,7 @@ const PROBE = (wanted = []) => {
     const r = el.getBoundingClientRect();
     const chrome = chromeOn(el);
     const near = nearOf(el);
+    const col = semanticColor(el);
     return {
       // the badge and the visible border one element away, for the clauses to accept
       near: {
@@ -490,10 +449,14 @@ const PROBE = (wanted = []) => {
       toggle: el.matches(TOGGLE),   // its icon, colour and badge clauses are not applicable
       select: el.matches(SELECT),   // its icon clause is not applicable
       // a picker, or a box whose one control is one; a trigger, a button or a box with one (Chatur TF-027)
-      pick: el.matches(PICK) || (el.querySelectorAll('a,button,input,select,textarea').length === 1 && !!el.querySelector(PICK)),
-      trig: el.matches(BTN) || el.querySelectorAll(BTN).length === 1,
+      // the controls counted are the box's own: not those in another state (a mockup's open list, Chatur
+      // TF-030: a popwrap holding its trigger and a data-tf-state list of three option buttons), nor aria-hidden ones
+      pick: el.matches(PICK) || (ctls(el).length === 1 && !!el.querySelector(PICK)),
+      trig: el.matches(BTN) || ctls(el, BTN).length === 1,
       date: el.matches(DATE),       // nor here; and the app side's icons are no one's (diff)
-      color: semanticColor(el),
+      color: col ? col.b : null,
+      // what the shape and colour clauses read, as measured: printed with their findings (Lekhak TF-042)
+      look: { ...(chrome ? { radius: chrome.radius, h: chrome.h, fill: chrome.fill, ring: chrome.ringed } : {}), ...(col ? { color: col.rgb } : {}) },
       stroke: strokeOf(el),
       wrap: lineCount(el),
       clip: clipOf(el),
@@ -610,6 +573,20 @@ const PROBE = (wanted = []) => {
 // not "not asked".
 // The same folding the page-side probe uses: spacing and digits.
 const norm = (t) => (t || '').replace(/\d[\d,.]*/g, '#').replace(/\s+/g, ' ').trim();
+
+// What a shape or colour finding was read from, on both sides, in its line (Lekhak TF-042): a reader
+// compares numbers with the page's own computed style instead of guessing why the check disagrees.
+const lookOf = (l = {}, name) => (name === 'color' ? (l.color || 'no colour')
+  : `${l.radius ?? 0}px corner on ${l.h ?? '?'}px, ${l.fill ? 'fill ' + l.fill : 'no fill'}, ${l.ring ? 'a ring' : 'no ring'}`);
+const measured = (name, m, a) => (name === 'badge' || name === 'color' ? ` (measured: mockup ${lookOf(m.look, name)}; app ${lookOf(a.look, name)})` : '');
+// The app is drawn in the mockup's site theme (data-site-theme …), which may not be the one it shows:
+// every shape and colour finding says so, with both values.
+const siteNote = (findings, theme) => {
+  const site = theme ? Object.keys(theme.mockup).filter((k) => !k.endsWith('|class') && theme.mockup[k] !== theme.app_had[k] && !/^(light|dark)$/i.test(theme.mockup[k] || '')) : [];
+  if (!site.length) return;
+  const said = `the app was drawn in the mockup's ${site.map((k) => `${k.split('|')[1]}="${theme.mockup[k]}"`).join(', ')}, not the ${site.map((k) => `"${theme.app_had[k] ?? 'none'}"`).join(', ')} it showed`;
+  for (const f of findings) if (['badge', 'color', 'stroke'].includes(f.class)) { f.drawn_in = said; f.detail += ` — ${said}`; }
+};
 
 const CLAUSES = {
   badge: (m, a) => {
@@ -875,7 +852,8 @@ function diff(mock, app, screen, width, skip = null) {
       if (CONTENT_CLAUSES.has(name)) contentGraded++;
       if (r) {
         if (name === 'icon' && iconMoved(key)) continue;   // the same icon, another child
-        const f = { screen, width, class: name, key, ...(appKey !== key ? { app_key: appKey } : {}), detail: r, mockup_text: m.text, app_text: a.text };
+        const f = { screen, width, class: name, key, ...(appKey !== key ? { app_key: appKey } : {}), detail: r + measured(name, m, a), mockup_text: m.text, app_text: a.text };
+        if (name === 'badge' || name === 'color') f.measured = { mockup: m.look, app: a.look };
         findings.push(f);
         if (name === 'icon') iconSeen.push({ f, side: m.icon ? m : a });
       }
@@ -1035,6 +1013,7 @@ for (const s of SCREENS) {
       continue;
     }
     const d = diff(mock, app, s.name, width);
+    siteNote(d.findings, theme);
     d.findings.push(...docFindings);
     if (wantTheme(own)) {
       perWidth.push({ width, mode: own, ...d, mockAnchors: mock.anchors, appAnchors: app.anchors,
@@ -1066,6 +1045,7 @@ for (const s of SCREENS) {
       const appO = await page.evaluate(PROBE, wanted);
       const d2 = diff(mockO, appO, s.name, width, mockDraws ? null : new Set(['color']));
       for (const f of d2.findings) f.theme = other;
+      siteNote(d2.findings, theme);
       perWidth.push({ width, mode: other, mockup_draws_theme: mockDraws, ...d2, mockAnchors: mockO.anchors, appAnchors: appO.anchors,
         appTestIds: appO.testids, mockTestIds: mockO.testids, ...(reached ? { reached } : {}) });
     } catch (e) {

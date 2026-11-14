@@ -151,6 +151,22 @@ export async function waitForRender(page, o, anchors = []) {
   return Date.now() - t0;
 }
 
+// Lekhak TF-040: attaching over CDP, Chromium hands the new client the console messages the app logged
+// before it (the inspector keeps them), and they arrived while the first screen was open: "Blazor has
+// already started" failed whichever screen a run opened first, at its first width only. Waits until no
+// message has come for `quiet` ms (at most `max`); returns how many came, which belong to no screen.
+export async function quietConsole(page, quiet = 600, max = 4000) {
+  let last = Date.now(), n = 0;
+  const on = () => { last = Date.now(); n++; };
+  page.on('console', on);
+  const t0 = Date.now();
+  try {
+    await page.evaluate(() => 1).catch(() => {});
+    while (Date.now() - last < quiet && Date.now() - t0 < max) await page.waitForTimeout(100);
+  } finally { page.off('console', on); }
+  return n;
+}
+
 // Open a route signed in. The document of a signed-in screen may answer 401 or 403 when the sign-in
 // lives in the page's own connection and not in a cookie (AppManager TF-006): then the page is judged
 // by what it draws. Signed in, the screen is reached and `reached` says how. Still signed out, the

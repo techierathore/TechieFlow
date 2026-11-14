@@ -35,7 +35,8 @@ run_artefact() {
     [[ "${ARTEFACT_KEYS[$i]}" == "$key" ]] && return "${ARTEFACT_RCS[$i]}"
     i=$((i + 1))
   done
-  if bash -c "$cmd" >/dev/null 2>&1; then rc=0; else rc=1; fi
+  # no stdin: the loop below reads the FR list from it, and a suite that reads stdin swallowed FR-27 to FR-72 (CI, 0c8158f)
+  if bash -c "$cmd" </dev/null >/dev/null 2>&1; then rc=0; else rc=1; fi
   ARTEFACT_KEYS[$i]="$key"; ARTEFACT_RCS[$i]="$rc"
   echo "  ran ${key} -> $([[ $rc -eq 0 ]] && echo pass || echo FAIL)" >&2
   return "$rc"
@@ -75,7 +76,7 @@ while IFS=$'\t' read -r fid kind artefact; do
   fn="fr_$(tr -d 'FR-' <<<"$fid")"
   if declare -F "$fn" >/dev/null; then
     graded=$((graded+1))
-    if "$fn" 2>/dev/null; then
+    if "$fn" </dev/null 2>/dev/null; then
       verdict="Verified"; gate="null"; passed=$((passed+1))
     else
       verdict="FAIL"; gate='"acceptance"'; failed=$((failed+1))
@@ -145,4 +146,7 @@ if [[ $EMIT -eq 1 && ${#EMIT_LINES[@]} -gt 0 ]]; then
   echo "emitted ${#EMIT_LINES[@]} gate record(s) under run_id $RUN_ID"
 fi
 
+# every FR line of the document read and reported: a line the loop never reached is no pass
+want="$(grep -c '^| *FR-[0-9]' "$REQ_DOC")"
+[[ "$total" -eq "$want" ]] || { echo "FAIL  only $total of the $want FR lines in $REQ_DOC were read; the rest were never graded"; failed=$((failed + 1)); }
 [[ $failed -eq 0 ]]

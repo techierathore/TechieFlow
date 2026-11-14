@@ -131,6 +131,9 @@ AMENDABLE_FIELDS = {
                    "dependency-not-declared", "instruction-ignored", "other"),
     "sort": ("spec", "unsaid", "weak-check", "ignored"),
 }
+# miss_class: never filled by an amend, only replaced by a correction with a reason (Sevak TF-036)
+MISS_CLASSES = ("missed-requirement", "partial-implementation", "wrong-behaviour", "regression", "unspecified-gap",
+                "spec-contradiction", "scope-creep", "hallucinated-api", "standards-violation", "other")
 # The four-question sort in words, for the report (SCHEMA.md §5.5.10).
 SORT_WORDS = {"spec": "the app's spec did not say it", "unsaid": "the framework never said it",
               "weak-check": "the check was too weak", "ignored": "said and ignored"}
@@ -400,10 +403,16 @@ def analyse_misses(misses):
     for a in sorted(amends, key=lambda r: r.get("ts") or ""):
         parent = opened_by_id.get(a.get("miss_id"))
         fld = a.get("field")
+        val = a.get("value")
+        # miss_class is replaced only by a correction (a reason), to a value of its vocabulary (Sevak TF-036)
+        if parent is not None and fld == "miss_class":
+            if (a.get("reason") or "").strip() and val in MISS_CLASSES:
+                parent[fld] = val
+                amended += 1
+            continue
         if parent is None or (fld not in AMENDABLE_FIELDS and fld not in AMENDABLE_TEXT_FIELDS):
             orphan_amends += 1
             continue
-        val = a.get("value")
         ok = (isinstance(val, str) and val.strip()) if fld in AMENDABLE_TEXT_FIELDS \
              else (val in AMENDABLE_FIELDS.get(fld, ()))
         # a correction names why the value set was wrong, and replaces it (or clears it: value null)

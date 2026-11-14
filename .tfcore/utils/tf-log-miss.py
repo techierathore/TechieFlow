@@ -251,7 +251,8 @@ def main(argv):
     print(f"Owning REQ : {req or 'none'}")
     print(f"Attributed : {rec['origin_phase']} ({rec['origin_agent']}) — {attributed}")
     print(f"Found by   : {found_by}")
-    print(f"Discovery  : " + (f"{ds} to {now}, from the `look` mark" if ds else rec.get("discovery_why", "")))
+    print(f"Discovery  : " + (f"{ds} to {now}, from the `look` mark" if ds else rec.get("discovery_why", "")
+                              + " — finding cost NOT MEASURED; the status gate will ask you to name this miss in the closing message"))
     print(f"Docs       : {doc_line}; docs/{app}-Misses.md rewritten")
     if fix_line:
         print(f"Fix        : {fix_line}")
