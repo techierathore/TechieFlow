@@ -230,10 +230,37 @@ export const markLaterPhase = (page, phase) => (phase === null || phase === unde
     let n = 0;
     for (const el of document.querySelectorAll('[data-tf-phase]')) {
       const of = parseInt(el.getAttribute('data-tf-phase'), 10);
-      if (Number.isFinite(of) && of > ph && !el.hasAttribute('data-tf-state')) { el.setAttribute('data-tf-state', `phase-${of}`); n++; }
+      if (Number.isFinite(of) && of > ph && !el.hasAttribute('data-tf-state')) { el.setAttribute('data-tf-state', `phase-${of}`); el.setAttribute('data-tf-later', ''); n++; }
     }
     return n;
   }, phase).catch(() => 0));
+// A later phase's box the app already draws is no other state (TrStudio TF-003): left marked on the mockup
+// only, it drops out of the mockup's sibling count while the app's copy is still counted, and every box after
+// it is paired with its neighbour. The app draws it when it holds the box's own anchor (or one inside it); a
+// box with no anchor, when the anchor around it holds a box of the same tag and the same text. Those boxes are
+// unmarked on the mockup page; returns how many, so the caller reads the mockup again.
+export const laterReached = async (mockPage, appPage) => {
+  const boxes = await mockPage.evaluate(() => {
+    const t = (el) => (el.textContent || '').replace(/\s+/g, ' ').trim();
+    return [...document.querySelectorAll('[data-tf-later]')].map((el) => ({
+      ids: [el, ...el.querySelectorAll('[data-testid]')].map((x) => x.getAttribute('data-testid')).filter(Boolean),
+      tag: el.tagName, text: t(el), anchor: el.parentElement?.closest('[data-testid]')?.getAttribute('data-testid') || null }));
+  }).catch(() => []);
+  if (!boxes.length) return 0;
+  const drawn = await appPage.evaluate((bs) => {
+    const seen = (el) => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+    const t = (el) => (el.textContent || '').replace(/\s+/g, ' ').trim();
+    const by = (id) => document.querySelector(`[data-testid="${CSS.escape(id)}"]`);
+    return bs.map((b) => (b.ids.length ? b.ids.some((id) => seen(by(id)))
+      : !!b.text && !!b.anchor && [...(by(b.anchor)?.querySelectorAll(b.tag) || [])].some((x) => seen(x) && t(x) === b.text)));
+  }, boxes).catch(() => boxes.map(() => false));
+  if (!drawn.some(Boolean)) return 0;
+  return mockPage.evaluate((d) => {
+    let n = 0;
+    [...document.querySelectorAll('[data-tf-later]')].forEach((el, i) => { if (d[i]) { el.removeAttribute('data-tf-state'); el.removeAttribute('data-tf-later'); n++; } });
+    return n;
+  }, drawn).catch(() => 0);
+};
 
 // ---- the mockup check's site theme: read from the mockup, put on the app, put back (tf-mockup-parity.mjs) ----
 // The theme a page declares: data-* attributes on <html> and <body> whose name says theme, mode or

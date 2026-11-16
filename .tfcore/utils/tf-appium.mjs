@@ -53,12 +53,22 @@ export async function openSession(url, { bundleId, appPath = '', automationName 
     // Typing into a field. A Blazor Hybrid form on a Mac kept its @bind empty or half filled when the
     // value was set through Accessibility, through mac2's "set value", or by key events posted to the
     // process ("The text must have valid value", Lekhak TF-026). What reached it: a click on the field,
-    // then W3C key actions, a key down and up per character.
+    // then W3C key actions, a key down and up per character. Those drop a text with "@", "!" or "#" in it
+    // (TrStudio's sign-in form stayed empty, 16 Nov 2026), so the field is read back: when it does not hold
+    // as many characters as were typed, it is cleared and typed again with mac2's own "macos: keys",
+    // which took them. Returns whether the field holds that many characters (unknown: true).
     type: async (el, text) => {
+      const t = String(text);
+      const holds = async () => { const v = await s.call('GET', `/element/${el}/attribute/value`).catch(() => null); return typeof v !== 'string' || v.length === t.length; };
       await s.click(el);
-      const actions = [...String(text)].flatMap((c) => [{ type: 'keyDown', value: c }, { type: 'keyUp', value: c }]);
+      const actions = [...t].flatMap((c) => [{ type: 'keyDown', value: c }, { type: 'keyUp', value: c }]);
       await s.call('POST', '/actions', { actions: [{ type: 'key', id: 'keyboard', actions }] });
       await s.call('DELETE', '/actions').catch(() => {});
+      if (await holds()) return true;
+      await s.call('POST', `/element/${el}/clear`, {}).catch(() => {});
+      await s.click(el);
+      await s.call('POST', '/execute/sync', { script: 'macos: keys', args: [{ elementId: el, keys: [...t] }] }).catch(() => {});
+      return holds();
     },
     shot: (el) => s.call('GET', el ? `/element/${el}/screenshot` : '/screenshot'),
     close: () => call(base, 'DELETE', sp).catch(() => {}),

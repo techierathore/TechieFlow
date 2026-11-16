@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-11-15, night (nine faults of 15 Nov; v1.3.1 is the last tag). |
+| Last updated | 2026-11-16, Mac (TrStudio TF-003 to TF-007; v1.3.1 is the last tag). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -119,6 +119,7 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | **Not proved on real machines** (v1.2.4): window restore, Mac `--env`, NAT fallback. The check fixes since 2026-11-10: fixtures only. | Maintainer |
 | **TfLens** must read the miss stream before its figures are quotable (`docs/TfLens-Metrics-Update-Prompt.md` there, awaiting the owner). | Separate repo |
 | **The feedback entries of 11 to 15 Nov are fixed** (2026-11-15, night), in seven projects (TrStudio has 12 Nov's). Re-checks: `tf-feedback.sh <App> --waiting`. | Each project (close) |
+| **TrStudio TF-001 to TF-007 fixed, deployed there** (2026-11-16, Mac); open items in its file. Windows must re-run `tests/faults` and `tests/regression`. | TrStudio; Maintainer |
 | Linux CI has no Playwright: every browser case is counted skipped. Install it in `validate.yml`? | Owner decision |
 | `tests/requirements` grades FR lines naming one regression case by the whole suite. | Maintainer |
 | Drop `BASE_URL`/`CDP_URL` from `tf-verify-tests.sh` at v1.5; `testsettings.Local.json` carries the address (14 Nov). | Maintainer |

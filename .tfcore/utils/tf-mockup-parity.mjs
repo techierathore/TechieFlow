@@ -22,7 +22,7 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { signIn, reach, reachCdp, waitLoaded } from './tf-login.mjs';
-import { parseThemes, useTheme, surface, differs, looksDark, gradedPhase, markLaterPhase, READ_THEME, DECLARES_THEME, APPLY_THEME } from './tf-theme.mjs';
+import { parseThemes, useTheme, surface, differs, looksDark, gradedPhase, markLaterPhase, laterReached, READ_THEME, DECLARES_THEME, APPLY_THEME } from './tf-theme.mjs';
 import { mockupMenus, walkMenus, placeholdersOnPage, reachability } from './tf-menus.mjs';
 
 // ---------------------------------------------------------------- arguments
@@ -325,8 +325,7 @@ const PROBE = (wanted = []) => {
     return out;
   };
 
-  // Only text that is genuinely a single inline run can be graded for wrapping or
-  // token fit. A container with block children has no meaningful line count.
+  // Only one inline run of text is graded for wrapping or token fit: block children have no line count.
   const inlineOnly = (el) => {
     for (const c of el.children) {
       const d = getComputedStyle(c).display;
@@ -335,16 +334,14 @@ const PROBE = (wanted = []) => {
     return (el.textContent || '').trim().length > 0;
   };
 
+  // rows from the text's line boxes, not the box height: a fixed-height button is 1 row (TF-005)
   const lineCount = (el) => {
     if (!inlineOnly(el)) return null;
-    const cs = getComputedStyle(el);
-    let lh = parseFloat(cs.lineHeight);
-    if (!lh || Number.isNaN(lh)) lh = (parseFloat(cs.fontSize) || 16) * 1.2;
-    // the text's height only: padding and borders are not rows
-    const h = el.getBoundingClientRect().height
-      - ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth'].reduce((s, k) => s + (parseFloat(cs[k]) || 0), 0);
-    if (!(h > 0) || !lh) return null;
-    return Math.max(1, Math.round(h / lh));
+    const g = document.createRange(), w = document.createTreeWalker(el, 4), q = [];
+    while (w.nextNode()) { g.selectNodeContents(w.currentNode); q.push(...[...g.getClientRects()].filter((r) => r.width && r.height)); }
+    let n = 0, b = -1e9;   // new row: bottom over half a box below the row's
+    for (const r of q.sort((x, y) => x.bottom - y.bottom)) if (r.bottom > b + r.height / 2) { n++; b = r.bottom; } else b = Math.max(b, r.bottom);
+    return n || null;
   };
 
   // A formatted number must never break mid-digit. The longest unbreakable token is
@@ -977,6 +974,7 @@ for (const s of SCREENS) {
       const ld = await waitLoaded(page, LOGIN_OPTS, await mockPage.evaluate(OWN_IDS), settled[s.name]);
       settled[s.name] = ld.present;
       if (ld.loading) { perWidth.push({ width, not_drawing: true, error: `not measured: ${ld.why}` }); continue; }
+      if (await laterReached(mockPage, page)) mock = await mockPage.evaluate(PROBE);   // TF-003
       wanted = [...new Set(Object.values(mock.index).filter((x) => x.badge === true && x.text).map((x) => x.text))];
       // The app is drawn in the mockup's theme for the comparison, not in the viewer's saved one.
       // The mockup's theme attributes on <html> and <body> are copied onto the app page

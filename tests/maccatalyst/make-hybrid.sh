@@ -162,6 +162,9 @@ rows = [r(i, n) for i, n in enumerate(names, 1)]
 for i, (n, route, more) in enumerate(extra, len(names) + 1):
     screens.append(dict(s(i, n), route=route, mockup="", **more))
     rows.append(dict(r(i, n), route=route))
+# Manage Crowd is driven from Home, before Broken: Broken's unhandled error stops the web view, so a click
+# after it changes nothing, and the checker rightly calls that screen not reached (TrStudio TF-007)
+screens.insert(1, screens.pop(len(names)))
 json.dump({"scope": "ui", "screens": screens, "rows": rows}, open(sys.argv[1], "w"), indent=1)
 PY
 echo "src/TfMacHybrid/TfMacHybrid.csproj"

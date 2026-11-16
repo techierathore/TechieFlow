@@ -43,6 +43,8 @@ const argv = process.argv.slice(2);
 const arg = (n, d = null) => { const i = argv.indexOf(n); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d; };
 const args = (n) => argv.flatMap((a, i) => (a === n && i + 1 < argv.length ? [argv[i + 1]] : []));
 const APPIUM = (arg('--appium') || '').replace(/\/$/, '');
+// a route as tf_nav.py keys it: '/admin/x/{Id:long}' -> 'admin/x/*'
+const keyOf = (r) => String(r || '').split(/[?#]/)[0].replace(/^\/+|\/+$/g, '').toLowerCase().split('/').filter(Boolean).map((g) => (/[{@]/.test(g) ? '*' : g)).join('/');
 const BOOT = arg('--boot', 'tests/.artifacts/verify/boot.json');
 const boot = existsSync(BOOT) ? JSON.parse(readFileSync(BOOT, 'utf8')) : {};
 const BUNDLE = arg('--bundle') || boot.bundle_id || '';
@@ -60,13 +62,14 @@ const ERROR_TEXTS = [...args('--error-text'), 'An unhandled error has occurred',
   .map((t) => t.toLowerCase());
 if (!FROM_SOURCE.length && (!APPIUM || !(BUNDLE || APP_PATH))) { console.error('tf-verify-native: --appium URL and the app (boot.json from tf-verify-boot.sh, --bundle or --app-path) are required'); process.exit(3); }
 
-let screens = [];
+let screens = [], LINKS = [];
 if (LIST && !existsSync(LIST)) { console.error(`tf-verify-native: ${LIST} does not exist; make it first with bash .tfcore/utils/tf-verify-list.sh <App> ui`); process.exit(3); }
 if (LIST) screens = (JSON.parse(readFileSync(LIST, 'utf8')).screens || []).map((s) => ({ name: s.name, route: s.route, mockup: s.mockup || '', rows: s.rows || [],
-  nav: s.nav || null, project: s.project || '' }));
+  nav: s.nav || null, project: s.project || '', key: s.key ?? keyOf(s.route) }));
+if (LIST) LINKS = JSON.parse(readFileSync(LIST, 'utf8')).links || [];
 for (const s of args('--screen')) {
   const m = s.match(/^([^=]+)=(.*)$/);
-  if (m) screens.push({ name: m[1], route: m[2], mockup: `${MOCKUPS}/${m[1].toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`, rows: [] });
+  if (m) screens.push({ name: m[1], route: m[2], key: keyOf(m[2]), mockup: `${MOCKUPS}/${m[1].toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`, rows: [] });
 }
 if (FROM_SOURCE.length && !screens.length) screens = FROM_SOURCE.map((f) => ({ name: basename(f).replace(/\.xml$/, ''), route: '', mockup: '', rows: [] }));
 if (!screens.length) { console.error('tf-verify-native: no screens (--list <json> or --screen name=route)'); process.exit(3); }
@@ -224,15 +227,18 @@ if (!FROM_SOURCE.length) {
 
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const q = (t) => t.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-// Button 9, RadioButton 10, Link 42 (a web view's menu), Cell 75: the control labelled `text`, else
-// the one whose label holds it (a menu link reads "📷 Images" for the code's "Images")
+// Button 9, RadioButton 10, Link 42 (a web view's menu), Cell 75: the control labelled `text`, else the one
+// whose label is that text with only icons or punctuation around it (a menu link reads "📷 Images" for the
+// code's "Images", a link "Forgot password?"). Never one that holds the text as a word of a longer label:
+// "Account" is not "Create an account" (TrStudio, 16 Nov: the Register screen was graded as Account).
+const bare = (t) => String(t || '').toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').replace(/\s+/g, ' ');
+const CLICKABLE = new Set(['Button', 'RadioButton', 'Link', 'Cell']);
 async function control(win, text) {
-  for (const value of [`elementType IN {9, 10, 42, 75} AND (label ==[c] '${q(text)}' OR title ==[c] '${q(text)}')`,
-    `elementType IN {9, 10, 42, 75} AND label CONTAINS[c] '${q(text)}'`]) {
-    const el = await s.find('-ios predicate string', value, win).catch(() => null);
-    if (el) return el;
-  }
-  return null;
+  const by = (t) => s.find('-ios predicate string', `elementType IN {9, 10, 42, 75} AND (label ==[c] '${q(t)}' OR title ==[c] '${q(t)}')`, win).catch(() => null);
+  const el = await by(text);
+  if (el) return el;
+  const n = parseSource(await s.source()).find((x) => CLICKABLE.has(x.type) && [x.label, x.title].some((t) => t && bare(t) === bare(text)));
+  return n ? by(n.label || n.title) : null;
 }
 // the sign-in step: fields found in the app's own window, never typed by screen position
 async function signIn() {
@@ -254,21 +260,116 @@ async function signIn() {
   }
   return { driven: false, reason: `still on the sign-in screen ${Math.round((Date.now() - t0) / 1000)} s after "Sign in" was clicked` };
 }
+// --- reaching a screen (TrStudio TF-004, TF-006, TF-007) ---------------------------------------------
+// Which screen is on view: the page whose own links (list.json `links`, from tf_nav.py) are all on view,
+// the one with the most of them; none when no page's links all show. The path is planned from there over
+// the links: a page's own links from that page, a menu's from any screen. Each control is scrolled into
+// the window before it is clicked, and a click that changes nothing in the window is no step: the screen
+// is not reached, with that reason. A label not on view is looked for again after a "Switch to …" control
+// (a surface switch) is pressed.
+const sameKey = (a, b) => { const x = a.split('/'), y = b.split('/'); return x.length === y.length && x.every((g, i) => g === y[i] || g === '*' || y[i] === '*'); };
+const scopeOk = (l) => !l.project || !heads.size || heads.has(normalize(l.project));
+const onView = (nodes) => nodes.filter((n) => n.type !== 'Window').map((n) => `${n.type}|${n.label}|${n.title}|${n.value}`).join('\n');
+const showsLabel = (nodes, lab) => { const t = lab.toLowerCase(); return nodes.some((n) => [n.label, n.title].some((x) => (x || '').toLowerCase().includes(t))); };
+// A label the menu also carries says nothing about the screen (TrStudio, 16 Nov: Model Sources' own links are
+// two menu items, so every management screen read as Model Sources): only a page's other labels count.
+function whereAmI(nodes) {
+  const own = {}, menu = new Set(LINKS.filter((l) => !l.from).map((l) => l.label));
+  for (const l of LINKS) if (l.from && scopeOk(l) && !menu.has(l.label)) (own[l.from] = own[l.from] || new Set()).add(l.label);
+  const all = Object.entries(own).filter(([, labs]) => [...labs].every((x) => showsLabel(nodes, x))).sort((a, b) => b[1].size - a[1].size);
+  return all.length && (all.length === 1 || all[0][1].size > all[1][1].size) ? all[0][0] : null;
+}
+function plan(from, to) {
+  if (from !== null && sameKey(from, to)) return [];
+  const usable = LINKS.filter(scopeOk), seen = new Map([[from ?? '', []]]), todo = [from ?? ''];
+  while (todo.length) {
+    const cur = todo.shift();
+    for (const l of usable) {
+      if (l.from && !(cur && sameKey(l.from, cur))) continue;
+      if ([...seen.keys()].some((k) => k && sameKey(k, l.to))) continue;
+      const p = [...seen.get(cur), l.label];
+      if (sameKey(l.to, to)) return p;
+      seen.set(l.to, p); todo.push(l.to);
+    }
+  }
+  return null;
+}
+// scrolls the window's content until the control's centre is inside it; `again` finds the control anew,
+// because a handle kept across a scroll can go on reporting the old rectangle; returns the handle, or null.
+// mac2's scroll delta is in points (a negative one shows what is below) and goes to the element it is aimed
+// at: the web view, else a scroll view, else the window (aimed at the window, TrStudio's page did not move).
+async function intoView(win, el, again = null) {
+  let dir = -1, last = Infinity, pane = null;
+  for (let k = 0; k < 8; k++) {
+    if (k && again) el = (await again()) || el;
+    const r = await s.call('GET', `/element/${el}/rect`).catch(() => null), w = win && await s.call('GET', `/element/${win}/rect`).catch(() => null);
+    if (!r || !w) return el;   // no rectangle to go by: clicked as before
+    const cy = r.y + r.height / 2, below = cy > w.y + w.height - 4, off = cy < w.y + 28 ? w.y + 28 - cy : below ? cy - (w.y + w.height - 4) : 0;
+    if (!off) return el;
+    if (off >= last) dir = -dir; else dir = below ? -1 : 1;   // the way that brings it closer; the other once it does not
+    last = off;
+    pane = pane || await s.find('-ios predicate string', 'elementType == 58', win).catch(() => null) || await s.find('-ios predicate string', 'elementType == 46', win).catch(() => null) || win;
+    await s.call('POST', '/execute/sync', { script: 'macos: scroll', args: [{ elementId: pane, deltaX: 0, deltaY: dir * Math.ceil(off + 60) }] }).catch(() => {});
+    await sleep(500);
+  }
+  return null;
+}
+async function press(win, label) {   // -> { ok, via, why }
+  let el = await control(win, label), via = '';
+  if (!el) {
+    const sw = await s.find('-ios predicate string', "elementType IN {9, 10, 42, 75} AND (label BEGINSWITH[c] 'Switch to' OR title BEGINSWITH[c] 'Switch to')", win).catch(() => null);
+    if (sw) {
+      via = (await s.call('GET', `/element/${sw}/attribute/label`).catch(() => '')) || (await s.call('GET', `/element/${sw}/attribute/title`).catch(() => '')) || 'Switch to';
+      const b = onView(parseSource(await s.source()));
+      const swIn = await intoView(win, sw, () => s.find('-ios predicate string', `elementType IN {9, 10, 42, 75} AND label ==[c] '${q(via)}'`, win).catch(() => null));
+      if (!swIn) return { ok: false, why: `"${via}" could not be scrolled into the window` };
+      await s.click(swIn); await sleep(SETTLE);
+      if (onView(parseSource(await s.source())) === b) return { ok: false, why: `the click on "${via}" changed nothing in the window` };
+      el = await control(win, label);
+    }
+  }
+  if (!el) return { ok: false, via, why: `no "${label}" control was on view${via ? ` after "${via}"` : ''}` };
+  el = await intoView(win, el, () => control(win, label));
+  if (!el) return { ok: false, via, why: `"${label}" sits outside the window and could not be scrolled into it` };
+  const before = onView(parseSource(await s.source()));
+  await s.click(el); await sleep(SETTLE);
+  let after = onView(parseSource(await s.source()));
+  for (const t0 = Date.now(); after === before && Date.now() - t0 < 3000; after = onView(parseSource(await s.source()))) await sleep(300);
+  return after === before ? { ok: false, via, same: true, why: `the click on "${label}" changed nothing in the window` } : { ok: true, via };
+}
+let here = null;   // the screen the checker last reached, when the window does not say
 async function reach(sc, first) {
   const name = sc.name;
   const win = await s.find('-ios predicate string', 'elementType == 4').catch(() => null);
-  if (sc.nav && sc.nav.length) {          // the path the code gives (Lekhak TF-027)
-    for (const [i, label] of sc.nav.entries()) {
-      const el = await control(win, label);
-      if (!el) return { how: '', win, why: `the code links "${label}" to it${i ? ` (after ${sc.nav.slice(0, i).map((x) => `"${x}"`).join(', ')})` : ''}, and no such control was on view` };
-      await s.click(el); await sleep(SETTLE);
+  const at = LINKS.length ? whereAmI(parseSource(await s.source())) ?? here : null;
+  const target = sc.key ?? keyOf(sc.route);
+  // a click that changes nothing is no step, unless the window already shows the screen: the first one
+  // looked at (its own tab or link, clicked on the screen the app opens on), or the one last reached
+  // when it has the same route
+  const there = first || (here !== null && sameKey(here, target));
+  const path = LINKS.length ? plan(at, target) : null;
+  if (path && !path.length) return { how: `already on view (its own links show)`, win, at: target };
+  const steps = path || (sc.nav && sc.nav.length ? sc.nav : null);   // the path the code gives (Lekhak TF-027)
+  if (steps) {
+    const done = [];
+    for (const [i, label] of steps.entries()) {
+      const p = await press(win, label);
+      if (p.via) done.push(p.via);
+      if (!p.ok && p.same && there && i === steps.length - 1) { done.push(label); break; }
+      if (!p.ok) return { how: '', win, why: `the code links "${label}" to it${i ? ` (after ${done.map((x) => `"${x}"`).join(', ')})` : ''}${at ? ` from /${at}` : ''}, and ${p.why}` };
+      done.push(label);
     }
-    return { how: `clicked ${sc.nav.map((x) => `"${x}"`).join(' > ')}`, win };
+    const now = whereAmI(parseSource(await s.source()));
+    if (now && !sameKey(now, target)) return { how: '', win, why: `clicked ${done.map((x) => `"${x}"`).join(' > ')}, and the window shows /${now}, not ${sc.route}` };
+    return { how: `clicked ${done.map((x) => `"${x}"`).join(' > ')}`, win, at: target };
   }
-  const el = await s.find('accessibility id', `nav-${slug(name)}`, win).catch(() => null) || await control(win, name);
-  if (el) { await s.click(el); await sleep(SETTLE); return { how: `clicked the control for "${name}"`, win }; }
+  const el = await s.find('accessibility id', `nav-${slug(name)}`, win).catch(() => null);
+  if (el || await control(win, name)) {
+    const p = el ? await (async () => { const b = onView(parseSource(await s.source())); await s.click((await intoView(win, el)) || el); await sleep(SETTLE); const ok = onView(parseSource(await s.source())) !== b; return { ok, same: !ok, why: `the click on "nav-${slug(name)}" changed nothing in the window` }; })() : await press(win, name);
+    return p.ok || (p.same && there) ? { how: `clicked the control for "${name}"`, win, at: target } : { how: '', win, why: p.why };
+  }
   // only the start screen may be the one on view without a click; any other was never shown
-  if (first && ['', '/'].includes(String(sc.route || '').trim())) return { how: 'the screen the app opens on', win };
+  if (first && ['', '/'].includes(String(sc.route || '').trim())) return { how: 'the screen the app opens on', win, at: target };
   return { how: '', win };
 }
 
@@ -306,7 +407,8 @@ for (const [i, sc] of screens.entries()) {
       }
     }
     nav = FROM_SOURCE.length ? { how: `saved source ${FROM_SOURCE[i]}` } : await reach(sc, results.length === 1);
-  } catch (e) { nav = { how: '', why: `Appium: ${e.message}` }; }
+    here = nav.how ? nav.at ?? null : null;   // not reached: where the window is, is not known
+  } catch (e) { nav = { how: '', why: `Appium: ${e.message}` }; here = null; }
   if (!nav.how && !blockedWhy && NO_NAMES && s) {
     try { if (opaque(parseSource(await s.source()))) blockedWhy = `the Mac head cannot go past the first screen: ${OPAQUE_WHY}`; } catch { /* left as unreachable */ }
   }

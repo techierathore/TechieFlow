@@ -347,7 +347,7 @@ _parity() {
   port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & srv=$!
   sleep 1
-  ( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen "$2=$3" --widths 1280,390 --json-out "$d/parity.json" >/dev/null 2>&1 )
+  ( cd "$d" && tf_timeout 120 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" --mockups docs/mockups --screen "$2=$3" --widths 1280,390 --json-out "$d/parity.json" ${TF_PARITY_ARGS:-} >/dev/null 2>&1 )
   kill "$srv" 2>/dev/null
   [[ -f "$d/parity.json" ]] || { echo "NO-RESULT"; return; }
   python3 -c "
@@ -1439,9 +1439,11 @@ print(len(r), r[0]['started'] >= '$mark' and s(r[0]['ended']) - s(r[0]['started'
     || bad verify_mark_c "a properly started verify lost its record: $(head -c 200 "$d/docs/metrics/runs.jsonl")"
 }
 
+source "$(dirname "${BASH_SOURCE[0]}")/ts-cases.sh"   # TrStudio TF-003 to TF-007
+
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/faults — one case per fault found by reading the code"
-for t in status_read marker_age yolo_ttl emit_root backtick_row owner_uat quoted_phase handoff_prose assets_login sv_025 ch_026 ch_027 ch_030 lk_042 ch_034 measure_rows ts_001 ts_002 ch_035 ch_029 lk_044 ch_028 tf_058 lk_040 ch_031 lk_041 sv_038 sv_033 sv_034 ch_036 find_cost verify_mark sv_035 sv_036 sv_027 sv_028 sv_029 sv_030 sv_032 tf_057 sv_026 sv_031 as_001 am_031 am_032 setup_first; do
+for t in status_read marker_age yolo_ttl emit_root backtick_row owner_uat quoted_phase handoff_prose assets_login sv_025 ch_026 ch_027 ch_030 lk_042 ch_034 measure_rows ts_001 ts_002 ts_003 ts_004 ts_005 ts_006 ts_007 ts_007e ch_035 ch_029 lk_044 ch_028 tf_058 lk_040 ch_031 lk_041 sv_038 sv_033 sv_034 ch_036 find_cost verify_mark sv_035 sv_036 sv_027 sv_028 sv_029 sv_030 sv_032 tf_057 sv_026 sv_031 as_001 am_031 am_032 setup_first; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t" > "$SCRATCH/case.out" 2>&1; cat "$SCRATCH/case.out"; grep '^skipped:' "$SCRATCH/case.out" >> "$SCRATCH/skipped"
 done

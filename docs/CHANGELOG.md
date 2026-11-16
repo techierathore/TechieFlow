@@ -12,6 +12,33 @@
 
 v1.3.1 is the tag at `15b61bb` (v1.3.0 is `96bea45`). What follows is in no tag yet.
 
+- **TrStudio TF-003 to TF-007 (2026-11-16, Mac; deployed to TrStudio only).** Each fault has a case that fails on
+  the scripts of `572b111` and passes now, with a control half; the new cases live in `tests/faults/ts-cases.sh`,
+  which `tests/faults/run.sh` sources (it is near the test-file size cap), against a stand-in mac2 server,
+  `tests/faults/fake-mac2.mjs`. Then checked on TrStudio's running app.
+  - TF-003 (`ts_003`): a later phase's box the app already draws is no other state. `laterReached` in `tf-theme.mjs`
+    unmarks it on the mockup when the app holds its anchor, or with none its tag and text under the same anchor, so
+    both sides number their siblings alike. On the app: Login's and Setup required's shifted-box findings are gone.
+  - TF-005 (`ts_005`): rows are counted from the text nodes' line boxes, a new row when a box's bottom sits more
+    than half a box below the row's. A fixed-height button is one row; `am_015`'s padded wrap still shows.
+  - TF-004 (`ts_004`): the click-path code moved to `tf_nav.py`. A page's own links count, the screen nothing in the
+    menu reaches gets `nav_from`, and list.json carries the link graph (`links`). The Mac checker tells the screen on
+    view by its own links (not menu labels) and plans from there.
+  - TF-006 (`ts_006`): a C# call whose first two arguments are a label and a route is a menu link; a wholly computed
+    href is no link (it matched every one-segment route); a label not on view is looked for again after a
+    "Switch to …" control.
+  - TF-007 (`ts_007`, `ts_007c`, `ts_007e`): a control is scrolled into the window first (aimed at the web view, by
+    the full distance: mac2's delta is in points, and aimed at the window TrStudio's page moved 19 points); a click
+    that changes nothing is no step, unless the window already shows that screen. Found on the real app and fixed:
+    "Account" matched "Create an account" (labels now match only with icons or punctuation around them), and the
+    sign-in typed nothing holding "@" or "!" (`tf-appium.mjs` reads the field back and types again with
+    `macos: keys`).
+  - `tests/maccatalyst/make-hybrid.sh`: Manage Crowd is driven before Broken. After Broken's unhandled error the web
+    view stops, and the old expectation passed on a window the click had not changed.
+  - On the app (16 Nov): Mac head, signed out, four screens reached at 1280 and 390; signed in, the seven admin
+    screens. Not reached: Character library, Comparison, Account, because both configured test users land on the
+    management surface with no switch (TrStudio's data). TF-001 seen on its no-password branch only.
+
 - **Nine faults of 15 Nov from four projects (2026-11-15, night; deployed to Chatur, Sevak, Lekhak, TfLens,
   AppManager, AstroLyfe and TechieRag; not TrStudio, which was being worked on from the Mac).** Each fault that
   needed code has a case in `tests/faults/run.sh` that fails on the scripts of `15b61bb` and passes now, with a
