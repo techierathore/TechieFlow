@@ -368,7 +368,7 @@ PY
     UNITLINE="$(bash "$HERE/tf-build.sh" test ${TARGET:+"$TARGET"} -- "${UARGS[@]}" 2>&1 | grep -m1 -E '^(PASS|FAIL|NOT-RUN)' || true)"
     UNITLOG="$(sed -n 's/.*log \(tests\/\.artifacts\/build\/[^ ;]*\).*/\1/p' <<<"$UNITLINE" | head -1)"
     TRX="$(find . -name '*.trx' -newer "$STAMP" -not -path '*/node_modules/*' 2>/dev/null)"; rm -f "$STAMP"
-    echo "unit tests: $UNITLINE"; [[ "$UNITLINE" != NOT-RUN* ]] && ran_any=1
+    echo "unit tests: $UNITLINE"; [[ "$UNITLINE" != NOT-RUN* && "$UNITLINE" != *"refused its arguments"* ]] && ran_any=1
   else
     echo "unit tests: no solution or test project found; skipped"
   fi

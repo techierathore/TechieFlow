@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 367 logged: 59 open, 306 fixed, 1 will not fix, 1 withdrawn |
+| Count | 374 logged: 59 open, 313 fixed, 1 will not fix, 1 withdrawn |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
-| Updated | 2026-11-14 |
+| Updated | 2026-11-15 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
@@ -73,10 +73,17 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (306)
+## Fixed (313)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261115-07 | 2026-11-15 by owner | 2026-11-15 by log-miss | the check was too weak | FW (TrStudio TF-002): the mockup check read a fill from background-color alone, so a gradient button was no fill and neutral beside the same button drawn solid |
+| MISS-TechieFlow-20261115-06 | 2026-11-15 by owner | 2026-11-15 by log-miss | the check was too weak | FW (TrStudio TF-001): the Mac boot matched REQUIRES user authentication in capitals only; macOS 27.2 prints it in small letters, so the boot built the app and then named Accessibility as the fix |
+| MISS-TechieFlow-20261115-05 | 2026-11-15 by owner | 2026-11-15 by log-miss | the check was too weak | FW (Chatur TF-036, Sevak TF-039): a finding took the latest look mark by the clock, so a mark set in the second of the last demote took that row's time and a cause logged late got the next investigation's time |
+| MISS-TechieFlow-20261115-04 | 2026-11-15 by owner | 2026-11-15 by log-miss | the check was too weak | FW (Chatur TF-035, Lekhak TF-045): the screen check waited for any one control and the mockup check did not wait, so a tab screen was measured on its window frame and a loading screen was compared with its mockup |
+| MISS-TechieFlow-20261115-03 | 2026-11-15 by owner | 2026-11-15 by log-miss | the check was too weak | FW (Chatur TF-034, the table): measure-projects.py printed 0 rows move from records the old mockup check had written, and the reply of 14 Nov repeated it as no verdict moves; the rule then failed 17 Chatur screens |
+| MISS-TechieFlow-20261115-02 | 2026-11-15 by owner | 2026-11-15 by log-miss | the check was too weak | FW (Chatur TF-034): the pill rule of 14 Nov still read the box around a text field as a pill at 6 px, so Sign in and Register kept failing the mockup check after the app took the mockup's button shape |
+| MISS-TechieFlow-20261115-01 | 2026-11-15 by owner | 2026-11-15 by log-miss | the check was too weak | FW (Lekhak TF-044): tf-build.sh handed a test filter holding a space to cmd.exe unquoted; dotnet refused it (MSB1008) and the next rungs were tried, which on the script of 14 Nov ran every test twice, the paid real-model ones included |
 | MISS-TechieFlow-20261114-11 | 2026-11-14 by owner | 2026-11-14 by log-miss | the check was too weak | FW (CI of 0c8158f): regression case ch_010 passed only with SDK 10, because dotnet run -p:TargetFramework does not reach the restore; the Linux runner's older SDK failed it, and with it every FR line graded by the regression suite |
 | MISS-TechieFlow-20261114-10 | 2026-11-14 by owner | 2026-11-14 by log-miss | the check was too weak | FW (owner 14 Nov): a chained verify with no start mark of its own was recorded from list.json's last write, three records of 5 to 8 seconds |
 | MISS-TechieFlow-20261114-09 | 2026-11-14 by owner | 2026-11-14 by log-miss | said and ignored | FW (owner 14 Nov): the cost of finding each root cause depended on agents setting look marks, and a run closed quietly with every one not measured |

@@ -1392,9 +1392,9 @@ def _amend_ok(rec):
     if not mid:
         warn("amend refused — no miss_id")
         return False
-    if fld == "miss_class":   # a correction only, to a value of its vocabulary (Sevak TF-036)
-        if not why or val not in _MISS_ENUMS["miss_class"]:
-            warn("amend refused — miss_class is replaced only by a correction with a reason")
+    if fld in ("miss_class", "discovery_scope"):   # a correction only (Sevak TF-036; a wrong finding time, TF-039)
+        if not why or val not in (_MISS_ENUMS["miss_class"] if fld == "miss_class" else ("not-measured",)):
+            warn("amend refused — %s is replaced only by a correction with a reason" % fld)
             return False
     elif val is None and why and (fld in _AMENDABLE or fld in _AMENDABLE_TEXT):
         pass

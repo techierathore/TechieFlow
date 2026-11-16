@@ -51,7 +51,7 @@ def main(argv):
         return 0
     last = max(m.get("found_run_id") or "" for m in misses)          # the command that closes now
     unmeasured = [m for m in misses if (m.get("found_run_id") or "") == last and not m.get("discovery_started")
-                  and not (m.get("discovery_why") or "").startswith("found by a rule check")]
+                  and not (m.get("discovery_why") or "").startswith(("found by a rule check", "found in the same investigation as"))]
     unsaid = [m for m in unmeasured if m.get("miss_id") and m["miss_id"] not in message]
     if not unsaid:
         return 0

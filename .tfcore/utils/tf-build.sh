@@ -21,6 +21,9 @@
 # that creates an account on a shared AppManager is a FAIL line, exit 1, like a compile error.
 # Exit 0 PASS · 1 FAIL (the code is wrong: fix it) · 2 NOT-RUN (the host is wrong: never a
 # project blocker; say which rungs were tried).
+# Extra arguments holding anything but plain characters (a test filter with a space, |, a quote) reach
+# dotnet on the Windows rungs in a file, one argument a line (`dotnet test <target> @file`), so no shell
+# splits them. Arguments dotnet refuses are FAIL, exit 1, and no other rung is tried (Lekhak TF-044).
 #
 # Rungs by host (docs/TechieFlow-How-It-Works.md; build-invocation-ladder.md §D keeps the
 # runtime-driver table, which this script does not replace):
@@ -150,6 +153,7 @@ if [[ "$MODE" == "test" && "${TF_TEST_TOGETHER:-0}" != "1" && "$TARGET" == *.sln
     for t in "${tests[@]}"; do
       out="$(TF_TEST_TOGETHER=1 bash "${BASH_SOURCE[0]}" test "$t" ${pass[@]+"${pass[@]}"} 2>&1)"
       v="$(grep -m1 -E '^(PASS|FAIL|NOT-RUN)' <<<"$out")"
+      [[ "$v" == *"refused its arguments"* ]] && { echo "$v"; exit 1; }   # the other projects would be refused the same
       lg="$(sed -n 's/.*log \(tests\/\.artifacts\/build\/[^ ;]*\).*/\1/p' <<<"$v" | head -1)"
       { echo "### test project: $t"; [[ -n "$lg" && -f "$lg" ]] && cat "$lg" || echo "$out"; } >> "$JOINED"
       lines+=("  $(basename "$t" .csproj): $v")
@@ -172,11 +176,30 @@ verb="$MODE"
 args=("$verb")
 [[ -n "$TARGET" ]] && args+=("$TARGET")
 [[ "$MODE" == "run" ]] && args=("run" "--project" "$TARGET")
-args+=(${EXTRA[@]+"${EXTRA[@]}"})
+# Lekhak TF-044: a double quote in a test filter goes as %22, which MSBuild reads back as the quote. dotnet
+# hands the filter on as -property:VSTestTestCaseFilter="…" and a quote inside it ended the value there
+# (MSB4177 on dotnet 10, with no shell between). An argument holding a line break can go on no command line.
+xa=(); prev=""
+for a in ${EXTRA[@]+"${EXTRA[@]}"}; do [[ "$prev" == --filter ]] && a="${a//\"/%22}"; xa+=("$a"); prev="$a"; done
+[[ "${xa[*]-}" == *$'\n'* ]] && { echo "FAIL  dotnet was not started: an extra argument holds a line break, which no command line can carry. Nothing ran."; exit 1; }
+args+=(${xa[@]+"${xa[@]}"})
 [[ $PRINT -eq 1 ]] && { echo "dotnet ${args[*]}"; exit 0; }
 
 mkdir -p tests/.artifacts/build
 LOG="tests/.artifacts/build/$(date -u +%Y%m%dT%H%M%SZ)-$MODE-$$.log"   # two builds in one second never share a log
+# Lekhak TF-044: on a Windows rung a shell stands between this script and dotnet. cmd.exe split a filter at
+# its space ("DisplayName~REQ-RAG-114 TestDbChapterOne" became a second project: MSB1008) and no escaping
+# holds for every character. So when an extra argument holds anything but plain characters, the extra
+# arguments go in a file, one per line, and the Windows rungs run `dotnet test <target> @file`: dotnet reads
+# each line as one argument (proved on cmd.exe and powershell.exe with dotnet 10: a space, |, ~, ' and ").
+wargs=("${args[@]}")
+if [[ "$MODE" != run ]] && printf '%s\n' ${xa[@]+"${xa[@]}"} | grep -qvE '^[A-Za-z0-9_./:=,~+%;\\-]*$'; then
+  RSP="${LOG%.log}.rsp"; printf '%s\n' "${xa[@]}" > "$RSP"
+  wargs=("$verb" ${TARGET:+"$TARGET"} "@$RSP")
+fi
+# dotnet refusing its arguments (one read as a second project, an unknown switch, a broken property) is the
+# arguments' failure. No other rung is tried: in Lekhak the next rung ran the whole suite, paid tests included.
+REFUSED='error MSB(1001|1006|1008|4177)|Unrecognized command or argument|Unrecognized option'
 
 # ---- one build or browser check at a time (TF-043, TF-048): tf-lock.sh. `run` does not take it.
 source "$(dirname "${BASH_SOURCE[0]}")/tf-lock.sh"
@@ -281,7 +304,7 @@ fi
 # one. Each argument is passed as written: for cmd.exe ^ & | < > are escaped with ^; for PowerShell (and
 # winrun, which runs it) an argument holding anything but plain characters is put in single quotes.
 win_cmd() { local a out=""; for a in "$@"; do a="${a//^/^^}"; a="${a//&/^&}"; a="${a//|/^|}"; a="${a//</^<}"; a="${a//>/^>}"; out+="${out:+ }$a"; done; printf '%s' "$out"; }
-win_ps() { local a out="" q="'"; for a in "$@"; do [[ "$a" =~ ^[A-Za-z0-9_./:=,~+@%\\-]*$ ]] || a="$q${a//$q/$q$q}$q"; out+="${out:+ }$a"; done; printf '%s' "$out"; }
+win_ps() { local a out="" q="'"; for a in "$@"; do [[ "$a" =~ ^[A-Za-z0-9_./:=,~+%\\-]*$ ]] || a="$q${a//$q/$q$q}$q"; out+="${out:+ }$a"; done; printf '%s' "$out"; }
 # A WSL rung run on a tree the Windows side also builds (a MAUI head in it, or an obj/ last built there)
 # restores the shared obj/ with Linux package paths, and the next Windows build (the boot's own
 # `cmd.exe /c dotnet run` included) failed with NETSDK1064 until a Windows restore (Sevak TF-037). The
@@ -309,9 +332,9 @@ for r in "${rungs[@]}"; do
   case "$r" in
     dotnet)          cmd=(dotnet "${args[@]}"); label="dotnet" ;;
     */.dotnet/dotnet) cmd=("$r" "${args[@]}"); label="~/.dotnet/dotnet" ;;
-    winrun)          cmd=(winrun "dotnet $(win_ps "${args[@]}")"); label="winrun dotnet" ;;
-    cmd.exe)         cmd=(cmd.exe /c "dotnet $(win_cmd "${args[@]}")"); label="cmd.exe /c dotnet" ;;
-    powershell.exe)  cmd=(powershell.exe -Command "dotnet $(win_ps "${args[@]}")"); label="powershell.exe dotnet" ;;
+    winrun)          cmd=(winrun "dotnet $(win_ps "${wargs[@]}")"); label="winrun dotnet" ;;
+    cmd.exe)         cmd=(cmd.exe /c "dotnet $(win_cmd "${wargs[@]}")"); label="cmd.exe /c dotnet" ;;
+    powershell.exe)  cmd=(powershell.exe -Command "dotnet $(win_ps "${wargs[@]}")"); label="powershell.exe dotnet" ;;
   esac
   tried+=("$label"); last_side="$(side_of "$r")"
   [[ "$PLATFORM" == "wsl" ]] && cross_side "$(side_of "$r")"
@@ -357,6 +380,11 @@ for r in "${rungs[@]}"; do
     warns="$(grep -cE 'warning [A-Z]+[0-9]+' <<<"$seg" || true)"
     echo "PASS  $MODE on $PLATFORM via $label (rung $n) — $warns warning line(s)${retried:+; the first try failed on $retried Razor error line(s) from a stale compiler server, and it passed once the build servers were shut down}; log $LOG"
     finish 0
+  fi
+  if grep -qE "$REFUSED" <<<"$seg"; then
+    first="$(grep -E "$REFUSED" <<<"$seg" | head -1 | sed 's/^[[:space:]]*//; s/[.][[:space:]]*$//' | cut -c1-200)"; first="${first%.}"
+    echo "FAIL  dotnet refused its arguments on $label (rung $n): $first. Nothing ran, and no other rung was tried: it would be handed the same arguments. Correct the arguments after -- and run again; log $LOG"
+    finish 1
   fi
   # Code errors: C# (CS), Razor (RZ), Blazor (BL), XAML (XC, XLS), missing reference (MSB/NU).
   # Until 2026-09-06 only CS counted, so a build failing on sixteen Razor RZ9991 errors was

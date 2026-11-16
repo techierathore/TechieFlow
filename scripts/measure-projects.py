@@ -11,7 +11,12 @@ of this repository, or `deployed` for the copy the project runs today), the othe
 in this working tree. The same checks run in both and the answers are compared:
 
   rows       tf-verify-verdict.py over the saved records of the project's last verify
-             (tests/.artifacts/verify/*.json): the rows whose verdict would move
+             (tests/.artifacts/verify/*.json): the rows whose verdict would move. That replays the
+             grading step only, over what the OLD screen and mockup checks measured, and only for the
+             rows that verify covered. So when a script that measures a screen differs, the rows with
+             a screen read "not measured", never 0 (Chatur TF-034: the pill rule of 14 Nov failed 17
+             screens where this column had said "0 rows move"), and the cell says how many of the
+             project's rows the last verify covered
   tests      the spec files under tests/verify, read as text: the tests a phase verify would leave
              out because nothing in their name, their group or their file carries a row id
   findings   tf-doc-check.py --app and tf-test-users-check.py: FAIL lines that appear or go
@@ -35,7 +40,11 @@ import tempfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BROWSER_SIDE = ["tf-verify-screens.mjs", "tf-mockup-parity.mjs", "tf-menus.mjs", "tf-login.mjs", "tf-theme.mjs",
-                "tf-assets.sh", "tf-assets-browser.mjs", "tf-verify-native.mjs", "tf-verify-boot.sh", "tf-verify-tests.sh", "tf-dropdowns.mjs"]
+                "tf-assets.sh", "tf-assets-browser.mjs", "tf-verify-native.mjs", "tf-verify-boot.sh", "tf-verify-tests.sh", "tf-dropdowns.mjs",
+                "tf-build.sh", "tf-mac-host-check.sh"]
+# the scripts that measure a screen: what they wrote is in the saved records, and only a running app renews it
+SCREEN_SIDE = ["tf-verify-screens.mjs", "tf-mockup-parity.mjs", "tf-menus.mjs", "tf-login.mjs", "tf-theme.mjs",
+               "tf-verify-native.mjs", "tf-dropdowns.mjs"]
 DOC_KEEP = (".md", ".json", ".jsonl", ".yaml", ".yml")
 SKIP_DIRS = {"node_modules", ".artifacts", "bin", "obj", "test-results", "playwright-report", ".git", "__pycache__"}
 ENV = {k: v for k, v in os.environ.items()
@@ -178,7 +187,16 @@ def measure(box, app, phases):
     nxt = re.search(r"## Next command to run\s*\nClaude Code:\s*\n```\s*\n(.*?)\n```", out)
     m["next"] = nxt.group(1).strip() if nxt else ""
     ev = os.path.join(box, "tests", ".artifacts", "verify")
+    m["screen_rows"], m["all_rows"] = set(), set()
+    docs = os.path.join(box, "docs")
+    for f in (os.listdir(docs) if os.path.isdir(docs) else []):
+        if f.endswith("-Checklist.md") and "Deployment" not in f:
+            m["all_rows"] |= {x.upper() for x in re.findall(r"(?m)^\s*\|\s*[`*]*(REQ-[A-Z]+-\d+)", open(os.path.join(docs, f), encoding="utf-8", errors="replace").read())}
     if os.path.isfile(os.path.join(ev, "list.json")):
+        try:   # the rows of the saved verify that have a screen
+            m["screen_rows"] = {r["id"] for r in json.load(open(os.path.join(ev, "list.json"), encoding="utf-8")).get("rows", []) if r.get("id") and r.get("screen")}
+        except Exception:
+            pass
         try:   # when the saved verify ran, read before the verdict script writes its own file over it
             was = json.load(open(os.path.join(ev, "verdicts.json"), encoding="utf-8")).get("date")
         except Exception:
@@ -213,8 +231,9 @@ def measure(box, app, phases):
     return m
 
 
-def compare(old, new):
-    """-> the cells of one table row and the detail lines under it"""
+def compare(old, new, screen_side=()):
+    """-> the cells of one table row and the detail lines under it. screen_side: the scripts that
+    measure a screen and differ between the two versions"""
     detail = []
     moved = [(rid, old["rows"][rid], new["rows"][rid]) for rid in sorted(set(old["rows"]) & set(new["rows"]))
              if old["rows"][rid] != new["rows"][rid]]
@@ -225,7 +244,16 @@ def compare(old, new):
         if "not measured (" in rows_cell:
             detail.append(f"rows: {new['verdict_note'] or old['verdict_note']}")
     else:
-        rows_cell = f"{len(moved)} of {len(new['rows'])}" if moved else f"0 of {len(new['rows'])}"
+        shown = sorted(set(new["rows"]) & new["screen_rows"]) if screen_side else []
+        rest = [x for x in moved if x[0] not in shown]
+        rows_cell = f"{len(moved)} of {len(new['rows'])}"
+        if shown:   # never "0": the saved records hold what the old script measured
+            rows_cell = (f"not measured for {len(shown)} row(s) with a screen; {len(rest)} of {len(new['rows']) - len(shown)} without one"
+                         + (f"; at least {len(moved) - len(rest)} with a screen move on the grading step alone" if len(moved) > len(rest) else ""))
+            detail.append(f"rows with a screen, not measured ({', '.join(screen_side)} differ and need the running app): {', '.join(shown[:12])}"
+                          + (f" … and {len(shown) - 12} more" if len(shown) > 12 else ""))
+        if len(new["all_rows"]) > len(new["rows"]):
+            rows_cell += f" (the last verify covered {len(new['rows'])} of the project's {len(new['all_rows'])} rows; the others are not measured)"
         for rid, o, n in moved[:12]:
             detail.append(f"row {rid}: {o[0]} ({o[1]}) → {n[0]} ({n[1]})")
         if len(moved) > 12:
@@ -308,9 +336,9 @@ def main(argv):
             sandbox(project, new_tfcore, os.path.join(work, name, "new"))
             old = measure(os.path.join(work, name, "old"), app, phases)
             new = measure(os.path.join(work, name, "new"), app, phases)
-            cells, detail = compare(old, new)
             boot = [s for s in BROWSER_SIDE
                     if digest(os.path.join(old_tfcore, "utils", s)) != digest(os.path.join(new_tfcore, "utils", s))]
+            cells, detail = compare(old, new, [s for s in SCREEN_SIDE if s in boot])
             has_ev = os.path.isfile(os.path.join(project, "tests", ".artifacts", "verify", "screens.json")) \
                 or os.path.isfile(os.path.join(project, "tests", ".artifacts", "verify", "parity.json"))
             cells.append(f"{len(boot)} script(s)" if boot and (has_ev or new["tests"]) else "nothing to boot" if boot else "none changed")
@@ -330,7 +358,8 @@ def main(argv):
            "| Project | Phase checklists | Rows whose verdict moves | Tests a phase verify stops running | Findings that appear or go | Build list, next command | Needs a boot to measure |",
            "|---|---|---|---|---|---|---|"] + lines + [""]
     if changed:
-        out += ["Browser-side scripts that differ, not measured here (their result needs the running app): " + ", ".join(changed) + ".", ""]
+        out += ["Browser-side scripts that differ, not measured here (their result needs the running app): " + ", ".join(changed) + ".",
+                "A row with a screen reads \"not measured\" when one of them measures screens: the saved records were written by the old script, so replaying them would show 0 whatever the new one finds.", ""]
     if skipped:
         out += ["No checklist yet, nothing to measure: " + ", ".join(skipped) + ".", ""]
     for name, detail in details:

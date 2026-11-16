@@ -21,7 +21,7 @@ import { chromium } from 'playwright';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { signIn, reach, ensureDrawing, openFresh } from './tf-login.mjs';
+import { signIn, reach, reachCdp, waitLoaded } from './tf-login.mjs';
 import { parseThemes, useTheme, surface, differs, looksDark, gradedPhase, markLaterPhase, READ_THEME, DECLARES_THEME, APPLY_THEME } from './tf-theme.mjs';
 import { mockupMenus, walkMenus, placeholdersOnPage, reachability } from './tf-menus.mjs';
 
@@ -190,6 +190,16 @@ const PROBE = (wanted = []) => {
   const over = (c, base) => ({ r: Math.round(c.r * c.a + base.r * (1 - c.a)), g: Math.round(c.g * c.a + base.g * (1 - c.a)),
                                b: Math.round(c.b * c.a + base.b * (1 - c.a)), a: 1 });
   const seen = (c, el) => (c && c.a < 0.99 ? over(c, behind(el)) : c);
+  // A gradient is painted over the background colour: the mean of its colour stops is the fill a reader
+  // sees (TrStudio TF-002: a gradient button read "no fill, neutral", the same button drawn solid "accent").
+  const fillOf = (cs, el) => {
+    const bg = RGB(cs.backgroundColor);
+    const st = (/gradient\(/.test(cs.backgroundImage) && cs.backgroundImage.match(/(rgba?|hsla?|oklch|oklab|lab|lch|color)\([^()]*\)|#[0-9a-f]{3,8}\b/gi) || []).map(RGB).filter(Boolean);
+    if (!st.length) return bg;
+    const m = (k) => st.reduce((t, c) => t + c[k], 0) / st.length;
+    const g = { r: Math.round(m('r')), g: Math.round(m('g')), b: Math.round(m('b')), a: m('a') };
+    return g.a < 0.99 ? over(g, bg ? seen(bg, el) : behind(el)) : g;
+  };
 
   // Semantic BUCKET, never the literal colour: two designs may legitimately differ
   // in shade, and grading the exact value would produce a finding on every screen.
@@ -216,7 +226,7 @@ const PROBE = (wanted = []) => {
   const semanticColor = (el) => {
     if (el.matches(TOGGLE)) return null;   // the browser paints a native toggle's fill itself
     const cs = getComputedStyle(el);
-    const bg = RGB(cs.backgroundColor);
+    const bg = fillOf(cs, el);
     const fg = RGB(cs.color);
     // text is seen over the element's own background, itself seen over what is behind it
     const under = bg ? seen(bg, el) : behind(el);
@@ -289,9 +299,11 @@ const PROBE = (wanted = []) => {
     if (r.height > 44 || r.height < 6) return null;    // a card is not a badge
     const cs = getComputedStyle(el);
     const radius = parseFloat(cs.borderTopLeftRadius) || 0;
-    const fill = RGB(cs.backgroundColor), filled = !!fill;
+    const fill = fillOf(cs, el), filled = !!fill;
     const ringed = drawnBorder(cs);      // a transparent ring is not a ring
-    return { badge: (filled || ringed) && (el.matches(CTL) ? radius >= r.height / 2 - 1 : radius >= 6), filled, ringed,
+    // the box drawn around a text field is the field's own box, judged as the field is (Chatur TF-034)
+    const ctl = el.matches(CTL) || !!el.querySelector('input:not([type="checkbox"],[type="radio"],[type="hidden"]),select,textarea');
+    return { badge: (filled || ringed) && (ctl ? radius >= r.height / 2 - 1 : radius >= 6), filled, ringed,
       radius: Math.round(radius), h: Math.round(r.height), fill: fill ? `rgb(${fill.r},${fill.g},${fill.b})` : null };
   };
 
@@ -895,24 +907,6 @@ if (CDP) {
     await browser.close(); process.exit(2);
   }
 }
-// the attached app's router, not a document load: a desktop head has no server to answer a goto
-// and it waits until the app has drawn the screen — the address matches and one of the
-// mockup's anchors that was not on the previous page is attached — before anything is read (tf-login.mjs)
-async function reachCdp(page, route, anchors = []) {
-  try {
-    // from the screen's own first state, scrolled to the top, whatever the last test left
-    const a = await openFresh(page, route, anchors, LOGIN_OPTS);
-    // a minimized desktop window draws nothing, and nothing read from it can be trusted
-    const dr = await ensureDrawing(page, CDP);
-    if (!dr.drawing) return { status: 0, not_drawing: true, error: `not measured: the app window is not drawing (minimized, or the screen is locked?) — 0 animation frames in 1 s${dr.restored ? `; restore: ${dr.restored}` : ''}` };
-    // A screen none of whose own controls appeared is not measured, never compared: the app has not
-    // moved to it, and the page still on view would be compared instead.
-    if (a.arrived === false && a.fresh > 0) {
-      return { status: 0, not_drawing: true, error: `not measured: the app did not move to ${route} within ${Math.round(Math.max(RENDER_WAIT, 5000) / 1000)} s — none of the screen's own controls appeared, so the page still on view was not compared (--render-wait <ms> waits longer)` };
-    }
-    return { status: 200, url: page.url(), arrived: a.arrived, reset: a.reset };
-  } catch (e) { return { status: 0, error: e.message.split('\n')[0] }; }
-}
 if (COOKIE && !CDP) {
   const u = new URL(BASE);
   for (const pair of COOKIE.split(';')) {
@@ -929,7 +923,10 @@ if (HEADERS.length) {
 // One app tab per width, signed in once and kept on the app, and one tab for the mockups. A sign-in
 // the page keeps for itself lives in that tab: a fresh tab per screen would be signed out every time.
 // The mockup tab never touches the app, so the app tab never leaves it.
-const tabs = {};
+const tabs = {}, settled = {};
+// a mockup's own controls: its anchors outside any other state, open menu or sample row
+const OWN_IDS = () => [...document.querySelectorAll('[data-testid]')]
+  .filter((e) => !e.closest('[data-tf-state],[data-state-testid],[data-tf-sample]')).map((e) => e.getAttribute('data-testid'));
 let loginResult = null;
 for (const width of WIDTHS) {
   const size = { width, height: width < 700 ? 844 : 800 };
@@ -967,7 +964,7 @@ for (const s of SCREENS) {
       // reach() judges by what the page draws, signs in again from inside the page when it must, and
       // returns 200 only when the screen was really drawn signed in.
       if (CDP) await page.setViewportSize({ width, height: width < 700 ? 844 : 800 }).catch(() => {});
-      const nav = CDP ? await reachCdp(page, s.route, mock.testids || []) : await reach(page, LOGIN_OPTS, s.route);
+      const nav = CDP ? await reachCdp(page, s.route, mock.testids || [], LOGIN_OPTS, CDP) : await reach(page, LOGIN_OPTS, s.route);
       if (nav.status === 0 || nav.status >= 400 || nav.signedOut) {
         perWidth.push({ width, ...(nav.not_drawing ? { not_drawing: true } : {}), error: nav.not_drawing ? nav.error : nav.status === 0 ? `could not open ${s.route}: ${nav.error || 'no response'}`
           : nav.signedOut ? `app returned HTTP ${nav.document_status ?? nav.status} and stayed signed out (sign-in ${LOGIN_PATH && USER ? 'did not hold' : 'not given: --login-path/--user/--password or --cookie'})`
@@ -976,6 +973,10 @@ for (const s of SCREENS) {
       }
       reached = nav.reached || '';
       await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+      // the waiting rule the screen check uses (tf-login.mjs waitLoaded): a screen still loading is not compared
+      const ld = await waitLoaded(page, LOGIN_OPTS, await mockPage.evaluate(OWN_IDS), settled[s.name]);
+      settled[s.name] = ld.present;
+      if (ld.loading) { perWidth.push({ width, not_drawing: true, error: `not measured: ${ld.why}` }); continue; }
       wanted = [...new Set(Object.values(mock.index).filter((x) => x.badge === true && x.text).map((x) => x.text))];
       // The app is drawn in the mockup's theme for the comparison, not in the viewer's saved one.
       // The mockup's theme attributes on <html> and <body> are copied onto the app page
@@ -1141,8 +1142,7 @@ if (WALK_MENUS && results.length) {
       byScreen[r.screen] = await mockupMenus(mockPage, 'data-testid');
       mockText[r.screen] = await mockPage.evaluate(() => document.body.innerText || '');
       // the controls that say a click landed on this screen: anchors outside any other state or open menu
-      mockIds[r.screen] = await mockPage.evaluate(() => [...document.querySelectorAll('[data-testid]')]
-        .filter((e) => !e.closest('[data-tf-state],[data-state-testid],[data-tf-sample]')).map((e) => e.getAttribute('data-testid')));
+      mockIds[r.screen] = await mockPage.evaluate(OWN_IDS);
     } catch (e) { byScreen[r.screen] = []; }
   }
   const key = (m) => `${m.trigger}|${m.popup}`;

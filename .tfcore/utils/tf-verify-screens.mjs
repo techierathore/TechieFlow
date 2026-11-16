@@ -207,7 +207,7 @@ function writeOut(extra, results = [], login = null) {
 // The sign-in recipe and the way a screen behind an in-page sign-in is reached live in
 // tf-login.mjs, shared with tf-mockup-parity and tf-assets so every check reaches a screen the
 // same way.
-import { signIn, signedOut as signedOutShared, navigateInApp as navigateInAppShared, ensureDrawing, openFresh, gotoRetry, waitForRender as waitForRenderShared, quietConsole } from './tf-login.mjs';
+import { signIn, signedOut as signedOutShared, navigateInApp as navigateInAppShared, ensureDrawing, openFresh, gotoRetry, waitForRender as waitForRenderShared, waitLoaded, quietConsole } from './tf-login.mjs';
 const LOGIN_OPTS = { base: BASE, loginPath: LOGIN_PATH, user: USER, password: PASS, attr: ATTR, settle: SETTLE, renderWait: RENDER_WAIT };
 const login = (page) => signIn(page, LOGIN_OPTS);
 
@@ -443,7 +443,7 @@ function grade(info, consoleErrors, width, excused = [], stateOnly = [], overlay
 
 // ---------------------------------------------------------------- run
 mkdirSync(SHOTS, { recursive: true });
-const results = [];
+const results = [], settled = {};   // settled: the controls each screen had when its wait ended (waitLoaded)
 let loginResult = null;
 let firstUnreachable = false;
 let darkOffered = false;  // auto mode: has any screen shown a dark theme yet?
@@ -515,7 +515,10 @@ for (const width of WIDTHS) {
       r.widths.push(entry);
       continue;
     }
-    entry.render_wait_ms = await waitForRender(page, (r.anchors || []).filter((id) => !excused.includes(id) && !stateOnly.includes(id)), ATTR);
+    // the waiting rule the mockup check uses too (tf-login.mjs waitLoaded); a screen that never loads is graded as it stands
+    const ld = await waitLoaded(page, { ...LOGIN_OPTS, attr: ATTR }, (r.anchors || []).filter((id) => !excused.includes(id) && !stateOnly.includes(id)), settled[s.name]);
+    settled[s.name] = ld.present; entry.render_wait_ms = ld.waited_ms;
+    if (!ld.loaded) { entry.loaded = false; entry.anchors_when_measured = `${ld.present} of ${ld.of}`; }
     // one pass per theme on the same opened screen; each pass puts the page back as it found it, so an
     // attached desktop head is left in the viewer's theme
     let lightSurface = null;
@@ -546,11 +549,12 @@ for (const width of WIDTHS) {
           consoleErrors.splice(0, consoleErrors.length, ...first.filter((e) => again.has(e)));
           if (te.console_once.length) { info = { ...(await inspect(page, r.anchors || [], ATTR, ERROR_SELECTORS)), contrast: info.contrast }; g = grade(info, consoleErrors, width, excused, stateOnly, r.overlay || []); }
         }
-        if (CDP && g.render === 'EMPTY') {   // still loading on a desktop head (Lekhak TF-040): waited for once more
+        if (g.render === 'EMPTY') {   // still loading (Lekhak TF-040; on a web head too since Chatur TF-035): waited for once more
           await page.waitForTimeout(Math.max(RENDER_WAIT, 3000));
           info = { ...(await inspect(page, r.anchors || [], ATTR, ERROR_SELECTORS)), contrast: info.contrast };
           g = { ...grade(info, theme === 'light' ? consoleErrors : [], width, excused, stateOnly, r.overlay || []), rechecked: true };
         }
+        if (ld.loading) for (const f of g.findings) if (f.check === 'render') f.detail += ` — ${ld.why}`;
         // a screen still showing placeholder text its mockup does not draw is not built
         if (theme === (THEMES || ['light'])[0]) {
           for (const p of await placeholdersOnPage(page, mockTextOf(s.mockup), PLACEHOLDER_EXTRA)) g.findings.push({ check: 'render', class: 'placeholder', detail: `the screen shows placeholder text "${p}"` });

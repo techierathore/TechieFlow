@@ -6,7 +6,8 @@
     bash .tfcore/utils/tf-triage.sh <App> new "<title>" "<When … on <screen>, then …>" [--prefix UI|FN|NFR|RAG]
                                      [--section "<screen>"] [--evidence <path>] [--source owner|production] [--mockup <file>] [--sort <sort>]
     bash .tfcore/utils/tf-triage.sh <App> note <REQ> "<could not reproduce: what was tried>"
-    bash .tfcore/utils/tf-triage.sh <App> look "<the problem you start investigating now>"
+    bash .tfcore/utils/tf-triage.sh <App> look "<the problem you start investigating now>"      (prints the mark's number)
+    demote and new take --look <number> when the finding answers an earlier mark than the latest one
     bash .tfcore/utils/tf-triage.sh <App> close [--started <ISO>] [--verify-ran] [--cmd triage-issues|fix-issues]
 
 demote, new and note take --phase N for another phase's checklist; without it demote and note find the
@@ -21,7 +22,8 @@ new     a defect no row covers: the next free id in the prefix, across every che
 note    a dated remark on the nearest row, no status change (could not reproduce).
 look    a time mark, nothing else: run it as you START investigating each reported problem. It is where
         that defect's discovery window begins (TechieBlog TF-004), so each miss carries what finding it
-        cost, not a share of the run's window.
+        cost, not a share of the run's window. Which mark a finding belongs to, and the time it carries,
+        is one rule shared with tf-log-miss.sh: tf_looks.py (Chatur TF-036, Sevak TF-039).
 close   what triage owes the telemetry, from the actions above (tests/.artifacts/verify/triage.json):
         one gate record per demoted or new row with gate "escaped" (no check caught it), one miss per row
         with found_by owner or production, the symptom as `what` and the sort (FR-32; --sort on demote or
@@ -42,6 +44,8 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import tf_looks as LK   # noqa: E402  the one rule for which mark a finding belongs to
 LOGP = os.path.join("tests", ".artifacts", "verify", "triage.json")
 KIND_CLASS = {"layout": "overlap", "render-empty": "blank-data", "data-logic": "assert-fail", "rag": "other", None: "other"}
 EMIT = os.path.join(HERE, "tf-emit.sh")
@@ -128,6 +132,17 @@ def opt(argv, name, default=None):
     return argv[argv.index(name) + 1] if name in argv and argv.index(name) + 1 < len(argv) else default
 
 
+def log_found(log, act, argv):
+    """a finding goes on the list with the mark it names; a finding nobody can place is said now, not at the close"""
+    if opt(argv, "--look"):
+        act["look"] = opt(argv, "--look")
+    log["actions"].append(act)
+    log_save(log)
+    r = LK.window(log["actions"], len(log["actions"]) - 1)
+    if r and r[2] and not r[2].startswith(LK.SAME):   # (LATER is falsy: nothing to say yet)
+        print(f"  finding time NOT MEASURED for {act['req_id']}: {r[2]}")
+
+
 SORTS = ("spec", "unsaid", "weak-check", "ignored")
 
 
@@ -171,10 +186,9 @@ def main(argv):
         prior = ce.demote(cl, rid, symptom, kind=kind, evidence=ev, source=src, prefix="⚠ prod bug" if src == "production" else "⚠ UAT bug")
         if prior is None:
             die(f"{rid} is not a row of {cl}")
-        log["actions"].append({"verb": "demote", "req_id": rid, "symptom": symptom, "kind": kind, "evidence": ev, "source": src,
-                               "why": opt(argv, "--why", "insufficient-verify-method"), "sort": sort_opt(argv, "weak-check"),
-                               "prior": prior["status"], "ts": now})
-        log_save(log)
+        log_found(log, {"verb": "demote", "req_id": rid, "symptom": symptom, "kind": kind, "evidence": ev, "source": src,
+                        "why": opt(argv, "--why", "insufficient-verify-method"), "sort": sort_opt(argv, "weak-check"),
+                        "prior": prior["status"], "ts": now}, argv)
         print(f"{rid}: {prior['status']} → Needs re-verify — {symptom}")
         return 0
 
@@ -201,9 +215,8 @@ def main(argv):
             print("note: a UI row needs a mockup link; pass --mockup docs/mockups/<screen>.html or the checker will flag it")
         rid = ce.add_row(cl, prefix, title, acc, section=section, mockup=mockup,
                          remark=f"logged from {'production' if src == 'production' else 'UAT'} {ce.TODAY}" + (f" (evidence: {ev})" if ev else ""))
-        log["actions"].append({"verb": "new", "req_id": rid, "symptom": title, "kind": None, "evidence": ev, "source": src,
-                               "why": opt(argv, "--why", "missing-checklist-item"), "sort": sort_opt(argv, "spec"), "prior": None, "ts": now})
-        log_save(log)
+        log_found(log, {"verb": "new", "req_id": rid, "symptom": title, "kind": None, "evidence": ev, "source": src,
+                        "why": opt(argv, "--why", "missing-checklist-item"), "sort": sort_opt(argv, "spec"), "prior": None, "ts": now}, argv)
         print(f"{rid}: new Not Started row — {title}")
         return 0
 
@@ -222,9 +235,10 @@ def main(argv):
     if verb == "look":
         if len(argv) < 4:
             die("look needs \"<the problem you start investigating>\"")
-        log["actions"].append({"verb": "look", "symptom": argv[3], "ts": now})
+        n = 1 + sum(1 for a in log["actions"] if a.get("verb") == "look")
+        log["actions"].append({"verb": "look", "symptom": argv[3], "ts": now, "n": n})
         log_save(log)
-        print(f"look: {now} — {argv[3][:80]}")
+        print(f"look: {now} — {argv[3][:80]} (mark {n}; a finding logged after a later mark names this one with --look {n})")
         return 0
 
     if verb == "close":
@@ -262,11 +276,11 @@ def main(argv):
         acts = [a for a in log.get("actions", []) if a["verb"] in ("demote", "new") and a not in stale]
         gates = misses = 0
         failed = []
-        # TechieBlog TF-004: each defect's own discovery window. It starts at the latest mark before it: a
-        # `look` (the agent began investigating this problem), the previous finding, or the command's start;
-        # it ends when the defect was logged. Findings logged within BURST seconds of each other with no
-        # `look` between them were found together and logged in a row (TechieBlog's two demotes of 5 Nov were
-        # 17 s apart): their windows cannot be told apart, so each is "not measured", never an even share.
+        # TechieBlog TF-004: each defect's own discovery window. With a `look` mark made before it, the rule
+        # is tf_looks.py's (by the order of the calls, never the clock: Chatur TF-036). With none, it starts
+        # at the previous finding or the command's start and ends when the defect was logged; findings logged
+        # within BURST seconds of each other with no mark between them were found together (TechieBlog's two
+        # demotes of 5 Nov were 17 s apart): each is "not measured", never an even share.
         BURST = 120
         def _s(t):
             try: return datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M:%SZ").timestamp()
@@ -277,11 +291,13 @@ def main(argv):
             t = a.get("ts")
             if not t or not started or t < started:
                 return None, None, "this triage logged no time for the finding, or ran with no start"
-            looks = [x["ts"] for x in live if x["verb"] == "look" and x["ts"] <= t]
+            marked = LK.window(live, next(k for k, x in enumerate(live) if x is a))
+            if marked:      # None: no mark before it. LATER: logged long after its mark's first rows. Both: the older rule
+                return marked
             prev_found = [x["ts"] for x in found if x["ts"] < t]
-            start = max([started] + looks + prev_found)
+            start = max([started] + prev_found)
             mates = [x for x in found if x is not a and abs((_s(x["ts"]) or 0) - (_s(t) or 0)) <= BURST
-                     and not any(min(x["ts"], t) <= lk <= max(x["ts"], t) for lk in looks + [y["ts"] for y in live if y["verb"] == "look"])]
+                     and not any(min(x["ts"], t) <= lk <= max(x["ts"], t) for lk in [y["ts"] for y in live if y["verb"] == "look"])]
             if mates:
                 return None, None, (f"found together with {', '.join(sorted({m['req_id'] for m in mates}))[:80]}: logged within "
                                     f"{BURST} s of each other with no `tf-triage.sh look` between them")

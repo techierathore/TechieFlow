@@ -746,13 +746,15 @@ A run's tokens are one window over every row it touched, so a defect found durin
 
 | Field | Type | Values / notes |
 |---|---|---|
-| `discovery_started` | ISO-8601 \| absent | Set by the writer. Where finding this defect began: the latest `tf-triage.sh <App> look` mark before it, the run's previous finding, or the command's start |
-| `discovery_ended` | ISO-8601 \| absent | Set by the writer: when the defect was logged (`demote` / `new`), or the verify pass's end |
+| `discovery_started` | ISO-8601 \| absent | Set by the writer. Where finding this defect began: the `tf-triage.sh <App> look` mark it belongs to (the one it names with `--look`, else the latest mark made before it, by the order of the calls and never by the clock; `tf_looks.py`, 2026-11-15), the run's previous finding, or the command's start |
+| `discovery_ended` | ISO-8601 \| absent | Set by the writer: when the defect was logged (`demote` / `new` / `tf-log-miss.sh`), or when the next mark was set if that came first, or the verify pass's end |
 | `discovery_s` | int \| absent | Derived: the window's length in seconds |
 | `discovery_tokens_in` / `_out` / `_cache_read` / `_cache_write` | int \| absent | Derived from the transcript (Claude Code) or opencode.db (OpenCode), in the window. A caller's figure is dropped |
 | `discovery_model_tokens_out` | object \| absent | Derived: output tokens per model in the window |
 | `discovery_scope` | `main` \| `tree` \| `not-measured` | Derived. `not-measured` whenever the window could not be given or the store held nothing in it — never an even share, never a zero |
-| `discovery_why` | string \| absent | Why it is `not-measured` |
+| `discovery_why` | string \| absent | Why it is `not-measured`. "found in the same investigation as <miss>" means that miss carries the time, counted once. "marked wrong: …" is a correction (below) |
+
+**A finding time recorded wrongly is marked, never rewritten** (2026-11-15; Chatur TF-036, Sevak TF-039). `tf-emit.sh --amend <miss_id> discovery_scope not-measured "<why, with the true time if known>"` appends a correction (§5.5.7). `tf-metrics.sh` then counts that miss as not measured and prints the reason; the wrong figure stays on the stream and leaves every average. No other `discovery_*` field can be amended: they are derived.
 
 Who sets the window:
 

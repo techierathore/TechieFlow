@@ -23,7 +23,9 @@ AMENDABLE = {
 AMENDABLE_TEXT = ("what",)
 # replaced only by a correction, never filled nor cleared (Sevak TF-036: a miss logged with the wrong class)
 CORRECT_ONLY = {"miss_class": ("missed-requirement", "partial-implementation", "wrong-behaviour", "regression", "unspecified-gap",
-                               "spec-contradiction", "scope-creep", "hallucinated-api", "standards-violation", "other")}
+                               "spec-contradiction", "scope-creep", "hallucinated-api", "standards-violation", "other"),
+                # a finding time recorded wrongly is marked, never rewritten: the report then counts it as not measured
+                "discovery_scope": ("not-measured",)}
 if fld in CORRECT_ONLY:
     if not why or val not in CORRECT_ONLY[fld]:
         print("REFUSED %s is replaced only by a correction with a reason, to one of: %s" % (fld, ", ".join(CORRECT_ONLY[fld]))); raise SystemExit(0)

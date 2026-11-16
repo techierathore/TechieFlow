@@ -136,20 +136,53 @@ export async function navigateInApp(page, o, route) {
   } catch (e) { return false; }
 }
 
-// Wait for the page to draw something: an anchored control, text, or a form control (TF-021).
-export async function waitForRender(page, o, anchors = []) {
+// ---- ONE WAITING RULE for the screen check and the mockup check (Chatur TF-035, Lekhak TF-045) -------
+// Until 2026-11-15 the screen check waited for ANY one of the screen's controls. A tab screen's mockup
+// also names the window around it (menu bar, toolbar), drawn at once, so the wait ended in 80 ms and the
+// tab was measured before its data came; the mockup check did not wait at all and compared "Loading …".
+// LOADED means all three: no loading sign is showing; at least half of the controls the screen's mockup
+//   names are on the page (`enough`: the count this screen settled at on an earlier pass, when that was
+//   fewer); and that count has not changed for 300 ms. With no names to go by: text or a control is drawn.
+// HOW LONG: up to --render-wait (5 s unless given), and once more the same time while a loading sign shows.
+// WHEN THE CONTENT NEVER ARRIVES: loaded is false, with what was there. A loading sign still showing is
+//   named in `loading`: the mockup check does not compare that screen ("not measured: still loading"), the
+//   screen check grades it as it stands and its finding says so. Fewer than half and no sign: the screen
+//   draws less than its mockup, and both checks read it as it is, as before.
+// A loading sign is a visible element with aria-busy="true", a progress bar with no value, or a text that
+//   reads "Loading" or starts with it and ends in "..." or "…".
+const LOAD_STATE = ({ anchors, attr }) => {
+  const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 1 && r.height > 1 && (!e.checkVisibility || e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })); };
+  let sign = '';
+  const busy = [...document.querySelectorAll('[aria-busy="true"],[role="progressbar"]:not([aria-valuenow])')].find(vis);
+  if (busy) sign = (busy.getAttribute('aria-label') || busy.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 80) || 'a busy sign';
+  const w = document.body ? document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT) : null;
+  for (let n; !sign && w && (n = w.nextNode());) {
+    const t = n.nodeValue.trim();
+    if (t.length <= 80 && /^loading$|^loading\b.*(\.\.\.|…)$/i.test(t) && n.parentElement && !n.parentElement.closest('script,style,noscript,template') && vis(n.parentElement)) sign = t;
+  }
+  return { n: anchors.filter((id) => document.querySelector(`[${attr}="${CSS.escape(id)}"]`)).length, sign,
+    content: !!(document.body && (document.body.innerText || '').trim()) || document.querySelectorAll('input, select, textarea, img, svg, canvas, video').length > 0 };
+};
+export async function waitLoaded(page, o, anchors = [], enough = 0) {
   const { attr, renderWait } = opts(o);
-  if (renderWait <= 0) return 0;
+  anchors = anchors || [];
+  const need = anchors.length ? Math.max(1, Math.min(Math.ceil(anchors.length / 2), enough || anchors.length)) : 0;
   const t0 = Date.now();
-  try {
-    await page.waitForFunction(({ anchors, attr }) => {
-      if (anchors && anchors.length) return anchors.some((id) => document.querySelector(`[${attr}="${CSS.escape(id)}"]`));
-      return (document.body && (document.body.innerText || '').trim().length > 0)
-        || document.querySelectorAll('input, select, textarea, img, svg, canvas, video').length > 0;
-    }, { anchors, attr }, { timeout: renderWait, polling: 100 });
-  } catch (e) { /* nothing appeared in time: grade what is there */ }
-  return Date.now() - t0;
+  let st = { n: 0, sign: '', content: false }, last = -1, since = t0, bound = renderWait, again = false, loaded = renderWait <= 0;
+  while (!loaded) {
+    st = await page.evaluate(LOAD_STATE, { anchors, attr }).catch(() => st);
+    const now = Date.now();
+    if (st.n !== last) { last = st.n; since = now; }
+    if ((need ? st.n >= need : st.content) && !st.sign && now - since >= 300) { loaded = true; break; }
+    if (now - t0 >= bound) { if (!st.sign || again) break; again = true; bound += renderWait; }
+    await page.waitForTimeout(100);
+  }
+  const ms = Date.now() - t0;
+  return { loaded, waited_ms: ms, present: st.n, of: anchors.length, loading: loaded ? '' : st.sign,
+    why: loaded || !st.sign ? '' : `still loading after ${Math.round(ms / 1000)} s: the screen shows "${st.sign}" (--render-wait <ms> waits longer)` };
 }
+// the time the rule above took (the callers that only need the page drawn)
+export async function waitForRender(page, o, anchors = []) { return (await waitLoaded(page, o, anchors)).waited_ms; }
 
 // Lekhak TF-040: attaching over CDP, Chromium hands the new client the console messages the app logged
 // before it (the inspector keeps them), and they arrived while the first screen was open: "Blazor has
@@ -319,6 +352,24 @@ export async function openFresh(page, route, anchors = [], o = {}) {
   const a = await waitArrived(page, route, anchors, before, o);
   await scrollToTop(page);
   return { ...a, reset };
+}
+
+// the attached app's router, not a document load: a desktop head has no server to answer a goto. It waits
+// until the app has drawn the screen before anything is read (moved here from tf-mockup-parity.mjs).
+export async function reachCdp(page, route, anchors, o, cdp) {
+  try {
+    // from the screen's own first state, scrolled to the top, whatever the last test left
+    const a = await openFresh(page, route, anchors, o);
+    // a minimized desktop window draws nothing, and nothing read from it can be trusted
+    const dr = await ensureDrawing(page, cdp);
+    if (!dr.drawing) return { status: 0, not_drawing: true, error: `not measured: the app window is not drawing (minimized, or the screen is locked?) — 0 animation frames in 1 s${dr.restored ? `; restore: ${dr.restored}` : ''}` };
+    // A screen none of whose own controls appeared is not measured, never compared: the app has not
+    // moved to it, and the page still on view would be compared instead.
+    if (a.arrived === false && a.fresh > 0) {
+      return { status: 0, not_drawing: true, error: `not measured: the app did not move to ${route} within ${Math.round(Math.max(opts(o).renderWait, 5000) / 1000)} s — none of the screen's own controls appeared, so the page still on view was not compared (--render-wait <ms> waits longer)` };
+    }
+    return { status: 200, url: page.url(), arrived: a.arrived, reset: a.reset };
+  } catch (e) { return { status: 0, error: e.message.split('\n')[0] }; }
 }
 
 // Sevak TF-011: a minimized Windows app window draws no frames, so every click waits for a control to

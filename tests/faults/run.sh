@@ -588,6 +588,7 @@ _mfx() {   # <dir>: a project with the scripts, empty streams and a running tria
 }
 _lm() { ( cd "$1" && shift && CLAUDE_PROJECT_DIR= TF_METRICS_ROOT="$PWD" bash .tfcore/utils/tf-log-miss.sh Fx --sort weak-check --found-by owner "$@" 2>&1 ); }
 _last() { python3 -c "import json,sys; r=[json.loads(l) for l in open(sys.argv[1]) if '\"kind\":\"miss\"' in l][-1]; print(r.get('discovery_started') or '-', r.get('discovery_why') or '-')" "$1/docs/metrics/misses.jsonl" 2>&1; }
+_win() { python3 -c "import json,sys; r=[json.loads(l) for l in open(sys.argv[1]) if '\"kind\":\"miss\"' in l][-1]; print(r.get('discovery_started') or '-', r.get('discovery_ended') or '-', r.get('found_run_id'))" "$1/docs/metrics/misses.jsonl" 2>&1; }
 
 # TF-033: tf-log-miss.sh never read the `tf-triage.sh look` marks, so every miss said "not measured".
 sv_033() {
@@ -601,9 +602,48 @@ sv_033() {
     || bad sv_033a "the look mark was not read: $r"
   _lm "$d/b" --what "The Assistant cuts its answer at 200 words" >/dev/null; r="$(_last "$d/b")"
   _lm "$d/a" --what "The Assistant loses the Speak button" >/dev/null; local r2; r2="$(_last "$d/a")"
-  [[ "$r" == "- found by the owner"* && "$r2" == "- found together with MISS-"* ]] \
-    && ok sv_033b "with no look mark the miss still says why it has no window; a second miss right after the first is 'found together', not given the same window" \
+  [[ "$r" == "- found by the owner"* && "$r2" == "- found in the same investigation as MISS-"* ]] \
+    && ok sv_033b "with no look mark the miss still says why it has no window; a second miss after the same mark names the first, which carries the time (Chatur TF-036), and is not given the same window" \
     || bad sv_033b "a miss with no mark of its own got a window: [$r] [$r2]"
+}
+
+# --- Chatur TF-036, Sevak TF-039: a finding took the time of a mark that was not its own -------------------
+# Both scripts read "the latest look mark at or before the finding" from the clock. Chatur: a mark set in the
+# same second as the last demote took that row's time (0 s) and the next two rows read "found together".
+# Sevak: a cause logged after the next investigation began got that one's time. One rule now (tf_looks.py):
+# by the order of the calls or the mark --look names; a wrong figure already recorded can be marked.
+ch_036() {
+  local d="$SCRATCH/ch036" r a b c n1 n2 mid out
+  a="$(tf_date_from -u '-30 min' +%Y-%m-%dT%H:%M:%SZ)"; b="$(tf_date_from -u '-12 min' +%Y-%m-%dT%H:%M:%SZ)"; c="$(tf_date_from -u '-2 min' +%Y-%m-%dT%H:%M:%SZ)"
+  dem() { printf '{"verb":"demote","req_id":"%s","symptom":"s","kind":null,"source":"owner","why":"other","sort":"weak-check","prior":"Verified","ts":"%s"}' "$1" "$2"; }
+  lk() { printf '{"verb":"look","symptom":"%s","ts":"%s"}' "$1" "$2"; }
+  _mfx "$d/t"
+  printf '{"actions":[%s,%s,%s,%s,%s]}\n' "$(lk 'blank screen' "$a")" "$(dem REQ-UI-055 "$b")" "$(lk 'pill shape' "$b")" "$(dem REQ-FN-018 "$c")" "$(dem REQ-UI-049 "$c")" > "$d/t/tests/.artifacts/verify/triage.json"
+  ( cd "$d/t" && CLAUDE_PROJECT_DIR= TF_METRICS_ROOT="$PWD" bash .tfcore/utils/tf-triage.sh Fx close --cmd triage-and-fix >/dev/null 2>&1 )
+  r="$(python3 -c "import json,sys
+for m in map(json.loads, open(sys.argv[1])):
+    if m.get('kind') == 'miss': print(m['req_id'], m.get('discovery_started') or '-', m.get('discovery_ended') or '-', '-' if m.get('discovery_started') else (m.get('discovery_why') or '-')[:34])" "$d/t/docs/metrics/misses.jsonl" 2>&1 | paste -s -d '|' -)"
+  [[ "$r" == "REQ-UI-055 $a $b -|REQ-FN-018 $b $c -|REQ-UI-049 - - found in the same investigation as" ]] \
+    && ok ch_036a "a mark set in the second of the last demote leaves that row its own 18 minutes; the next mark's first row carries its time and the second says it shares it" \
+    || bad ch_036a "the rows took another mark's time (marks at $a and $b): $r"
+  _mfx "$d/s"; printf '{"actions":[%s,%s]}\n' "$(lk 'cause A' "$a")" "$(lk 'cause B' "$b")" > "$d/s/tests/.artifacts/verify/triage.json"
+  _lm "$d/s" --what "The cause of A, logged after B began" --look 1 --started "$c" > "$d/s.out"; n1="$(_win "$d/s")"
+  _lm "$d/s" --what "The cause of B" >/dev/null; n2="$(_win "$d/s")"
+  [[ "$n1" == "$a $b "* && "$n1" != *" $c" && "$n2" == "$b "* ]] && grep -q "^note: --started is the running command's start" "$d/s.out" \
+    && ok ch_036b "a cause logged after the next investigation began, naming its mark with --look, carries its own investigation's time and the running command's start; the next cause carries the later mark's" \
+    || bad ch_036b "cause A did not get mark 1's time ($a to $b): [$n1] [$n2]"
+  _mfx "$d/u"; printf '{"actions":[%s,%s]}\n' "$(lk 'cause A' "$a")" "$(lk 'cause B' "$b")" > "$d/u/tests/.artifacts/verify/triage.json"
+  _mfx "$d/v"; printf '{"actions":[%s,%s]}\n' "$(lk 'cause A' "$a")" "$(lk 'cause B' "$b")" > "$d/v/tests/.artifacts/verify/triage.json"
+  printf '# Fx — Checklist\n\n| ID | Requirement | Status | %% | Remarks | Detail |\n|---|---|---|---|---|---|\n| REQ-UI-001 | A screen | Verified | 100%% | — | x |\n' > "$d/v/docs/Fx-Checklist.md"
+  local dm; dm="$(cd "$d/v" && CLAUDE_PROJECT_DIR= TF_METRICS_ROOT="$PWD" bash .tfcore/utils/tf-triage.sh Fx look "a third problem" 2>&1; CLAUDE_PROJECT_DIR= TF_METRICS_ROOT="$PWD" bash .tfcore/utils/tf-triage.sh Fx demote REQ-UI-001 "the screen is blank" --look 3 2>&1)"
+  _lm "$d/u" --what "A cause that names no mark while two are open" >/dev/null; n1="$(_last "$d/u")"
+  mid=MISS-Fx-20261114-02   # a finding time recorded wrongly (0 s, another mark's): marked, and out of the report's average
+  printf '{"v":1,"kind":"miss","miss_id":"%s","app":"Fx","project_type":"app","req_id":"REQ-UI-001","miss_class":"wrong-behaviour","artifact":"src","severity":"minor","found_by":"owner","found_phase":"triage-and-fix","discovery_started":"%s","discovery_ended":"%s","discovery_s":0,"discovery_scope":"main","discovery_tokens_out":900,"ts":"%s"}\n' "$mid" "$b" "$b" "$b" >> "$d/u/docs/metrics/misses.jsonl"
+  out="$(cd "$d/u" && CLAUDE_PROJECT_DIR= TF_METRICS_ROOT="$PWD" bash .tfcore/utils/tf-emit.sh --amend "$mid" discovery_scope not-measured "took another mark's time; the true time is in the run summary" 2>&1; CLAUDE_PROJECT_DIR= TF_METRICS_ROOT="$PWD" bash .tfcore/utils/tf-emit.sh --amend "$mid" discovery_started "$a" 2>&1
+    bash "$ROOT/.tfcore/telemetry/tf-metrics.sh" --report "$d/u" --json 2>/dev/null | python3 -c "import json,sys; print('measured', json.dumps(json.load(sys.stdin)).count('\"discovery\": \"measured\"'))")"
+  [[ "$dm" == *"(mark 3;"*"REQ-UI-001: Verified → Needs re-verify"* && "$dm" != *"NOT MEASURED"* && "$n1" == "- 2 investigations were open"*"--look <number>"* && "$out" == *"corrected $mid — discovery_scope = not-measured"*"amend refused"*"measured 0" ]] \
+    && ok ch_036c "with two marks open and none named the finding is not measured and says how to name one; a wrong finding time can be marked not measured with a reason, and never rewritten" \
+    || bad ch_036c "demote with --look failed, a guess was recorded, or the figure could not be marked: [${dm:0:160}] [$n1] [$(tr '\n' ' ' <<<"$out" | cut -c1-200)]"
 }
 
 # TF-034: a fix recorded in segments around its chained verifies gave each miss it closed the first segment only.
@@ -952,6 +992,122 @@ for s in json.load(open('$d/parity.json'))['screens']:
     || bad lk_042b "the flattened pill was lost: $(tr '\n' '|' <<<"$par" | cut -c1-300)"
 }
 
+# --- Chatur TF-034: the box drawn around a text field read as a pill -------------------------------------------
+# Sign in and Register kept failing after the app took the mockups' button shape: the mockup's field is a
+# box (10 px corner on 34 px, a ring) around a borderless input, the app's a bare div around the library's
+# input. Since 14 Nov a control is a pill only when fully rounded, but the box around one was still a pill at
+# 6 px, and the app's input no longer answered for it. The box around a text field is judged as the field is.
+ch_034() {
+  [[ -n "$(_pw_dir)" ]] || { printf 'skipped: ch_034 — needs playwright\n'; return; }
+  local d="$SCRATCH/ch034" out box='style="border:1px solid #bbb;border-radius:10px;background:#fbf6f1;height:34px;display:flex"'
+  _pages "$d" sign-in "<div data-testid=\"field-email\"><label>Email</label><div $box><input value=\"a@b.c\" style=\"width:100%;height:32px;padding:0 11px;border:0;background:none;outline:none\" data-testid=\"input-email\"></div></div><p data-testid=\"state\"><span class=\"pill green\">Active</span></p>" \
+                      "<div data-testid=\"field-email\"><label>Email</label><div><input value=\"a@b.c\" class=\"input\" data-testid=\"input-email\"></div></div><p data-testid=\"state\"><span>Active</span></p>"
+  out="$(_parity "$d" sign-in /sign-in/)"
+  [[ "$out" != NO-RESULT ]] && ! grep -q 'field-email.* badge ' <<<"$out" \
+    && ok ch_034a "a mockup's box around a text field, drawn by the app as the library's input, is no pill finding" \
+    || bad ch_034a "the field box was read as a pill: $(grep -m2 'field-email' <<<"$out" | tr '\n' '|' | cut -c1-240)"
+  grep -qE '^1280 state > span\[0\] (badge|missing) ' <<<"$out" \
+    && ok ch_034b "a real status pill the app draws as plain text is still reported" \
+    || bad ch_034b "the flattened pill was lost: $(tr '\n' '|' <<<"$out" | cut -c1-240)"
+}
+
+# --- TrStudio TF-002: a gradient button read "neutral, plain", the same button drawn solid "accent, pill" --------
+# The fill was read from background-color alone, and a gradient is a background-image: the mockup's brand button
+# had "no fill". The gradient's colour stops are measured and their mean is the fill, on both sides.
+ts_002() {
+  [[ -n "$(_pw_dir)" ]] || { printf 'skipped: ts_002 — needs playwright\n'; return; }
+  local d="$SCRATCH/ts002" out g='border:0;border-radius:999px;height:40px;padding:0 16px;font:inherit;color:#fff'
+  _pages "$d" forgot "<p><button data-testid=\"btn-send\" style=\"background:linear-gradient(135deg,#6366f1,#a855f7);$g\">Send reset link</button> <button data-testid=\"btn-cancel\" style=\"background:linear-gradient(#e5e7eb,#d1d5db);$g;color:#111\">Cancel</button></p>" \
+                     "<p><button data-testid=\"btn-send\" style=\"background:#6366f1 linear-gradient(135deg,#6366f1,#a855f7);$g\">Send reset link</button> <button data-testid=\"btn-cancel\" style=\"background:#dc2626;$g\">Cancel</button></p>"
+  out="$(_parity "$d" forgot /forgot/)"
+  [[ "$out" != NO-RESULT ]] && ! grep -q ' btn-send ' <<<"$out" \
+    && ok ts_002a "a button filled with the brand gradient on both sides is one colour and one shape: no finding" \
+    || bad ts_002a "the gradient button was read differently on the two sides: $(grep ' btn-send ' <<<"$out" | tr '\n' '|' | cut -c1-240)"
+  grep -q '^1280 btn-cancel color ' <<<"$out" \
+    && ok ts_002b "a grey gradient in the mockup against a solid red in the app is still a colour finding" \
+    || bad ts_002b "a real colour difference behind a gradient was lost: $(tr '\n' '|' <<<"$out" | cut -c1-240)"
+}
+
+# --- Chatur TF-034, the table: "0 rows move" where 17 screens moved ----------------------------------------
+# measure-projects.py replays the grading step over the records the project's last verify saved, which the
+# OLD mockup check wrote: a rule changed in that check can show nothing there. A row with a screen now reads
+# "not measured" when a script that measures screens differs, and the cell says how many rows that verify covered.
+measure_rows() {
+  local d="$SCRATCH/measure" out tool="${TF_MEASURE:-$ROOT/scripts/measure-projects.py}" row
+  mkdir -p "$d/Fx/docs" "$d/Fx/tests/.artifacts/verify"; cp -r "$ROOT/.tfcore" "$d/Fx/.tfcore"; rm -rf "$d/Fx/.tfcore/.session"
+  printf '# Fx — Checklist\n\n| ID | Requirement | Status |\n|---|---|---|\n| REQ-UI-001 | Sign in screen | Verified |\n| REQ-FN-002 | A rule with no screen | Verified |\n| REQ-FN-003 | Outside the last verify | Verified |\n' > "$d/Fx/docs/Fx-Checklist.md"
+  printf '{"app":"Fx","scope":"all","phase":1,"rows":[{"id":"REQ-UI-001","screen":"Sign in","route":"/sign-in"},{"id":"REQ-FN-002","screen":""}]}\n' > "$d/Fx/tests/.artifacts/verify/list.json"
+  printf '{"app":"Fx","scope":"all","phase":1,"date":"2026-11-14","rows":[{"id":"REQ-UI-001","verdict":"PASS","status":"Verified"},{"id":"REQ-FN-002","verdict":"PASS","status":"Verified"}]}\n' > "$d/Fx/tests/.artifacts/verify/verdicts.json"
+  printf '\n// the mockup check this project runs today: one rule older\n' >> "$d/Fx/.tfcore/utils/tf-mockup-parity.mjs"
+  out="$(python3 "$tool" --base deployed --roots "$d" 2>/dev/null)"; row="$(grep '^| Fx |' <<<"$out")"
+  grep -q '| not measured for 1 row(s) with a screen; 0 of 1 without one (the last verify covered 2 of the project.s 3 rows; the others are not measured) |' <<<"$row" \
+    && ok measure_rows_a "a project whose mockup check differs: its row with a screen reads \"not measured\", never 0, and the cell says the last verify covered 2 of 3 rows" \
+    || bad measure_rows_a "the table claims a measurement it did not make: ${row:0:260}"
+  cp "$ROOT/.tfcore/utils/tf-mockup-parity.mjs" "$d/Fx/.tfcore/utils/"; printf '\n# the same checks, another build script\n' >> "$d/Fx/.tfcore/utils/tf-doc-tests.sh"
+  row="$(python3 "$tool" --base deployed --roots "$d" 2>/dev/null | grep '^| Fx |')"
+  grep -q '^| Fx | 1 | 0 of 2 (the last verify covered 2 of' <<<"$row" \
+    && ok measure_rows_b "with no screen-measuring script changed, the same rows are measured and counted: 0 of 2" \
+    || bad measure_rows_b "rows that could be measured were not: ${row:0:260}"
+}
+
+# --- TrStudio TF-001: the Mac boot missed "Automation Mode asks for a password" and named the wrong fix -----
+# macOS 27.2 prints "This device requires user authentication" in small letters; the boot script matched only
+# the capitals of macOS 26, so it built the app, the driver's helper stopped (xcodebuild code 65) and the
+# reason pointed at Accessibility. The checks moved to tf-mac-host-check.sh, which reads the tools on PATH,
+# so stand-in tools prove it on any machine; the boot itself runs only on a Mac (tests/regression lk_026).
+ts_001() {
+  local d="$SCRATCH/ts001" o1 o2 o3 o4 rc1 rc2 hc="$UTILS/tf-mac-host-check.sh" want='sudo automationmodetool enable-automationmode-without-authentication'
+  mkdir -p "$d/bin"; printf '#!/bin/sh\necho "Automation Mode is disabled."\necho "This device requires user authentication to enable Automation Mode."\n' > "$d/bin/automationmodetool"
+  printf '#!/bin/sh\necho "{\\"mac2\\": {\\"version\\": \\"4.1.2\\"}}"\n' > "$d/bin/appium"; printf '#!/bin/sh\necho "Xcode 27.2"\n' > "$d/bin/xcodebuild"; chmod +x "$d/bin/"*
+  o1="$(PATH="$d/bin:$PATH" bash "$hc" 2>&1)"; rc1=$?
+  printf 'Timed out while enabling automation mode.\n' > "$d/appium.log"
+  o2="$(bash "$hc" --session "xcodebuild failed with code 65" session "$d/appium.log" 2>&1)"
+  local at build; at="$(grep -n 'tf-mac-host-check.sh")" || mac_none' "$UTILS/tf-verify-boot.sh" | head -1 | cut -d: -f1)"; build="$(grep -n 'nohup appium ' "$UTILS/tf-verify-boot.sh" | head -1 | cut -d: -f1)"
+  [[ $rc1 -eq 1 && "$o1" == "macOS asks for a password before Automation Mode comes on"*"$want" && "$o2" == "; run once, with an administrator password: $want" && -n "$at" && "$at" -lt "${build:-0}" ]] \
+    && ok ts_001a "Automation Mode behind a password, as macOS 27.2 words it, stops the boot before the driver is started, with the one-time command; a helper that timed out enabling it gets the same fix" \
+    || bad ts_001a "the password check was missed or the wrong fix named: exit $rc1 [${o1:0:140}] [${o2:0:140}] (check at line ${at:-none}, driver started at ${build:-none})"
+  printf '#!/bin/sh\necho "This device does not require user authentication to enable Automation Mode."\n' > "$d/bin/automationmodetool"
+  o3="$(PATH="$d/bin:$PATH" bash "$hc" 2>&1)"; rc2=$?
+  printf '#!/bin/sh\necho "{\\"mac2\\": {\\"version\\": \\"4.0.4\\"}}"\n' > "$d/bin/appium"
+  o4="$(PATH="$d/bin:$PATH" bash "$hc" 2>&1)"; o2="$(bash "$hc" --session "xcodebuild failed with code 65" session "$d/none.log" 2>&1)"
+  [[ $rc2 -eq 0 && -z "$o3" && "$o4" == "the mac2 driver 4.0.4 cannot build its helper with Xcode 27"*"appium driver uninstall mac2; appium driver install mac2" && "$o2" == *"cannot build its helper"* ]] \
+    && ok ts_001b "a Mac that needs no password passes the check; a driver too old for Xcode 27, and a helper that fails to build for another reason, still name the reinstall" \
+    || bad ts_001b "exit $rc2 [${o3:0:100}] [${o4:0:140}] [${o2:0:100}]"
+}
+
+# --- Chatur TF-035, Lekhak TF-045: both checks measured a screen before its content arrived ------------------
+# The screen check waited for any one control, and a tab screen's mockup names the window around it too, drawn
+# at once; the mockup check did not wait. One rule now (tf-login.mjs waitLoaded): half of the screen's controls
+# on the page, no loading sign, the count quiet for 300 ms; up to --render-wait, once more while a loading sign
+# shows. Fixture: tests/faults/loading/make.sh (content after 3.2 s; "Loading board…" for good; nothing; no icons).
+ch_035() {
+  [[ -n "$(_pw_dir)" ]] || { printf 'skipped: ch_035 — needs playwright\n'; return; }
+  local d="$SCRATCH/ch035" port srv sc pa a="--screen board=/board/ --screen never=/never/ --screen broken=/broken/ --screen plain=/plain/ --widths 1280 --themes light --render-wait 4500 --mockups docs/mockups"
+  bash "$ROOT/tests/faults/loading/make.sh" "$d"
+  ln -sfn "$(_pw_dir)/node_modules" "$d/node_modules"; cp "$UTILS"/tf-*.mjs "$d/"
+  port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & srv=$!
+  sleep 1
+  ( cd "$d" && tf_timeout 200 node tf-verify-screens.mjs --base "http://127.0.0.1:$port" $a --no-menus --json-out "$d/s.json" --shots-dir "$d/shots" > "$d/s.log" 2>&1
+    tf_timeout 200 node tf-mockup-parity.mjs --base "http://127.0.0.1:$port" $a --json-out "$d/p.json" > "$d/p.log" 2>&1 )
+  kill "$srv" 2>/dev/null
+  sc="$(python3 -c "
+import json
+for s in json.load(open('$d/s.json'))['screens']: print(s['name'], s['render'], 'still-loading' if 'still loading after' in json.dumps(s) else '-')" 2>&1 | paste -s -d ' ' -)"
+  pa="$(python3 -c "
+import json
+for s in json.load(open('$d/p.json'))['screens']: print(s['screen'], s['verdict'], 'still-loading' if 'still loading after' in json.dumps(s) else '-')" 2>&1 | paste -s -d ' ' -)"
+  [[ "$sc" == "board OK - "* && "$pa" == "board PASS - "* ]] \
+    && ok ch_035a "a tab screen whose content arrives 3 s after the window's frame is waited for by both checks: render OK, mockup PASS" \
+    || bad ch_035a "the screen was measured before its content: screen check «$sc» // mockup check «$pa»"
+  [[ "$sc" == *" never EMPTY still-loading "* && "$pa" == *" never NOT-MEASURED still-loading "* ]] \
+    && ok ch_035b "a screen still showing \"Loading board…\" when the wait ends is not compared with the mockup (not measured), and the screen check's finding says it was still loading" \
+    || bad ch_035b "a screen that never left its loading sign: screen check «$sc» // mockup check «$pa»"
+  [[ "$sc" == *" broken EMPTY - plain OK -" && "$pa" == *" plain FAIL -" ]] \
+    && ok ch_035c "a screen that never draws its content and shows no loading sign is still EMPTY; a loaded screen missing its mockup's icons still fails the mockup check" \
+    || bad ch_035c "a real finding was lost: screen check «$sc» // mockup check «$pa»"
+}
+
 # --- Chatur TF-029, Sevak TF-037: a test filter "A|B" was cut by the Windows shells ------------------------
 # tf-build.sh joined the extra arguments into one string for cmd.exe, winrun and PowerShell, which read the
 # `|` as a pipe ("'B' is not recognized ..."), so a MAUI tree's test run stopped NOT-RUN and a tree with a WSL
@@ -962,7 +1118,11 @@ _win_stubs() {   # <dir>: cmd.exe, winrun, powershell.exe that run "dotnet …" 
   mkdir -p "$1/bin" "$1/home/.dotnet"
   cat > "$1/bin/fx-dotnet" <<'SH'
 #!/usr/bin/env bash
-printf '%s\n' "$*" >> "$TF_FX_DIR/received"
+# @file is read one argument a line, as dotnet reads it; a third bare word is a second project (MSB1008)
+a=(); for x in "$@"; do if [[ "$x" == @* && -f "${x#@}" ]]; then while IFS= read -r l; do a+=("$l"); done < "${x#@}"; else a+=("$x"); fi; done
+set -- "${a[@]}"; printf '%s\n' "$*" >> "$TF_FX_DIR/received"
+n=0; p=""; for x in "$@"; do [[ "$p" == --filter || "$x" == -* ]] || n=$((n+1)); p="$x"; done
+[[ $n -gt 2 || -n "${TF_FX_REFUSE:-}" ]] && { echo "MSBUILD : error MSB1008: Only one project can be specified."; exit 1; }
 case "$*" in *Broken*) echo "Failed!  - Failed: 1, Passed: 0"; exit 1 ;; esac
 echo "Passed!  - Failed: 0, Passed: 2"; exit 0
 SH
@@ -1009,6 +1169,47 @@ ch_029() {
   grep -q '^PASS  build on wsl via dotnet' <<<"$out" && [[ ! -e "$e/obj/project.assets.json" && ! -e "$e/obj/Fx.csproj.nuget.g.props" ]] \
     && ok ch_029c "a WSL rung on a tree the Windows side builds passes and removes the restore files it wrote with Linux paths" \
     || bad ch_029c "the WSL rung left its restore files for the Windows side: $(grep -m1 -E '^(PASS|FAIL|NOT-RUN)' <<<"$out" | cut -c1-120) // $(ls "$e/obj" | tr '\n' ' ')"
+}
+
+# --- Lekhak TF-044: cmd.exe split a test filter at its space, and the refused run went on to the next rung ----
+# "DisplayName~REQ-RAG-114 TestDbChapterOne" reached dotnet as a filter and a second project (MSB1008). The
+# script Lekhak had then tried winrun and PowerShell, which cut the command at the `;` of the logger argument
+# and ran `dotnet test <solution>`: every test, the paid real-model ones included, twice (reproduced on this
+# machine's cmd.exe and powershell.exe with dotnet 10 on 2026-11-15). The stand-in cmd.exe splits at a space
+# as the real one does; the stand-in dotnet reads @file a line an argument and refuses a second project.
+lk_044() {
+  local d="$SCRATCH/lk044" out f n=0 rc
+  mkdir -p "$d/m"; _win_stubs "$d"
+  printf '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><UseMaui>true</UseMaui></PropertyGroup></Project>\n' > "$d/m/Fx.Tests.csproj"
+  _b() { ( cd "$d" && TF_FX_DIR="$d" HOME="$d/home" PATH="$d/bin:/usr/bin:/bin" TF_BUILD_PLATFORM=wsl TF_BUILD_LOCK_WAIT=0 "$@" 2>&1 ); }
+  while IFS= read -r f; do
+    : > "$d/received"; out="$(_b bash "$UTILS/tf-build.sh" test m/Fx.Tests.csproj -- --filter "$f")"
+    [[ "$(cat "$d/received")" == "test m/Fx.Tests.csproj --filter ${f//\"/%22}" ]] && grep -q '^PASS  test on wsl via cmd.exe /c dotnet (rung 1)' <<<"$out" \
+      || { n=$((n+1)); note "filter «$f»: $(grep -m1 -E '^(PASS|FAIL|NOT-RUN)' <<<"$out" | cut -c1-110) // dotnet received: $(paste -s -d '/' "$d/received")"; }
+  done <<'EOF'
+DisplayName~REQ-RAG-114 TestDbChapterOne
+DisplayName~REQ-RAG-114 TestDbChapterOne|DisplayName~REQ-RAG-115 TestDbChapterTwo
+DisplayName~Says "hi" it's
+FullyQualifiedName~Fx.Tests.Chapter One & Two
+EOF
+  [[ $n -eq 0 ]] && ok lk_044a "a filter holding a space, a |, quotes or a ~ reaches dotnet as one argument on the cmd.exe rung, through a file" \
+                 || bad lk_044a "$n of 4 filters did not reach dotnet whole on the first rung"
+  # dotnet refuses the arguments: one FAIL line, one rung, and the test step says nothing ran
+  : > "$d/received"; out="$(_b bash "$UTILS/tf-build.sh" test m/Fx.Tests.csproj -- Other.csproj)"
+  grep -q '^FAIL  dotnet refused its arguments on cmd.exe /c dotnet (rung 1): MSBUILD : error MSB1008' <<<"$out" && [[ "$(grep -c . "$d/received")" == 1 ]] \
+    && ok lk_044b "arguments dotnet refuses are one FAIL line naming MSB1008, and no other rung is started" \
+    || bad lk_044b "a refused run went on: $(grep -m1 -E '^(PASS|FAIL|NOT-RUN)' <<<"$out" | cut -c1-120) // dotnet was started $(grep -c . "$d/received") time(s)"
+  : > "$d/received"; out="$(TF_FX_REFUSE=1 _b bash "$UTILS/tf-verify-tests.sh" --target m/Fx.Tests.csproj --filter "DisplayName~REQ-RAG-114 TestDbChapterOne")"; rc=$?
+  grep -q '^unit tests: FAIL  dotnet refused its arguments' <<<"$out" && [[ $rc -eq 2 && "$(grep -c . "$d/received")" == 1 ]] && ! grep -qv -- '--filter' "$d/received" \
+    && ok lk_044c "tf-verify-tests.sh prints FAIL and exits 2 when dotnet refuses the filter; nothing runs without the filter" \
+    || bad lk_044c "the test step (exit $rc) said: $(grep -m1 '^unit tests' <<<"$out" | cut -c1-120) // dotnet was started $(grep -c . "$d/received") time(s)"
+  # control: a failing test behind a filter with a space is still a test failure; a wrong rung still moves on
+  out="$(_b bash "$UTILS/tf-build.sh" test m/Fx.Tests.csproj -- --filter "DisplayName~Broken one")"
+  printf '#!/usr/bin/env bash\necho "error NETSDK1178: wrong rung"; exit 1\n' > "$d/bin/cmd.exe"
+  f="$(_b bash "$UTILS/tf-build.sh" test m/Fx.Tests.csproj -- --filter "DisplayName~REQ-RAG-114 TestDbChapterOne")"
+  grep -q '^FAIL  tests failed on wsl via cmd.exe' <<<"$out" && grep -q '^PASS  test on wsl via winrun dotnet (rung 2)' <<<"$f" \
+    && ok lk_044d "a failing test behind such a filter is still FAIL, and a wrong rung still hands the same file to the next one" \
+    || bad lk_044d "$(grep -m1 -E '^(PASS|FAIL|NOT-RUN)' <<<"$out" | cut -c1-100) // $(grep -m1 -E '^(PASS|FAIL|NOT-RUN)' <<<"$f" | cut -c1-100)"
 }
 
 # --- Sevak TF-036: a miss logged with the wrong class could not be corrected ------------------------------
@@ -1240,7 +1441,7 @@ print(len(r), r[0]['started'] >= '$mark' and s(r[0]['ended']) - s(r[0]['started'
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/faults — one case per fault found by reading the code"
-for t in status_read marker_age yolo_ttl emit_root backtick_row owner_uat quoted_phase handoff_prose assets_login sv_025 ch_026 ch_027 ch_030 lk_042 ch_029 ch_028 tf_058 lk_040 ch_031 lk_041 sv_038 sv_033 sv_034 find_cost verify_mark sv_035 sv_036 sv_027 sv_028 sv_029 sv_030 sv_032 tf_057 sv_026 sv_031 as_001 am_031 am_032 setup_first; do
+for t in status_read marker_age yolo_ttl emit_root backtick_row owner_uat quoted_phase handoff_prose assets_login sv_025 ch_026 ch_027 ch_030 lk_042 ch_034 measure_rows ts_001 ts_002 ch_035 ch_029 lk_044 ch_028 tf_058 lk_040 ch_031 lk_041 sv_038 sv_033 sv_034 ch_036 find_cost verify_mark sv_035 sv_036 sv_027 sv_028 sv_029 sv_030 sv_032 tf_057 sv_026 sv_031 as_001 am_031 am_032 setup_first; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t" > "$SCRATCH/case.out" 2>&1; cat "$SCRATCH/case.out"; grep '^skipped:' "$SCRATCH/case.out" >> "$SCRATCH/skipped"
 done

@@ -513,31 +513,10 @@ PY
   mac_none() { # reason: a host fault found before anything was started
     write_state maccatalyst none "" "" "" "$PROJECT" "$1" host "$PLATFORM"
     echo "NONE head=maccatalyst kind=host reason=$1"; exit 2; }
-  # Two set-up faults of a fresh macOS 27 / Xcode 27 machine, each of which stops every mac2 session
-  # with an error that does not name its fix. Checked here, before a build of minutes.
-  # 1. mac2 turns Automation Mode on for each session; when that needs a password it never comes, and
-  #    the session fails with "Timed out while enabling automation mode".
-  if command -v automationmodetool >/dev/null 2>&1 && automationmodetool 2>&1 | grep -q '^This device REQUIRES user authentication'; then
-    mac_none "macOS asks for a password before Automation Mode comes on, so no mac2 session can open. Run once, with an administrator password: sudo automationmodetool enable-automationmode-without-authentication"
-  fi
-  # 2. mac2 builds its WebDriverAgentMac with the Xcode on this Mac. Before 4.1.1 that build fails
-  #    under Xcode 27 (deployment target 10.15 below its 12.0 minimum, xcodebuild exit 65). An
-  #    `appium driver update mac2` leaves the driver unloadable ("Cannot find package 'appium'"),
-  #    so the fix named is to uninstall and install again.
-  if command -v appium >/dev/null 2>&1; then
-    M2="$(appium driver list --installed --json 2>/dev/null | python3 -c 'import json,sys
-try: print(json.load(sys.stdin).get("mac2", {}).get("version", ""))
-except Exception: print("?")' 2>/dev/null)"
-    XMAJ="$(xcodebuild -version 2>/dev/null | sed -n 's/^Xcode \([0-9]*\).*/\1/p' | head -1)"
-    REINSTALL="appium driver uninstall mac2; appium driver install mac2"
-    if [[ -z "$M2" ]]; then
-      mac_none "Appium's mac2 driver is not installed. Run: appium driver install mac2"
-    elif [[ "$M2" != "?" && "${XMAJ:-0}" -ge 27 ]] && python3 -c 'import sys
-v = tuple(int(x) for x in sys.argv[1].split("-")[0].split(".")[:3])
-sys.exit(0 if v < (4, 1, 1) else 1)' "$M2"; then
-      mac_none "the mac2 driver $M2 cannot build its helper with Xcode $XMAJ (4.1.1 is the first that can). Run: $REINSTALL"
-    fi
-  fi
+  # The set-up faults of a fresh macOS 27 / Xcode 27 machine (Automation Mode behind a password, a mac2
+  # driver too old for this Xcode), found before a build of minutes and before the driver is started:
+  # tf-mac-host-check.sh prints the one line that names the fix (TrStudio TF-001).
+  hostfault="$(bash "$HERE/tf-mac-host-check.sh")" || mac_none "$hostfault"
   ready() { curl -s -m 3 "$AURL/status" 2>/dev/null | grep -q '"ready":true'; }
   APPIUM_PID=""
   if ! ready; then
@@ -630,12 +609,7 @@ try: print(json.loads(sys.argv[1]).get(sys.argv[2]) or "")
 except Exception: print("")' "$FIRST" "$1"; }
   if [[ "$(fs ok)" != "True" ]]; then
     why="$(fs reason)"; why="${why:-$(cut -c1-200 <<<"$FIRST")}"
-    fix=""
-    case "$why" in
-      *[Aa]utomation\ mode*) fix="; run once, with an administrator password: sudo automationmodetool enable-automationmode-without-authentication" ;;
-      *"Cannot find package"*|*"Could not find a driver"*|*xcodebuild*|*"code 65"*) fix="; the mac2 driver does not load or cannot build its helper: appium driver uninstall mac2; appium driver install mac2" ;;
-    esac
-    [[ "$(fs stage)" == session && -z "$fix" ]] && fix="; a mac2 session that cannot start is usually a permission: System Settings > Privacy & Security > Accessibility (the terminal, and WebDriverAgentRunner-Runner)"
+    fix="$(bash "$HERE/tf-mac-host-check.sh" --session "$why" "$(fs stage)" "$DIR/appium-$APORT.log")"   # the fix that reason calls for
     bash "${BASH_SOURCE[0]}" stop --port "$APORT" >/dev/null 2>&1
     write_state maccatalyst none "" "" "tf-build.sh build -f $TFM" "$PROJECT" "the app started but its first screen was not reached: $why$fix" host "$PLATFORM"
     echo "NONE head=maccatalyst kind=host reason=the app started but its first screen was not reached: $why$fix (log $LOG)"; exit 2

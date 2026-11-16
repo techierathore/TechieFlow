@@ -8,12 +8,12 @@
 
 ## Summary
 
-39 entries: 0 blocking now, 0 open, 3 fixed upstream and not yet re-checked (TF-037, ships in TechieFlow v1.2.4; TF-038 and TF-039, ship in v1.3.0), 36 closed after a re-check here.
+45 entries: 0 blocking now, 2 open (TF-044, TF-045), 3 fixed upstream and not yet re-checked (TF-037, ships in TechieFlow v1.2.4; TF-038 and TF-039, ship in v1.3.0), 40 closed after a re-check here.
 
-Nothing is blocked. TF-038: the mockup check measured a desktop screen as the last test left it. TF-039: a fix's miss stayed open after its re-verify passed; three older misses with the same fault are named in the reply.
+Nothing is blocked. TF-044: a test filter with a space or "|" runs the whole unit suite. TF-045: the mockup check compares a screen that is still loading. TF-040 to TF-043 were closed on 15 Nov after a re-check on the running app; the two faults filed as TF-040 turned out to be the app's own start page and a database setting on this machine.
 
-- 0 blockers, 13 majors, 26 minors, 0 nice-to-haves.
-- Last consolidated: 2026-11-01.
+- 0 blockers, 16 majors, 29 minors, 0 nice-to-haves.
+- Last consolidated: 2026-11-15.
 
 ## Entries
 
@@ -721,6 +721,8 @@ Nothing is blocked. TF-038: the mockup check measured a desktop screen as the la
 
 ### TF-040 — On a desktop head over CDP, the screen check fails a screen the app draws: "Blazor has already started" on the first screen of a run, and a screen still "Loading" in one sequence
 
+> ✅ **Closed 2026-11-15** — re-checked here: 15 Nov: neither symptom was the check's. (1) Blazor has already started was the app's own uncaught error on every fresh document load: index.html called Blazor.start() and the MAUI BlazorWebView host calls it again (stack: blazor.webview.js start, called from an injected script). The fixed check opened the screen again, the error came back, and it rightly failed the screen. The start call is removed from index.html; the four-screen screen check now shows no such error. (2) Prompt Manager still Loading: its first open after each start takes about 12 s here, because the connection setting says localhost, Windows tries ::1 first, the database container listens on IPv4 only, and each new connection waits 7.5 s; Prompt Manager opens three at once. Later opens take 0.4 s. A settings matter on this machine, put to the owner. The mockup check on a cold Prompt Manager still reports 11 icon findings against the loading state (0 when warm): filed separately as TF-045.
+
 - **Status:** fixed upstream 2026-11-14 (evening), fixed in Lekhak's `.tfcore/` by the framework update of 2026-11-15, 04:10 UTC; not yet re-checked here.
 - **Re-check here (2026-11-15, night):** not closed. The fix is not on disk: `.tfcore/utils/tf-verify-screens.mjs` is dated 14 Nov 01:32 and holds no `console_once` or re-check. The screen check over AI Story Studio alone, first screen of the run, still read `render ERROR — console error: Blazor has already started.`; a warm-up screen first was still needed. The mockup half too: Prompt Manager failed 10 findings in the four-screen run and passed alone.
 - **Severity:** major (it fails rows whose screens are fine)
@@ -744,8 +746,11 @@ Nothing is blocked. TF-038: the mockup check measured a desktop screen as the la
 - **Workaround:** none in the check. The rows on these screens are graded here by their browser tests (`tests/verify/p4-screens.spec.ts`, which open both screens and pass) and the failing render line is reported to the owner as the check's.
 - **Suggested fix:** clear console messages collected before the first navigation of a CDP run (or take only `Runtime.consoleAPICalled` after the navigation starts); when a screen is "EMPTY" over CDP, wait once more after a fresh `openFresh` before failing it.
 - **Reply (TechieFlow team, 2026-11-14, evening):** Fixed upstream in `tf-verify-screens.mjs`, without knowing the cause on your head, and said plainly: your best guess (Chromium replaying console messages logged before the check attached) does not happen in stock Chromium; I tried a logged error and a thrown one, attached over CDP, and neither came back. So the fix does not depend on the cause. **The first-screen error:** a screen that fails on console errors alone is opened once more, and only an error that comes back is charged to it; one that does not is kept in the JSON as `console_once`. That is what you saw by hand: the screen passed every time it was opened again. The check also waits, once, for any messages the attached app sends right after attaching before the first screen (your guess, kept because it costs at most four seconds per run). **The screen still loading:** on a desktop head, a screen measured EMPTY is waited for once more and measured again (`rechecked: true` in the JSON). Case `lk_040` (a real Chromium on a debugging port; the error logged once on the first route change, as your head did; a screen that fills its data after 2.5 s) fails on the script you had (`one ERROR Blazor has already started.`, the loading screen EMPTY) and passes now; its control half: a screen that logs an error every time it opens is still ERROR, and one that never draws is still EMPTY. **Not fixed:** the mockup check's half (Prompt Manager's 11 icon findings in the four-screen run, 0 alone). That script had no room left for it tonight; it stays open on our side. Proved on a fixture, not on BlogAdmin. Measured on every project before the deploy (`measure-projects.py --base HEAD`, 13 projects): no row's verdict moves, no test stops running, no document finding appears or goes; the browser-side scripts that changed (screen, mockup, dropdown, sign-in, theme checks) need the running app and were not measured there. **Check it here:** the screen check in the Repro over all four screens: no "Blazor has already started" on the first screen, and Prompt Manager not EMPTY. **Fixed in Lekhak's `.tfcore`:** deployed with `update-framework.sh` on 2026-11-15 at 04:10 UTC, after the Lekhak run of 14 Nov ended (it was in progress at 18:17 UTC, when the other projects were updated).
+- **Reply (TechieFlow team, 2026-11-15, night):** Nothing is owed in the framework under this entry, and it stays closed. Your closing note settles both halves: the console error was the app's own (two `Blazor.start()` calls), and the check was right to fail the screen once the error came back on the second open; the slow first open is a setting on this machine. The mockup check's half that I left open on 14 Nov is the fault you filed again as TF-045, fixed tonight. No fix was built for TF-040 itself. Two things added on 14 Nov on a wrong guess of the cause stay in, because each is right on its own: a console error that does not come back when the screen is opened again is not charged to that screen (`console_once`), and the check waits up to four seconds for messages an attached app sends right after attaching.
 
 ### TF-041 — The dropdown check skips every native select, so a closed select that cuts its chosen text passes
+
+> ✅ **Closed 2026-11-15** — re-checked here: 15 Nov: the screen check now measures native selects (AI Story Studio: 3 selects measured, pass). With every select of the running app narrowed to 144 px by a style tag, it reported: the select Content Type cuts its text at 1280px: Moderate (Sensual) needs 104 px, the box has 99 px (and Story profile likewise). Both halves hold.
 
 - **Status:** fixed upstream 2026-11-14 (evening), fixed in Lekhak's `.tfcore/` by the framework update of 2026-11-15, 04:10 UTC; not yet re-checked here.
 - **Re-check here (2026-11-15, night):** not closed. `.tfcore/utils/tf-dropdowns.mjs` is dated 14 Nov 01:31 and measures no native select (no canvas, no `appearance` check). Today's screens passed, as they did before; the failing half of the check (a cut select reported) could not be shown with the script on disk.
@@ -768,6 +773,8 @@ Nothing is blocked. TF-038: the mockup check measured a desktop screen as the la
 
 ### TF-042 — Mockup parity calls the app's 2 px-radius buttons "badge/pill" and their near-black icons "accent"
 
+> ✅ **Closed 2026-11-15** — re-checked here: 15 Nov, desktop head over CDP: the Repro's parity command on Episode series gave 0 findings in all four passes (1280 and 390, light and dark), twice, on two boots; no badge finding on the six buttons. The JSON names both themes (mockup fluent-modern, app had minimal). The Back button is not blue under fluent-modern: the app gives the outline link button its own colour (EpisodeSeriesPage, fixed 15 Nov night).
+
 - **Status:** fixed upstream 2026-11-14 (evening), fixed in Lekhak's `.tfcore/` by the framework update of 2026-11-15, 04:10 UTC; not yet re-checked here.
 - **Re-check here (2026-11-15, night):** not closed. `.tfcore/utils/tf-mockup-parity.mjs` is dated 14 Nov 02:39, before the reply, and has no fully-rounded rule. The Repro's parity run gave no badge finding once, then the same six badge findings at 1280 (light and dark) on the next run against the same build; no finding printed the promised measurements or site-theme note. The two app-side findings named in the reply were fixed in the app tonight (Back link colour under fluent-modern, the part footer's divider) and no longer appear.
 - **Severity:** major (it holds eight rows of one screen below Verified)
@@ -789,6 +796,8 @@ Nothing is blocked. TF-038: the mockup check measured a desktop screen as the la
 
 ### TF-043 — The cost of finding each root cause was lost: ten causes logged together at the end of the run
 
+> ✅ **Closed 2026-11-15** — re-checked here: 15 Nov: tf-log-miss printed finding cost NOT MEASURED; the status gate will ask you to name this miss for a miss logged after its look mark was used; a miss logged right after its look mark carried its window (07:27:02Z to 07:34:16Z).
+
 - **Status:** fixed upstream 2026-11-14 (evening), fixed in Lekhak's `.tfcore/` by the framework update of 2026-11-15, 04:10 UTC; not yet re-checked here.
 - **Filed by:** the TechieFlow team, from the owner's report of Lekhak's run of 14 Nov (no entry was filed here). The same fault was met in Chatur's run (its TF-032).
 - **Blocks:** no. The misses are logged; only the time it took to find each cause is missing.
@@ -800,7 +809,7 @@ Nothing is blocked. TF-038: the mockup check measured a desktop screen as the la
 
 ### TF-044 — `tf-verify-tests.sh --filter` with a space or `|` runs the whole unit suite instead of the filter, and says nothing
 
-- **Status:** open (filed 2026-11-15).
+- **Status:** fixed upstream 2026-11-15 (night), fixed in Lekhak's `.tfcore/` by the framework update of 2026-11-15 (night); not yet re-checked here.
 - **Severity:** major (on a project with gated real-model tests it starts every one of them, spending the owner's paid allowance and writing sessions into his database)
 - **Blocks:** no. A filter with neither a space nor `|` works: `--filter "DisplayName~TestDbChapterOne"`.
 - **Repro (Lekhak, WSL, MAUI head in the solution so rung `cmd.exe /c dotnet`, 15 Nov 2026):**
@@ -817,10 +826,48 @@ Nothing is blocked. TF-038: the mockup check measured a desktop screen as the la
 - **Encountered in:** `*triage-and-fix Lekhak` (15 Nov 2026), the verify chained after the fixes.
 - **Workaround:** a filter without a space or `|`, one test name per call, merged with `--merge`.
 - **Suggested fix:** pass `--filter` through a response file (`dotnet test @args.rsp`) or a file the `cmd` side reads, as Lekhak's own `tests/.artifacts/runtests.cmd` does; check `dotnet test`'s exit and the MSB1008 line and stop.
+- **Reply (TechieFlow team, 2026-11-15, night):** Fixed upstream in `tf-build.sh` and `tf-verify-tests.sh`. **What happened to you**, reproduced here with a throw-away test project on this machine's own cmd.exe, PowerShell and dotnet 10: cmd.exe split the filter at its space, dotnet refused it (MSB1008), and the script went on to the next rungs. On the script you had that night (the update of 04:10 UTC had not arrived) winrun and PowerShell cut the command at the `;` of the logger argument and ran `dotnet test <solution>` with no filter: every test, once on each of the two rungs. That is the "twice" you saw. **Now:** when an extra argument holds anything but plain characters, the Windows rungs get the extra arguments in a file, one a line, and run `dotnet test <target> @file`. dotnet reads each line as one argument, so no shell can split it: a space, `|`, `~`, `'` and `"` arrive whole. A `"` in a filter is sent as `%22`, because dotnet itself breaks on a quote there (MSB4177) with no shell between. **A refusal stops the run:** when dotnet refuses its arguments (MSB1008, MSB1001, MSB1006, MSB4177, an unrecognised option) the script prints one `FAIL  dotnet refused its arguments …` line and starts no other rung; `tf-verify-tests.sh` prints `unit tests: FAIL …` and exits 2. Nothing falls through to the whole suite. Case `lk_044` fails on the scripts you have (dotnet is started three times) and passes now; its control half: a failing test behind such a filter is still FAIL, and a wrong rung still moves on. **Check it here, with the real-run switch off:** `bash .tfcore/utils/tf-verify-tests.sh --filter "DisplayName~REQ-RAG-114 TestDbChapterOne"` runs one test on rung 1, and the build log's first line shows `@tests/.artifacts/build/….rsp`. **Fixed in Lekhak's `.tfcore`** by the framework update of 2026-11-15, night.
+
+### TF-045 — Mockup parity compares a screen that is still loading and reports missing icons, where the screen check waits and measures again
+
+- **Status:** fixed upstream 2026-11-15 (night), fixed in Lekhak's `.tfcore/` by the framework update of 2026-11-15 (night); not yet re-checked here.
+- **Severity:** minor
+- **Blocks:** no. The second run of the same command passes; the rows on that screen were not in this run's scope.
+- **Repro:** Lekhak, desktop head over CDP, a fresh boot, 15 Nov 2026:
+  ```
+  bash .tfcore/utils/tf-mockup-parity.sh --cdp http://localhost:9223 --screen episode-series=… --screen ai-story-studio=… --screen ai-setup=… --screen prompt-manager=/admin/prompt-manager --list <phase 4 list> --json-out run1.json
+  #  run 1 (Prompt Manager's first open after the boot): prompt-manager FAIL 11
+  #  run 2, a minute later, same build: prompt-manager PASS 0
+  ```
+- **Smallest page:** not reduced. Any screen that shows a spinner for longer than the parity wait would do; here Prompt Manager's first open takes about 12 s (three new database connections, each waiting 7.5 s on the IPv6 address of `localhost`; a setting on this machine, see the closed TF-040).
+- **Expected:** a screen none of whose anchored controls has appeared is waited for once more, as `tf-verify-screens.mjs` now does on a desktop head (`rechecked`), and if it is still loading it is reported "not measured: still loading", not compared.
+- **Actual:** the loading state is compared with the mockup: 11 findings ("the mockup carries an icon here; the app does not").
+- **Encountered in:** `*triage-and-fix Lekhak` (15 Nov 2026), the TF-040 re-check.
+- **Workaround:** open the screen once before the parity run.
+- **Suggested fix:** the same wait and re-measure the screen check has; a screen still without its anchors is NOT-MEASURED.
+- **Reply (TechieFlow team, 2026-11-15, night):** Fixed upstream with Chatur's TF-035, the same fault in the screen check, as one waiting rule both checks call (`waitLoaded` in `tf-login.mjs`). **Loaded** means all three: no loading sign is showing (a visible `aria-busy="true"` element, a progress bar with no value, or a text that reads "Loading" or starts with it and ends in "..." or "…"); at least half of the controls the screen's mockup names are on the page; and that count has not changed for 300 ms. **How long:** up to `--render-wait` (5 s unless given), and once more the same time while a loading sign is still showing. **When the content never arrives:** the mockup check compares nothing and writes `NOT-MEASURED — not measured: still loading after 10 s: the screen shows "Loading prompt configurations..."`, which the verdict reads as not measured, neither a pass nor a failure; the screen check grades the screen as it stands and its finding says it was still loading. Your Prompt Manager's cold first open (about 12 s) outlasts the default 10 s, so a cold run reads "not measured" where it read 11 findings; `--render-wait 8000` waits long enough to compare it. Case `ch_035` (content 3 s after the window's frame; a screen that shows "Loading board…" for good; a screen with its mockup's icons missing) fails on the scripts you have and passes now; its control half: a loaded screen missing its mockup's icons still fails. Proved on a fixture, not on BlogAdmin. **Check it here:** the Repro's command on a fresh boot: Prompt Manager is PASS, or NOT-MEASURED with the loading text, never 11 findings. **Fixed in Lekhak's `.tfcore`** by the framework update of 2026-11-15, night.
 
 ## Replies from TechieFlow
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
+
+### Resolution status (TechieFlow team, 2026-11-15, night)
+
+**Fixed in Lekhak's `.tfcore`** through the framework update of 2026-11-15, night. Each fix has a case in `tests/faults/run.sh` that fails on the scripts this project had and passes now, with a control half that shows a real finding is still reported. Proved on fixtures, not on this project's app.
+
+| ID | Fix | Check it here |
+|---|---|---|
+| TF-044 | Fixed upstream. A filter goes to dotnet in a file no shell can split; a refused run stops with FAIL. The reply is under the entry. | with the real-run switch off, the Repro's filter runs one test on rung 1. |
+| TF-045 | Fixed upstream with Chatur's TF-035: one waiting rule for both checks. The reply is under the entry. | the Repro on a fresh boot: PASS, or NOT-MEASURED with the loading text. |
+| TF-040 | Nothing owed; it stays closed. The reply is under the entry. | nothing to check. |
+
+**What changed in the screen and mockup checks tonight, and what was measured for Lekhak.** Nothing here ran your app, so no screen's result is promised.
+
+- *The box around a text field* is a pill only when fully rounded, as the field itself is. This can take pill findings away from field boxes; it adds one only where the other side draws a fully rounded box there.
+- *A gradient is a fill.* An element painted with a gradient now has a colour (the mean of the gradient's colour stops) and, when small and rounded, a pill shape. A finding can appear or go wherever only one side draws the gradient.
+- *Waiting.* Both checks wait until no loading sign shows and half of the controls the mockup names are on the page (up to `--render-wait`, 5 s unless given; once more while a loading sign shows). A screen that never draws half of its mockup's controls is read as before, up to 5 s later per width. A screen still showing a loading sign is "not measured" in the mockup check, never compared; a screen the screen check finds empty is measured once more after a wait, on a web head too.
+- *Measured without your app:* what the mockup check reads on your own mockup pages, script of the last commit against tonight's, one width, light theme: **56 mockup pages read (index, 32 under admin/, 23 under web/), 1,374 elements; 0 read differently**. That is the mockup's side only; what the same rules read on the app's side needs the running app.
+- *The table* (`measure-projects.py --base HEAD`), your row: rows whose verdict moves: not measured for 4 row(s) with a screen; 0 of 0 without one (the last verify covered 4 of the project's 504 rows; the others are not measured); tests a phase verify stops running: 0 of 351 stop (12 left out in all, in 7 file(s)); 3 file(s) name no row id at all; findings that appear or go: none; build list and next command: same.
 
 ### Resolution status (TechieFlow team, 2026-11-14, evening)
 

@@ -147,7 +147,7 @@ npm run validate
 npm run test:install
 ```
 
-Then measure the release on every project before it is published or deployed. This command reads each project's documents, spec files and saved verify records, writes nothing, and prints one table: the rows whose verdict would move, the tests a phase verify would stop running, and the findings that would appear or go. Read the table before you go on. Give it the last release tag:
+Then measure the release on every project before it is published or deployed. This command reads each project's documents, spec files and saved verify records, writes nothing, and prints one table: the rows whose verdict would move, the tests a phase verify would stop running, and the findings that would appear or go. It cannot run the screen and mockup checks, which need the running app: when one of those scripts changed, a row with a screen reads "not measured", never 0, and the cell says how many of the project's rows the last verify covered. Read the table before you go on. Give it the last release tag:
 
 ```bash
 python3 scripts/measure-projects.py --base v1.3.0

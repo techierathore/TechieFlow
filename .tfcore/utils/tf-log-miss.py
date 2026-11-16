@@ -5,6 +5,8 @@
          [--req REQ-UI-014 | --new "<title>" --acceptance "<When … on <screen>, then …>" [--prefix FN] [--section "<screen>"]]
          [--class <miss_class>] [--why <why_missed>] [--artifact <artifact>] [--severity blocker|major|minor]
          [--found-by owner|production] [--evidence <path>] [--fixed [--fix-run <ISO>]] [--started <ISO>]
+         [--look <number, time or words of a `tf-triage.sh look` mark>]   the investigation this cause belongs to,
+                                                    when a later mark has been set since (Sevak TF-039)
 
 First the sort (FR-32): --sort answers the four questions, in order, and is required.
     spec        the app's spec did not say it            -> fix the checklist line; the framework is untouched
@@ -29,6 +31,8 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import tf_looks as LK   # noqa: E402  the one rule for which mark a finding belongs to
 EMIT = os.path.join(HERE, "tf-emit.sh")
 CLASSES = {"missed-requirement", "partial-implementation", "unspecified-gap", "regression", "wrong-behaviour", "standards-violation", "spec-contradiction", "other"}
 DEFAULT_ARTIFACT = {"unspecified-gap": "brd", "spec-contradiction": "brd", "standards-violation": "src"}
@@ -67,34 +71,29 @@ def emit(stream, rec):
     return ok, reason
 
 
-def discovery(started, now, found_run):
-    """Sevak, 2026-11-13: what finding the root cause cost, from the `tf-triage.sh look` marks set in the
-    running command (tests/.artifacts/verify/triage.json). The window starts at the latest mark, or at
-    the last miss this command logged after it, and ends now. -> (start, None), (None, why) or (None, None)
-    when no mark was set. Two misses logged within 120 s with no mark between were found together."""
+def discovery(since, now, named, mid):
+    """What finding the root cause cost, from the `tf-triage.sh look` marks set in the running command
+    (tests/.artifacts/verify/triage.json). The rule is tf_looks.py's, shared with tf-triage.py: by the order
+    of the calls, or the mark --look names (Sevak TF-039: a cause logged after the next investigation began
+    got that one's time). -> (start, end, why, keep): the two times, or why there are none; all None when
+    no mark was set. keep() writes this miss into the list, so the mark is known to be answered."""
+    p = os.path.join("tests", ".artifacts", "verify", "triage.json")
     try:
-        acts = json.load(open(os.path.join("tests", ".artifacts", "verify", "triage.json"), encoding="utf-8")).get("actions", [])
+        log = json.load(open(p, encoding="utf-8"))
+        live = [a for a in log.get("actions", []) if since <= (a.get("ts") or "") <= now]
     except (OSError, ValueError, AttributeError):
-        return None, None
-    looks = [a["ts"] for a in acts if a.get("verb") == "look" and started <= (a.get("ts") or "") <= now]
-    if not looks:
-        return None, None
-    look, prev = max(looks), []
-    try:
-        root = os.environ.get("TF_METRICS_ROOT") or "."
-        for line in open(os.path.join(root, "docs", "metrics", "misses.jsonl"), encoding="utf-8"):
-            r = json.loads(line) if line.strip() else {}
-            if r.get("kind") == "miss" and r.get("found_run_id") == found_run and look <= (r.get("ts") or "") <= now:
-                prev.append((r["ts"], r.get("miss_id")))
-    except (OSError, ValueError):
-        pass
-    if not prev:
-        return look, None
-    t, mid = max(prev)
-    sec = lambda x: datetime.datetime.strptime(x, "%Y-%m-%dT%H:%M:%SZ").timestamp()
-    if sec(now) - sec(t) <= 120:
-        return None, f"found together with {mid}: logged within 120 s of it with no `tf-triage.sh look` between them"
-    return t, None
+        log, live = None, []
+    me = {"verb": "miss", "miss_id": mid, "ts": now, **({"look": named} if named else {})}
+    r = LK.window(live + [me], len(live))
+    if r is LK.LATER:
+        r = LK.later(live + [me], len(live))
+    if r is None:
+        return None, None, (f"--look {named} was given, but this command set no `tf-triage.sh look` mark" if named else None), None
+
+    def keep():
+        log.setdefault("actions", []).append(me)
+        json.dump(log, open(p, "w", encoding="utf-8"), indent=1)
+    return r[0], r[1], r[2], keep
 
 
 def main(argv):
@@ -145,9 +144,13 @@ def main(argv):
         fresh = age < datetime.timedelta(hours=24)
     except ValueError:
         fresh = False
-    started = started or (m_started if fresh else now)
+    given, started = started, started or (m_started if fresh else now)
     if fresh and m_cmd and m_cmd not in ("log-miss", "goal"):
         running = m_cmd
+        if given and given != m_started:   # Sevak TF-039: a cause's own time, given as --started, linked the miss to no run
+            print(f"note: --started is the running command's start, not when the cause was found. *{m_cmd} started {m_started}: "
+                  f"that is used. The finding time comes from the `tf-triage.sh look` marks (--look <number> names one).")
+            started = m_started
 
     spec = importlib.util.spec_from_file_location("tf_checklist_edit", os.path.join(HERE, "tf-checklist-edit.py"))
     ce = importlib.util.module_from_spec(spec)
@@ -201,10 +204,10 @@ def main(argv):
            # TechieBlog TF-004: a defect told to *log-miss was found outside any run's window
            "discovery_why": ("found by the owner or in production, not by a run" if found_by in ("owner", "production")
                              else "logged after the fact by *log-miss; it has no window of its own")}
-    ds, dwhy = discovery(started, now, started)
+    ds, de, dwhy, keep = discovery(m_started if fresh else started, now, opt(argv, "--look"), mid)
     if ds:
         rec.pop("discovery_why")
-        rec["discovery_started"], rec["discovery_ended"] = ds, now
+        rec["discovery_started"], rec["discovery_ended"] = ds, de
     elif dwhy:
         rec["discovery_why"] = dwhy
     attributed = "inferred, no run record found"
@@ -214,6 +217,8 @@ def main(argv):
             rec["origin_run_id"], rec["origin_phase"], rec["origin_agent"] = o[0], o[1], o[2]
             attributed = f"linked to run {o[0]}"
     ok, refusal = emit("misses", rec)
+    if ok and keep:
+        keep()
 
     # 4. --fixed
     fix_line = ""
@@ -251,8 +256,9 @@ def main(argv):
     print(f"Owning REQ : {req or 'none'}")
     print(f"Attributed : {rec['origin_phase']} ({rec['origin_agent']}) — {attributed}")
     print(f"Found by   : {found_by}")
-    print(f"Discovery  : " + (f"{ds} to {now}, from the `look` mark" if ds else rec.get("discovery_why", "")
-                              + " — finding cost NOT MEASURED; the status gate will ask you to name this miss in the closing message"))
+    print(f"Discovery  : " + (f"{ds} to {de}, from the `look` mark" if ds else rec.get("discovery_why", "")
+                              + ("" if rec.get("discovery_why", "").startswith(LK.SAME) else
+                                 " — finding cost NOT MEASURED; the status gate will ask you to name this miss in the closing message")))
     print(f"Docs       : {doc_line}; docs/{app}-Misses.md rewritten")
     if fix_line:
         print(f"Fix        : {fix_line}")

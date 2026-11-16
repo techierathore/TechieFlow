@@ -8,7 +8,45 @@
 
 ---
 
-## Unreleased (since v1.2.4) — ships as v1.3.0
+## Unreleased (since v1.3.1)
+
+v1.3.1 is the tag at `15b61bb` (v1.3.0 is `96bea45`). What follows is in no tag yet.
+
+- **Nine faults of 15 Nov from four projects (2026-11-15, night; deployed to Chatur, Sevak, Lekhak, TfLens,
+  AppManager, AstroLyfe and TechieRag; not TrStudio, which was being worked on from the Mac).** Each fault that
+  needed code has a case in `tests/faults/run.sh` that fails on the scripts of `15b61bb` and passes now, with a
+  control half. Proved on fixtures, and the first on this machine's real cmd.exe, PowerShell and dotnet 10.
+  - Lekhak TF-044 (`lk_044`): cmd.exe split a test filter at its space; dotnet refused it (MSB1008) and the next
+    rungs were tried. On the script Lekhak had on 14 Nov those rungs cut the command at the `;` of the logger
+    argument and ran every test, twice (reproduced here with a throw-away project). Now, when an extra argument
+    holds anything but plain characters, the Windows rungs get the extra arguments in a file, one a line
+    (`dotnet test <target> @file`): a space, `|`, `~`, `'` and `"` arrive whole. A `"` in a filter goes as `%22`,
+    because dotnet itself breaks on it (MSB4177). Arguments dotnet refuses are one `FAIL` line and no other rung
+    is started; `tf-verify-tests.sh` then exits 2.
+  - Chatur TF-034 (`ch_034`, `measure_rows`): since 14 Nov a control is a pill only when fully rounded, but the
+    box around a text field was still a pill at 6 px, so Sign in and Register kept failing. The box around a
+    text field is judged as the field is. And `measure-projects.py` said "0 rows move": it replays the grading
+    step over records the old mockup check wrote, for the rows of the last verify only. A row with a screen now
+    reads "not measured" when a script that measures screens differs, and the cell says how many of the
+    project's rows the last verify covered.
+  - Chatur TF-035 = Lekhak TF-045 (`ch_035`): one waiting rule for the screen check and the mockup check,
+    `waitLoaded` in `tf-login.mjs`. Loaded: no loading sign, half of the mockup's controls on the page, that
+    count quiet for 300 ms. It waits up to `--render-wait`, once more while a loading sign shows. A screen still
+    loading is "not measured" in the mockup check; the screen check grades it as it stands and says so.
+  - Chatur TF-036 = Sevak TF-039 (`ch_036`): which `look` mark a finding belongs to is one rule in
+    `tf_looks.py`, by the order of the calls or the mark `--look` names. Rows logged together right after one mark: the
+    first carries the time and the others name it. Two marks open and none named: not measured, with the reason. A wrong figure already
+    recorded is marked with `tf-emit.sh --amend <miss> discovery_scope not-measured "<why>"`.
+  - Lekhak TF-040: nothing owed. Lekhak found both symptoms were its own app's; the mockup half is TF-045.
+  - TrStudio TF-001 (`ts_001`): the Mac boot matched "REQUIRES user authentication" in capitals only; macOS 27.2
+    prints it in small letters. The host checks moved to `tf-mac-host-check.sh`, which stops the boot before the
+    driver starts and names the one-time `sudo` command, also when the driver's helper timed out enabling
+    Automation Mode. The boot script shrank by 26 lines.
+  - TrStudio TF-002 (`ts_002`): a gradient is a fill. The mean of its colour stops is read on both sides.
+  - Not measured on any running app: the three mockup and screen rules above. `measure-projects.py` says so
+    per project.
+
+## v1.3.0 and v1.3.1 (since v1.2.4)
 
 v1.2.4 is the tag at `4699d14`. What follows is in no published package yet and goes out as **v1.3.0**, not
 v1.2.5: besides the bug fixes it adds a feature, effort estimates in tokens with a new command, a new script and

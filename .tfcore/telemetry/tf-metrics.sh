@@ -410,6 +410,13 @@ def analyse_misses(misses):
                 parent[fld] = val
                 amended += 1
             continue
+        # a finding time recorded wrongly is marked by a correction and counted as not measured from then on
+        # (Chatur TF-036, Sevak TF-039): the wrong figure stays on the stream and leaves every average
+        if parent is not None and fld == "discovery_scope":
+            if (a.get("reason") or "").strip() and val == "not-measured":
+                parent["discovery_scope"], parent["discovery_why"] = val, "marked wrong: " + a["reason"].strip()
+                amended += 1
+            continue
         if parent is None or (fld not in AMENDABLE_FIELDS and fld not in AMENDABLE_TEXT_FIELDS):
             orphan_amends += 1
             continue
