@@ -57,6 +57,8 @@
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/tf-portable.sh"   # bash-4 and GNU-only spellings go through the shim (stock Mac)
+# an app booted for a verify runs `git` by name under the guard: never a write to the project's repository (Chatur TF-037)
+[[ "${1:-}" == start ]] && { source "$HERE/tf-test-guard.sh"; tf_test_guard "$PWD"; }
 DIR="tests/.artifacts/verify"; STATE="$DIR/boot.json"; LOG="$DIR/app.log"; KEYED=""
 mkdir -p "$DIR"
 # once the port is known: this app's own state file and log

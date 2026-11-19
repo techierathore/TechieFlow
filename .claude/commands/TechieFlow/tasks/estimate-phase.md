@@ -10,7 +10,7 @@ First: `bash .tfcore/utils/tf-phase.sh start estimate-phase {App}` prints the st
 
 ## Steps
 
-1. Run the estimate, naming every family repo the owner passed (other apps built with this framework, used only where this repo has fewer than three runs of a kind):
+1. Run the estimate, naming every family repo the owner passed (other apps built with this framework, used only where this repo has fewer than three finished phases of a kind):
 
    ```bash
    bash .tfcore/telemetry/tf-estimate.sh . --phase N --app {App} [--family /path/to/FamilyRepo ...]
@@ -18,11 +18,11 @@ First: `bash .tfcore/utils/tf-phase.sh start estimate-phase {App}` prints the st
 
    `--app {App}` names the app's checklist, as the verifier is given it; without it the script reads `customTechnicalDocuments.brd` in core-config.yaml, then the one checklist with its own BRD, and otherwise stops and asks, never taking the first `*-Checklist.md` it finds (a `Prod-Deploy-Checklist.md` was once read as the app). When runs on the phase's own rows already exist, the estimate is printed **ESTIMATED AFTER THE FACT** and its records carry `basis_note: "retro"`: say so in the report, because hindsight is not a forecast.
 
-   It reads phase N's checklist rows (`docs/{App}-Checklist.md` for phase 1, `docs/{App}-P<N>-Checklist.md` otherwise) and this repo's live run records of `build-phase`, `verify-phase`, `fix-issues` and the after-handoff step (`triage-and-fix` + `triage-issues`, pooled, never inside `fix-issues`) that touched at least one row. Per cmd and per row prefix (REQ-UI, REQ-FN, REQ-RAG, REQ-NFR …) it gives each row the first quartile, median and third quartile of the per-row tokens and time of earlier runs: low, mid, high. A run that touched one of this phase's rows is left out, so a phase is never estimated from itself. Fewer than three runs here: the family's runs are added (basis `family`). Still fewer than three: **no precedent**, never a number. It writes one record per row per cmd and one per phase total per cmd to `docs/metrics/estimates.jsonl` through `tf-emit.sh` (SCHEMA.md §2.8). `--dry-run` writes nothing; use it only when the owner asks for a look without a record.
+   It reads phase N's checklist rows (`docs/{App}-Checklist.md` for phase 1, `docs/{App}-P<N>-Checklist.md` otherwise) and this repo's live run records of `build-phase`, `verify-phase`, `fix-issues` and the after-handoff step (`triage-and-fix` + `triage-issues`, pooled, never inside `fix-issues`) and the checklists of the other phases. Per cmd and per row prefix (REQ-UI, REQ-FN, REQ-RAG, REQ-NFR …) it gives each row what earlier built phases spent per row on that step, every re-verify and fix included: mid the mean, low and high the quartiles. This phase is never its own history. Fewer than three built phases here: the family's are added (basis `family`). Still fewer than three: **no precedent**, never a number. It writes one record per row per cmd and one per phase total per cmd to `docs/metrics/estimates.jsonl` through `tf-emit.sh` (SCHEMA.md §2.8). `--dry-run` writes nothing; use it only when the owner asks for a look without a record.
 
 2. For every row the table prints as **no precedent** (for any of build, verify, fix or after handoff), add a dated Remark to that row of the phase checklist with the Write tool (never by shell, so the guards can see it):
 
-   `YYYY-MM-DD estimate: no precedent for <cmd> on <prefix> rows (<n> run(s) here, <m> with the family); left out of the phase figure. Closest in kind: <one plain sentence: what this row is most like, and why>.`
+   `YYYY-MM-DD estimate: no precedent for <cmd> on <prefix> rows (<n> phase(s) here, <m> with the family); left out of the phase figure. Closest in kind: <one plain sentence: what this row is most like, and why>.`
 
    That last sentence is the judgement, and it is words, never a number. Change nothing else on the row: not its Status, not its %.
 

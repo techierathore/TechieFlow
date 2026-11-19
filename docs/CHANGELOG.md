@@ -8,9 +8,100 @@
 
 ---
 
-## Unreleased (since v1.3.1)
+## v1.4.0 (since v1.3.1)
 
-v1.3.1 is the tag at `15b61bb` (v1.3.0 is `96bea45`). What follows is in no tag yet.
+v1.3.1 is the tag at `15b61bb` (v1.3.0 is `96bea45`). What follows is in no tag yet and goes out as **v1.4.0**,
+not v1.3.2: besides the fixes it adds a flag and a mode (`*develop-end-to-end --no-git`, an existing app, every
+phase), a settings key (`buildCopy:`) and an estimate method, nothing removed (Release Guide §1). The release notes
+to paste are `docs/TechieFlow-Release-Notes-v1.4.0.md`.
+
+- **Chatur TF-048 and the deploy (2026-11-19, morning; Windows).** Case `ch_048` in `tests/faults/n19-cases.sh`
+  fails on the scripts of the night before and passes now. Chatur's copy was a Windows path
+  (`C:\ChaturRuns\fix-20261118-night`), which `tf-doc-tests.sh` could not see on WSL, so `--root` or `buildCopy`
+  named that way read "does not exist"; with no copy named the step built in the repository without a word. A Windows
+  path is now read through `wslpath`, the step prints a `note` first when it builds here, and the status gate's step 4
+  and `*amend-docs` step 11 say to pass `--root <copy>` (step 4 reworded to keep the shared rules at 3,000 words).
+  Miss MISS-TechieFlow-20261119-01 (weak-check). Then `update-framework.sh` ran on Chatur, Sevak, TfLens, AstroLyfe,
+  AppManager and Lekhak (not TechieRag, TrStudio or TrBlazeUI); each now holds this working tree byte for byte. The
+  night's replies were merged into each app's own feedback file under their entries (never copied over), with the
+  entries' Status lines; AppManager had none.
+- **The faults of 17 and 18 Nov from five projects, and the owner's two metrics faults (2026-11-19, night;
+  Windows; deployed nowhere).** Sevak and Chatur were running their own fix runs, so no app folder was written,
+  run in or updated; every app file was read only, and the replies are in this repository's copies of the
+  feedback files. Each fault has a case in `tests/faults/n19-cases.sh` (or `n19-metrics-cases.sh`), sourced by
+  `tests/faults/run.sh`, that fails on the scripts the projects had on 18 Nov (the working tree of 16 Nov) and
+  passes now, with a control half.
+  - Chatur TF-045 (`ch_045`), my own slip of 16 Nov: the Sevak TF-042 rule read "a control one element away" on
+    one side only, so two wrappers measuring alike (0 px on 28 px, no fill, no ring) were "a badge on one side".
+    Two anchors that measure alike now agree. The page passes on `4659972`, so the 16 Nov change was the cause.
+  - TfLens TF-059 (`tf_059`): a mockup switch's empty track was a missing badge where the app draws a library
+    switch (which the badge count leaves out). It is now that switch's track. The same page fails on every
+    version since 11 Nov, so the 16 Nov change is not the cause; why TfLens passed on 12 Nov is not known.
+  - TfLens TF-060 (`tf_060`): a later phase's row no screen of its own phase owns is resolved against the earlier
+    phases' UIDesigns (its mockup, its screen's name, or a route its entry names). On the projects' documents,
+    274 later-phase rows in 6 projects (AstroLyfe 7, Chatur 65, Lekhak 18, Sevak 56, TfLens 57, TrStudio 71) gain a
+    screen and will be screen- and mockup-checked from their next verify.
+  - Chatur TF-039 (`ch_039`): `tf-register-test-users.mjs` sends and needs `ApplicationId` only with no API key.
+  - Chatur TF-046 (`ch_046`, filed during the run): `tf-build.sh` counts any error on a line of a `.cs`, `.razor`,
+    `.xaml` or `.cshtml` file as a code error on the first rung (CsWinRT1032 was tried on every rung, then "host issue").
+  - Chatur TF-047 (`ch_047`, filed during the run): `tf-menus.mjs` compares the browser's page targets before and after
+    a click that changed nothing else, so a second web view opened by a menu item is "opened a window". Proved over
+    CDP with a page in a browser context of its own; not on a WebView2 head.
+  - Chatur TF-038 (`ch_038`): a verify run from a separate copy writes its checklist cells, ledger and records into
+    the project the session names, when that project holds the checklist (verdicts.json `home`).
+  - Sevak TF-045 (`sv_045`): `buildCopy:` in `core-config.yaml` (or `tf-doc-tests.sh --root`) makes the gate's doc
+    tests build and run in that copy; a missing copy is NOT-RUN, never a build in the repository.
+  - Lekhak TF-046 (`lk_046`, `lk_046c`): `tf-fix-close.sh` leaves a run record with no start out of its follow-up
+    and names it; with no start at all it writes no run record (the source of Lekhak's six).
+  - TrStudio TF-008 (`ts_008`): the status facts shorten a long phase name so `current_phase` fits the guard's 120.
+  - TrStudio TF-009 (`ts_009`): `<CodesignProvision>` counts as a profile. TrStudio's own project: WARN to OK.
+  - TrStudio TF-010 (`ts_010`): a select at opacity 0 is not graded; the label under it is, when it cuts sideways.
+  - Owner: a Claude Code reply was counted once per content block (`tokens_once`); TechieBlog's estimate-phase of
+    16 Nov recorded 772,297 output tokens for 20,193. Most older records are 2 to 5 times high and stay as written.
+  - Owner: `tf-estimate.sh` charged every row one verify and one fix pass (`estimate_phases`); history is now counted
+    per finished phase. Over 28 built phases the old method gave verify 0.15 and fix 4.5 times what was spent; the
+    new one 0.99 and 0.99 (SCHEMA §2.8, new field `basis_phases`).
+  - `*develop-end-to-end` for an existing app (owner's option A): a new `tf-develop-plan.py` skips a Day-1 stage whose
+    documents exist (or writes only the missing ones), runs every row of a Large app's Phases table in order
+    (`build-pN` with `appPhase` set, then `handoff-pN`), and `--no-git` leaves git to the owner; `--dry-run` prints
+    the plan. Cases in the new `tests/develop/run.sh`; a dry run on a scaffolded two-phase Large app. A second dry
+    run, on a scratch copy of AppManager's documents (Large, two phases), first planned to write a second usage guide
+    (AppManager's is `-Usage-Guide.md`) and a UIDesign for its finished phase 1; the plan now accepts every name the
+    readers accept and wants a design only for a phase still to build (`dev_names`). It now plans phase 2's missing
+    UIDesign, skips phase 1, then builds and hands off phase 2.
+  - `sv_015d` expected `applicationId` beside a key; it now expects what Chatur TF-039 asks.
+
+- **Chatur TF-037 and Sevak TF-040 to TF-044 (2026-11-16, afternoon; Windows).** First, the Mac commit `4659972` was
+  run here before any change: `tests/faults` 119 ok, none skipped (Playwright from TrBlazeUI); `tests/regression`
+  449 ok, 1 skipped (`lk_032`, a Mac), on a whole copy of `4659972`: nothing failed on Windows. Each
+  fault below has a case in `tests/faults/n16-cases.sh` (sourced by `run.sh`), built from the project's own page or
+  state, that fails on the scripts of `4659972` and passes now, with a control half.
+  - Chatur TF-037 (`ch_037`): the sweep deleted old files one by one, so a test repository under `tests/.artifacts/`
+    kept HEAD and index and lost its objects and refs; git then found Chatur's own repository, and a seed wrote
+    four check-ins and three branches onto Chatur's main. `sweep-artifacts.sh` now takes a folder holding `.git`
+    whole (once its newest file is old) or leaves it whole. And a new `tf-test-guard.sh` runs under every seed
+    (`tf-verify-screens.mjs`), every browser test run (`tf-verify-tests.sh`), every unit-test run (`tf-build.sh
+    test`) and every app `tf-verify-boot.sh start` runs on this side (Chatur's app runs `git` by name): a `git` put first on PATH refuses any write to the project's own repository, whatever state the test
+    folder is in; for a seed, git also cannot climb out of the test folder (`GIT_CEILING_DIRECTORIES`). Proved with
+    the test folder half deleted. Not covered: git called by full path, a library reading `.git` itself, and git
+    on the Windows side of `tf-build.sh`'s cmd.exe and PowerShell rungs.
+  - Sevak TF-040 (`sv_040`): a gradient's stops are each seen over what is behind them before the mean is taken.
+  - Sevak TF-041 (`sv_041`): a textless box in a progress bar, or as tall as a track that clips it, is a fill, never
+    a badge (HTML elements only: an SVG's insides are no fill).
+  - Sevak TF-042 (`sv_042`, `sv_042c`, `sv_042d`): when either side draws the box as a control (or `role="tab"`), or
+    the element one away is one (Sevak anchors a `<span>` around TrBlazeUI's tab button), both sides are judged by the
+    control's pill rule. The span shape was missed by the first version and found by reading Sevak's running copy.
+  - Sevak TF-043 (`sv_043`): the dropdown check closes whatever its click opened (the trigger, Escape, then a click
+    on a spot with nothing under it). One that stays open is named, not opened again on that route, and that
+    width's overlap check is left out.
+  - Sevak TF-044 (`sv_044`): when the hop away comes back to the screen by itself, the screen is open: it has arrived
+    when half its controls are on the page.
+  - `tf-mockup-parity.mjs` took out as many bytes as it gained (comments shortened); `tf-verify-tests.sh` stays at
+    600 lines.
+  - Found in the full run here: `tests/requirements` kept `CLAUDE_PROJECT_DIR`, so under Claude Code `fr_35` and
+    `fr_55` wrote two `Fx` run records into this repository's `runs.jsonl` and failed (the 18 Oct fix covered
+    `tests/regression` only). It now clears it as the other suites do; the two records are voided
+    (MISS-TechieFlow-20261116-10).
 
 - **TrStudio TF-003 to TF-007 (2026-11-16, Mac; deployed to TrStudio only).** Each fault has a case that fails on
   the scripts of `572b111` and passes now, with a control half; the new cases live in `tests/faults/ts-cases.sh`,

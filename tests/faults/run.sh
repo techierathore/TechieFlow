@@ -8,7 +8,7 @@
 #   bash tests/faults/run.sh                # all
 #   bash tests/faults/run.sh marker_age     # one
 #
-# Exit 0 all held, 1 a case failed. Python 3 standard library only. Never runs git.
+# Exit 0 all held, 1 a case failed. Python 3 standard library only. git runs only in a case's own scratch repositories (n16-cases.sh).
 set -u
 # a case's records go to its own fixture, never this repository's docs/metrics/
 unset CLAUDE_PROJECT_DIR TF_METRICS_ROOT TF_PROJECT_DIR TF_YOLO TF_YOLO_TTL_HOURS
@@ -1440,10 +1440,13 @@ print(len(r), r[0]['started'] >= '$mark' and s(r[0]['ended']) - s(r[0]['started'
 }
 
 source "$(dirname "${BASH_SOURCE[0]}")/ts-cases.sh"   # TrStudio TF-003 to TF-007
+source "$(dirname "${BASH_SOURCE[0]}")/n16-cases.sh"  # Chatur TF-037, Sevak TF-040 to TF-044
+source "$(dirname "${BASH_SOURCE[0]}")/n19-cases.sh"  # the faults of 18 Nov from five projects
+source "$(dirname "${BASH_SOURCE[0]}")/n19-metrics-cases.sh"  # the owner's two metrics faults of 19 Nov
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/faults — one case per fault found by reading the code"
-for t in status_read marker_age yolo_ttl emit_root backtick_row owner_uat quoted_phase handoff_prose assets_login sv_025 ch_026 ch_027 ch_030 lk_042 ch_034 measure_rows ts_001 ts_002 ts_003 ts_004 ts_005 ts_006 ts_007 ts_007e ch_035 ch_029 lk_044 ch_028 tf_058 lk_040 ch_031 lk_041 sv_038 sv_033 sv_034 ch_036 find_cost verify_mark sv_035 sv_036 sv_027 sv_028 sv_029 sv_030 sv_032 tf_057 sv_026 sv_031 as_001 am_031 am_032 setup_first; do
+for t in status_read marker_age yolo_ttl emit_root backtick_row owner_uat quoted_phase handoff_prose assets_login sv_025 ch_026 ch_027 ch_030 lk_042 ch_034 measure_rows ts_001 ts_002 ts_003 ts_004 ts_005 ts_006 ts_007 ts_007e ch_035 ch_029 lk_044 ch_028 tf_058 lk_040 ch_031 lk_041 sv_038 sv_033 sv_034 ch_036 find_cost verify_mark sv_035 sv_036 sv_027 sv_028 sv_029 sv_030 sv_032 tf_057 sv_026 sv_031 as_001 am_031 am_032 setup_first ch_037 sv_040 sv_041 sv_042 sv_042c sv_042d sv_043 sv_044 ch_045 tf_059 ch_039 ch_038 sv_045 lk_046 lk_046c tf_060 ts_008 ts_010 ts_009 tokens_once estimate_phases ch_046 ch_047 ch_048; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t" > "$SCRATCH/case.out" 2>&1; cat "$SCRATCH/case.out"; grep '^skipped:' "$SCRATCH/case.out" >> "$SCRATCH/skipped"
 done

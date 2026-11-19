@@ -111,6 +111,7 @@ def entries_of(text):
                 zc = re.search(r"zoom-check:\s*(keys|kept)\b", l)   # coding-standards-dotnet.md §9b
                 if zc and not e["zoom_check"]:
                     e["zoom_check"] = zc.group(1)
+                e.setdefault("routes", set()).update(x.lower() for x in re.findall(r"`(/[\w/{}.-]*)`", l))   # TfLens TF-060
                 nb = re.search(r"needs-boot:\s*`?([A-Za-z][\w-]*)", l)   # Sevak TF-026: graded on a boot of its own
                 if nb and not e["needs_boot"]:
                     e["needs_boot"] = nb.group(1).lower()
@@ -374,6 +375,10 @@ def main(argv):
     by_route = {s["route"].lower(): s for s in screens}
     by_section = {s["section"]: s for s in screens if s.get("section")}
 
+    # TfLens TF-060: a later phase can change an earlier phase's screen. A row no screen of its own phase owns is
+    # resolved against the earlier phases' UIDesigns: by its mockup, its screen's name, or a route its entry names.
+    earlier = [dict(s, phase=p) for p in range(phase - 1, 0, -1)
+               for s in screens_of_uidesign(os.path.join("docs", f"{app}-UIDesign.md" if p == 1 else f"{app}-P{p}-UIDesign.md"))]
     work, skipped, unresolved = [], 0, []
     for r in rows:
         if not in_scope(r["id"], scope):
@@ -408,6 +413,15 @@ def main(argv):
         tab = by_mock.get(e["mockup"])
         if row["screen"] and tab and tab.get("parent") and by_name.get(norm_name(row["screen"]), {}).get("parent") == tab["parent"]:
             row["screen"], row["route"] = tab["name"], tab["route"]
+        if not row["screen"] and earlier and row["class"] != "NFR":
+            names = {norm_name(c) for c in cand if norm_name(c)}
+            s = next((x for x in earlier if e["mockup"] and x["mockup"] == e["mockup"]), None) \
+                or next((x for x in earlier if norm_name(x["name"]) in names), None) \
+                or next((x for x in earlier if x["route"].lower() in e.get("routes", ())), None)
+            if s:
+                row["screen"], row["route"], row["screen_phase"] = s["name"], s["route"], s["phase"]
+                if s["name"] not in {x["name"] for x in screens}:
+                    screens.append(s)
         if not row["screen"] and row["class"] != "NFR":
             unresolved.append(row["id"])
         work.append(row)
@@ -443,7 +457,8 @@ def main(argv):
     print()
     print("## Rows")
     for r in work:
-        where = f"{r['screen']} {r['route']}" + (f" — dialog {r['dialog']}" if r["dialog"] else "") if r["screen"] else "no screen resolved"
+        where = f"{r['screen']} {r['route']}" + (f" — dialog {r['dialog']}" if r["dialog"] else "") \
+            + (f" (phase {r['screen_phase']}'s screen)" if r.get("screen_phase") else "") if r["screen"] else "no screen resolved"
         extra = (f" — perf-budget: {r['perf_budget']}" if r["perf_budget"] else "") \
             + (f" — zoom-check: {r['zoom_check']} (bash .tfcore/utils/tf-verify-zoom.sh --appium|--cdp <url>"
                + (" --expect-restored 1.3, after a run with --leave 3 and a restart" if r.get("zoom_check") == "kept" else "")

@@ -274,8 +274,8 @@ accurately tasks self-report.
 A row with no precedent is outside the estimate, and `[n/m]` says how many rows it covers. A run that
 also touched rows outside the phase counts its share only and is labelled apportioned; a run that named
 no row cannot be placed in any phase and is counted, never shared out. Fewer than 3 runs: `insufficient
-data (n=…)`. A row's QA estimate is one verify and one fix pass, so a phase that re-verifies many times
-sits above it. Owner UAT time is not measured.
+data (n=…)`. A row's estimate is what earlier built phases spent per row on that step, re-verifies and
+fixes included. Owner UAT time is not measured.
 
 ---
 

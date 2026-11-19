@@ -143,7 +143,7 @@ gaps, t = [], started
 for s, e, _c in inner:
     if t and s > t: gaps.append((t, s))
     t = max(t, e) if t else e
-if not started or not gaps or t < now: gaps.append((t, now))
+if started and (not gaps or t < now): gaps.append((t, now))   # no start, no run record: a start is measured, never left out (Lekhak TF-046)
 existing = {r.get("started") for r in jsonl("runs.jsonl") if r.get("kind", "run") == "run" and r.get("cmd") == cmd}
 wrote = had = 0
 for i, (s, e) in enumerate(gaps):
@@ -202,19 +202,18 @@ for rid in reqs:
         if prev and prev.get("verdict_after") == rows[rid] and started and prev.get("fix_run_id") == started:
             continue    # this close already wrote this verdict for this fix
         closed += write_fix(m, rid, rows[rid], started)
-# Lekhak TF-039: the follow-up. A fix's first verify said Needs re-verify, its miss-fix said so, and a later
-# verify passed the row. A close started after that verify has no row in its window, so the miss stayed open
-# although the row is Verified. The rows of the last run of this command before this close (the fix it
-# follows up) get a miss-fix, filed under that run, for each open miss a verify graded after the miss's own
-# record or its latest miss-fix (a newer gate record) with a different verdict. Rows of older fixes are left
-# alone: their misses are closed by the next fix of those rows.
-fu = None
+# Lekhak TF-039, the follow-up: the rows of the last run of this command before this close get a miss-fix, filed
+# under that run, for each open miss a verify graded later (a newer gate record) with another verdict; a later
+# passing verify would otherwise leave the miss open. Rows of older fixes wait for the next fix of those rows.
+fu, nostart = None, 0   # a record with no start time cannot be placed before this close: skipped, counted (Lekhak TF-046)
 if started:
     for r in jsonl("runs.jsonl"):
         if r.get("kind", "run") == "run" and r.get("app") == app and r.get("cmd") == cmd and r.get("reqs_touched") \
-                and (r.get("started") or "") < started and (r.get("cmd"), r.get("started")) not in voided \
-                and (fu is None or r["started"] > fu["started"]):
-            fu = r
+                and (r.get("cmd"), r.get("started")) not in voided:
+            if not r.get("started"):
+                nostart += 1
+            elif r["started"] < started and (fu is None or r["started"] > fu["started"]):
+                fu = r
 for rid in sorted({x.upper() for x in (fu or {}).get("reqs_touched") or []} - set(reqs)):
     g = latest_gate.get(rid)
     if not g or not g.get("verdict"):
@@ -226,10 +225,11 @@ for rid in sorted({x.upper() for x in (fu or {}).get("reqs_touched") or []} - se
             continue
         if write_fix(m, rid, g["verdict"], fu["started"]):
             closed += 1; followed += 1
-state = "already there" if had == len(gaps) else "written" if wrote + had == len(gaps) else "not written"
+state = "not written: no --started and no marker, so the fix's time is not measured" if not started else "already there" if had == len(gaps) else "written" if wrote + had == len(gaps) else "not written"
 print(f"{cmd}: run record {state}; {closed} miss-fix record(s) with the verifier's verdict"
       + (f" ({followed} for a re-verify after the {cmd} of {fu['started']})" if followed else "")
       + (f"; no open miss on {', '.join(none)} (log it first, then re-run)" if none else "")
-      + (f"; no verify graded {', '.join(unverified)} during this fix, so its miss stays open with no miss-fix" if unverified else ""))
+      + (f"; no verify graded {', '.join(unverified)} during this fix, so its miss stays open with no miss-fix" if unverified else "")
+      + (f"; {nostart} earlier {cmd} run record(s) carry no start time and were left out of the follow-up" if nostart else ""))
 PY
 exit 0

@@ -13,7 +13,8 @@
 //     secrets.json with flat "AppManager:ApiKey" keys), later files winning
 // For each user with an Email and no Password yet: asks AppManager for its public key
 // (GET /AuthSvc/public-key), generates a password, sends it encrypted (RSA-OAEP, SHA-256) to
-// POST /AuthSvc/register under the app's ApplicationId, and on success writes TestUsers:<n>:Password into
+// POST /AuthSvc/register (with ApplicationId only when no ApiKey is set: the key names its own application, and
+// AppManager refuses an applicationId beside it, Chatur TF-039), and on success writes TestUsers:<n>:Password into
 // tests/verify/testsettings.Local.json only. A password is never printed. A user that already has a
 // password is skipped, so it is safe to run again. --dry-run says what it would do and calls nothing.
 // Exit 0 all done · 1 a registration failed · 2 settings missing · 3 refused (inside a verify).
@@ -63,16 +64,16 @@ if (!users.length) {
 const todo = users.filter((u) => !u.has);
 for (const u of users.filter((x) => x.has)) console.log(`${u.email}: already has a password in the settings, skipped`);
 if (!todo.length) process.exit(0);
-if (!baseUrl || !apiKey || !appId) {
-  console.error(`tf-register-test-users: AppManager ${[!baseUrl && 'BaseUrl', !apiKey && 'ApiKey', !appId && 'ApplicationId'].filter(Boolean).join(', ')} not set; `
+if (!baseUrl || (!apiKey && !appId)) {
+  console.error(`tf-register-test-users: AppManager ${[!baseUrl && 'BaseUrl', !apiKey && !appId && 'ApiKey (or ApplicationId)'].filter(Boolean).join(', ')} not set; `
     + 'put them in tests/verify/testsettings.Local.json under "AppManager", or pass --appsettings <the app\'s settings or secrets file>');
   process.exit(2);
 }
 if (dry) {
-  for (const u of todo) console.log(`${u.email}: would be registered on ${baseUrl} under application ${appId}; password into ${LOCAL_FILE} as TestUsers:${u.n}:Password`);
+  for (const u of todo) console.log(`${u.email}: would be registered on ${baseUrl} under ${apiKey ? "the API key's application" : `application ${appId}`}; password into ${LOCAL_FILE} as TestUsers:${u.n}:Password`);
   process.exit(0);
 }
-const headers = { 'Content-Type': 'application/json', 'X-Api-Key': apiKey, 'X-Device-Id': deviceId };
+const headers = { 'Content-Type': 'application/json', ...(apiKey ? { 'X-Api-Key': apiKey } : {}), 'X-Device-Id': deviceId };
 let pem;
 try {
   const r = await fetch(`${baseUrl}/AuthSvc/public-key`, { headers });
@@ -87,7 +88,7 @@ for (const u of todo) {
   const encryptedPassword = crypto.publicEncrypt({ key: pem, padding: crypto.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
     Buffer.from(password, 'utf8')).toString('base64');
   const r = await fetch(`${baseUrl}/AuthSvc/register`, { method: 'POST', headers,
-    body: JSON.stringify({ email: u.email, encryptedPassword, firstName: u.first, lastName: u.last, applicationId: appId }) });
+    body: JSON.stringify({ email: u.email, encryptedPassword, firstName: u.first, lastName: u.last, ...(apiKey ? {} : { applicationId: appId }) }) });
   const b = await r.json().catch(() => ({}));
   if (r.ok && b.success !== false) {
     setLocal(`TestUsers:${u.n}:Email`, u.email);

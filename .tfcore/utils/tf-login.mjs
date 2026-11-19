@@ -328,7 +328,7 @@ export async function scrollToTop(page) {
 // When the hop leaves the address on the route, or leaves every one of the screen's controls in place,
 // it is made again to a route no page answers.
 export async function openFresh(page, route, anchors = [], o = {}) {
-  let reset = false;
+  let reset = false, back = false;
   const here = await page.evaluate(() => location.pathname + location.search).catch(() => '');
   const hop = async (away) => {
     const was = await page.evaluate(() => (document.body ? document.body.innerText : '')).catch(() => '');
@@ -346,8 +346,11 @@ export async function openFresh(page, route, anchors = [], o = {}) {
     const there = await page.evaluate(() => location.pathname + location.search).catch(() => '');
     if (!samePath(route, '/') && (samePath(there, route) || (on.length > 0 && on.every((x) => still.includes(x))))) await hop('/tf-verify-away');
     reset = true;
+    // Sevak TF-044: every address leads back here (a first-run wizard): the screen is open, its own controls never
+    // leave, so none can be new. It has arrived when half of them are on the page, as an app whose root is the screen.
+    if (samePath(await page.evaluate(() => location.pathname + location.search).catch(() => ''), route)) back = true;
   }
-  const before = await anchorsPresent(page, anchors, opts(o).attr);
+  const before = back ? anchors : await anchorsPresent(page, anchors, opts(o).attr);
   await pushRoute(page, route);
   const a = await waitArrived(page, route, anchors, before, o);
   await scrollToTop(page);

@@ -14,18 +14,11 @@
 //     sibling has moved the state, and the theme the walk changed is put back (Sevak TF-006).
 // A one-of choice the walk moved (the branch checked out) is chosen back to the item ticked at the start (Chatur TF-025).
 // So is a submenu row the page showed outside the menus at the start, the open project (Chatur TF-026).
-// An item the mockup marks data-tf-sample is sample data and is not owed by its label; a pick-list (a
-// select's options) is checked but not clicked; a trigger disabled in this state is passed over. A menu inside
-// a box marked as another state (data-tf-state="mockup-only" …) is not owed at all. An item whose
-// label ends the session or the work (Exit, Quit, Sign out, Log out, Close …, Delete, Remove, and any
-// --no-click pattern) is checked but never clicked. A mockup that marks no menu still has the app's own menus opened: every
-// [aria-haspopup="menu"|"true"] and every trigger in a [role=menubar], graded on placeholder text and on
-// items that do nothing. A popup that is not a menu (a popover, role="group") is the box the trigger's
-// aria-controls names.
-// A row that opens a submenu (aria-haspopup="menu"|"true", or a label ending in ▸) is graded by the submenu
-// appearing (aria-expanded turning true, or another menu shown), and each of its child rows is then opened
-// through it and clicked and graded in turn, one level deep (Chatur TF-022: "File › Recent projects ▸" read
-// "does nothing when clicked" because a submenu opening changes nothing outside the menus).
+// Not owed: a data-tf-sample item, a menu inside another state's box. Checked, not clicked: a pick-list, an item that
+// ends the session or the work (Exit, Quit, Sign out, Close …, Delete, Remove, --no-click). With no menu marked, the
+// app's own [aria-haspopup] and [role=menubar] menus are opened and graded; a popover is its aria-controls box.
+// A submenu row (aria-haspopup, or a label ending in ▸) is graded by the submenu appearing, and its child rows are
+// each clicked through it, one level deep (Chatur TF-022).
 // A menu item the mockup links to another mockup (<a href="prerequisites.html">) is the way into that
 // screen. reachability() says which screens had such a way in and were reached by none of those clicks.
 
@@ -224,6 +217,9 @@ export async function walkMenus(page, mockMenus, o = {}) {
   const askedNot = (o.noClick || []).map((x) => norm(x));
   const skipWhy = (label) => (askedNot.some((n) => norm(label) === n || norm(label).startsWith(n + ' ')) ? 'not clicked (--no-click)' : 'not clicked (ends the session or deletes)');
   const pagesNow = o.pages || (async () => page.context().pages());
+  // a second web view the app opens is a new target no page list shows (Chatur TF-047): page targets, by CDP
+  const targetsNow = async () => { try { const x = await page.context().browser().newBrowserCDPSession(); const r = await x.send('Target.getTargets');
+    x.detach().catch(() => {}); return r.targetInfos.filter((t) => t.type === 'page').map((t) => t.targetId); } catch (e) { return null; } };
   const findings = [], clicks = [], menus = [];
   // o.mockText: the mockup's own text, so a placeholder the design itself draws is not held against the app
   const placeholderIn = (t) => pr.find((re) => re.test(t) && !re.test(o.mockText || ''));
@@ -433,7 +429,7 @@ export async function walkMenus(page, mockMenus, o = {}) {
         fresh.i = fresh3.i;
       }
       const before = await page.evaluate(SIGNATURE, MENU_SEL).catch(() => null);
-      const pagesBefore = new Set(await pagesNow());
+      const pagesBefore = new Set(await pagesNow()), tBefore = await targetsNow();
       const events = [];
       const onPage = () => events.push('window'); const onDl = () => events.push('download'); const onFc = () => events.push('file chooser'); const onDg = (d) => { events.push('dialog'); d.dismiss().catch(() => {}); };
       page.context().on('page', onPage); page.on('download', onDl); page.on('filechooser', onFc); page.on('dialog', onDg);
@@ -446,6 +442,7 @@ export async function walkMenus(page, mockMenus, o = {}) {
         if (newPages.length || events.length || (before && after && changed(before, after))) break;
       }
       page.context().off('page', onPage); page.off('download', onDl); page.off('filechooser', onFc); page.off('dialog', onDg);
+      if (tBefore && !newPages.length && !events.length && !(before && after && changed(before, after)) && ((await targetsNow()) || []).some((t) => !tBefore.includes(t))) events.push('window');
       // where it landed: a new window or tab, or this one
       let landed = null;
       for (const np of newPages) {

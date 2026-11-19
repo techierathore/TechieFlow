@@ -7,17 +7,18 @@ Develop mode is on while `.tfcore/.session/develop.json` exists. `tf-develop.sh`
 - **No question to the owner, ever.** Every question a task would ask is answered here, or by the brief (`docs/{App}-Brief.md`), or decided by you. A decision the owner would normally make is written down where the owner will see it: in the Architecture's Stack Decisions, or in the document it belongs to, under a line starting `Decided in develop mode:`, with one reason. Never stop to ask, and never write `done blocked` for a question you could decide.
 - **The mockups are yours.** In this command you drew them on Day 1, so a difference between a mockup and what the stack mandates (a library's own control, a required layout) is never an owner decision: redraw the mockup to match the mandated component, write `Decided in develop mode:` with the reason in the UIDesign, re-render it, and verify again. The same for any document you wrote in this run. Only a thing the owner alone can supply is a blocker.
 - **No owner-review stop.** This is the one command that crosses the reviews: `*day1-greenfield` stage 1 ends without "review them, then run --stage2"; the supervisor starts stage 2 itself. Everything else about each stage is unchanged.
-- **Git is the supervisor's.** `tf-develop.sh` commits and pushes after each phase from its own shell. You still never run a git write: the guard is unchanged, and you do not need to.
+- **Git is the supervisor's, or the owner's** (`--no-git`). You never run a git write; the guard is unchanged.
+- **Documents already written are kept.** A Day-1 goal that names missing documents: write those, change nothing else.
 
 ## Day 1 answers
 
 | Question in `day1-greenfield.md` | Answer in develop mode |
 |---|---|
 | 1. The app name | `{App}` from `develop.json` |
-| 2. The concept | `docs/{App}-Brief.md`, all of it |
+| 2. The concept | `docs/{App}-Brief.md`, all of it; with no brief, the documents already written |
 | 3. Hints | none, unless the brief names notes or mockups to harvest |
 | 4. The stack | the stack the brief names; when it names none, the owner's answer set under `.tfcore/templates/stack-defaults/` (the one `core-config.yaml` names, or the only one there). Each question that answer set leaves open is decided as below, and every answer is written into the Architecture's Stack Decisions |
-| 5. The size | the size you propose from your count; a Large brief is built as its phase 1 only, and the other phases are listed in the Build Report as not built |
+| 5. The size | the size you propose from your count; a Large app is built phase by phase |
 
 Questions an answer set commonly leaves open:
 

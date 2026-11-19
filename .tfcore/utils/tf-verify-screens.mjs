@@ -158,11 +158,13 @@ function overlayOf(mockup, anchors) {
 // Its seed, tests/verify/seed/<mockup name>.sh (tf-verify-list.py finds it), puts the
 // running app in the state the mockup draws, once, before the screen is first opened. It is given the
 // app's address as TF_BASE. A seed that fails is the screen's render finding: the screen was not in
-// the state it is graded in.
+// the state it is graded in. It runs under tf-test-guard.sh: it cannot write to the project's own git repository,
+// whatever state its fixture's .git is in (Chatur TF-037).
 function runSeed(seed) {
   if (!seed) return null;
   if (!existsSync(seed)) return { path: seed, ok: false, output: 'the seed script is not on disk at that path' };
-  const r = spawnSync('bash', [seed], { env: { ...process.env, TF_BASE: BASE || CDP }, encoding: 'utf8', timeout: 120000 });
+  const guard = decodeURIComponent(new URL('./tf-test-guard.sh', import.meta.url).pathname);
+  const r = spawnSync('bash', [guard, '--ceiling', process.cwd(), '--', 'bash', seed], { env: { ...process.env, TF_BASE: BASE || CDP }, encoding: 'utf8', timeout: 120000 });
   const output = `${r.stdout || ''}${r.stderr || ''}`.trim().split('\n').slice(-3).join(' | ').slice(0, 300);
   return { path: seed, ok: r.status === 0, exit: r.status, output: r.error ? String(r.error.message) : output };
 }
@@ -535,6 +537,7 @@ for (const width of WIDTHS) {
         const te = theme === 'light' ? entry : { ...entry, screenshot: `${SHOTS}/${slug(s.name)}-${width}-${theme}.png` };
         te.theme = theme;
         let info = await inspect(page, r.anchors || [], ATTR, ERROR_SELECTORS);
+        if (r._shut === width) { info.boxes = []; te.overlap = `not measured: ${r._open} stayed open`; }   // Sevak TF-043
         info.contrast = await audit(page, theme === 'dark', MIN_CONTRAST);
         let g = grade(info, theme === 'light' ? consoleErrors : [], width, excused, stateOnly, r.overlay || []);
         // Lekhak TF-040: "Blazor has already started" failed whichever screen a run opened first, at its first
@@ -561,7 +564,7 @@ for (const width of WIDTHS) {
           if (g.render === 'OK' && g.findings.some((f) => f.class === 'placeholder')) g.render = 'EMPTY';
           const dd = DD ? await DD.dropdownFindings(page, width) : null;
           for (const f of dd || []) { g.findings.push(f); g.visual = 'FAIL'; }
-          if (dd) { const { names, ...t } = dd.tally; g.dropdowns = t; (r._dd ||= []).push(...names); }
+          if (dd) { const { names, ...t } = dd.tally; g.dropdowns = t; (r._dd ||= []).push(...names); if (t.unclosed.length) { r._shut = width; r._open = t.unclosed.join(', '); } }
         }
         if (r.seed && !r.seed.ok) {
           g.findings.unshift({ check: 'render', class: 'other', detail: `seed ${r.seed.path} failed (exit ${r.seed.exit ?? '?'}): ${r.seed.output}` });
@@ -654,8 +657,9 @@ for (const r of results) {
   // how many lists were opened, so a clean result is not read as one that opened nothing (Chatur TF-031)
   const dds = r.widths.map((w) => w.dropdowns).filter(Boolean), seen = new Set(r._dd || []);
   if (dds.length) r.dropdowns = { opened: dds.reduce((n, x) => n + x.opened, 0), triggers: dds.reduce((n, x) => n + x.triggers, 0), dialogs: dds.reduce((n, x) => n + x.dialogs, 0),
-    not_reached: (r._statePickers || []).filter((x) => !seen.has(x.id)).map((x) => `${x.id} (${x.state})`) };
-  delete r._dd; delete r._statePickers;
+    not_reached: (r._statePickers || []).filter((x) => !seen.has(x.id)).map((x) => `${x.id} (${x.state})`), unclosed: [...new Set(dds.flatMap((x) => x.unclosed))] };
+  if (r.dropdowns?.unclosed.length) notes.unshift(`could not close the list of ${r.dropdowns.unclosed.join(', ')}; not opened again, overlap not measured at ${r._shut}px`);
+  delete r._dd; delete r._statePickers; delete r._shut; delete r._open;
   console.log(`${r.render === 'OK' && r.visual === 'OK' ? 'OK  ' : r.render === 'NOT-MEASURED' ? 'NOT ' : 'FAIL'} ${r.name} (${r.route}) — render ${r.render}, visual ${r.visual}, ${r.anchors_n} anchors${r.mockup && !existsSync(r.mockup) ? ' (no mockup file)' : ''}, ${r.themes.join(' + ') || 'no'} theme${r.themes.length === 1 ? '' : 's'}${r.dark === 'not offered' ? ' (the app has no dark theme)' : ''}${r.dropdowns ? `, ${r.dropdowns.opened} list(s) opened${r.dropdowns.not_reached.length ? `, ${r.dropdowns.not_reached.length} picker(s) inside another state not reached: ${r.dropdowns.not_reached.slice(0, 3).join(', ')}` : ''}` : ''}${notes.length ? ' — ' + notes.join('; ') : ''}`);
 }
 const out = writeOut({ menus: menuWalk, ...(CDP ? { console_before_run } : {}) }, results, loginResult);

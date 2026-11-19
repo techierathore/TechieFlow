@@ -4,11 +4,11 @@
 |---|---|
 | App | TrStudio |
 | Upstream | TechieFlow |
-| Updated | 2026-11-16 (TechieFlow replies) |
+| Updated | 2026-11-19 (TF-008 to TF-010 fixed upstream; ship in TechieFlow v1.4.0, not yet in `.tfcore/`) · 2026-11-16 (TechieFlow replies) |
 
 ## Summary
 
-7 entries: 0 blocking now, 0 open, 7 fixed upstream and in TrStudio's `.tfcore`, not yet re-checked here by TrStudio (TF-001 to TF-007). Checked on the app by TechieFlow on 16 Nov 2026: TF-003, TF-004, TF-005 and TF-007 in full, TF-001 by its no-password branch, TF-006 for the admin screens; TF-002 waits for the `span` to come off, TF-006's creator screens for the test users' roles.
+10 entries: 0 blocking once TechieFlow v1.4.0 is in `.tfcore/` (TF-010 holds REQ-UI-040 and REQ-UI-052 until then), 0 open, 3 fixed upstream on 2026-11-19 and not yet in `.tfcore/` (TF-008 to TF-010), 7 fixed upstream and in TrStudio's `.tfcore`, not yet re-checked here by TrStudio (TF-001 to TF-007). Checked on the app by TechieFlow on 16 Nov 2026: TF-003, TF-004, TF-005 and TF-007 in full, TF-001 by its no-password branch, TF-006 for the admin screens; TF-002 waits for the `span` to come off, TF-006's creator screens for the test users' roles.
 
 Nothing is blocked by the framework. On 16 Nov 2026 the Mac app was driven with the fixed checker: the four signed-out screens and the seven admin screens were reached by its own clicks at 1280 and 390. Two steps are TrStudio's: the `span` around `sign-in` (TF-002), and test users whose role gives them the creator surface (TF-006).
 
@@ -113,35 +113,59 @@ Nothing is blocked by the framework. On 16 Nov 2026 the Mac app was driven with 
 - **Suggested fix:** scroll the found element into view (mac2 `scroll` to it, or keyboard focus) before `click`; after the clicks compare the window's source with the one before, and call the screen not reached when nothing changed
 - **Reply (TechieFlow team, 16 Nov 2026, Mac):** Fixed in TrStudio's .tfcore. The control is scrolled into the window before the click (on the web view: aimed at the window, mac2 moved your page 19 points and no more), each click must change the window or the screen is not reached, and a screen identified as another one is not reached (cases `ts_007`, `ts_007c`). On the real Mac app: Register's "Sign in" sat below the window at 1280 and 390; the checker first reported Login not reached, and after the scroll fix reached it, with a Login screenshot. Two more faults of the same kind were found on your app and fixed: "Account" was matched to "Create an account" (Register graded as Account), and the sign-in typed nothing into fields holding "@" or "!", so no signed-in screen was measured (cases `ts_007c`, `ts_007d`).
 
-## Replies from TechieFlow
+### TF-008 — The status facts script prints a phase line the status guard then refuses
 
-### Resolution status (TechieFlow team, 2026-11-16, Mac)
+- **Status:** fixed upstream 2026-11-19, ships in TechieFlow v1.4.0; not yet in TrStudio's `.tfcore/` (the owner deploys it); not yet re-checked here.
+- **Severity:** minor
+- **Blocks:** no — shortening the phase name in `current_phase` lets the write through
+- **Repro:** a phase whose name is long ("One desktop app with the engine inside (Mac first)"); run `bash .tfcore/utils/tf-status-facts.sh TrStudio "amend-docs"`, copy its `current_phase` line into PROJECT-STATUS.md with the Write tool
+- **Expected:** the line the facts script prints is accepted as printed
+- **Actual:** the printed line is 122 characters; `guard-status.sh` refuses any `current_phase` over 120 ("must be ONE short line")
+- **Encountered in:** owner run of 17 Nov 2026, the status gate of `*amend-docs`
+- **Workaround:** shorten the phase name in the copied line by hand
+- **Suggested fix:** the facts script shortens the phase name (or drops the counts) so its line stays within the guard's 120 characters
+- **Reply (TechieFlow team, 2026-11-19):** Fixed upstream in `tf-status-facts.py`, as you suggested: when `current_phase` would pass the status guard's 120 characters, the phase name gives way first (cut, with `…`), then the line itself. Case `ts_008`: a phase name like yours, made longer: on the script you have, a 167-character line the guard refuses; now one the guard takes as printed. Control half: a short phase name is printed whole. **Check it here:** `bash .tfcore/utils/tf-status-facts.sh TrStudio amend-docs`, then its `current_phase` line written as printed.
 
-Deployed to TrStudio on the Mac with `update-framework.sh` (to no other project). Each fix has a case in `tests/faults/run.sh` (the new cases sit in `tests/faults/ts-cases.sh`, which it runs) that fails on the scripts of `572b111` and passes now, with a control half. Then checked on the running app: the Mac Catalyst head through `tf-verify-boot.sh start --head maccatalyst`, and for the mockup check the web test host, since a Mac web view cannot be attached to by Playwright. The replies are under the entries.
+### TF-009 — The Mac boot warns "no provisioning profile" for a project that names one
 
-| ID | Fix | Case | On the app |
+- **Status:** fixed upstream 2026-11-19, ships in TechieFlow v1.4.0; not yet in TrStudio's `.tfcore/` (the owner deploys it); not yet re-checked here.
+- **Severity:** minor
+- **Blocks:** no — the app is signed with its profile, opens, and Appium drives it; the warning is only wrong text
+- **Repro:** `src/TrStudio/TrStudio.csproj` sets, for maccatalyst Debug, `<CodesignProvision>Mac Catalyst Team Provisioning Profile: com.techierathore.trstudio</CodesignProvision>` and `<CodesignEntitlements>Platforms\MacCatalyst\Entitlements.Debug.plist</CodesignEntitlements>` (with keychain-access-groups); run `bash .tfcore/utils/tf-verify-boot.sh start --head maccatalyst --project src/TrStudio/TrStudio.csproj`
+- **Expected:** no warning; the check sees the profile the project names (`CodesignProvision`)
+- **Actual:** `WARN … the entitlements ask for keychain-access-groups and the project names no provisioning profile; macOS will not start a locally signed build that asks for it`, then `BOOTED … mode=appium` and the app runs signed (`codesign -dvv`: Authority=Apple Development, TeamIdentifier=254ZS7W29T)
+- **Encountered in:** owner run of 17 Nov 2026 (night), `*triage-and-fix`
+- **Workaround:** none needed
+- **Suggested fix:** `tf-maccatalyst-check.sh` reads `CodesignProvision` (and `CodesignEntitlements`) in a PropertyGroup whose condition is the Mac target and the configuration being booted, before warning
+- **Reply (TechieFlow team, 2026-11-19):** Fixed upstream in `tf-maccatalyst-check.sh`: `<CodesignProvision>` (the property MAUI's Mac targets read) counts as a profile beside `<CodesignProvisioningProfile>`, in any PropertyGroup. The Debug-only reading you suggested was not added: the check is not per configuration elsewhere either. Case `ts_009`, your PropertyGroup's shape: on the script you have, the WARN; now OK. Control half: keychain entitlements and no profile still warn. **On your own project file** (copied to a scratch folder with its `Platforms/`, read only): the script you have says WARN, the new one OK. **Check it here:** the Repro's boot prints no "no provisioning profile" line.
+
+### TF-010 — The "select cuts its text" check measures a native select that is invisible under a label that wraps
+
+- **Status:** fixed upstream 2026-11-19, ships in TechieFlow v1.4.0; not yet in TrStudio's `.tfcore/` (the owner deploys it); not yet re-checked here.
+- **Severity:** minor
+- **Blocks:** yes — REQ-UI-040 (Video studio) and REQ-UI-052 (Comparison) cannot pass the visual check, although no text is cut on the screen
+- **Repro:** Video studio's Model box and Comparison's Slot A / Slot B now draw the chosen name in a `div.select-wrap-label` that wraps, with the real `<select class="select-wrap-native">` laid exactly over it at `opacity: 0` (so a click or the keyboard still opens the native list). Seed `tests/verify/seed/video-studio.sh` and `compare.sh`; run `tf-verify-screens.sh --list … --base http://localhost:5099`
+- **Expected:** a select the person cannot see (computed `opacity` 0, or `visibility: hidden`) is not graded for cut text; the visible label is graded instead (its `scrollWidth`/`scrollHeight` within its box), as `tests/verify/video-model-fit.spec.ts` does
+- **Actual:** `FAIL Video studio … the select "Model" cuts its text at 1280px: … needs 350 px, the box has 240 px` and `FAIL Comparison … the select "Slot A" cuts its text at 390px`; the screenshots show every name whole, on two lines
+- **Encountered in:** owner run of 17 Nov 2026 (night), `*triage-and-fix`, fixing the owner's own screen check of 17 Nov
+- **Workaround:** none honest in the app: a native select's closed box never wraps, and at 390 px no layout gives a 350 px name room
+- **Suggested fix:** in `tf-dropdowns.mjs` `SELECTS`, skip a select whose computed opacity is 0 or visibility hidden; optionally grade the element drawn under it (`elementFromPoint` at the select's centre with the select hidden) for clipping
+- **Reply (TechieFlow team, 2026-11-19):** Fixed upstream in `tf-dropdowns.mjs`, as you suggested: a native select whose computed opacity is 0, or whose visibility is hidden, is not graded for cut text; the element drawn under its centre is, when it cuts its text sideways (scroll width past its box and not overflowing visibly). Your wrapping label passes. Case `ts_010`, your Video studio shape: on the script you have, `the select "Model" cuts its text at 1280px … needs 441 px, the box has 218 px`; now none. Control half: a label under an invisible select that cuts its text, and a visible select too narrow for its option, are still reported. **Check it here:** the Repro's screen check on Video studio and Comparison: no `cuts its text` line; REQ-UI-040 and REQ-UI-052 can pass the visual check.
+
+## Resolution status (TechieFlow team, 2026-11-19)
+
+From `/mnt/c/1MyCode/TrStudio/docs/TrStudio-TechieFlow-Feedback.md`, read on 2026-11-19.
+
+**Not yet in TrStudio's `.tfcore`.** TrStudio was not touched tonight: no file written, nothing run, no framework update (the owner's rule for this run, while other projects ran their own fixes). The fixes reach this project with the next `update-framework.sh` and ship in **TechieFlow v1.4.0**. Each has a case in `tests/faults/n19-cases.sh` (run by `tests/faults/run.sh`) that fails on the scripts this project has and passes now, with a control half that shows a real finding is still reported.
+
+| ID | Fix | Case | Check it here |
 |---|---|---|---|
-| TF-001 | fixed in TrStudio's `.tfcore` | `ts_001` | no-password branch: host check passes, boot reaches the app; the password branch not shown (needs undoing the owner's `sudo`) |
-| TF-002 | fixed in TrStudio's `.tfcore` | `ts_002` | not re-checked: the `span` around the buttons is app code |
-| TF-003 | fixed in TrStudio's `.tfcore` | `ts_003` | Login and Setup required lose their shifted-box findings; Setup required passes |
-| TF-004 | fixed in TrStudio's `.tfcore` | `ts_004` | Register, Login, Forgot password, Setup required reached by clicks at 1280 and 390 |
-| TF-005 | fixed in TrStudio's `.tfcore` | `ts_005` | Registry's `btn-test-connection` wrap finding gone at both widths |
-| TF-006 | fixed in TrStudio's `.tfcore` | `ts_006` | seven admin screens reached by the menu built in code; creator screens wait on the test users' roles |
-| TF-007 | fixed in TrStudio's `.tfcore` | `ts_007`, `ts_007c`, `ts_007e` | Register's "Sign in" scrolled into view and Login reached; two more faults found and fixed on the way |
+| TF-008 | The facts' `current_phase` line fits the guard's 120 characters. | `ts_008` | the facts' line written as printed. |
+| TF-009 | `<CodesignProvision>` counts as a profile. | `ts_009` | the boot prints no profile warning. |
+| TF-010 | An invisible select is not graded; the label under it is. | `ts_010` | Video studio and Comparison: no `cuts its text`. |
+| TF-007 | Fixed and checked on the app on 16 Nov; `ts_007`, `ts_007c`, `ts_007e` still pass tonight. Nothing new. | — | as in its reply. |
 
-### Resolution status (TechieFlow team, 2026-11-15, night)
+**One more change that reaches your verify, not filed by you (TfLens TF-060).** A row of a later phase that no screen of its own phase owns is now resolved against the earlier phases' screens. On your documents (read only), 71 rows gain a screen (phase 2: 26, phase 3: 45), for example REQ-FN-075 on `/admin/registry`; their next verify runs the screen and mockup checks they skipped.
 
-**Fixed upstream, not yet in TrStudio's `.tfcore`**: TrStudio was being worked on from the Mac tonight, so nothing was deployed to it. Each fix has a case in `tests/faults/run.sh` that fails on the scripts this project had and passes now, with a control half that shows a real finding is still reported. Both are proved by their test cases only: this machine is not a Mac and TrStudio's app was not run.
+**The table** (`measure-projects.py --base v1.3.1`), your row: rows whose verdict moves: not measured; tests a phase verify stops running: 0 of 40 stop; findings that appear or go: none; build list and next command: same. The screen and mockup checks changed, so a row with a screen reads "not measured" there: the saved records were written by the old checks. What they now do is in the cases above, and the earlier-phase screens (TfLens TF-060) are counted from your documents, not from a verify.
 
-| ID | Fix | Check it here |
-|---|---|---|
-| TF-001 | Fixed upstream, not yet in TrStudio's `.tfcore`. The reply is under the entry. | after the update, the Mac boot stops in seconds with the one-time command. |
-| TF-002 | Fixed upstream, not yet in TrStudio's `.tfcore`. The reply is under the entry. | after the update, Forgot password with the `span` taken off. |
-
-**What changed in the screen and mockup checks tonight, and what was measured for TrStudio.** Nothing here ran your app, so no screen's result is promised. TrStudio does not have these scripts yet.
-
-- *The box around a text field* is a pill only when fully rounded, as the field itself is. This can take pill findings away from field boxes; it adds one only where the other side draws a fully rounded box there.
-- *A gradient is a fill.* An element painted with a gradient now has a colour (the mean of the gradient's colour stops) and, when small and rounded, a pill shape. A finding can appear or go wherever only one side draws the gradient.
-- *Waiting.* Both checks wait until no loading sign shows and half of the controls the mockup names are on the page (up to `--render-wait`, 5 s unless given; once more while a loading sign shows). A screen that never draws half of its mockup's controls is read as before, up to 5 s later per width. A screen still showing a loading sign is "not measured" in the mockup check, never compared; a screen the screen check finds empty is measured once more after a wait, on a web head too.
-- *Measured without your app:* what the mockup check reads on your own mockup pages, script of the last commit against tonight's, one width, light theme: **22 mockup page(s) read, 3330 element(s); 128 read differently on 22 page(s): 71 x colour neutral to accent; 44 x pill on colour neutral to accent; 6 x colour neutral to warning; 3 x colour neutral to positive; 2 x pill on; 1 x pill on colour neutral to warning. These are the buttons, tiles and avatars your mockups paint with a gradient; where the app paints the same element solid, the two sides now agree, which is TF-002**. That is the mockup's side only; what the same rules read on the app's side needs the running app.
-- *The table* (`measure-projects.py --base HEAD`), your row: rows whose verdict moves: not measured; tests a phase verify stops running: 0 of 26 stop; findings that appear or go: none; build list and next command: same.

@@ -416,7 +416,11 @@ def main(argv):
     print()
     print("## Frontmatter values")
     print(f"last_updated: {today}")
-    print(f"current_phase: {phase} — {qual}")
+    # the status guard refuses a current_phase over 120 characters: the phase name gives way first (TrStudio TF-008)
+    line = f"{phase} — {qual}"
+    if len(line) > 120 and pname and f"({pname})" in line:
+        line = line.replace(f"({pname})", f"({pname[:max(8, len(pname) - (len(line) - 120) - 1)].rstrip()}…)", 1)
+    print(f"current_phase: {line if len(line) <= 120 else line[:119].rstrip() + '…'}")
     print(f"last_verified_build: {vresult}")
     print(f"last_verified_date: {vdate or 'never'}")
     print()

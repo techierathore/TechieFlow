@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-11-16, Mac (TrStudio TF-003 to TF-007; v1.3.1 is the last tag). |
+| Last updated | 2026-11-19 morning, Windows (v1.4.0 deployed to six projects, untagged; v1.3.1 is the last tag). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -46,7 +46,7 @@ Four personas: **analyst** (documents), **flow-master** (build, bugs, guides, st
 6. **Bugs.** `*triage-issues` analyses and never touches code. `*fix-issues` repairs. `*triage-and-fix` runs the owner's whole sequence unattended. `*log-miss` records one sentence.
 7. **Ship.** `*handoff-phase`, then the owner's testing, then `*deploy-checklist <App> <pipeline-document>` after UAT.
 8. **Anytime.** `*amend-docs` for a change, `*refresh-status` after an interrupted run, `*devguide` and `*productguide` for the guides, `*metrics` for the report.
-9. **All of it in one go.** `*develop-end-to-end <App> <brief>` runs steps 2 to 7 on a new app unattended; it alone commits and pushes, per phase, and reports time and tokens.
+9. **All of it in one go.** `*develop-end-to-end <App> [<brief>] [--no-git]` runs steps 2 to 7 unattended, every phase in order, skipping documents already written; it alone commits and pushes, unless `--no-git`.
 
 **Unattended runs go through the supervisor**, never a bare harness command: `bash .tfcore/utils/tf-goal.sh [--harness opencode] [--model <id>] [--tier <tier>] <app-folder> "<goal>"`. It retries a crash, re-prompts an agent that stopped early, and on a usage limit moves to the next model the tier's `fallbacks:` chain names — waiting for the reset only when every model in the chain is limited (`--no-fallback` restores the old always-wait behaviour).
 
@@ -118,8 +118,8 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | **Open misses**: `docs/TechieFlow-Misses.md`. | Maintainer |
 | **Not proved on real machines** (v1.2.4): window restore, Mac `--env`, NAT fallback. The check fixes since 2026-11-10: fixtures only. | Maintainer |
 | **TfLens** must read the miss stream before its figures are quotable (`docs/TfLens-Metrics-Update-Prompt.md` there, awaiting the owner). | Separate repo |
-| **The feedback entries of 11 to 15 Nov are fixed** (2026-11-15, night), in seven projects (TrStudio has 12 Nov's). Re-checks: `tf-feedback.sh <App> --waiting`. | Each project (close) |
-| **TrStudio TF-001 to TF-007 fixed, deployed there** (2026-11-16, Mac); open items in its file. Windows must re-run `tests/faults` and `tests/regression`. | TrStudio; Maintainer |
+| **v1.4.0 (untagged) is in six projects** (TfLens among them) since 19 Nov morning, replies merged; TechieRag and TrStudio still to update. | Owner (tag, deploy) |
+| **Seeds and tests run under `tf-test-guard.sh`**: no write to the project's repository. Windows-side dotnet rungs uncovered. | Maintainer |
 | Linux CI has no Playwright: every browser case is counted skipped. Install it in `validate.yml`? | Owner decision |
 | `tests/requirements` grades FR lines naming one regression case by the whole suite. | Maintainer |
 | Drop `BASE_URL`/`CDP_URL` from `tf-verify-tests.sh` at v1.5; `testsettings.Local.json` carries the address (14 Nov). | Maintainer |

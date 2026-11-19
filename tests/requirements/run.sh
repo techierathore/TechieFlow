@@ -20,6 +20,9 @@
 # Exit 0 when no graded line failed.
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; ROOT="$(cd "$HERE/../.." && pwd)"
+# a check's records go to its own fixture: under Claude Code tf-emit would follow CLAUDE_PROJECT_DIR into this
+# repository's docs/metrics (FR-35 and FR-55 wrote two Fx records there on 2026-11-16); --emit names ROOT itself
+unset CLAUDE_PROJECT_DIR TF_METRICS_ROOT TF_PROJECT_DIR
 EMIT=0; [[ "${1:-}" == "--emit" ]] && EMIT=1
 cd "$ROOT" || exit 2
 
@@ -142,7 +145,7 @@ echo "  ungraded means the line's own check is a fixture run, a review, or a scr
 echo "  described but never written. It is not a pass and it is not a failure."
 
 if [[ $EMIT -eq 1 && ${#EMIT_LINES[@]} -gt 0 ]]; then
-  printf '%s\n' ${EMIT_LINES[@]+"${EMIT_LINES[@]}"} | bash .tfcore/utils/tf-emit.sh gates
+  printf '%s\n' ${EMIT_LINES[@]+"${EMIT_LINES[@]}"} | CLAUDE_PROJECT_DIR="$ROOT" bash "$ROOT/.tfcore/utils/tf-emit.sh" gates
   echo "emitted ${#EMIT_LINES[@]} gate record(s) under run_id $RUN_ID"
 fi
 

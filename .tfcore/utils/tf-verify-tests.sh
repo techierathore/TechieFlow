@@ -27,11 +27,11 @@
 # be merged: a memory-heavy test that skips itself when its whole project runs (TechieRag TF-010).
 # The address reaches the tests as Verify:BaseUrl (Verify:CdpUrl for a desktop head) in testsettings.Local.json,
 # put back after (tf-verify-settings.py), and until v1.5 as BASE_URL / CDP_URL too (Lekhak TF-021). A Mac Catalyst head
-# (boot.json mode=appium) reaches them as APPIUM_URL, TF_BUNDLE_ID and TF_APP_PATH.
-# Exit 0 ran (whatever the results) · 2 nothing could run.
+# (boot.json mode=appium) reaches them as APPIUM_URL, TF_BUNDLE_ID and TF_APP_PATH. Exit 0 ran (any results) · 2 nothing ran.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$HERE/tf-portable.sh"; source "$HERE/tf-verify-around.sh"   # tf_read_lines for bash 3.2; tf_setup_first …
+source "$HERE/tf-portable.sh"; source "$HERE/tf-verify-around.sh"; source "$HERE/tf-test-guard.sh"   # tf_read_lines (bash 3.2); tf_setup_first …
+tf_test_guard "$PWD"; # no spec or unit test writes to the project's own git repository (Chatur TF-037)
 BASE=""; TARGET=""; BROWSER=1; UNIT=1; OUT=""; SHARD=""; SPECS=(); MERGE=(); LIST="tests/.artifacts/verify/list.json"; ALLSPECS=0; FILTER=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -46,7 +46,7 @@ while [[ $# -gt 0 ]]; do
     --filter) FILTER="${2:-}"; BROWSER=0; shift 2 ;;
     --merge) shift; MERGING=1; while [[ $# -gt 0 && "$1" != --* ]]; do MERGE+=("$1"); shift; done ;;
     --json-out) OUT="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "tf-verify-tests: unknown argument $1" >&2; exit 2 ;;
   esac
 done

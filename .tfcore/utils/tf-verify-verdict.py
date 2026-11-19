@@ -157,6 +157,19 @@ def mac_why(r, scr):
         + ("" if f.get("not_drawing") else " (grade it on the web or Windows head)")
 
 
+def home_of(cl):
+    """One place for all a verify writes (Chatur TF-038): run from a separate copy, the project the session names
+    (the root tf-emit.sh sends records to) gets the checklist cells and the ledger too, when it holds that checklist."""
+    for v in ("TF_METRICS_ROOT", "TF_PROJECT_DIR", "CLAUDE_PROJECT_DIR"):
+        p = os.environ.get(v) or ""
+        if os.path.isdir(p):
+            if cl and os.path.isfile(os.path.join(p, cl)) and os.path.realpath(p) != os.path.realpath("."):
+                print(f"home: this verify runs in {os.getcwd()}; its checklist cells, ledger and records go to {p} ({v})")
+                return p
+            return "."
+    return "."
+
+
 def main(argv):
     if len(argv) < 2 or argv[1] in ("-h", "--help"):
         print(__doc__)
@@ -185,7 +198,8 @@ def main(argv):
     tu_on = bool(tu) and tu.get("enforced", False)
 
     # the last ledger: an earlier PASS lets a row this run could not measure keep its Verified
-    prev = load(os.path.join("docs", ".last-verify.json")) if os.path.isfile(os.path.join("docs", ".last-verify.json")) else None
+    home = home_of(lst.get("checklist") or "")
+    prev = load(os.path.join(home, "docs", ".last-verify.json")) if os.path.isfile(os.path.join(home, "docs", ".last-verify.json")) else None
     prev_ok = isinstance(prev, dict) and prev.get("app") in (None, app) and isinstance(prev.get("rows"), dict)
 
     def earlier_pass(rid, remarks):
@@ -519,17 +533,17 @@ def main(argv):
               "booted": boot_text, "gates": checks,
               "evidence": d, "run_id": started, "rows": all_rows, "row_dates": row_dates, "row_runs": row_runs,
               "row_phases": row_phases, "this_run": sorted(ledger_rows)}
-    os.makedirs("docs", exist_ok=True)
-    with open(os.path.join("docs", ".last-verify.json"), "w", encoding="utf-8") as f:
+    os.makedirs(os.path.join(home, "docs"), exist_ok=True)
+    with open(os.path.join(home, "docs", ".last-verify.json"), "w", encoding="utf-8") as f:
         json.dump(ledger, f, indent=1)
     with open(os.path.join(d, "verdicts.json"), "w", encoding="utf-8") as f:
         json.dump({"app": app, "scope": lst.get("scope", "all"), "phase": phase, "date": today, "started": started, "booted": boot_text,
                    "build_result": "fail" if build_failed else ("pass" if booted else "not-run"), "checks": checks,
-                   "checklist": lst.get("checklist"), "rows": rows_out}, f, indent=1)
+                   "checklist": lst.get("checklist"), "home": os.path.abspath(home), "rows": rows_out}, f, indent=1)
 
     applied = 0
     if apply:
-        cl = lst.get("checklist")
+        cl = os.path.join(home, lst.get("checklist"))
         text = open(cl, encoding="utf-8").read()
         by_id = {x["id"]: x for x in rows_out}
         out = []

@@ -26,6 +26,14 @@ Defects found in the **TechieFlow framework itself** (`.tfcore/`) while building
 
 ## Replies from TechieFlow
 
+### Resolution status (TechieFlow team, 2026-11-19)
+
+From `/mnt/c/1MyCode/AstroLyfe/docs/AstroLyfe-TechieFlow-Feedback.md`, read on 2026-11-19. **No entry is open.** TF-001 is fixed upstream and waits for your re-check; `as_001` still passes on tonight's scripts, so nothing about them changed. TechieFlow v1.4.0 (in this project's `.tfcore/` from the framework update of 2026-11-19 (morning)) changes the screen and mockup checks, the token counts of Claude Code runs and the estimates; its notes are `docs/TechieFlow-Release-Notes-v1.4.0.md` in TechieFlow.
+
+**One change that reaches your verify (TfLens TF-060).** A row of a later phase that no screen of its own phase owns is now resolved against the earlier phases' screens. On your documents (read only), 7 rows gain a screen (phase 3: 6, phase 4: 1), for example REQ-UI-060 on `/ShowKundali/{id}`.
+
+**The table** (`measure-projects.py --base v1.3.1`), your row: rows whose verdict moves: 0 of 96 (the last verify covered 96 of the project's 157 rows; the others are not measured); tests a phase verify stops running: 0 of 67 stop (32 left out in all, in 21 file(s)); 12 file(s) name no row id at all; findings that appear or go: none; build list and next command: same. The screen and mockup checks changed, so a row with a screen reads "not measured" there: the saved records were written by the old checks. What they now do is in the cases above, and the earlier-phase screens (TfLens TF-060) are counted from your documents, not from a verify.
+
 ### Resolution status (TechieFlow team, 2026-11-14)
 
 **Fixed in AstroLyfe's `.tfcore`** through the framework update of 2026-11-14.

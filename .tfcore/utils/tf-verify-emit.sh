@@ -31,5 +31,8 @@ done
 YOLO=false; bash "$HERE/tf-yolo.sh" is-on >/dev/null 2>&1 && YOLO=true
 [[ -z "$STARTED" ]] && STARTED="$(bash "$HERE/tf-phase.sh" show 2>/dev/null | sed -n 's/.*"started":"\([^"]*\)".*/\1/p')"
 
+# the records go where the verdict wrote the checklist cells (verdicts.json "home"), one place for both (Chatur TF-038)
+HOME_DIR="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("home") or "")' "$DIR/verdicts.json" 2>/dev/null)"
+[[ -n "$HOME_DIR" && -z "${TF_METRICS_ROOT:-}" && -d "$HOME_DIR" ]] && export TF_METRICS_ROOT="$HOME_DIR"
 TF_APP="$APP" TF_DIR="$DIR" TF_MODE="$MODE" TF_STARTED="$STARTED" TF_YOLO="$YOLO" TF_EMIT="$HERE/tf-emit.sh" python3 "$HERE/tf-verify-emit.py"
 exit 0

@@ -2,8 +2,9 @@
 # tests/estimate/run.sh — effort estimates in tokens, and their reconciliation (SCHEMA.md §2.8).
 #
 # Three fixture repos, built here from nothing:
-#   enough  — four or more live runs of every cmd on UI and FN rows: basis "repo", known quartiles
-#   family  — one build run of its own: the build figure comes from the family repo, basis "family"
+#   enough  — four built phases besides the one estimated, with UI and FN rows: basis "repo", known figures
+#             (since 2026-11-19 the unit of history is a finished phase: what a step spent per row of it)
+#   family  — no finished phase of its own: the build figure comes from the family repo, basis "family"
 #   none    — no runs at all and no family: "no precedent", never a number
 # Then: --dry-run writes nothing, a real run writes one record per row per cmd plus three totals
 # through tf-emit.sh and never touches runs.jsonl, tf-emit.sh refuses a malformed estimate,
@@ -40,6 +41,14 @@ mkrepo() {
   } > "$f"
 }
 
+# mkphase <dir> <app> <phase> <rows...> : one more phase checklist (history), Requirements Status table only
+mkphase() {
+  local d="$1" app="$2" ph="$3"; shift 3
+  local f="$d/docs/$app-P$ph-Checklist.md"; [[ "$ph" == "1" ]] && f="$d/docs/$app-Checklist.md"
+  { printf '# %s — Checklist (phase %s)\n\n## Requirements Status\n\n| ID | Requirement | Status |\n|----|----|----|\n' "$app" "$ph"
+    for r in "$@"; do printf '| %s | row %s | Verified |\n' "$r" "$r"; done; } > "$f"
+}
+
 # mkruns <dir> <python list of (cmd, reqs, tokens_out, seconds[, extra-dict])>
 mkruns() {
   python3 - "$1/docs/metrics/runs.jsonl" "$2" <<'PY'
@@ -63,7 +72,10 @@ PY
 }
 
 E="$SCRATCH/enough"; mkrepo "$E" Fx 2 REQ-UI-101 REQ-FN-101
-# UI build history, per row: 1000 2000 3000 4000 tokens and 100 200 300 400 s -> q1 1750, median 2500, q3 3250
+# the finished phases: 1, 3, 4, 5 built; 6 never built (left out, counted)
+mkphase "$E" Fx 1 REQ-UI-001 REQ-FN-001; mkphase "$E" Fx 3 REQ-UI-002 REQ-UI-003 REQ-FN-002
+mkphase "$E" Fx 4 REQ-UI-004 REQ-FN-003; mkphase "$E" Fx 5 REQ-UI-005 REQ-UI-006; mkphase "$E" Fx 6 REQ-UI-020
+# UI build spend per row of each phase: 1000 2000 3000 4000 tokens and 100 200 300 400 s -> q1 1750, mean 2500, q3 3250
 mkruns "$E" "[
  ('build-phase', ['REQ-UI-001'], 1000, 100), ('build-phase', ['REQ-UI-002','REQ-UI-003'], 4000, 400),
  ('build-phase', ['REQ-UI-004'], 3000, 300), ('build-phase', ['REQ-UI-005','REQ-UI-006'], 8000, 800),
@@ -100,16 +112,16 @@ import json
 d = json.loads('''$out''')
 rows = {r["req_id"]: r for r in d["rows"]}
 b = rows["REQ-UI-101"]["build-phase"]
-print(sorted(rows), b["basis"], b["basis_runs"], b["tokens_out"], b["duration_s"], d["history_skipped"])
+print(sorted(rows), b["basis"], b["basis_runs"], b["basis_phases"], b["tokens_out"], b["duration_s"], d["history_skipped"])
 PY
 )"
-if grep -q "\['REQ-FN-101', 'REQ-UI-101'\] repo 4 {'low': 1750, 'mid': 2500, 'high': 3250} {'low': 175, 'mid': 250, 'high': 325}" <<<"$got"; then
-  ok es_001 "four UI runs give the UI row its own quartiles, basis repo; the FN row in another table is not a row"
+if grep -q "\['REQ-FN-101', 'REQ-UI-101'\] repo 4 4 {'low': 1750, 'mid': 2500, 'high': 3250} {'low': 175, 'mid': 250, 'high': 325}" <<<"$got"; then
+  ok es_001 "four built phases give the UI row its own figure (mean, quartiles), basis repo; the FN row in another table is not a row"
 else
-  bad es_001 "the UI row's figure is not the quartiles of the UI history"; note "$got"
+  bad es_001 "the UI row's figure is not what the built phases spent per UI row"; note "$got"
 fi
-if grep -q "'backfilled': 1, 'voided': 1, 'no_reqs': 2, 'this_phase': 7, 'no_tokens': 1" <<<"$got"; then
-  ok es_002 "backfilled, voided, row-less, token-less runs and runs on this phase's own rows all leave the history, counted"
+if grep -q "'backfilled': 1, 'voided': 1, 'no_reqs': 2, 'this_phase': 7, 'no_tokens': 1, 'phases_not_built': 1, 'steps_unmeasured': 0" <<<"$got"; then
+  ok es_002 "backfilled, voided, row-less and token-less runs, runs on this phase's own rows and a phase never built are counted"
 else
   bad es_002 "the history kept a run it must leave out"; note "$got"
 fi
@@ -152,9 +164,10 @@ fam="$(bash "$EST" "$F" --phase 1 --family "$E" --dry-run --json 2>&1)"
 fr="$(python3 -c "
 import json,sys; d=json.loads(sys.stdin.read()); r={x['req_id']:x for x in d['rows']}
 u=r['REQ-UI-201']['build-phase']; g=r['REQ-RAG-201']['build-phase']
-print(u['basis'], u['basis_runs'], g['basis'], g['tokens_out'], d['family'])" <<<"$fam" 2>&1)"
-if [[ "$fr" == "family 6 none None ['enough']" ]]; then
-  ok es_006 "one run of its own: the UI row adds the family's five UI build runs (basis family, 6 runs); a RAG row the family never built has no precedent"
+print(u['basis'], u['basis_phases'], u['tokens_out']['mid'], g['basis'], g['tokens_out'], d['family'])" <<<"$fam" 2>&1)"
+# the family's phases 1, 3, 4, 5 and its phase 2 too (25000 per UI row: half the 50000 run on two rows, one in it)
+if [[ "$fr" == "family 5 7000 none None ['enough']" ]]; then
+  ok es_006 "no finished phase of its own: the UI row takes the family's five built phases (basis family, mean 7000); a RAG row the family never built has no precedent"
 else
   bad es_006 "the family fallback is wrong"; note "$fr"
 fi
@@ -244,9 +257,11 @@ fi
 tri="$(python3 -c "
 import json,sys; d=json.loads(sys.stdin.read()); r={x['req_id']:x for x in d['rows']}
 u=r['REQ-UI-101']['triage']; f=r['REQ-FN-101']['triage']
-print(u['basis'], u['basis_runs'], u['tokens_out'], f['tokens_out']['mid'], d['phase_columns']['after_handoff']['tokens_out'])" <<<"$out" 2>&1)"
-# per-row triage history 600, 900, 1200 (triage-and-fix and triage-issues pooled) -> 750 / 900 / 1050
-if [[ "$tri" == "repo 3 {'low': 750, 'mid': 900, 'high': 1050} 900 {'low': 1500, 'mid': 1800, 'high': 2100}" ]]; then
+print(u['basis'], u['basis_phases'], u['tokens_out'], f['tokens_out'], d['phase_columns']['after_handoff']['tokens_out'])" <<<"$out" 2>&1)"
+# triage-and-fix and triage-issues pooled, per UI row of each built phase: P1 600, P3 (900+1200)/2 = 1050, P4 0 (no
+# triage: a row nobody had to fix costs nothing), P5 4000 x 1/2 / 2 = 1000 (a run that also touched this phase's row
+# counts its share on P5's row) -> q1 450, mean 662.5, q3 1012.5. FN: P1 600, P3 900, P4 1200 -> 750 / 900 / 1050.
+if [[ "$tri" == "repo 4 {'low': 450, 'mid': 662, 'high': 1012} {'low': 750, 'mid': 900, 'high': 1050} {'low': 1200, 'mid': 1562, 'high': 2062}" ]]; then
   ok es_015 "after handoff is estimated from triage-and-fix + triage-issues history by prefix, basis repo, its own column"
 else
   bad es_015 "the after-handoff estimate is wrong"; note "$tri"
@@ -255,7 +270,7 @@ ah="$(python3 -c "
 import json,sys; p=json.loads(sys.stdin.read())['phases'][0]; t=p['cmds']['triage']['actual']; f=p['cmds']['fix-issues']['actual']; a=p['parts']['after_handoff']
 print(t['tokens_out'], t['runs_n'], t['apportioned_n'], t['rowless_runs_in_repo_n'], f['tokens_out'], f['rowless_runs_in_repo_n'], a['estimate']['tokens_out']['mid'], a['actual']['tokens_out'], sorted(p['parts']))" <<<"$rec" 2>&1)"
 # 5000 + 4000 x 1/2 + 3000 = 10000 over 3 runs, one apportioned; the row-less triage run is counted, not shared out
-if [[ "$ah" == "10000 3 1 1 insufficient data (n=0) 1 1800 10000 ['after_handoff', 'build', 'machine_qa']" ]] \
+if [[ "$ah" == "10000 3 1 1 insufficient data (n=0) 1 1562 10000 ['after_handoff', 'build', 'machine_qa']" ]] \
    && grep -q 'after handoff' <<<"$txt" && grep -q 'PHASE 2 in three parts' <<<"$txt"; then
   ok es_016 "the reconciliation prints build, machine QA and after handoff as estimate beside actual; triage never reaches fix-issues"
 else
@@ -294,7 +309,7 @@ if [[ "$retro" == "12 {'retro'}" && "$fresh" == "False" ]] && grep -q 'ESTIMATED
 else
   bad es_018 "a hindsight estimate was not labelled"; note "$retro // fresh=$fresh"
 fi
-G="$SCRATCH/forecast"; mkrepo "$G" Fg 2 REQ-UI-501
+G="$SCRATCH/forecast"; mkrepo "$G" Fg 2 REQ-UI-501; mkphase "$G" Fg 3 REQ-UI-002; mkphase "$G" Fg 4 REQ-UI-003
 mkruns "$G" "[('build-phase', ['REQ-UI-001'], 1000, 100), ('build-phase', ['REQ-UI-002'], 2000, 200), ('build-phase', ['REQ-UI-003'], 3000, 300)]"
 bash "$EST" "$G" --phase 2 >/dev/null 2>&1; sleep 1
 mkruns "$G" "[('build-phase', ['REQ-UI-501'], 9000, 900)]"

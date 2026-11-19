@@ -8,11 +8,11 @@
 
 ## Summary
 
-45 entries: 0 blocking now, 2 open (TF-044, TF-045), 3 fixed upstream and not yet re-checked (TF-037, ships in TechieFlow v1.2.4; TF-038 and TF-039, ship in v1.3.0), 40 closed after a re-check here.
+46 entries: 0 blocking now, 0 open, TF-046 fixed upstream on 2026-11-19 (in TechieFlow v1.4.0, not yet in `.tfcore/`), TF-044 and TF-045 fixed upstream on 15 Nov and not yet re-checked, 3 more fixed upstream and not yet re-checked (TF-037, ships in TechieFlow v1.2.4; TF-038 and TF-039, ship in v1.3.0), 40 closed after a re-check here.
 
 Nothing is blocked. TF-044: a test filter with a space or "|" runs the whole unit suite. TF-045: the mockup check compares a screen that is still loading. TF-040 to TF-043 were closed on 15 Nov after a re-check on the running app; the two faults filed as TF-040 turned out to be the app's own start page and a database setting on this machine.
 
-- 0 blockers, 16 majors, 29 minors, 0 nice-to-haves.
+- 0 blockers, 16 majors, 30 minors, 0 nice-to-haves.
 - Last consolidated: 2026-11-15.
 
 ## Entries
@@ -847,7 +847,41 @@ Nothing is blocked. TF-044: a test filter with a space or "|" runs the whole uni
 - **Suggested fix:** the same wait and re-measure the screen check has; a screen still without its anchors is NOT-MEASURED.
 - **Reply (TechieFlow team, 2026-11-15, night):** Fixed upstream with Chatur's TF-035, the same fault in the screen check, as one waiting rule both checks call (`waitLoaded` in `tf-login.mjs`). **Loaded** means all three: no loading sign is showing (a visible `aria-busy="true"` element, a progress bar with no value, or a text that reads "Loading" or starts with it and ends in "..." or "…"); at least half of the controls the screen's mockup names are on the page; and that count has not changed for 300 ms. **How long:** up to `--render-wait` (5 s unless given), and once more the same time while a loading sign is still showing. **When the content never arrives:** the mockup check compares nothing and writes `NOT-MEASURED — not measured: still loading after 10 s: the screen shows "Loading prompt configurations..."`, which the verdict reads as not measured, neither a pass nor a failure; the screen check grades the screen as it stands and its finding says it was still loading. Your Prompt Manager's cold first open (about 12 s) outlasts the default 10 s, so a cold run reads "not measured" where it read 11 findings; `--render-wait 8000` waits long enough to compare it. Case `ch_035` (content 3 s after the window's frame; a screen that shows "Loading board…" for good; a screen with its mockup's icons missing) fails on the scripts you have and passes now; its control half: a loaded screen missing its mockup's icons still fails. Proved on a fixture, not on BlogAdmin. **Check it here:** the Repro's command on a fresh boot: Prompt Manager is PASS, or NOT-MEASURED with the loading text, never 11 findings. **Fixed in Lekhak's `.tfcore`** by the framework update of 2026-11-15, night.
 
+### TF-046 — `tf-fix-close.sh` stops with `KeyError: 'started'` after writing the miss-fix, when a chained verify ran inside the fix window
+
+- **Status:** fixed upstream 2026-11-19, in TechieFlow v1.4.0; in Lekhak's `.tfcore/` from the framework update of 2026-11-19 (morning); not yet re-checked here.
+- **Severity:** minor
+- **Blocks:** no. The miss-fix record was written before the stop; only the rest of the script's output is lost.
+- **Repro:** Lekhak, `*build-phase` fix pass, 18 Nov 2026, one `verify-phase` run recorded inside the window:
+  ```
+  bash .tfcore/utils/tf-fix-close.sh Lekhak --reqs REQ-UI-163 --subagents builder --build pass --files 16 --cmd build-phase --started 2026-11-18T17:20:00Z
+  # build-phase: recorded around 1 chained run(s) (verify-phase) in 2 segment(s)
+  # Traceback … line 151 … KeyError: 'started'
+  ```
+- **Smallest page:** not reduced. A runs.jsonl record that the script reads around line 140 (`r["started"]`) seems to lack `started`; the verify run records of this day were written by `tf-verify-emit.sh`.
+- **Expected:** a run record without `started` is skipped or reported by name, and the script finishes its report.
+- **Actual:** the script stops with a Python traceback after its first output line.
+- **Encountered in:** `*build-phase Lekhak` (18 Nov 2026), closing MISS-Lekhak-20261118-49 for REQ-UI-163.
+- **Workaround:** none needed: the miss-fix was already written; the row's Remarks were then rewritten by hand with the Edit tool and the row re-verified.
+- **Suggested fix:** read `started` with `r.get("started")` in the chained-run scan and skip a record that has none, naming it in the output.
+- **Reply (TechieFlow team, 2026-11-19):** Fixed upstream in `tf-fix-close.sh`, as you suggested, and its source too. (1) The follow-up scan (your TF-039) skips a run record with no start and names how many: `…; 1 earlier build-phase run record(s) carry no start time and were left out of the follow-up`; the script finishes its report. (2) Where those records came from: a close with no `--started` and no marker wrote its run record with no start. Your `runs.jsonl` holds six (three `build-phase` fix records of 18 Nov). A close with no start now writes no run record and says `run record not written: no --started and no marker, so the fix's time is not measured`; the miss-fix records are still written. Case `lk_046`, your Repro's shape: on the script you have, `KeyError: 'started'` at line 151 after the first output line; now the report finishes, the row's miss-fix is written, and the follow-up still files an earlier fix's row under that fix. `lk_046c`: a close with no start wrote a startless run record; now none. Your six records stay as written: streams are never edited. **Check it here:** your Repro's command finishes with the run record line and no traceback.
+
 ## Replies from TechieFlow
+
+## Resolution status (TechieFlow team, 2026-11-19)
+
+From `/mnt/c/3AIGenCode/Lekhak/docs/Lekhak-TechieFlow-Feedback.md`, read on 2026-11-19.
+
+**Fixed in Lekhak's `.tfcore`** through the framework update of 2026-11-19 (morning), **TechieFlow v1.4.0**. The replies were written on the night of 18 to 19 Nov, when Lekhak was read only, and merged into this file at the update; nothing of Lekhak's was run for them. Each has a case in `tests/faults/n19-cases.sh` (run by `tests/faults/run.sh`) that fails on the scripts this project had before the update and passes now, with a control half that shows a real finding is still reported.
+
+| ID | Fix | Case | Check it here |
+|---|---|---|---|
+| TF-046 | A run record with no start is left out of the follow-up and named; a close with no start writes none. | `lk_046`, `lk_046c` | the Repro's command finishes. |
+| TF-045 | Fixed on 15 Nov (with Chatur TF-035); its case `ch_035` still passes tonight. Nothing new. | `ch_035` | as in its reply. |
+
+**One more change that reaches your verify, not filed by you (TfLens TF-060).** A row of a later phase that no screen of its own phase owns is now resolved against the earlier phases' screens. On your documents (read only), 18 rows gain a screen (phase 2: 6, phase 3: 2, phase 5: 4, phase 6: 3, phase 7: 3), for example REQ-RAG-069 on `/admin/llm-manager`; their next verify runs the screen and mockup checks they skipped.
+
+**The table** (`measure-projects.py --base v1.3.1`), your row: rows whose verdict moves: not measured for 1 row(s) with a screen; 0 of 0 without one (the last verify covered 1 of the project's 582 rows; the others are not measured); tests a phase verify stops running: 0 of 404 stop (13 left out in all, in 8 file(s)); 3 file(s) name no row id at all; findings that appear or go: none; build list and next command: same. The screen and mockup checks changed, so a row with a screen reads "not measured" there: the saved records were written by the old checks. What they now do is in the cases above, and the earlier-phase screens (TfLens TF-060) are counted from your documents, not from a verify.
 
 <!-- The upstream team's answers, newest block first. Left in full: this is the record. -->
 

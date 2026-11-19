@@ -3700,7 +3700,7 @@ MD
   - *Acceptance:* When the owner opens Bad, then the check-ins show.
 MD
   ln -sfn "$pw/node_modules" "$d/node_modules"
-  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
+  cp "$UTILS/tf-login.mjs" "$UTILS/tf-theme.mjs" $(ls "$UTILS/tf-menus.mjs" "$UTILS/tf-test-guard.sh" 2>/dev/null) "$UTILS/tf-mockup-parity.mjs" "$UTILS/tf-verify-screens.mjs" "$d/"
   local port; port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$d/site" >/dev/null 2>&1 & local srv=$!
   sleep 1
@@ -7327,7 +7327,7 @@ JS
   [[ $rc -eq 0 && ${#pw1} -ge 20 ]] && cmp -s "$d/committed.json" "$d/tests/verify/testsettings.json" \
     && grep -q 'fx-owner@fx.app: registered (user id 41); password written to tests/verify/testsettings.Local.json as TestUsers:1:Password' <<<"$out" \
     && grep -q 'fx-second@fx.app: already has a password in the settings, skipped' <<<"$out" && ! grep -qF -- "$pw1" <<<"$out" \
-    && grep -q '"email":"fx-owner@fx.app","app":"fx-app"' "$d/am-log.json" && ! grep -q 'fx-second' "$d/am-log.json" \
+    && grep -q '"email":"fx-owner@fx.app","pwlen"' "$d/am-log.json" && ! grep -q 'fx-second' "$d/am-log.json" \
     && ok sv_015d "the register-test-users script registers only a user with no password, writes it to the Local file only, never prints it" \
     || { bad sv_015d "the register-test-users script (exit $rc)"; note "$(tr '\n' ' ' <<<"$out" | cut -c1-240)"; }
 }

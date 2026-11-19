@@ -16,7 +16,8 @@
 //   - a list that opens outside the window.
 // A native <select> is not opened (the system draws its list), but its closed box is the page's: a select
 // whose widest option is wider than its box, less padding and the arrow, cuts its text (Lekhak TF-041; the
-// rule of Lekhak's own cutSelects test: canvas text width in the select's own font).
+// rule of Lekhak's own cutSelects test: canvas text width in the select's own font). A select nobody sees (opacity 0,
+// hidden) is not graded; the label drawn under it is, when it cuts its text sideways (TrStudio TF-010).
 // Pickers inside a dialog (Sevak TF-038): each visible [aria-haspopup="dialog"] trigger that ends nothing is
 // clicked, the pickers in the dialog it opens are graded the same way, and the dialog is closed. A list is
 // closed by a click on its trigger before Escape, so a dialog holding it stays open.
@@ -69,13 +70,22 @@ const SELECTS = (scope) => {
     const r = s.getBoundingClientRect();
     if (!(r.width > 0 && r.height > 0) || s.multiple || s.size > 1 || !s.options.length) continue;
     const cs = getComputedStyle(s);
+    const name = s.getAttribute('aria-label') || s.getAttribute('data-testid') || s.closest('[data-testid]')?.getAttribute('data-testid') || s.id || s.name || 'a select';
+    if (cs.opacity === '0' || cs.visibility === 'hidden') {
+      // a select nobody sees, laid over the label that shows its value: the label is graded (TrStudio TF-010)
+      const pe = s.style.pointerEvents; s.style.pointerEvents = 'none';
+      const u = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); s.style.pointerEvents = pe;
+      if (u && !s.contains(u) && u.scrollWidth > u.clientWidth + 1 && getComputedStyle(u).overflowX !== 'visible') {
+        out.push({ name, text: (u.textContent || '').trim().slice(0, 50), need: u.scrollWidth, room: u.clientWidth });
+      }
+      continue;
+    }
     cv.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
     const room = s.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - (cs.appearance === 'none' ? 0 : 20);
     let widest = 0, text = '';
     for (const o of s.options) { const w = cv.measureText(o.text).width; if (w > widest) { widest = w; text = o.text; } }
     if (widest > room + 1) {
-      out.push({ name: s.getAttribute('aria-label') || s.getAttribute('data-testid') || s.closest('[data-testid]')?.getAttribute('data-testid') || s.id || s.name || 'a select',
-        text: text.slice(0, 50), need: Math.round(widest), room: Math.round(room) });
+      out.push({ name, text: text.slice(0, 50), need: Math.round(widest), room: Math.round(room) });
     }
   }
   return out;
@@ -94,15 +104,36 @@ const MARK = ({ trig, scope, from }) => {
   return t.map((el, k) => { el.setAttribute('data-tf-dd', String(from + k)); return String(from + k); });
 };
 
+// Sevak TF-043: a date picker's calendar is no list, so it was never closed, and the dark pass measured it over the
+// top bar. Whatever a click opened is closed: by its trigger (a dialog around it stays open), Escape, then a click
+// on a spot with nothing under it. One that stays open is named, and is not opened again on this route.
+const POP = '[role="listbox"],[role="menu"],[role="dialog"],[role="alertdialog"],[role="grid"],[role="tooltip"],[popover],[data-state="open"]';
+const OPEN = ([i, pop]) => {   // a number that grows with what is open around trigger i
+  const t = document.querySelector(`[data-tf-dd="${i}"]`), id = t?.getAttribute('aria-controls');
+  const vis = (el) => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+  return (t?.getAttribute('aria-expanded') === 'true' ? 1000 : 0) + (id && vis(document.getElementById(id)) ? 1000 : 0) + [...document.querySelectorAll(pop)].filter(vis).length;
+};
+const EMPTY = (pop) => {       // a point near an edge of the window with no control, list or popup under it
+  const W = innerWidth, H = innerHeight, busy = `a,button,input,select,textarea,label,summary,[tabindex],[contenteditable],[role="button"],[role="link"],[role="tab"],[role="option"],[role^="menuitem"],[data-tf-dd],${pop}`;
+  return [[W - 3, H - 3], [3, H - 3], [W - 3, H / 2], [3, H / 2], [W / 2, H - 3]].find(([x, y]) => { const e = document.elementFromPoint(x, y); return e && !e.closest(busy); }) || null;
+};
+const STUCK = new Set();       // route|name of a trigger whose popup could not be closed
+
 async function gradeList(page, i, width, o, out, tally, where) {
   const trig = page.locator(`[data-tf-dd="${i}"]`).first();
+  const who = await page.evaluate((i) => { const t = document.querySelector(`[data-tf-dd="${i}"]`); return location.pathname + '|' + (t?.getAttribute('aria-label') || t?.getAttribute('data-testid') || t?.closest('[data-testid]')?.getAttribute('data-testid') || (t?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 40)); }, i).catch(() => '|');
+  if (STUCK.has(who)) { tally.left_shut.push(who.split('|')[1]); return; }
+  const was = await page.evaluate(OPEN, [i, POP]).catch(() => 0);
   if (await trig.click({ timeout: 3000 }).then(() => false, () => true)) return;
   let got = null;
   for (let t = 0; t < o.settle && !got; t += 150) { await page.waitForTimeout(150); got = await page.evaluate(MEASURE, i).catch(() => null); }
-  // closed by its own trigger first, so a dialog around it stays open; Escape only when that leaves it open
-  if (got) await trig.click({ timeout: 2000 }).catch(() => {});
-  await page.waitForTimeout(150);
-  if (await page.evaluate(MEASURE, i).catch(() => null)) { await page.keyboard.press('Escape').catch(() => {}); await page.waitForTimeout(150); }
+  const isOpen = async () => (await page.evaluate(OPEN, [i, POP]).catch(() => 0)) > was;
+  const empty = async () => { const p = await page.evaluate(EMPTY, POP).catch(() => null); if (p) await page.mouse.click(p[0], p[1]); };
+  for (const close of [() => trig.click({ timeout: 2000 }), () => page.keyboard.press('Escape'), empty]) {
+    if (!(await isOpen())) break;
+    await close().catch(() => {}); await page.waitForTimeout(200);
+  }
+  if (await isOpen()) { STUCK.add(who); tally.unclosed.push(who.split('|')[1]); }
   if (!got) return;
   tally.opened++; tally.names.push(got.name);
   const at = `${where}at ${width}px`;
@@ -114,11 +145,11 @@ async function gradeList(page, i, width, o, out, tally, where) {
 const ENDS = /\b(exit|quit|sign out|log ?out|delete|remove|uninstall|reset|discard)\b/i;
 
 // -> [{ check: 'visual', class, detail }] for the screen open in page, at this width; the array also
-// carries `.tally` = { opened, triggers, selects, dialogs, names }
+// carries `.tally` = { opened, triggers, selects, dialogs, names, unclosed, left_shut }
 export async function dropdownFindings(page, width, o = {}) {
   const opt = { max: o.max ?? 8, settle: o.settle ?? 900 };
   await page.evaluate(() => document.querySelectorAll('[data-tf-dd]').forEach((x) => x.removeAttribute('data-tf-dd'))).catch(() => {});
-  const out = [], tally = { opened: 0, triggers: 0, selects: 0, dialogs: 0, names: [] };
+  const out = [], tally = { opened: 0, triggers: 0, selects: 0, dialogs: 0, names: [], unclosed: [], left_shut: [] };
   const marks = await page.evaluate(MARK, { trig: TRIG, scope: null, from: 0 }).catch(() => []);
   tally.triggers += marks.length;
   for (const i of marks.slice(0, opt.max)) await gradeList(page, i, width, opt, out, tally, '');

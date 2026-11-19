@@ -26,7 +26,7 @@ Each rule lives in one place; these lines only point at it.
 
 | Command | What it does | Task file |
 |---|---|---|
-| `*develop-end-to-end {App} {brief}` | a new app from a brief to UAT, unattended: Day 1, build and verify, handoff; commits and pushes each phase; reports time and tokens per phase (greenfield only) | `develop-end-to-end.md` |
+| `*develop-end-to-end {App} [{brief}] [--no-git]` | an app to UAT, unattended: Day 1 (skipped where its documents exist), then every phase in order with build, verify, fixes and handoff; commits and pushes each step unless `--no-git`; reports time and tokens per step | `develop-end-to-end.md` |
 | `*estimate-phase {App} [family repos]` | estimates the phase's tokens and time (build, machine QA, total; low/mid/high) from the run history, before `*build-phase` | `estimate-phase.md` |
 | `*build-phase {App}` | builds every open row of the phase's checklist, smokes, chains the verifier, fixes what fails | `build-phase.md` |
 | `*fix-issues {App} {folder}` | reproduces reported bugs from screenshots and notes, fixes, re-verifies | `fix-issues.md` |

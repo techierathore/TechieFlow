@@ -20,7 +20,8 @@
 #   Files older than the retention window are deleted; directories left empty
 #   are removed. Newer files are untouched — a run in flight is never disturbed
 #   (its files are minutes old), and a mixed-age dir like tests/.artifacts/harness/
-#   keeps its recent scripts and loses its stale ones.
+#   keeps its recent scripts and loses its stale ones. A folder holding .git (a test's own
+#   repository) is one thing: removed whole once its newest file is old, else untouched (Chatur TF-037).
 #   Repo-root legacy dirs (banned outright by the artifact-location rule, kept
 #   only by the .gitignore for legacy trees) are removed REGARDLESS of age:
 #     test-results/  test-results-*/  scripts-*/  playwright-report/
@@ -42,6 +43,18 @@
 # the project root; symlinks are never followed; nothing outside the listed
 # roots is ever considered. stdout (a one-line summary, only when something was
 # removed) is surfaced into the session so the agent knows the sweep ran.
+#
+# THROTTLE AND KEPT PATHS (moved out of the program to keep it under its size ceiling):
+# Throttle: at most one sweep per hour per project, whichever harness fires it
+# (a harness may re-fire session-start on every prompt; a walk of a big tree on every
+# turn is waste). TF_SWEEP_FORCE=1 bypasses. Dry runs never touch the stamp.
+# A spec that reads tests/.artifacts/harness/hindi-src lost it on the eighth day, and two rows failed
+# "the crawl produced no result" on a working product. Any path under the sweep roots that a file of
+# the project's tests (or its Playwright config) names is kept, with everything below it, whatever its
+# age. The right home for a fixture is still tests/verify/fixtures/, outside the sweep.
+# Only a NAMED thing inside a folder counts (tests/.artifacts/<folder>/<name>): a folder a test writes
+# into is named with a variable after it (`shots/${name}.png`), which the pattern stops at, and the
+# framework's own output folders are never kept. The Playwright config is not read: it names outputs.
 
 INPUT="$(cat 2>/dev/null)"
 command -v python3 >/dev/null 2>&1 || exit 0
@@ -53,17 +66,12 @@ try:
     data = json.loads(os.environ.get("TF_HOOK_INPUT") or "{}")
 except Exception:
     data = {}
-
 root = os.environ.get("CLAUDE_PROJECT_DIR") or os.environ.get("TF_PROJECT_DIR") or data.get("cwd") or ""
 if not root or not os.path.isdir(os.path.join(root, ".tfcore")):
     raise SystemExit(0)
 root = os.path.realpath(root)
-
 DRY = os.environ.get("TF_SWEEP_DRY_RUN") == "1"
 
-# Throttle: at most one sweep per hour per project, whichever harness fires it
-# (a harness may re-fire session-start on every prompt; a walk of a big tree on every
-# turn is waste). TF_SWEEP_FORCE=1 bypasses. Dry runs never touch the stamp.
 stamp = os.path.join(root, ".tfcore", ".session", "sweep.stamp")
 if not DRY and os.environ.get("TF_SWEEP_FORCE") != "1":
     try:
@@ -95,20 +103,11 @@ def retention_days():
     except Exception:
         pass
     return 7
-
 DAYS = retention_days()
 CUTOFF = time.time() - DAYS * 86400
-
 SWEEP_ROOTS = [os.path.join("tests", ".artifacts"), ".verify"]
 
 # ---- what a test names is not litter (Lekhak TF-004) ---------------------------
-# A spec that reads tests/.artifacts/harness/hindi-src lost it on the eighth day, and two rows failed
-# "the crawl produced no result" on a working product. Any path under the sweep roots that a file of
-# the project's tests (or its Playwright config) names is kept, with everything below it, whatever its
-# age. The right home for a fixture is still tests/verify/fixtures/, outside the sweep.
-# Only a NAMED thing inside a folder counts (tests/.artifacts/<folder>/<name>): a folder a test writes
-# into is named with a variable after it (`shots/${name}.png`), which the pattern stops at, and the
-# framework's own output folders are never kept. The Playwright config is not read: it names outputs.
 KEEP_RE = re.compile(r"(?:tests[/\\]+\.artifacts|\.verify)[/\\]+[^'\"`\s)\]},;*?<>|${}+]+")
 OUTPUTS = ("tests/.artifacts/verify/", "tests/.artifacts/build/", "tests/.artifacts/test-results",
            "tests/.artifacts/playwright", "tests/.artifacts/regression", "tests/.artifacts/doc-check/")
@@ -137,12 +136,10 @@ def kept(fp):
     rel = os.path.relpath(fp, root).replace(os.sep, "/")
     return any(rel == k or rel.startswith(k + "/") for k in keep)
 LEGACY_ROOT_GLOBS = ["test-results", "test-results-*", "scripts-*", "playwright-report"]
-
 removed_files = 0
 removed_dirs = 0
 removed_bytes = 0
 legacy = []
-
 def inside(p):
     rp = os.path.realpath(p)
     return rp == root or rp.startswith(root + os.sep)
@@ -185,13 +182,28 @@ def rm_tree(p):
         pass
 
 # ---- 1. age sweep under the sanctioned roots --------------------------------
+# A folder holding .git (a test's own repository) goes whole or stays whole (Chatur TF-037): a .git left
+# with HEAD but no objects is no repository to git, which then walks up and writes to the project's own.
+def newest(p):
+    return max([os.lstat(os.path.join(d, n)).st_mtime for d, ds, fs in os.walk(p) for n in ds + fs] + [0])
+def near_keep(u):
+    r = os.path.relpath(u, root).replace(os.sep, "/")
+    return any(k == r or k.startswith(r + "/") or r.startswith(k + "/") for k in keep)
 if DAYS > 0:
     for rel in SWEEP_ROOTS:
         top = os.path.join(root, rel)
         if os.path.islink(top) or not os.path.isdir(top) or not inside(top):
             continue
+        units = [d for d, ds, fs in os.walk(top) if d != top and (".git" in ds or ".git" in fs)]
+        units = [u for u in units if not any(u.startswith(v + os.sep) for v in units)]
+        for u in units:
+            try:
+                if newest(u) < CUTOFF and not near_keep(u):
+                    rm_tree(u)
+            except Exception:
+                pass
         for dp, dns, fns in os.walk(top, topdown=False, followlinks=False):
-            if not inside(dp):
+            if not inside(dp) or any(dp == u or dp.startswith(u + os.sep) for u in units):
                 continue
             for f in fns:
                 fp = os.path.join(dp, f)

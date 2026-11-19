@@ -82,7 +82,8 @@ for P in ${PROJECTS[@]+"${PROJECTS[@]}"}; do
     [[ -f "$e" ]] || continue
     if grep -q 'keychain-access-groups' "$e"; then with=1; else without=1; fi
   done
-  if [[ $with -eq 1 && $without -eq 0 ]] && ! grep -q '<CodesignProvisioningProfile>' "$P"; then
+  # a profile named by either property, CodesignProvision being the one MAUI's Mac targets read (TrStudio TF-009)
+  if [[ $with -eq 1 && $without -eq 0 ]] && ! grep -qE '<CodesignProvision(ingProfile)?( [^>]*)?>[^<[:space:]]' "$P"; then
     echo "WARN $P: the entitlements ask for keychain-access-groups and the project names no provisioning profile; macOS will not start a locally signed build that asks for it. Sign with a development certificate and profile, or give Debug builds an entitlements file without it (coding-standards-dotnet.md §9)"
     found=1
   fi

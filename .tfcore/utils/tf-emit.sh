@@ -889,10 +889,11 @@ def _pointer(name):
         return None
 
 def _sum_claude_transcript(path, t0, t1, tot, models):
-    """Sum one transcript's in-window assistant messages. Returns the OUTPUT tokens
-    this transcript alone contributed, so the caller can split main from subagents
-    (SCHEMA.md §2.5 `tokens_out_subagents`) without walking the file twice."""
-    before = tot["out"]
+    """Sum one transcript's in-window replies; return the OUTPUT tokens it alone gave (main vs subagents,
+    SCHEMA.md §2.5). Claude Code writes a line per content block of one reply, each repeating that reply's
+    usage, so a reply counts once, by message id (TechieBlog's estimate-phase of 16 Nov: one reply of 46
+    blocks gave 772,297 for 20,193)."""
+    seen = {}
     with open(path, encoding="utf-8", errors="replace") as fh:
         for line in fh:
             if '"assistant"' not in line:
@@ -908,15 +909,19 @@ def _sum_claude_transcript(path, t0, t1, tot, models):
                 continue
             msg = r.get("message") or {}
             u = msg.get("usage") or {}
-            o = u.get("output_tokens") or 0
-            tot["in"] += u.get("input_tokens") or 0
-            tot["out"] += o
-            tot["cr"] += u.get("cache_read_input_tokens") or 0
-            tot["cw"] += u.get("cache_creation_input_tokens") or 0
-            m = msg.get("model")
-            if m:
-                models[m] = models.get(m, 0) + o
-    return tot["out"] - before
+            k = msg.get("id") or r.get("requestId") or r.get("uuid") or len(seen)
+            if (u.get("output_tokens") or 0) >= (seen.get(k, ({}, 0))[0].get("output_tokens") or 0):
+                seen[k] = (u, msg.get("model"))
+    out = 0
+    for u, m in seen.values():
+        o = u.get("output_tokens") or 0
+        out += o
+        for f, key in (("in", "input_tokens"), ("cr", "cache_read_input_tokens"), ("cw", "cache_creation_input_tokens")):
+            tot[f] += u.get(key) or 0
+        if m:
+            models[m] = models.get(m, 0) + o
+    tot["out"] += out
+    return out
 
 def _window_claude(t0, t1):
     ptr = _pointer("claude-code")
@@ -1518,7 +1523,7 @@ _ALLOWED = {
     # An ESTIMATE, never a measurement (SCHEMA.md §2.8, added 2026-11-08): one per checklist row per cmd
     # and one per phase total per cmd, written by tf-estimate.sh. Its own stream, so no reader of
     # runs.jsonl can ever take one for a run; `model` here is the model that made the estimate.
-    ("estimates", "estimate"): {"phase", "req_id", "cmd", "tokens_out", "duration_s", "basis", "basis_runs",
+    ("estimates", "estimate"): {"phase", "req_id", "cmd", "tokens_out", "duration_s", "basis", "basis_runs", "basis_phases",
                                 "model", "rows_n", "rows_no_precedent_n", "basis_note"},
     # a miss that should never have been written, withdrawn by --void-miss (SCHEMA.md §5.5.11)
     ("misses", "miss-void"): {"miss_id", "reason"},

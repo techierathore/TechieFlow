@@ -6,15 +6,21 @@
 # WHAT IT DOES (SCHEMA.md §2.8; the task is .tfcore/tasks/estimate-phase.md)
 #   1. Reads phase N's checklist rows: docs/<App>-Checklist.md for phase 1, docs/<App>-P<N>-Checklist.md
 #      for the others (the same naming *verify --phase uses).
-#   2. Reads the repo's LIVE run records (never backfilled, never voided) of build-phase, verify-phase
-#      and fix-issues that touched at least one row (reqs_count > 0). A run that touched one of THIS
-#      phase's rows is left out of the history, so a finished phase is never estimated from itself.
-#   3. Per cmd and per requirement id prefix (REQ-UI, REQ-FN, REQ-RAG, REQ-NFR ...) it takes each run's
-#      tokens_out and duration per row touched (the run's figure divided by its reqs_count), and gives
-#      every row of that prefix the first quartile, median and third quartile of those: low, mid, high.
-#      A UI row is estimated from UI history only.
-#   4. Fewer than three runs for a cmd and prefix in this repo: the history of the --family repos is
-#      added and the basis is "family". Still fewer than three: "no precedent" — never a number.
+#   2. Reads the repo's LIVE run records (never backfilled, never voided) of build-phase, verify-phase,
+#      fix-issues and the after-handoff step, and the checklists of its OTHER phases.
+#   3. THE UNIT OF HISTORY IS A FINISHED PHASE, NOT A RUN (2026-11-19). For each other phase that was built
+#      (a build-phase run touched its rows), per cmd and per row prefix (REQ-UI, REQ-FN ...): what that step
+#      spent on the phase's rows of that prefix — each run counting the share of its tokens and time its rows
+#      there make up, every re-verify and every fix included — divided by those rows. A row that no fix ever
+#      touched counts as nothing spent. Over those phases: low and high are the first and third quartile,
+#      mid is the mean (a phase total is a sum, so the average phase is its expected cost; low/high widen to
+#      take it in). Each row of the prefix gets that figure.
+#      Why: pricing every row at one pass of the median run put verify at 0.15 and fix at 4.5 times what 28
+#      built phases of ten repos spent (TechieBlog phase 1: 39 times too low, 6 times too high); a phase is
+#      re-verified many times and fixes few rows. This way gives 0.99 and 0.99 on the same phases.
+#   4. Fewer than three such phases for a cmd and prefix in this repo: the phases of the --family repos are
+#      added and the basis is "family". Still fewer than three: "no precedent" — never a number. A phase
+#      whose step on those rows has a run with no measured tokens or time is left out for that step, counted.
 #   5. Writes one estimate record per row per cmd and one per phase total per cmd to
 #      docs/metrics/estimates.jsonl through tf-emit.sh (nothing on --dry-run), then prints the table:
 #      per row and per phase, build, machine QA (verify + fix) and the total, each low / mid / high,
@@ -105,7 +111,7 @@ family = [os.path.abspath(f) for f in family if os.path.abspath(f) != os.path.ab
 
 
 # ------------------------------------------------------------------ the phase's rows
-def app_of(r):
+def app_of(r, given=None, family_repo=False):
     """The app whose checklist this is, resolved the way the rest of the framework names it — never the first
     *-Checklist.md found. TechieBlog has Prod-Deploy-Checklist.md beside TechieBlog-Checklist.md, and the first
     by name was taken as the app, so every row read "no precedent" (owner, 2026-11-08). In order:
@@ -114,8 +120,8 @@ def app_of(r):
       3. the one <X>-Checklist.md (not -P<n>-, not -Deployment-) that has its own docs/<X>-BRD.md;
       4. otherwise none: the caller is told to pass --app, and nothing is guessed."""
     docs = os.path.join(r, "docs")
-    if app_arg:
-        return app_arg, "--app"
+    if given:
+        return given, "--app"
     try:
         with open(os.path.join(r, ".tfcore", "core-config.yaml"), encoding="utf-8", errors="replace") as fh:
             m = re.search(r"(?m)^\s+brd:\s*['\"]?docs/(.+?)-BRD\.md", fh.read())
@@ -130,10 +136,12 @@ def app_of(r):
         return own[0], "its BRD"
     if len(names) == 1:
         return names[0], "the only checklist"
+    if family_repo:
+        return None, None
     usage("cannot tell which checklist is the app's (%s): pass --app <App>" % (", ".join(n + "-Checklist.md" for n in names) or "none under docs/"))
 
 
-APP, APP_FROM = app_of(repo)
+APP, APP_FROM = app_of(repo, app_arg)
 CHECKLIST = os.path.join(repo, "docs", ("%s-Checklist.md" % APP) if phase == 1 else ("%s-P%d-Checklist.md" % (APP, phase)))
 if not os.path.isfile(CHECKLIST):
     usage("phase %d has no checklist: %s" % (phase, os.path.relpath(CHECKLIST, repo)))
@@ -179,8 +187,19 @@ def _dur(r):
     return d if isinstance(d, (int, float)) and d > 0 else None
 
 
-def history(r, exclude=frozenset()):
-    """Per cmd, one sample per usable run: (prefixes, tokens per row, seconds per row, run key)."""
+def checklists(r, app):
+    """{phase: rows} of one repo's phase checklists, named as *verify --phase names them."""
+    out = {}
+    for path in glob.glob(os.path.join(r, "docs", "*-Checklist.md")):
+        m = re.match(r"^%s(?:-P(\d+))?-Checklist\.md$" % re.escape(app), os.path.basename(path))
+        if m:
+            out[int(m.group(1) or 1)] = set(rows_of(path))
+    return out
+
+
+def history(r, app, skip_phase=None, mine=frozenset()):
+    """Per cmd, one sample per finished phase and prefix: (prefix, tokens per row, seconds per row, phase key,
+    run keys). skip_phase is the phase being estimated; mine its rows (runs on them make the estimate retro)."""
     recs = []
     try:
         with open(os.path.join(r, "docs", "metrics", "runs.jsonl"), encoding="utf-8") as fh:
@@ -193,70 +212,104 @@ def history(r, exclude=frozenset()):
         pass
     voided = {(v.get("cmd"), v.get("started")) for v in recs if v.get("kind") == "run-void"}
     out = {c: [] for c in CMDS}
-    skipped = {"backfilled": 0, "voided": 0, "no_reqs": 0, "this_phase": 0, "no_tokens": 0}
+    skipped = {"backfilled": 0, "voided": 0, "no_reqs": 0, "this_phase": 0, "no_tokens": 0, "phases_not_built": 0,
+               "steps_unmeasured": 0}
+    live = []
     for x in recs:
         if x.get("kind") != "run" or x.get("cmd") not in STEP_OF:
-            continue
-        if x.get("backfilled"):
-            skipped["backfilled"] += 1
             continue
         if (x.get("cmd"), x.get("started")) in voided:
             skipped["voided"] += 1
             continue
-        reqs = [q for q in (x.get("reqs_touched") or []) if isinstance(q, str)]
-        n = x.get("reqs_count") if isinstance(x.get("reqs_count"), int) else len(reqs)
+        reqs = {q for q in (x.get("reqs_touched") or []) if isinstance(q, str)}
+        n = x.get("reqs_count") if isinstance(x.get("reqs_count"), int) and x.get("reqs_count") > 0 else len(reqs)
         if n <= 0 or not reqs:
             skipped["no_reqs"] += 1
             continue
-        if exclude and exclude.intersection(reqs):
+        if mine.intersection(reqs):
             skipped["this_phase"] += 1
-            continue
         tok, dur = x.get("tokens_out"), _dur(x)
-        if not isinstance(tok, (int, float)) or x.get("tokens_scope") in (None, "none") or dur is None:
-            skipped["no_tokens"] += 1
+        ok = (not x.get("backfilled") and isinstance(tok, (int, float)) and x.get("tokens_scope") not in (None, "none")
+              and dur is not None)
+        skipped["backfilled" if x.get("backfilled") else "no_tokens"] += 0 if ok else 1
+        live.append((STEP_OF[x["cmd"]], reqs, n, tok if ok else None, dur, ok,
+                     "%s %s %s" % (os.path.basename(r), x["cmd"], x.get("started"))))
+    for ph, rows in sorted(checklists(r, app).items()):
+        if ph == skip_phase or not rows:
             continue
-        prefixes = {PREFIX.match(q).group(1) for q in reqs if PREFIX.match(q)}
-        out[STEP_OF[x["cmd"]]].append((prefixes, float(tok) / n, float(dur) / n,
-                              "%s %s %s" % (os.path.basename(r), x["cmd"], x.get("started"))))
+        if not any(s == "build-phase" and rows & q for s, q, *_ in live):
+            skipped["phases_not_built"] += 1
+            continue
+        for pfx in sorted({PREFIX.match(q).group(1) for q in rows if PREFIX.match(q)}):
+            mine_rows = {q for q in rows if q.startswith(pfx + "-")}
+            for c in CMDS:
+                tok = dur = 0.0
+                keys, whole = set(), True
+                for s, q, n, t, d, ok, key in live:
+                    hit = len(q & mine_rows)
+                    if s != c or not hit:
+                        continue
+                    whole = whole and ok
+                    if ok:
+                        tok, dur = tok + t * min(1.0, float(hit) / n), dur + d * min(1.0, float(hit) / n)
+                        keys.add(key)
+                if not whole:
+                    skipped["steps_unmeasured"] += 1
+                    continue
+                out[c].append((pfx, tok / len(mine_rows), dur / len(mine_rows),
+                               "%s P%d" % (os.path.basename(r), ph), keys))
     return out, skipped
 
 
-HIST, SKIPPED = history(repo, PHASE_SET)
+HIST, SKIPPED = history(repo, APP, phase, PHASE_SET)
 # Estimated after the fact: runs on this phase's own rows already exist, so the figure is hindsight, not a
 # forecast. Its records carry basis_note "retro" and every table says so (owner, 2026-11-08; SCHEMA.md §2.8).
 RETRO = SKIPPED["this_phase"] > 0
-FAM = []
+FAM, FAM_UNNAMED = [], []
 for f in family:
-    h, _ = history(f)
+    fapp, _ = app_of(f, family_repo=True)
+    if not fapp:
+        FAM_UNNAMED.append(os.path.basename(f))
+        continue
+    h, _ = history(f, fapp)
     FAM.append(h)
 
 
 def quartiles(xs):
+    """low/high the first and third quartile; mid the MEAN, since a phase total is a sum of rows and the average
+    phase is its expected cost. When the mean falls outside the middle half, the range widens to take it in."""
     xs = sorted(xs)
     def q(p):
         k = (len(xs) - 1) * p
         lo = int(k)
         hi = min(lo + 1, len(xs) - 1)
         return xs[lo] + (xs[hi] - xs[lo]) * (k - lo)
-    return {"low": q(0.25), "mid": q(0.5), "high": q(0.75)}
+    mid = sum(xs) / float(len(xs))
+    return {"low": min(q(0.25), mid), "mid": mid, "high": max(q(0.75), mid)}
 
 
 def rnd(d):
-    return {k: int(round(v)) for k, v in d.items()} if d else None
+    if not d:
+        return None
+    r = {k: int(round(v)) for k, v in d.items()}
+    r["low"], r["high"] = min(r["low"], r["mid"]), max(r["high"], r["mid"])
+    return r
 
 
 def estimate(cmd, prefix):
-    own = [s for s in HIST[cmd] if prefix in s[0]]
+    own = [s for s in HIST[cmd] if s[0] == prefix]
     basis, pool = "repo", own
     if len(own) < MIN_N:
         basis = "family"
-        pool = own + [s for h in FAM for s in h[cmd] if prefix in s[0]]
+        pool = own + [s for h in FAM for s in h[cmd] if s[0] == prefix]
     if len(pool) < MIN_N or (basis == "family" and not FAM):
-        return {"basis": "none", "basis_runs": len(pool), "tokens_out": None, "duration_s": None, "runs": set()}
-    return {"basis": basis, "basis_runs": len(pool),
+        return {"basis": "none", "basis_runs": len({k for s in pool for k in s[4]}), "basis_phases": len(pool),
+                "tokens_out": None, "duration_s": None, "runs": set(), "phases": set()}
+    runs = {k for s in pool for k in s[4]}
+    return {"basis": basis, "basis_runs": len(runs), "basis_phases": len(pool),
             "tokens_out": rnd(quartiles([s[1] for s in pool])),
             "duration_s": rnd(quartiles([s[2] for s in pool])),
-            "runs": {s[3] for s in pool}}
+            "runs": runs, "phases": {s[3] for s in pool}}
 
 
 # ------------------------------------------------------------------ the model that estimates
@@ -289,10 +342,12 @@ for req in ROWS:
 totals = {}
 for c in CMDS:
     have = [r["per_cmd"][c] for r in rows if r["per_cmd"][c]["basis"] != "none"]
-    runs = set()
+    runs, phs = set(), set()
     for e in have:
         runs |= e["runs"]
-    t = {"rows_n": len(rows), "rows_no_precedent_n": len(rows) - len(have), "basis_runs": len(runs)}
+        phs |= e["phases"]
+    t = {"rows_n": len(rows), "rows_no_precedent_n": len(rows) - len(have), "basis_runs": len(runs),
+         "basis_phases": len(phs)}
     if have:
         t["basis"] = "family" if any(e["basis"] == "family" for e in have) else "repo"
         for f in ("tokens_out", "duration_s"):
@@ -316,14 +371,14 @@ for r in rows:
         e = r["per_cmd"][c]
         records.append({"kind": "estimate", "ts": TS, "app": APP, "phase": phase, "req_id": r["req_id"], "cmd": c,
                         "tokens_out": e["tokens_out"], "duration_s": e["duration_s"], "basis": e["basis"],
-                        "basis_runs": e["basis_runs"], "model": MODEL})
+                        "basis_runs": e["basis_runs"], "basis_phases": e["basis_phases"], "model": MODEL})
         if RETRO:
             records[-1]["basis_note"] = "retro"
 for c in CMDS:
     t = totals[c]
     records.append({"kind": "estimate", "ts": TS, "app": APP, "phase": phase, "req_id": None, "cmd": c,
                     "tokens_out": t["tokens_out"], "duration_s": t["duration_s"], "basis": t["basis"],
-                    "basis_runs": t["basis_runs"], "model": MODEL,
+                    "basis_runs": t["basis_runs"], "basis_phases": t["basis_phases"], "model": MODEL,
                     "rows_n": t["rows_n"], "rows_no_precedent_n": t["rows_no_precedent_n"]})
     if RETRO:
         records[-1]["basis_note"] = "retro"
@@ -354,8 +409,9 @@ summary = {
     "app": APP, "app_from": APP_FROM, "retro": RETRO, "phase": phase, "checklist": os.path.relpath(CHECKLIST, repo), "model": MODEL, "ts": TS,
     "dry_run": dry, "records": len(records), "records_written": written,
     "family": [os.path.basename(f) for f in family],
-    "history_runs": {c: len(HIST[c]) for c in CMDS}, "history_skipped": SKIPPED,
-    "rows": [{"req_id": r["req_id"], **{c: {k: v for k, v in r["per_cmd"][c].items() if k != "runs"} for c in CMDS}}
+    "history_samples": {c: len(HIST[c]) for c in CMDS}, "family_unnamed": FAM_UNNAMED, "history_skipped": SKIPPED,
+    "rows": [{"req_id": r["req_id"], **{c: {k: v for k, v in r["per_cmd"][c].items() if k not in ("runs", "phases")}
+                                         for c in CMDS}}
              for r in rows],
     "totals": totals,
     "owner_uat": "not measured",
@@ -408,15 +464,15 @@ def fig(d, fmt):
 
 def basis_word(per):
     b = [per[c]["basis"] for c in CMDS]
-    n = [str(per[c]["basis_runs"]) for c in CMDS]
-    return "%s n=%s" % ("/".join(b), "/".join(n))
+    n = [str(per[c]["basis_phases"]) for c in CMDS]
+    return "%s phases=%s" % ("/".join(b), "/".join(n))
 
 
 W = 160
 print("=" * W)
 print("Estimate — %s phase %d (%s), %d row(s)%s" % (APP, phase, summary["checklist"], len(rows),
                                                   "  [dry run: nothing written]" if dry else ""))
-print("Estimating model: %s.  Figures are mid (low–high) = median (first–third quartile) per row." % (MODEL or "unknown"))
+print("Estimating model: %s.  Figures are mid (low–high) = mean (first–third quartile) per row." % (MODEL or "unknown"))
 print("App: %s (from %s)." % (APP, APP_FROM))
 if RETRO:
     print("ESTIMATED AFTER THE FACT: %d run(s) on this phase's own rows already exist, so this is hindsight, not a"
@@ -444,12 +500,14 @@ if short:
           % "; ".join("%s %d of %d rows" % (c, totals[c]["rows_no_precedent_n"], totals[c]["rows_n"]) for c in short))
     print("  many rows it covers, so it is never read as the whole phase. Those rows get a Remark (estimate-phase.md).")
 print("  Owner UAT time: not measured (no stream records it).")
-print("  History: %s live runs with rows (build/verify/fix/triage) in %s; left out: %s."
+print("  History: %s finished phase-and-prefix sample(s) (build/verify/fix/triage) in %s; left out: %s."
       % ("/".join(str(len(HIST[c])) for c in CMDS), APP,
          ", ".join("%d %s" % (v, kk.replace("_", " ")) for kk, v in SKIPPED.items() if v) or "none"))
 if family:
-    print("  Family: %s." % ", ".join(os.path.basename(f) for f in family))
-print("  Machine QA counts ONE verify pass and ONE fix pass per row; a phase that re-verifies spends more.")
+    print("  Family: %s.%s" % (", ".join(os.path.basename(f) for f in family),
+          (" Left out, no checklist that names the app: %s." % ", ".join(FAM_UNNAMED)) if FAM_UNNAMED else ""))
+print("  A row's figure is what built phases spent per row on that step, every re-verify and fix included (a row")
+print("  no fix touched counts as nothing): mid the average phase, low-high the middle half of phases.")
 print("  After handoff = *triage-and-fix + *triage-issues on bugs a person found; never inside machine QA, and kept")
 print("  out of \"build + machine QA\" so a phase with no triage history still has a total.")
 if not dry:

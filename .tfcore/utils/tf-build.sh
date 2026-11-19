@@ -72,6 +72,8 @@ elif [[ "$U" == Linux* ]]; then
 elif [[ "$U" == windows || "$U" == MINGW* || "$U" == MSYS* || "$U" == CYGWIN* ]]; then PLATFORM="windows"
 fi
 PLATFORM="${TF_BUILD_PLATFORM:-$PLATFORM}"   # the self-tests only
+# a unit test cannot write to the project's own git repository (Chatur TF-037); the Windows rungs are not covered
+if [[ "$MODE" == test ]]; then source "$(dirname "${BASH_SOURCE[0]}")/tf-test-guard.sh"; tf_test_guard "$PWD"; fi
 
 # ---- target ---------------------------------------------------------------------------
 if [[ -z "$TARGET" && "$MODE" != "probe" ]]; then
@@ -389,11 +391,14 @@ for r in "${rungs[@]}"; do
   # Code errors: C# (CS), Razor (RZ), Blazor (BL), XAML (XC, XLS), missing reference (MSB/NU).
   # Until 2026-09-06 only CS counted, so a build failing on sixteen Razor RZ9991 errors was
   # taken for a wrong rung and reported NOT-RUN "host issue" (MISS-TechieFlow-20260906-03).
-  if grep -qE 'error (CS|RZ|BL|XC|XLS)[0-9]{3,5}|error MSB[0-9]{4}: .*(does not exist|could not be found)|error NU1' <<<"$seg" && ! grep -qE "$WRONG_RUNG" <<<"$seg"; then
-    errs="$(grep -cE 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" || true)"
-    first="$(grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" | head -1 | sed 's/^[[:space:]]*//' | cut -c1-160)"
+  # Any error that points at a line of a source file is the code's too, whatever raised it: an analyzer or a source
+  # generator (Chatur TF-046: CsWinRT1032 on a .cs line was tried on every rung and called a host issue).
+  src='\.(cs|razor|xaml|cshtml)\([0-9]+,[0-9]+(,[0-9]+,[0-9]+)?\): error [A-Za-z]+[0-9]+'
+  if grep -qE "error (CS|RZ|BL|XC|XLS)[0-9]{3,5}|error MSB[0-9]{4}: .*(does not exist|could not be found)|error NU1|$src" <<<"$seg" && ! grep -qE "$WRONG_RUNG" <<<"$seg"; then
+    errs="$(grep -cE "error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+|$src" <<<"$seg" || true)"
+    first="$(grep -E "error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+|$src" <<<"$seg" | head -1 | sed 's/^[[:space:]]*//' | cut -c1-160)"
     echo "FAIL  real errors on $PLATFORM via $label (rung $n): $errs error line(s), first: $first${retried:+; still there after the build servers were shut down and the $MODE was run again}; log $LOG"
-    grep -E 'error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+' <<<"$seg" | sed 's/^[[:space:]]*//' | sort -u | head -10
+    grep -E "error (CS|RZ|BL|XC|XLS|MSB|NU)[0-9]+|$src" <<<"$seg" | sed 's/^[[:space:]]*//' | sort -u | head -10
     finish 1
   fi
   if [[ "$MODE" == "test" ]] && grep -qE 'Failed!|Failed:[[:space:]]+[1-9]|Tests? failed' <<<"$seg"; then

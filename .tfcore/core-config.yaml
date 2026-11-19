@@ -37,6 +37,8 @@ devStoryLocation: docs/stories
 slashPrefix: TechieFlow
 # artifactRetentionDays: 7   # sweep-artifacts.sh (SessionStart) deletes run material under
 #                            # tests/.artifacts/ and .verify/ older than this; 0 disables the age sweep
+# buildCopy: <folder>      # a separate copy of this repository; tf-doc-tests.sh (the status gate's step 4) builds and
+#                            # runs the doc tests there, never here (Sevak TF-045)
 # runtimeVerification: per-app, OPT-IN. Only set the heads this app actually ships.
 # The verifier/devguide/smoke gates drive Blazor with headless Playwright and the MAUI
 # Windows head with FlaUI/Appium-Win (unchanged). For MAUI Android / iOS / Mac Catalyst

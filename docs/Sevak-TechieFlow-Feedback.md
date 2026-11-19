@@ -8,9 +8,9 @@
 
 ## Summary
 
-39 entries: 0 blocking now, 1 open (TF-039, 2026-11-14: `tf-log-miss.sh` measures a cause from the latest `look` mark), 14 fixed upstream and not yet re-checked, 24 closed (as `tf-feedback.sh` counts them).
+45 entries: 0 blocking now, 0 open, 15 fixed upstream and not yet re-checked (TF-045 on 2026-11-19, in TechieFlow v1.4.0, not yet in `.tfcore/`), 30 closed (as `tf-feedback.sh` counts them).
 
-Nothing is blocked. TF-031 (a row split across two installs ran both halves on the second install) and TF-032 (the screen check counted the Speak icons of answers past the 200th anchor as the conversation box's own; it held 17 phase 4 Assistant rows) were fixed upstream on 12 Nov, evening, and are in this project's `.tfcore/`: replies under each entry. TF-031 needs one tag here first, `@boot:install` on the restore test. TF-026 to TF-030 were re-checked on the Sevak app on 12 Nov and closed.
+Nothing is blocked. TF-040 to TF-044 were re-checked on the Sevak app from a separate copy on 16 to 17 Nov and closed.
 
 ## Entries
 
@@ -605,6 +605,8 @@ Nothing is blocked. TF-031 (a row split across two installs ran both halves on t
 
 ### TF-039 — `tf-log-miss.sh` measures a root cause from the latest `look` mark, so causes logged after the next investigation began get that investigation's window (minor, found 2026-11-14 in Sevak triage-and-fix)
 
+> ✅ **Closed 2026-11-16** — re-checked here: 16 Nov: tf-triage.sh look printed a mark number each time (marks 4 to 11, then 1 after the verify started); tf-log-miss.sh --look 5 and --look 7 gave MISS-Sevak-20261116-01 and -04 their own mark's window (04:43:16 to 04:54:03, 05:08:19 to 05:10:27, ending at the next mark), not the latest mark's; the two --amend commands marked MISS-Sevak-20261114-02 and -03 not measured with their own sentences.
+
 - **Status:** fixed upstream 2026-11-15 (night), fixed in Sevak's `.tfcore/` by the framework update of 2026-11-15 (night); not yet re-checked here.
 - **Blocks:** no — the three misses are written; only their discovery cost is wrong, and the real windows are in each miss's sentence and in the run's summary.
 - **Severity:** minor
@@ -615,6 +617,151 @@ Nothing is blocked. TF-031 (a row split across two installs ran both halves on t
 - **Workaround:** log each cause as soon as it is found, before the next `look` mark; the real windows of this run's three causes are in their sentences.
 - **Suggested fix:** the `--look` option above, and a warning on `--started` that it is the command's start, not the cause's.
 - **Reply (TechieFlow team, 2026-11-15, night):** Fixed upstream with Chatur's TF-036, as one rule in a new `tf_looks.py` that `tf-triage.py` and `tf-log-miss.py` both call. `tf-triage.sh look` now prints the mark's number, and `tf-log-miss.sh … --look <number, time or words of the mark's text>` names the investigation a cause belongs to (`demote` and `new` take `--look` too). The time runs from that mark to the next mark when one was set before the cause was logged, else to the logging. **Your run under the new rule:** `look A` at 19:48:27, `look B` at 20:00:22, cause A logged at 20:09 with `--look 1` carries 19:48:27 to 20:00:22, never B's time; the next cause, naming none, carries B's. Without `--look`, while two marks are unanswered, the miss is written "not measured" with the reason and the marks' numbers: never a guess. A `--started` that differs from the running command's start prints a note, and the running command's start is used, so the miss links to its run. **The figures already recorded:** MISS-Sevak-20261114-02 (574 s, 56,766 tokens out) and MISS-Sevak-20261114-03 (647 s, 72,478) carry B's window and are counted in your averages today. They cannot be rewritten: the stream is append-only and these fields are derived. Each can be marked, and the report then counts it as not measured and prints your reason: `bash .tfcore/utils/tf-emit.sh --amend MISS-Sevak-20261114-02 discovery_scope not-measured "took the next investigation's time; found in about a minute at 19:48"` and the same for `-03` with its own sentence. I did not run them: your metrics are yours to write. Case `ch_036` (your two marks and a cause logged after the second) fails on the scripts you have and passes now; its control half: a miss logged after one mark still carries that mark's time. **Fixed in Sevak's `.tfcore`** by the framework update of 2026-11-15, night.
+
+### TF-040 — The mockup check reads a gradient with a see-through colour as a strong colour (minor, found 2026-11-16 in Sevak triage-and-fix)
+
+> ✅ **Closed 2026-11-17** — re-checked here: 16-17 Nov, separate copy, verify phase 1: mockup check on the first-run wizard (/setup) PASS at 1280 and 390, light and dark; no colour finding on wizard-page.
+
+- **Status:** fixed upstream 2026-11-16 (afternoon), fixed in Sevak's `.tfcore/` by the framework update of 2026-11-16 (afternoon); not yet re-checked here.
+- **Blocks:** no — the row keeps its status and nothing in the app changed; but the next `*verify` of REQ-UI-022 fails on the mockup check until this is fixed.
+- **Severity:** minor
+- **Repro:** `tf-mockup-parity.sh --cdp … --screen setup-wizard=/setup` on a fresh Sevak install, 16 Nov: `color` on `wizard-page`, "mockup neutral, app accent (mockup rgb(243,245,251); app rgb(215,215,250))", in light and in dark. The app paints the page box with `linear-gradient(to bottom, <accent at 5%>, <background>, <background>)`; on screen it is a near-white tint, as the mockup's `linear-gradient(160deg,#eef2ff 0%,#f6f7f9 45%,#f6f7f9 100%)` is.
+  The smallest page that shows it: mockup `<body style="margin:0;background:#f6f7f9"><div data-testid="page-box" style="min-height:300px;padding:24px;background:linear-gradient(160deg,#eef2ff 0%,#f6f7f9 45%,#f6f7f9 100%)"><h1 data-testid="title">Set up</h1><button data-testid="go">Continue</button></div></body>`; app page the same with `background-image:linear-gradient(to bottom,rgba(79,70,229,.05),#f6f7f9,#f6f7f9)`. Result: `color` on `page-box`, mockup neutral rgb(243,245,251), app accent rgb(208,209,246). Both files are in `tests/.artifacts/verify/ui16/fx/` (`mock/gradbox.html`, `app/gradbox.html`).
+- **Expected:** neutral on both sides: 5% of the accent over #f6f7f9 is rgb(238,239,248), and the mean with the two background stops is about rgb(243,244,249).
+- **Actual:** `fillOf` in `tf-mockup-parity.mjs` takes the mean of the stops' red, green and blue without weighting each stop by its opacity, so a stop at 5% counts as a full third of the colour; only the mean opacity is then blended over the background.
+- **Encountered in:** Sevak `*triage-and-fix`, 16 Nov 2026, the first run after the framework update of 15 Nov, night. The old script read no gradient, so this screen passed (`parity-wiz.json`, 10 Nov: PASS, 0 findings).
+- **Workaround:** none taken; the app was not changed.
+- **Suggested fix:** blend each stop over what is painted behind the element first (the `seen` rule the script already has), then take the mean.
+- **Reply (TechieFlow team, 2026-11-16, afternoon):** Fixed upstream in `tf-mockup-parity.mjs` (`fillOf`), as you suggested: each colour stop is first seen over what is painted behind the element (the `seen` rule), and the mean is taken of what a reader sees; a transparent stop counts as the background. Your page box: 5% of the accent over #f6f7f9 and two #f6f7f9 stops now read about rgb(243,244,249), neutral, as the mockup's near-white gradient does. Case `sv_040`, your `gradbox.html` pair: on the script you had, `color` on `page-box` at 1280 and 390 ("mockup neutral, app accent"); now none. Control half: the same box painted with an opaque accent gradient is still reported "mockup neutral, app accent". **Fixed in Sevak's `.tfcore`** by the framework update of 2026-11-16 (afternoon).
+
+### TF-041 — The mockup check reads a progress bar's fill as a badge and reports it missing (minor, found 2026-11-16 in Sevak triage-and-fix)
+
+> ✅ **Closed 2026-11-17** — re-checked here: verify phases 1, 3 and 4 from the copy: mockup check PASS on the wizard, Today and Weekly review; no progress-fill badge reported missing.
+
+- **Status:** fixed upstream 2026-11-16 (afternoon), fixed in Sevak's `.tfcore/` by the framework update of 2026-11-16 (afternoon); not yet re-checked here.
+- **Blocks:** no — the rows keep their status and nothing in the app changed; but the next `*verify` of a row whose screen draws a progress bar fails on the mockup check until this is fixed.
+- **Severity:** minor
+- **Repro:** the same run, `setup-wizard`: `missing` on `wizard-progress > i[0]`, "the mockup draws a badge/pill here (""); it could not be located in the app … the app draws 0 badge(s) there where the mockup draws 1". The mockup draws the bar as `.progress > i` (8 px high, radius 999 px, a gradient fill); the app draws it with TrBlazeUI's `Progress`: a rounded track that clips a plain, unrounded fill moved by a transform. The bar is on screen, one third filled, in the accent colour.
+  The smallest page that shows it: mockup `<div data-testid="bar" style="height:8px;border-radius:999px;background:#eef0f4;overflow:hidden"><i style="display:block;width:33%;height:100%;background:linear-gradient(90deg,#6366f1,#4f46e5);border-radius:999px"></i></div>`; app `<div data-testid="bar" role="progressbar" aria-valuenow="33" style="position:relative;height:8px;border-radius:999px;background:#eef0f4;overflow:hidden"><div style="height:100%;width:100%;background:#4f46e5;transform:translateX(-67%)"></div></div>`, each beside a heading and a button. Result: `missing` on `bar > i[0]`. Files: `tests/.artifacts/verify/ui16/fx/mock/bar.html`, `app/bar.html`.
+- **Expected:** no finding, or a comparison of the bars as bars (a fill is there, its share of the track, its colour).
+- **Actual:** since a gradient counts as a fill, the mockup's `i` is "small, filled, rounded" and so a badge (`chromeOn`); the app's fill has no radius of its own, sits under another key, and the `missing` clause reports a badge gone.
+- **Encountered in:** Sevak `*triage-and-fix`, 16 Nov 2026. Your reply to TF-039 named this risk for the 6 progress-bar fills.
+- **Workaround:** none taken; the app was not changed.
+- **Suggested fix:** an element with no text inside a `role="progressbar"` or a track that clips it (`overflow:hidden`, the same height) is a fill, never a badge; or leave textless pills out of the `missing` clause.
+- **Reply (TechieFlow team, 2026-11-16, afternoon):** Fixed upstream in `tf-mockup-parity.mjs`, as your first suggestion: a box with no text and no children that sits inside a `role="progressbar"` (or `<progress>`, `<meter>`), or is as tall as a parent that clips it (`overflow` not visible), is a fill and never a badge, so it is neither compared as a pill nor counted among the badges the `missing` clause looks for. HTML elements only: an SVG's insides are no fill (the first version caught the `<use>` of TfLens's wordmark; the measuring below found it before the deploy). Case `sv_041`, your `bar.html` pair: on the script you had, `missing` on `bar > i[0]` at 1280 and 390; now none. Control half: a real status badge ("Draft") the mockup draws beside the bar and the app leaves out is still reported missing. On your 40 mockup pages this changes 7 elements, all progress fills: `wizard-progress`, `today-summary-progress`, `review-goal-progress` and one more bar on Weekly review, `tokens-budget-progress`, `data-usage-progress` and `conn-job-progress-1`. **Fixed in Sevak's `.tfcore`** by the framework update of 2026-11-16 (afternoon).
+
+### TF-042 — The mockup check calls a tab a badge on one side only, when one side draws it as a button and the other as a div (minor, found 2026-11-16 in Sevak triage-and-fix)
+
+> ✅ **Closed 2026-11-17** — re-checked here: verify phases 2, 3 and 4 from the copy: mockup check PASS on App settings, Automations, Tasks and goals, Inbox, Memory and Plan; no tab badge finding.
+
+- **Status:** fixed upstream 2026-11-16 (afternoon), fixed in Sevak's `.tfcore/` by the framework update of 2026-11-16 (afternoon); not yet re-checked here.
+- **Blocks:** no — nothing in the app changed; but the next `*verify` of a row on a screen with tabs fails on the mockup check until this is fixed. REQ-UI-028 is held at Needs re-verify by it today.
+- **Severity:** minor
+- **Repro:** 16 Nov, `badge` on the current tab of Workspace settings (`wsset-tab-general`), Agents, Automations, App settings, Tasks, Memory and Plan, and the reverse on Inbox's `inbox-choose-file`: "mockup renders this as a badge/pill, app renders it as a plain element (mockup 7px corner on 32px, fill white; app 8px corner on 37px, fill white)". The mockups draw the tab as `<div class="tab active">`; the app draws TrBlazeUI's `TabsTrigger`, a `<button role="tab">` with the same fill and corner.
+  The smallest page that shows it: mockup `<div data-testid="tabs" style="display:flex;background:#eef0f4;border-radius:9px;padding:3px"><div data-testid="tab-general" style="padding:6px 16px;border-radius:7px;background:#fff">General</div><div data-testid="tab-other" style="padding:6px 16px;border-radius:7px">Other</div></div>`; app the same with `<button role="tab" … style="padding:6px 12px;border:0;border-radius:7.5px;background:#fff">`. Result: `badge` on `tab-general`, "mockup 7px corner on 27px, app 8px corner on 28px". Files: `tests/.artifacts/verify/ui16/fx/mock/tab.html`, `app/tab.html`.
+- **Expected:** no finding: the two draw the same box.
+- **Actual:** `chromeOn` in `tf-mockup-parity.mjs` asks a control (button, link, a box holding a field) for a full radius before it is a pill, and any other element for 6 px. The same box is a pill as a div and not as a button. The rule existed before; tonight's change to the box around a text field did not cause it, but these screens now reach it.
+- **Encountered in:** Sevak `*triage-and-fix`, 16 Nov 2026.
+- **Workaround:** none taken; the app was not changed.
+- **Suggested fix:** judge both sides with one rule: when either side is a control (or `role="tab"`), use the control's rule on both.
+- **Reply (TechieFlow team, 2026-11-16, afternoon):** Fixed upstream in `tf-mockup-parity.mjs`, as you suggested: when either side draws the box as a control (a button, a link, a field's box, or now `role="tab"`), both sides are judged by the control's pill rule (a fill or ring and a radius of at least half the height); when neither is, both keep the 6 px rule. A side counts as a control when its anchored element is one, or the element one away is (the neighbour the clause already accepts a treatment from): on Automations, Tasks, Plan and App settings your anchor is a `<span>` around TrBlazeUI's tab button (`<span class="td-tab-anchor" data-testid="auto-tab-schedules"><TabsTrigger …>`), and the first version of this fix missed that shape; the reading of your app below found it, and it is fixed and has its own case. The probe carries each side's reading under both rules, and the `badge` clause picks one rule for the pair. Case `sv_042`, your `tab.html` pair: on the script you had, `badge` on `tab-general` ("mockup badge/pill, app plain"); now none. `sv_042c` is Inbox the other way round, from your markup (`<button>` in `inbox.html`, a `<span class="ib-fake-button">` in `Inbox.razor`): a finding on the old script, none now. `sv_042d` is the span-anchored shape of Automations: a finding on the old script, none now. Control halves: an app tab drawn fully rounded beside the mockup's 7 px box, as a button or inside a span, is still reported as a pill on one side only. **Fixed in Sevak's `.tfcore`** by the framework update of 2026-11-16 (afternoon).
+
+### TF-043 — The screen check opens a date picker's calendar it cannot close and then reports the calendar as overlapping the top bar (minor, found 2026-11-16 in Sevak triage-and-fix)
+
+> ✅ **Closed 2026-11-17** — re-checked here: screen check on Event log at 1280 and 390, light and dark, from the copy: no calendar overlap with the top bar. A separate 'sidebar overlaps sidebar-rail at 1280' came from a run without the screen's mockup and is not visible in its screenshot; not filed.
+
+- **Status:** fixed upstream 2026-11-16 (afternoon), fixed in Sevak's `.tfcore/` by the framework update of 2026-11-16 (afternoon); not yet re-checked here.
+- **Blocks:** no — nothing in the app changed; but REQ-UI-026 (Event log) fails the visual check at 390 in dark mode on every run until this is fixed.
+- **Severity:** minor
+- **Repro:** `tf-verify-screens.sh --list … --cdp …`, Event log at 390, dark: "topbar overlaps button "November" … "2026" …". Replayed by hand on the test app: `tf-dropdowns.mjs` clicks the From date picker (`aria-haspopup="true"`), the calendar opens below it; the second click on its button and Escape both leave it open (TrBlazeUI TR-050); only a click outside closes it. The next width's page is then measured with the calendar still open, scrolled under the top bar.
+- **Expected:** the check closes every list it opened before it measures anything else, or says it could not, and leaves the screen out of the overlap check while one is open.
+- **Actual:** the open calendar is measured as part of the screen.
+- **Encountered in:** Sevak `*triage-and-fix`, 16 Nov 2026.
+- **Workaround:** none taken; the app was not changed. The calendar's own fault is filed with TrBlazeUI as TR-050.
+- **Suggested fix:** after Escape, if the list named by the trigger's `aria-controls` is still shown, click outside it (a corner of the page with nothing under it) and check again; if it is still shown, record "could not close" and skip the overlap check for that width.
+- **Reply (TechieFlow team, 2026-11-16, afternoon):** Fixed upstream in `tf-dropdowns.mjs` and `tf-verify-screens.mjs`, close to your suggestion. The cause was a step earlier than the overlap: the calendar is no list or menu, so after the click the check saw nothing to close, and the dark pass on the same opened page measured it. Now, before each click the check counts what is open around the trigger (its `aria-expanded`, the box its `aria-controls` names, and any visible list, menu, dialog, grid, tooltip or popover). Whatever the click added is closed: by a click on its own trigger (so a dialog around it stays open), then Escape, then a click on a spot near the window's edge with no control, list or popup under it. The calendar of TR-050 closes at that third step. One that is still open after all three is named in the screen's line ("could not close the list of …; not opened again"), is not opened again on that route at any later width, and the overlap check is left out for that width and theme pass (`overlap: not measured: … stayed open` in the JSON). Case `sv_043`: a top bar and a date button whose calendar opens over the bar and closes only on a click outside it, graded at 1280 in light and dark. On the scripts you had, "overlaps" in the dark pass; now none. A calendar that nothing closes is named and not measured for overlap, and two controls that really overlap on another screen are still reported (the control half). **Fixed in Sevak's `.tfcore`** by the framework update of 2026-11-16 (afternoon).
+
+### TF-044 — The mockup check reads the first-run wizard as "not measured" at 390, because every address leads back to it (minor, found 2026-11-16 in Sevak triage-and-fix)
+
+> ✅ **Closed 2026-11-17** — re-checked here: verify phase 1 from the copy on a fresh install: the wizard is compared at 1280 and 390 (PASS), not 'not measured'.
+
+- **Status:** fixed upstream 2026-11-16 (afternoon), fixed in Sevak's `.tfcore/` by the framework update of 2026-11-16 (afternoon); not yet re-checked here.
+- **Blocks:** no — the wizard is compared at 1280; only the 390 comparison is missing.
+- **Severity:** minor
+- **Repro:** `tf-mockup-parity.sh --cdp … --screen setup-wizard=/setup` on a fresh install, 16 Nov (also with `--render-wait 12000`): "390: not measured: the app did not move to /setup within 12 s — none of the screen's own controls appeared". On a new install every route sends the user to `/setup`, so the hop away that `openFresh` makes lands on `/setup` again, the wizard's controls never leave, and none is new when the check comes back. The script of 14 Nov compared both widths (`parity-wiz.json`: PASS at 1280 and 390).
+- **Expected:** the 390 comparison, as before.
+- **Actual:** "not measured" at 390.
+- **Encountered in:** Sevak `*triage-and-fix`, 16 Nov 2026. The same family as TF-030.
+- **Suggested fix:** when the hop away comes back to the same route with the same controls, the screen is already open: take it as arrived (as TF-030 does for an app whose root is the screen).
+- **Reply (TechieFlow team, 2026-11-16, afternoon):** Fixed upstream in `tf-login.mjs` (`openFresh`), as you suggested: when the screen is already on view, the hop away is made as before, and when the app comes back to the same route by itself, the screen is taken as open. Every control is counted as already there, and it has arrived when half of them are on the page, as TF-030's rule for an app whose root is the screen. Case `sv_044`, over CDP like your desktop head: an app that sends every address to `/setup`, with a mockup naming wizard controls of later steps the first view never draws. On the script you had, "not measured: the app did not move to /setup"; now compared at 1280 and 390. Control half: a screen none of whose controls ever appear is still "not measured", never compared with the page on view. **Fixed in Sevak's `.tfcore`** by the framework update of 2026-11-16 (afternoon).
+
+### TF-045 — The status gate's doc-test step builds in the repository, with no way to use the separate copy (major, found 2026-11-17 in Sevak triage-and-fix)
+
+- **Status:** fixed upstream 2026-11-19, in TechieFlow v1.4.0; in Sevak's `.tfcore/` from the framework update of 2026-11-19 (morning); not yet re-checked here.
+- **Blocks:** no — the owner's install folder was not touched; the next Visual Studio build overwrites what was built.
+- **Severity:** major
+- **Repro:** the owner runs Sevak from the repository's `apps/Sevak/bin/Debug` this week and asked that nothing builds into any `bin` or `obj` folder of the repository. Every build, test and boot of the run was made in a copy (`/mnt/c/1MyCode/Sevak-copy-n17`). Then `_status-update-gate.md` step 4, `bash .tfcore/utils/tf-doc-tests.sh docs/Sevak-Checklist.md …`, found 15 test files reading the changed documents and ran `dotnet test` on `tests/Sevak.Tests` in the repository: `SevakDb`, `SevakDb.Cli`, `Sevak.Core`, `SevakScheduler` and `Sevak.Tests` were built into their own `bin\Debug\net10.0` there (log `tests/.artifacts/build/20261116T204729Z-test-936554.log`).
+- **Expected:** a way to run the gate's doc tests in a copy (an option or a `core-config.yaml` key naming the folder to build in), or a refusal that names the rule, when the owner has said the repository must not be built.
+- **Actual:** the step builds where it stands; nothing in the gate says it will build.
+- **Encountered in:** Sevak `*triage-and-fix`, 16 to 17 Nov 2026; the same class as MISS-Sevak-20261116-10 (the morning's `tf-verify-tests.sh --no-browser`).
+- **Workaround:** none possible after the fact; the full unit suite had already run in the copy before the documents' last edits. The repository run gave 2,367 pass, 6 skip, 1 PostgreSQL time-out.
+- **Suggested fix:** `tf-doc-tests.sh --root <copy>` (and the same on `tf-verify-tests.sh`), and a line in the gate saying the step builds the test project.
+- **Reply (TechieFlow team, 2026-11-19):** Fixed upstream in `tf-doc-tests.sh`, as you suggested, plus a setting: `--root <copy>`, or `buildCopy: <copy>` in `.tfcore/core-config.yaml` (read without being told, so the gate's step 4 honours it as written), makes the step copy the changed documents into that copy and build and run the doc tests there. The step prints `note the tests build and run in the separate copy …`. A `buildCopy` that does not exist is `NOT-RUN … does not exist; nothing was built here`, never a build in the repository. The gate's step now says the step builds. `tf-verify-tests.sh` was not given `--root`: run from the copy, as your run did, it already builds there. Case `sv_045`, with a stand-in build that records where it ran: on the scripts you have, the test project was built in the repository; now in the copy, on the changed text. Control half: with no copy named, the tests run here as before. **Check it here:** add `buildCopy: /mnt/c/1MyCode/Sevak-copy-n17` (or your copy) to `core-config.yaml`; the next status gate that changes a document prints the note, and no `bin/` or `obj/` under the repository changes.
+
+## Resolution status (TechieFlow team, 2026-11-19)
+
+From `/mnt/c/1MyCode/Sevak/docs/Sevak-TechieFlow-Feedback.md`, read on 2026-11-19.
+
+**Fixed in Sevak's `.tfcore`** through the framework update of 2026-11-19 (morning), **TechieFlow v1.4.0**. The replies were written on the night of 18 to 19 Nov, when Sevak was read only, and merged into this file at the update; nothing of Sevak's was run for them. Each has a case in `tests/faults/n19-cases.sh` (run by `tests/faults/run.sh`) that fails on the scripts this project had before the update and passes now, with a control half that shows a real finding is still reported.
+
+| ID | Fix | Case | Check it here |
+|---|---|---|---|
+| TF-045 | `buildCopy:` (or `--root`) makes the gate's doc tests build and run in the copy. Since the morning of 19 Nov (Chatur TF-048, case `ch_048`) a Windows path such as `C:\Runs\copy` works too, and with no copy named the step says first that it builds in the repository. | `sv_045` | the next gate after a document change prints the copy note. |
+| TF-042, TF-043, TF-044 | Closed by you on 17 Nov. Tonight's change to the same badge rule (Chatur TF-045) was checked against them: `sv_042`, `sv_042c`, `sv_042d`, `sv_043`, `sv_044` still pass. | — | nothing to do. |
+
+**One more change that reaches your verify, not filed by you (TfLens TF-060).** A row of a later phase that no screen of its own phase owns is now resolved against the earlier phases' screens and checked on them. On your documents (read only), 56 rows gain a screen (phase 2: 4, phase 3: 1, phase 4: 22, phase 5: 29), for example REQ-UI-036 on `/workspace/{slug}`. A row on a route that takes a value is graded "screen not driven" unless the verify is given the value, so some rows Verified on their tests alone can move on their next verify.
+
+**The table** (`measure-projects.py --base v1.3.1`), your row: rows whose verdict moves: not measured for 26 row(s) with a screen; 0 of 16 without one (the last verify covered 42 of the project's 352 rows; the others are not measured); tests a phase verify stops running: 0 of 210 stop (7 left out in all, in 3 file(s)); 3 file(s) name no row id at all; findings that appear or go: none; build list and next command: same. The screen and mockup checks changed, so a row with a screen reads "not measured" there: the saved records were written by the old checks. What they now do is in the cases above, and the earlier-phase screens (TfLens TF-060) are counted from your documents, not from a verify.
+
+## Resolution status (TechieFlow team, 2026-11-16, afternoon)
+
+**Fixed in Sevak's `.tfcore`** through the framework update of 2026-11-16 (afternoon). Each fix has a case in `tests/faults/n16-cases.sh` (run by `tests/faults/run.sh`), built from the page you filed. Each case fails on the scripts of the last commit and passes now, with a control half that shows a real finding is still reported. This time the fixes were also read on Sevak's running app, from a separate copy (below).
+
+| ID | Fix | Case | Check it here |
+|---|---|---|---|
+| TF-040 | A gradient's stops are each seen over what is behind them before the mean. | `sv_040` | the mockup check on the first-run wizard: no `color` on `wizard-page`. |
+| TF-041 | A progress bar's fill is a fill, never a badge. | `sv_041` | the mockup check on Today, Weekly review, Token usage and the wizard. |
+| TF-042 | One pill rule for both sides when either side, or the element one away, is a control or a tab. | `sv_042`, `sv_042c`, `sv_042d` | the mockup check on the seven tab screens and Inbox. |
+| TF-043 | The dropdown check closes whatever it opened; what will not close is named, not reopened, and its width is left out of the overlap check. | `sv_043` | the screen check on Event log at 390, dark. |
+| TF-044 | A screen every address leads back to is taken as open. | `sv_044` | the mockup check on the wizard at 390, fresh install. |
+
+**Your running app, read by the old and the new scripts.** The copy was on the Windows drive, built and booted through your own `tests/verify/boot-safe.sh`, on a fresh data folder of its own; the `bin\Debug` you are using was not touched. First the wizard on that fresh boot; then your `p4/ready.spec.ts` (@setup, 1 passed) and the other screens. Seeds were taken out, so old and new read the same state. Both widths, light and dark. The table lists every screen read differently; nothing new appeared anywhere.
+
+| Screen | Old scripts | New scripts | Findings gone |
+|---|---|---|---|
+| First-run wizard (mockup check) | not measured at 1280 and 390 ("did not move to /setup") | PASS at both, 0 findings | — |
+| App settings | FAIL | PASS | `appset-tab-defaults` badge, 1280 and 390 |
+| Automations | FAIL | PASS | `auto-tab-schedules` badge |
+| Plan | FAIL | PASS | `plan-tab-plan` badge |
+| Tasks and goals | FAIL | PASS | `tasks-tab-tasks` badge |
+| Memory | FAIL | PASS | `memory-tab-profile` badge |
+| Inbox | FAIL | PASS | `inbox-choose-file` badge |
+| Today | FAIL | PASS | `today-summary-progress > i[0]` missing |
+| Weekly review | FAIL | PASS | `review-goal-progress > i[0]` missing |
+| Event log (screen check) | visual FAIL | visual OK | "events-filters overlaps button … at 390 in dark mode" |
+
+Read and unchanged: the other 18 screens (mockup check: 12 PASS old and new; 2 FAIL old and new, Data and storage and Senders, on a `nav-…` colour, not one of these faults; 4 not measured old and new, Ideas, Places, Content and Browser, "did not move to …"). Not read by either: the five workspace screens (Workspace chat, Workspace settings, Document library, Connectors, Agents), whose routes need a workspace (`/workspace/{slug}`) that a fresh copy does not have. So TF-042 on Workspace settings and Agents, and TF-041 on Connectors and Token usage, are proved by the cases and by your mockup pages only.
+
+**Which of your rows would now pass these two checks** (the screen check and the mockup check; their tests are another matter):
+
+- clean on both, where the old scripts failed one: REQ-UI-026 (Event log); REQ-UI-028, REQ-UI-037, REQ-UI-038, REQ-UI-039, REQ-UI-050 (App settings; REQ-UI-028 is the row TF-042 held at Needs re-verify); REQ-UI-040, REQ-FN-028, REQ-FN-042, REQ-UI-046, REQ-UI-056, REQ-UI-058, REQ-FN-053 (Automations); REQ-UI-022, REQ-FN-009, REQ-FN-050 (the wizard); REQ-UI-066 (Tasks and goals); REQ-UI-060, REQ-FN-055, REQ-UI-125, REQ-UI-061, REQ-UI-062, REQ-UI-063, REQ-UI-064, REQ-FN-056, REQ-UI-065, REQ-FN-057, REQ-FN-060, REQ-FN-062 (Today);
+- mockup check now passes, screen check read EMPTY in the copy because no seed ran: REQ-RAG-059 (Inbox); REQ-UI-082, REQ-UI-083, REQ-RAG-110 to REQ-RAG-114, REQ-UI-084, REQ-UI-123 (Memory); REQ-UI-091, REQ-UI-092, REQ-UI-093, REQ-RAG-125 (Plan); REQ-FN-061 (Weekly review). With their seeds, as your verify runs them, they should be clean too [Likely].
+
+**What changed in the checks, on your mockup pages alone** (old against new, 1280, light): 40 pages, 7,841 elements; 7 read differently on 6 pages, all progress fills that are no longer pills (`wizard-progress`, `today-summary-progress`, `review-goal-progress` and one more bar on Weekly review, `tokens-budget-progress`, `data-usage-progress`, `conn-job-progress-1`).
+
+**The table** (`measure-projects.py --base HEAD`), your row: rows whose verdict moves: not measured for 52 row(s) with a screen; 0 of 28 without one (the last verify covered 80 of the project's 348 rows; the others are not measured); tests a phase verify stops running: 0 of 203 stop (5 left out in all, in 2 file(s)); 2 file(s) name no row id at all; findings that appear or go: none; build list and next command: same. Rows with a screen read "not measured" there because the checks that measure screens changed; what they do on your screens is the reading of the running copy above.
+
+**Also in this update, not filed by you:** every seed, browser-test run, unit-test run and booted app now runs under `tf-test-guard.sh` (Chatur TF-037): nothing they start can write to Sevak's own repository. Your seeds write through the app, so nothing changes for them.
 
 ## Resolution status (TechieFlow team, 2026-11-15, night)
 

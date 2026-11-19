@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tf-doc-tests.sh — run the unit tests when a test reads a document this command changed (Lekhak TF-016, 2026-09-30).
 #
-#   bash .tfcore/utils/tf-doc-tests.sh <doc> [<doc>…] [--target <sln|csproj>]
+#   bash .tfcore/utils/tf-doc-tests.sh <doc> [<doc>…] [--target <sln|csproj>] [--root <copy>]
 #
 # A project may guard a document with a unit test: Lekhak's VerificationRuleDocTests reads
 # docs/Lekhak-UsageGuide.md and fails when the REQ-NFR-042 paragraph is gone. *amend-docs removed that
@@ -14,14 +14,19 @@
 #   FAIL     <n> test file(s) read <docs> (<files>); the unit tests fail — <build line>   exit 1
 #   NOT-RUN  the tests could not be run — <reason>                                         exit 2
 # A FAIL means the phase is not closed: a test guards text this command changed.
+# The tests BUILD the test projects. --root <copy>, or `buildCopy: <copy>` in .tfcore/core-config.yaml, builds and runs
+# them in that separate copy instead, after copying the named documents into it; a buildCopy that does not exist is
+# NOT-RUN, never a build in this repository (Sevak TF-045). A Windows path (C:\Runs\x) is read through wslpath on WSL,
+# and with no copy named the script says, before it builds, that it builds here (Chatur TF-048).
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/tf-portable.sh"   # tf_read_lines, for bash 3.2 on a stock Mac
-DOCS=(); TARGET=""
+DOCS=(); TARGET=""; COPY=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --target) TARGET="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --root) COPY="${2:-}"; shift 2 ;;
+    -h|--help) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) DOCS+=("$1"); shift ;;
   esac
 done
@@ -59,6 +64,17 @@ if [[ -z "$READERS" ]]; then
   exit 0
 fi
 N="$(wc -l <<<"$READERS" | tr -d ' ')"; LIST="$(tr '\n' ',' <<<"$READERS" | sed 's/,$//; s/,/, /g')"
+[[ -z "$COPY" ]] && COPY="$(sed -n 's/^buildCopy:[[:space:]]*//p' .tfcore/core-config.yaml 2>/dev/null | sed 's/[[:space:]]*#.*//; s/^["'\'']//; s/["'\'']$//' | head -1)"
+# Chatur's copy was C:\ChaturRuns\fix-20261118-night: on WSL `[[ -d ]]` cannot see that form (Chatur TF-048)
+[[ "$COPY" =~ ^[A-Za-z]:[\\/] ]] && command -v wslpath >/dev/null 2>&1 && COPY="$(wslpath -u "$COPY" 2>/dev/null || echo "$COPY")"
+if [[ -n "$COPY" ]]; then
+  [[ -d "$COPY" ]] || { echo "NOT-RUN  $N test file(s) read ${DOCS[*]} ($LIST), but the separate copy to build in, $COPY, does not exist; nothing was built here (buildCopy)"; exit 2; }
+  for doc in "${DOCS[@]}"; do mkdir -p "$COPY/$(dirname "$doc")" && cp "$doc" "$COPY/$doc"; done
+  cd "$COPY" || exit 2
+  echo "note     the tests build and run in the separate copy $COPY; its copies of ${DOCS[*]} were brought up to date first"
+else
+  echo "note     no separate copy named (--root or buildCopy): the tests build and run here, in $(pwd -P); a run that builds in a copy passes --root <copy>"
+fi
 
 # the same target choice as tf-verify-tests.sh: a root solution, else the only test project under tests/
 ROOTSLN="$(compgen -G '*.sln'; compgen -G '*.slnx'; compgen -G '*.csproj')"

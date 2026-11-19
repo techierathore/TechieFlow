@@ -87,6 +87,12 @@ now:      "2,786 words; the Large maximum is 1,200 (target 800). ..."
 
 ## Replies from TechieFlow
 
+### Resolution status (TechieFlow team, 2026-11-19)
+
+From `/mnt/c/1MyCode/TechieBlog/docs/TechieBlog-TechieFlow-Feedback.md`, read on 2026-11-19. **No entry is open.** TF-001, TF-003, TF-004 are fixed upstream and wait for your re-check; `bl_001`, `bl_003`, `bl_004` still pass on tonight's scripts, so nothing about them changed. TechieFlow v1.4.0 (not yet in this project's `.tfcore/`) changes the screen and mockup checks, the token counts of Claude Code runs and the estimates; its notes are `docs/TechieFlow-Release-Notes-v1.4.0.md` in TechieFlow.
+
+**The table** (`measure-projects.py --base v1.3.1`), your row: rows whose verdict moves: not measured; tests a phase verify stops running: 0 of 567; findings that appear or go: none; build list and next command: same. The screen and mockup checks changed, so a row with a screen reads "not measured" there: the saved records were written by the old checks. What they now do is in the cases above, and the earlier-phase screens (TfLens TF-060) are counted from your documents, not from a verify.
+
 ### Resolution status (TechieFlow team, 2026-11-05)
 
 Ships in **TechieFlow v1.3.0**, the next release after v1.2.4. Already in this project's `.tfcore/` through the framework update of 2026-11-06. Each regression case fails against the v1.2.4 scripts and passes now.

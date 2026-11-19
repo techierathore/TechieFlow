@@ -6,14 +6,8 @@
 // viewports, by named structural classes, never pixels (a pixel diff on live data is unusable).
 // Every clause is a measurement compared by code; no model reads either page.
 //
-// THE FOUR DEFECTS THIS IMPLEMENTATION IS BUILT AROUND (TfLens TF-008/009/011/012), one shape seen
-// four times: *a gate reports on what it can reach, and reports success when it reaches nothing.*
-//   TF-008  No gate compared a built screen to its design: 13 of 14 screens drifted with every gate green.
-//   TF-009  `border-style` was graded by no class, so a card lost its dashed "estimate" border and
-//           passed (dashed and solid grey share a colour bucket). -> the `stroke` clause.
-//   TF-011  Only <table> was walked: table screens gave 44 findings, card screens PASS. -> the structural
-//           walker, the coverage accounting, UNGRADEABLE: a PASS means "graded", never "nothing compared".
-//   TF-012  `clip` counted screen-reader-only text as overflow on 8 of 10 screens. -> isHidden().
+// Built around TfLens TF-008/009/011/012: a gate reports on what it reaches, and reaching nothing is never a pass
+// (the stroke clause; the structural walker, coverage and UNGRADEABLE; isHidden for screen-reader-only text).
 //
 // It produces FINDINGS and a per-screen verdict; verify-phase §4b2 decides what it means for a REQ.
 
@@ -136,18 +130,15 @@ if ((!BASE && !CDP) || SCREENS.length === 0) {
 }
 
 // ------------------------------------------------------------ page-side probe
-// Everything below runs INSIDE the browser, on both the mockup and the app, and
-// returns one flat index keyed by a stable path key. It is deliberately one
-// evaluate() call: two passes over the same DOM can disagree after a re-layout.
+// Runs INSIDE the browser on both sides, as one evaluate() call (two passes can disagree after a re-layout),
+// and returns one flat index keyed by a stable path key.
 // `wanted` names the texts of the mockup's badges, so the app's side can find each one at whatever
 // depth the app drew it; the mockup's own probe is called without it.
 const PROBE = (wanted = []) => {
   const MAX_DEPTH = 4;        // descend this far below an anchor
   const MAX_PER_ANCHOR = 60;  // and no further; a huge subtree is noise, not signal
 
-  // Screen-reader-only text counts as hidden. The sr-only recipe DOES lay out — a 1px
-  // clipped box with white-space:nowrap — so its scrollWidth is meaningless and it
-  // inflates its ANCESTOR's scrollWidth, which is what the clip clause reads.
+  // sr-only text counts as hidden: its 1px clipped box inflates an ancestor's scrollWidth, which the clip clause reads.
   const isHidden = (el) => {
     const cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return true;
@@ -158,9 +149,7 @@ const PROBE = (wanted = []) => {
     return false;
   };
 
-  // The browser converts the colour, never a regex: getComputedStyle returns a colour in the
-  // syntax it was written in (hex, oklch() …). Painting one pixel and reading it back gives
-  // sRGB for any syntax the browser accepts.
+  // A colour is converted by painting one pixel and reading it back: sRGB for any syntax (hex, oklch() …).
   const px = document.createElement('canvas');
   px.width = px.height = 1;
   const pctx = px.getContext('2d', { willReadFrequently: true });
@@ -190,19 +179,18 @@ const PROBE = (wanted = []) => {
   const over = (c, base) => ({ r: Math.round(c.r * c.a + base.r * (1 - c.a)), g: Math.round(c.g * c.a + base.g * (1 - c.a)),
                                b: Math.round(c.b * c.a + base.b * (1 - c.a)), a: 1 });
   const seen = (c, el) => (c && c.a < 0.99 ? over(c, behind(el)) : c);
-  // A gradient is painted over the background colour: the mean of its colour stops is the fill a reader
-  // sees (TrStudio TF-002: a gradient button read "no fill, neutral", the same button drawn solid "accent").
+  // A gradient's fill is the mean of its stops, each first seen over what is behind it: a stop at 5% is
+  // nearly the background (TrStudio TF-002; Sevak TF-040). A transparent stop is the background.
   const fillOf = (cs, el) => {
     const bg = RGB(cs.backgroundColor);
-    const st = (/gradient\(/.test(cs.backgroundImage) && cs.backgroundImage.match(/(rgba?|hsla?|oklch|oklab|lab|lch|color)\([^()]*\)|#[0-9a-f]{3,8}\b/gi) || []).map(RGB).filter(Boolean);
-    if (!st.length) return bg;
-    const m = (k) => st.reduce((t, c) => t + c[k], 0) / st.length;
-    const g = { r: Math.round(m('r')), g: Math.round(m('g')), b: Math.round(m('b')), a: m('a') };
-    return g.a < 0.99 ? over(g, bg ? seen(bg, el) : behind(el)) : g;
+    const st = (/gradient\(/.test(cs.backgroundImage) && cs.backgroundImage.match(/(rgba?|hsla?|oklch|oklab|lab|lch|color)\([^()]*\)|#[0-9a-f]{3,8}\b/gi) || []).map(RGB);
+    if (!st.some(Boolean)) return bg;
+    const u = bg ? seen(bg, el) : behind(el), v = st.map((c) => (c ? over(c, u) : u));
+    const m = (k) => Math.round(v.reduce((t, c) => t + c[k], 0) / v.length);
+    return { r: m('r'), g: m('g'), b: m('b'), a: 1 };
   };
 
-  // Semantic BUCKET, never the literal colour: two designs may legitimately differ
-  // in shade, and grading the exact value would produce a finding on every screen.
+  // A semantic bucket, never the literal colour: two designs may differ in shade.
   const bucket = (c) => {
     if (!c) return null;
     const { r, g, b } = c;
@@ -218,9 +206,7 @@ const PROBE = (wanted = []) => {
     return 'accent';
   };
 
-  // A border nobody draws carries no colour. `border: 1px solid transparent` is how a mockup
-  // reserves space, and a page reset that sets border-color everywhere leaves the property set on
-  // elements with no border at all.
+  // A border nobody draws carries no colour (`1px solid transparent` reserves space; a reset sets border-color everywhere).
   const drawnBorder = (cs) => (parseFloat(cs.borderTopWidth) || 0) > 0 && !!RGB(cs.borderTopColor);
 
   const semanticColor = (el) => {
@@ -236,9 +222,7 @@ const PROBE = (wanted = []) => {
       || pick(fg && fg.a < 0.99 ? over(fg, under) : fg);
   };
 
-  // The border STYLE is a class of its own: a mockup says "provisional / estimated /
-  // inactive" with it. Quantised to the three values that carry meaning rather than the
-  // full CSS keyword set, so the clause stays as noise-free as the colour buckets.
+  // The border STYLE says "provisional / inactive": quantised to none, dashed and solid.
   // A checkbox, switch or radio is not compared by its border (a native one computes none, a
   // library's draws one), nor by its fill, tick or pill shape: the browser paints a native one itself,
   // a library draws it with CSS and an <svg>. What is drawn inside a toggle is no icon or badge of the
@@ -288,22 +272,23 @@ const PROBE = (wanted = []) => {
   const iconIds = (el) => own(el, ICON).map((i) => iconNo.get(i));
   const depthOf = (el) => { let n = 0; for (let p = el.parentElement; p; p = p.parentElement) n++; return n; };
 
-  // "Chrome" = a badge / pill / chip: a small element with its own fill or ring and
-  // a rounded edge. A status pill is the one value on a page meant to be read at a
-  // glance, so the mockup drawing one and the app rendering bare text is a finding.
+  // "Chrome" = a badge / pill / chip: a small element with its own fill or ring and a rounded edge.
   // A button or link is a pill only when fully rounded (radius at least half its height): every
   // button has a fill or a ring, and a 6 px corner on a 36 px button is a button (Lekhak TF-042).
-  const CTL = 'a[href],button,[role="button"],input,select,textarea,summary';
+  const CTL = 'a[href],button,[role="button"],[role="tab"],input,select,textarea,summary';
+  // a progress bar's fill is no badge: a box with no text in a progress bar, or as tall as a track that clips it (Sevak TF-041)
+  const barFill = (el, r, p = el.parentElement) => el instanceof HTMLElement && !el.children.length && !el.textContent.trim() && (!!el.closest('[role="progressbar"],progress,meter')
+    || (!!p && getComputedStyle(p).overflow !== 'visible' && Math.abs(p.getBoundingClientRect().height - r.height) < 1));
   const chromeOn = (el) => {
     const r = el.getBoundingClientRect();
-    if (r.height > 44 || r.height < 6) return null;    // a card is not a badge
+    if (r.height > 44 || r.height < 6 || barFill(el, r)) return null;    // a card is not a badge
     const cs = getComputedStyle(el);
     const radius = parseFloat(cs.borderTopLeftRadius) || 0;
     const fill = fillOf(cs, el), filled = !!fill;
     const ringed = drawnBorder(cs);      // a transparent ring is not a ring
     // the box drawn around a text field is the field's own box, judged as the field is (Chatur TF-034)
     const ctl = el.matches(CTL) || !!el.querySelector('input:not([type="checkbox"],[type="radio"],[type="hidden"]),select,textarea');
-    return { badge: (filled || ringed) && (ctl ? radius >= r.height / 2 - 1 : radius >= 6), filled, ringed,
+    return { badge: (filled || ringed) && (ctl ? radius >= r.height / 2 - 1 : radius >= 6), ctl, pill: (filled || ringed) && radius >= r.height / 2 - 1, filled, ringed,
       radius: Math.round(radius), h: Math.round(r.height), fill: fill ? `rgb(${fill.r},${fill.g},${fill.b})` : null };
   };
 
@@ -344,9 +329,7 @@ const PROBE = (wanted = []) => {
     return n || null;
   };
 
-  // A formatted number must never break mid-digit. The longest unbreakable token is
-  // what the cell actually has to fit; the mockup's own column width is the claim
-  // that it does.
+  // A formatted number never breaks mid-digit: the cell must fit its longest unbreakable token.
   const tokenFit = (el) => {
     if (!inlineOnly(el)) return null;
     const text = (el.textContent || '').trim();
@@ -434,12 +417,12 @@ const PROBE = (wanted = []) => {
     return {
       // the badge and the visible border one element away, for the clauses to accept
       near: {
-        badge: near.some((n) => chromeOn(n)?.badge === true),
+        badge: near.some((n) => chromeOn(n)?.badge === true), ctl: near.some((n) => chromeOn(n)?.ctl), pill: near.some((n) => chromeOn(n)?.pill),
         stroke: near.map(strokeOf).find((s) => s && s.visible) || null,
       },
       tag: el.tagName.toLowerCase(),
       text: ownText(el).trim().replace(/\s+/g, ' ').slice(0, 60),
-      badge: chrome && !el.matches(TOGGLE) ? chrome.badge : null,
+      badge: chrome && !el.matches(TOGGLE) ? chrome.badge : null, ctl: !!chrome?.ctl, pill: !!chrome?.pill,
       full: ownText(el).trim().replace(/\s+/g, ' ').slice(0, 400),
       // a box the mockup marks as sample data, drawn only when the app has data there, and anything in one
       sample: el.matches(SAMPLE),
@@ -455,6 +438,7 @@ const PROBE = (wanted = []) => {
       depth: depthOf(el),
       // badges drawn anywhere inside, so a badge one wrapper deeper still counts under its parent
       badges: own(el, '*').filter((c) => !isHidden(c) && !c.closest(TOGGLE) && chromeOn(c)?.badge).length,
+      toggles: own(el, TOGGLE).filter((c) => !isHidden(c)).length,
       toggle: el.matches(TOGGLE),   // its icon, colour and badge clauses are not applicable
       select: el.matches(SELECT),   // its icon clause is not applicable
       // a picker, or a box whose one control is one; a trigger, a button or a box with one (Chatur TF-027)
@@ -476,10 +460,7 @@ const PROBE = (wanted = []) => {
     };
   };
 
-  // --- the walker. It descends ANY anchored subtree by a structural path key,
-  // so a card, a column, a grid, a <dl>, a list and a table are all walked the same
-  // way. Keys pair only when both sides produce them, so extra depth costs precision
-  // nothing.
+  // --- the walker: any anchored subtree by a structural path key; keys pair only when both sides make them.
   // A box the mockup marks as another state of the screen (data-tf-state="<state>", or
   // data-state-testid="<id>") is not on the first view, so it is neither walked nor counted when its
   // siblings are numbered: counted, it would move every row below it one place.
@@ -577,9 +558,7 @@ const PROBE = (wanted = []) => {
 };
 
 // ------------------------------------------------------------------- diffing
-// A clause returns a finding, `null` (not applicable — do NOT count it as graded),
-// or `false` (applicable and agreeing). The three are kept distinct: "agreed" is
-// not "not asked".
+// A clause returns a finding, `null` (not applicable, not counted as graded) or `false` (applicable, agreeing).
 // The same folding the page-side probe uses: spacing and digits.
 const norm = (t) => (t || '').replace(/\d[\d,.]*/g, '#').replace(/\s+/g, ' ').trim();
 
@@ -600,11 +579,17 @@ const siteNote = (findings, theme) => {
 const CLAUSES = {
   badge: (m, a) => {
     if (m.badge === null || a.badge === null) return null;
-    if (m.badge === a.badge) return false;
+    // the two anchors measure alike (corner, height, fill, ring): one box, whatever sits one element away (Chatur TF-045)
+    const L = m.look || {}, R = a.look || {};
+    if (Math.abs((L.radius ?? 0) - (R.radius ?? 0)) <= 1 && Math.abs((L.h ?? 0) - (R.h ?? 0)) <= 2 && !L.fill === !R.fill && !L.ring === !R.ring) return false;
+    // else one rule for both: a control on either side, or one element away, is judged as a control (Sevak TF-042)
+    const c = (x) => x.ctl || !!x.near?.ctl, p = (x) => x.pill || !!x.near?.pill;
+    const [mb, ab] = c(m) !== c(a) ? [p(m), p(a)] : [m.badge, a.badge];
+    if (mb === ab) return false;
     // The side without the treatment carries it one element away — the same control, drawn
     // by a library on the box around it or the box inside it. That is agreement, not drift.
-    if ((m.badge ? a : m).near?.badge) return false;
-    return `mockup renders this as a ${m.badge ? 'badge/pill' : 'plain element'}, app renders it as a ${a.badge ? 'badge/pill' : 'plain element'}`;
+    if ((mb ? a : m).near?.badge) return false;
+    return `mockup renders this as a ${mb ? 'badge/pill' : 'plain element'}, app renders it as a ${ab ? 'badge/pill' : 'plain element'}`;
   },
   icon: (m, a) => (m.toggle || a.toggle || m.select || a.select || m.date ? null : m.icon === a.icon ? false
     : m.icon && !a.icon ? 'mockup carries an icon here; the app does not'
@@ -760,7 +745,7 @@ function diff(mock, app, screen, width, skip = null) {
   clauseCoverage.missing = 0;
   let compared = 0, contentGraded = 0, relocated = 0;
   const iconsShort = {};   // parent key -> icons the app still owes under it
-  const badgesShort = {};  // parent key -> badges the app still owes under it
+  const badgesShort = {}, tracks = {};  // parent key -> badges the app still owes under it; switches standing for one
   const usedApp = new Set();
   const iconSeen = [];     // icon findings with the side that holds the icons
 
@@ -827,6 +812,11 @@ function diff(mock, app, screen, width, skip = null) {
       // parent draws fewer badges than the mockup's does, the rule icons follow.
       if (m.badge === true && parentPaired && mock.index[parentKey] && !(parentKey in badgesShort)) {
         badgesShort[parentKey] = Math.max(0, (mock.index[parentKey].badges ?? 0) - (app.index[parentKey].badges ?? 0));
+        // a textless pill where the app draws a switch the mockup does not is that switch's track (TfLens TF-059)
+        tracks[parentKey] = Math.max(0, (app.index[parentKey].toggles ?? 0) - (mock.index[parentKey].toggles ?? 0));
+      }
+      if (m.badge === true && !m.text && !m.icon && tracks[parentKey] > 0) {
+        tracks[parentKey]--; badgesShort[parentKey] = Math.max(0, badgesShort[parentKey] - 1); clauseCoverage.missing++; continue;
       }
       const badgeGone = m.badge === true && parentPaired && (badgesShort[parentKey] || 0) > 0;
       if (badgeGone) badgesShort[parentKey]--;

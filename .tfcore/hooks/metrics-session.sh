@@ -41,9 +41,7 @@ root = payload.get("cwd") or os.environ.get("CLAUDE_PROJECT_DIR") or ""
 if not root or not os.path.isdir(root):
     bail("no usable cwd in payload")
 
-# Only emit into a repo the framework has actually set up — the scaffold/update
-# scripts create docs/metrics/. Without it, a session in an unrelated directory
-# would litter.
+# Only emit into a repo the framework set up (the scaffold/update scripts create docs/metrics/).
 met = os.path.join(root, "docs", "metrics")
 if not os.path.isdir(met):
     bail("no docs/metrics in %s — framework refresh has not run here" % root)
@@ -54,6 +52,7 @@ if not tpath or not os.path.isfile(tpath):
 
 model = None
 inp = out = cread = ccreate = 0
+seen = {}
 first = last = None
 try:
     with open(tpath, encoding="utf-8", errors="replace") as fh:
@@ -75,13 +74,13 @@ try:
             m = r.get("message") or {}
             if m.get("model"):
                 model = m["model"]
-            u = m.get("usage") or {}
-            inp     += u.get("input_tokens") or 0
-            out     += u.get("output_tokens") or 0
-            cread   += u.get("cache_read_input_tokens") or 0
-            ccreate += u.get("cache_creation_input_tokens") or 0
+            # one reply is a line per content block, each repeating its usage: count it once (tf-emit.sh)
+            seen[m.get("id") or r.get("uuid") or len(seen)] = m.get("usage") or {}
 except Exception as e:
     bail("could not read transcript (%s)" % e)
+for u in seen.values():
+    inp, out = inp + (u.get("input_tokens") or 0), out + (u.get("output_tokens") or 0)
+    cread, ccreate = cread + (u.get("cache_read_input_tokens") or 0), ccreate + (u.get("cache_creation_input_tokens") or 0)
 
 def secs(a, b):
     try:

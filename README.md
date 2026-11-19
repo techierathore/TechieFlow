@@ -96,6 +96,8 @@ bash .tfcore/utils/tf-goal.sh [--harness opencode] [--model <id>] <app-folder> "
 bash .tfcore/utils/tf-goal.sh --resume <app-folder>     # after a reboot
 ```
 
+**All of it in one go.** `*develop-end-to-end {App} [{brief}]` runs Day 1, every phase of the Phases table in order (build, verify, fixes, handoff), and writes `docs/{App}-Build-Report.md` with the time and tokens of each step, asking nothing. It works on a new app from a brief, and on an app whose documents are already written: a Day-1 stage whose documents are all there is skipped, one with some missing writes only those, and a phase the Phases table marks done is skipped. It commits and pushes after each phase; `--no-git` leaves git to you (no commit, no push, every step still in the report), and `--no-push` commits without pushing. `--dry-run` prints the plan and runs nothing.
+
 ---
 
 ## 4. The commands
@@ -120,6 +122,7 @@ Replace `{App}` with your application name. Claude Code takes the long persona p
 | Developer guide | `… flow-master *devguide {App} [--update]` | `/flow-master *devguide {App}` |
 | End-user manual | `… flow-master *productguide {App}` | `/flow-master *productguide {App}` |
 | Hand it over | `… flow-master *handoff-phase {App}` | `/flow-master *handoff-phase {App}` |
+| All of it, unattended, to UAT | `… flow-master *develop-end-to-end {App} [{brief}] [--no-git]` | `/flow-master *develop-end-to-end {App} …` |
 | Deployment steps, after UAT | `… flow-master *deploy-checklist {App} {pipeline-doc}` | `/flow-master *deploy-checklist …` |
 | Recover a dead session | `… flow-master *refresh-status {App} [verify]` | `/flow-master *refresh-status {App}` |
 | The measurements | `… flow-master *metrics {App}` | `/flow-master *metrics {App}` |
