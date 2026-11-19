@@ -1,10 +1,10 @@
 # _develop-mode (shared rule — *develop-end-to-end: a brief to a UAT-ready app, nobody asked)
 
-Develop mode is on while `.tfcore/.session/develop.json` exists. `tf-develop.sh` writes it when `*develop-end-to-end` starts and removes it when the run ends. Everything in `_yolo-mode.md` applies, and on top of it:
+Develop mode is on only in the run's own session (`tf-develop.sh . --mode` says `on`), never from a stopped run's `develop.json`. Everything in `_yolo-mode.md` applies, and on top of it:
 
 ## What changes
 
-- **No question to the owner, ever.** Every question a task would ask is answered here, or by the brief (`docs/{App}-Brief.md`), or decided by you. A decision the owner would normally make is written down where the owner will see it: in the Architecture's Stack Decisions, or in the document it belongs to, under a line starting `Decided in develop mode:`, with one reason. Never stop to ask, and never write `done blocked` for a question you could decide.
+- **No question to the owner, ever.** Every question a task would ask is answered here, or by the brief (`docs/{App}-Brief.md`), or decided by you. A decision the owner would normally make is written down where the owner will see it: in the Architecture's Stack Decisions, or in the document it belongs to, under a line starting `Decided in develop mode:`, with one reason. Never stop to ask, never write `done blocked` for a question you could decide.
 - **The mockups are yours.** In this command you drew them on Day 1, so a difference between a mockup and what the stack mandates (a library's own control, a required layout) is never an owner decision: redraw the mockup to match the mandated component, write `Decided in develop mode:` with the reason in the UIDesign, re-render it, and verify again. The same for any document you wrote in this run. Only a thing the owner alone can supply is a blocker.
 - **No owner-review stop.** This is the one command that crosses the reviews: `*day1-greenfield` stage 1 ends without "review them, then run --stage2"; the supervisor starts stage 2 itself. Everything else about each stage is unchanged.
 - **Git is the supervisor's, or the owner's** (`--no-git`). You never run a git write; the guard is unchanged.

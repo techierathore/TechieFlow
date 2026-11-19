@@ -26,7 +26,7 @@
 #   - any `|| docker compose up` fallback, which widens the command precisely when it failed
 #   - `docker compose run|create`, `docker run`, `docker volume create` — creating, not starting
 #   - an inline or exported connection-string variable in front of a test/run command
-# ALLOWS: during *develop-end-to-end only, one `docker run|create --name <app>-db …` (_develop-mode.md);
+# ALLOWS: inside a *develop-end-to-end run only, one `docker run|create --name <app>-db …` (_develop-mode.md);
 #   always: `docker start <name>`, `docker compose up <service>`, `docker compose start`,
 #   `docker ps|logs|inspect`, and anything that is not one of the above.
 #
@@ -99,13 +99,13 @@ if re.search(r"\|\|\s*" + COMPOSE + r"\s+up\b", cmd, re.I):
           "the name or ask; do not start everything instead.")
 
 # *develop-end-to-end (_develop-mode.md): the owner asked for the database to be created when none is
-# reachable. While that run is on (.tfcore/.session/develop.json), ONE command is allowed through: a single
+# reachable. Inside that run only (TF_DEVELOP_RUN = develop.json's run_id), ONE command is allowed: a single
 # `docker run|create` of the container that rule names, `--name <app>-db`, nothing else in the command.
 # Found by the first proof run, which stopped "blocked" because this hook refused it (2026-10-08).
 root = os.environ.get("CLAUDE_PROJECT_DIR") or os.environ.get("TF_PROJECT_DIR") or os.getcwd()
 dev = os.path.join(root, ".tfcore", ".session", "develop.json")
 if os.path.isfile(dev):
-    try: app = (json.load(open(dev)).get("app") or "").lower()
+    try: d = json.load(open(dev)); app = (d.get("app") or "").lower() if d.get("run_id") and d.get("run_id") == os.environ.get("TF_DEVELOP_RUN") else ""
     except Exception: app = ""
     one = not re.search(r"(?:&&|\|\||;|\||\n|\$\(|`)", cmd)   # && first: the portability check reads a pipe-ampersand pair as bash 4
     if app and one and re.match(r"\s*docker\s+(?:run|create)\b", cmd, re.I) \

@@ -96,7 +96,25 @@ bash .tfcore/utils/tf-goal.sh [--harness opencode] [--model <id>] <app-folder> "
 bash .tfcore/utils/tf-goal.sh --resume <app-folder>     # after a reboot
 ```
 
-**All of it in one go.** `*develop-end-to-end {App} [{brief}]` runs Day 1, every phase of the Phases table in order (build, verify, fixes, handoff), and writes `docs/{App}-Build-Report.md` with the time and tokens of each step, asking nothing. It works on a new app from a brief, and on an app whose documents are already written: a Day-1 stage whose documents are all there is skipped, one with some missing writes only those, and a phase the Phases table marks done is skipped. It commits and pushes after each phase; `--no-git` leaves git to you (no commit, no push, every step still in the report), and `--no-push` commits without pushing. `--dry-run` prints the plan and runs nothing.
+**All of it in one go.** `*develop-end-to-end {App} [{brief}]` runs Day 1, every phase of the Phases table in order (build, verify, fixes, handoff), and writes `docs/{App}-Build-Report.md` with the time and tokens of each step, asking nothing. It works on a new app from a brief, and on an app whose documents are already written: a Day-1 stage whose documents are all there is skipped, one with some missing writes only those, and a phase the Phases table marks done is skipped. It commits and pushes after each phase; `--no-git` leaves git to you (no commit, no push, every step still in the report), and `--no-push` commits without pushing. `--dry-run` prints the plan and runs nothing. How to watch it, stop it and resume it is next.
+
+### Watching a long run
+
+**Where it runs.** Not in your window. `*develop-end-to-end` starts a supervisor in a process of its own, and the supervisor starts one unattended agent session per step. Your window only launches it and then watches it.
+
+**The window that starts it follows it to the end.** It prints the process id, the machine and the model, then reports as the run goes: each step's start and end, each agent cycle, each verify's result, the rows built and verified, and the time of the last activity. Claude Code does this with its Monitor tool, OpenCode with a background command that wakes the agent each time something happens. When the run ends, the same window says how: ready for UAT, or stopped and why, with the time, the tokens and the next command.
+
+**From any other window.** `*develop-status {App}` says whether the run is alive (it checks the process, it does not assume), its model, the step and phase, rows built and verified, the last activity, the tokens so far, and where the log and the report are. A run whose process is gone reads "stopped", never "running". `*develop-end-to-end {App} --follow` starts following it in that window.
+
+**If the launching window is closed,** the run goes on; nothing tells that window it ended. Use `*develop-status` or `--follow` from a new one.
+
+**If the machine sleeps,** the run pauses with it and carries on when it wakes; a model call cut off by the sleep is retried after a pause. **If the machine restarts or WSL shuts down,** the run stops with it. `*develop-status` then reads "stopped", and `--resume` continues it. Keep one WSL window open while a run goes: Windows may shut WSL down a while after its last window closes.
+
+**Stopping and resuming.** `*develop-end-to-end {App} --stop` ends the run and every process it started, including a web server the agent started; the database container stays, with its data. It records the step it stopped in. `*develop-end-to-end {App} --resume` continues from that step; steps already done are not run again, and rows already built stay built. While a stopped run waits, a session you open in the app is an ordinary one: it asks you its questions as usual.
+
+**Where the results are.** The step-by-step log is `.tfcore/.session/develop.log` (times in UTC). The result is `docs/{App}-Build-Report.md`: time and tokens per step and in total, with the same figures in `docs/metrics/develop-report.json`. Tokens are counted from the agent's own output under Claude Code, and from the run records under OpenCode, whose output carries no token count.
+
+**The model.** The one you name with `--model`, else the model of the window that starts the run, on every step. If that model cannot be read, the run refuses to start rather than pick one. A usage limit makes it wait for the reset, never switch models. `--resume` keeps the stopped run's model unless you name another.
 
 ---
 
@@ -123,6 +141,11 @@ Replace `{App}` with your application name. Claude Code takes the long persona p
 | End-user manual | `… flow-master *productguide {App}` | `/flow-master *productguide {App}` |
 | Hand it over | `… flow-master *handoff-phase {App}` | `/flow-master *handoff-phase {App}` |
 | All of it, unattended, to UAT | `… flow-master *develop-end-to-end {App} [{brief}] [--no-git]` | `/flow-master *develop-end-to-end {App} …` |
+| … on a model you name | `… flow-master *develop-end-to-end {App} [{brief}] --model <id>` | `/flow-master *develop-end-to-end {App} --model <provider/id>` |
+| Check that run from any window | `… flow-master *develop-status {App}` | `/flow-master *develop-status {App}` |
+| Follow it in this window | `… flow-master *develop-end-to-end {App} --follow` | `/flow-master *develop-end-to-end {App} --follow` |
+| Stop it, and everything it started | `… flow-master *develop-end-to-end {App} --stop` | `/flow-master *develop-end-to-end {App} --stop` |
+| Resume a stopped run | `… flow-master *develop-end-to-end {App} --resume [--model <id>]` | `/flow-master *develop-end-to-end {App} --resume` |
 | Deployment steps, after UAT | `… flow-master *deploy-checklist {App} {pipeline-doc}` | `/flow-master *deploy-checklist …` |
 | Recover a dead session | `… flow-master *refresh-status {App} [verify]` | `/flow-master *refresh-status {App}` |
 | The measurements | `… flow-master *metrics {App}` | `/flow-master *metrics {App}` |

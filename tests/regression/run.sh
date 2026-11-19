@@ -24,7 +24,7 @@
 #   .tfcore/utils/tf_feedback.py        .tfcore/utils/tf-day1-files.py
 #   .tfcore/utils/tf-verify-verdict.py  .tfcore/utils/tf-status-facts.py
 #   .tfcore/utils/tf-render-html.py     .tfcore/utils/tf-checklist-edit.py
-#   .tfcore/utils/tf-brd-status.py      .tfcore/hooks/guard-verify.sh
+#   .tfcore/utils/tf-brd-status.py      .tfcore/hooks/guard-verify.sh   .tfcore/utils/tf-develop-watch.py
 # A new script that reads the local clock is added to this list. CI (validate.yml) still runs every
 # tests/*/run.sh in UTC and in Asia/Kolkata. The portability check (tests/portability) and the
 # install-route comparison (npm run test:install) also run after every fix (owner, 2026-11-11;
@@ -5937,8 +5937,8 @@ gitignore_once() {
 }
 
 # --- *develop-end-to-end: a brief to UAT, commits and pushes each phase, reports time and tokens ----
-# The owner asked (2026-10-08) for one command that develops a new app from a brief to UAT with no
-# question, commits and pushes after every phase, and reports how long each phase took and its tokens.
+# The owner asked (2026-10-08) for one command: a brief to UAT, no question, a commit and push per
+# phase, its time and tokens.
 # tf-develop.sh runs the four phases through tf-goal.sh; here a stand-in goal runner plays the agent:
 # it writes a file and a run record per phase. The supervisor must commit and push each phase to the
 # remote, write the report with the summed tokens, skip finished phases on --resume, and stop with
@@ -5966,7 +5966,7 @@ sleep 1
 SH
   chmod +x "$fake"
   local out rc
-  out="$(cd "$repo" && TF_DEVELOP_GOAL_SH="$fake" bash .tfcore/utils/tf-develop.sh . --app Fx --brief "$d/brief.md" 2>&1)"; rc=$?
+  out="$(cd "$repo" && TF_DEVELOP_GOAL_SH="$fake" bash .tfcore/utils/tf-develop.sh . --app Fx --model m1 --brief "$d/brief.md" 2>&1)"; rc=$?
   local commits; commits="$(git -C "$remote" log --oneline 2>/dev/null | grep -c 'develop-end-to-end')"
   [[ $rc -eq 0 && $commits -eq 5 ]] && n=$((n+1)) || note "run: rc=$rc, $commits develop commits on the remote (want 5): $(tail -2 <<<"$out" | tr '\n' ' ')"
   local rep; rep="$(python3 -c "
@@ -5978,7 +5978,7 @@ print(r['status'], r['totals']['tokens_out'], r['totals']['runs'], ','.join(p['p
   # a second app, blocked in the build, then resumed: the done phases are not run again
   local r2="$d/app2"; git init -q "$r2"; git -C "$r2" config user.email t@t; git -C "$r2" config user.name t
   mkdir -p "$r2/.tfcore/utils" "$r2/docs/metrics"; cp "$UTILS/tf-develop.sh" "$r2/.tfcore/utils/"; printf '.tfcore/.session/\n' > "$r2/.gitignore"
-  out="$(cd "$r2" && TF_FAKE_BLOCK=build TF_DEVELOP_GOAL_SH="$fake" bash .tfcore/utils/tf-develop.sh . --app Fx --brief "$d/brief.md" --no-push 2>&1)"; rc=$?
+  out="$(cd "$r2" && TF_FAKE_BLOCK=build TF_DEVELOP_GOAL_SH="$fake" bash .tfcore/utils/tf-develop.sh . --app Fx --model m1 --brief "$d/brief.md" --no-push 2>&1)"; rc=$?
   local st; st="$(python3 -c "import json; print(json.load(open('$r2/docs/metrics/develop-report.json'))['status'])" 2>&1)"
   [[ $rc -eq 3 && "$st" == blocked ]] && n=$((n+1)) || note "blocked: rc=$rc status=$st"
   out="$(cd "$r2" && TF_DEVELOP_GOAL_SH="$fake" bash .tfcore/utils/tf-develop.sh . --resume 2>&1)"; rc=$?
@@ -5997,7 +5997,7 @@ b=[p for p in r['phases'] if p['phase']=='build'][0]; print(b['attempts'], r['to
   local r4="$d/app4" bin="$d/stillclock"; git init -q "$r4"; git -C "$r4" config user.email t@t; git -C "$r4" config user.name t
   mkdir -p "$r4/.tfcore/utils" "$r4/docs/metrics" "$bin"; cp "$UTILS/tf-develop.sh" "$r4/.tfcore/utils/"; printf '.tfcore/.session/\n' > "$r4/.gitignore"
   printf '#!/usr/bin/env bash\n[[ "$*" == *%%Y-%%m-%%dT%%H:%%M:%%SZ* ]] && { echo 2026-10-09T07:00:00Z; exit 0; }\nexec /bin/date "$@"\n' > "$bin/date"; chmod +x "$bin/date"
-  (cd "$r4" && PATH="$bin:$PATH" TF_FAKE_BLOCK=build TF_DEVELOP_GOAL_SH="$fake" bash .tfcore/utils/tf-develop.sh . --app Fx --brief "$d/brief.md" --no-push >/dev/null 2>&1)
+  (cd "$r4" && PATH="$bin:$PATH" TF_FAKE_BLOCK=build TF_DEVELOP_GOAL_SH="$fake" bash .tfcore/utils/tf-develop.sh . --app Fx --model m1 --brief "$d/brief.md" --no-push >/dev/null 2>&1)
   (cd "$r4" && PATH="$bin:$PATH" TF_DEVELOP_GOAL_SH="$fake" bash .tfcore/utils/tf-develop.sh . --resume >/dev/null 2>&1)
   local a4; a4="$(python3 -c "
 import json; r=json.load(open('$r4/docs/metrics/develop-report.json'))
@@ -6008,17 +6008,16 @@ print([p for p in r['phases'] if p['phase']=='build'][0]['attempts'], r['status'
 }
 
 # --- *develop-end-to-end may create its one database container, and nothing else -----------------
-# The first proof run stopped "blocked": guard-verify-deps.sh refused the database container the develop
-# rule tells the agent to create. During a develop run one `docker run|create --name <app>-db` passes;
-# another name, a chained command, a volume or a bare compose up are still refused, and with no develop
-# run the container is refused as before.
+# The first proof run stopped "blocked": the hook refused the database container the develop rule asks
+# for. Inside a develop run one `docker run|create --name <app>-db` passes; another name, a chained
+# command, a volume or a bare compose up are refused, and with no run the container is refused.
 dev_002() {
   local r="$SCRATCH/dev002" h="$HOOKS/guard-verify-deps.sh" got=""
   mkdir -p "$r/.tfcore/.session"
   t() { printf '{"tool_input":{"command":%s}}' "$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$1")" \
-        | CLAUDE_PROJECT_DIR="$r" bash "$h" >/dev/null 2>&1; got+="$?"; }
+        | TF_DEVELOP_RUN=r1 CLAUDE_PROJECT_DIR="$r" bash "$h" >/dev/null 2>&1; got+="$?"; }
   t "docker run -d --name fx-db -p 5561:5432 postgres:17"
-  echo '{"app":"Fx"}' > "$r/.tfcore/.session/develop.json"
+  echo '{"app":"Fx","run_id":"r1"}' > "$r/.tfcore/.session/develop.json"
   t "docker run -d --name fx-db -p 5561:5432 postgres:17"
   t "docker create --name=fx-db postgres:17"
   t "docker run -d --name other-db postgres:17"

@@ -26,7 +26,11 @@ Each rule lives in one place; these lines only point at it.
 
 | Command | What it does | Task file |
 |---|---|---|
-| `*develop-end-to-end {App} [{brief}] [--no-git]` | an app to UAT, unattended: Day 1 (skipped where its documents exist), then every phase in order with build, verify, fixes and handoff; commits and pushes each step unless `--no-git`; reports time and tokens per step | `develop-end-to-end.md` |
+| `*develop-end-to-end {App} [{brief}] [--no-git] [--model <id>]` | an app to UAT, unattended, in its own process: Day 1 (skipped where its documents exist), then every phase in order with build, verify, fixes and handoff; commits and pushes each step unless `--no-git`; on the named model, else this session's; this window follows it to the end; Build Report with time and tokens per step | `develop-end-to-end.md` |
+| `*develop-end-to-end {App} --follow` | follow a running develop run in this window, to its end | `develop-end-to-end.md` |
+| `*develop-end-to-end {App} --stop` | end the run and every process it started; records the step for `--resume` | `develop-end-to-end.md` |
+| `*develop-end-to-end {App} --resume [--model <id>]` | continue a stopped run from the step it stopped in | `develop-end-to-end.md` |
+| `*develop-status {App}` | from any window: is the develop run alive (checked), its model, step, phase, rows, last activity, tokens, log and report | `develop-status.md` |
 | `*estimate-phase {App} [family repos]` | estimates the phase's tokens and time (build, machine QA, total; low/mid/high) from the run history, before `*build-phase` | `estimate-phase.md` |
 | `*build-phase {App}` | builds every open row of the phase's checklist, smokes, chains the verifier, fixes what fails | `build-phase.md` |
 | `*fix-issues {App} {folder}` | reproduces reported bugs from screenshots and notes, fixes, re-verifies | `fix-issues.md` |

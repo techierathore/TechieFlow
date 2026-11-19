@@ -9,6 +9,11 @@ The text to paste into the GitHub release for tag `v1.4.0`. It follows v1.3.1. T
   written is skipped; one with some missing writes only those. A large app is built phase by phase, in the order of
   its Phases table, each phase with its verify, its fixes and its handoff. `--no-git` leaves git to you: no commit,
   no push, every phase still in the Build Report. `--dry-run` shows the plan first and runs nothing.
+- **A develop run can be followed, checked and stopped.** The window that starts `*develop-end-to-end` follows the
+  run to its end: each step's start and end, each goal cycle, each verify's result, the rows built and verified,
+  then the Build Report's result and the next command. `*develop-status {App}` shows it from any window, and says
+  `stopped` when its process is gone. `--stop` ends it and every process it started; `--resume` continues from
+  there. The run uses the model you name with `--model`, else the model of the window that starts it, on every step.
 - **Builds can stay out of your repository.** Set `buildCopy: <folder>` in `.tfcore/core-config.yaml` and the status
   gate's document tests build and run in that copy (or pass `--root <copy>` for one run). A Windows path such as
   `C:\Runs\copy` works from WSL. A copy that does not exist stops the step instead of building in the repository,

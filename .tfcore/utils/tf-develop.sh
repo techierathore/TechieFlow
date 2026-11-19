@@ -5,6 +5,14 @@
 #        [--model <id>] [--tier standard] [--no-push | --no-git] [--dry-run] [--detach]
 #   bash .tfcore/utils/tf-develop.sh <app-dir> --report           # write the Build Report again from the saved state
 #   bash .tfcore/utils/tf-develop.sh <app-dir> --resume          # continue a stopped run where it stopped
+#   bash .tfcore/utils/tf-develop.sh <app-dir> --status          # *develop-status: alive (checked), step, rows, tokens
+#   bash .tfcore/utils/tf-develop.sh <app-dir> --follow [--next] # the launching window follows the run to its end
+#   bash .tfcore/utils/tf-develop.sh <app-dir> --stop            # end the run and every process it started
+#   bash .tfcore/utils/tf-develop.sh <app-dir> --mode            # "on" only inside the run's own processes
+#
+# MODEL: --model, else the model of the agent session that launches it (tf-develop-watch.py reads it),
+# else refused. Never the routing default: the AstroLyfe run of 19 Nov ran on Sonnet from an Opus window.
+# It is passed to every goal cycle of every step with --no-fallback, so a usage limit waits for the reset.
 #
 # The flow-master's *develop-end-to-end starts this; the owner never types it. Each step is an unattended
 # goal run (tf-goal.sh: no questions, survives usage limits by waiting for the reset and resuming):
@@ -16,7 +24,8 @@
 # (--brief is needed only when docs/<App>-BRD.md is not there). A Large app runs build-pN and
 # handoff-pN for every row of docs/<App>-Phases.md in order, appPhase set to N first; a row whose Status
 # is done or kept-whole is skipped. tf-develop-plan.py decides all of this before each step.
-# While it runs, .tfcore/.session/develop.json exists and every task follows .tfcore/tasks/_develop-mode.md.
+# develop.json holds the run's state. Develop mode (.tfcore/tasks/_develop-mode.md) is on only in the run's own
+# processes, which carry TF_DEVELOP_RUN: a stopped run's file leaves a session the owner opens a normal one (--mode).
 #
 # GIT — the one exception to "agents never write to git", for this command only. The agent still
 # cannot commit: its git guard is unchanged. THIS script commits after each phase, and pushes, from
@@ -33,12 +42,12 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 case "${1:-}" in
-  -h|--help) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-  "")        sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  -h|--help) awk 'NR > 1 && !/^#/ { exit } NR > 1 { sub(/^# ?/, ""); print }' "$0"; exit 0 ;;
+  "")        awk 'NR > 1 && !/^#/ { exit } NR > 1 { sub(/^# ?/, ""); print }' "$0"; exit 2 ;;
 esac
 
 DIR="$(cd "$1" 2>/dev/null && pwd)" || { echo "tf-develop: no such dir: $1" >&2; exit 2; }; shift
-APP=""; BRIEF=""; HARNESS="claude"; MODEL=""; TIER="standard"; PUSH=1; GIT=1; DRY=0; RESUME=0; DETACH=0; REPORT_ONLY=0
+APP=""; BRIEF=""; HARNESS="claude"; MODEL=""; TIER="standard"; PUSH=1; GIT=1; DRY=0; RESUME=0; DETACH=0; REPORT_ONLY=0; VIEW=""; NEXT=""
 ARGS_IN=("$@")
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -53,19 +62,20 @@ while [[ $# -gt 0 ]]; do
     --resume) RESUME=1; shift ;;
     --detach) DETACH=1; shift ;;
     --report) REPORT_ONLY=1; shift ;;
+    --status|--follow|--stop|--mode) VIEW="${1#--}"; shift ;;
+    --next) NEXT=--next; shift ;;
     *) echo "tf-develop: unknown argument $1" >&2; exit 2 ;;
   esac
 done
-# --detach: start this same run in its own session and return at once, so it outlives the agent session
-# that started it (the flow-master's *develop-end-to-end), in a session of its own (tf_setsid, portable).
-if [[ $DETACH -eq 1 ]]; then
-  mkdir -p "$DIR/.tfcore/.session"
-  rest=(); for a in "${ARGS_IN[@]}"; do [[ "$a" != --detach ]] && rest+=("$a"); done
-  source "$HERE/tf-portable.sh"   # tf_setsid works on macOS too (a python3 or perl stand-in)
-  tf_setsid bash "$0" "$DIR" "${rest[@]}" > "$DIR/.tfcore/.session/develop.out" 2>&1 < /dev/null &
-  echo "tf-develop: started (pid $!) — follow .tfcore/.session/develop.log; the result is docs/<App>-Build-Report.md"
-  exit 0
-fi
+WATCH="$HERE/tf-develop-watch.py"
+MODEL_FROM="${TF_DEVELOP_MODEL_FROM:-}"; [[ -n "$MODEL" && -z "$MODEL_FROM" ]] && MODEL_FROM="--model"   # a detached run is told where its model came from
+case "$VIEW" in   # any window: status and follow read only; stop ends the run and keeps its state for --resume
+  status|follow|mode) exec python3 "$WATCH" "$VIEW" "$DIR" $NEXT ;;
+  stop) python3 "$WATCH" stop "$DIR"; rc=$?
+        grep -q '"source":[[:space:]]*"goal"' "$DIR/.tfcore/.session/yolo.json" 2>/dev/null \
+          && CLAUDE_PROJECT_DIR="$DIR" TF_PROJECT_DIR="$DIR" bash "$DIR/.tfcore/utils/tf-yolo.sh" off >/dev/null 2>&1
+        exit $rc ;;
+esac
 STATE="$DIR/.tfcore/.session/develop.json"
 GOAL_SH="${TF_DEVELOP_GOAL_SH:-$DIR/.tfcore/utils/tf-goal.sh}"   # tests point this at a fake
 PLAN_PY="$HERE/tf-develop-plan.py"
@@ -76,6 +86,21 @@ ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 own_repo() { local top; top="$(git -C "$DIR" rev-parse --show-toplevel 2>/dev/null)" || return 1
   [[ -n "$top" && "$(cd "$top" && pwd -P)" == "$(cd "$DIR" && pwd -P)" ]]; }
 log() { printf '[%s] tf-develop: %s\n' "$(ts)" "$*" | tee -a "$DIR/.tfcore/.session/develop.log" >&2; }
+# --detach: this same run in its own session (tf_setsid, portable), so it outlives the agent session that
+# started it. It returns once the run has written its pid, and says where it runs and on which model.
+detach() {
+  local rest=() a token="$$-$RANDOM" i=0
+  for a in "${ARGS_IN[@]}"; do [[ "$a" != --detach ]] && rest+=("$a"); done
+  [[ " ${ARGS_IN[*]} " == *" --model "* ]] || rest+=(--model "$MODEL")
+  source "$HERE/tf-portable.sh"
+  TF_DEVELOP_LAUNCH="$token" TF_DEVELOP_MODEL_FROM="$MODEL_FROM" tf_setsid bash "$0" "$DIR" "${rest[@]}" > "$DIR/.tfcore/.session/develop.out" 2>&1 < /dev/null &
+  while [[ "$(st get launch)" != "$token" && $i -lt 40 ]]; do sleep 0.5; i=$((i+1)); done
+  if [[ "$(st get launch)" != "$token" ]]; then echo "tf-develop: the run did not start — $(tail -3 "$DIR/.tfcore/.session/develop.out" | tr '\n' ' ')" >&2; exit 1; fi
+  echo "tf-develop: started $APP — pid $(st get pid) on host $(st get host), harness $HARNESS, model $MODEL ($MODEL_FROM)"
+  echo "  follow: bash .tfcore/utils/tf-develop.sh . --follow · status: … --status · stop: … --stop"
+  echo "  log: .tfcore/.session/develop.log · result: docs/$APP-Build-Report.md"
+  exit 0
+}
 
 st() { python3 - "$STATE" "$@" <<'PY'
 import json, sys
@@ -85,6 +110,10 @@ except Exception: d = {}
 if op == "get": print(d.get(a[0], ""))
 elif op == "init":
     d = {"app": a[0], "brief": a[1], "harness": a[2], "model": a[3], "tier": a[4], "push": a[5] == "1", "started": a[6], "phases": [], "git": a[7] == "1"}
+elif op == "set":     # key value ...; an empty value removes the key
+    for k, v in zip(a[::2], a[1::2]):
+        if v: d[k] = v
+        else: d.pop(k, None)
 elif op == "plan": d["plan"] = a[0].split(",")   # the steps that make the app UAT-ready, for the report
 elif op == "done": print("yes" if any(x["name"] == a[0] and x["status"] in ("done", "skipped") for x in d.get("phases", [])) else "")
 elif op == "attempts": print(sum(1 for x in d.get("phases", []) if x["name"] == a[0]))
@@ -97,25 +126,36 @@ elif op == "phase":   # name status started ended exit commit pushed attempt —
     if hit: ph[hit[0]] = new
     else: ph.append(new)
     d["phases"] = ph
-if op in ("init", "phase", "plan"): json.dump(d, open(p, "w"), indent=1)
+if op in ("init", "phase", "plan", "set"): json.dump(d, open(p, "w"), indent=1)
 PY
 }
 
 if [[ $REPORT_ONLY -eq 1 ]]; then :
 elif [[ $RESUME -eq 1 ]]; then
   [[ -f "$STATE" ]] || { echo "tf-develop: --resume: no $STATE" >&2; exit 2; }
-  APP="$(st get app)"; BRIEF="$(st get brief)"; HARNESS="$(st get harness)"; MODEL="$(st get model)"; TIER="$(st get tier)"
+  python3 "$WATCH" status "$DIR" >/dev/null 2>&1 && { echo "tf-develop: --resume: the run is still running — see: bash .tfcore/utils/tf-develop.sh . --status" >&2; exit 2; }
+  APP="$(st get app)"; BRIEF="$(st get brief)"; HARNESS="$(st get harness)"; TIER="$(st get tier)"
+  [[ -z "$MODEL" ]] && MODEL="$(st get model)" && MODEL_FROM="kept from the run it continues"   # --model on the resume wins
   [[ "$(st get push)" == "False" ]] && PUSH=0
   [[ "$(st get git)" == "False" ]] && { GIT=0; PUSH=0; }
 else
   [[ -n "$APP" ]] || { echo "tf-develop: --app <App> is required" >&2; exit 2; }
   [[ "$APP" =~ ^[A-Z][A-Za-z0-9]*$ ]] || { echo "tf-develop: --app must be PascalCase with no spaces" >&2; exit 2; }
+  if [[ $DRY -eq 0 && -f "$STATE" ]]; then
+    python3 "$WATCH" status "$DIR" >/dev/null 2>&1 && { echo "tf-develop: a develop run is running here — see: bash .tfcore/utils/tf-develop.sh . --status" >&2; exit 2; }
+    echo "tf-develop: a stopped develop run is here ($(st get app)) — continue it with --resume, or see --status" >&2; exit 2
+  fi
   if [[ -n "$BRIEF" ]]; then [[ -f "$BRIEF" ]] || { echo "tf-develop: brief not found: $BRIEF" >&2; exit 2; }
   elif [[ ! -f "$DIR/docs/$APP-BRD.md" ]]; then echo "tf-develop: --brief <file> is required: docs/$APP-BRD.md is not written yet" >&2; exit 2; fi
   if [[ $GIT -eq 1 ]]; then
     own_repo || { echo "tf-develop: $DIR is not a git repository of its own (a folder inside another repository does not count) — set it up first, or pass --no-git" >&2; exit 2; }
     if [[ $PUSH -eq 1 && -z "$(git -C "$DIR" remote 2>/dev/null)" ]]; then echo "tf-develop: $DIR has no git remote to push to — add one, or pass --no-push" >&2; exit 2; fi
   fi
+  if [[ -z "$MODEL" ]]; then MODEL="$(python3 "$WATCH" session-model "$HARNESS")"; MODEL_FROM="the launching session's model"; fi
+  if [[ -z "$MODEL" && $DRY -eq 0 ]]; then
+    echo "tf-develop: which model? No --model was given and the launching $HARNESS session's model could not be read — pass --model <id>" >&2; exit 2
+  fi
+  if [[ $DETACH -eq 1 && $DRY -eq 0 ]]; then detach; fi
   if [[ $DRY -eq 0 ]]; then
     if [[ -n "$BRIEF" ]]; then
       [[ "$(cd "$(dirname "$BRIEF")" && pwd)/$(basename "$BRIEF")" == "$DIR/docs/$APP-Brief.md" ]] || cp "$BRIEF" "$DIR/docs/$APP-Brief.md"
@@ -123,6 +163,18 @@ else
     fi
     st init "$APP" "$BRIEF" "$HARNESS" "$MODEL" "$TIER" "$PUSH" "$(ts)" "$GIT"
   fi
+fi
+if [[ $RESUME -eq 1 ]]; then
+  if [[ -z "$MODEL" ]]; then MODEL="$(python3 "$WATCH" session-model "$HARNESS")"; MODEL_FROM="the launching session's model"; fi
+  [[ -n "$MODEL" ]] || { echo "tf-develop: which model? The stopped run recorded none and the launching $HARNESS session's model could not be read — pass --model <id>" >&2; exit 2; }
+  [[ $DETACH -eq 1 ]] && detach
+fi
+if [[ $REPORT_ONLY -eq 0 && $DRY -eq 0 ]]; then   # this process is the run: what any window needs to check it
+  TF_DEVELOP_RUN="$APP-$(date -u +%Y%m%dT%H%M%SZ)-$$"; export TF_DEVELOP_RUN   # every process it starts carries it (--stop)
+  st set pid "$$" host "$(python3 -c 'import socket; print(socket.gethostname())')" run_id "$TF_DEVELOP_RUN" model "$MODEL" \
+     model_from "${MODEL_FROM:-}" launch "${TF_DEVELOP_LAUNCH:-}" stopped ""
+  python3 "$WATCH" backfill "$DIR" 2>/dev/null   # a stopped attempt's tokens, before this run's first cycle overwrites its files
+  log "run started: pid $$ on host $(st get host), harness $HARNESS, model $MODEL (${MODEL_FROM:-})"
 fi
 
 if [[ -n "$BRIEF" ]]; then CONCEPT="The brief is $BRIEF."; else CONCEPT="There is no brief: the documents already written (docs/$APP-BRD.md and the rest) are the concept."; fi
@@ -175,20 +227,17 @@ try:
     for line in open(os.path.join(root, "docs", "metrics", "runs.jsonl"), encoding="utf-8", errors="replace"):
         try: r = json.loads(line)
         except Exception: continue
-        if r.get("kind", "run") == "run" and r.get("app") in (None, app) and r.get("started"): runs.append(r)
+        if r.get("kind", "run") == "run" and r.get("app") in (None, app) and r.get("started") and r.get("cmd") != "develop-status": runs.append(r)
 except OSError: pass
 voided = {(r.get("cmd"), r.get("started")) for r in runs if r.get("kind") == "run-void"}
-def hm(s):
-    s = int(s or 0); return f"{s // 3600} h {s % 3600 // 60:02d} min" if s >= 3600 else f"{s // 60} min {s % 60:02d} s"
+def hm(s): s = int(s or 0); return f"{s // 3600} h {s % 3600 // 60:02d} min" if s >= 3600 else f"{s // 60} min {s % 60:02d} s"
 NAMES = {"day1": "Day 1, stage 1 (BRD, Architecture, mockups)", "day1-2": "Day 1, stage 2 (checklist, documents)",
          "build": "Build and verify", "handoff": "Handoff (UsageGuide, UAT-ready)", "build-p": "Phase {}: build and verify", "handoff-p": "Phase {}: handoff"}
-out, tot = [], {"wall_s": 0, "work_s": 0, "tokens_in": 0, "tokens_out": 0, "tokens_cache_read": 0, "tokens_cache_write": 0, "runs": 0}
-models = {}
-# One row per phase, summing every attempt of it (a phase stopped "blocked" and resumed is run again; its
-# first attempts' time and tokens are part of what the phase cost). A run record belongs to the attempt
-# whose window holds its start, the window's first second included and its last excluded: a record that
-# starts the second the previous phase ends belongs to the next one (the first proof run counted the
-# build's 301,201 tokens under Day 1 stage 2).
+out, tot, models = [], {"wall_s": 0, "work_s": 0, "tokens_in": 0, "tokens_out": 0, "tokens_cache_read": 0, "tokens_cache_write": 0, "runs": 0}, {}
+try: cyc = json.load(open(os.path.join(root, ".tfcore", ".session", "develop-tokens.json")))   # per step and attempt, from the goal cycles
+except Exception: cyc = {}
+# One row per phase, summing its attempts. A record belongs to the attempt whose window holds its start, first second
+# in and last out (the first proof run counted the build's 301,201 tokens under Day 1 stage 2).
 order, attempts = [], {}
 for x in state.get("phases", []):
     if x["name"] not in attempts: order.append(x["name"])
@@ -200,9 +249,8 @@ for name in order:
     ats = attempts[name]; p = ats[-1]
     wins = [(t(x.get("started")), t(x.get("ended")) or datetime.datetime.utcnow()) for x in ats if t(x.get("started"))]
     rs = [r for r in runs if (r.get("cmd"), r.get("started")) not in voided and inside(r, wins)]
-    # A record's tokens are measured over its own window of the session, so a command chained inside
-    # another (devguide inside handoff-phase) is counted twice if both are summed: a record lying wholly
-    # inside another is dropped, and working time is the union of the windows, not their sum.
+    # A record lying wholly inside another (devguide inside handoff-phase) is dropped, or its tokens count twice;
+    # working time is the union of the windows, not their sum.
     span = lambda r: (t(r.get("started")), t(r.get("ended")) or t(r.get("started")))
     rs = [r for i, r in enumerate(rs) if not any(
         j != i and span(o)[0] and span(r)[0] and span(o)[0] <= span(r)[0] and span(r)[1] <= span(o)[1]
@@ -215,12 +263,16 @@ for name in order:
             cur = (a_, b_)
     if cur: union += (cur[1] - cur[0]).total_seconds()
     row = {"phase": name, "title": NAMES.get(name) or NAMES.get(name.rstrip("0123456789"), name).format(name.rsplit("p", 1)[-1]), "status": p.get("status"), "attempts": len(ats),
-           "started": ats[0].get("started"), "ended": p.get("ended"),
-           "wall_s": int(sum((b - a).total_seconds() for a, b in wins)), "work_s": int(union),
+           "started": ats[0].get("started"), "ended": p.get("ended"), "wall_s": int(sum((b - a).total_seconds() for a, b in wins)), "work_s": int(union),
            "tokens_in": sum(int(r.get("tokens_in") or 0) for r in rs), "tokens_out": sum(int(r.get("tokens_out") or 0) for r in rs),
-           "tokens_cache_read": sum(int(r.get("tokens_cache_read") or 0) for r in rs),
-           "tokens_cache_write": sum(int(r.get("tokens_cache_write") or 0) for r in rs),
+           "tokens_cache_read": sum(int(r.get("tokens_cache_read") or 0) for r in rs), "tokens_cache_write": sum(int(r.get("tokens_cache_write") or 0) for r in rs),
            "runs": len(rs), "commands": sorted({r.get("cmd") for r in rs if r.get("cmd")}), "commit": p.get("commit"), "pushed": p.get("pushed")}
+    have = {str(x.get("attempt", "1")): cyc[name][str(x.get("attempt", "1"))] for x in ats if str(x.get("attempt", "1")) in (cyc.get(name) or {})}
+    if have:   # the goal cycles' own count; run records only for an attempt with none saved (MISS-TechieFlow-20261119-03: 4,763 against 29,314)
+        rs = [r for r in rs if inside(r, [w for x, w in zip([x for x in ats if t(x.get("started"))], wins) if str(x.get("attempt", "1")) not in have])]
+        for k in ("in", "out", "cache_read", "cache_write"): row["tokens_" + k] = sum(int(v.get(k) or 0) for v in have.values()) + sum(int(r.get("tokens_" + k) or 0) for r in rs)
+        models[state.get("model") or "unknown"] = models.get(state.get("model") or "unknown", 0) + sum(int(v.get("out") or 0) for v in have.values())
+    row["tokens_from"] = "goal cycles" if have else "run records"
     for r in rs:
         for m, n in (r.get("model_tokens_out") or {r.get("model") or "unknown": r.get("tokens_out") or 0}).items():
             models[m] = models.get(m, 0) + int(n or 0)
@@ -246,26 +298,20 @@ for p in out:
     L.append(f"| {p['title']}{' (' + str(p['attempts']) + ' attempts)' if p['attempts'] > 1 else ''} | {p['status']} | {hm(p['wall_s'])} | {hm(p['work_s'])} | {p['tokens_out']:,} | {p['commit'] or '—'}{'' if p['pushed'] in ('yes', 'off') else ' (not pushed)'} |")
 L += ["", "Time is the clock from the phase's start to its end, summed over its attempts, waits for a usage limit to reset included. "
       "Built in also counts the time between attempts, while a stopped run waited to be resumed. "
-      "Agent working is the sum of the phase's run records. The same figures, for a comparison harness, are in "
+      "Agent working is the sum of the phase's run records. Tokens are the goal cycles' own count where the harness reports it (Claude Code), else the run records'. The same figures, for a comparison harness, are in "
       "`docs/metrics/develop-report.json`.", ""]
 open(os.path.join(root, "docs", f"{app}-Build-Report.md"), "w", encoding="utf-8").write("\n".join(L))
 print(f"report: {rep['status']}, {hm(span)} elapsed, {tot['tokens_out']:,} tokens out — docs/{app}-Build-Report.md")
 PY
 }
 
-# No --model: the tier's routed model (.tfcore/routing.yaml), never the machine's own default. The proof
-# run on OpenCode fell back to a local model server that was not running and failed every cycle.
-if [[ -z "$MODEL" && -f "$DIR/.tfcore/utils/tf-model-pick.sh" ]]; then
-  MODEL="$(cd "$DIR" && bash .tfcore/utils/tf-model-pick.sh pick "$TIER" "$HARNESS" 2>/dev/null)"
-  [[ "$MODEL" == inherit ]] && MODEL=""
-fi
 # --report: write the report again from the saved state (the run's, or the finished run's), nothing else
 if [[ $REPORT_ONLY -eq 1 ]]; then
   [[ -f "$STATE" ]] || STATE="$DIR/.tfcore/.session/develop-done.json"
   [[ -f "$STATE" ]] || { echo "tf-develop: --report: no develop run recorded here" >&2; exit 2; }
-  report; exit 0
+  python3 "$WATCH" backfill "$DIR" 2>/dev/null; report; exit 0
 fi
-GOAL_ARGS=(--harness "$HARNESS" --tier "$TIER"); [[ -n "$MODEL" ]] && GOAL_ARGS+=(--model "$MODEL")
+GOAL_ARGS=(--harness "$HARNESS" --tier "$TIER"); [[ -n "$MODEL" ]] && GOAL_ARGS+=(--model "$MODEL" --no-fallback)
 GIT_NOTE="commit and push"; [[ $PUSH -eq 0 ]] && GIT_NOTE="commit, no push"
 [[ $GIT -eq 0 ]] && GIT_NOTE="no commit and no push (git is the owner's); recorded in develop.json, develop-report.json and the Build Report"
 step() {   # $1 step, $2 run|skip, $3 detail — runs one step to its end; a failed or blocked step ends the run here
@@ -290,9 +336,14 @@ step() {   # $1 step, $2 run|skip, $3 detail — runs one step to its end; a fai
   if [[ "$phase" == build-p* ]]; then   # the phase being worked is appPhase; the agent builds that one
     (cd "$DIR" && bash .tfcore/utils/tf-day1-files.sh "$APP" --phase "$n" >/dev/null 2>&1) && log "appPhase set to $n" || log "appPhase not set (tf-day1-files.sh failed); the goal names phase $n"
   fi
-  start="$(ts)"; log "$phase started"
+  [[ -f "$WATCH" ]] && python3 "$WATCH" clear-cycles "$DIR" 2>/dev/null   # earlier steps' cycle files aside, their tokens already saved
+  start="$(ts)"; log "$phase started — $HARNESS, model $MODEL"
   st phase "$phase" running "$start" "" "" "" "" "$attempt"
-  bash "$GOAL_SH" "${GOAL_ARGS[@]}" "$DIR" "$(goal_of "$phase" "$detail")" </dev/null; rc=$?
+  python3 "$WATCH" progress "$DIR" "$phase" $$ </dev/null >/dev/null 2>&1 & local watcher=$!   # verifies and rows, into develop.log
+  { bash "$GOAL_SH" "${GOAL_ARGS[@]}" "$DIR" "$(goal_of "$phase" "$detail")" </dev/null 2>&1 1>&3 \
+      | if [[ -f "$WATCH" ]]; then python3 "$WATCH" cycles "$DIR" "$phase" "$MODEL"; else cat >&2; fi; rc=${PIPESTATUS[0]}; } 3>&1   # each goal cycle, into develop.log
+  kill -TERM "$watcher" 2>/dev/null; wait "$watcher" 2>/dev/null
+  python3 "$WATCH" tokens "$DIR" "$phase" all "$attempt" 2>/dev/null   # every cycle file present is this attempt's
   status=done; [[ $rc -eq 3 ]] && status=blocked; [[ $rc -ne 0 && $rc -ne 3 ]] && status="failed (exit $rc)"
   end="$(ts)"
   st phase "$phase" "$status" "$start" "$end" "$rc" "" "" "$attempt"

@@ -142,6 +142,16 @@ bash .tfcore/utils/tf-goal.sh --resume /path/to/App      # after a reboot
 ```
 It launches `opencode run --auto` (approve everything not denied — git writes stay denied by the permission map), exports `TF_YOLO=1`, and the plugin's `permission.ask` hook auto-approves the `rm */sudo *` asks while the flag is on. Log: `.tfcore/.session/goal.log`. Override the launch flags with `TF_GOAL_OPENCODE_FLAGS` if a future OpenCode renames `--auto`.
 
+**A whole app, unattended (`*develop-end-to-end`):** type `/flow-master *develop-end-to-end <App>` in the app's folder. The run starts in a process of its own (the supervisor, `tf-develop.sh`), which runs every step through the goal runner above with `--harness opencode`; it does not run inside the OpenCode window.
+
+- **Model.** `--model <provider/id>` if you give one, else the model of the OpenCode session that typed the command, read from that session's own record (the session id OpenCode passes to its bash tool). If it cannot be read, the run refuses to start; it never falls back to the routing file or to OpenCode's default model. Every step runs on that one model, and a usage limit waits for the reset rather than switching.
+- **Following it.** The OpenCode window runs `tf-develop.sh . --follow --next` with the bash tool's background option. The command returns at the next event (a step starting or ending, a goal cycle, a verify's result, a change in the rows built and verified), OpenCode wakes the agent, the agent reports it and starts the command again, until the run ends; then it gives the Build Report's result, time, tokens and the next command.
+- **From another window.** `/flow-master *develop-status <App>` says whether the run's process is alive (checked), its model, step, phase, rows, last activity, tokens, log and report. `/flow-master *develop-end-to-end <App> --follow` follows it there.
+- **Closing, sleeping, restarting.** Closing the OpenCode window leaves the run going. Sleep pauses it. A restart or `wsl --shutdown` ends it, and *develop-status then reads "stopped". Keep one WSL window open while it runs: Windows may shut WSL down a while after its last window closes.
+- **Stopping and resuming.** `/flow-master *develop-end-to-end <App> --stop` ends the supervisor and every process it started (each carries the run's mark in its environment, which OpenCode's bash tool passes on), keeping the database container. `--resume` continues from the step it stopped in, on the stopped run's model unless you name another.
+- **Where things are.** `.tfcore/.session/develop.log` (steps, cycles and verifies, times in UTC); `docs/<App>-Build-Report.md` and `docs/metrics/develop-report.json`. OpenCode's output carries no token count, so under OpenCode the report's tokens come from the run records the commands write.
+- **Develop mode** holds only inside the run's own processes. An OpenCode session you open in the app while a stopped run waits is an ordinary one.
+
 ## 9. What to retire, what to keep
 
 | Item | Action |

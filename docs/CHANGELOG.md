@@ -15,6 +15,35 @@ not v1.3.2: besides the fixes it adds a flag and a mode (`*develop-end-to-end --
 phase), a settings key (`buildCopy:`) and an estimate method, nothing removed (Release Guide §1). The release notes
 to paste are `docs/TechieFlow-Release-Notes-v1.4.0.md`.
 
+- **Deployed (2026-11-20; Windows).** `update-framework.sh` on AstroLyfe, Chatur, Sevak, TfLens, TechieRag and Lekhak, then AppManager once its agent had
+  finished (not TrStudio, which the Mac pulls); each `.tfcore` now matches this tree byte for byte. Earlier replies were
+  already in every app; AstroLyfe got one new resolution section (the TF-062 follow-ups), by insertion only. Its stopped
+  develop run is not resumed, and `tf-develop.sh --mode` in a plain session there says `off`.
+- **The develop run documented end to end, and its two open misses fixed (2026-11-19, night; Windows).**
+  README: rows for `*develop-status`, `--follow`, `--stop`, `--resume` and `--model` in both harness columns, and a
+  section "Watching a long run" (where the run runs, how the launching window follows it, other windows, a closed
+  window, sleep, restart and WSL shutdown, stop and resume, log and Build Report, the model). The same facts in
+  `docs/TechieFlow-How-It-Works.md` §3.11, `docs/OpenCode-Deployment-Guide.md` §8, `WorkFlow-Context.md` §2 item 9
+  (open items trimmed to stay under 3,000 words) and the flow-master `*help` table. MISS-TechieFlow-20261119-04: develop
+  mode, and the database container it unlocks, now hold only in processes carrying the run's own `TF_DEVELOP_RUN`
+  (`tf-develop.sh --mode`; `guard-verify-deps.sh`); a stopped run's `develop.json` no longer turns a new session into
+  develop mode. Case `dev_mode`; regression `dev_002` now sets the mark. MISS-TechieFlow-20261119-03: the Build Report
+  takes each attempt's tokens from the goal cycles' own output (`.tfcore/.session/develop-tokens.json`), saved at the
+  step's end, rescued from the cycle files before a resume or `--report`, and moved aside at the next step's start
+  instead of being picked by file time (a file on a Windows drive can read a second early). On a copy of AstroLyfe's
+  run the report reads 29,314 tokens out instead of 4,763. Case `dev_tokens`. Deployed nowhere.
+- **AstroLyfe TF-062: a develop run can be followed, checked and stopped, and runs on the launching session's
+  model (2026-11-19, evening; Windows).** The run started on AstroLyfe at 17:48 could not be seen: the launching
+  window ended its turn, `develop.log` had one line per step, nothing said whether it was alive, and it ran on
+  Sonnet (the routing default) from an Opus window. A new `tf-develop-watch.py` and five switches of `tf-develop.sh`:
+  `--follow [--next]` (the launching window follows the run to its end: Monitor in Claude Code, a background
+  command in OpenCode), `--status` (`*develop-status {App}`: pid and host checked, never assumed), progress inside a
+  step (each goal cycle and each verify, into `develop.log`), the model (`--model`, else the launching session's,
+  read from its Claude Code transcript or OpenCode store, else refused; passed with `--no-fallback`), and `--stop`
+  (every process carrying the run's `TF_DEVELOP_RUN` mark, the step recorded for `--resume`). Cases `dev_follow`,
+  `dev_follow_next`, `dev_status`, `dev_progress`, `dev_model`, `dev_stop` in `tests/develop/run.sh` fail on the
+  morning's scripts and pass now. Deployed to AstroLyfe only; its run is not resumed.
+
 - **Chatur TF-048 and the deploy (2026-11-19, morning; Windows).** Case `ch_048` in `tests/faults/n19-cases.sh`
   fails on the scripts of the night before and passes now. Chatur's copy was a Windows path
   (`C:\ChaturRuns\fix-20261118-night`), which `tf-doc-tests.sh` could not see on WSL, so `--root` or `buildCopy`

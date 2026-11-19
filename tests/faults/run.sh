@@ -750,7 +750,8 @@ _fx_tests() {
   port="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
   printf '{"mode":"cdp","url":"http://127.0.0.1:%s","win_pids":[4242]}' "$port" > "$d/tests/.artifacts/verify/boot.json"
   printf '%s' "$port" > "$d/port"
-  printf '#!/usr/bin/env bash\necho "powershell $*" >> "$TF_FX_LOG"\n' > "$d/bin/powershell.exe"
+  # its own log: two processes appending to one file on a Windows drive overwrote each other's line (sv_026a failed 1 run in 5)
+  printf '#!/usr/bin/env bash\necho "powershell $*" >> "$TF_FX_LOG.ps"\n' > "$d/bin/powershell.exe"
   # npx playwright test …: --list names three tests, a --grep @setup run passes the set-up one, any other passes the row's
   cat > "$d/bin/npx" <<'SH'
 #!/usr/bin/env bash
@@ -774,9 +775,9 @@ sv_026() {
   command -v node >/dev/null 2>&1 || { printf 'skipped: sv_026 — needs node\n'; return; }
   local d="$SCRATCH/sv026a" out
   _fx_tests "$d"; out="$(_run_tests "$d" --no-unit)"
-  grep -q 'powershell .*IsIconic.*4242' "$d/log" 2>/dev/null \
+  grep -q 'powershell .*IsIconic.*4242' "$d/log.ps" 2>/dev/null \
     && ok sv_026a "while the browser tests run, the desktop head's window is restored whenever it is minimized" \
-    || { bad sv_026a "nothing watched the head's window during the test run"; note "$(tr '\n' '|' < "$d/log" 2>/dev/null | cut -c1-200)"; }
+    || { bad sv_026a "nothing watched the head's window during the test run"; note "$(cat "$d/log" "$d/log.ps" 2>/dev/null | tr '\n' '|' | cut -c1-200)"; }
   d="$SCRATCH/sv026b"; _fx_tests "$d"; : > "$d/x.sln"
   out="$(_run_tests "$d" --no-browser)"
   ! grep -q '^tf-build' "$d/log" 2>/dev/null && grep -q 'unit tests: NOT RUN — the desktop head at .* is up' <<<"$out" \

@@ -200,6 +200,18 @@ flowchart LR
 
 Examples from the reset's own test runs (2026-09-05): `bash .tfcore/utils/tf-goal.sh --model sonnet /mnt/c/1MyCode/MyDiary @goal.md` for Claude Code, and the same with `--harness opencode --model opencode-go/mimo-v2.5` for OpenCode. The interactive alternative is to start Claude Code with `--permission-mode bypassPermissions`, type `/goal <condition>`, then `*yolo` and the command; that gives YOLO and the goal loop but not the limit wait. (Moved here from `_yolo-mode.md` in Sitting 4b, 2026-09-05.)
 
+### 3.11 Developing end to end — flow-master
+
+**`*develop-end-to-end {App} [{brief}] [--no-git | --no-push] [--model <id>] [--dry-run]`**
+
+- Reads: the brief, or the documents already written; `docs/{App}-Phases.md` for the order of the phases.
+- Does: starts `tf-develop.sh` as a process of its own, outside the window that typed the command. The supervisor runs each step (Day 1 where documents are missing, then each phase's build, verify, fixes and handoff) as an unattended goal run (§3.10), asking the owner nothing (`_develop-mode.md`). Develop mode holds only inside the run's own processes, which carry its mark (`TF_DEVELOP_RUN`); a session the owner opens in the app is an ordinary one, even while a stopped run waits.
+- Model: the one named with `--model`, else the model of the session that launched it, read from that session's own records; if neither can be read the run is refused, never routed to a default. The same model runs every step; a usage limit waits for the reset instead of switching.
+- Watching: the launching window follows the run to its end (Claude Code: the Monitor tool; OpenCode: a background command, started again after each report) and is told each step's start and end, each goal cycle, each verify's result, the rows built and verified, and the last activity; at the end, the Build Report's result, time, tokens and the next command. `*develop-status {App}` gives the same picture from any window and checks the process rather than assuming it: a run whose process is gone reads "stopped". `--follow` starts following from another window.
+- Interruptions: closing the launching window leaves the run going. A sleeping machine pauses it; a cut-off model call is retried. A restart or a WSL shutdown ends it; `*develop-status` then reads "stopped".
+- Stop and resume: `--stop` ends the supervisor and every process carrying the run's mark, a web server the agent started included, keeps the database container, and records the step. `--resume` continues from that step; steps already done are skipped, and the stopped run's model is kept unless another is named.
+- Writes: `.tfcore/.session/develop.log` (each step, cycle and verify, with times in UTC); `docs/{App}-Build-Report.md` and `docs/metrics/develop-report.json` (time and tokens per step and in total; tokens from the goal cycles' own output under Claude Code, from the run records under OpenCode); a commit and push per step unless `--no-git` or `--no-push`.
+
 ---
 
 ## 4. What surrounds every command

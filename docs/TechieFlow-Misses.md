@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 403 logged: 59 open, 342 fixed, 1 will not fix, 1 withdrawn |
+| Count | 408 logged: 59 open, 347 fixed, 1 will not fix, 1 withdrawn |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
 | Updated | 2026-11-19 |
 
@@ -73,10 +73,15 @@
 | MISS-TechieFlow-20260904-01 | 2026-09-04 by owner | not sorted | no sentence recorded (wrong-behaviour, other, why: instruction-ignored) |
 | (no id, record 55) | 2026-09-05 by owner | not sorted | The first Session 4a task table put the owner questions inside table cells and the rows were too wide to read in a terminal, against the plain-words rule. |
 
-## Fixed (342)
+## Fixed (347)
 
 | Miss | Found | Closed | Whose gap | What went wrong |
 |---|---|---|---|---|
+| MISS-TechieFlow-20261119-06 | 2026-11-19 by owner | 2026-11-19 by log-miss | the check was too weak | Found on 19 Nov (night) while running every suite: faults case sv_026a failed about 1 run in 5, on the evening's scripts too. Its stand-in npx and powershell.exe appended to one log file on the Windows drive at the same moment and one overwrote the other's line, so the IsIconic line the case looks f |
+| MISS-TechieFlow-20261119-05 | 2026-11-19 by owner | 2026-11-19 by log-miss | said and ignored | The owner's TF-062 prompt (19 Nov evening) said 'Never run git'; the fix run still ran read-only git (git status, git diff --stat, git ls-files, git grep, git tag) to look at the tree. Nothing was written, but the instruction was explicit |
+| MISS-TechieFlow-20261119-04 | 2026-11-19 by owner | 2026-11-19 by fix-issues | the framework never said it | Found while fixing AstroLyfe TF-062 (19 Nov), not fixed: a stopped develop run keeps .tfcore/.session/develop.json so --resume can continue it, and _develop-mode.md says develop mode is on while that file exists, so every agent session opened in AstroLyfe now runs with no questions to the owner unti |
+| MISS-TechieFlow-20261119-03 | 2026-11-19 by owner | 2026-11-19 by fix-issues | the check was too weak | Found while fixing AstroLyfe TF-062 (19 Nov), not fixed: the Build Report sums tokens from run records, which cover only part of a goal cycle, so AstroLyfe's build-p1 shows 4,763 tokens out while its four goal cycles' own Claude Code output adds up to 29,314; *develop-status now reads the cycles' ou |
+| MISS-TechieFlow-20261119-02 | 2026-11-19 by owner | 2026-11-19 by log-miss | the framework never said it | AstroLyfe TF-062 (19 Nov): *develop-end-to-end, built the night before, left the launching window blind: it ended its turn after the detached launch, develop.log had one line per step and nothing for 45 minutes inside the build, nothing said whether the supervisor was alive, there was no way to stop |
 | MISS-TechieFlow-20261119-01 | 2026-11-19 by owner | 2026-11-19 by log-miss | the check was too weak | Chatur TF-048 (19 Nov): the status gate's doc-test step built Chatur's unit tests in the repository while the run built everything else in its copy C:\ChaturRuns\fix-20261118-night; the Sevak TF-045 fix of the night before read only a WSL-form copy path and said nothing when no copy was named |
 | MISS-TechieFlow-20261118-17 | 2026-11-18 by owner | 2026-11-18 by log-miss | the check was too weak | FW (own slip, 19 Nov): the first develop plan would have written a second usage guide for AppManager (its guide is -Usage-Guide.md) and a design for a finished phase; found by a dry run on a copy of real documents |
 | MISS-TechieFlow-20261118-16 | 2026-11-18 by owner | 2026-11-18 by log-miss | the framework never said it | FW (own slip, 19 Nov): tests/develop/run.sh was rewritten in place while the sweep's bash was reading it, so its cases ran twice into used folders and three read FAIL; rerun alone, all hold |
