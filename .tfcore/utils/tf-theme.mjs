@@ -80,10 +80,23 @@ const SETTLE_ANIMATIONS = () => {
   return n;
 };
 
+// AstroLyfe TF-065: a page that still says color-scheme light only once dark is put on (its meta, <html>, <body>)
+// has no dark theme: a UI library's .dark colours are not the app's. It is left light; the returned function says lightOnly.
+const LIGHT_ONLY = () => {
+  const s = [document.querySelector('meta[name="color-scheme"]')?.content || '',
+    ...[document.documentElement, document.body].filter(Boolean).map((e) => getComputedStyle(e).colorScheme)].join(' ');
+  return /\blight\b/.test(s) && !/\bdark\b/.test(s);
+};
+
 // Draws the page in `want` and returns the function that puts it back.
 export async function useTheme(page, want, settle = 350) {
   await page.emulateMedia({ colorScheme: want }).catch(() => {});
   const before = await page.evaluate(FORCE, want).catch(() => null);
+  if (want === 'dark' && await page.evaluate(LIGHT_ONLY).catch(() => false)) {
+    if (before) await page.evaluate(RESTORE, before).catch(() => {});
+    await page.emulateMedia({ colorScheme: null }).catch(() => {});
+    const none = async () => {}; none.lightOnly = true; return none;
+  }
   if (settle) await page.waitForTimeout(settle);
   // Sevak TF-007: a theme change starts the page's CSS fades (`transition: all .12s`), and the mockup,
   // read with no settle, gave its light colour in dark mode. Every fade and finite animation is run to

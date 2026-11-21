@@ -106,7 +106,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <div class="layout">
   <nav class="side">
     <h1>TechieFlow — How It Works</h1>
-    <div class="sub">Last rendered: 2026-11-08</div>
+    <div class="sub">Last rendered: 2026-11-21</div>
     <div class="group">Contents</div>
     <ol>
         <li><a href="#overview">1. Overview</a></li>
@@ -122,6 +122,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
         <li class="h3"><a href="#ship-flow-master">3.8 Ship — flow-master</a></li>
         <li class="h3"><a href="#maintenance-flow-master">3.9 Maintenance — flow-master</a></li>
         <li class="h3"><a href="#running-unattended-the-supervisor">3.10 Running unattended — the supervisor</a></li>
+        <li class="h3"><a href="#developing-end-to-end-flow-master">3.11 Developing end to end — flow-master</a></li>
         <li><a href="#what-surrounds-every-command">4. What surrounds every command</a></li>
         <li class="h3"><a href="#step-0-is-the-framework-itself-working-here">4.0 Step 0 — is the framework itself working here?</a></li>
         <li class="h3"><a href="#example-a-document-producing-command-day1-greenfield-techiedesk">4.1 Example: a document-producing command, *day1-greenfield TechieDesk</a></li>
@@ -136,7 +137,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
   </nav>
   <main>
     <h1>TechieFlow — How It Works</h1>
-    <div class="subtitle">Rendered 2026-11-08 &middot; source <code>TechieFlow-How-It-Works.md</code></div>
+    <div class="subtitle">Rendered 2026-11-21 &middot; source <code>TechieFlow-How-It-Works.md</code></div>
 
     <div class="toc-inline">
       <div>Contents</div>
@@ -154,6 +155,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
         <li class="h3"><a href="#ship-flow-master">3.8 Ship — flow-master</a></li>
         <li class="h3"><a href="#maintenance-flow-master">3.9 Maintenance — flow-master</a></li>
         <li class="h3"><a href="#running-unattended-the-supervisor">3.10 Running unattended — the supervisor</a></li>
+        <li class="h3"><a href="#developing-end-to-end-flow-master">3.11 Developing end to end — flow-master</a></li>
         <li><a href="#what-surrounds-every-command">4. What surrounds every command</a></li>
         <li class="h3"><a href="#step-0-is-the-framework-itself-working-here">4.0 Step 0 — is the framework itself working here?</a></li>
         <li class="h3"><a href="#example-a-document-producing-command-day1-greenfield-techiedesk">4.1 Example: a document-producing command, *day1-greenfield TechieDesk</a></li>
@@ -317,7 +319,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </li>
 </ul>
 <h3 id="build-flow-master"><a id="34-build--flow-master"></a>3.4 Build — flow-master<a class="anchor-link" href="#build-flow-master">#</a></h3>
-<p><strong><code>*estimate-phase {App} [family repos]</code></strong> (added 2026-11-08, v1.3.0)</p>
+<p><strong><code>*estimate-phase {App} [family repos]</code></strong> (added 2026-11-08)</p>
 <ul>
 <li>Run before <code>*build-phase</code>, for the phase in progress.
 </li>
@@ -383,6 +385,24 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 <h3 id="running-unattended-the-supervisor"><a id="310-running-unattended--the-supervisor"></a>3.10 Running unattended — the supervisor<a class="anchor-link" href="#running-unattended-the-supervisor">#</a></h3>
 <p><code>bash .tfcore/utils/tf-goal.sh [--harness opencode] [--model &lt;id&gt;] &lt;app-folder&gt; "&lt;goal&gt;"</code> (or <code>@goal.md</code> for a goal written in a file) starts a harness session in YOLO mode with that goal and keeps it running until the agent writes the done sentinel. It waits out a usage limit (reads the reset time, sleeps until reset plus 15 minutes, resumes the same session), retries a crash with a growing pause, and re-prompts an agent that stopped early. <code>--resume</code> picks up after a reboot. The state and the full log live under <code>&lt;app&gt;/.tfcore/.session/</code> (<code>goal.log</code>, <code>goal.json</code>, <code>goal-done.json</code>); nothing is committed. Exit codes: 0 complete, 3 blocked on the owner, 4 too many cycles.</p>
 <p>Examples from the reset's own test runs (2026-09-05): <code>bash .tfcore/utils/tf-goal.sh --model sonnet /mnt/c/1MyCode/MyDiary @goal.md</code> for Claude Code, and the same with <code>--harness opencode --model opencode-go/mimo-v2.5</code> for OpenCode. The interactive alternative is to start Claude Code with <code>--permission-mode bypassPermissions</code>, type <code>/goal &lt;condition&gt;</code>, then <code>*yolo</code> and the command; that gives YOLO and the goal loop but not the limit wait. (Moved here from <code>_yolo-mode.md</code> in Sitting 4b, 2026-09-05.)</p>
+<h3 id="developing-end-to-end-flow-master"><a id="311-developing-end-to-end--flow-master"></a>3.11 Developing end to end — flow-master<a class="anchor-link" href="#developing-end-to-end-flow-master">#</a></h3>
+<p><strong><code>*develop-end-to-end {App} [{brief}] [--no-git | --no-push] [--model &lt;id&gt;] [--dry-run]</code></strong></p>
+<ul>
+<li>Reads: the brief, or the documents already written; <code>docs/{App}-Phases.md</code> for the order of the phases.
+</li>
+<li>Does: starts <code>tf-develop.sh</code> as a process of its own, outside the window that typed the command. The supervisor runs each step (Day 1 where documents are missing, then each phase's build, verify, fixes and handoff) as an unattended goal run (§3.10), asking the owner nothing (<code>_develop-mode.md</code>). Develop mode holds only inside the run's own processes, which carry its mark (<code>TF_DEVELOP_RUN</code>); a session the owner opens in the app is an ordinary one, even while a stopped run waits.
+</li>
+<li>Model: the one named with <code>--model</code>, else the model of the session that launched it, read from that session's own records; if neither can be read the run is refused, never routed to a default. The same model runs every step; a usage limit waits for the reset instead of switching.
+</li>
+<li>Watching: the launching window follows the run to its end (Claude Code: the Monitor tool; OpenCode: a background command, started again after each report) and is told each step's start and end, each goal cycle, each verify's result, the rows built and verified, and the last activity; at the end, the Build Report's result, time, tokens and the next command. <code>*develop-status {App}</code> gives the same picture from any window and checks the process rather than assuming it: a run whose process is gone reads "stopped". <code>--follow</code> starts following from another window.
+</li>
+<li>Interruptions: closing the launching window leaves the run going. A sleeping machine pauses it; a cut-off model call is retried. A restart or a WSL shutdown ends it; <code>*develop-status</code> then reads "stopped".
+</li>
+<li>Stop and resume: <code>--stop</code> ends the supervisor and every process carrying the run's mark, a web server the agent started included, keeps the database container, and records the step. <code>--resume</code> continues from that step; steps already done are skipped, and the stopped run's model is kept unless another is named.
+</li>
+<li>Writes: <code>.tfcore/.session/develop.log</code> (each step, cycle and verify, with times in UTC); <code>docs/{App}-Build-Report.md</code> and <code>docs/metrics/develop-report.json</code> (time and tokens per step and in total; tokens from the goal cycles' own output under Claude Code, from the run records under OpenCode); a commit and push per step unless <code>--no-git</code> or <code>--no-push</code>.
+</li>
+</ul>
 <hr>
 <h2 id="what-surrounds-every-command"><a id="4-what-surrounds-every-command"></a>4. What surrounds every command<a class="anchor-link" href="#what-surrounds-every-command">#</a></h2>
 <p>Every command is wrapped by the same four mechanisms: a self-check before anything else, shared rules read before the work, hooks watching during the work, and the status gate closing the work.</p>
@@ -573,7 +593,7 @@ h2:hover .anchor-link,h3:hover .anchor-link,h4:hover .anchor-link{opacity:1}
 </li>
 <li><strong>Effort per phase.</strong> For each command: elapsed time, tokens, model, sub-agent count. It shows what each stage costs and allows a cheap model to be compared with an expensive one on the same kind of work.
 </li>
-<li><strong>Estimate against actual</strong> (added 2026-11-08, v1.3.0). For each phase that <code>*estimate-phase</code> estimated: the estimate's middle figure and its range for build, verify and fix, beside what the runs on that phase's rows actually used. The two stand in separate columns and are never turned into one number such as an accuracy percentage. Example from Sevak phase 3: the build was estimated at 466,000 output tokens (219,000 to 738,000) and used 525,000, inside the range; verify was estimated at 113,000 and used 496,000, because the phase was verified 40 times and the estimate counts one pass.
+<li><strong>Estimate against actual</strong> (added 2026-11-08). For each phase that <code>*estimate-phase</code> estimated: the estimate's middle figure and its range for build, verify and fix, beside what the runs on that phase's rows actually used. The two stand in separate columns and are never turned into one number such as an accuracy percentage. Example from Sevak phase 3: the build was estimated at 466,000 output tokens (219,000 to 738,000) and used 525,000, inside the range; verify was estimated at 113,000 and used 496,000, because the phase was verified 40 times and the estimate counts one pass.
 </li>
 </ol>
 <p>Dollar figures on a <em>record</em> exist only for OpenCode runs: Claude Code reports tokens and never a price, and no record ever stores a computed one. Converting tokens to money is the report's job, not the framework's, so <code>*metrics</code> prices every run at the published rate when it runs — a <strong>list price</strong>, never called a bill — and keeps three things apart that used to be one column: what a provider actually billed, what a monthly plan's allowance was consumed by, and what a flat fee had already paid for.</p>

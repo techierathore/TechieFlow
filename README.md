@@ -110,6 +110,8 @@ bash .tfcore/utils/tf-goal.sh --resume <app-folder>     # after a reboot
 
 **If the machine sleeps,** the run pauses with it and carries on when it wakes; a model call cut off by the sleep is retried after a pause. **If the machine restarts or WSL shuts down,** the run stops with it. `*develop-status` then reads "stopped", and `--resume` continues it. Keep one WSL window open while a run goes: Windows may shut WSL down a while after its last window closes.
 
+**On Windows, for a long run,** set `instanceIdleTimeout=-1` under `[general]` in `%UserProfile%\.wslconfig`, so WSL does not shut down after its last window closes (it takes effect the next time WSL starts).
+
 **Stopping and resuming.** `*develop-end-to-end {App} --stop` ends the run and every process it started, including a web server the agent started; the database container stays, with its data. It records the step it stopped in. `*develop-end-to-end {App} --resume` continues from that step; steps already done are not run again, and rows already built stay built. While a stopped run waits, a session you open in the app is an ordinary one: it asks you its questions as usual.
 
 **Where the results are.** The step-by-step log is `.tfcore/.session/develop.log` (times in UTC). The result is `docs/{App}-Build-Report.md`: time and tokens per step and in total, with the same figures in `docs/metrics/develop-report.json`. Tokens are counted from the agent's own output under Claude Code, and from the run records under OpenCode, whose output carries no token count.

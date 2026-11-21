@@ -517,7 +517,7 @@ for (const width of WIDTHS) {
       r.widths.push(entry);
       continue;
     }
-    // the waiting rule the mockup check uses too (tf-login.mjs waitLoaded); a screen that never loads is graded as it stands
+    // the mockup check's waiting rule (tf-login.mjs waitLoaded); a screen that never loads is graded as it is
     const ld = await waitLoaded(page, { ...LOGIN_OPTS, attr: ATTR }, (r.anchors || []).filter((id) => !excused.includes(id) && !stateOnly.includes(id)), settled[s.name]);
     settled[s.name] = ld.present; entry.render_wait_ms = ld.waited_ms;
     if (!ld.loaded) { entry.loaded = false; entry.anchors_when_measured = `${ld.present} of ${ld.of}`; }
@@ -528,9 +528,10 @@ for (const width of WIDTHS) {
       const restore = await useTheme(page, theme);
       try {
         if (theme === 'light') lightSurface = await surface(page);
+        if (restore.lightOnly) { r.dark = 'not offered'; continue; }   // AstroLyfe TF-065
         if (theme === 'dark' && !THEMES && !darkOffered) {
-          // auto: the app has a dark theme when dark changes what it paints, asked screen by screen until one
-          // says yes; from then on every screen is graded in dark, one that ignores it too, and fails.
+          // auto: dark when it changes what the app paints, asked screen by screen until one says yes;
+          // from then on every screen is graded in dark, one that ignores it too, and fails.
           darkOffered = differs(lightSurface, await surface(page));
           if (!darkOffered) { r.dark = 'not offered'; continue; }
         }
@@ -540,9 +541,8 @@ for (const width of WIDTHS) {
         if (r._shut === width) { info.boxes = []; te.overlap = `not measured: ${r._open} stayed open`; }   // Sevak TF-043
         info.contrast = await audit(page, theme === 'dark', MIN_CONTRAST);
         let g = grade(info, theme === 'light' ? consoleErrors : [], width, excused, stateOnly, r.overlay || []);
-        // Lekhak TF-040: "Blazor has already started" failed whichever screen a run opened first, at its first
-        // width only, and never when that screen was opened again. A screen failed on console errors alone is
-        // opened once more; only an error that comes back is its own. One that does not is kept as console_once.
+        // Lekhak TF-040: "Blazor has already started" failed the first screen a run opened, at its first width only.
+        // A screen failed on console errors alone is opened once more; an error that does not come back is console_once.
         if (theme === 'light' && g.render === 'ERROR' && consoleErrors.length && g.findings.every((f) => f.class !== 'exception' || /^console error/.test(f.detail))) {
           const first = consoleErrors.splice(0);
           const own = (r.anchors || []).filter((id) => !excused.includes(id) && !stateOnly.includes(id));

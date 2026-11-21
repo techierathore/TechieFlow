@@ -177,8 +177,21 @@ export async function dropdownFindings(page, width, o = {}) {
     next += 100; tally.triggers += inner.length;
     for (const i of inner.slice(0, opt.max)) await gradeList(page, i, width, opt, out, tally, `in the dialog "${label}" `);
     cutSel(await page.evaluate(SELECTS, scope).catch(() => []), `in the dialog "${label}" `);
+    // Chatur TF-051: a sheet Escape does not close stayed open into the dark pass and "overlapped" the page. Then its
+    // own Close button, then a click beside it (its backdrop); one still open is named, and its width's overlap not measured
+    const gone = () => page.waitForSelector(scope, { state: 'hidden', timeout: 2000 }).then(() => true, () => false);
     await page.keyboard.press('Escape').catch(() => {});
-    await page.waitForSelector(scope, { state: 'detached', timeout: 2000 }).catch(() => {});
+    if (!(await gone())) {
+      await page.evaluate((sc) => { const x = [...document.querySelectorAll(`${sc} button, ${sc} [role="button"]`)].find((b) => /^\s*(close|×|✕)\s*$/i.test(b.getAttribute('aria-label') || '') || /^(close\s*)?[×✕]?$/i.test((b.textContent || '').trim()) && (b.textContent || '').trim()); if (x) x.click(); }, scope).catch(() => {});
+      if (!(await gone())) {
+        const pt = await page.evaluate((sc) => { const r = document.querySelector(sc)?.getBoundingClientRect(); if (!r) return null;
+          const busy = 'a,button,input,select,textarea,label,summary,[tabindex],[contenteditable],[role="button"],[role="link"],[role="tab"],[role="option"],[role^="menuitem"]';
+          return [[innerWidth - 3, innerHeight / 2], [3, innerHeight / 2], [innerWidth / 2, innerHeight - 3], [innerWidth / 2, 3]]
+            .find(([x, y]) => (x < r.left || x > r.right || y < r.top || y > r.bottom) && !document.elementFromPoint(x, y)?.closest(busy)) || null; }, scope).catch(() => null);
+        if (pt) await page.mouse.click(pt[0], pt[1]).catch(() => {});
+        if (!(await gone())) tally.unclosed.push(label);
+      }
+    }
     await page.evaluate(() => document.querySelectorAll('[data-tf-dlg-open]').forEach((d) => { d.removeAttribute('data-tf-dlg-open'); d.setAttribute('data-tf-dlg-seen', ''); })).catch(() => {});
   }
   out.tally = tally;

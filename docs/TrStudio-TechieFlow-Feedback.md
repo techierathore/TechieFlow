@@ -4,11 +4,11 @@
 |---|---|
 | App | TrStudio |
 | Upstream | TechieFlow |
-| Updated | 2026-11-19 (TF-008 to TF-010 fixed upstream; ship in TechieFlow v1.4.0, not yet in `.tfcore/`) · 2026-11-16 (TechieFlow replies) |
+| Updated | 2026-11-21 (TF-011 fixed upstream, not yet in `.tfcore/`) · 2026-11-19 (TF-008 to TF-010 fixed upstream; ship in TechieFlow v1.4.0, not yet in `.tfcore/`) · 2026-11-16 (TechieFlow replies) |
 
 ## Summary
 
-10 entries: 0 blocking once TechieFlow v1.4.0 is in `.tfcore/` (TF-010 holds REQ-UI-040 and REQ-UI-052 until then), 0 open, 3 fixed upstream on 2026-11-19 and not yet in `.tfcore/` (TF-008 to TF-010), 7 fixed upstream and in TrStudio's `.tfcore`, not yet re-checked here by TrStudio (TF-001 to TF-007). Checked on the app by TechieFlow on 16 Nov 2026: TF-003, TF-004, TF-005 and TF-007 in full, TF-001 by its no-password branch, TF-006 for the admin screens; TF-002 waits for the `span` to come off, TF-006's creator screens for the test users' roles.
+11 entries: 0 open, 1 fixed upstream on 2026-11-21 and not yet in `.tfcore/` (TF-011, which holds the mockup check of REQ-UI-040, REQ-FN-051, 052 and 054 until the framework is updated), 3 fixed upstream on 2026-11-19 (TF-008 to TF-010; TrStudio's own file records them re-checked and closed on 20 Nov), 7 fixed upstream and in TrStudio's `.tfcore`, not yet re-checked here by TrStudio (TF-001 to TF-007). Checked on the app by TechieFlow on 16 Nov 2026: TF-003, TF-004, TF-005 and TF-007 in full, TF-001 by its no-password branch, TF-006 for the admin screens; TF-002 waits for the `span` to come off, TF-006's creator screens for the test users' roles.
 
 Nothing is blocked by the framework. On 16 Nov 2026 the Mac app was driven with the fixed checker: the four signed-out screens and the seven admin screens were reached by its own clicks at 1280 and 390. Two steps are TrStudio's: the `span` around `sign-in` (TF-002), and test users whose role gives them the creator surface (TF-006).
 
@@ -151,6 +151,33 @@ Nothing is blocked by the framework. On 16 Nov 2026 the Mac app was driven with 
 - **Workaround:** none honest in the app: a native select's closed box never wraps, and at 390 px no layout gives a 350 px name room
 - **Suggested fix:** in `tf-dropdowns.mjs` `SELECTS`, skip a select whose computed opacity is 0 or visibility hidden; optionally grade the element drawn under it (`elementFromPoint` at the select's centre with the select hidden) for clipping
 - **Reply (TechieFlow team, 2026-11-19):** Fixed upstream in `tf-dropdowns.mjs`, as you suggested: a native select whose computed opacity is 0, or whose visibility is hidden, is not graded for cut text; the element drawn under its centre is, when it cuts its text sideways (scroll width past its box and not overflowing visibly). Your wrapping label passes. Case `ts_010`, your Video studio shape: on the script you have, `the select "Model" cuts its text at 1280px … needs 441 px, the box has 218 px`; now none. Control half: a label under an invisible select that cuts its text, and a visible select too narrow for its option, are still reported. **Check it here:** the Repro's screen check on Video studio and Comparison: no `cuts its text` line; REQ-UI-040 and REQ-UI-052 can pass the visual check.
+
+### TF-011 — The mockup check counts an empty slider track as a missing badge
+
+- **Status:** fixed upstream 2026-11-21; not yet in TrStudio's `.tfcore/` (the owner deploys it); not yet re-checked here.
+- **Severity:** minor
+- **Blocks:** yes — REQ-UI-040, REQ-FN-051, 052 and 054 (Video studio) cannot pass the mockup check, although the app draws both sliders
+- **Repro:** `docs/mockups/video-studio.html` draws Duration and Motion strength as `<div class="slider"><i></i><b></b></div>` (no text); the app draws a native range input. Seed `tests/verify/seed/video-studio.sh`, then `tf-mockup-parity.sh --base http://localhost:5099 --screen video-studio=/video …`
+- **Expected:** an element with no text and no badge class is not graded as a badge; a slider is matched to the app's range input
+- **Actual:** `missing on card-controls > div[0] > div[1] @1280: the mockup draws a badge/pill here (""); it could not be located in the app` (and `div[1] > div[1]`), in light and dark; `tests/.artifacts/verify/parity.json`, 20 Nov 2026
+- **Encountered in:** owner run of 19 Nov 2026 (night), `*handoff-phase`, re-verifying the TF-010 rows
+- **Workaround:** none honest in the app: changing the real slider to match a drawing would make it worse
+- **Suggested fix:** in the parity badge pass, skip a candidate whose text is empty; treat `.slider` (or an element whose children are only empty `i`/`b`) as a range control and match it to `input[type=range]`
+- **Reply (TechieFlow team, 2026-11-21):** Fixed upstream in `tf-mockup-parity.mjs`, both halves of your suggestion. (1) A drawn slider is a slider, not a badge: a range input, a library's `role="slider"` handle with the textless box around it, or a textless box whose class says `slider` (your `<div class="slider"><i></i><b></b></div>`). Nothing inside one is a badge, on either side, and the mockup's slider is matched to the app's by count under the same parent: where the app draws as many, no finding; where it draws fewer, the finding reads `the mockup draws a slider here; the app draws no range input under this parent`. (2) A mockup box with no text, no icon and no class that says badge, pill, chip, tag or dot is no longer reported as a missing badge. Case `ts_011`, your Controls card: on the script you have, `missing on card-controls > div[0] > div[1]` and `div[1] > div[1]` (`the mockup draws a badge/pill here ("")`); now none. Control half: with both sliders taken out of the app, two missing-slider findings; a dot of class `dot` and a pill with text that the app leaves out are still missing. **Check it here**, once the framework is updated: seed and run the Repro's `tf-mockup-parity.sh … --screen video-studio=/video`; expect no `missing` on `card-controls`, then `*verify` REQ-UI-040, REQ-FN-051, 052 and 054. Not run on your app by us: TrStudio was read only today.
+
+## Resolution status (TechieFlow team, 2026-11-21)
+
+From `/mnt/c/1MyCode/TrStudio/docs/TrStudio-TechieFlow-Feedback.md`, read on 2026-11-21.
+
+**Not yet in TrStudio's `.tfcore`.** TrStudio was not touched: no file written, nothing run, no framework update (the owner's rule for this run). The fix reaches this project with the next `update-framework.sh`. Its case is in `tests/faults/n21-cases.sh` (run by `tests/faults/run.sh`); it fails on the scripts this project has and passes now, with a control half that shows a real finding is still reported.
+
+| ID | Fix | Case | Check it here |
+|---|---|---|---|
+| TF-011 | A drawn slider is matched to the app's range input; a box with no text, no icon and no badge class is not a missing badge. | `ts_011` | Video studio: no `missing` on `card-controls`; then verify REQ-UI-040, REQ-FN-051, 052, 054. |
+
+**The rules that changed, and which way each can move a finding** (mockup check only). (1) Slider: fewer findings, where a mockup draws a slider and the app draws one; a new `missing` finding only where the mockup draws more sliders under a box than the app does. (2) No text, no icon, no badge class: fewer `missing` findings, never more. Nothing else in the check changed.
+
+**The table** (`measure-projects.py --base deployed`: your scripts against this tree, read only), your row: rows whose verdict moves: not measured; tests a phase verify stops running: 0 of 42 stop; findings that appear or go: none; build list and next command: same. The mockup check changed, so a row with a screen reads "not measured" there: the saved records were written by the old check. **The mockup side was measured** by opening your 22 mockups with the old and the new measuring code (read only, 1280 wide): of 349 boxes the old check called a badge, 21 are now slider parts (image-studio, video-studio and voice-studio), 40 have no text, no icon and no badge class and can no longer be reported missing (13 mockups), and 30 textless ones keep their badge by their class. Whether a finding goes on a given screen depends on what the app draws there, which was not run.
 
 ## Resolution status (TechieFlow team, 2026-11-19)
 

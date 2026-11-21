@@ -134,7 +134,7 @@ flowchart LR
 
 ### 3.4 Build — flow-master
 
-**`*estimate-phase {App} [family repos]`** (added 2026-11-08, v1.3.0)
+**`*estimate-phase {App} [family repos]`** (added 2026-11-08)
 
 - Run before `*build-phase`, for the phase in progress.
 - Reads: the phase's checklist rows and this repo's own past run records (never reconstructed ones). Where the repo has fewer than three earlier runs of a kind, it also reads the other projects the owner names.
@@ -384,7 +384,7 @@ The report (`*metrics`) answers six questions.
 
 5. **Effort per phase.** For each command: elapsed time, tokens, model, sub-agent count. It shows what each stage costs and allows a cheap model to be compared with an expensive one on the same kind of work.
 
-6. **Estimate against actual** (added 2026-11-08, v1.3.0). For each phase that `*estimate-phase` estimated: the estimate's middle figure and its range for build, verify and fix, beside what the runs on that phase's rows actually used. The two stand in separate columns and are never turned into one number such as an accuracy percentage. Example from Sevak phase 3: the build was estimated at 466,000 output tokens (219,000 to 738,000) and used 525,000, inside the range; verify was estimated at 113,000 and used 496,000, because the phase was verified 40 times and the estimate counts one pass.
+6. **Estimate against actual** (added 2026-11-08). For each phase that `*estimate-phase` estimated: the estimate's middle figure and its range for build, verify and fix, beside what the runs on that phase's rows actually used. The two stand in separate columns and are never turned into one number such as an accuracy percentage. Example from Sevak phase 3: the build was estimated at 466,000 output tokens (219,000 to 738,000) and used 525,000, inside the range; verify was estimated at 113,000 and used 496,000, because the phase was verified 40 times and the estimate counts one pass.
 
 Dollar figures on a *record* exist only for OpenCode runs: Claude Code reports tokens and never a price, and no record ever stores a computed one. Converting tokens to money is the report's job, not the framework's, so `*metrics` prices every run at the published rate when it runs — a **list price**, never called a bill — and keeps three things apart that used to be one column: what a provider actually billed, what a monthly plan's allowance was consumed by, and what a flat fee had already paid for.
 

@@ -33,15 +33,16 @@ ch_045() {
 # fully rounded, filled, no text); the app draws two icons and TrBlazeUI's Switch, a button[role="switch"], which the
 # badge count leaves out as a toggle. The mockup's track was a badge the app "did not draw". A textless pill under a
 # parent where the app draws a switch the mockup does not is now that switch's track. The same page fails on every
-# version of the check since 11 Nov, so the 16 Nov change is not its cause. Controls: a bell's textless dot the app
-# leaves out is still missing, and so is the track when the app draws no switch at all.
+# version of the check since 11 Nov, so the 16 Nov change is not its cause. Control: a bell's textless dot of class
+# "dot" the app leaves out is still missing. Until 21 Nov the track was also missing when the app drew no switch at
+# all; since TrStudio TF-011 a box with no text, no icon and no badge class is not a badge, so it is not reported.
 tf_059() {
   [[ -n "$(_pw_dir)" ]] || { printf 'skipped: tf_059 — needs playwright\n'; return; }
   local d="$SCRATCH/tf059" out b='margin:0;font-family:sans-serif;background:#fff'
   local sv='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="4"/></svg>'
   local hd='display:flex;align-items:center;justify-content:space-between;height:56px;padding:0 16px;border-bottom:1px solid #e2e8f0'
   local trk='<span style="display:inline-block;width:36px;height:20px;border-radius:999px;background:#f1f5f9;border:1px solid #e2e8f0"></span>'
-  local dot='<span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#ef4444"></span>'
+  local dot='<span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#ef4444"></span>'
   local sw='<button type="button" role="switch" aria-checked="false" aria-label="Dark mode" style="width:36px;height:20px;border-radius:999px;background:#f1f5f9;border:1px solid #e2e8f0;padding:0"><span style="display:block;width:14px;height:14px;border-radius:999px;background:#0f172a;margin:2px"></span></button>'
   local m; m="$(_doc mockup "$b" "<header style=\"$hd\" data-testid=\"header\"><h1 data-testid=\"title\">Routing</h1><button data-testid=\"theme-toggle\" style=\"display:inline-flex;align-items:center;gap:8px;background:none;border:0\">$sv$trk</button><button data-testid=\"bell\" style=\"background:none;border:0\">$sv$dot</button></header><p data-testid=\"body\">Rows</p>")"
   _app() { _doc app "$b" "<header style=\"$hd\" data-testid=\"header\"><h1 data-testid=\"title\">Routing</h1><div data-testid=\"theme-toggle\" style=\"display:flex;align-items:center;gap:8px\">$sv$1</div><button data-testid=\"bell\" style=\"background:none;border:0\">$sv$2</button></header><p data-testid=\"body\">Rows</p>"; }
@@ -52,8 +53,8 @@ tf_059() {
     || bad tf_059a "the switch's track is still a missing badge: $(tr '\n' '|' <<<"$out" | cut -c1-300)"
   _fx "$d" routing "$m" "$(_app '' '')"
   out="$(_parity "$d" routing /routing/)"
-  grep -qE '^1280 bell > span\[0\] missing' <<<"$out" && grep -qE '^1280 theme-toggle > span\[0\] missing' <<<"$out" \
-    && ok tf_059b "a bell's textless dot the app leaves out, and a track where the app draws no switch, are still missing" \
+  grep -qE '^1280 bell > span\[0\] missing' <<<"$out" && ! grep -qE ' theme-toggle > span\[0\] missing' <<<"$out" \
+    && ok tf_059b "a bell's dot (class dot) the app leaves out is still missing; a track with no text and no badge class is not a badge (TrStudio TF-011)" \
     || bad tf_059b "a real missing pill was lost: $(tr '\n' '|' <<<"$out" | cut -c1-300)"
 }
 
@@ -205,7 +206,10 @@ lk_046c() {
   printf 'appPhase: 1\n' > "$d/.tfcore/core-config.yaml"
   printf '{"kind":"miss","miss_id":"MISS-Fx-20261118-49","req_id":"REQ-UI-163","req_class":"UI","miss_class":"wrong-behaviour","artifact":"src","severity":"major","found_by":"owner","app":"Fx","v":1,"ts":"2026-11-18T17:10:00Z"}\n' > "$M/misses.jsonl"
   printf '{"run_id":"x","rows":{"REQ-UI-163":"PASS"}}\n' > "$d/docs/.last-verify.json"
-  out="$(cd "$d" && bash "$UTILS/tf-fix-close.sh" Fx --reqs REQ-UI-163 --subagents builder --build pass --cmd build-phase 2>&1)"
+  # the scripts run from the fixture's own .tfcore, so the close reads the fixture's running-command mark (none), never
+  # the mark of a command running in this repository (MISS-TechieFlow-20261121-03)
+  cp -R "$UTILS" "$d/.tfcore/utils"; rm -rf "$d/.tfcore/.session"
+  out="$(cd "$d" && bash "$d/.tfcore/utils/tf-fix-close.sh" Fx --reqs REQ-UI-163 --subagents builder --build pass --cmd build-phase 2>&1)"
   [[ ! -s "$M/runs.jsonl" ]] && grep -q 'run record not written: no --started and no marker' <<<"$out" && grep -q '"verdict_after":"Verified"' "$M/misses.jsonl" \
     && ok lk_046c "a close with no start writes no run record without a start time, says so, and still writes the miss-fix" \
     || bad lk_046c "runs: $(head -c 200 "$M/runs.jsonl") // $(tr '\n' ' ' <<<"$out" | cut -c1-200)"

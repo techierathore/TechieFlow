@@ -15,6 +15,37 @@ not v1.3.2: besides the fixes it adds a flag and a mode (`*develop-end-to-end --
 phase), a settings key (`buildCopy:`) and an estimate method, nothing removed (Release Guide §1). The release notes
 to paste are `docs/TechieFlow-Release-Notes-v1.4.0.md`.
 
+- **Three Chatur faults, one AstroLyfe fault and a test case (2026-11-21, later; Windows). Deployed nowhere.**
+  Chatur TF-049 (`tf-menus.mjs`, MISS-TechieFlow-20261121-04): a tickable menu item that changed nothing the walk
+  could see is read again from the menu reopened; a tick that moved is "toggled its tick" and is put back. Case
+  `ch_049`. Chatur TF-050 (`tf-verify-tests.sh`, -05): `--no-build` goes to `dotnet test`; `--from-log <log>` only
+  parses a finished log (refused while it has no end-of-run line); the unit run first prints how to read its log if
+  the call is cut off; `verify-phase.md` step 3 says so. Case `ch_050`. Chatur TF-051 (`tf-dropdowns.mjs`, -06): a
+  dialog the dropdown walk opened and Escape left open (TrBlazeUI's Sheet) is closed by its Close button, then by a
+  click beside it on a spot with no control; one still open is named and that width's overlap is not measured. Case
+  `ch_051`. AstroLyfe TF-065 (`tf-theme.mjs`, one line each in `tf-verify-screens.mjs` and `tf-mockup-parity.mjs`,
+  -07): a page whose meta, `<html>` and `<body>` colour scheme still say light only once dark is put on has no dark
+  theme, in auto mode and under `--themes light,dark`. Case `as_065`. MISS-TechieFlow-20261121-03 closed: case
+  `lk_046c` runs the scripts from its fixture's own `.tfcore`, so a command running in this repository no longer
+  fails it. Every touched script at its size ceiling had comments shortened by as much as the code added.
+
+- **Two check faults and two document lines (2026-11-21; Windows). Deployed nowhere.**
+  TrStudio TF-011 (`tf-mockup-parity.mjs`, MISS-TechieFlow-20261121-01): a mockup's drawn slider (a textless box of
+  class `slider`, a range input, or a library's `role="slider"` handle and the textless box around it) is a slider
+  and nothing in it a badge; the two sides are matched by count under the same parent, and a slider the app does not
+  draw is a `missing` slider. A mockup box with no text, no icon and no class saying badge, pill, chip, tag or dot is
+  no longer reported as a missing badge; `tf_059`'s control half changed with it (its unnamed track is no longer
+  reported where the app draws no switch; its dot now carries class `dot`). Case `ts_011`. The script is at its size
+  ceiling, so comments were shortened by as much as the code added. TfLens TF-061 (`tf_signin.py`, new;
+  `tf-verify-verdict.py`, `tf-verify-emit.py`; MISS-TechieFlow-20261121-02): when `screens.json` says the sign-in
+  failed, a row whose screen was sent to the sign-in page or whose test failed waiting for an address is
+  `NOT-MEASURED`, keeps its Status and % exactly (a Verified row too, with or without an earlier PASS on record) and
+  gets no gate record and no miss; the same when no screen check signed in and a test stopped on the sign-in path.
+  Not covered on purpose: the Sign-in screen's own rows, and a test stopping on the sign-in path in a run whose screen
+  check did sign in. Case `tf_061` (three halves). Both cases are in `tests/faults/n21-cases.sh`. README "Watching a
+  long run": one line on `instanceIdleTimeout=-1` under `[general]` in `.wslconfig`. `docs/TechieFlow-How-It-Works.md`
+  no longer names a version in its two "added 2026-11-08" notes; `WorkFlow-Context.md` lost its two as well. Replies
+  are in this repository's copies of the TrStudio and TfLens feedback files only.
 - **Deployed (2026-11-20; Windows).** `update-framework.sh` on AstroLyfe, Chatur, Sevak, TfLens, TechieRag and Lekhak, then AppManager once its agent had
   finished (not TrStudio, which the Mac pulls); each `.tfcore` now matches this tree byte for byte. Earlier replies were
   already in every app; AstroLyfe got one new resolution section (the TF-062 follow-ups), by insertion only. Its stopped

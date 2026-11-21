@@ -13,7 +13,7 @@
 #                 result, whether YOLO was on
 # Run and gate records carry app_phase, the phase whose checklist was graded (list.json). A second pass
 # of one *verify --phase all starts where the first one's record ended (Sevak TF-005).
-# Rows the run could not grade (not tested, not observable, not driven) get no record. Telemetry
+# Rows the run could not grade (not tested, not observable, not driven, sign-in failed) get no record. Telemetry
 # never blocks: a refused record is printed and the script still exits 0.
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

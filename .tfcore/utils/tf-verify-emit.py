@@ -77,7 +77,7 @@ for r in runs:
 
 # the defects this pass will open a miss for (same tests as below), counted first for the discovery window
 def _would_open(row):
-    if not row.get("emit_gate") or not row["gate"]:
+    if not row.get("emit_gate") or not row["gate"] or row.get("verdict") == "NOT-MEASURED":
         return False
     c = ("regression" if (row["prior_verdict"] or "").lower().startswith("verified")
          else "standards-violation" if row["gate"] in ("standards", "test-users") else "partial-implementation")
@@ -86,7 +86,7 @@ def _would_open(row):
 n_new = sum(1 for r in v["rows"] if _would_open(r))
 gates = misses = 0
 for row in v["rows"]:
-    if not row.get("emit_gate"):
+    if not row.get("emit_gate") or row.get("verdict") == "NOT-MEASURED":
         continue
     rid = row["id"]
     att = q("--next-attempt", rid) or "1"
@@ -125,6 +125,9 @@ for row in v["rows"]:
         misses += 1
 
 touched = [r["id"] for r in v["rows"] if r.get("emit_gate")]
+nm = [r["id"] for r in v["rows"] if r.get("verdict") == "NOT-MEASURED"]   # the sign-in failed (TfLens TF-061)
+if nm:
+    print(f"  not measured, the sign-in failed: {len(nm)} row(s) get no gate record and no miss ({', '.join(nm[:8])}{' …' if len(nm) > 8 else ''})")
 rec = {"kind": "run", "app": app, "cmd": "verify-phase", "mode": mode, "yolo": yolo, "ended": now,
        "reqs_touched": touched, "reqs_count": len(touched), "subagents": [], "files_written": 2,
        "build_result": v.get("build_result", "not-run"), **json.loads(subprocess.run(["python3", os.path.join(os.path.dirname(EMIT), "tf-checks-model.py")], capture_output=True, text=True).stdout or "{}")}  # checks_provider/_model: Chatur TF-028

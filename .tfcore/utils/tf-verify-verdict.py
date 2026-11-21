@@ -38,7 +38,7 @@ status and get a Remark saying so; nothing is ever written as a static-only pass
 reads Verified keeps it only when an earlier PASS is on record (its Remark or the ledger), and its
 Remark names that date; otherwise it goes to Needs re-verify (Chatur TF-017). On a Mac web-view head
 a screen nothing could reach is not measured, never a render failure: Appium sees the web view's
-content as one empty element and cannot sign in (Chatur TF-015, TF-016; Sevak TF-014).
+content as one empty element and cannot sign in (Chatur TF-015, TF-016; Sevak TF-014). NOT-MEASURED: the run's sign-in failed, so a row behind it keeps its status, no record (TfLens TF-061).
 
 Writes docs/.last-verify.json (the ledger the verify hook reads: date, app, scope, booted, the checks
 that ran, and every row's verdict) and <dir>/verdicts.json (for tf-verify-emit.sh). With --apply it
@@ -55,6 +55,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import tf_defect  # noqa: E402
+import tf_signin  # noqa: E402
 import tf_stack_check  # noqa: E402
 FAILING = {"BUILD-FAIL": "build", "TEST-USERS-FAIL": "test-users", "FAIL": "acceptance", "RENDER-FAIL": "render", "ASSET-FAIL": "assets",
            "VISUAL-FAIL": "visual", "MOCKUP-FAIL": "mockup-parity", "PERF-FAIL": "perf"}
@@ -387,6 +388,10 @@ def main(argv):
         failed = [c for c in checks if c[1] and c[2]]
         first = failed[0] if failed else None
         verdict, cls, detail, evidence = (first[3], first[4], first[5], first[6]) if first else (None, None, "", "")
+        # the sign-in itself failed: a row behind it is not measured and keeps its status (tf_signin.py, TfLens TF-061)
+        no_signin = tf_signin.why(screens, r, scr, t) if verdict not in ("BUILD-FAIL", "TEST-USERS-FAIL") else ""
+        if no_signin:
+            verdict, cls, detail, evidence = "NOT-MEASURED", None, no_signin, ""
         # a Not Started row whose only failing check is its route answering 404 (the mockup comparison
         # cannot open it either, for the same reason) is not built yet; it is not a defect to re-verify,
         # so it keeps Not Started and emits no miss
@@ -450,9 +455,8 @@ def main(argv):
         kept = tf_defect.unseen(r.get("remarks"))
         if kept and verdict == "PASS":
             verdict = "DEFECT-OPEN"
-        # A Blocked row waits on something no test measures (an owner decision, a device, a library gap),
-        # so whatever this run found it keeps its Status, its % and its reason; the finding is appended to
-        # its Remark and no gate record or miss is written.
+        # A Blocked row waits on something no test measures (an owner decision, a device, a library gap), so whatever this
+        # run found it keeps its Status, its % and its reason; the finding is appended to its Remark, no gate record or miss.
         held_from = None
         if prior.strip("`* ").lower().startswith("blocked"):
             if verdict == "PASS":
@@ -464,7 +468,7 @@ def main(argv):
         pct = r.get("pct")
         # A row that did not PASS in this run keeps Verified only on an earlier PASS, named in the Remark
         # so the next run still finds it; without one it is re-verified.
-        if verdict != "PASS" and status.strip("`* ").lower().startswith("verified"):
+        if verdict not in ("PASS", "NOT-MEASURED") and status.strip("`* ").lower().startswith("verified"):
             when = earlier_pass(rid, r.get("remarks"))
             if when:
                 status = "Verified"
@@ -480,7 +484,7 @@ def main(argv):
         gate = FAILING.get(verdict)
         marks = {"FAIL": "⚠ acceptance", "BUILD-FAIL": "⚠ build", "TEST-USERS-FAIL": "⚠ test-users", "RENDER-FAIL": "⚠ render", "ASSET-FAIL": "⚠ assets",
                  "VISUAL-FAIL": "⚠ visual", "MOCKUP-FAIL": "⚠ mockup-parity", "PERF-FAIL": "⚠ perf",
-                 "NOT-TESTED": "not measured", "NOT-OBSERVABLE": "not observable", "NOT-DRIVEN": "not measured", "PASS": "PASS",
+                 "NOT-TESTED": "not measured", "NOT-OBSERVABLE": "not observable", "NOT-DRIVEN": "not measured", "NOT-MEASURED": "not measured", "PASS": "PASS",
                  "NOT-BUILT": "not built", "BLOCKED-HELD": "tests pass, still Blocked",
                  "DEFECT-OPEN": "checks pass, defect open"}
         remark = f"{today} verify: {marks[verdict]} — {detail}"

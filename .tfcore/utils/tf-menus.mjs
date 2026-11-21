@@ -9,8 +9,8 @@
 //     is the state the app is in, no file open, and is only noted in the JSON);
 //   - placeholder text ("Nothing to do yet", "Coming soon", "Not built yet", "TODO", and any
 //     --placeholder-text a project adds) the mockup does not itself draw;
-//   - an enabled item that does nothing when clicked: no address, window, dialog, zoom, text or theme
-//     changed. A choice that is already the state (Light, in a light app) is clicked again after a
+//   - an enabled item that does nothing when clicked: no address, window, dialog, zoom, text, theme or
+//     own tick (Chatur TF-049) changed. A choice that is already the state (Light, in a light app) is clicked again after a
 //     sibling has moved the state, and the theme the walk changed is put back (Sevak TF-006).
 // A one-of choice the walk moved (the branch checked out) is chosen back to the item ticked at the start (Chatur TF-025).
 // So is a submenu row the page showed outside the menus at the start, the open project (Chatur TF-026).
@@ -80,7 +80,7 @@ const APP_ITEMS = ({ popupId, attr, controls }) => {
   // the popup by its name when the app carries it; any open menu only when it does not (the walk closes
   // every menu before it opens one, so an open one is the one just opened)
   let box = popupId ? document.querySelector(`[${attr}="${CSS.escape(popupId)}"]`) : null;
-  // a popover opened by an aria-haspopup trigger is no menu: it is the box the trigger's aria-controls names
+  // a popover an aria-haspopup trigger opens is the box its aria-controls names, not a menu
   if ((!box || !vis(box)) && controls) { const c = document.getElementById(controls); if (c && vis(c)) { box = c; c.setAttribute('data-tf-walk-popup', ''); } }
   if (!box) box = [...document.querySelectorAll('[role="menu"], [role="listbox"]')].filter(vis).pop() || null;
   if (!box || !vis(box)) return null;
@@ -213,7 +213,7 @@ export async function walkMenus(page, mockMenus, o = {}) {
   const settle = o.settle ?? 1200;
   const pr = placeholderRe(o.placeholders || []);
   const noClick = [...NO_CLICK, ...(o.noClick || [])].map((x) => norm(x));
-  // the reason a row was not clicked: the built-in list ends the session or deletes; --no-click is the caller's
+  // why a row was not clicked: the built-in list ends the session or deletes; --no-click is the caller's
   const askedNot = (o.noClick || []).map((x) => norm(x));
   const skipWhy = (label) => (askedNot.some((n) => norm(label) === n || norm(label).startsWith(n + ' ')) ? 'not clicked (--no-click)' : 'not clicked (ends the session or deletes)');
   const pagesNow = o.pages || (async () => page.context().pages());
@@ -221,7 +221,7 @@ export async function walkMenus(page, mockMenus, o = {}) {
   const targetsNow = async () => { try { const x = await page.context().browser().newBrowserCDPSession(); const r = await x.send('Target.getTargets');
     x.detach().catch(() => {}); return r.targetInfos.filter((t) => t.type === 'page').map((t) => t.targetId); } catch (e) { return null; } };
   const findings = [], clicks = [], menus = [];
-  // o.mockText: the mockup's own text, so a placeholder the design itself draws is not held against the app
+  // o.mockText: the mockup's text, so a placeholder the design draws is not held against the app
   const placeholderIn = (t) => pr.find((re) => re.test(t) && !re.test(o.mockText || ''));
   const says = (m) => m.trigger_text || m.trigger || m.popup || 'a menu';
 
@@ -369,7 +369,7 @@ export async function walkMenus(page, mockMenus, o = {}) {
         if (opened) {
           c.effect = 'opened its submenu';
           c.submenu = [];
-          // the menu, the submenu row, then the child, from a freshly opened menu: null, menu gone; false, child gone
+          // menu, submenu row, then child, from a fresh menu: null, menu gone; false, child gone
           const toChild = async (label) => {
             const row2 = (await open(m)).items && await current(m, item.label);
             if (!row2) return null;
@@ -455,11 +455,12 @@ export async function walkMenus(page, mockMenus, o = {}) {
       c.ids_before = before ? before.ids : [];
       c.effect = c.error ? 'could not be clicked' : newPages.length ? 'opened a window' : events.length ? events.join(', ') : effectOf(before, after);
       if (c.error) findings.push({ class: 'menu', popup: m.popup, detail: `"${name} › ${item.label}" could not be clicked (${c.error.slice(0, 80)})` });
-      // put the app back: a new window closed (a web tab only; a desktop head's window is the owner's),
-      // a dialog dismissed, a toggled item toggled back, the screen reopened when the address moved
+      // put back: a web tab closed (a desktop window is the owner's), a dialog shut, a toggle undone, the screen reopened
       if (!o.keepWindows) for (const np of newPages) await np.close().catch(() => {});
       await page.keyboard.press('Escape').catch(() => {});   // a dialog the item opened
       await shut(m);
+      // Chatur TF-049: a tick shown only in the menu the click shut, read from it reopened
+      if (item.checkbox && c.effect === 'nothing') { const t = (await open(m)).items && await current(m, item.label); if (t && t.checked !== fresh.checked) c.effect = 'toggled its tick'; await shut(m); }
       if (item.checkbox && c.effect !== 'nothing') {
         const back = await open(m);
         const b = back.items && await current(m, item.label);
@@ -469,12 +470,12 @@ export async function walkMenus(page, mockMenus, o = {}) {
       const now = await page.evaluate(SIGNATURE, MENU_SEL).catch(() => null);
       if (o.back && (!now || !before || now.url !== before.url || now.dialogs > before.dialogs)) await o.back();
     }
-    // a choice that was already the state (Light in a light app) shows nothing: when a sibling moved the
+    // a choice already the state (Light in a light app) shows nothing: when a sibling moved the
     // theme or the page in place, that sibling is clicked first and the choice looked at again
     const donor = mine.find((x) => !x.item.checkbox && /^changed the (theme|page)$/.test(x.c.effect || ''));
     for (const { c, item } of mine) {
       if (c.effect !== 'nothing') continue;
-      // ticked: it is the state already (the branch checked out), and choosing it again has nothing to do
+      // ticked: it is the state already (the branch checked out); choosing it again does nothing
       if (item.checked) { c.effect = 'already the state (ticked)'; continue; }
       if (donor && donor.item.label !== item.label && !/^menu did not reopen/.test(await press(m, donor.item.label))) {
         const second = await press(m, item.label);
@@ -482,8 +483,7 @@ export async function walkMenus(page, mockMenus, o = {}) {
       }
       findings.push({ class: 'menu', popup: m.popup, detail: `"${name} › ${item.label}" does nothing when clicked` });
     }
-    // Chatur TF-025: a one-of choice put back as the walk found it (the branch checked out): when the menu
-    // opened with one ticked item and a click on another took effect, the item ticked at the start is chosen again.
+    // Chatur TF-025 (header): the item ticked at the start is chosen again once another one took effect
     const ticked0 = got.items.filter((x) => x.checked && !x.checkbox && !x.sub);
     if (ticked0.length === 1 && mine.some(({ c, item }) => item.label !== ticked0[0].label && !item.checkbox && c.effect
         && !/^(nothing|disabled|not clicked|menu did not reopen|already the state|could not be clicked|opened its submenu)/.test(c.effect))) {

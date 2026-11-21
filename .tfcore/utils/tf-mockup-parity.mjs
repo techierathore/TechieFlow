@@ -1,14 +1,9 @@
-// TechieFlow — mockup-parity gate. Feeds verify-phase §4b2.
-//
-// Driven by tf-mockup-parity.sh; run that, not this.
+// TechieFlow — mockup-parity gate. Feeds verify-phase §4b2. Driven by tf-mockup-parity.sh; run that, not this.
 //
 // WHAT IT ASKS: "does the built screen carry the structure its approved mockup draws?", at the same
 // viewports, by named structural classes, never pixels (a pixel diff on live data is unusable).
 // Every clause is a measurement compared by code; no model reads either page.
-//
-// Built around TfLens TF-008/009/011/012: a gate reports on what it reaches, and reaching nothing is never a pass
-// (the stroke clause; the structural walker, coverage and UNGRADEABLE; isHidden for screen-reader-only text).
-//
+// Built around TfLens TF-008/009/011/012: a gate reports on what it reaches; reaching nothing is never a pass.
 // It produces FINDINGS and a per-screen verdict; verify-phase §4b2 decides what it means for a REQ.
 
 import { chromium } from 'playwright';
@@ -36,10 +31,9 @@ const WIDTHS = (arg('--widths', '1280,390') || '').split(',').map((w) => parseIn
 const JSON_OUT = arg('--json-out');
 const COOKIE = arg('--cookie');
 // A sign-in the page keeps for itself sets no cookie, so --cookie cannot reach such screens. The same
-// --login-path, --user, --password and --storage-state tf-verify-screens takes, through the shared
-// recipe in tf-login.mjs.
-// A sign-in the command line does not name comes from tests/verify/testsettings(.Local).json
-// (Verify:Login:Path / User / Password, or Verify:Login:TestUser naming a Test users number).
+// --login-path, --user, --password and --storage-state tf-verify-screens takes (tf-login.mjs). One the
+// command line does not name comes from tests/verify/testsettings(.Local).json (Verify:Login:Path / User /
+// Password, or Verify:Login:TestUser naming a Test users number).
 const TS = await import('./tf-testsettings.mjs').catch(() => null);
 const fromSettings = (k) => (TS ? TS.setting(k) : '') || null;
 const LOGIN_PATH = arg('--login-path') || fromSettings('Verify:Login:Path');
@@ -57,11 +51,10 @@ for (let i = 0; i < argv.length; i++) {
     SCREENS.push({ name: name.trim(), route: rest.join('=').trim() || '/' + name.trim() });
   }
 }
-// Where each screen's mockup is. --list names the list.json tf-verify-list.sh wrote,
-// which holds the path it resolved per screen (docs/mockups/admin/prompt-manager.html); a --screen is
-// matched to a listed screen by its mockup's stem or its name, and with no --screen every listed screen
-// that has a mockup and a route without a {value} is driven. Without a list, a mockup missing at the top
-// of --mockups is looked for in its subfolders, and used when exactly one file has that name.
+// Where each screen's mockup is. --list names the list.json tf-verify-list.sh wrote, which holds the path
+// it resolved per screen (docs/mockups/admin/prompt-manager.html); a --screen is matched to a listed screen
+// by its mockup's stem or its name, and with no --screen every listed screen with a mockup and a route without
+// a {value} is driven. Without a list, a mockup missing at the top of --mockups is used from a subfolder when one file has that name.
 const MOCK_OF = {};
 const LIST = arg('--list');
 const PHASE = gradedPhase(arg('--phase'), LIST);   // which data-tf-phase marks are still ahead
@@ -106,12 +99,10 @@ const findMockup = (name) => {
 const THIN_RATIO = 0.25;
 // --keep-app-theme compares the app in the theme it is showing, not the mockup's
 const KEEP_APP_THEME = flag('--keep-app-theme');
-// A screen is compared in the mockup's own theme and then in the other one. --themes
-// light,dark runs both; light or dark alone runs only that one; auto (the default) runs the other one
-// once the app shows it has it (what it paints changes when that theme is put on it). In the other
-// theme the mockup is drawn in it too; when the mockup does not change under it (no dark styles in the
-// mockup), the app is compared with the mockup as drawn and colour is left out, since the mockup says
-// nothing about it; every other class is compared.
+// A screen is compared in the mockup's own theme and then in the other one. --themes light,dark runs
+// both; light or dark alone only that one; auto (the default) runs the other once the app shows it has it
+// (what it paints changes under that theme). The mockup is drawn in the other theme too; when it does not
+// change under it (no dark styles), the app is compared with the mockup as drawn, colour left out.
 const THEMES = parseThemes(arg('--themes', 'auto'));
 const wantTheme = (t) => !THEMES || THEMES.includes(t);
 let otherSeen = false;    // auto: has any screen shown the other theme yet?
@@ -131,9 +122,8 @@ if ((!BASE && !CDP) || SCREENS.length === 0) {
 
 // ------------------------------------------------------------ page-side probe
 // Runs INSIDE the browser on both sides, as one evaluate() call (two passes can disagree after a re-layout),
-// and returns one flat index keyed by a stable path key.
-// `wanted` names the texts of the mockup's badges, so the app's side can find each one at whatever
-// depth the app drew it; the mockup's own probe is called without it.
+// and returns one flat index keyed by a stable path key. `wanted` names the texts of the mockup's badges, so
+// the app's side finds each at whatever depth the app drew it; the mockup's own probe is called without it.
 const PROBE = (wanted = []) => {
   const MAX_DEPTH = 4;        // descend this far below an anchor
   const MAX_PER_ANCHOR = 60;  // and no further; a huge subtree is noise, not signal
@@ -223,11 +213,10 @@ const PROBE = (wanted = []) => {
   };
 
   // The border STYLE says "provisional / inactive": quantised to none, dashed and solid.
-  // A checkbox, switch or radio is not compared by its border (a native one computes none, a
-  // library's draws one), nor by its fill, tick or pill shape: the browser paints a native one itself,
-  // a library draws it with CSS and an <svg>. What is drawn inside a toggle is no icon or badge of the
-  // boxes around it. The checked state is not compared: the tick follows the app's data. A toggle the
-  // app does not draw, or draws with no size, is the screen check's finding.
+  // A checkbox, switch or radio is not compared by its border (a native one computes none, a library's
+  // draws one), nor by its fill, tick or pill shape: the browser paints a native one, a library draws it
+  // with CSS and an <svg>. What is drawn inside a toggle is no icon or badge of the boxes around it. The
+  // checked state follows the app's data. A toggle the app does not draw, or with no size, is the screen check's finding.
   const TOGGLE = 'input[type="checkbox"],input[type="radio"],[role="checkbox"],[role="switch"],[role="radio"]';
   // A picker (select, combobox, date box) is not compared by its arrow or calendar, which a browser
   // paints and a library draws as an <svg>: on neither side is it an icon of any box (TF-025, TF-027).
@@ -279,9 +268,13 @@ const PROBE = (wanted = []) => {
   // a progress bar's fill is no badge: a box with no text in a progress bar, or as tall as a track that clips it (Sevak TF-041)
   const barFill = (el, r, p = el.parentElement) => el instanceof HTMLElement && !el.children.length && !el.textContent.trim() && (!!el.closest('[role="progressbar"],progress,meter')
     || (!!p && getComputedStyle(p).overflow !== 'visible' && Math.abs(p.getBoundingClientRect().height - r.height) < 1));
+  // A slider: a range input, a role="slider" handle or the textless box around it, or a textless box of class
+  // "slider" (a mockup's). Nothing in one is a badge; matched by count under a parent (TrStudio TF-011).
+  const sld = (x) => x.matches('input[type="range"]') || (!x.textContent.trim() && (/slider/i.test(x.getAttribute('class') || '') || x.matches('[role="slider"]') || !!x.querySelector('[role="slider"]')));
+  const sldAll = [...document.querySelectorAll('body *')].filter(sld), sldRoots = sldAll.filter((x) => !sldAll.some((y) => y !== x && y.contains(x)));
   const chromeOn = (el) => {
     const r = el.getBoundingClientRect();
-    if (r.height > 44 || r.height < 6 || barFill(el, r)) return null;    // a card is not a badge
+    if (r.height > 44 || r.height < 6 || barFill(el, r) || sldRoots.some((t) => t.contains(el))) return null;  // a card is not a badge
     const cs = getComputedStyle(el);
     const radius = parseFloat(cs.borderTopLeftRadius) || 0;
     const fill = fillOf(cs, el), filled = !!fill;
@@ -292,12 +285,10 @@ const PROBE = (wanted = []) => {
       radius: Math.round(radius), h: Math.round(r.height), fill: fill ? `rgb(${fill.r},${fill.g},${fill.b})` : null };
   };
 
-  // The treatment one element away. A component library draws the ring and the radius on
-  // the box AROUND the control the mockup styles (an InputGroup around a filter input, a nav <li>
-  // around the active link), and a mockup does the reverse. The element's neighbours
-  // one step away are kept here — the parent when it is the same row (same height, its other
-  // children carrying no text: an icon, or the box a library wraps one in) and the only child when
-  // it is — so a clause can accept the treatment there.
+  // The treatment one element away. A library draws the ring and the radius on the box AROUND the control
+  // the mockup styles (an InputGroup around a filter input, a nav <li> around the active link), and a mockup
+  // does the reverse. The neighbours one step away are kept: the parent when it is the same row (same height,
+  // its other children carrying no text) and the only child when it is, so a clause can accept the treatment there.
   const nearOf = (el) => {
     const out = [];
     const h = el.getBoundingClientRect().height;
@@ -352,14 +343,12 @@ const PROBE = (wanted = []) => {
     return { fits: w <= avail + 1, token: longest.slice(0, 24) };
   };
 
-  // scrollWidth includes the phantom extent of an sr-only descendant, so the ancestor
-  // is measured from the right edge of its VISIBLE descendants instead whenever a
-  // hidden one is present.
-  // A descendant inside a scroller is painted only as far as that scroller's edge, so its own box
-  // must be cut by every ancestor that clips before it can count as the card overflowing: a table
-  // scrolling inside its wrapper is not a card cut off. The same rectangle tf-verify-screens measures.
-  // The cut stops BELOW `stop`: the element being measured must not cut its own content, or a card
-  // that really clips would read as holding everything.
+  // scrollWidth includes the phantom extent of an sr-only descendant, so the ancestor is measured from
+  // the right edge of its VISIBLE descendants whenever a hidden one is present.
+  // A descendant inside a scroller is painted only as far as that scroller's edge, so its box is cut by
+  // every ancestor that clips before it counts as the card overflowing: a table scrolling inside its
+  // wrapper is not a card cut off (the rectangle tf-verify-screens measures). The cut stops BELOW `stop`:
+  // the element measured must not cut its own content, or a card that really clips would read as whole.
   const paintedRight = (c, stop) => {
     const r = c.getBoundingClientRect();
     let x1 = r.left, x2 = r.right;
@@ -439,11 +428,12 @@ const PROBE = (wanted = []) => {
       // badges drawn anywhere inside, so a badge one wrapper deeper still counts under its parent
       badges: own(el, '*').filter((c) => !isHidden(c) && !c.closest(TOGGLE) && chromeOn(c)?.badge).length,
       toggles: own(el, TOGGLE).filter((c) => !isHidden(c)).length,
+      slider: sldRoots.includes(el), sliders: sldRoots.filter((t) => t !== el && el.contains(t) && !isHidden(t)).length,
+      named: /\b(badge|pill|chip|tag|dot)/i.test(el.getAttribute('class') || ''),
       toggle: el.matches(TOGGLE),   // its icon, colour and badge clauses are not applicable
       select: el.matches(SELECT),   // its icon clause is not applicable
       // a picker, or a box whose one control is one; a trigger, a button or a box with one (Chatur TF-027)
-      // the controls counted are the box's own: not those in another state (a mockup's open list, Chatur
-      // TF-030: a popwrap holding its trigger and a data-tf-state list of three option buttons), nor aria-hidden ones
+      // the controls counted are the box's own: not those in another state (a mockup's open list, Chatur TF-030), nor aria-hidden ones
       pick: el.matches(PICK) || (ctls(el).length === 1 && !!el.querySelector(PICK)),
       trig: el.matches(BTN) || ctls(el, BTN).length === 1,
       date: el.matches(DATE),       // nor here; and the app side's icons are no one's (diff)
@@ -461,9 +451,8 @@ const PROBE = (wanted = []) => {
   };
 
   // --- the walker: any anchored subtree by a structural path key; keys pair only when both sides make them.
-  // A box the mockup marks as another state of the screen (data-tf-state="<state>", or
-  // data-state-testid="<id>") is not on the first view, so it is neither walked nor counted when its
-  // siblings are numbered: counted, it would move every row below it one place.
+  // A box the mockup marks as another state of the screen (data-tf-state="<state>", or data-state-testid="<id>")
+  // is not on the first view: neither walked nor counted when its siblings are numbered, or every row below it would move one place.
   const stateOnly = (el) => el.matches(STATE);
   const keyOf = (el, parentKey) => {
     const tag = el.tagName.toLowerCase();
@@ -526,13 +515,11 @@ const PROBE = (wanted = []) => {
   }
 
   const de = document.documentElement;
-  // the shell's content scroll container, when it has one: a box that scrolls inside itself, no
-  // taller than the viewport (a table wrapper that grows with its rows is not one), at least 60% of
-  // its width and half its height, and across the viewport's centre (a side menu, or a drawer parked
-  // off screen, is not one). Without one the document is the app's scroller.
-  // A box that only scrolls sideways is not one either: `overflow-x: auto` alone makes the browser
-  // compute overflow-y as auto too (Bootstrap's .table-responsive). Skipped: a box whose only child
-  // is a table, and a box wider inside than out whose height fits its content.
+  // the shell's content scroll container, when it has one: a box that scrolls inside itself, no taller than
+  // the viewport (not a table wrapper growing with its rows), at least 60% of its width and half its height,
+  // across the viewport's centre (not a side menu or a parked drawer). Without one the document scrolls.
+  // Not one either: a box that only scrolls sideways (`overflow-x: auto` alone computes overflow-y auto too,
+  // Bootstrap's .table-responsive): a box whose only child is a table, or wider inside than out with a fitting height.
   const scroller = [...document.querySelectorAll('body *')].find((el) => {
     const o = getComputedStyle(el).overflowY;
     if (o !== 'auto' && o !== 'scroll') return false;
@@ -640,11 +627,10 @@ const SAMPLE_SKIP = new Set(['color', 'badge', 'wrap', 'token']);
 const CONTENT_CLAUSES = new Set(['badge', 'icon', 'wrap', 'token']);
 
 function diff(mock, app, screen, width, skip = null) {
-  // --- Sample data the app is not showing. A mockup draws a list full of sample rows
-  // and a fresh app has none. A box the mockup marks
-  // data-tf-sample is compared when the app draws something at its place; when it draws nothing
-  // there, the box and everything in it are "not measured", and its icons and badges are taken off
-  // the boxes around it. A seed script (tests/verify/seed/) puts the app in the drawn state instead.
+  // --- Sample data the app is not showing. A mockup draws a list full of sample rows and a fresh app has
+  // none. A box the mockup marks data-tf-sample is compared when the app draws something at its place; when
+  // it draws nothing, the box and all in it are "not measured", and its icons and badges are taken off the
+  // boxes around it. A seed script (tests/verify/seed/) puts the app in the drawn state instead.
   const notMeasured = [];
   const mockAll = mock.index;   // before anything is dropped
   // the mockup's sample rows that carry their own anchor (commit-row-N), read before any is dropped
@@ -684,10 +670,9 @@ function diff(mock, app, screen, width, skip = null) {
     mock = { ...mock, index: dropRows(mock.index, (id) => sampleRows.has(id)) };
     app = { ...app, index: dropRows(app.index, (id) => sampleRows.has(id) || (!(id in mock.index) && sampleShapes.has(fold(id)))) };
   }
-  // --- The app's rows in the place of sample rows not measured. The app's rows in that place — the
-  // children and anchors of the box holding the sample rows that the mockup does not have — are left
-  // out of every box around them, as the sample rows are on the mockup's side, anchors around the list
-  // included.
+  // --- The app's rows in the place of sample rows not measured: the children and anchors of the box holding
+  // the sample rows that the mockup does not have are left out of every box around them, as the sample rows
+  // are on the mockup's side, anchors around the list included.
   // A row's icons come off the boxes AROUND it only: an element above it that holds all of them. A
   // button inside the row keeps its own icon, or it reads as one the mockup does not carry.
   const appAll = app.index;
@@ -696,10 +681,9 @@ function diff(mock, app, screen, width, skip = null) {
     return new Set(rows.filter((r) => (s.depth ?? 0) < r.depth && r.ids.every((i) => had.has(i))).flatMap((r) => r.ids));
   };
   const inPlace = [];
-  // The app's rows in that place are what the mockup does not have under the same box and of the
-  // same kind as the sample row (a tbody for a tbody, an <a> for an <a>), the outermost of them; only
-  // when there is none of that kind, every child of the box the mockup does not have. A heading or a
-  // toolbar of the box's own is not a row.
+  // The app's rows in that place are what the mockup does not have under the same box, of the same kind as
+  // the sample row (a tbody for a tbody, an <a> for an <a>), the outermost of them; only when there is none of
+  // that kind, every child of the box the mockup does not have. A heading or toolbar of the box's own is not a row.
   const takeRows = (box, tag) => {
     const a = appAll[box];
     if (!a) return;
@@ -745,16 +729,14 @@ function diff(mock, app, screen, width, skip = null) {
   clauseCoverage.missing = 0;
   let compared = 0, contentGraded = 0, relocated = 0;
   const iconsShort = {};   // parent key -> icons the app still owes under it
-  const badgesShort = {}, tracks = {};  // parent key -> badges the app still owes under it; switches standing for one
+  const badgesShort = {}, tracks = {}, sldShort = {};  // parent key -> badges, sliders the app still owes; switches standing for one
   const usedApp = new Set();
   const iconSeen = [];     // icon findings with the side that holds the icons
 
-  // --- The same icon in another child. Pairing is by position, so a card header that a
-  // library wraps in one more <div> pairs the mockup's description with the app's toolbar, while
-  // the header holds exactly one icon on both sides. The rule the `missing` clause follows, one
-  // wrapper further: an icon finding is dropped when the parent or the grandparent is paired and carries the same
-  // number of icons on both sides. Bounded to a few icons, so a coincidence across a whole page
-  // (one lost, one added) stays reported.
+  // --- The same icon in another child. Pairing is by position, so a card header a library wraps in one
+  // more <div> pairs the mockup's description with the app's toolbar, while the header holds one icon on
+  // both sides. An icon finding is dropped when the parent or the grandparent is paired and carries the same
+  // number of icons on both sides: at most 4, so a coincidence across a page (one lost, one added) is reported.
   const iconMoved = (key) => {
     let k = key;
     for (let up = 0; up < 2; up++) {
@@ -788,21 +770,23 @@ function diff(mock, app, screen, width, skip = null) {
       if (pick) { a = pick; appKey = pick.key; usedApp.add(pick.key); relocated++; }
     }
 
-    // --- the `missing` clause. Key-pairing alone cannot see an element that is
-    // NOT THERE: a missing element has no signature to compare, so it needs its own clause.
-    //
-    // Deliberately narrow: only a mockup element that is CHROME (a badge/pill) or
-    // CARRIES AN ICON is reported when absent, and only when its parent paired. An
-    // unrestricted "the DOM shapes differ" report would fire on every incidental
-    // wrapper div, and a finding that is always present trains a reader to skim the report.
+    // --- the `missing` clause: an element that is NOT THERE has no signature to compare.
+    // Narrow: only a mockup badge/pill, slider or icon is reported absent, and only when its parent
+    // paired; "the DOM shapes differ" would fire on every incidental wrapper div.
     if (!a) {
       if (inSample && m.badge === true) continue;   // a sample badge reading otherwise in the app is its data
       const parentKey = key.includes(' > ') ? key.slice(0, key.lastIndexOf(' > ')) : null;
       const parentPaired = parentKey ? !!app.index[parentKey] : false;
-      // an icon is missing only when the paired parent carries fewer icons than the mockup's
-      // does. Pairing is by position, so an icon the app draws one wrapper deeper sits under
-      // another key.
-      // and no more reports under one parent than it is icons short
+      if (m.slider) {   // missing only while the paired parent holds fewer
+        if (parentPaired && (sldShort[parentKey] ??= Math.max(0, (mock.index[parentKey]?.sliders ?? 0) - (app.index[parentKey].sliders ?? 0))) > 0) {
+          sldShort[parentKey]--; clauseCoverage.missing++; contentGraded++;
+          findings.push({ screen, width, class: 'missing', key, detail: 'the mockup draws a slider here; the app draws no range input under this parent', mockup_text: '', app_text: null });
+        }
+        continue;
+      }
+      if (m.badge === true && !m.text && !m.icon && !m.named) continue;   // no text, icon or badge class
+      // an icon is missing only when the paired parent carries fewer icons than the mockup's (one
+      // wrapper deeper it sits under another key), and no more reports than it is icons short
       if (m.icon === true && parentPaired && mock.index[parentKey] && !(parentKey in iconsShort)) {
         iconsShort[parentKey] = Math.max(0, (mock.index[parentKey].icons ?? 0) - (app.index[parentKey].icons ?? 0));
       }
@@ -859,10 +843,9 @@ function diff(mock, app, screen, width, skip = null) {
     }
   }
 
-  // --- One icon, one finding. "Is there an icon inside?" is true of the element that carries
-  // the icon and of every element above it. A finding is
-  // dropped when every icon it holds is already reported on a deeper element, on the side that has
-  // the icons; a container holding an extra icon of its own is still reported.
+  // --- One icon, one finding. "Is there an icon inside?" is true of the element that carries the icon and
+  // of every element above it. A finding is dropped when every icon it holds is already reported on a deeper
+  // element, on the side that has the icons; a container holding an extra icon of its own is still reported.
   const repeat = new Set();
   for (const x of iconSeen) {
     const ids = x.side.icon_ids || [];
@@ -966,11 +949,10 @@ for (const s of SCREENS) {
       if (ld.loading) { perWidth.push({ width, not_drawing: true, error: `not measured: ${ld.why}` }); continue; }
       if (await laterReached(mockPage, page)) mock = await mockPage.evaluate(PROBE);   // TF-003
       wanted = [...new Set(Object.values(mock.index).filter((x) => x.badge === true && x.text).map((x) => x.text))];
-      // The app is drawn in the mockup's theme for the comparison, not in the viewer's saved one.
-      // The mockup's theme attributes on <html> and <body> are copied onto the app page
-      // and the app's own are put back afterwards, so an attached app is left as the viewer had it.
-      // A light/dark class on <html> or <body> is carried the same way, or a class-driven
-      // dark mode (class="dark") keeps its dark colours under the mockup's light data-theme.
+      // The app is drawn in the mockup's theme for the comparison, not in the viewer's saved one: the
+      // mockup's theme attributes on <html> and <body> are copied onto the app page and the app's own put
+      // back afterwards (an attached app is left as the viewer had it). A light/dark class is carried the same
+      // way, or a class-driven dark mode (class="dark") keeps its dark colours under the mockup's light data-theme.
       const mockRead = KEEP_APP_THEME ? null : await mockPage.evaluate(READ_THEME);
       mockTheme = DECLARES_THEME(mockRead) ? mockRead : null;
       // The mockup's own theme: what it declares, or, declaring none, what it paints. A mockup
@@ -986,10 +968,8 @@ for (const s of SCREENS) {
       try { app = await page.evaluate(PROBE, wanted); ownSurface = await surface(page); }
       finally { if (putBack) await putBack(); }
 
-      // Document height: a document taller than its viewport means the page has escaped the
-      // shell's scroll container. Cheap, no false positives in a shell-scrolled app.
-      // Only when the shell has a content scroll container: an app whose document is its only
-      // scroller (a long report page) has escaped nothing.
+      // Document height: a document taller than its viewport has escaped the shell's scroll container.
+      // Only when the shell has one: an app whose document is its only scroller (a long report page) has escaped nothing.
       if (app.doc.scroller && app.doc.scrollHeight > app.doc.clientHeight + 2) {
         docFindings.push({
           screen: s.name, width, class: 'document-scroll', key: 'document',
@@ -1023,11 +1003,10 @@ for (const s of SCREENS) {
       }
       backApp = await useTheme(page, other);
       backMock = await useTheme(mockPage, other, 0);
-      if (!THEMES && !otherSeen && !differs(ownSurface, await surface(page))) { notOffered.add(other); continue; }
+      if (backApp.lightOnly || !THEMES && !otherSeen && !differs(ownSurface, await surface(page))) { notOffered.add(other); continue; }
       otherSeen = true;
-      // A mockup that does not change under the other theme does not draw it: forcing it there only
-      // strips the styles it keys on its own theme (a badge losing its fill). The app in the other theme
-      // is then compared with the mockup as drawn, colour left out.
+      // A mockup the other theme does not change does not draw it: forcing it only strips the styles it
+      // keys on its own theme (a badge losing its fill). The app is compared with it as drawn, colour left out.
       const mockDraws = differs(mockSurface, await surface(mockPage));
       if (!mockDraws) { await backMock(); backMock = null; }
       const mockO = mockDraws ? await mockPage.evaluate(PROBE) : mock;
@@ -1053,11 +1032,10 @@ for (const s of SCREENS) {
   const appAnchors = Math.max(0, ...ok.map((w) => w.appAnchors || 0));
   const mockAnchors = Math.max(0, ...ok.map((w) => w.mockAnchors || 0));
 
-  // --- The central rule. A PASS must mean the screen was GRADED: a screen where no clause that
-  // reaches inside a container fired is UNGRADEABLE, never PASS (comparisons that could have produced
-  // a finding, not an anchor ratio). UNGRADEABLE is NOT-OBSERVABLE and never licenses `Verified`, as
-  // PERF-UNMEASURED does not. A finding outranks the absence of evidence, so FAIL beats UNGRADEABLE,
-  // and `coverage.ungradeable` stays true either way so the report can say both.
+  // --- The central rule. A PASS must mean the screen was GRADED: a screen where no clause that reaches
+  // inside a container fired is UNGRADEABLE, never PASS (comparisons that could have produced a finding,
+  // not an anchor ratio), and never licenses `Verified`. A finding outranks the absence of evidence, so
+  // FAIL beats UNGRADEABLE, and `coverage.ungradeable` stays true either way so the report can say both.
   const ungradeable = contentGraded === 0;
   // A width or theme pass that threw was not compared, so it cannot be part of a PASS.
   const failedPasses = perWidth.filter((w) => w.error);
@@ -1114,9 +1092,9 @@ for (const s of SCREENS) {
 }
 
 // ---------------------------------------------------------------- menus
-// Each menu the mockups draw open is opened in the app and every item clicked, once, on the first screen
-// that draws it, at the first width. Its findings go on every screen whose mockup draws it; a screen a
-// menu item links to and no click reached gets an `unreachable` finding.
+// Each menu the mockups draw open is opened in the app and every item clicked, once, on the first screen that
+// draws it, at the first width. Its findings go on every screen whose mockup draws it; a screen a menu item
+// links to and no click reached gets an `unreachable` finding.
 let menuWalk = { walked: WALK_MENUS, menus: [], clicks: [] };
 if (WALK_MENUS && results.length) {
   const width = WIDTHS[0];

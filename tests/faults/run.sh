@@ -1444,10 +1444,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/ts-cases.sh"   # TrStudio TF-003 to TF-00
 source "$(dirname "${BASH_SOURCE[0]}")/n16-cases.sh"  # Chatur TF-037, Sevak TF-040 to TF-044
 source "$(dirname "${BASH_SOURCE[0]}")/n19-cases.sh"  # the faults of 18 Nov from five projects
 source "$(dirname "${BASH_SOURCE[0]}")/n19-metrics-cases.sh"  # the owner's two metrics faults of 19 Nov
+source "$(dirname "${BASH_SOURCE[0]}")/n21-cases.sh"  # TfLens TF-061, TrStudio TF-011, Chatur TF-049..051, AstroLyfe TF-065
 
 # --- run ----------------------------------------------------------------------------------
 echo "# tests/faults — one case per fault found by reading the code"
-for t in status_read marker_age yolo_ttl emit_root backtick_row owner_uat quoted_phase handoff_prose assets_login sv_025 ch_026 ch_027 ch_030 lk_042 ch_034 measure_rows ts_001 ts_002 ts_003 ts_004 ts_005 ts_006 ts_007 ts_007e ch_035 ch_029 lk_044 ch_028 tf_058 lk_040 ch_031 lk_041 sv_038 sv_033 sv_034 ch_036 find_cost verify_mark sv_035 sv_036 sv_027 sv_028 sv_029 sv_030 sv_032 tf_057 sv_026 sv_031 as_001 am_031 am_032 setup_first ch_037 sv_040 sv_041 sv_042 sv_042c sv_042d sv_043 sv_044 ch_045 tf_059 ch_039 ch_038 sv_045 lk_046 lk_046c tf_060 ts_008 ts_010 ts_009 tokens_once estimate_phases ch_046 ch_047 ch_048; do
+for t in status_read marker_age yolo_ttl emit_root backtick_row owner_uat quoted_phase handoff_prose assets_login sv_025 ch_026 ch_027 ch_030 lk_042 ch_034 measure_rows ts_001 ts_002 ts_003 ts_004 ts_005 ts_006 ts_007 ts_007e ch_035 ch_029 lk_044 ch_028 tf_058 lk_040 ch_031 lk_041 sv_038 sv_033 sv_034 ch_036 find_cost verify_mark sv_035 sv_036 sv_027 sv_028 sv_029 sv_030 sv_032 tf_057 sv_026 sv_031 as_001 am_031 am_032 setup_first ch_037 sv_040 sv_041 sv_042 sv_042c sv_042d sv_043 sv_044 ch_045 tf_059 ch_039 ch_038 sv_045 lk_046 lk_046c tf_060 ts_008 ts_010 ts_009 tokens_once estimate_phases ch_046 ch_047 ch_048 tf_061 ts_011 ch_049 ch_050 ch_051 as_065; do
   [[ -n "$only" && "$only" != "$t" ]] && continue
   "$t" > "$SCRATCH/case.out" 2>&1; cat "$SCRATCH/case.out"; grep '^skipped:' "$SCRATCH/case.out" >> "$SCRATCH/skipped"
 done

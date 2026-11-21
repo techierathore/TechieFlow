@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Repo | `/mnt/c/3AIGenCode/TechieFlow` on Windows/WSL and `/Users/MyCode/TechieFlow` on the owner's Mac, synced through GitHub. This is the framework template, not an application. |
-| Last updated | 2026-11-20, Windows (deployed to seven projects, replies merged). |
+| Last updated | 2026-11-21, Windows (six fixes, deployed nowhere). |
 | Branch | Work since Session 3 is on `dev`. The owner commits; agents never run git. |
 
 ---
@@ -116,13 +116,13 @@ If a run died mid-phase, the status gate never ran and `PROJECT-STATUS.md` is st
 | Three requirements name a **script that has not been written**: FR-58, FR-60, FR-61. The idea-stage commands still emit no run record (FR-34, FR-60). | Maintainer |
 | **Model routing is enabled in three repositories.** Turn one on with `bash .tfcore/utils/tf-routing.sh on` (Routing-Guide §2b). | Owner decision, per project |
 | **Open misses**: `docs/TechieFlow-Misses.md`. | Maintainer |
-| **Not proved on real machines** (v1.2.4): window restore, Mac `--env`, NAT fallback. The check fixes since 2026-11-10: fixtures only. | Maintainer |
+| **Not proved on real machines**: window restore, Mac `--env`, NAT fallback. The check fixes since 2026-11-10: fixtures only. | Maintainer |
 | **TfLens** must read the miss stream before its figures are quotable (`docs/TfLens-Metrics-Update-Prompt.md` there, awaiting the owner). | Separate repo |
-| **The untagged changes, to 19 Nov night, are in seven projects** (TfLens and TechieRag among them) since 20 Nov, replies merged; not TrStudio. | Owner (tag, deploy) |
+| **The untagged changes to 19 Nov night are in seven projects** since 20 Nov, replies merged; not TrStudio. **21 Nov's six fixes** (TrStudio TF-011, TfLens TF-061, four from two private apps): in no project; replies here only. | Owner (tag, deploy) |
 | **Seeds and tests run under `tf-test-guard.sh`**: no write to the project's repository. Windows-side dotnet rungs uncovered. | Maintainer |
 | Linux CI has no Playwright: every browser case is counted skipped. Install it in `validate.yml`? | Owner decision |
 | `tests/requirements` grades FR lines naming one regression case by the whole suite. | Maintainer |
-| Drop `BASE_URL`/`CDP_URL` from `tf-verify-tests.sh` at v1.5; `testsettings.Local.json` carries the address (14 Nov). | Maintainer |
+| Drop `BASE_URL`/`CDP_URL` from `tf-verify-tests.sh` at the next minor release; `testsettings.Local.json` carries the address (14 Nov). | Maintainer |
 | **TrBlazeUI TR-004**: disabled menu items lack `aria-disabled`; the menu bar ignores Escape. `tf-menus.mjs` works around both. | TrBlazeUI |
 | **Mockup parity pairs live rows with sample rows by position** (MISS-TechieFlow-20261003-02), so data in another order gives row-level icon findings; Chatur's Repository rows are blocked on it. | Maintainer |
 | **Blazor Hybrid heads owe OS zoom** (standards §9b): TrSetup lacks it and the macOS 27 scene rule; TrStudio's is unbuilt (GitHub Packages 401); one private project unchecked. | Those projects |

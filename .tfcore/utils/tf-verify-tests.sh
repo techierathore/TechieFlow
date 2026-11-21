@@ -3,7 +3,7 @@
 #
 #   bash .tfcore/utils/tf-verify-tests.sh [--base URL] [--target <sln|csproj>] [--no-browser] [--no-unit]
 #                                         [--shard N/M] [--spec <file or glob>]… [--list <list.json>] [--all-specs]
-#                                         [--filter <dotnet test filter>] [--json-out tests/.artifacts/verify/tests.json]
+#                                         [--filter <dotnet test filter>] [--no-build] [--from-log <log>] [--json-out <json>]
 #   bash .tfcore/utils/tf-verify-tests.sh --merge <tests-a.json> <tests-b.json>… [--json-out tests/.artifacts/verify/tests.json]
 #
 # Browser tests: `npx playwright test` over tests/verify/ (JSON reporter); unit tests: `tf-build.sh test`.
@@ -24,7 +24,9 @@
 # `--list` names another list.json; `--all-specs` runs every browser test whatever the scope. Set-up tests
 # (@setup) run first; @boot:<kind> tests only on that boot; no unit tests while a head is up (tf-verify-around.sh).
 # `--filter "DisplayName~REQ-RAG-150"` runs only the unit tests it selects into tests-filter-<expr>.json, to
-# be merged: a memory-heavy test that skips itself when its whole project runs (TechieRag TF-010).
+# be merged: a memory-heavy test that skips itself when its whole project runs (TechieRag TF-010). Chatur TF-050: a unit
+# run longer than one call: `--no-build` (after one build) goes to `dotnet test`; `--from-log <log>` only parses the log
+# a cut-off call left once dotnet has finished it (refused while it has no end-of-run line), into the same JSON.
 # The address reaches the tests as Verify:BaseUrl (Verify:CdpUrl for a desktop head) in testsettings.Local.json,
 # put back after (tf-verify-settings.py), and until v1.5 as BASE_URL / CDP_URL too (Lekhak TF-021). A Mac Catalyst head
 # (boot.json mode=appium) reaches them as APPIUM_URL, TF_BUNDLE_ID and TF_APP_PATH. Exit 0 ran (any results) · 2 nothing ran.
@@ -46,15 +48,14 @@ while [[ $# -gt 0 ]]; do
     --filter) FILTER="${2:-}"; BROWSER=0; shift 2 ;;
     --merge) shift; MERGING=1; while [[ $# -gt 0 && "$1" != --* ]]; do MERGE+=("$1"); shift; done ;;
     --json-out) OUT="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --no-build) NOBUILD=1; shift ;;
+    --from-log) FROMLOG="${2:-}"; BROWSER=0; shift 2 ;;
+    -h|--help) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "tf-verify-tests: unknown argument $1" >&2; exit 2 ;;
   esac
 done
-# `--merge` with no part files is refused: it would fall through to a full test run over the suite the
-# caller meant only to combine.
-if [[ "${MERGING:-0}" == 1 && ${#MERGE[@]} -eq 0 ]]; then
-  echo "tf-verify-tests: --merge needs the part files to combine (--merge tests-1of2.json tests-2of2.json); nothing was run" >&2; exit 2
-fi
+# `--merge` with no part files is refused: it would fall through to a full run of the suite it meant to combine.
+[[ "${MERGING:-0}" == 1 && ${#MERGE[@]} -eq 0 ]] && { echo "tf-verify-tests: --merge needs the part files to combine (--merge tests-1of2.json tests-2of2.json); nothing was run" >&2; exit 2; }
 PART=""
 if [[ -n "$SHARD" ]]; then
   [[ "$SHARD" =~ ^([1-9][0-9]*)/([1-9][0-9]*)$ ]] || { echo "tf-verify-tests: --shard takes N/M, such as 2/4" >&2; exit 2; }
@@ -65,6 +66,8 @@ if [[ -n "$FILTER" ]]; then
   # its own part file, named for the filter, so it merges beside the full run instead of replacing it
   [[ -z "$PART" ]] && PART="filter-$(printf '%s' "$FILTER" | tr -c 'A-Za-z0-9' '-' | cut -c1-40)"
 fi
+[[ -n "${FROMLOG:-}" ]] && { UNIT=0; [[ -f "$FROMLOG" ]] && grep -qiE '^[[:space:]]*(Passed!|Failed!|Test Run (Successful|Failed|Aborted)|Test run summary|Total tests:)' "$FROMLOG" \
+  || { echo "tf-verify-tests: --from-log $FROMLOG: no such file, or no end-of-run line in it yet (dotnet may still be running); nothing was written" >&2; exit 2; }; }
 [[ -n "$OUT" ]] || OUT="tests/.artifacts/verify/tests${PART:+-$PART}.json"
 mkdir -p "$(dirname "$OUT")" tests/.artifacts/verify
 
@@ -169,7 +172,7 @@ PY
 fi
 
 source "$HERE/tf-lock.sh"; tf_take_lock "verify-tests${PART:+ $PART}"   # one browser check at a time
-PWJSON="tests/.artifacts/verify/playwright${PART:+-$PART}.json"; PWLOG="tests/.artifacts/verify/playwright${PART:+-$PART}.log"; UNITLOG=""; UNITLINE=""; ran_any=0
+PWJSON="tests/.artifacts/verify/playwright${PART:+-$PART}.json"; PWLOG="tests/.artifacts/verify/playwright${PART:+-$PART}.log"; UNITLOG="${FROMLOG:-}"; UNITLINE="${FROMLOG:+read from $FROMLOG}"; ran_any=$([[ -n "${FROMLOG:-}" ]] && echo 1 || echo 0)
 
 if [[ $BROWSER -eq 1 ]]; then
   # A desktop head is reached over its debugging address (tf-verify-boot.sh prints mode=cdp). The tests
@@ -320,21 +323,17 @@ else rm -f "$PWJSON"; fi
 HELD="$([[ $UNIT -eq 1 ]] && tf_head_holds_build)"
 [[ -n "$HELD" ]] && { UNIT=0; echo "unit tests: NOT RUN — the desktop head at $HELD is up and holds the build output (Sevak TF-026); run them before the boot (--no-browser --json-out tests/.artifacts/verify/tests-unit.json) and --merge that part"; }
 if [[ $UNIT -eq 1 ]]; then
-  # Each pattern on its own: `ls *.sln *.slnx` fails when either matches nothing, so a .slnx-only
-  # solution would read as none; and a test project may sit at any depth under tests/, not one folder
-  # down. tf-build.sh finds a root solution itself; without one it is handed the only test project,
-  # and several are named rather than guessed between.
+  # each pattern alone (`ls *.sln *.slnx` fails if one matches nothing); tf-build.sh finds a root solution, else is
+  # handed the only test project at any depth under tests/; several are named, not guessed between
   ROOTSLN="$(compgen -G '*.sln'; compgen -G '*.slnx'; compgen -G '*.csproj')"
   tf_read_lines TESTPROJ < <(find tests -name '*.csproj' -not -path 'tests/.artifacts/*' -not -path '*/bin/*' -not -path '*/obj/*' -not -path '*/node_modules/*' 2>/dev/null | sort)
   [[ -z "$TARGET" && -z "$ROOTSLN" && ${#TESTPROJ[@]} -eq 1 ]] && TARGET="${TESTPROJ[0]}"
   if [[ -z "$TARGET" && -z "$ROOTSLN" && ${#TESTPROJ[@]} -gt 1 ]]; then
     echo "unit tests: NOT RUN — no solution here and ${#TESTPROJ[@]} test projects under tests/ (${TESTPROJ[*]}); name one with --target"
   elif [[ -n "$TARGET" || -n "$ROOTSLN" ]]; then
-    # the VERDICT line, not the first line: tf-build.sh may print a note before it
-    # A test project on Microsoft.Testing.Platform ignores --logger and prints no line per test, so
-    # none of its tests would reach a row. Such a project is asked for
-    # a TRX report, the per-test record both platforms write, through the property `dotnet test` passes
-    # to it. One switch serves every project or none is passed: an unknown switch stops a test app.
+    # A test project on Microsoft.Testing.Platform ignores --logger and prints no line per test, so it is asked for a TRX
+    # report (both platforms write one) through the property `dotnet test` passes on. One switch for all, or none is
+    # passed: an unknown switch stops a test app.
     MTP="$(python3 - <<'PY'
 import os, re
 flags, mtp = set(), 0
@@ -357,14 +356,14 @@ print(next(iter(flags)) if mtp and len(flags) == 1 and "?" not in flags else ("m
 PY
 )"
     UARGS=(--logger "console;verbosity=normal")
-    [[ -n "$FILTER" ]] && UARGS+=(--filter "$FILTER")
+    [[ -n "$FILTER" ]] && UARGS+=(--filter "$FILTER"); [[ -n "${NOBUILD:-}" ]] && UARGS+=(--no-build)
     case "$MTP" in
       --report-*) UARGS+=("-p:TestingPlatformCommandLineArguments=$MTP") ;;
       mixed) echo "unit tests: note  the Testing Platform projects here take different report switches, so none was passed; their tests are not mapped to rows" ;;
     esac
-    # the stamp sits on the project's own drive: one in /tmp takes its time from WSL's clock and the
-    # report on /mnt/c from Windows', which drift apart, so a fresh report could read as older
+    # the stamp on the project's drive: /tmp keeps WSL's clock and /mnt/c Windows', which drift apart
     mkdir -p tests/.artifacts; STAMP="$(mktemp tests/.artifacts/.unit-stamp.XXXXXX)"
+    echo "unit tests: running; if this call is cut off, dotnet still writes the newest tests/.artifacts/build/*-test-*.log: once it ends, run again with --from-log <that log>"
     UNITLINE="$(bash "$HERE/tf-build.sh" test ${TARGET:+"$TARGET"} -- "${UARGS[@]}" 2>&1 | grep -m1 -E '^(PASS|FAIL|NOT-RUN)' || true)"
     UNITLOG="$(sed -n 's/.*log \(tests\/\.artifacts\/build\/[^ ;]*\).*/\1/p' <<<"$UNITLINE" | head -1)"
     TRX="$(find . -name '*.trx' -newer "$STAMP" -not -path '*/node_modules/*' 2>/dev/null)"; rm -f "$STAMP"
