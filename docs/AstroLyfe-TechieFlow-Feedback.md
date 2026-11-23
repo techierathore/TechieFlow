@@ -4,19 +4,19 @@
 |---|---|
 | App | AstroLyfe |
 | Upstream | TechieFlow |
-| Updated | 2026-11-21 (TF-065 copied and fixed upstream, not yet in `.tfcore/`) · 2026-11-19 (TF-062 filed from the owner's report of the develop run of 19 Nov, fixed upstream, in `.tfcore/`; TF-001 from the run of 13 Nov) |
+| Updated | 2026-11-21 (TF-065 fixed upstream, in `.tfcore/` from the framework update of the same day) · 2026-11-19 (TF-062 filed from the owner's report of the develop run of 19 Nov, fixed upstream, in `.tfcore/`; TF-001 from the run of 13 Nov) |
 
 Defects found in the **TechieFlow framework itself** (`.tfcore/`) while building AstroLyfe. `.tfcore/` is the TechieFlow team's and `update-framework.sh` overwrites it, so nothing in it is fixed here; this file is the hand-off. `bash .tfcore/utils/tf-feedback.sh AstroLyfe` reads it.
 
 ## Summary
 
-3 entries copied here (TF-063 and TF-064 are in AstroLyfe's own file, not answered yet): 0 open, 3 fixed upstream and not yet re-checked (TF-001, TF-062, and on 2026-11-21 TF-065, not yet in `.tfcore/`), 0 closed. 0 blocking.
+3 entries copied here (TF-063 and TF-064 are in AstroLyfe's own file, not answered yet): 0 open, 3 fixed upstream and not yet re-checked (TF-001, TF-062, and on 2026-11-21 TF-065, in `.tfcore/` from the update of the same day), 0 closed. 0 blocking.
 
 ## Entries
 
 ### TF-065 — `tf-theme` grades a light-only app in dark mode once its UI library ships a `.dark` token block
 
-- **Status:** fixed upstream 2026-11-21 (filed the same day); not yet in AstroLyfe's `.tfcore/` (no framework update yet); not yet re-checked here.
+- **Status:** fixed upstream 2026-11-21 (filed the same day); in AstroLyfe's `.tfcore/` from the framework update of 2026-11-21; not yet re-checked here.
 - **Filed by:** the flow-master, in AstroLyfe's build-phase of 2026-11-21 (phase 3 verify).
 - **Blocks:** no — the screens were graded in light only (`--themes light`), as the app has no dark theme, and the run carried on.
 - **Severity:** minor
@@ -26,7 +26,7 @@ Defects found in the **TechieFlow framework itself** (`.tfcore/`) while building
 - **Encountered in:** `*build-phase AstroLyfe`, chained verify of phase 3, 2026-11-21.
 - **Workaround:** `--themes light` on the screen and mockup checks, recorded in the run.
 - **Suggested fix:** treat a page whose `color-scheme` meta (or CSS `color-scheme`) is `light` only as having no dark theme, and add the class `dark` only when the app itself shows a way to set it.
-- **Reply (TechieFlow team, 2026-11-21):** Fixed upstream in `tf-theme.mjs`, with one line each in `tf-verify-screens.mjs` and `tf-mockup-parity.mjs`; the first part of your suggestion. When the screen check puts the dark theme on, it now reads the page's colour scheme: the `color-scheme` meta and the CSS `color-scheme` of `<html>` and `<body>`. If they still say light and nothing says dark, the page has no dark theme. It is put back as it was, reads "(the app has no dark theme)", and gets no dark pass. That holds in the default mode and also under `--themes light,dark`. The mockup check does the same (`themes_not_offered: dark`). An app with a real dark theme is not touched: its own dark switch (`.dark { color-scheme: dark }`, `[data-theme=dark]`) changes the scheme when dark is put on. The answer no longer depends on which screen was asked first, so phase 3 now reads like phases 1 and 2. **Not done:** the second part, adding the class `dark` only when the app shows a way to set it. An app that says `color-scheme: light` but has a dark mode that never changes the scheme would lose its dark pass. Of the projects read, none is built that way [Likely, read in their CSS, not run]. **Rule that changed:** whether a screen gets a dark pass. It can only take dark findings away, from a page that says light only. Read across the projects (read only): only AstroLyfe's app says so (`<meta name="color-scheme" content="light">` and `:root { color-scheme: light }`). No project's mockups do. The "light only" lines in TfLens, TrStudio, TrSetup and XVault are on `#blazor-error-ui`, not the page. **Proved** by case `as_065` (`tests/faults/n21-cases.sh`), shaped like your app: the meta and `:root` say light, and a library sheet re-colours `.dark`. On the scripts you have, that page was graded in dark. Now it is not, in auto mode or under `--themes light,dark`, and the mockup check reports dark as not offered. Control half: an app whose `.dark` sets `color-scheme: dark`, and a page whose meta says `light dark`, are still graded in dark. Not run on AstroLyfe's own head. **Check it here:** after the next framework update, the screen check on `/Testing/Run` with no `--themes` prints "(the app has no dark theme)" and no screen fails in dark mode, so the `--themes light` workaround can go.
+- **Reply (TechieFlow team, 2026-11-21):** Fixed upstream in `tf-theme.mjs`, with one line each in `tf-verify-screens.mjs` and `tf-mockup-parity.mjs`; the first part of your suggestion. When the screen check puts the dark theme on, it now reads the page's colour scheme: the `color-scheme` meta and the CSS `color-scheme` of `<html>` and `<body>`. If they still say light and nothing says dark, the page has no dark theme. It is put back as it was, reads "(the app has no dark theme)", and gets no dark pass. That holds in the default mode and also under `--themes light,dark`. The mockup check does the same (`themes_not_offered: dark`). An app with a real dark theme is not touched: its own dark switch (`.dark { color-scheme: dark }`, `[data-theme=dark]`) changes the scheme when dark is put on. The answer no longer depends on which screen was asked first, so phase 3 now reads like phases 1 and 2. **Not done:** the second part, adding the class `dark` only when the app shows a way to set it. An app that says `color-scheme: light` but has a dark mode that never changes the scheme would lose its dark pass. Of the projects read, none is built that way [Likely, read in their CSS, not run]. **Rule that changed:** whether a screen gets a dark pass. It can only take dark findings away, from a page that says light only. Read across the projects (read only): only AstroLyfe's app says so (`<meta name="color-scheme" content="light">` and `:root { color-scheme: light }`). No project's mockups do. The "light only" lines in TfLens, TrStudio, TrSetup and XVault are on `#blazor-error-ui`, not the page. **Proved** by case `as_065` (`tests/faults/n21-cases.sh`), shaped like your app: the meta and `:root` say light, and a library sheet re-colours `.dark`. On the scripts you have, that page was graded in dark. Now it is not, in auto mode or under `--themes light,dark`, and the mockup check reports dark as not offered. Control half: an app whose `.dark` sets `color-scheme: dark`, and a page whose meta says `light dark`, are still graded in dark. Not run on AstroLyfe's own head. **Check it here:** the screen check on `/Testing/Run` with no `--themes` prints "(the app has no dark theme)" and no screen fails in dark mode, so the `--themes light` workaround can go.
 
 ### TF-001 — The booted app's address reaches the browser tests only as an environment variable, and the test-users check does not read the TestNUsageDoc
 
@@ -66,7 +66,7 @@ Defects found in the **TechieFlow framework itself** (`.tfcore/`) while building
 
 From `/mnt/c/1MyCode/AstroLyfe/docs/AstroLyfe-TechieFlow-Feedback.md`, read on 2026-11-21 (read only). TF-063 and TF-064 are not answered here.
 
-**Not yet in AstroLyfe's `.tfcore`.** Fixed upstream on 21 Nov and deployed nowhere; this reply is written in the TechieFlow repository's copy of this file and is merged into AstroLyfe's at the next framework update. Nothing of AstroLyfe's was run for it.
+**Fixed in AstroLyfe's `.tfcore`** through the framework update of 2026-11-21. The reply was written in the TechieFlow repository's copy of this file and merged into AstroLyfe's at the update. Nothing of AstroLyfe's was run for it.
 
 | ID | Fix | Case | Check it here |
 |---|---|---|---|

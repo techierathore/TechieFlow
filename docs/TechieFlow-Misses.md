@@ -3,16 +3,17 @@
 | | |
 |---|---|
 | App | TechieFlow |
-| Count | 416 logged: 59 open, 355 fixed, 1 will not fix, 1 withdrawn |
+| Count | 417 logged: 60 open, 355 fixed, 1 will not fix, 1 withdrawn |
 | Source | `docs/metrics/misses.jsonl`, one row per miss record. Rewritten by `tf-misses-md.sh` on every new record. Never edit it: a wrong row is corrected by a new record. |
 | Updated | 2026-11-21 |
 
 **Whose gap** answers the four questions of the miss protocol: **the app's spec** did not say it, so the checklist line is fixed; **the framework never said it**, so one requirement line and a check are added; **the check was too weak** (a review, or a script that did not fire), so the check is fixed; **said and ignored**, so the rule becomes a hook or is deleted. **not sorted** means the record predates the sort or nobody has answered yet; `bash .tfcore/utils/tf-emit.sh --amend <miss> sort <spec|unsaid|weak-check|ignored>` completes it.
 
-## Open (59)
+## Open (60)
 
 | Miss | Found | Whose gap | What went wrong |
 |---|---|---|---|
+| MISS-TechieFlow-20261121-09 | 2026-11-21 by owner | the check was too weak | 21 Nov deploy to Chatur and AstroLyfe: my shell's find rejected '-60 minutes', so I wrote a framework-reset run record with an empty start time; tf-emit accepted it, and neither --void-run nor the metrics reader can void a record with no start, so it counts as one extra run with no time. The same er |
 | MISS-TechieFlow-20261113-13 | 2026-11-13 by owner | the check was too weak | tf-log-miss.sh's duplicate check takes a new problem on a row for the open miss of the same class and completes that miss's why_missed and sort with the new one's |
 | MISS-TechieFlow-20261113-12 | 2026-11-13 by owner | the framework never said it | A tf-log-miss.sh --fixed --fix-run <start> written before that fix's run record exists carries no cost (five Sevak log-miss fixes of 13 Nov) |
 | MISS-TechieFlow-20261113-11 | 2026-11-13 by owner | said and ignored | Maintainer slip 2026-11-14: a sed meant to mask AstroLyfe's TestNUsageDoc table did not match, and the command printed the test-user passwords into the session |
