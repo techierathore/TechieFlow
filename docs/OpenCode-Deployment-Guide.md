@@ -79,6 +79,31 @@ Checked on OpenCode 2.0.18 (2026-09-29, `opencode models --standalone --print-lo
 
 `external_directory` patterns above mirror `.claude/settings.json` `additionalDirectories`; `permission.bash` mirrors its `ask` tier (Coupling-Points P-1).
 
+### Opening these folders from Windows, and changing a provider key
+
+`~` is a Linux path, and Windows Explorer does not understand it: `explorer.exe ~/.config/opencode` opens Explorer's default folder (Documents or OneDrive) instead. Inside WSL, this opens the real folder:
+
+```bash
+cd ~/.config/opencode && explorer.exe .
+```
+
+To get the folder's Windows address without knowing the distro or the user name, let WSL print it, then paste the printed line into Explorer's address bar:
+
+```bash
+wslpath -w ~/.config/opencode      # prints, for example, \\wsl.localhost\Ubuntu\home\ravi\.config\opencode
+```
+
+**Where the key is on OpenCode 2 (read from OpenCode's source, 23 Nov 2026).** There is no `auth.json` to edit any more. The first start of OpenCode 2 imports the old `~/.local/share/opencode/auth.json` once into the `credential` table of `~/.local/share/opencode/opencode.db` (`packages/core/src/database/migration/..._import_legacy_credentials.ts`); from then on keys live only there, and `opencode.jsonc` holds no key unless you wrote one into a `provider` block yourself.
+
+To replace a rotated key, Azure AI Foundry included:
+
+1. Start `opencode` in WSL and type `/connect`.
+2. Pick **Azure**, then the method **API key**.
+3. If it asks "Enter Azure Resource Name", give the resource's name only (for `https://my-models.openai.azure.com` that is `my-models`); it does not ask when `opencode.jsonc` already names the resource or a `baseURL`.
+4. Paste the new key. The new connection replaces the old one; restart OpenCode if a session was open.
+
+Two other ways OpenCode connects to Azure (`packages/core/src/plugin/provider/azure.ts`), worth a look when a key "is nowhere": the variable `AZURE_API_KEY` (or the older `AZURE_COGNITIVE_SERVICES_API_KEY`) in the shell profile, and **Microsoft Entra ID (Azure CLI)**, offered in `/connect` only when `az` is installed, which uses the `az login` session and no key at all.
+
 ## 4. Per-project setup (what the framework already does, plus one check)
 
 1. `scaffold-*.sh` / `update-framework.sh <app>` (or the npm installer) — deploys `.tfcore/`, `.opencode/plugin/techieflow.js`, `.opencode/command/*.md`, the framework-owned `.opencode/opencode.jsonc`, the root `opencode.jsonc` (refreshed only while it holds nothing of yours), the `.gitignore` block and telemetry.
